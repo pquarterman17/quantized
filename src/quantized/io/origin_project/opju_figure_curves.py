@@ -34,7 +34,15 @@ designation-marker runs ``windows_opju.py`` independently decodes):
 ```
 form A:  80 <serial> 01 10 80 03 <id:u16 LE> <pb> <fields…>
 form B:  80 <serial> 07 10 01 00 00 <id:u16 LE> <pb> <fields…>
+form A1: 80 <serial> 01 10 80 01 <id:u8> <fields…>          (no <pb>)
+form B1: 80 <serial> 05 10 01 00 00 <id:u8> <fields…>       (no <pb>)
 ```
+
+Forms A1/B1 are A/B with the curve token's own u8 id width (``80 01 <id>``):
+54 records corpus-wide (53 A1 + 1 B1), all in
+``pedotpss_IV_2019-08-01.opju`` (``Book1`` B..AB of two sheets), the
+columns Origin plots in its Graph2/Graph7 (plan item 68); every other corpus
+match of those bytes fails the field walk.
 
 ``<pb>`` is one uninterpreted byte (``03/09/0b/0c`` observed). ``<fields…>``
 is a run of tagged fields ``<tag:0x80-0x9f> <len:u8> <payload:len>``:
@@ -98,7 +106,8 @@ with no id table at all (synthetic fixtures; degraded files): see
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from bisect import bisect_right
+from collections.abc import Collection, Mapping
 from typing import NamedTuple
 
 from quantized.io.origin_project.curve_style_color import (
@@ -108,6 +117,7 @@ from quantized.io.origin_project.curve_style_color import (
 )
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
+from quantized.io.origin_project.opju_sheet_signals import newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
@@ -115,6 +125,9 @@ __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pag
 # Column-record id field, form A / form B (see module docstring).
 _ID_FORM_A = re.compile(rb"\x01\x10\x80\x03(..)", re.DOTALL)
 _ID_FORM_B = re.compile(rb"\x07\x10\x01\x00\x00(..)", re.DOTALL)
+_ID_FORM_A1 = re.compile(rb"\x01\x10\x80\x01(.)", re.DOTALL)  # u8 id, no <pb>
+_ID_FORM_B1 = re.compile(rb"\x05\x10\x01\x00\x00(.)", re.DOTALL)  # u8 id, no <pb>
+_NARROW = (_ID_FORM_A1, _ID_FORM_B1)
 
 # The unified curve token: <flag> 01 01 01 80 <width> <id…> (module docstring).
 _CURVE_TOKEN = re.compile(rb"\x01\x01\x01\x80([\x01\x03])", re.DOTALL)
@@ -226,10 +239,11 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     book_pages: set[str] = set()
     bounds = [*pages, (len(b), "")]
     for (start, book), (end, _next) in zip(bounds, bounds[1:], strict=False):
-        for pattern in (_ID_FORM_A, _ID_FORM_B):
+        for pattern in (_ID_FORM_A, _ID_FORM_B, *_NARROW):
             for m in pattern.finditer(b, start, end):
                 cid = int.from_bytes(m.group(1), "little")
-                parsed = _parse_column_record(b, m.end())
+                # the parser skips one <pb> byte, which the u8 forms do not have
+                parsed = _parse_column_record(b, m.end() - (pattern in _NARROW))
                 if parsed is None:
                     continue
                 name, desig, partner = parsed
@@ -257,6 +271,7 @@ def extract_curves_by_id(
     table: ColumnIdTable,
     off_sheet: Mapping[int, str] | None = None,
     omitted: list[tuple[int, dict[str, str]]] | None = None,
+    newly: Collection[int] = (),
 ) -> list[dict[str, str | float]]:
     """Every curve binding in ``b[start:end)`` via the unified id token.
 
@@ -280,8 +295,10 @@ def extract_curves_by_id(
     colour resolution, so the kept curves keep their plot-order colours --
     and appended to ``omitted`` as ``(plot index, {book, x, y, recorded,
     reason})``; the index is the curve's position in plot order, the order
-    ``legend_labels`` follows. Dedup is per ``(book, y, sheet)``, so a layer
-    plotting ``B`` of two sheets keeps both.
+    ``legend_labels`` follows. A curve plotting a ``newly`` proven id
+    (``opju_sheet_signals.sheet_map``) is omitted the same way when
+    ``opju_sheet_signals.newly_proven_reason`` gives a reason. Dedup is per
+    ``(book, y, sheet)``, so a layer plotting ``B`` of two sheets keeps both.
     """
     off = off_sheet or {}
     out: list[dict[str, str | float]] = []
@@ -289,6 +306,7 @@ def extract_curves_by_id(
     notes: list[dict[str, str]] = []  # per curve: its sheet note (reason "" = kept)
     seen: set[tuple[str, str, str]] = set()
     sheet_x: dict[str, str] | None = None  # built on first need
+    token_starts: list[int] | None = None  # built on first need
     for m in _CURVE_TOKEN.finditer(b, start, end):
         width = m.group(1)[0]
         if m.end() + width > len(b):
@@ -315,6 +333,13 @@ def extract_curves_by_id(
                 sheet_x = sheet_x_names(table.ids, table.x_ids, off)
             x_col = sheet_x.get(sheet, x_col)
             reason = "" if sheet in sheet_x else "x_sheet_unproven"
+        if not reason and (cid in newly or partner in newly):  # placed by opju_sheet_signals
+            if token_starts is None:  # the token's record runs to the next token
+                token_starts = [t.start() for t in _CURVE_TOKEN.finditer(b, start, end)] + [end]
+            span = (m.end(), token_starts[bisect_right(token_starts, m.start())])
+            reason = newly_proven_reason(
+                b, cid, x_col, span, (start, end), table.ids, table.x_ids
+            )
         key = (book, y_col, sheet)
         if key in seen:
             continue

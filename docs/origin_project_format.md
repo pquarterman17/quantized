@@ -2517,7 +2517,38 @@ in every worksheet column's own windows-section record, two forms:
 ```
 form A:  80 <serial> 01 10 80 03 <id:u16 LE> <pb> <fields…>
 form B:  80 <serial> 07 10 01 00 00 <id:u16 LE> <pb> <fields…>   (rare)
+form A1: 80 <serial> 01 10 80 01 <id:u8> <fields…>              (no <pb>)
+form B1: 80 <serial> 05 10 01 00 00 <id:u8> <fields…>           (no <pb>)
 ```
+
+Forms A1/B1 (2026-11-15, plan item 68) carry the curve token's own u8 id
+width. 54 records corpus-wide (53 A1 + 1 B1), all in
+`pedotpss_IV_2019-08-01.opju` (`Book1` B..AB on two sheets); every other
+match of those lead bytes in the 359-file corpus fails the field walk.
+Admitting them decodes the 54 columns Origin 2026b plots in Graph2/Graph7
+(`%Z` and plotted values compared over COM, all identical).
+
+**Second sheet signal for `.opju` (2026-11-15, plan item 67).** The id
+record has no sheet; `opju_curve_sheets` proves one by RANK (k-th smallest
+id of a name = k-th `Book_Col[@N]` dataset in file order), which fails when
+the id and dataset counts of a name differ (a deleted sheet, an unparsed
+record). Two independent signals then decide (`opju_sheet_signals`):
+**H** — the dataset header's u16 at `0x52` is a column id (the column the
+dataset is plotted against, as in `.opj` §5), and that id is on the
+dataset's own sheet: 8,642 rank-proven references agree, 0 disagree, over
+the 359 `.opju` files (references to another book's id — `Residual*`
+report pages — are ignored). **P** — a Y column is on its stored X
+partner's sheet: 15,556 rank-proven pairs agree, 0 disagree. A result is
+kept only if both signals that speak agree, the `Book_Col@N` dataset
+exists, and no other id of the name lands on that sheet. Corpus effect:
+`sheet_unknown` omissions 770 → 149; all re-bound curves in the
+COM-checked layers match Origin's `%Z` sheet. The sheet proves the Y, not
+the X Origin draws it against: a curve placed only this way is still
+omitted when it plots an X-designated column (`y_is_x_column`) or when its
+token record — or, if it names none, another token of the layer — stores
+`<id:u16> 21 61` naming a different column of the book (`x_token_differs`):
+Origin plots against that stored X (item 70), which is not decoded. Without
+that gate 51 of 784 newly drawn, COM-checked curves drew the wrong X.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix
