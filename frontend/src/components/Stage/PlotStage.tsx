@@ -16,6 +16,7 @@ import type { Dataset } from "../../lib/types";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { useFocusedRampedStyles } from "./useSeriesRamp";
+import { useStageOverlays } from "./useStageOverlays";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
@@ -77,7 +78,8 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const annotations = useApp((s) => s.annotations);
   const shapes = useApp((s) => s.shapes);
   const regionShades = useApp((s) => s.regionShades);
-  const seriesStyles = useFocusedRampedStyles(active, focusedDocument), seriesLabels = useApp((s) => s.seriesLabels); // + colour gradient (gap-4 G1)
+  const seriesStyles = useFocusedRampedStyles(active, focusedDocument); // + the graph's colour gradient (gap audit 4 G1)
+  const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
   const waterfallDx = useApp((s) => s.waterfallDx); // Origin's waterfall X step
   const excludedDisplay = useApp((s) => s.excludedDisplay);
@@ -139,10 +141,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
-  const fitOverlay = useApp((s) => s.fitOverlay);
-  const peakOverlay = useApp((s) => s.peakOverlay);
-  const baselineOverlay = useApp((s) => s.baselineOverlay);
-  const derivOverlay = useApp((s) => s.derivOverlay);
+  const [fitOverlay, peakOverlay, baselineOverlay, derivOverlay] = useStageOverlays();
   // Peak-workshop click-on-plot editing — Peak Analyzer or the simpler Peaks
   // panel owns this legacy-named bridge while its edit mode is live.
   const peakWizardEdit = useApp((s) => s.peakWizardEdit);

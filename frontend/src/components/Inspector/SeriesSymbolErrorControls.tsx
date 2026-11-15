@@ -4,6 +4,8 @@
 // canvas reads them in `markers.seriesPoints` / `uplotErrorRange.
 // styleErrorDraw`; the export in `calc/figure.py` / `calc/figure_errorbars.py`.
 
+import { resolveToHex } from "../../lib/color";
+import { seriesColor } from "../../lib/seriesStyleCycle";
 import type { ErrorBarStyle, SeriesStyle } from "../../lib/types";
 import { NumberField } from "../primitives/NumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -23,6 +25,8 @@ interface Props {
   markers: boolean;
   /** Show the error-bar rows (the series has error bars bound). */
   errors: boolean;
+  /** The colour the curve is drawn in when it has none of its own (a gradient's), for the wells. */
+  drawnColor?: string;
 }
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
@@ -32,20 +36,22 @@ const ERR_OPTS: { value: ErrMode; label: string; ariaLabel: string }[] = [
   { value: "bars", label: "Bars", ariaLabel: "Draw the error as bars" },
   { value: "band", label: "Band", ariaLabel: "Draw the Y error as a shaded band" },
 ];
-const hexOf = (c: string | undefined) => (c && !c.startsWith("--") ? c : "#8b5cf6");
+/** An unset well shows the colour the series is DRAWN in (review L9), not a fixed purple. */
+const hexOf = (c: string | undefined, series: string) => (c && !c.startsWith("--") ? c : series);
 
 /** A colour well plus its "series colour" reset (G10 edge / fill). */
-function ColorWell({ label, value, onChange }: { label: string; value?: string; onChange: (c: string | undefined) => void }) {
+function ColorWell({ label, value, series, onChange }: { label: string; value?: string; series: string; onChange: (c: string | undefined) => void }) {
   return (
     <>
       <span className="qzk-ds-meta">{label}</span>
-      <input type="color" aria-label={`Symbol ${label} color`} title={`Symbol ${label} color (default: the series color)`} value={hexOf(value)} onChange={(e) => onChange(e.target.value)} style={swatch} />
+      <input type="color" aria-label={`Symbol ${label} color`} title={`Symbol ${label} color (default: the series color)`} value={hexOf(value, series)} onChange={(e) => onChange(e.target.value)} style={swatch} />
       {value && <button type="button" className="qz-btn qz-ghost qz-sm" onClick={() => onChange(undefined)} aria-label={`Symbol ${label}: series color`}>×</button>}
     </>
   );
 }
 
-export default function SeriesSymbolErrorControls({ channel, style, setSeriesStyle, markers, errors }: Props) {
+export default function SeriesSymbolErrorControls({ channel, style, setSeriesStyle, markers, errors, drawnColor }: Props) {
+  const series = resolveToHex(style.color ? seriesColor(channel, style) : drawnColor ?? seriesColor(channel)) ?? "#8b5cf6";
   const eb: ErrorBarStyle = style.errorBar ?? {};
   const setEb = (patch: Partial<ErrorBarStyle>, coalesce?: string) => {
     const next: ErrorBarStyle = { ...eb, ...patch };
@@ -57,7 +63,7 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
     const n = Number(v);
     if (Number.isFinite(n) && n >= min && n <= 100) setEb({ [key]: n });
   };
-  const ebHex = eb.color && !eb.color.startsWith("--") ? eb.color : "#8b5cf6";
+  const ebHex = hexOf(eb.color, series);
   return (
     <>
       {markers && (
@@ -74,8 +80,8 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
       {markers && (
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Symbol</span>
-          <ColorWell label="edge" value={style.markerEdge} onChange={(c) => setSeriesStyle(channel, { markerEdge: c }, c && `marker-edge:${channel}`)} />
-          <ColorWell label="fill" value={style.markerFillColor} onChange={(c) => setSeriesStyle(channel, { markerFillColor: c }, c && `marker-face:${channel}`)} />
+          <ColorWell label="edge" series={series} value={style.markerEdge} onChange={(c) => setSeriesStyle(channel, { markerEdge: c }, c && `marker-edge:${channel}`)} />
+          <ColorWell label="fill" series={series} value={style.markerFillColor} onChange={(c) => setSeriesStyle(channel, { markerFillColor: c }, c && `marker-face:${channel}`)} />
           <NumberField
             value={style.markerAlpha != null ? String(Math.round(style.markerAlpha * 100)) : ""} width={44} placeholder="100" unit="%"
             aria-label="Symbol fill opacity" title="Symbol fill opacity (the edge stays opaque)"

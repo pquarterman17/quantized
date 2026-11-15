@@ -175,7 +175,7 @@ describe("lane A styles, screen == export (shared wire fixture)", () => {
     const [a, b] = CASES.map(truth);
     expect(a).toHaveLength(11); // one hidden
     const all = canvas(CASES[0]);
-    expect(all.series[1].stroke).toBe("#8804a5"); // viridis' start, lifted for the dark canvas
+    expect(all.series[1].stroke).toBe("#723684"); // viridis' purple start, lightness compressed (review M1)
     expect(b.map((s) => s.color)).toContain("#cc3311");
     // Reversed and by value: the coldest curve (2 K, channel 1) takes the map's END (warm red).
     const cold = canvas(CASES[1]).series[2].stroke as string;

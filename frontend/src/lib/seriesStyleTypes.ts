@@ -113,6 +113,11 @@ export interface SeriesStyle {
   markerFillColor?: string;
   markerAlpha?: number;
   markerEvery?: number;
+  /** DERIVED, never stored: a curve's rank in its graph's colour gradient
+   *  (gap audit 4 G1), set by `seriesRampImpl.rampSeriesStyles` so a
+   *  greyscale export greys the curves in the gradient's order (wire key
+   *  `ramp_rank`, `calc.figure_greyscale`). */
+  rampRank?: number;
   /** Error-bar styling for this series' bars (gap audit 2 #6). */
   errorBar?: ErrorBarStyle;
   /** Marker SIZE from a column (gap audit 3 N5): a dataset channel index whose

@@ -253,7 +253,7 @@ function StyleRow({
 
         <SeriesSymbolErrorControls
           channel={channel} style={style} setSeriesStyle={setSeriesStyle}
-          markers={style.marker ?? false} errors={errCol != null}
+          markers={style.marker ?? false} errors={errCol != null} drawnColor={drawnColor}
         />
 
         <SeriesFillColorControls

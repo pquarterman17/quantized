@@ -49,6 +49,7 @@
 // `resolveSeriesStyle` returns the CALLER'S OWN reference untouched (an
 // explicit identity, not a shallow copy that happens to compare equal).
 
+import { rampLive, type SeriesRamp } from "./seriesRamp";
 import type { LineStyle, MarkerShape, SeriesStyle } from "./types";
 
 /** Dash patterns (canvas setLineDash arrays) per line style; solid = no dash.
@@ -120,7 +121,7 @@ export interface CycleView {
   xKey: number | null;
   yKeys: readonly number[] | null;
   /** A colour gradient across the curves (gap audit 4 G1, `lib/seriesRamp.ts`). */
-  seriesRamp?: object | null;
+  seriesRamp?: SeriesRamp | null;
 }
 
 /** Do the canvas and its publication export draw the SAME display list?
@@ -269,7 +270,7 @@ export function windowCyclesSeriesStyles(
   // the same refusals. `count` is the canvas' plotted-channel count.
   // Gap audit 4 G1: a colour gradient never repeats a hue, so it does not engage the cycle past
   // the palette (where it applies the cycle's other refusals all hold, so both sides agree).
-  return cyclesPastPalette(on, view.seriesRamp ? 0 : count) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
+  return cyclesPastPalette(on, rampLive(view.seriesRamp) ? 0 : count) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
 }
 
 /** The preference `on`, or `count` plotted series past the palette's eight

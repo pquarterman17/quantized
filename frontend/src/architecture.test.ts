@@ -998,7 +998,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // the SAME list this view-style sanitizer uses instead of accepting any
   // string. (Not lib/markers.ts: that module carries the canvas path builders,
   // and the persistence layer is kept clear of them.)
-  "/lib/plotspec2.ts": 636,
+  "/lib/plotspec2.ts": 614, // 636 -> 614 (gap audit 4 L8): validateSeriesDisplay -> lib/plotspecSeriesDisplay.ts
   // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to
   // canonicalSession.ts's selectSessionLiveDrifted, where the subscription
   // contract it documents actually lives. Ratchet, not a bump.

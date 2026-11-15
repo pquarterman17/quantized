@@ -83,6 +83,7 @@ const ORIGIN_FIGURE_MODE_RESET = {
   waterfall: 0,
   waterfallDx: 0,
   seriesOrder: null,
+  seriesRamp: null, // gap audit 4 review L1: a recovered graph never inherits the previous one's gradient
 };
 
 const ORIGIN_FIGURE_Y2_RESET = {

@@ -79,7 +79,8 @@
 
 import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, StepMode, TickMode } from "./types";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
-import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
+import { validateSeriesDisplay } from "./plotspecSeriesDisplay";
+import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 import { LEGEND_POS, legendXYOrNull, sanitizeAnnotations, sanitizeShapes, type LegendPos } from "./plotview";
@@ -124,6 +125,9 @@ export interface DisplayBlock {
    *  series/order content (never flips a spec to v2 on its own); a legacy
    *  spec without it falls back to the by-index behavior. */
   labels?: Record<number, string>;
+  /** The graph's colour gradient (origin gap audit 4 G1): it is display, and a
+   *  saved PlotSpec reopens with it (review L8). */
+  ramp?: SeriesRamp;
 }
 
 // ── Axes block ───────────────────────────────────────────────────────────
@@ -219,20 +223,11 @@ export interface PageBlock {
 
 // ── Small validation primitives ───────────────────────────────────────────
 
-const LINE_STYLES: readonly LineStyle[] = ["solid", "dashed", "dotted"];
-const STEP_MODES: readonly StepMode[] = ["pre", "post", "mid"];
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
 const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
-}
-
-/** Line width: 0 is a real, meaningful value (marker-only "scatter" preset —
- *  see SeriesStyleCard's trace-type toggle), so this allows zero; only a
- *  negative or absurd (>100 px) width drops. */
-function isValidWidth(v: unknown): v is number {
-  return isFiniteNumber(v) && v >= 0 && v <= 100;
 }
 
 function isAxisFormat(v: unknown): v is AxisFormat {
@@ -246,27 +241,7 @@ function isAxisFormat(v: unknown): v is AxisFormat {
 }
 
 // ── Display block validation ──────────────────────────────────────────────
-
-function validateSeriesDisplay(v: unknown): SeriesDisplay | null {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v as Record<string, unknown>;
-  const out: SeriesDisplay = {};
-  if (typeof o.color === "string") out.color = o.color;
-  if (isValidWidth(o.width)) out.width = o.width;
-  if (typeof o.marker === "boolean") out.marker = o.marker;
-  if (typeof o.markerShape === "string" && MARKER_SHAPE_VALUES.has(o.markerShape)) {
-    out.markerShape = o.markerShape as MarkerShape;
-  }
-  if (typeof o.line === "string" && (LINE_STYLES as readonly string[]).includes(o.line)) {
-    out.line = o.line as LineStyle;
-  }
-  if (typeof o.step === "string" && (STEP_MODES as readonly string[]).includes(o.step)) {
-    out.step = o.step as StepMode;
-  }
-  if (typeof o.hidden === "boolean") out.hidden = o.hidden;
-  if (o.axis === 0 || o.axis === 1) out.axis = o.axis;
-  return out;
-}
+// (One series entry: `validateSeriesDisplay`, lib/plotspecSeriesDisplay.ts.)
 
 /** Validate + normalize an arbitrary value into a `DisplayBlock`, or null if
  *  the input isn't even an object. Tolerant per-FIELD/per-ENTRY: a malformed
@@ -291,6 +266,8 @@ export function validateDisplayBlock(v: unknown): DisplayBlock | null {
     const order = o.order.filter((n): n is number => typeof n === "number" && Number.isInteger(n));
     if (order.length > 0) out.order = order;
   }
+  const ramp = sanitizeSeriesRamp(o.ramp);
+  if (ramp) out.ramp = ramp;
   if (typeof o.labels === "object" && o.labels !== null) {
     const labels: Record<number, string> = {};
     for (const [key, val] of Object.entries(o.labels as Record<string, unknown>)) {
@@ -308,7 +285,8 @@ export function displayBlockHasContent(b: DisplayBlock | null | undefined): b is
   if (!b) return false;
   return (
     (b.series !== undefined && Object.keys(b.series).length > 0) ||
-    (b.order !== undefined && b.order.length > 0)
+    (b.order !== undefined && b.order.length > 0) ||
+    b.ramp !== undefined
   );
 }
 
@@ -455,6 +433,7 @@ export function buildDisplayBlock(
   hiddenChannels: number[],
   seriesOrder: number[] | null,
   channelLabels: readonly string[] = [],
+  ramp: SeriesRamp | null = null,
 ): DisplayBlock | undefined {
   const y2Set = new Set(y2Keys ?? []);
   const hiddenSet = new Set(hiddenChannels);
@@ -481,6 +460,7 @@ export function buildDisplayBlock(
   const block: DisplayBlock = {};
   if (Object.keys(series).length > 0) block.series = series;
   if (orderDiffers) block.order = [...(seriesOrder as number[])];
+  if (ramp) block.ramp = { ...ramp };
   // Attach the plotted channels' current labels so apply can re-key by label
   // (see DisplayBlock.labels). Only when the block already carries real
   // content — labels never promote an all-default plot to v2 on their own.

@@ -15,7 +15,7 @@ import {
 } from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
 import { pickRefLine, type RefLineHit } from "./refLineHit";
-import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colorscatter";
+import type { ColorScatterSpec } from "./colorscatter";
 import { richLabelAst, type RichNode } from "./richtext";
 import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
 import { drawReferenceStick } from "./referenceStickOverlay";
@@ -998,10 +998,6 @@ export function errorBarsPlugin(
   };
 }
 
-/** Default colour-mapped-scatter point diameter (CSS px) — matches the
- *  default marker size the regular per-series marker styling uses
- *  (`SeriesStyleCard`'s `NumberField` placeholder). */
-const COLOR_SCATTER_SIZE = 5;
 
 /** Draw colour-mapped scatter points (MAIN #14) for every series in `specs`
  *  (keyed by uPlot data-column index, 1-based — see `colorscatter.buildColorByColumns`):
@@ -1017,31 +1013,8 @@ const COLOR_SCATTER_SIZE = 5;
 export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.Plugin {
   return {
     hooks: {
-      draw: (u: uPlot) => {
-        if (specs.size === 0) return;
-        const { ctx } = u;
-        const { left, top, width, height } = u.bbox;
-        const xs = u.data[0];
-        const r = COLOR_SCATTER_SIZE / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(left, top, width, height);
-        ctx.clip();
-        for (const [col, spec] of specs) {
-          const ys = u.data[col];
-          if (!ys || spec.diam || u.series[col]?.show === false) continue; // a size-by series is the lazy `sizeScatterPlugin`'s
-          const scaleKey = u.series[col]?.scale ?? "y";
-          for (let i = 0; i < xs.length; i++) {
-            const x = xs[i];
-            const y = ys[i];
-            if (x == null || y == null) continue;
-            const fill = colorScatterFill(spec, i); // the one colour rule (P1.4 gradient shares it)
-            if (fill === null) continue;
-            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shape, spec.hollow);
-          }
-        }
-        ctx.restore();
-      },
+      // The drawing is the startup chunk's (lib/uplotScatterDraw.ts, eager-budget move).
+      draw: (u: uPlot) => regionDecor()?.drawColorScatter(u, specs),
     },
   };
 }

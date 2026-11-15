@@ -172,7 +172,10 @@ def apply_error_bars(
             except AttributeError:
                 color = None  # a colour-mapped scatter has no single colour
         if yerr is not None and isinstance(style, Mapping) and style.get("error_band") is True:
-            _draw_band(ax, band_quads(np.asarray(xv, dtype=float), yv, yerr), color or "0.5")
+            # A colour-mapped series has no single artist colour: its series colour, as on
+            # screen (gap audit 4 review L4).
+            fallback = style.get("color") if isinstance(style.get("color"), str) else "0.5"
+            _draw_band(ax, band_quads(np.asarray(xv, dtype=float), yv, yerr), color or fallback)
             yerr = None  # gap audit 4 G8: shaded, not barred; X bars stay bars
             if xerr is None:
                 continue

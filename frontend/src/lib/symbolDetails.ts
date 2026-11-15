@@ -15,6 +15,7 @@
 
 import type uPlot from "uplot";
 
+import { validAlpha, validEvery } from "./symbolSanitize";
 import type { SeriesStyle } from "./types";
 import { translucent } from "./uplotFill";
 
@@ -46,7 +47,7 @@ export function symbolPoints(
 ): uPlot.Series.Points {
   if (!style || !points.show) return points;
   const out = { ...points };
-  const alpha = style.markerAlpha;
+  const alpha = validAlpha(style.markerAlpha) ? style.markerAlpha : undefined; // as the export (review L5)
   if (style.markerEdge || style.markerFillColor || alpha != null) {
     out.stroke = style.markerEdge ? color(style.markerEdge) : stroke;
     // A closed glyph already has a fill; the circle (no `paths`) gets one.
@@ -55,6 +56,6 @@ export function symbolPoints(
       out.fill = alpha != null && alpha < 1 ? translucent(face, Math.round(alpha * 100)) : face;
     }
   }
-  if ((style.markerEvery ?? 1) > 1) out.filter = everyNth(style.markerEvery!);
+  if (validEvery(style.markerEvery)) out.filter = everyNth(style.markerEvery);
   return out;
 }

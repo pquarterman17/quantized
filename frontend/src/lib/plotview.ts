@@ -465,7 +465,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     shapes: uniqueIds(sanitizeShapes(o.shapes)),
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
-        ? (o.seriesStyles as Record<number, SeriesStyle>)
+        ? (o.seriesStyles as Record<number, SeriesStyle>) // symbol values: `graphLayersSanitize.withValidLayers` (.dwk)
         : {},
     seriesRamp: sanitizeSeriesRamp(o.seriesRamp), // additive: an older .dwk has none -> null
     // Values VALIDATED, not cast — see `lib/sanitizeRecord.ts` (BUG-014 r4).

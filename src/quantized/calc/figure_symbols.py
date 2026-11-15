@@ -29,6 +29,10 @@ from quantized.heavy_import import heavy_imports
 
 __all__ = ["apply_symbol_details"]
 
+# matplotlib codes of the glyphs the canvas draws open (`markers.FILLED_SHAPES`
+# excludes plus, cross and star).
+_OPEN = ("+", "x", "*")
+
 
 def _alpha(v: Any) -> float | None:
     if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -38,7 +42,7 @@ def _alpha(v: Any) -> float | None:
 
 
 def _every(v: Any) -> int | None:
-    if isinstance(v, bool) or not isinstance(v, int) or v <= 1:
+    if isinstance(v, bool) or not isinstance(v, int) or not 1 < v <= 100000:  # as the canvas
         return None
     return v
 
@@ -85,7 +89,9 @@ def apply_symbol_details(line: Any, spec: Mapping[str, Any] | None) -> None:
                 return to_rgba(colour, a)
 
         line.set_markeredgecolor(rgba(edge))
-        if spec.get("marker_fill") != "hollow":
+        # An open glyph has no fill on the canvas (plus, cross, and the star, an
+        # asterisk there): leave matplotlib's face alone (gap audit 4 review L3).
+        if spec.get("marker_fill") != "hollow" and line.get_marker() not in _OPEN:
             line.set_markerfacecolor(rgba(face, 1.0 if alpha is None else alpha))
     if every is not None:
         line.set_markevery(_skip_indices(line, every))

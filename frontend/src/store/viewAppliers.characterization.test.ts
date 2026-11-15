@@ -783,6 +783,12 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
       ]);
     });
 
+    it("does not inherit the previous graph's colour gradient (gap audit 4 review L1)", () => {
+      useApp.setState({ seriesRamp: { map: "turbo" } });
+      useApp.getState().applyOriginFigure("fig-ov");
+      expect(useApp.getState().seriesRamp).toBeNull();
+    });
+
     it("builds the overlay dataset (segment-concatenated, one column per curve), activates it, applies the decoded axis snapshot, and records the macro step", () => {
       useApp.getState().applyOriginFigure("fig-ov");
       const s = useApp.getState();

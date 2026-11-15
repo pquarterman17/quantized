@@ -170,3 +170,56 @@ def test_symbol_details_survive_an_unreadable_colour() -> None:
     apply_symbol_details(line, {"marker_edge": "not-a-colour", "marker_alpha": 0.5})
     assert to_hex(line.get_markeredgecolor()) == "#336699"
     assert to_rgba(line.get_markerfacecolor())[3] == pytest.approx(0.5)
+
+
+def test_greyscale_greys_in_the_gradient_order() -> None:
+    """Review L2: curves plotted in shuffled order, ranked by the gradient."""
+    from quantized.calc.figure_greyscale import apply_greyscale, greyscale_ramp
+
+    styles = [{"color": "#111111", "ramp_rank": r} for r in (2, 0, 3, 1)]
+    out = apply_greyscale(styles, 4)
+    ramp = greyscale_ramp(4)
+    assert [s["color"] for s in out] == [ramp[2], ramp[0], ramp[3], ramp[1]]
+    assert all("ramp_rank" not in s for s in out)
+    # Without ranks: display order, as before.
+    assert [s["color"] for s in apply_greyscale([{}, {}, {}, {}], 4)] == ramp
+
+
+def test_an_open_star_keeps_its_face_alone() -> None:
+    """Review L3: the canvas star is an open asterisk, so no fill colour is set."""
+    from matplotlib.figure import Figure
+
+    ax = Figure().subplots()
+    (star,) = ax.plot([0, 1], [0, 1], marker="*", color="#336699")
+    face = to_rgba(star.get_markerfacecolor())
+    apply_symbol_details(
+        star, {"marker_face": "#ff0000", "marker_alpha": 0.3, "marker_edge": "#00ff00"}
+    )
+    assert to_rgba(star.get_markerfacecolor()) == face
+    assert to_hex(star.get_markeredgecolor()) == "#00ff00"
+
+
+def test_a_colour_mapped_band_uses_the_series_colour() -> None:
+    """Review L4: a scatter artist has no single colour; the spec's colour shades the band."""
+    from matplotlib.figure import Figure
+
+    ax = Figure().subplots()
+    x = np.array([0.0, 1.0, 2.0])
+    sc = ax.scatter(x, [1.0, 2.0, 1.0], c=[0.0, 0.5, 1.0])
+    spans = [{"y": {"plus": [0.1, 0.1, 0.1], "minus": [0.1, 0.1, 0.1]}}]
+    apply_error_bars(
+        ax, x, [("s", [1.0, 2.0, 1.0])], spans, [sc], [{"error_band": True, "color": "#aa3377"}]
+    )
+    (patch,) = [p for p in ax.patches if isinstance(p, PathPatch)]
+    assert to_hex(patch.get_facecolor()) == "#aa3377"
+
+
+def test_symbol_every_rejects_what_the_canvas_rejects() -> None:
+    """Review L5: only integers 2..100000, the canvas' `symbolSanitize.validEvery`."""
+    from matplotlib.figure import Figure
+
+    for bad in (2.5, "3", 1, 0, 200000, True):
+        ax = Figure().subplots()
+        (line,) = ax.plot([0, 1, 2, 3], [0, 1, 0, 1], marker="o")
+        apply_symbol_details(line, {"marker_every": bad})
+        assert line.get_markevery() is None, bad

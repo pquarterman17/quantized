@@ -15,7 +15,43 @@ import { seriesColor, windowCyclesSeriesStyles } from "./seriesStyleCycle";
 
 const view = { ...defaultPlotView(), seriesRamp: { map: "viridis" as const } };
 
+/** CIE76 ΔE between two `#rrggbb` colours (D65 Lab). */
+function deltaE(p: string, q: string): number {
+  const lab = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    const X = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+    const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const Z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const [a, b] = [lab(p), lab(q)];
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
 describe("the ramp resolver", () => {
+  it("adjacent curves are clearly different on every map, for 2 to 12 curves (review M1)", () => {
+    for (const map of RAMP_MAPS) {
+      for (let n = 2; n <= 12; n++) {
+        const c = Array.from({ length: n }, (_, k) => rampColor({ map }, k, n));
+        for (let k = 0; k + 1 < n; k++) expect(deltaE(c[k], c[k + 1]), `${map} n=${n} k=${k}`).toBeGreaterThan(3);
+      }
+    }
+  });
+
+  it("keeps the map's hue at both ends: viridis starts purple, magma starts dark-violet grey, not a saturated primary", () => {
+    const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const [r, g, b] = rgb(rampColor({ map: "viridis" }, 0, 12));
+    expect(b > g && r > g).toBe(true); // purple
+    const [vr, vg, vb] = rgb(rampColor({ map: "viridis" }, 11, 12));
+    expect(vr > vb && vg > vb).toBe(true); // yellow-ish
+    const m = rgb(rampColor({ map: "magma" }, 0, 12));
+    expect(Math.max(...m) - Math.min(...m)).toBeLessThan(60); // low chroma, as magma's start
+  });
+
   it("lifts the 8-colour repeat: 20 curves are 20 distinct colours (the palette repeats at 9)", () => {
     const n = 20;
     const ramp = Array.from({ length: n }, (_, k) => rampColor({ map: "viridis" }, k, n));
@@ -46,6 +82,7 @@ describe("the ramp resolver", () => {
     expect(valueRanks(["T=-5", "T=5"])).toEqual([0, 1]);
     expect(valueRanks(["M 300 K", "M"])).toBeNull();
     expect(valueRanks(["5 K", "5 K"])).toBeNull();
+    expect(valueRanks(["5 K", "5 K", "10 K"])).toBeNull(); // review L11: any tie is unreliable
     const styles = rampSeriesStyles({}, [7, 8], { map: "turbo", order: "value" }, (ch) => (ch === 7 ? "10 K" : "2 K"));
     expect(styles[8].color).toBe(rampColor({ map: "turbo" }, 0, 2));
     expect(styles[7].color).toBe(rampColor({ map: "turbo" }, 1, 2));
@@ -55,7 +92,7 @@ describe("the ramp resolver", () => {
     const out = rampSeriesStyles({ 1: { color: "--series-3" }, 2: { width: 3 } }, [0, 1, 2], { map: "magma" }, () => "");
     expect(out[1].color).toBe("--series-3");
     expect(out[0].color).toBe(rampColor({ map: "magma" }, 0, 3));
-    expect(out[2]).toEqual({ width: 3, color: rampColor({ map: "magma" }, 2, 3) });
+    expect(out[2]).toEqual({ width: 3, rampRank: 2, color: rampColor({ map: "magma" }, 2, 3) });
   });
 });
 

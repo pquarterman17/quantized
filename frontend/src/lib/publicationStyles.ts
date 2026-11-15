@@ -57,6 +57,9 @@ export interface ExportSeriesStyle {
   marker_face?: string;
   marker_alpha?: number;
   marker_every?: number;
+  /** Gap audit 4 G1: the curve's rank in its graph's colour gradient, so a
+   *  greyscale export keeps the order (`calc.figure_greyscale`). */
+  ramp_rank?: number;
   /** `vs` and `color_by` remain dataset channel indices on the wire. */
   fill?: "under" | { vs: number };
   color_by?: number;

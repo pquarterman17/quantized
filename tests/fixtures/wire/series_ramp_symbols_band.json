@@ -151,47 +151,58 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#8804a5",
+            "color": "#723684",
+            "ramp_rank": 0,
             "width": 1.5
           },
           {
-            "color": "#6933a3",
+            "color": "#694598",
+            "ramp_rank": 1,
             "width": 1.5
           },
           {
-            "color": "#4b4693",
+            "color": "#5a58a0",
+            "ramp_rank": 2,
             "width": 1.5
           },
           {
-            "color": "#2e6f8e",
+            "color": "#377796",
+            "ramp_rank": 4,
             "width": 1.5
           },
           {
-            "color": "#25868d",
+            "color": "#23848c",
+            "ramp_rank": 5,
             "width": 1.5
           },
           {
-            "color": "#219b88",
+            "color": "#07907e",
+            "ramp_rank": 6,
             "width": 1.5
           },
           {
-            "color": "#2dad7b",
+            "color": "#199a6a",
+            "ramp_rank": 7,
             "width": 1.5
           },
           {
-            "color": "#48ad5b",
+            "color": "#2da449",
+            "ramp_rank": 8,
             "width": 1.5
           },
           {
-            "color": "#6baa39",
+            "color": "#5da804",
+            "ramp_rank": 9,
             "width": 1.5
           },
           {
-            "color": "#8ea319",
+            "color": "#90a611",
+            "ramp_rank": 10,
             "width": 1.5
           },
           {
-            "color": "#aa9b15",
+            "color": "#b4a417",
+            "ramp_rank": 11,
             "width": 1.5
           }
         ],
@@ -211,77 +222,77 @@
       },
       "canvas": [
         {
-          "color": "#8804a5",
+          "color": "#723684",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#6933a3",
+          "color": "#694598",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#4b4693",
+          "color": "#5a58a0",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#2e6f8e",
+          "color": "#377796",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#25868d",
+          "color": "#23848c",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#219b88",
+          "color": "#07907e",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#2dad7b",
+          "color": "#199a6a",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#48ad5b",
+          "color": "#2da449",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#6baa39",
+          "color": "#5da804",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#8ea319",
+          "color": "#90a611",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#aa9b15",
+          "color": "#b4a417",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
@@ -441,51 +452,63 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#3b4cc0",
+            "color": "#3442b6",
+            "ramp_rank": 11,
             "width": 1.5
           },
           {
-            "color": "#b40426",
+            "color": "#a10d23",
+            "ramp_rank": 0,
             "width": 1.5
           },
           {
-            "color": "#7d99d6",
+            "color": "#6a89ce",
+            "ramp_rank": 8,
             "width": 1.5
           },
           {
-            "color": "#e87a61",
+            "color": "#c25840",
+            "ramp_rank": 2,
             "width": 1.5
           },
           {
             "color": "#cc3311",
+            "ramp_rank": 10,
             "width": 1.5
           },
           {
-            "color": "#d34b41",
+            "color": "#b8312b",
+            "ramp_rank": 1,
             "width": 1.5
           },
           {
-            "color": "#a49790",
+            "color": "#ac9b93",
+            "ramp_rank": 5,
             "width": 1.5
           },
           {
-            "color": "#7496f3",
+            "color": "#5575cf",
+            "ramp_rank": 9,
             "width": 1.5
           },
           {
-            "color": "#cf886f",
+            "color": "#c47458",
+            "ramp_rank": 3,
             "width": 1.5
           },
           {
-            "color": "#879abd",
+            "color": "#8198c2",
+            "ramp_rank": 7,
             "width": 1.5
           },
           {
-            "color": "#b9917f",
+            "color": "#bc8b75",
+            "ramp_rank": 4,
             "width": 1.5
           },
           {
-            "color": "#949aa5",
+            "color": "#979fad",
+            "ramp_rank": 6,
             "width": 1.5
           }
         ],
@@ -505,28 +528,28 @@
       },
       "canvas": [
         {
-          "color": "#3b4cc0",
+          "color": "#3442b6",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#b40426",
+          "color": "#a10d23",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#7d99d6",
+          "color": "#6a89ce",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#e87a61",
+          "color": "#c25840",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
@@ -540,49 +563,49 @@
           "band": null
         },
         {
-          "color": "#d34b41",
+          "color": "#b8312b",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#a49790",
+          "color": "#ac9b93",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#7496f3",
+          "color": "#5575cf",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#cf886f",
+          "color": "#c47458",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#879abd",
+          "color": "#8198c2",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#b9917f",
+          "color": "#bc8b75",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,
           "band": null
         },
         {
-          "color": "#949aa5",
+          "color": "#979fad",
           "marker_rows": null,
           "marker_edge": null,
           "marker_fill": null,

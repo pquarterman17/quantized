@@ -8,6 +8,7 @@ import { DEFAULT_MARKER_PX } from "./markers";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
+import { validAlpha, validEvery } from "./symbolSanitize";
 
 export type { ExportSeriesStyle } from "./publicationStyles";
 
@@ -118,14 +119,15 @@ export function buildExportStyles(
     const ebHex = eb?.color ? resolveToHex(seriesColor(pos[i] ?? i, { color: eb.color })) : null;
     if (ebHex) spec.error_color = ebHex;
     if (eb?.band) spec.error_band = true; // gap audit 4 G8
+    if (st?.rampRank != null) spec.ramp_rank = st.rampRank; // G1: greyscale greys in the gradient's order
     // Gap audit 4 G10: edge / fill colours resolved to hex like the error colour;
     // `marker_every` > 1 only (1 is every point, the default).
     for (const [k, c] of [["marker_edge", st?.markerEdge], ["marker_face", st?.markerFillColor]] as const) {
       const h = c ? resolveToHex(seriesColor(pos[i] ?? i, { color: c })) : null;
       if (h) spec[k] = h;
     }
-    if (st?.markerAlpha != null) spec.marker_alpha = st.markerAlpha;
-    if ((st?.markerEvery ?? 1) > 1) spec.marker_every = st!.markerEvery;
+    if (validAlpha(st?.markerAlpha)) spec.marker_alpha = st.markerAlpha;
+    if (validEvery(st?.markerEvery)) spec.marker_every = st.markerEvery;
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
     if (st?.step) spec.step = st.step;
     // Gap audit 3 N5/N6 (`size_by` stays a channel index; the backend resolves it). The glyph

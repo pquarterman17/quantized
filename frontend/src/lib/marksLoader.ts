@@ -14,6 +14,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { loseRampResolver } from "./seriesRamp";
 import type { SeriesStyle } from "./types";
 
 type Marks = typeof import("./marksImpl");
@@ -38,7 +39,12 @@ export const usesMarks = (s?: SeriesStyle): boolean => !!(s && (s.connect || s.d
 
 /** Do these styles (over `rows` data rows) need the FULL-resolution rows? A size-by column is indexed
  *  by row, and a spline is fitted through the rows, so neither tolerates decimation (a spline only up to
- *  `SPLINE_MAX_ROWS`; above that it is straight and decimation is as for any line). */
+ *  `SPLINE_MAX_ROWS`; above that it is straight and decimation is as for any line).
+ *  "Symbol every N" (gap audit 4 G10) counts drawn ROWS, which a decimated payload renumbers, so it
+ *  blocks too. Its cost was measured (review L10, built app, headless Chromium, 500,000 rows, one
+ *  series): a full redraw took 33 ms decimated and 44 ms with every 1000th symbol (47 ms with a
+ *  symbol on every point), so the full-row path stays; a decimated line with the skip's rows kept
+ *  would need the filter to map back to source rows. */
 export const blocksDecimation = (styles: Iterable<SeriesStyle | undefined>, rows: number): boolean =>
   [...styles].some((s) => s && (s.sizeBy != null || (s.markerEvery ?? 1) > 1 || (s.connect === "spline" && rows <= SPLINE_MAX_ROWS))); // G10: a symbol skip counts rows
 
@@ -49,6 +55,7 @@ export function loadMarks(): Promise<void> {
       try { mod = await import("./marksImpl"); } catch { /* retried once, then plain */ }
     }
     failed = !mod;
+    if (failed) loseRampResolver(); // the gradient's resolver rides this chunk: both sides drop it (review L6)
     // The store is imported only on failure: a static import would pull the whole store (and its
     // DOM-touching init) into every module that reaches this one, e2e's Node-side helpers included.
     if (failed) {

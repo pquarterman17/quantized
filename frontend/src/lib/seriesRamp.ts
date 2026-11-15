@@ -44,3 +44,19 @@ export function sanitizeSeriesRamp(v: unknown): SeriesRamp | null {
   if (!RAMP_MAPS.includes(o.map as RampMap)) return null;
   return { map: o.map as RampMap, ...(o.reverse === true ? { reverse: true } : {}), ...(o.order === "value" ? { order: "value" } : {}) };
 }
+
+// Review L6: the canvas reaches the resolver through the lazy marks chunk. If
+// that chunk failed to load (`marksLoader`, after two attempts), the canvas
+// cannot draw the gradient, so NEITHER side may: the export skips it too
+// (`seriesRampImpl.rampView`) and the dash cycle past the palette comes back
+// (`seriesStyleCycle.windowCyclesSeriesStyles`), so 12 curves are never 8
+// repeated colours with no dashes on screen.
+let resolverLost = false;
+
+/** Called by `marksLoader` when the chunk failed for good (the argument is for tests). */
+export function loseRampResolver(lost = true): void {
+  resolverLost = lost;
+}
+
+/** Does `ramp` colour the curves in this session (set, and its resolver reachable)? */
+export const rampLive = (ramp: SeriesRamp | null | undefined): boolean => !!ramp && !resolverLost;

@@ -43,7 +43,6 @@ import {
   mergeFigureOverrides,
   type FigureOverrides,
 } from "./figureOverrides";
-import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { encodingSplits, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
@@ -54,7 +53,7 @@ import { facetSplitChannels } from "./facetDomains";
 import { perSeriesXSpec } from "./figureSpecPerSeriesX";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3 against the 500-line ceiling. Imported, NOT re-exported (no barrel pulling it in).
-import { viewOverrides } from "./figureViewOverrides";
+import { pageViewOverrides } from "./figureViewOverrides";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct, DefaultTrace } from "./types";
 import { axisTitleWire } from "./exportAxisTitles";
@@ -215,15 +214,10 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
-  [st, data, extras] = perSeriesXSpec(rampView(st, data, channelRoles, extras), data, channelRoles, extras); // gap-2 #2 each Y on its own X; gap-4 G1 the colour gradient first, on the source channels as on screen
-  const ps = st.pageSetup; // #54 Stage 3: the window page (figsize + margins as `page_pad`, audit B3); absent = preset + tight_layout
-  const pageSize = ps ? pageSizeInches(ps) : null;
-  const overrides = ps
-    ? (compactOverrides({
-        ...(viewOverrides(st) ?? {}),
-        page_pad: marginFractions(ps),
-      }) ?? undefined)
-    : viewOverrides(st);
+  // Gap audit 4 G1: the colour gradient first, on the SOURCE channels, as on screen.
+  st = rampView(st, data, channelRoles, extras);
+  [st, data, extras] = perSeriesXSpec(st, data, channelRoles, extras); // gap-2 #2: each Y on its own X, as on screen
+  const { pageSize, overrides } = pageViewOverrides(st); // #54 Stage 3: the window page (figureViewOverrides.ts)
   // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them.
   const xBreaks = breakCompositionFromData(pruneToLiveDataset(data, extras.liveDataset), extras.xBreaks, st.xKey, st.yKeys) && extras.xBreaks;
   const withBreaks = xBreaks

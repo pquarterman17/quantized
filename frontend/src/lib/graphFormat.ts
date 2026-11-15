@@ -16,6 +16,7 @@ import type { LegendPos, PlotView } from "./plotview";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
+import { cleanSymbols, validAlpha, validEvery } from "./symbolSanitize";
 import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 export const GRAPH_FORMAT_VERSION = 1;
@@ -49,7 +50,7 @@ export function portableStyle(style: SeriesStyle | undefined): SeriesStyle | nul
   void _colorBy;
   void _colormap;
   void _sizeBy;
-  const out: SeriesStyle = { ...rest };
+  const out: SeriesStyle = cleanSymbols({ ...rest }); // gap audit 4 L5
   if (fill === "under") out.fill = "under";
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -203,7 +204,7 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (cap != null || width != null || color || style.error_band) out.errorBar = { cap, width, color, ...(style.error_band ? { band: true } : {}) };
   if (style.marker_edge) out.markerEdge = style.marker_edge; // gap audit 4 G10
   if (style.marker_face) out.markerFillColor = style.marker_face;
-  if (style.marker_alpha != null) out.markerAlpha = style.marker_alpha;
-  if (style.marker_every != null) out.markerEvery = style.marker_every;
+  if (validAlpha(style.marker_alpha)) out.markerAlpha = style.marker_alpha;
+  if (validEvery(style.marker_every)) out.markerEvery = style.marker_every;
   return Object.keys(out).length > 0 ? out : null;
 }

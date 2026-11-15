@@ -33,7 +33,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
-import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
+import { plotDecorNeeds, startupOverlayCount, useLazyPlotParts } from "./useLazyPlotParts";
 import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
@@ -352,7 +352,7 @@ export default function PlotViewport(props: PlotViewportProps) {
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
   const decor = plotDecorNeeds(
     [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
-    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0) + (errorBars?.size ?? 0) + (errorSpans?.size ?? 0), args.seriesStyles, // + error bars (lib/uplotErrorDraw.ts)
+    displayPayload, args.annotations, startupOverlayCount({ r: args.refLines, s: args.regionShades, errorBars, errorSpans, colorByColumns }), args.seriesStyles,
   );
   useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 
