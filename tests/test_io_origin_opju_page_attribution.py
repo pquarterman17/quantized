@@ -298,33 +298,16 @@ def test_wide_pass_with_only_a_false_separator_still_fails_closed() -> None:
 _AXIS_JSON = "origin/ground_truth_public/axis_ranges.json"
 _REL_TOL = 1e-6
 
-_SCI = "origin/public/ARETE-zzwl_origin-meteohydro-skills/python-origin-plotting/assets/scientific_color_reference/origin_scientific_colors.opju"  # noqa: E501
-_TEA = "origin/public/niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju"
 _SOP = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
 _RISK5 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig3_ExtFig5/PerceivedRiskandPrediction.opju"  # noqa: E501
 _RISK9 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig4_ExtFig9/PerceivedRiskandPrediction.opju"  # noqa: E501
 
-_Y_MISREAD = "Y span misread (value-token defect); decoded by the unfixed decoder too"
-
 # (file, page, layer) -> cause: decoded, but the values differ from Origin's.
-KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
-    (_SCI, "ColorPage1", 7): "y_to 240 vs Origin 242 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 2): "Y span reads +-3.05e-05 vs Origin [-0.5, 3.5] (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 4): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 5): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 6): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 7): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 8): "y_from 438.4 vs Origin 0 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 9): "y_to 2 vs Origin 4 (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 10): "Y span reads 0..3.05e-05 vs Origin [0, 1] (" + _Y_MISREAD + ")",
-    (_SCI, "ColorPage2", 12): "y_to 240 vs Origin 242 (" + _Y_MISREAD + ")",
-    (
-        _TEA,
-        "Graph12",
-        1,
-    ): "y_from 927.5 vs Origin 0: geometry payload 82 03 fc 8c 40 fills as a value",
-    (_SOP, "fig_SHAP_stability", 1): "y_from 731.17 vs Origin 0 (" + _Y_MISREAD + ")",
-}
+# Empty (2026-11-15): every decoded layer in the 76-file oracle matches. The
+# Y-span family that filled this table (a geometry double read as ``y_from``,
+# a real-form record taken by the specimen parser) is fixed; see
+# ``test_io_origin_opju_y_span``. Stale entries fail the test by design.
+KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {}
 
 # (file, page, layer) -> cause: decoded under a page NAME Origin does not
 # list, so keyed (page, layer) it has no counterpart. All are the same class,

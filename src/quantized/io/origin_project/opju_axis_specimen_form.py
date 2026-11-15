@@ -115,6 +115,12 @@ def _parse_specimen_record(
         x_log = False
     elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
         x_log = True
+    if b[tb + 1 : tb + 3] == b"{@" and 0x81 <= b[tb + 3] <= 0x8F:
+        # The skeleton's third filler byte is the Y span's first value TAG, not
+        # the ``01`` scale flag: the geometry double carries no X-scale trailer
+        # (type byte 02 = just ``7b 40``), so the fixed +3 skip below would eat
+        # the tag. That is a real-form record (it decodes there); never guess.
+        return None
     y_start = tb + 1 + 3  # + type byte + "7b 40 ..." filler (see docstring)
     ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
     if ystep < 0:

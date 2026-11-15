@@ -2591,13 +2591,10 @@ a value token or the geometry filler can no longer shadow the real
 separator). The strict pass still takes only its first hit. Whole-corpus
 measurement: 0 of 2,153 (page, layer) values changed.
 
-Known open (reported, not fixed; each is pinned, strict-xfail style, in
-`tests/test_io_origin_opju_page_attribution.py`):
+Known open (reported, not fixed; pinned in
+`tests/test_io_origin_opju_page_attribution.py`; the Y-span defects that filled
+the strict `KNOWN_DEFECTS` table are fixed, see "Y-span start grammar" below):
 
-- `TEA_ExcelGraphs` `Graph12` Y decodes `[927.5, 1000]` vs Origin `[0, 1000]` —
-  the geometry payload `82 03 fc 8c 40` fills as a tagged value and `y_from`
-  (elided 0) is mis-read; `origin_scientific_colors` `ColorPage1/2` several Y
-  spans (e.g. `y_from` 438.4 for 0).
 - **Page-header names with an escape.** `fig_ c0 43 06 Verr…` is Origin's page
   `fig_CCCVerror`, `Graph c0 31 …` is `Graph111`: the header name is read
   truncated (`fig_`, `Graph`) or the page is not enumerated at all
@@ -2650,6 +2647,41 @@ record that matched Origin before is byte-identical. Of the 90, 77 have no
 oracle: 56 `x_to` 88/54/124-style values become 90/55/125-style, and 21
 undecoded layers now decode to round Origin-style spans (e.g. `[0, 800]`,
 `[0.7, 3.3]` step 1).
+
+**Y-span start grammar (2026-11-15).** The 13 Y-span misreads in the 76-file
+oracle were three mechanisms, all visible in the bytes after the second
+separator (`81 id plen 00 flag 01`):
+
+- **The geometry payload opens with its own value token.** `82 03 fc 8c 40`
+  (= 927.5) or `c3 66 02 7b 40` (= 438.4) is the layer-geometry double, not a
+  Y value. The start scan began at the payload's first byte, so with `y_from`
+  elided (0) the 3-token fill `[geometry, to, step]` beat the true 2-token
+  fill and `y_from` read 927.5 / 438.4 / 731.17. The Y span now starts at or
+  after the end of the first tagged/RLE token at `y_lo` (never inside it). All
+  15 records the old scan started at `y_lo` were inverted (`from > to`) or
+  Origin-wrong. This also fixed `y_to` 2 vs 4 and 1.0 vs 0.0 in the specimen
+  family below.
+- **A tagged value's literal run carries the next token's lead byte.** The
+  stream is chunked: `8T nn <nn literals>` or `c2/c3 <byte> ctx <ctx
+  literals>`; a lead-form RLE value's first byte is the last literal of the
+  PREVIOUS chunk. `85 03 e8 3f` + `cd c2 cc 03 f0 3f 9a c2 99 02 a9 3f` is
+  `y_from` 0.75 (`e8 3f`), `y_to` 1.05, step 0.05: nn = 3 counts `e8 3f` AND
+  the `cd` that leads the RLE 1.05, so `e8 3f cd` is not a value (implausible,
+  rejected). Read as `nn - 1` compact bytes + lead, accepted only when the
+  byte after the run is `c2`/`c3` and the plain `nn`-byte reading failed.
+  Evidence: 27 of 27 oracle-covered records this affects match Origin
+  exactly (hyperspectral Graph4 + 26 previously-undecoded layers).
+- **Specimen skeleton, no X-scale trailer.** `c3 66 <ctx> 7b 40 [ctx-2
+  literals]`: ctx 02 = no `01`/`08 01` scale trailer, so the Y span's first tag
+  (`8d`, `86`, `8e`) follows `7b 40` directly. `_parse_specimen_record` assumed
+  `7b 40 01` and skipped 3 filler bytes, eating the tag (`8d 03 40 6e 40` =
+  242 read as 240; `86 02 e0 bf` -0.5 read as +-3.05e-05). It now declines
+  when the third filler byte is a value tag; the real-form reader decodes
+  these. The corpus has 6 such records and 33 true specimen ones (`7b 40
+  01`, `7b 40 08 01`) -- unchanged.
+
+Oracle (76 files, decoded layers): 1549 match / 13 wrong / 16 phantom before
+-> 1588 / 0 / 16 after (phantoms are the page-name-escape class above, unchanged).
 
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`
