@@ -190,17 +190,14 @@ export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Pro
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
   const opened = await openResultPlot(id, bindingIndex, "report");
   if (!opened) return false;
-  let refused = false;
   const require = opened.fitDrawn
-    ? (spec: FigureSpec | null) => {
-        if (specCarriesFit(spec, opened.dataset)) return null;
-        refused = true;
-        return "this view's figure cannot carry the fit (a polar, grouped, faceted or stat view); show it as a plain plot first";
-      }
+    ? (spec: FigureSpec | null) => specCarriesFit(spec, opened.dataset)
+      ? null
+      : "this view's figure cannot carry the fit (a polar, grouped, faceted or stat view); show it as a plain plot first"
     : undefined;
   try {
-    const sent = await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState, require));
-    return sent && !refused;
+    // True only when a figure block was really added (not cancelled, refused or a duplicate click).
+    return await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState, require));
   } catch (error) {
     useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`);
     return false;

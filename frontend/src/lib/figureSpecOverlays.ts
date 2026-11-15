@@ -56,6 +56,10 @@ import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
 import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
 
+/** The fit's series label on the wire, past the dataset's own columns -- what a
+ *  caller checking "does this figure carry the fit?" looks for. */
+export const FIT_SERIES_LABEL = "fit";
+
 /** The view fields the overlays are decided from: a slice of the SAME PlotView
  *  the spec was built from -- never re-assembled from two sources. */
 export type OverlayView = Pick<
@@ -147,7 +151,7 @@ export function withAnalysisOverlays(
   if (!drawsShownCurves(keys as number[], ds, view, layout.shown)) return spec; // fail closed
   const n = target.data.time.length;
   const candidates: [string, FitOverlay | null | undefined, boolean][] = [
-    ["fit", placeOverlay(sources.fitOverlay, layout), false],
+    [FIT_SERIES_LABEL, placeOverlay(sources.fitOverlay, layout), false],
     ["baseline", placeOverlay(sources.baselineOverlay, layout), false],
     ["peaks", placeOverlay(sources.peakOverlay, layout), true],
   ];

@@ -19,6 +19,7 @@
 
 import type { FigureSpec } from "../lib/api/figures";
 import { fitBands } from "../lib/api/fitStats";
+import { FIT_SERIES_LABEL } from "../lib/figureSpecOverlays";
 import { fullPlottedX } from "../lib/fitselectionActions";
 import { curveX } from "../lib/perSeriesX";
 import type { Dataset, FitSpec, OverlayBinding } from "../lib/types";
@@ -100,7 +101,10 @@ export async function openResultPlot(
     const current = now.analysisResults.find((item) => item.id === id);
     const currentDataset = now.datasets.find((item) => item.id === fitDataset.id);
     if (current?.settingsRef?.field !== "fitSpec" || current.settingsRef.datasetId !== fitDataset.id ||
-        currentDataset?.fitSpec !== fitSpec || currentDataset.data !== fitDataset.data) {
+        currentDataset?.fitSpec !== fitSpec || currentDataset.data !== fitDataset.data ||
+        // A re-designation / role edit in flight changes where the fit may be drawn.
+        currentDataset.columnDesignations !== fitDataset.columnDesignations ||
+        currentDataset.channelRoles !== fitDataset.channelRoles) {
       return fail("the fit changed while its curve was loading");
     }
     fitY = evaluated;
@@ -126,5 +130,5 @@ export async function openResultPlot(
  *  series labelled "fit" past the dataset's own columns; a view whose export
  *  cannot carry overlays (grouped, faceted, encoded, stat) has none. */
 export function specCarriesFit(spec: FigureSpec | null, ds: Pick<Dataset, "data">): boolean {
-  return !!spec && spec.dataset.labels.slice(ds.data.labels.length).includes("fit");
+  return !!spec && spec.dataset.labels.slice(ds.data.labels.length).includes(FIT_SERIES_LABEL);
 }

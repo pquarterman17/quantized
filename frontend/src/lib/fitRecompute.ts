@@ -71,9 +71,12 @@ export function commitRecomputedFit(
   /** The 1-sigma errors the re-fit was weighted with (aligned to `pairs`). */
   dy?: readonly number[],
 ): void {
-  // The X/Y the re-fit actually read (`binding`) become the recorded ones: a
-  // legacy spec on a multi-X sheet is re-read on the Y's own X (I3).
-  const updatedSpec = stampRecompute({ ...spec, xKey: binding.xKey, yKey: binding.yKey }, result);
+  // The X/Y the re-fit actually read (`binding`) become the recorded ones (a
+  // spec on a multi-X sheet is re-read on the Y's own X, I3) -- except for a
+  // fully legacy spec, whose selection came from the LIVE plot: that guess is
+  // never promoted to provenance.
+  const legacy = spec.xKey === undefined && spec.yKey === undefined;
+  const updatedSpec = stampRecompute(legacy ? spec : { ...spec, xKey: binding.xKey, yKey: binding.yKey }, result);
   if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
     throw new Error("source or fit changed while recalculating");
   }

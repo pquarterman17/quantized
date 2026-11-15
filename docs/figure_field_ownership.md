@@ -198,3 +198,23 @@ alternative *sources* of a new value (a menu edit vs. an Origin import vs. a
 recipe apply vs. a dataset switch), not competing *destinations* — writing
 the same `AppState`/document field once each, never two representations of
 the same field at rest.
+
+## Analysis overlays (fit / baseline / peaks)
+
+The overlays are NOT figure fields: they live on the app store
+(`fitOverlay`, `baselineOverlay`, `peakOverlay`), are never saved into a
+`FigureDocument`, and each carries the `OverlayBinding` (`{yKey, xKey}`) its
+producer computed it on. A figure owns only the VIEW they are decided
+against. The full rule is invariants I1-I6 in
+`frontend/src/lib/overlayPlacement.ts`; in field-ownership terms:
+
+- The canvas decides from the live view; every export (Export, Copy, Send to
+  report) decides from the ONE `PlotView` its spec was built from
+  (`figureSpecStage.buildStageFigureSpec`: the focused document's view, else
+  the live view), never a mix of document and store fields.
+- An overlay rides an export only when the spec draws exactly that view's
+  curves and the overlay's bound curve is among them.
+- Reopening a saved fit opens the plot on the legacy-tolerant resolved
+  binding but draws the fit only on the exact X/Y it was fitted on
+  (`store/analysisResultPlotOpen.openResultPlot`); Send to report refuses
+  rather than ship a fitted plot without its fit.

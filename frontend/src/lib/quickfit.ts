@@ -117,7 +117,8 @@ export function qfitSpec(
   fitted?: OverlayBinding | null,
 ): FitSpec {
   const curve = fitted ?? gadgetCurve(ds, view);
-  const spec: FitSpec = { model, xKey: curve?.xKey ?? view.xKey, yKey: curve?.yKey ?? 0 };
+  // `curve.xKey === null` is the TIME column, not "unknown": never `??` it to the plot's X.
+  const spec: FitSpec = { model, xKey: curve ? curve.xKey : view.xKey, yKey: curve ? curve.yKey : 0 };
   const params = result?.params;
   if (Array.isArray(params) && params.every((v) => typeof v === "number")) {
     spec.params = params as number[];

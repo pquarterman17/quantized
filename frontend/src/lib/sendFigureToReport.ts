@@ -249,11 +249,11 @@ const sendingPlots = new WeakSet<StoreGet>();
 /** `require` (optional): a last check of the BUILT spec, returning why it must
  *  not be sent (e.g. a fitted result plot whose fit the figure does not carry,
  *  store/analysisResultActions) -- the figure is then refused, not sent. */
-export async function runSendFigureToReportCommand(s: StoreGet, require?: SendRequirement): Promise<void> {
-  if (sendingPlots.has(s)) return;
+export async function runSendFigureToReportCommand(s: StoreGet, require?: SendRequirement): Promise<boolean> {
+  if (sendingPlots.has(s)) return false;
   sendingPlots.add(s);
   try {
-    await sendActivePlot(s, require);
+    return await sendActivePlot(s, require); // true only when a figure block was added
   } finally {
     sendingPlots.delete(s);
   }
@@ -261,7 +261,7 @@ export async function runSendFigureToReportCommand(s: StoreGet, require?: SendRe
 
 export type SendRequirement = (spec: FigureSpec | null) => string | null;
 
-async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<void> {
+async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<boolean> {
   // Finding #3 (P3.6 review round 2): checked BEFORE any dialog opens, not
   // after the user has already answered target/caption/style/etc — asking
   // those questions only to then discover there is nothing to send wastes
@@ -273,11 +273,12 @@ async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<v
   if (!active) {
     s().setStatus("no dataset to send");
     toast("no dataset to send", "danger");
-    return;
+    return false;
   }
   const choice = await askSendToReport(s, s().plotTitle, `${stemFromName(active.name)} figures`);
-  if (!choice) return;
+  if (!choice) return false;
   const { targetId, caption, opts, newReportName } = choice;
+  let added = false;
   await exportActive(
     s,
     async (stem, ds, signal) => {
@@ -288,7 +289,9 @@ async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<v
         const refused = require?.(null); // a stat figure carries no row-aligned overlay
         if (refused) throw new Error(refused);
         const statBlock = await statReportBlock(stat, { style: opts.style, dpi: REPORT_FIGURE_DPI, signal }, stem, caption);
-        return addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
+        addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
+        added = true;
+        return;
       }
       // Title and axis labels come from the live view AFTER the dataset
       // resolved — the moment `buildStageFigureSpec` reads the focused
@@ -314,6 +317,7 @@ async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<v
       if (!(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);
       addFigureToReport(s, targetId, block, stem, ds.id, newReportName, refs);
+      added = true;
       // Estimated by walking the spec, never by serializing it (see
       // estimateJsonBytes): a heads-up, not a refusal — the copy is the point.
       const notice = largeSpecNotice(estimateJsonBytes(block.spec));
@@ -321,6 +325,7 @@ async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<v
     },
     { verb: "send", past: "sent to report:" },
   );
+  return added;
 }
 
 /** Figures currently mid-send (finding #2, P3.6 review round 2), so a rapid

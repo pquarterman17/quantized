@@ -27,6 +27,9 @@ import {
 import { fitDrawBinding } from "../../store/analysisResultPlotOpen";
 import { useApp } from "../../store/useApp";
 import { peakBinding, peakInputs } from "../workshops/peaks/peakInputs";
+import { dropGapRows } from "../../lib/api/finitePairs";
+import { commitRecomputedFit } from "../../lib/fitRecompute";
+import { qfitSpec } from "../../lib/quickfit";
 import { R1, T1, T2, t1r1t2r2 } from "../../test/ownXFixture";
 import { usePerSeriesX } from "./usePerSeriesX";
 import { usePlotPayload, type PlotPayloadParams } from "./usePlotPayload";
@@ -246,6 +249,24 @@ describe("I3 -- provenance is what was really fitted, separate from where marker
     expect(useApp.getState().datasets[0].fitSpec).toMatchObject({ xKey: 1, yKey: 2 });
   });
 
+  it("a quick fit of a curve on the TIME column records time, not the plot's X", () => {
+    // Plot X = T2: R1's own X is the time column (T1), recorded as null.
+    const spec = qfitSpec(SHEET, { xKey: 1, yKeys: [0], seriesOrder: null, hiddenChannels: [] }, "Linear", null, ON_R1);
+    expect(spec).toMatchObject({ xKey: null, yKey: 0 });
+  });
+
+  it("a fully legacy spec's re-fit never promotes the live plot's channels to provenance", () => {
+    const legacy: FitSpec = { model: "Linear", params: [1, 0] };
+    const ds: Dataset = { ...SHEET, fitSpec: legacy };
+    useApp.setState({ datasets: [ds] });
+    const result = { params: [2, 1], errors: [0, 0], R2: 1, RMSE: 0, yFit: [1, 2, 3, 4], exitFlag: 1 };
+    commitRecomputedFit(useApp.setState, useApp.getState, ds, legacy, dropGapRows(T1, R1), ON_R1, result);
+    const saved = useApp.getState().datasets[0].fitSpec!;
+    expect(saved.xKey).toBeUndefined();
+    expect(saved.yKey).toBeUndefined();
+    expect(saved.params).toEqual([2, 1]);
+  });
+
   it("a fit is never drawn against an X-designated column as its Y", () => {
     expect(fitDrawBinding(SHEET, { channels: [1], xChannel: null }, { xKey: null, yKey: 1 })).toBeNull();
     expect(fitDrawBinding(SHEET, { channels: [2], xChannel: 1 }, { xKey: 1, yKey: 2 })).toEqual(ON_R2);
@@ -303,6 +324,13 @@ describe("I4 -- plot-open and fit-draw are separate, and every consumer honours 
       expect(mocks.ask).not.toHaveBeenCalled();
     });
   }
+
+  it("Send to report says false when nothing was added (dialog cancelled)", async () => {
+    saveFit({ ...base, xKey: 1, yKey: 2 });
+    mocks.ask.mockResolvedValueOnce(null);
+    expect(await sendAnalysisResultPlotToReport("analysis-fit-own", 0)).toBe(false);
+    expect(useApp.getState().reports).toEqual([]);
+  });
 
   it("Open shows a hidden fitted curve, so its fit is really drawn", async () => {
     saveFit({ ...base, xKey: 1, yKey: 2 });
