@@ -39,12 +39,13 @@ import { traceSeriesStyles } from "./exportDefaultTrace";
 import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { canvasLineWidth } from "./plotTemplates";
 import type { ExportSeriesStyle } from "./publicationStyles";
+import { overlayDecades } from "./logOffset";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
-import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay } from "./types";
+import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
 
 /** The live view fields the overlays are read from (all on the app store). */
 export interface OverlayView {
@@ -63,9 +64,10 @@ export interface OverlayView {
 
 /** The rows the overlays align to: `ds` itself, or on a per-series-X sheet the
  *  same blocks x n view the canvas and the request are built from. */
-function overlayTarget(ds: Dataset, view: OverlayView): { target: Dataset; layout: OverlayLayout | null } {
-  const v = perSeriesXDataset(ds, view.xKey, shownCurves(ds.data, view, ds.channelRoles));
-  return { target: v?.dataset ?? ds, layout: overlayLayout(ds, view.xKey, v?.blocks) };
+function overlayTarget(ds: Dataset, view: OverlayView): { target: Dataset; layout: OverlayLayout } {
+  const shown = shownCurves(ds.data, view, ds.channelRoles);
+  const v = perSeriesXDataset(ds, view.xKey, shown);
+  return { target: v?.dataset ?? ds, layout: overlayLayout(ds, view.xKey, v?.blocks, shown) };
 }
 
 /** Same X, row for row (NaN = NaN): the wire really is `target`'s rows. */
@@ -129,11 +131,12 @@ export function withAnalysisOverlays(
   ];
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
   // (0 = not a band edge); an odd value is a lower edge.
-  // The bound Y's offset: the wire keeps channel indices, so it is its y_keys slot.
-  const factorFor = (o: { binding?: { yKey: number } | null }): number => {
-    const at = o.binding ? keys.indexOf(o.binding.yKey) : 0;
-    return 10 ** (spec.log_offsets?.[at < 0 ? 0 : at] ?? 0);
-  };
+  // The bound Y's offset (lib/logOffset.overlayDecades, as the canvas): the wire
+  // keeps channel indices, so a channel's offset is its y_keys slot's.
+  const decadesOf = (ch: number): number => spec.log_offsets?.[keys.indexOf(ch)] ?? 0;
+  const firstShown = keys.find((k) => !view.hiddenChannels.includes(k as number)) as number | undefined;
+  const factorFor = (o: { binding?: OverlayBinding | null }): number =>
+    10 ** overlayDecades(o.binding, decadesOf, firstShown ?? null);
   const present = candidates.flatMap(([label, o, points]) => {
     if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];

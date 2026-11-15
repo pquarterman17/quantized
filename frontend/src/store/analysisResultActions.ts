@@ -196,10 +196,16 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
       state.setStatus("can't open fitted plot: the saved fit has no parameter values");
       return null;
     }
-    // `null` deliberately means the independent/time axis; unlike `undefined`
-    // it must not fall through to the FitSpec channel.
-    const savedX = prepared.xChannel !== undefined ? prepared.xChannel : fitSpec.xKey ?? null;
-    fitBinding = { yKey: fitSpec.yKey ?? prepared.channels[0] ?? 0, xKey: savedX }; // the curve is the model at savedX
+    // The curve is the model at the X the fit READ (`fitSpec.xKey`: the curve's
+    // own X on a T1,R1,T2,R2 sheet), which is not necessarily the plot X the
+    // result opens on (`prepared.xChannel`) -- the overlay binds to the fit's.
+    // `null` is the time axis. A legacy fit records neither, and is not guessed.
+    if (fitSpec.xKey === undefined || fitSpec.yKey === undefined) {
+      state.setStatus("can't open fitted plot: the legacy fit does not record its exact X/Y channels; use Edit / Re-fit first");
+      return null;
+    }
+    const savedX = fitSpec.xKey;
+    fitBinding = { yKey: fitSpec.yKey, xKey: savedX };
     const xs = fullPlottedX(fitDataset.data, savedX);
     const finite = xs.flatMap((value, index) => Number.isFinite(value) ? [{ value, index }] : []);
     if (!finite.length) {

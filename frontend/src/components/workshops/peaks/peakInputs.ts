@@ -20,7 +20,7 @@ export interface PeakInputs {
    *  T1,R1,T2,R2 reads T2), for aligning marker overlays to the full-length
    *  plot x (which keeps excluded/filtered rows as gaps). In the fallback
    *  branch (`selectedFitData` returned null, `x`/`y` come from the time axis)
-   *  it is still the requested `xKey`'s column. */
+   *  it is the time column too -- always the column `xKeyUsed` names. */
   fullX: number[];
   /** The x channel `x` was actually taken from — `null` means the time axis.
    *  NOT necessarily the `xKey` that was asked for: `selectedFitData` returns
@@ -55,15 +55,14 @@ export function peakInputs(
   const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
   // `sel.x` is the Y's OWN X (R2 -> T2); the marker overlay and the recorded
   // provenance must follow it, not the plot's shared X.
-  const usedX = sel ? sel.xKey : xKey;
-  const fullX = fullPlottedX(ds.data, usedX);
+  const fullX = fullPlottedX(ds.data, sel ? sel.xKey : null);
   if (sel) {
     const pairs = dropGapRows(sel.x, sel.y);
     return {
       x: pairs.x,
       y: pairs.y,
       fullX,
-      xKeyUsed: usedX,
+      xKeyUsed: sel.xKey,
       yKeyUsed: sel.yKey,
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
@@ -84,9 +83,11 @@ export function peakInputs(
 }
 
 /** The curve a peak overlay drawn from these inputs belongs to: the Y and X
- *  the peaks were actually found/fitted on (lib/overlayPlacement.ts). */
+ *  the peaks were actually found/fitted on (lib/overlayPlacement.ts). `xKeyUsed`
+ *  is the X the markers are positioned on (`fullX`); no value channel = no
+ *  curve (-1). */
 export function peakBinding(i: Pick<PeakInputs, "xKeyUsed" | "yKeyUsed">): OverlayBinding {
-  return { yKey: i.yKeyUsed ?? 0, xKey: i.xKeyUsed };
+  return { yKey: i.yKeyUsed ?? -1, xKey: i.xKeyUsed };
 }
 
 /** A saved peak table may be shown only beside the exact input contract it

@@ -32,7 +32,7 @@
 
 import type { ErrorSpan } from "./errorbars";
 import type { PlotPayload } from "./plotdata";
-import type { SeriesStyle } from "./types";
+import type { OverlayBinding, SeriesStyle } from "./types";
 import { waterfallApplies } from "./waterfallOffset";
 
 /** The largest offset honoured, either way (the backend's `MAX_DECADES`). */
@@ -44,6 +44,22 @@ export const MAX_DECADES = 30;
 export function logOffsetDecades(v: unknown): number {
   if (typeof v !== "number" || !Number.isInteger(v) || Math.abs(v) > MAX_DECADES) return 0;
   return v === 0 ? 0 : v; // -0 -> 0
+}
+
+/** The decade offset an analysis overlay is scaled by -- the ONE rule the canvas
+ *  (Stage/usePlotPayloadLogOffsets) and the export (lib/figureSpecOverlays)
+ *  share. An overlay is glued to the Y its producer bound it to; one bound to
+ *  no curve (yKey < 0) is not offset; only an unbound (legacy) overlay falls
+ *  back to `fallbackChannel` (the first visible plotted one). Placement
+ *  (lib/overlayPlacement) has already dropped an overlay whose bound Y is not
+ *  drawn, so there is no fallback for that case. */
+export function overlayDecades(
+  binding: OverlayBinding | null | undefined,
+  decadesOf: (channel: number) => number,
+  fallbackChannel: number | null,
+): number {
+  if (binding) return binding.yKey < 0 ? 0 : decadesOf(binding.yKey);
+  return fallbackChannel === null ? 0 : decadesOf(fallbackChannel);
 }
 
 /** The legend suffix for an offset series ("" for none). Mirrors the

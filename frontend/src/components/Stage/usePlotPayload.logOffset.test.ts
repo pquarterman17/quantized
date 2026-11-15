@@ -170,13 +170,26 @@ describe("usePlotPayload — decade offsets reach error bars/spans and overlays 
     await waitFor(() => expect(result.current.payload).not.toBeNull());
     const cols = () => result.current.displayPayload!.data as unknown as (number | null)[][];
     expect(cols()[3]).toEqual([1000, 2000, 3000]); // B's fit follows B (offset ×10)
-    // A fit of A (no offset) stays put although B is the first visible channel.
+    // A fit of B (no offset) stays put although A (offset x10) is the first visible channel.
     rerender(params({
-      seriesStyles: { 1: { logOffset: 1 } },
-      hiddenChannels: [0],
-      fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [100, 200, 300] },
+      seriesStyles: { 0: { logOffset: 1 } },
+      hiddenChannels: [],
+      fitOverlay: { datasetId: "d1", binding: { yKey: 1, xKey: null }, y: [100, 200, 300] },
     }));
     await waitFor(() => expect(cols()[3]).toEqual([100, 200, 300]));
+  });
+
+  it("does not draw a fit bound to a hidden channel (never scaled by a fallback)", async () => {
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: params({
+        seriesStyles: { 0: { logOffset: 1 } },
+        hiddenChannels: [0],
+        fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [100, 200, 300] },
+      }),
+    });
+    await waitFor(() => expect(result.current.payload).not.toBeNull());
+    const cols = result.current.displayPayload!.data as unknown as (number | null)[][];
+    expect(cols).toHaveLength(3); // x, A, B -- no fit column
   });
 });
 

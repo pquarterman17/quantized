@@ -63,7 +63,7 @@ describe("useCurveFit on a secondary-X Y", () => {
     const o = useApp.getState().fitOverlay!;
     expect(o.binding).toEqual({ yKey: 2, xKey: 1 });
     // On the live view (R1 on T1, R2 on T2) the curve lands on T2's rows only.
-    const layout = overlayLayout(ds, null, perSeriesXData(ds, null, [0, 2])?.blocks);
+    const layout = overlayLayout(ds, null, perSeriesXData(ds, null, [0, 2])?.blocks, [0, 2]);
     expect(placeOverlay(o, layout)?.y).toEqual([null, null, null, null, 7, 8, 9, 10]);
   });
 });

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitAnalysisResult } from "../lib/fitAnalysisResult";
+import { overlayLayout, placeOverlay } from "../lib/overlayPlacement";
+import { perSeriesXData } from "../lib/perSeriesX";
+import { shownCurves } from "../lib/shownCurves";
 import type { Dataset, FitSpec } from "../lib/types";
+import { T2, t1r1t2r2 } from "../test/ownXFixture";
 
 const mocks = vi.hoisted(() => ({
   fitModel: vi.fn(), fitBands: vi.fn(), listFitModels: vi.fn(), saveBlob: vi.fn(),
@@ -145,5 +149,40 @@ describe("curve-fit analysis result actions", () => {
     expect(mocks.saveBlob).toHaveBeenCalledWith(expect.any(Blob), "Linear fit · Line-parameters.csv");
     const blob = mocks.saveBlob.mock.calls[0][0] as Blob;
     expect(await blob.text()).toContain("slope,2,0.1,false");
+  });
+});
+
+describe("open fitted plot on a T1,R1,T2,R2 sheet", () => {
+  it("evaluates the model at the fit's own X (T2) and draws it in T2's block with those values", async () => {
+    const own = t1r1t2r2(); // R2 (channel 2) is fitted against T2 (channel 1)
+    const ownSpec: FitSpec = { ...spec, xKey: 1, yKey: 2, nPoints: 4 };
+    const ds: Dataset = { ...own, fitSpec: ownSpec };
+    mocks.fitBands.mockImplementation(async ({ x }: { x: number[] }) => ({
+      yFit: x.map((v) => 2 * v + 1), ciLo: [], ciHi: [], piLo: [], piHi: [], level: 0.95,
+    }));
+    useApp.setState({
+      datasets: [ds], activeId: "own", analysisResults: [fitAnalysisResult(ds, ownSpec)],
+      staleFits: [], xKey: null, yKeys: [0], fitOverlay: null,
+    });
+    expect(await prepareAnalysisResultPlot("analysis-fit-own", 0)).not.toBeNull();
+    // The model was evaluated on T2's values, not on T1's.
+    expect(mocks.fitBands).toHaveBeenCalledWith(expect.objectContaining({ x: T2 }));
+    const overlay = useApp.getState().fitOverlay!;
+    expect(overlay.binding).toEqual({ yKey: 2, xKey: 1 });
+    expect(overlay.y).toEqual([81, 21, 61, 41]);
+    // The canvas draws it, in the rows of the X it was computed on.
+    const s = useApp.getState();
+    const shown = shownCurves(ds.data, s, ds.channelRoles);
+    const layout = overlayLayout(ds, s.xKey, perSeriesXData(ds, s.xKey, shown)?.blocks, shown);
+    expect(placeOverlay(overlay, layout)?.y).toEqual([81, 21, 61, 41]);
+  });
+
+  it("does not guess the Y of a legacy fit that records no channel (a one-column sheet would resolve to 0)", async () => {
+    const { yKey: _y, ...legacy } = spec;
+    const ds: Dataset = { ...source, fitSpec: legacy as FitSpec };
+    useApp.setState({ datasets: [ds], analysisResults: [fitAnalysisResult(ds, legacy as FitSpec)] });
+    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).toBeNull();
+    expect(useApp.getState().status).toContain("exact X/Y");
+    expect(useApp.getState().fitOverlay).toBeNull();
   });
 });

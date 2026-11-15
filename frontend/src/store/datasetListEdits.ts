@@ -206,6 +206,8 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
           fwhmResult: null,
           qfitRoi: null,
           qfitResult: null,
+          qfitResultModel: null,
+          qfitResultCurve: null,
           qfitBusy: false,
           qfitError: null,
           gadgetBusy: false,

@@ -9,7 +9,7 @@ import type { Dataset, FitOverlay } from "./types";
 
 const DS = t1r1t2r2();
 const layoutFor = (shown: number[], ds: Dataset = DS, xKey: number | null = null) =>
-  overlayLayout(ds, xKey, perSeriesXData(ds, xKey, shown)?.blocks);
+  overlayLayout(ds, xKey, perSeriesXData(ds, xKey, shown)?.blocks, shown);
 const BOTH = layoutFor([0, 2]); // blocks [T1 (time), T2 (channel 1)], n = 4
 const fit = (over: Partial<FitOverlay> = {}): FitOverlay => ({
   datasetId: "own",
@@ -50,7 +50,7 @@ describe("placeOverlay", () => {
     // Re-designated: R1 is now the X and T2 a Y, so R2 belongs to channel 0 --
     // a fit made against T2 describes no curve of this view.
     const ds: Dataset = { ...DS, columnDesignations: { 0: "X", 1: "Y" } };
-    const layout = overlayLayout(ds, null, perSeriesXData(ds, null, [1, 2])?.blocks);
+    const layout = overlayLayout(ds, null, perSeriesXData(ds, null, [1, 2])?.blocks, [1, 2]);
     expect(layout?.blocks).toEqual([0]);
     expect(placeOverlay(fit(), layout)).toBeNull();
   });
@@ -69,11 +69,25 @@ describe("placeOverlay", () => {
     expect(placeOverlay(fit({ y: [1, 2, 3] }), BOTH)).toBeNull();
   });
 
-  it("fails closed for a binding to no curve (yKey -1) on a multi-X view, passes through on one X", () => {
+  it("fails closed for a binding to no curve (yKey -1) on a multi-X view, passes through on its own one-block view", () => {
     const orphan = fit({ binding: { yKey: -1, xKey: null }, y: R1 });
     expect(placeOverlay(orphan, BOTH)).toBeNull();
     expect(placeOverlay(orphan, layoutFor([0]))).toBe(orphan);
-    expect(placeOverlay(orphan, null)).toBe(orphan);
+  });
+
+  it("does not draw no-curve markers on a one-block view that is another X (R2 alone shown)", () => {
+    // Plot X = T1, only R2 shown: the view is ONE block, T2's rows. Markers the
+    // peak wizard placed against T1 must not land on T2's rows ...
+    const onlyR2 = layoutFor([2]);
+    expect(onlyR2.blocks).toEqual([1]);
+    const onT1 = fit({ binding: { yKey: -1, xKey: null }, y: R1 });
+    expect(placeOverlay(onT1, onlyR2)).toBeNull();
+    // ... and an unbound (legacy) overlay is on the plot's X, T1, so not there either ...
+    const legacy = { datasetId: "own", y: R1 } as unknown as FitOverlay;
+    expect(placeOverlay(legacy, onlyR2)).toBeNull();
+    // ... while markers positioned on T2 are exactly this view's rows.
+    const onT2 = fit({ binding: { yKey: -1, xKey: 1 }, y: R2 });
+    expect(placeOverlay(onT2, onlyR2)).toBe(onT2);
   });
 
   it("never guesses an unbound (legacy) overlay into a block, but keeps it on a one-X view", () => {
@@ -82,13 +96,44 @@ describe("placeOverlay", () => {
     expect(placeOverlay(legacy, layoutFor([0]))).toBe(legacy);
   });
 
-  it("passes every overlay through untouched on a sheet with one X", () => {
-    const single: Dataset = { ...DS, columnDesignations: {} };
-    expect(overlayLayout(single, null, perSeriesXData(single, null, [0, 2])?.blocks)).toBeNull();
-    const o = fit();
-    expect(placeOverlay(o, null)).toBe(o);
-    const legacy = { datasetId: "own", y: R2 } as unknown as FitOverlay;
-    expect(placeOverlay(legacy, null)).toBe(legacy);
+  it("does not draw an overlay whose bound Y is not shown", () => {
+    // T2 is shown as a Y; R2 (channel 2) is not.
+    expect(placeOverlay(fit(), layoutFor([0, 1]))).toBeNull();
+  });
+
+  describe("a sheet with one X", () => {
+    const ONE: Dataset = { ...DS, columnDesignations: {} }; // R1, T2, R2 are plain Ys against T1
+    const one = (shown: number[], xKey: number | null = null) => layoutFor(shown, ONE, xKey);
+    const onT1 = fit({ binding: { yKey: 2, xKey: null }, y: R2 });
+
+    it("has no per-series blocks and returns a placed overlay as the same object", () => {
+      const layout = one([0, 2]);
+      expect(layout.multi).toBe(false);
+      expect(layout.blocks).toEqual([null]);
+      expect(placeOverlay(onT1, layout)).toBe(onT1);
+    });
+
+    it("hides a fit computed on another X once the plot X changes, and shows it again on switching back", () => {
+      // The fit read R2 against T1 (the time column). Plot X -> T2 (channel 1).
+      expect(placeOverlay(onT1, one([0, 2], 1))).toBeNull();
+      expect(placeOverlay(onT1, one([0, 2], null))).toBe(onT1);
+    });
+
+    it("hides a fit whose Y is no longer plotted", () => {
+      expect(placeOverlay(onT1, one([0]))).toBeNull();
+    });
+
+    it("keeps legacy unbound overlays, as before", () => {
+      const legacy = { datasetId: "own", y: R2 } as unknown as FitOverlay;
+      expect(placeOverlay(legacy, one([0, 2]))).toBe(legacy);
+      expect(placeOverlay(legacy, one([0, 2], 1))).toBe(legacy);
+    });
+
+    it("fails closed for no-curve markers computed on another X", () => {
+      const markers = fit({ binding: { yKey: -1, xKey: null }, y: R1 });
+      expect(placeOverlay(markers, one([0, 2]))).toBe(markers);
+      expect(placeOverlay(markers, one([0, 2], 1))).toBeNull();
+    });
   });
 
   it("returns the SAME placed object for the same overlay and block layout", () => {
@@ -96,7 +141,7 @@ describe("placeOverlay", () => {
     const first = placeOverlay(o, BOTH);
     // A rename mints a new dataset object over the same data: same layout key.
     const renamedDs: Dataset = { ...DS, name: "renamed" };
-    const renamed = overlayLayout(renamedDs, null, BOTH!.blocks);
+    const renamed = overlayLayout(renamedDs, null, BOTH.blocks, BOTH.shown);
     expect(placeOverlay(o, renamed)).toBe(first);
   });
 });

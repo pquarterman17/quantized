@@ -7,7 +7,8 @@
 // finding 4 (P2.3 review): an overlay is scaled by the decade offset of the Y
 // its producer bound it to (`OverlayBinding.yKey`, lib/overlayPlacement.ts) --
 // never by a guess from the live plot. Only an unbound overlay (an object from
-// before bindings) falls back to the FIRST VISIBLE plotted channel.
+// before bindings) falls back to the FIRST VISIBLE plotted channel. The rule is
+// `lib/logOffset.overlayDecades`, shared with the export.
 // `applyLogOffsets` (lib/logOffset.ts) only scales the BASE series it's
 // handed -- an overlay is appended by `composeDisplayPayload` AFTER that, so
 // without this it would stay at the unscaled magnitude while the offset
@@ -32,12 +33,13 @@ import {
   logOffsetDecades,
   logOffsetsApply,
   logOffsetSuffix,
+  overlayDecades,
   scaleErrorColumns,
   scaleErrorSpans,
 } from "../../lib/logOffset";
 import type { PlotPayload } from "../../lib/plotdata";
 import { firstVisiblePlottedChannel } from "../../lib/quickfit";
-import type { BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
+import type { BaselineOverlay, Dataset, FitOverlay, OverlayBinding, PeakOverlay, SeriesStyle } from "../../lib/types";
 
 export interface LogOffsetScalingParams {
   plotted: readonly number[];
@@ -91,11 +93,10 @@ export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScaling
   // The unbound fallback's channel; each overlay's factor is a primitive, so
   // a colour-only style edit re-scales nothing.
   const fallback = offsetsApply ? firstVisiblePlottedChannel(p.plotted, (c) => p.hiddenChannels.includes(c)) : null;
-  const factorOf = (o: { binding?: { yKey: number } | null } | null): number => {
-    if (!offsetsApply || !o) return 1;
-    const ch = o.binding ? o.binding.yKey : fallback;
-    return ch === null ? 1 : 10 ** logOffsetDecades(p.seriesStyles[ch]?.logOffset);
-  };
+  const factorOf = (o: { binding?: OverlayBinding | null } | null): number =>
+    !offsetsApply || !o
+      ? 1
+      : 10 ** overlayDecades(o.binding, (ch) => logOffsetDecades(p.seriesStyles[ch]?.logOffset), fallback);
   const fitF = factorOf(p.fitOverlay), baseF = factorOf(p.baselineOverlay);
   const peakF = factorOf(p.peakOverlay), derivF = factorOf(p.derivOverlay);
 

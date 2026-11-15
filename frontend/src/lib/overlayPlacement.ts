@@ -12,15 +12,18 @@
 // draw order and the visible set all change after a fit, and a guess from
 // them put R2's fit on T1 (the review of the first attempt).
 //
-// Fails closed: a bound Y that is no longer a curve on the bound X
-// (re-designated columns), a bound X with no block in this view (all its
-// curves hidden -- including a multi-X sheet whose shown curves all sit on the
-// plot's X, so the view collapses to that one X), or a row count that is not
-// the source's is NOT drawn. An overlay with no binding (an object from before
-// bindings existed) or a binding to no curve (yKey < 0) is drawn only where the view has one X, as it always was,
-// never guessed into a block. On a sheet with ONE X (no curve owns another)
-// there is no layout and every overlay passes through untouched, exactly as
-// before per-series X.
+// Fails closed: a bound Y that is not drawn (hidden, or no longer plotted), a
+// bound Y that is no longer a curve on the bound X (re-designated columns, or
+// the plot's X changed on a one-X sheet), a bound X with no block in this view
+// (all its curves hidden -- including a multi-X sheet whose shown curves all
+// sit on the plot's X, so the view collapses to that one X), or a row count
+// that is not the source's is NOT drawn. An overlay with no curve -- no
+// binding (an object from before bindings existed: its X is taken to be the
+// plot's) or a binding to no curve (yKey < 0: the peak wizard's markers) -- is
+// drawn only when the view is ONE block and that block IS its X (the plot's X
+// for a legacy object, `binding.xKey` otherwise), never guessed into a block.
+// On a sheet with ONE X (no curve owns another) the view is the source's rows,
+// so a placed overlay is returned untouched (the same object).
 //
 // Cost: the layout is O(channels); a placement is O(blocks x n) once per
 // (overlay object, layout) pair and cached by identity, so a rename or an
@@ -42,6 +45,12 @@ export interface OverlayLayout {
   /** The plot's X: where a channel that is not a curve is drawn (every block
    *  copies it, against the shared X). */
   xKey: number | null;
+  /** More than one X is in play: the view has several blocks, or a curve of the
+   *  sheet owns an X other than the plot's. False = a one-X sheet. */
+  multi: boolean;
+  /** The channels this view draws (`shownCurves`: plotted minus hidden). A bound
+   *  Y outside it is not drawn, so neither is its overlay. */
+  shown: readonly number[];
   /** Identity of the above, for the placement cache. */
   key: string;
 }
@@ -57,29 +66,31 @@ interface Placeable {
 
 const code = (x: number | null | undefined) => (x === undefined ? "u" : x === null ? "t" : String(x));
 
-/** The layout of `ds`'s view under plot X `xKey`: `blocks` is
- *  perSeriesXData's, or null when it built no view -- then the view is the
- *  plot's X alone, and the layout is null too unless some curve of the sheet
- *  owns ANOTHER X (a multi-X sheet whose other curves are hidden). */
+/** The layout of `ds`'s view under plot X `xKey`, with `shown` the drawn
+ *  channels: `blocks` is perSeriesXData's, or null when it built no view --
+ *  then the view is the plot's X alone (`multi` is still true when some curve
+ *  of the sheet owns ANOTHER X: a multi-X sheet whose other curves are hidden).
+ *  The one place that decides whether a sheet is multi-X. */
 export function overlayLayout(
   ds: Pick<Dataset, "id" | "data" | "columnDesignations">,
   xKey: number | null,
   blocks: readonly (number | null)[] | null | undefined,
-): OverlayLayout | null {
+  shown: readonly number[],
+): OverlayLayout {
   const own = curveX(ds, xKey);
-  if (!blocks && own.every((x) => x === undefined || x === xKey)) return null; // one X: nothing to place
+  const multi = !!blocks || own.some((x) => x !== undefined && x !== xKey);
   const b = blocks ?? [xKey];
   const n = ds.data.time.length;
-  const key = `${ds.id}|${n}|${code(xKey)}|${b.map(code).join(",")}|${own.map(code).join(",")}`;
-  return { datasetId: ds.id, n, blocks: b, own, xKey, key };
+  const key = `${ds.id}|${n}|${code(xKey)}|${b.map(code).join(",")}|${own.map(code).join(",")}|${shown.join(",")}`;
+  return { datasetId: ds.id, n, blocks: b, own, xKey, multi, shown, key };
 }
 
 const cache = new WeakMap<object, { key: string; out: object | null }>();
 
 /** `o` placed into its bound block of `layout` (see the module header), or
- *  `o` itself when `layout` is null (a sheet with one X). */
-export function placeOverlay<T extends Placeable>(o: T | null, layout: OverlayLayout | null): T | null {
-  if (!o || !layout) return o;
+ *  null when it is not drawn here. */
+export function placeOverlay<T extends Placeable>(o: T | null | undefined, layout: OverlayLayout): T | null {
+  if (!o) return null;
   if (o.datasetId !== layout.datasetId) return null; // another dataset's: never drawn here anyway
   const hit = cache.get(o);
   if (hit && hit.key === layout.key) return hit.out as T | null;
@@ -90,18 +101,19 @@ export function placeOverlay<T extends Placeable>(o: T | null, layout: OverlayLa
 
 function place<T extends Placeable>(o: T, layout: OverlayLayout): T | null {
   const b = o.binding;
-  const one = layout.blocks.length === 1;
-  // Unbound (a legacy object) or bound to no curve (yKey -1: the peak wizard's
-  // markers with no working segment): drawn where there is one X, as before --
-  // never guessed onto the plot's X in a block.
-  if (!b || b.yKey < 0) return one ? o : null;
+  const { n, blocks } = layout;
+  // No curve: unbound (a legacy object, taken to be on the plot's X) or bound to
+  // none (yKey -1: the peak wizard's markers). Drawn only on a one-block view
+  // whose block IS its X -- never guessed into a block of a wider view, and
+  // never onto another X's rows when the other curves are hidden.
+  if (!b || b.yKey < 0) return blocks.length === 1 && blocks[0] === (b ? b.xKey : layout.xKey) ? o : null;
+  if (!layout.shown.includes(b.yKey)) return null; // that Y is hidden / not plotted
   const own = layout.own[b.yKey];
   if ((own === undefined ? layout.xKey : own) !== b.xKey) return null; // that Y is not drawn on that X
-  const block = layout.blocks.indexOf(b.xKey);
-  const { n } = layout;
+  const block = blocks.indexOf(b.xKey);
   if (block < 0 || o.y.length !== n) return null;
-  if (one) return o; // the view IS that X's rows: unchanged
-  const total = layout.blocks.length * n;
+  if (blocks.length === 1) return o; // the view IS that X's rows: unchanged
+  const total = blocks.length * n;
   const spread = (y: (number | null)[]): (number | null)[] => {
     const out = new Array<number | null>(total).fill(null);
     for (let r = 0; r < n; r++) out[block * n + r] = y[r] ?? null;

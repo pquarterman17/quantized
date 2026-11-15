@@ -33,7 +33,7 @@ beforeEach(() => {
 /** Where the canvas draws `o` once R1 is shown again (blocks T1, T2). */
 const placedWithR1Shown = <T extends { datasetId: string; y: (number | null)[] }>(o: T) => {
   const ds = useApp.getState().datasets[0]!;
-  return placeOverlay(o, overlayLayout(ds, null, perSeriesXData(ds, null, [0, 2])?.blocks));
+  return placeOverlay(o, overlayLayout(ds, null, perSeriesXData(ds, null, [0, 2])?.blocks, [0, 2]));
 };
 
 describe("ROI gadget on a hidden primary", () => {

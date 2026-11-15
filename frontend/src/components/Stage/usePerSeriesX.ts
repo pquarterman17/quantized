@@ -8,47 +8,17 @@
 // rows for the ONE curve their binding names; on a view each is placed into
 // its bound X's block by lib/overlayPlacement.ts -- the same placement the
 // figure export uses -- and fails closed (not drawn) when that block is not
-// in the view. On a one-X sheet every overlay passes through untouched.
+// in the view, or (on any sheet) when the overlay was computed on another X or
+// Y than the plot shows. A placement that needs no change returns the overlay
+// itself. Imported statically: it is small, and a lazy load meant a null flash
+// and a decimation-gate flip while it arrived.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { curveX, perSeriesXData, viewDataset, viewRows } from "../../lib/perSeriesX";
+import { overlayLayout, placeOverlay } from "../../lib/overlayPlacement";
+import { perSeriesXData, viewDataset, viewRows } from "../../lib/perSeriesX";
 import { shownCurves } from "../../lib/shownCurves";
 import type { BaselineOverlay, Dataset, FitOverlay, PeakOverlay } from "../../lib/types";
-
-// LAZY: the placement matters only on a multi-X view, so lib/overlayPlacement
-// loads through a dynamic import the first time one is shown. Until it
-// resolves a multi-X view draws NO overlay (fail closed, never a misplaced
-// one); a one-X sheet never waits and never loads it.
-type PlacementModule = typeof import("../../lib/overlayPlacement");
-let placementLoaded: PlacementModule | null = null;
-let placementLoading: Promise<PlacementModule> | null = null;
-function usePlacementModule(wanted: boolean): PlacementModule | null {
-  const [mod, setMod] = useState<PlacementModule | null>(placementLoaded);
-  useEffect(() => {
-    if (!wanted || mod) return;
-    let live = true;
-    placementLoading ??= import("../../lib/overlayPlacement").then((m) => (placementLoaded = m));
-    void placementLoading.then((m) => {
-      if (live) setMod(m);
-    });
-    return () => {
-      live = false;
-    };
-  }, [wanted, mod]);
-  return mod;
-}
-
-type Layout = ReturnType<PlacementModule["overlayLayout"]>;
-function placeFor<T extends Parameters<PlacementModule["placeOverlay"]>[0]>(
-  o: T,
-  multiX: boolean,
-  placement: PlacementModule | null,
-  layout: Layout,
-): T {
-  if (!multiX) return o;
-  return placement ? (placement.placeOverlay(o, layout) as T) : (null as T);
-}
 
 type Selection = { datasetId: string; rows: number[] } | null;
 interface Overlays {
@@ -89,24 +59,19 @@ export function usePerSeriesX(
   );
   // `built` keeps its identity across renames/exclusion toggles, and a
   // placement is cached per (overlay, layout key): unrelated edits re-place nothing.
-  const multiX = useMemo(
-    () => !!active && (!!built || curveX(active, xKey).some((x) => x !== undefined && x !== xKey)),
-    [active, xKey, built],
-  );
-  const placement = usePlacementModule(multiX);
   const layout = useMemo(
-    () => (active && placement ? placement.overlayLayout(active, xKey, built?.blocks) : null),
-    [active, xKey, built, placement],
+    () => (active ? overlayLayout(active, xKey, built?.blocks, shown) : null),
+    [active, xKey, built, shown],
   );
   const { fitOverlay: f, baselineOverlay: b, peakOverlay: pk, derivOverlay: d } = plot;
   const overlays = useMemo(
     () => ({
-      fitOverlay: placeFor(f, multiX, placement, layout),
-      baselineOverlay: placeFor(b, multiX, placement, layout),
-      peakOverlay: placeFor(pk, multiX, placement, layout),
-      derivOverlay: placeFor(d, multiX, placement, layout),
+      fitOverlay: layout ? placeOverlay(f, layout) : null,
+      baselineOverlay: layout ? placeOverlay(b, layout) : null,
+      peakOverlay: layout ? placeOverlay(pk, layout) : null,
+      derivOverlay: layout ? placeOverlay(d, layout) : null,
     }),
-    [f, b, pk, d, multiX, placement, layout],
+    [f, b, pk, d, layout],
   );
   if (!view) return { active, xKey, selection, blockRows: undefined, overlays };
   return { active: view.dataset, xKey: null, selection: viewSelection, blockRows: view.blockRows, overlays };

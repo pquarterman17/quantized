@@ -184,6 +184,29 @@ describe("canvas / export parity on a per-series-X view", () => {
     expect(wirePairs(spec, "baseline")).toEqual(pairs(p, "baseline"));
   });
 
+  it("scales by the bound Y's offset or drops the overlay, identically on screen and in the FigureSpec", async () => {
+    const ONE: Dataset = { ...SHEET, columnDesignations: {} }; // R1, T2, R2 against T1
+    const seriesStyles = { 0: { logOffset: 2 } }; // R1 x10^2
+    const baseline: FitOverlay = { datasetId: "own", binding: ON_R1, y: [1, 2, 3, 4] };
+    const both = async (hiddenChannels: number[], overlays: Partial<PlotPayloadParams>) => ({
+      p: await draw({ active: ONE, hiddenChannels, seriesStyles, ...overlays }),
+      spec: exportSpec(ONE, { hiddenChannels, seriesStyles }, overlays),
+    });
+    // R1 shown: its baseline is x100 on both sides.
+    const shown = await both([1], { baselineOverlay: baseline });
+    expect(pairs(shown.p, "baseline")).toEqual([[1, 100], [2, 200], [3, 300], [4, 400]]);
+    expect(wirePairs(shown.spec, "baseline")).toEqual(pairs(shown.p, "baseline"));
+    // R1 hidden: a baseline bound to it is drawn nowhere -- not scaled by R2's (no) offset
+    // or by a fallback slot's.
+    const hidden = await both([0, 1], { baselineOverlay: baseline });
+    expect(column(hidden.p, "baseline")).toBeUndefined();
+    expect(hidden.spec.dataset.labels).not.toContain("baseline");
+    // R2's fit beside the hidden R1 (offset x100) is R2's own: unscaled on both sides.
+    const r2 = await both([0, 1], { fitOverlay: fit({ yKey: 2, xKey: null }) });
+    expect(pairs(r2.p, "fit")).toEqual([[1, 7], [2, 8], [3, 9], [4, 10]]);
+    expect(wirePairs(r2.spec, "fit")).toEqual(pairs(r2.p, "fit"));
+  });
+
   it("agrees with excluded rows too, and drops a fit whose X is hidden in both", async () => {
     const masked: Dataset = { ...SHEET, excludedRows: [1] };
     const o = fit(ON_R2, [7, null, 9, 10]); // the producer leaves the excluded row a gap
