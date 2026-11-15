@@ -17,7 +17,9 @@ are addressed by side, so the Y axis's spine is the bottom one, and
 ``twinx`` gives the secondary Y axis along the top.
 
 Applied when any series asks for horizontal bars, as on screen: Origin
-rotates the whole layer, not one curve.
+rotates the whole layer, not one curve. The same turn serves Plot > "Exchange
+X-Y axes" (``overrides["exchange_xy"]``, ``PlotView.exchangeXY``) for any
+curve type: the layer is turned when EITHER asks, never turned twice.
 """
 
 from __future__ import annotations
@@ -172,9 +174,13 @@ class TransposedAxes:
         return self.real.margins(*args[::-1], **kw)
 
 
-def oriented(ax: Any, series_styles: Sequence[Mapping[str, Any] | None] | None) -> Any:
-    """``ax`` itself, or its :class:`TransposedAxes` for horizontal bars (an
-    already turned ``ax`` is returned as is)."""
-    if isinstance(ax, TransposedAxes) or not horizontal_bars(series_styles):
+def oriented(
+    ax: Any,
+    series_styles: Sequence[Mapping[str, Any] | None] | None,
+    exchange: bool = False,
+) -> Any:
+    """``ax`` itself, or its :class:`TransposedAxes` for horizontal bars or an
+    exchange of X and Y (an already turned ``ax`` is returned as is)."""
+    if isinstance(ax, TransposedAxes) or not (exchange or horizontal_bars(series_styles)):
         return ax
     return TransposedAxes(ax)

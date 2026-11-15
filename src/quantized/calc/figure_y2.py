@@ -286,13 +286,13 @@ def render_with_secondary_axis(
     # The graph layers too: over the twin, so no y2 curve draws across them.
     primary_ov = {k: v for k, v in primary_ov.items() if k not in ("inset", "layers")}
     artists = draw_series_axes(  # turned when ANY series, either axis, is horizontal
-        fig, oriented(ax, series_styles), xv, primary,
+        fig, oriented(ax, series_styles, bool(ov.get("exchange_xy"))), xv, primary,
         st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label,
         series_styles=primary_styles, error_spans=primary_spans,
         x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
     )
-    ax2 = oriented(ax, series_styles).twinx()  # horizontal bars: along the top
+    ax2 = oriented(ax, series_styles, bool(ov.get("exchange_xy"))).twinx()  # turned: along the top
     # ov["ticks"]["minor"] already covers "is EITHER axis log" (the frontend
     # folds a log y2Scale into the same single flag -- lib/exportFigureCommand
     # .ts's runExportFigureCommand) -- thread just that bit to the secondary

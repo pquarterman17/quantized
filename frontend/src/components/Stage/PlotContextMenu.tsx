@@ -12,6 +12,7 @@ import type uPlot from "uplot";
 import { fixedLim, type HalfLim } from "../../lib/axisLim";
 import { parseLimFields } from "../../lib/axisLimFields";
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
+import { exchangeBlocker } from "../../lib/exchangeXY";
 import { fullPlottedX } from "../../lib/fitselectionActions";
 import type { PlotPayload } from "../../lib/plotdata";
 import { buildPlotMenu, type LegendCorner, type MenuSeries } from "../../lib/plotMenu";
@@ -259,6 +260,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       pointMask,
       pointUnder,
       layerContents: activeDs ? openLayerContents : undefined,
+      exchange: { on: st.exchangeXY, blocker: exchangeBlocker(st), toggle: st.toggleExchangeXY },
       colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
       ...(st.plotWindows.filter((w) => w.kind === "plot").length > 1 ? { linkXAxis: linkAxis("linkXAxisWith"), linkYAxis: linkAxis("linkYAxisWith") } : {}),
       openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),

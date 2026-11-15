@@ -7,7 +7,10 @@
 // (`calc/figure_orient.py`).
 //
 // Applied when any series asks for horizontal bars (`SeriesStyle.bars ===
-// "horizontal"`): Origin rotates the whole layer, not one curve.
+// "horizontal"`): Origin rotates the whole layer, not one curve. The same
+// rotation serves Plot > "Exchange X-Y axes" (`PlotView.exchangeXY`, any
+// curve type): `isTurned` is "bars OR exchanged", so a graph is turned once
+// -- never flipped back by having both.
 //
 // Bundle diet slice 27 (plans/BUNDLE_HEADROOM.md): the overlay half -- the
 // upright view, its canvas context and the draw-hook wrapper -- moved
@@ -24,7 +27,11 @@ export function hasHorizontalBars(styles: readonly (SeriesStyle | undefined)[] |
   return (styles ?? []).some((s) => s?.bars === "horizontal");
 }
 
-/** `{scales, axes}`, rotated for horizontal bars; unchanged otherwise. The
+/** The layer is turned: horizontal bars, or X and Y exchanged by the user. */
+export const isTurned = (styles: readonly (SeriesStyle | undefined)[] | undefined, exchange?: boolean): boolean =>
+  !!exchange || hasHorizontalBars(styles);
+
+/** `{scales, axes}`, rotated for a turned layer; unchanged otherwise. The
  *  X axis moves to the left (side 3) with the Y axis's measured gutter, the
  *  Y axis to the bottom (side 2) with the X axis's band height, and a
  *  secondary Y to the top (side 0). */
@@ -32,8 +39,9 @@ export function orientAxes(
   scales: uPlot.Scales,
   axes: uPlot.Axis[],
   styles: readonly (SeriesStyle | undefined)[] | undefined,
+  exchange?: boolean,
 ): { scales: uPlot.Scales; axes: uPlot.Axis[] } {
-  if (!hasHorizontalBars(styles)) return { scales, axes };
+  if (!isTurned(styles, exchange)) return { scales, axes };
   const turned: uPlot.Scales = {};
   for (const [key, sc] of Object.entries(scales)) turned[key] = { ...sc, ori: key === "x" ? 1 : 0 };
   const [x, y, ...rest] = axes;
@@ -73,12 +81,12 @@ export function orientAxes(
  *  positions along the upright axes. */
 export const TURNED_TOOLS: readonly PlotTool[] = ["pointer", "zoom", "cursor"];
 export const TURNED_TOOL_NOTE =
-  "Not available on a horizontal bar graph (the plot is turned on its side)";
+  "Not available on a horizontal bar graph or with X and Y exchanged (the plot is turned)";
 
 /** `args` for a turned plot: a pointer-driven tool falls back to zoom, and
  *  wheel zoom and every drag-to-edit hook are off. Unchanged otherwise. */
 export function orientArgs<A extends OrientableArgs>(args: A): A {
-  if (!hasHorizontalBars(args.seriesStyles)) return args;
+  if (!isTurned(args.seriesStyles, args.exchangeXY)) return args;
   return {
     ...args,
     tool: TURNED_TOOLS.includes(args.tool) ? args.tool : "zoom",
@@ -94,6 +102,7 @@ export function orientArgs<A extends OrientableArgs>(args: A): A {
 }
 
 interface OrientableArgs {
+  exchangeXY?: boolean;
   seriesStyles?: (SeriesStyle | undefined)[];
   tool: PlotTool;
   wheelZoom?: boolean;
@@ -130,7 +139,8 @@ export const orientTurnReady = (): boolean => turnSettled;
 export function orientPlugins(
   plugins: uPlot.Plugin[],
   styles: readonly (SeriesStyle | undefined)[] | undefined,
+  exchange?: boolean,
 ): uPlot.Plugin[] {
-  if (!hasHorizontalBars(styles) || !turn) return plugins;
+  if (!isTurned(styles, exchange) || !turn) return plugins;
   return turn.turnPlugins(plugins);
 }

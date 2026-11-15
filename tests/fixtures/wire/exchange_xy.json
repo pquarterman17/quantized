@@ -1,0 +1,23 @@
+{
+  "about": "Plot > Exchange X-Y axes (PlotView.exchangeXY, overrides.exchange_xy): the layer turns on its side, so X runs up the LEFT and Y along the BOTTOM, and each quantity keeps its own title, scale, limits and direction. Both legs read this table: frontend/src/lib/exchangeXY.test.ts (the screen's uPlot options) and tests/test_calc_figure_exchange_xy.py (the exported matplotlib figure). `vertical` is the axis that must end up on the left in both.",
+  "cases": [
+    {
+      "name": "SIMS depth profile: depth up the side, log counts along the bottom",
+      "x": { "title": "Depth (nm)", "scale": "linear", "lim": [0, 120], "reversed": false },
+      "y": { "title": "Counts (c/s)", "scale": "log", "lim": [10, 1000000] },
+      "vertical": "x"
+    },
+    {
+      "name": "reversed log X keeps its direction and scale on the vertical axis",
+      "x": { "title": "Wavenumber (cm^-1)", "scale": "log", "lim": [400, 4000], "reversed": true },
+      "y": { "title": "Absorbance", "scale": "linear", "lim": [0, 2] },
+      "vertical": "x"
+    },
+    {
+      "name": "no limits set: scales and titles still follow their axes",
+      "x": { "title": "Time (s)", "scale": "linear", "lim": null, "reversed": false },
+      "y": { "title": "Signal (V)", "scale": "linear", "lim": null },
+      "vertical": "x"
+    }
+  ]
+}

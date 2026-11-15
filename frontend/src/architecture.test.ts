@@ -2026,6 +2026,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   plotTemplate: "named template, not channel-indexed",
   showAxisBox: "display toggle, not channel-indexed",
   xReversed: "x axis direction toggle, not channel-indexed",
+  exchangeXY: "display toggle (Plot > Exchange X-Y axes), not channel-indexed",
   stackMode: "display toggle, not channel-indexed",
   insetMode: "display toggle, not channel-indexed",
   inset: "the magnifier's source region (data coords) + placement fractions, not channel-indexed",

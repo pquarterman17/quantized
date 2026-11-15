@@ -85,6 +85,7 @@ export interface PlotViewSettingsSlice {
   cyclePanelFit: () => void; // #54 — frames<->window, +page when a pageSetup exists
   setPageSetup: (pageSetup: PageSetup | null) => void; // #54
   setInsetMode: (insetMode: boolean) => void;
+  toggleExchangeXY: () => void; // Plot > Exchange X-Y axes (lib/exchangeXY.ts): one undo step
   setPolarMode: (polarMode: boolean) => void;
   setStatMode: (statMode: boolean) => void;
   setXLim: (xLim: HalfLim | null) => void;
@@ -192,6 +193,7 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     cyclePanelFit: () => { get().recordHistory("change panel fit"); set((s) => ({ panelFit: nextPanelFit(s.panelFit, s.pageSetup != null) })); },
     setPageSetup: (pageSetup) => { get().recordHistory("change page setup"); set({ pageSetup }); },
     setInsetMode: (insetMode) => { get().recordHistory("toggle inset"); set({ insetMode }); },
+    toggleExchangeXY: () => { get().recordHistory("exchange X–Y axes"); set((s) => ({ exchangeXY: !s.exchangeXY })); },
     setPolarMode: (polarMode) => { get().recordHistory("toggle polar plot"); set({ polarMode }); },
     setStatMode: (statMode) => { get().recordHistory("toggle statistics plot"); set({ statMode }); },
     // On: `setStackMode(false)` turns the whole layout off (facet, break and

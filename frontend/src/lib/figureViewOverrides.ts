@@ -63,6 +63,7 @@ export function viewOverrides(st: Pick<
   | "xScale"
   | "yScale"
   | "xReversed"
+  | "exchangeXY"
   | "insetMode"
   | "inset"
 > & Partial<Pick<PlotView, "layers">>,
@@ -160,6 +161,7 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       region_shades: regionShades,
       x_lim: finiteLim(st.xLim),
       x_reversed: st.xReversed || undefined, // matplotlib invert_xaxis (calc/figure_overrides.py)
+      exchange_xy: st.exchangeXY || undefined, // x and y swap (calc/figure_orient.py)
       y_lim: finiteLim(st.yLim),
       y2_lim: finiteLim(st.y2Lim),
       grid: st.showGrid,

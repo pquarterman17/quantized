@@ -56,7 +56,7 @@ export const PLOT_VIEW: Classify<PlotView> = {
   facetKey: V, y2Keys: V, y2Lim: V, y2Scale: V, y2Step: V, y2AxisLabel: V, refLines: V, annotations: V,
   regionShades: V, shapes: V, seriesStyles: V, seriesLabels: V, errKeys: V, seriesOrder: V, hiddenChannels: V,
   waterfall: V, waterfallDx: V, panelFit: V, pageSetup: V,
-  layers: G, yAxes: G, yAxisOf: G, seriesRamp: G,
+  layers: G, exchangeXY: G, yAxes: G, yAxisOf: G, seriesRamp: G,
 };
 
 export const PLOT_WINDOW: Classify<PlotWindow> = {

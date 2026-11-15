@@ -195,7 +195,7 @@ def draw_series_axes(
     """
     artists: list[Any] = []
     drops: list[DropLine] = []
-    ax = oriented(ax, series_styles)  # horizontal bars: x and y exchanged (figure_orient)
+    ax = oriented(ax, series_styles, bool(ov.get("exchange_xy")))  # bars / exchange_xy
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
         yv = np.asarray(y, dtype=float)

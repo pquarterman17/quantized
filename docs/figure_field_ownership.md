@@ -81,6 +81,7 @@ to all 57 fields and is not repeated per row.
 | `plotTemplate` | `style.templateId` | `plot.view.plotTemplate` | Setter `setPlotTemplate`; Bulk (Recipe) | no |
 | `showAxisBox` | `axes.box.visible` | `plot.view.showAxisBox` | Setter `setShowAxisBox`; Bulk (Origin's `ORIGIN_FIGURE_AXIS`) | no |
 | `xReversed` | `axes.x.reversed` | `plot.view.xReversed` | Inspector "Reverse X" (`AxisScaleControls`, history + live field); Rebind default from `metadata.x_reversed` (`datasetViewDefaults`) | no |
+| `exchangeXY` | `axes.exchangeXY` | `plot.view.exchangeXY` | Setter `toggleExchangeXY` (Plot > "Exchange X–Y axes", command palette, graph context menu; one undo step; `lib/exchangeXY.ts` names what blocks it) | no |
 | `stackMode` | `plot.stack.enabled` | `plot.view.stackMode` | Setter `setStackMode` (also clears `facetKey`/`composition`); Bulk (Recipe, Origin, `facetByColumn` sets it true) | no |
 | `insetMode` | `plot.inset.enabled` | `plot.view.insetMode` | Setter `setInsetMode` | no |
 | `inset` | `plot.inset.geometry` | `plot.view.inset` | `Stage/InsetPlot` (zoom, header drag, corner resize, connector toggle; one undo step each); sanitized by `sanitizeInset` (`lib/plotviewDecor.ts`) | no |

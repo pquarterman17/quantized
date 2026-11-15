@@ -18,6 +18,12 @@ import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
 import { colorGradientCommand } from "./plotStyleCommands";
 
+/** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes) is a lazy chunk the
+ *  session starts loading with this module, as `lib/uplotOrient.ts` does for its
+ *  overlay half: its few hundred bytes of reasons stay out of the entry chunk. */
+let xy: typeof import("../lib/exchangeXY") | undefined;
+void import("../lib/exchangeXY").then((m) => { xy = m; }, () => {});
+
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
  *  in the entry graph — it only runs when the user picks "Page setup…". Its
@@ -167,6 +173,17 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Axes",
       label: "Cycle X tick format (auto/fixed/sci/eng)",
       run: () => s().setXFmt({ ...s().xFmt, mode: cycleTickMode(s().xFmt.mode) }),
+    },
+    {
+      id: "exchange-xy", // Exchange X-Y axes: lib/exchangeXY.ts says what cannot be turned
+      group: "Plot",
+      section: "Axes",
+      label: "Exchange X–Y axes",
+      checked: () => s().exchangeXY,
+      // Fail closed until the blocker's chunk lands (the first moments of a session).
+      disabled: () => !xy || !!xy.exchangeBlocker(s()),
+      disabledReason: () => xy?.exchangeBlocker(s()),
+      run: () => void (xy && !xy.exchangeBlocker(s()) && s().toggleExchangeXY()),
     },
     {
       id: "grid",

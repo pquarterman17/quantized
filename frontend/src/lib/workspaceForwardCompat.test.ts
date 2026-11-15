@@ -55,6 +55,7 @@ const dataset = (ws: LoadedWorkspace, id: string): Dataset => ws.datasets.find((
 /** One edit per gated field (and gated value), keyed `Type.field`. */
 const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "PlotView.layers": (ws) => editView(ws, (v) => { v.layers = [{ id: "t", kind: "table", rows: [["a", "1"]] } as never]; }),
+  "PlotView.exchangeXY": (ws) => editView(ws, (v) => { v.exchangeXY = true; }),
   "PlotView.yAxes": (ws) => editView(ws, (v) => { v.yAxes = [{ lim: null, scale: null, step: null, fmt: null, label: "R3", color: null }]; }),
   "PlotView.yAxisOf": (ws) => editView(ws, (v) => {
     v.yAxes = [{ lim: null, scale: null, step: null, fmt: null, label: "R3", color: null }];

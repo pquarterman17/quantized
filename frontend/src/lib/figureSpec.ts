@@ -224,7 +224,7 @@ function buildFigureSpecForView(
   // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them.
   const xBreaks = breakCompositionFromData(pruneToLiveDataset(data, extras.liveDataset), extras.xBreaks, st.xKey, st.yKeys) && extras.xBreaks;
   const withBreaks = xBreaks
-    ? (compactOverrides({ ...overrides, x_breaks: xBreaks.map((range) => [...range] as [number, number]) }) ?? undefined)
+    ? (compactOverrides({ ...overrides, exchange_xy: undefined, x_breaks: xBreaks.map((range) => [...range] as [number, number]) }) ?? undefined)
     : overrides;
 
   // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden legend

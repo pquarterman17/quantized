@@ -69,7 +69,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const plotTemplate = useApp((s) => s.plotTemplate);
-  const showAxisBox = useApp((s) => s.showAxisBox), xReversed = useApp((s) => s.xReversed);
+  const showAxisBox = useApp((s) => s.showAxisBox), xReversed = useApp((s) => s.xReversed), exchangeXY = useApp((s) => s.exchangeXY);
   // Plot defaults from Preferences (apply when no per-series override / template).
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
@@ -292,7 +292,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         xFmt={xFmt}
         yFmt={yFmt} y2Fmt={y2Fmt}
         showGrid={showGrid}
-        axisBox={showAxisBox} xReversed={xReversed}
+        axisBox={showAxisBox} xReversed={xReversed} exchangeXY={exchangeXY}
         fontSize={resolveTemplate(plotTemplate).fontSize}
         // A publication template sets its own line width; the "screen" default
         // defers to the user's Preferences default line width.

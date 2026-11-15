@@ -176,6 +176,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   autoscale: { description: "Reset zoom and restore automatic limits around the plotted data." },
   "view-back": { description: "Return to the preceding zoom or pan state." },
   "view-forward": { description: "Move forward to the next zoom or pan state." },
+  "exchange-xy": { description: "Turn the graph on its side: X runs up the left and Y along the bottom, each axis keeping its own title, scale, limits and format.", keywords: "swap flip rotate transpose horizontal vertical depth profile" },
   xLog: { description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales." },
   xTickFormat: { description: "Change horizontal-axis labels between automatic, fixed, scientific, and engineering notation." },
   grid: { description: "Show or hide major plot grid lines." },

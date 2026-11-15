@@ -32,7 +32,7 @@ import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "re
 import { loadToolPlugins } from "../../lib/axisExtrasHook";
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
-import { hasHorizontalBars, TURNED_TOOL_NOTE, TURNED_TOOLS } from "../../lib/uplotOrient";
+import { isTurned, TURNED_TOOL_NOTE, TURNED_TOOLS } from "../../lib/uplotOrient";
 import {
   ANALYZE_TOOLS,
   COPY_DATA,
@@ -124,7 +124,7 @@ export default function PlotToolbar({
 }: Props) {
   const tool = useApp((s) => s.plotTool);
   // A horizontal bar graph turns the plot: pointer-driven tools are off (uplotOrient).
-  const turned = useApp((s) => hasHorizontalBars(Object.values(s.seriesStyles)));
+  const turned = useApp((s) => isTurned(Object.values(s.seriesStyles), s.exchangeXY));
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setStatus = useApp((s) => s.setStatus);
   // S1 (a): ON whenever a multi-panel layout is engaged, not just `stackMode`.

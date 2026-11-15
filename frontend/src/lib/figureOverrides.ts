@@ -21,6 +21,8 @@ export interface FigureOverrides {
   x_lim?: [number | null, number | null];
   /** x drawn high-to-low (`PlotView.xReversed`): matplotlib invert_xaxis. */
   x_reversed?: boolean;
+  /** X and Y exchanged (`PlotView.exchangeXY`): the figure turns on its side (calc/figure_orient.py). */
+  exchange_xy?: boolean;
   y_lim?: [number | null, number | null];
   /** Fixed secondary (right) Y-axis range — the twinx counterpart of
    *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`
