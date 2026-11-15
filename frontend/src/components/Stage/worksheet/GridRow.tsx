@@ -1,9 +1,10 @@
 // One worksheet grid data row (WORKSHEET_PLAN item 2): the row-number gutter
 // (pinned, click to select / shift-click a range / right-click to mask), the
-// pinned x cell, then the windowed slice of value/computed cells, then (item
-// 8) any read-only Origin text cells, unvirtualized, appended at the very
-// end (same position as the header's text-column run, so columns line up).
-// Double-click a cell to edit (Enter/blur commits, Escape cancels via
+// pinned x cell, then the windowed slice of value/computed cells interleaved
+// with (item 8) any read-only Origin text cells at THEIR OWN file-order
+// position (worksheet audit follow-up, `textLayout` — same grouping
+// GridHeader renders, so columns line up). Double-click a cell to edit
+// (Enter/blur commits, Escape cancels via
 // `cellEdit`); computed (formula) and text columns are read-only. Mask (#50)
 // / global-filter (#53) / row-selection styling is applied from booleans the
 // container derives via lib/rowstate ONLY — this component just renders what
@@ -20,12 +21,13 @@
 // redundant ones.
 
 import clsx from "clsx";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { labelForCode } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/originTextColumns";
 import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { fmtCell, type CellFormatter } from "./cellFormat";
+import type { TextColumnLayout } from "./textColumns";
 import type { CellEditApi } from "./useCellEdit";
 
 /** Sentinel `<select>` value meaning "the user wants to type a new level"
@@ -56,8 +58,9 @@ export interface GridRowProps {
   onRowNumClick: (r: number, e: React.MouseEvent) => void;
   onRowContext?: (row: number, e: React.MouseEvent) => void;
   cellEdit: CellEditApi;
-  /** Read-only Origin text columns (item 8) — see module doc above. */
-  textCols: TextColumn[];
+  /** Read-only Origin text columns (item 8), positioned by file order — see
+   *  module doc above and textColumns.ts. */
+  textLayout: TextColumnLayout;
   /** P1.6b: a column's level table, or `null` when it isn't categorical.
    *  Optional so every existing caller/test (plain numeric grids) is
    *  unaffected — omitting it renders every column the old numeric way. */
@@ -121,7 +124,7 @@ export default function GridRow({
   onRowNumClick,
   onRowContext,
   cellEdit,
-  textCols,
+  textLayout,
   catLevels,
   onEditCategoricalCell,
   onEditCell,
@@ -285,6 +288,18 @@ export default function GridRow({
     );
   };
 
+  const textCell = (t: TextColumn) => (
+    <div
+      key={`text-${t.shortName}`}
+      role="gridcell"
+      className="qzk-grid-cell"
+      style={{ width: colWidth, flexShrink: 0, textAlign: "left", color: "var(--text-dim)" }}
+      title="read-only text column"
+    >
+      {t.rows[r] ?? ""}
+    </div>
+  );
+
   return (
     <div
       role="row"
@@ -314,20 +329,16 @@ export default function GridRow({
         {r + 1}
       </div>
       {cell(-1, time[r], gutterWidth)}
+      {textLayout.before.map(textCell)}
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
-      {visibleCols.map((c) => cell(c, values[r]?.[c]))}
-      {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}
-      {textCols.map((t) => (
-        <div
-          key={`text-${t.shortName}`}
-          role="gridcell"
-          className="qzk-grid-cell"
-          style={{ width: colWidth, flexShrink: 0, textAlign: "left", color: "var(--text-dim)" }}
-          title="read-only text column"
-        >
-          {t.rows[r] ?? ""}
-        </div>
+      {visibleCols.map((c) => (
+        <Fragment key={c}>
+          {cell(c, values[r]?.[c])}
+          {textLayout.after(c).map(textCell)}
+        </Fragment>
       ))}
+      {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}
+      {textLayout.trailing.map(textCell)}
     </div>
   );
 }
