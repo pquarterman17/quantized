@@ -2733,6 +2733,53 @@ those in the layer ordinal (pages with none keep counting every match). The
 layer frame is NOT a usable signal: 6 real anchors in oracle pages have no
 `12 00 20 22` frame (composite/embedded layers).
 
+**The axis record is run-length compressed; a 0.0 endpoint has no token
+(2026-11-15, items 64-65).** Read as a byte stream from the anchor, a control
+`0x80 | k` is a run of `k + 3` zero bytes, `0xc0 | k` a run of `k + 3` copies
+of the next byte, each followed by a literal count and that many literals
+(runs shorter than 3 stay literal, which is why separators carry bare `00 00`).
+The anchor's own `03` is a literal count (`00 00 1f`). A tagged value `8T nn
+<nn>` is a zero run plus the double's top `nn` bytes; `c2`/`c3` are the
+repeat runs; the `9T` X lead is a zero run long enough (`0x10 | T`) to include
+the record prefix. Expanded, the X span's `from` sits at offset 15 of the
+record in every layout checked (Figure 6 Graph3, Battery Aging Graph1:
+`8f 02 59 c0` = 18 zeros + `59 c0`, i.e. 12 prefix bytes and -100's 6). Two
+consequences, both proven against Origin 2026b COM `layer.x/y.from/to`:
+
+- **Which endpoint is zero (item 64).** A 0.0 endpoint's 8 zeros merge into
+  the next token's run, so the span has only two value tokens, and the reader
+  always took the zero to be `from`. The step token says which: its run
+  covers its own value's low zeros plus whatever zero bytes precede it.
+  Figure 6 Graph3 layer 9's Y is `85 02 54 c0 | 8b 02 34 40`: the step run is
+  14 = 20.0's 6 + 8, so `to` is the zero, Y = (-80, 0), step 20 (Origin:
+  -80, 0); it had decoded (0, -80). The value's share of the run is 8 minus
+  its literal count (a literal `00` is not a run byte). A surplus of 0 is the
+  historical from-elided reading; any other surplus, or fills that disagree,
+  declines the whole record, not just that span start, so a later misaligned
+  start cannot decode instead (`opju_axis_zero_slot.py`). Corpus: exactly 9 records change, all
+  `(0, -a)` -> `(-a, 0)`: the 5 pinned Figure 6 layers, plus BD_SC_all,
+  BD_TC_all, RSOS_SC_all and RSOS_TC_all (Y (-66.76, 0)); no record drops.
+- **The specimen step tag (item 65).** `_parse_specimen_record` found the X
+  and Y steps by searching for `83 02`, but that is how ANY value with two
+  significant bytes encodes after a token ending non-zero: `83 02 48 40` is
+  48.0. Battery Aging Graph3's X `8f 02 28 40 | 83 02 48 40 | 84 01 40` (12,
+  48, step 2) was read (0, 12); Graph2's Y `85 02 e0 bf | 83 02 08 40 | 83 02
+  f0 3f` (-0.5, 3, step 1) was read (0, -0.5). The step token must now end
+  where the next field begins: X's step is the `83 02` token ending at
+  `_Y_TRANSITION` (else the specimen parser declines and the real form, which
+  decodes the full span, takes the record); Y's is the first `83 02` token
+  followed by an end separator (the real form's admitted-flag `_SEP_WIDE`
+  gate), so a tag-shaped `to` is stepped over. The hybrid parser shares both
+  checks. Corpus: 11 records
+  change (both Battery layers, Hc2 data Graph33 (x2 copies), airfoil Graph1,
+  the five OriginAgent `demo*` projects, Fiber_CSV Graph1), all from a
+  one-slot-early `(0, a)` to a full span; the 21 records where both parsers
+  agree are untouched.
+
+Oracle (103 files): 1,777 match / 7 wrong / 0 phantom -> 1,784 / 0 / 0. The 13
+changed records it does not score were checked over COM separately, and all
+match Origin (`docs/origin_re/validation_log.md`, 2026-11-15).
+
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`
 oracles (`tools/origin_trial/score_curve_bindings.py`'s per-graph section +
