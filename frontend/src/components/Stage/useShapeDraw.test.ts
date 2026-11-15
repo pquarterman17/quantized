@@ -118,6 +118,8 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
     const ann = useApp.getState().annotations[0];
     expect(ann).toMatchObject({ x: 5, y: 6, text: "Hc2" });
     expect(ann.frame).toBeDefined();
+    expect(ann.dot).toBe(false); // a text box has no anchor dot
+    expect(ann.size).toBe(14); // axis-title size, not the 12 px tick-label default
     expect(useApp.getState().shapes).toEqual([]); // never a Shape
     expect(useApp.getState().selectedAnnotationId).toBe(ann.id);
   });

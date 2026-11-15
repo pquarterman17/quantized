@@ -1,7 +1,7 @@
 import { useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 
-import { nearestLegendCorner } from "../../lib/plotview";
 import { frameAnchorStyle } from "../../lib/uplotFrameVars";
+import { openFigureDialog } from "../../store/figureDialogs";
 import { useApp, type PlotTool } from "../../store/useApp";
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
@@ -13,7 +13,6 @@ export function useLegendBox(tool: PlotTool) {
   const legendFrameXY = useApp((s) => s.legendFrameXY);
   const legendSize = useApp((s) => s.legendSize);
   const setLegendXY = useApp((s) => s.setLegendXY);
-  const setLegendPos = useApp((s) => s.setLegendPos);
   const boxRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -51,10 +50,10 @@ export function useLegendBox(tool: PlotTool) {
   };
 
   const onBoxDoubleClick = (e: ReactMouseEvent) => {
-    if (tool !== "pointer" || !isBoxSurface(e) || (!legendXY && !legendFrameXY)) return;
-    if (legendXY) setLegendPos(nearestLegendCorner(legendXY[0], legendXY[1]));
-    else useApp.getState().recordHistory("reset legend position");
-    setLegendXY(null);
+    if (tool !== "pointer" || !isBoxSurface(e)) return;
+    // Legend formatting (entries, corner, visibility); "Reset position" (the
+    // old double-click action) lives in that dialog.
+    openFigureDialog({ kind: "legend" });
   };
 
   return {

@@ -16,7 +16,11 @@ import {
   type ImageLayer,
   type LayerKind,
 } from "./graphLayers";
+import { newCurve } from "./layerContents";
+import { is2DMap } from "./mapdata";
 import { openFilePicker } from "./openFilePicker";
+import { effectiveChannels } from "./plotdata";
+import type { LinkedCurve } from "./types";
 import { openFigureDialog } from "../store/figureDialogs";
 import { addLayer, layersOf, nextLayerId } from "../store/graphLayerEdit";
 import { toast } from "../store/toasts";
@@ -121,10 +125,27 @@ export async function imageLayerFromFile(file: File, deps: ImageDeps = BROWSER):
   return { id: nextLayerId(), kind: "image", at: [l, Math.max(0, Math.min(t, 0.98 - h)), w, h], src, name: file.name, ...(raster ? { raster } : {}) };
 }
 
+/** Most curves a new inset starts with (a crowded graph would make a muddy
+ *  thumbnail; more can be added in Layer properties). */
+const MAX_SEED_CURVES = 8;
+
+/** The active graph's visible curves as the new inset's starting set, each on
+ *  its own X (Origin copies the parent's curves into a new inset). Empty when
+ *  the active dataset is a map or has none plotted. */
+function parentCurves(): LinkedCurve[] {
+  const s = useApp.getState();
+  const ds = s.datasets.find((d) => d.id === s.activeId);
+  if (!ds || is2DMap(ds.data)) return [];
+  return effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder)
+    .filter((ch) => !s.hiddenChannels.includes(ch))
+    .slice(0, MAX_SEED_CURVES)
+    .map((ch) => newCurve(ds, null, ch));
+}
+
 function newLayer(kind: Exclude<LayerKind, "image">): GraphLayer {
   const at = [...DEFAULT_LAYER_AT[kind]] as GraphLayer["at"];
   return kind === "inset"
-    ? { id: nextLayerId(), kind, at, curves: [], x: defaultAxis(), y: defaultAxis(), mark: "line" }
+    ? { id: nextLayerId(), kind, at, curves: parentCurves(), x: defaultAxis(), y: defaultAxis(), mark: "line" }
     : { id: nextLayerId(), kind, at, rows: [["Quantity", "Value"], ["", ""]], header: true };
 }
 

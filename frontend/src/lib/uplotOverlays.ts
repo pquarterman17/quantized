@@ -903,9 +903,11 @@ export function annotationPlugin(
           // Frame (MAIN #27 "text box") draws BEHIND the dot+text, padded
           // around the same box the hit-test/selection outline use.
           if (a.text && a.frame) drawAnnotationFrame(ctx, annotationBox(layout), a.frame, color, opts?.paperColor ?? "transparent");
-          ctx.beginPath();
-          ctx.arc(px, py, 3, 0, Math.PI * 2);
-          ctx.fill();
+          if (a.dot !== false) {
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
           if (a.text) {
             if (layout.rich) {
               // Reuse the SAME shared canvas renderer the axis-label plugin

@@ -118,6 +118,7 @@ function panelOverrides(
       ...(ann.size ? { size: ann.size } : {}),
       ...(ann.anchor === "page" ? { anchor: "page" as const } : {}),
       ...(ann.frame ? { frame: ann.frame } : {}),
+      ...(ann.dot === false ? { dot: false as const } : {}),
     }));
   return compactOverrides({
     legend: hasLegend

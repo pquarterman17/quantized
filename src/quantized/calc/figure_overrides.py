@@ -277,7 +277,10 @@ def _apply_overrides(
         # The canvas marks every annotation's anchor with a 3 px dot and sets
         # the label 6 px right of it, its bottom 2 px above (uplotOverlays'
         # annotationLayout); 1 CSS px = 0.75 pt.
-        _anchor_dot(fig, ax, i, x, y, page=ann.get("anchor") == "page")
+        # `dot: false` (new plain text / text boxes) hides it, as on screen;
+        # absent = dot, so every older figure keeps its look.
+        if ann.get("dot") is not False:
+            _anchor_dot(fig, ax, i, x, y, page=ann.get("anchor") == "page")
         ax.annotate(
             safe_mathtext_label(str(ann.get("text", ""))),
             xy=(x, y),

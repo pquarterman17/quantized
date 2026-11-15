@@ -92,6 +92,7 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       ...(a.size ? { size: a.size } : {}),
       ...(a.anchor === "page" ? { anchor: "page" as const } : {}),
       ...(a.frame ? { frame: a.frame } : {}),
+      ...(a.dot === false ? { dot: false as const } : {}),
     }));
   // MAIN #27: drawn shapes, wire-shaped (no `id` — the render request needs no
   // identity, unlike the screen's editable list).

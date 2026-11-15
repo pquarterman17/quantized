@@ -85,7 +85,7 @@ export interface PointerToolSlice {
    *  call site, which keep recording their own independent entry. */
   updateAnnotation: (
     id: string,
-    patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size" | "anchor" | "frame" | "groupId">>,
+    patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size" | "anchor" | "frame" | "dot" | "groupId">>,
     historyToken?: HistoryBatchToken,
   ) => void;
 }

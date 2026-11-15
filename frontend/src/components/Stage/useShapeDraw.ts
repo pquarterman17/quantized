@@ -36,6 +36,10 @@ const DRAW_HINTS: Record<DrawShapeKind, string> = {
  *  discoverability requirement). */
 const DEFAULT_TEXTBOX_FRAME = { opacity: 0.9 };
 
+/** A fresh text box's font size: the axis-title size (tick size 12 + 2, see
+ *  `uplotOpts.buildOpts`' `titlePx`), not the small tick-label default. */
+const DEFAULT_TEXTBOX_SIZE = 14;
+
 export interface ShapeDrawResult {
   /** Pass straight through to <PlotViewport shapeDraw={...}>; null when no
    *  drawing mode is active. */
@@ -103,7 +107,7 @@ export function useShapeDraw(): ShapeDrawResult {
           // ruling: unlike a right-click's cancellable menu pick, committing
           // a drag-drawn text box IS the commit — the tool flip isn't
           // conditioned on the dialog outcome).
-          void createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME });
+          void createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME, size: DEFAULT_TEXTBOX_SIZE });
           return;
         }
         const id = addShape({ kind, x1, y1, x2, y2 });

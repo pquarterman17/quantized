@@ -341,6 +341,19 @@ def test_every_annotation_exports_its_anchor_dot() -> None:
         assert f'id="annotation_dot_{i}"' in svg
 
 
+def test_dot_false_drops_only_that_annotations_anchor_dot() -> None:
+    """Audit 6 M: a plain text box (`dot: false`) exports with no dot, as on
+    screen; a peak label (no `dot`) keeps it, so older figures look the same."""
+    x = np.linspace(0, 10, 5)
+    anns = [
+        {"x": 2.0, "y": 4.0, "text": "box", "dot": False},
+        {"x": 6.0, "y": 3.0, "text": "peak"},
+    ]
+    svg = render_figure(x, [("y", x)], fmt="svg", overrides={"annotations": anns}).decode("utf-8")
+    assert 'id="annotation_dot_0"' not in svg
+    assert 'id="annotation_dot_1"' in svg
+
+
 def test_an_anchor_dot_never_widens_the_axes() -> None:
     x = np.linspace(0, 10, 5)
     far = {"annotations": [{"x": 50.0, "y": 90.0, "text": "off"}]}

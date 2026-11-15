@@ -163,7 +163,7 @@ export default function PlotLegend({
       style={legendBox.style}
       onMouseDown={legendBox.onBoxMouseDown}
       onDoubleClick={legendBox.onBoxDoubleClick}
-      title={tool === "pointer" ? "Drag to move · drag an edge or corner to resize · double-click to reset position" : undefined}
+      title={tool === "pointer" ? "Drag to move · drag an edge or corner to resize · double-click for legend formatting" : undefined}
       role="group"
       aria-label={legendTitle ? undefined : "Plot legend"}
       aria-labelledby={legendTitle ? titleId : undefined}

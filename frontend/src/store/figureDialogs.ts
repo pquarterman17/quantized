@@ -21,6 +21,8 @@ export type FigureDialog =
   | { kind: "graphLayer"; id: string; draft?: import("../lib/graphLayers").GraphLayer }
   /** Gap audit 4 G1: the focused graph's colour gradient across its curves. */
   | { kind: "colorGradient" }
+  /** Audit 6 M: legend formatting, from a double-click on the legend box. */
+  | { kind: "legend" }
   | null;
 
 export const useFigureDialog = create<{ open: FigureDialog }>(() => ({ open: null }));

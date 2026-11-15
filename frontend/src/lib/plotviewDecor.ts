@@ -120,6 +120,7 @@ export function sanitizeAnnotations(v: unknown): Annotation[] {
       ...(typeof o.size === "number" && Number.isFinite(o.size) ? { size: o.size } : {}),
       ...(anchor ? { anchor } : {}),
       ...(frame ? { frame } : {}),
+      ...(o.dot === false ? { dot: false } : {}),
     });
   }
   return out;

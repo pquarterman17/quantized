@@ -129,6 +129,12 @@ describe("createAnnotationFromDialog", () => {
     expect(useApp.getState().selectedAnnotationId).toBe(id);
   });
 
+  it("creates plain text with no anchor dot, and applies a size patch", async () => {
+    mockAskAnnotationText.mockResolvedValue("Note");
+    const id = await createAnnotationFromDialog({ x: 1, y: 2, title: "Text box", size: 14 });
+    expect(useApp.getState().annotations).toEqual([expect.objectContaining({ id, dot: false, size: 14 })]);
+  });
+
   it("B1: flips the plot tool to pointer only when flipToPointer is set AND the create succeeds", async () => {
     mockAskAnnotationText.mockResolvedValue("Tc onset");
     useApp.setState({ plotTool: "zoom" });

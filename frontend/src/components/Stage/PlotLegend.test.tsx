@@ -7,6 +7,7 @@ import { CHANNEL_DND, decodeChannelDrag } from "../../lib/dragaxis";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { displayPositions } from "../../lib/seriesStyleCycle";
 import type { DataStruct, SeriesStyle } from "../../lib/types";
+import { useFigureDialog } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
 
 const series: PlotSeriesSpec[] = [
@@ -216,29 +217,20 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     expect(input).toHaveAccessibleName("Legend label for B");
   });
 
-  it("double-click on the box background resets to the nearest corner and clears legendXY", () => {
-    useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" }); // near the top-right -> "ne"
-    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    const el = container.querySelector(".qzk-legend") as HTMLElement;
-    fireEvent.doubleClick(el);
-    expect(useApp.getState().legendXY).toBeNull();
-    expect(useApp.getState().legendPos).toBe("ne");
-  });
-
-  it("double-click on the content body's empty space resets like the box background", () => {
+  it("double-click on the box background opens legend formatting and leaves the position alone", () => {
     useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" });
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    fireEvent.doubleClick(container.querySelector(".qzk-legend-content") as HTMLElement);
-    expect(useApp.getState().legendXY).toBeNull();
-    expect(useApp.getState().legendPos).toBe("ne");
+    fireEvent.doubleClick(container.querySelector(".qzk-legend") as HTMLElement);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
+    expect(useApp.getState().legendXY).toEqual([0.9, 0.1]);
+    useFigureDialog.setState({ open: null });
   });
 
-  it("double-click is a no-op when the legend has no free position to reset from", () => {
-    useApp.setState({ legendPos: "sw" });
+  it("double-click on the content body's empty space opens legend formatting too", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    const el = container.querySelector(".qzk-legend") as HTMLElement;
-    fireEvent.doubleClick(el);
-    expect(useApp.getState().legendPos).toBe("sw"); // untouched — nothing to reset
+    fireEvent.doubleClick(container.querySelector(".qzk-legend-content") as HTMLElement);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
+    useFigureDialog.setState({ open: null });
   });
 });
 
@@ -385,16 +377,6 @@ describe("PlotLegend frame anchor (decode #52 — faithful in-frame placement)",
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
     expect(useApp.getState().legendXY).toEqual([0.5, 0.8]);
     expect(useApp.getState().legendFrameXY).toBeNull();
-  });
-
-  it("double-click clears the frame anchor, falling back to the pinned corner", () => {
-    useApp.setState({ legendFrameXY: [0.2, 0.8], legendXY: null, legendPos: "sw" });
-    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    const el = container.querySelector(".qzk-legend") as HTMLElement;
-    fireEvent.doubleClick(el);
-    expect(useApp.getState().legendFrameXY).toBeNull();
-    expect(useApp.getState().legendPos).toBe("sw"); // the corner the apply already pinned
-    expect(el).toHaveClass("sw");
   });
 });
 

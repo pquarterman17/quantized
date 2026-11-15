@@ -75,6 +75,9 @@ export interface CreateAnnotationFromDialogOptions {
    *  "Add text here…" entry passes none, so the label rides with no
    *  frame). */
   frame?: Annotation["frame"];
+  /** Font size patch for the new annotation (text boxes default to the
+   *  axis-title size rather than the small tick-label size). */
+  size?: number;
   /** Flip the active plot tool to "pointer" once the annotation is created,
    *  so it is immediately selected + directly manipulable (MAIN #27).
    *  Applied ONLY on a successful, non-blank create — never on cancel, and
@@ -96,13 +99,18 @@ export interface CreateAnnotationFromDialogOptions {
  *  a blank "Done" creates nothing, same as Cancel: no annotation, no undo
  *  entry, no tool flip). */
 export function createAnnotationFromDialog(opts: CreateAnnotationFromDialogOptions): Promise<string | null> {
-  const { x, y, title, initial = "", frame, flipToPointer } = opts;
-  return askAnnotationText(title, initial).then((v) => {
+  const { x, y, title, initial = "", frame, size, flipToPointer } = opts;
+  return askAnnotationText(title, initial).then(async (v) => {
     const text = v?.trim() ?? "";
     if (!text) return null;
     const s = useApp.getState();
-    const id = s.addAnnotation(x, y, text);
-    if (frame) s.updateAnnotation(id, { frame });
+    // Plain text / text boxes carry no anchor dot (peak and point labels,
+    // created elsewhere, keep it). One batch so create + patch is ONE undo step.
+    const id = await s.withHistoryBatch("add annotation", async (token) => {
+      const made = s.addAnnotation(x, y, text, token);
+      s.updateAnnotation(made, { dot: false, ...(frame ? { frame } : {}), ...(size ? { size } : {}) }, token);
+      return made;
+    });
     s.setSelectedAnnotationId(id);
     if (flipToPointer) s.setPlotTool("pointer");
     return id;

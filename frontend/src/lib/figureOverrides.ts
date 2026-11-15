@@ -58,6 +58,8 @@ export interface FigureOverrides {
     /** MAIN #27 "text box": a bbox behind the text —
      *  `calc.figure_overrides._apply_overrides`'s `ann.get("frame")` branch. */
     frame?: { fill?: string; stroke?: string; opacity?: number; pad?: number };
+    /** `false` hides the anchor dot (absent = dot, the legacy look). */
+    dot?: false;
   }[];
   /** Manual axis breaks (gap #21, export-side): elided `[lo, hi]` x-ranges,
    *  rendered as twinned panels with diagonal break glyphs
