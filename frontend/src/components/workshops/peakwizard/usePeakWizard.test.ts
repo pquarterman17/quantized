@@ -288,11 +288,12 @@ describe("usePeakWizard — a live drag outranks the marker-edit pause, ONE acti
 describe("usePeakWizard — click-on-plot editing never triggers a find/fit call", () => {
   it("addPeakAt/removePeak do not call findPeaks", async () => {
     const { findPeaks } = await import("../../../lib/api/peaks");
+    vi.mocked(findPeaks).mockResolvedValue({ peaks: [{ center: 2, height: 4, fwhm: 1, prominence: 1 }], background: [0, 0, 0, 0, 0] } as never);
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.setStep(1));
-    // Entering step ② auto-finds once (gap audit 6, lane N); only the editing
-    // calls below must add none.
-    await waitFor(() => expect(result.current.findBusy).toBe(false));
+    // Entering step ② auto-finds once (gap audit 6, lane N); wait on its RESULT
+    // (state), then only the editing calls below must add none.
+    await waitFor(() => expect(result.current.candidates).toHaveLength(1));
     const before = vi.mocked(findPeaks).mock.calls.length;
     act(() => result.current.addPeakAt(1));
     act(() => result.current.removePeak(0));

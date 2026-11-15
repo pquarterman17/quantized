@@ -49,8 +49,13 @@ export default function PeakWizardPanel() {
   // Nothing to fit: Next from step ② and the Model / Fit & review chips (③, ④)
   // are off, with the reason.
   const noPeaks = !w.candidates.some((c) => c.included);
-  const noPeaksWhy = w.findBusy ? "finding peaks…" : "no peaks to fit — find or add at least one peak first";
-  const nextBlock = w.step === 1 && noPeaks ? noPeaksWhy : null;
+  const noPeaksWhy = w.findBusy
+    ? "finding peaks…"
+    : w.findError
+      ? `peak find failed (${w.findError}) — retry it or add a peak, then continue`
+      : "no peaks to fit — find or add at least one peak first";
+  // Step ② -> ③ and ③ -> ④ (a model-table "×" can delete the last peak in ③).
+  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : null;
 
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,

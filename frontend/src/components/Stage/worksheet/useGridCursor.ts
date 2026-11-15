@@ -85,6 +85,9 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const setStatus = useApp((s) => s.setStatus);
   const [range, setRange] = useState<CellRange | null>(null);
   const [reveal, setReveal] = useState<GridReveal | null>(null);
+  // Select-all (Ctrl+A) keeps the cell that was active before it, as Excel
+  // does: the range covers everything, but typing / arrows act from `active`.
+  const [all, setAll] = useState<{ range: CellRange; active: CellRange } | null>(null);
   const { order, data, baseCount } = view;
   const readOnly = isRederived(ds);
   // The entry row only where display position = row index (no view filter or
@@ -137,9 +140,9 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const rowAt = (pos: number): number => order[pos] ?? order.length + (pos - order.length);
   const valueAt = (row: number, col: number) => (col < 0 ? data.time[row] : data.values[row]?.[col]);
 
-  const startEdit = (typed?: string) => {
-    if (!range) return;
-    const { pos, col } = range.focus;
+  const startEdit = (typed?: string, from: CellRange | null = range) => {
+    if (!from) return;
+    const { pos, col } = from.focus;
     if (readOnly || col >= baseCount) {
       setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set Column Values… to edit the formula" : ds.linkedCurves ? editRefusalNotice(ds) : "this worksheet is rebuilt from its source and can't be edited here");
       return;
@@ -204,8 +207,13 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     if (accel && e.key.toLowerCase() === "a" && b.rows > 0) {
       const last = { pos: Math.max(0, order.length - 1), col: b.cols - 1 };
       // setRange, not place(): place() also raises a reveal, which would scroll
-      // the view to the last cell. Select-all must leave the viewport alone.
-      setRange({ anchor: { pos: 0, col: -1 }, focus: last });
+      // the view to the last cell. Select-all must leave the viewport alone,
+      // and the active cell stays the one it was (the first cell if none).
+      const full = { anchor: { pos: 0, col: -1 }, focus: last };
+      const was = (all && all.range === range ? all.active : range) ?? cellAt({ pos: 0, col: -1 }, b);
+      const active = { anchor: was.focus, focus: was.focus };
+      setRange(full);
+      setAll({ range: full, active });
       return true;
     }
     if (!range) {
@@ -217,32 +225,37 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       return false;
     }
     const k = e.key;
+    // Keys that move or edit act from the pre-select-all active cell and
+    // collapse the selection to it; clear / copy / cut / fill keep the range.
+    const fromAll = all && all.range === range && !accel && k !== "Delete" && k !== "Backspace" && k !== "Escape"  && !["Shift", "Control", "Alt", "Meta"].includes(k);
+    const cur = fromAll ? all.active : range;
+    if (fromAll) setRange(cur);
     // A jump to the bottom lands on the last DATA row, as Ctrl+End does in a
     // spreadsheet — never on the blank entry row under it.
     const jb = { ...b, rows: Math.max(1, b.rows - (entryRow ? 1 : 0)) };
     if (ARROWS[k]) {
       const [dr, dc] = ARROWS[k];
       const edge = accel ? (dr < 0 ? "top" : dr > 0 ? "bottom" : dc < 0 ? "left" : "right") : null;
-      place(edge ? jumpCursor(range, edge, e.shiftKey, jb) : moveCursor(range, dr, dc, e.shiftKey, b));
+      place(edge ? jumpCursor(cur, edge, e.shiftKey, jb) : moveCursor(cur, dr, dc, e.shiftKey, b));
     } else if (k === "Home" || k === "End") {
-      const r = accel ? jumpCursor(range, k === "Home" ? "top" : "bottom", e.shiftKey, jb) : range;
+      const r = accel ? jumpCursor(cur, k === "Home" ? "top" : "bottom", e.shiftKey, jb) : cur;
       place(jumpCursor(r, k === "Home" ? "left" : "right", e.shiftKey, b));
     } else if (k === "PageUp" || k === "PageDown") {
-      place(moveCursor(range, k === "PageUp" ? -PAGE : PAGE, 0, e.shiftKey, b));
+      place(moveCursor(cur, k === "PageUp" ? -PAGE : PAGE, 0, e.shiftKey, b));
     } else if (k === "Enter") {
-      place(moveCursor(range, e.shiftKey ? -1 : 1, 0, false, b));
+      place(moveCursor(cur, e.shiftKey ? -1 : 1, 0, false, b));
     } else if (k === "Tab") {
-      const next = moveCursor(range, 0, e.shiftKey ? -1 : 1, false, b);
+      const next = moveCursor(cur, 0, e.shiftKey ? -1 : 1, false, b);
       // At the sheet's edge Tab leaves the grid, so keyboard users can move on.
-      if (next.focus.col === range.focus.col) return false;
+      if (next.focus.col === cur.focus.col) return false;
       place(next);
     } else if (k === "F2" && e.shiftKey) {
-      hooks.onEditHeader(range.focus.col);
+      hooks.onEditHeader(cur.focus.col);
     } else if (k === "F2") {
-      startEdit();
+      startEdit(undefined, cur);
     } else if (k === "ContextMenu" || (k === "F10" && e.shiftKey)) {
-      const box = document.getElementById(cellId(range.focus.pos, range.focus.col))?.getBoundingClientRect();
-      hooks.onColumnMenu(range.focus.col, box ? box.left : 0, box ? box.bottom : 0);
+      const box = document.getElementById(cellId(cur.focus.pos, cur.focus.col))?.getBoundingClientRect();
+      hooks.onColumnMenu(cur.focus.col, box ? box.left : 0, box ? box.bottom : 0);
     } else if (k === "Delete" || k === "Backspace") {
       cursorOps.clearBlock();
     } else if (accel && (k === "c" || k === "x" || k === "v" || k === "d")) {
@@ -251,23 +264,24 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       else if (k === "v") pasteAtCursor();
       else cursorOps.fillDown();
     } else if (startsTyping(e)) {
-      startEdit(e.key);
+      startEdit(e.key, cur);
     } else {
       return false;
     }
     return true;
   };
 
+  const activeCell = range ? (all && all.range === range ? all.active.focus : range.focus) : null;
   const grid: GridCursorProps = {
     gridId,
     label: `${ds.name} worksheet`,
-    activeCellId: range ? cellId(range.focus.pos, range.focus.col) : undefined,
+    activeCellId: activeCell ? cellId(activeCell.pos, activeCell.col) : undefined,
     cellEdit,
     entryRow,
     entryRowIndex: order.length,
     cellId,
     mark: (pos, col) =>
-      !range ? null : range.focus.pos === pos && range.focus.col === col ? "cursor" : inRange(range, pos, col) ? "range" : null,
+      !range || !activeCell ? null : activeCell.pos === pos && activeCell.col === col ? "cursor" : inRange(range, pos, col) ? "range" : null,
     onCellDown: (pos, col, e) => {
       if (e.button !== 0) return;
       if (e.shiftKey && range) {

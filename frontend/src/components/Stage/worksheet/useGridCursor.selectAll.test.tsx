@@ -1,10 +1,13 @@
 // Ctrl+A on the worksheet grid selects every cell WITHOUT moving the viewport
-// (gap audit 6, lane N / P8): it used to place the cursor on the last cell,
-// which raised a reveal and jumped the view to the bottom-right. Ctrl+C after
-// it still copies the whole block.
+// and keeps the cell that was active before it, as Excel does (gap audit 6,
+// lane N / P8). It used to place the cursor on the LAST cell, which raised a
+// reveal (the view jumped bottom-right); and the first fix left that last cell
+// active while off-screen, so typing edited an invisible cell and the next
+// arrow key jumped there anyway. jsdom does not scroll, so the checks read the
+// active cell (aria-activedescendant) — which is where a reveal would aim.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -23,40 +26,60 @@ const big = (): Dataset => ({
   },
 });
 
-const realH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
 beforeEach(() => {
-  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.classList.contains("qzk-grid") ? 240 : 0;
-    },
-  });
   useApp.setState({ datasets: [big()], activeId: "w", worksheetId: null, history: [], future: [], status: "" });
-});
-afterEach(() => {
-  if (realH) Object.defineProperty(HTMLElement.prototype, "clientHeight", realH);
 });
 
 const grid = () => screen.getByRole("grid");
 const cellAt = (pos: number, col: number) => document.querySelector<HTMLElement>(`[role=gridcell][id$="-r${pos}-c${col + 1}"]`)!;
+const active = () => grid().getAttribute("aria-activedescendant");
+const key = (k: string, opts: Partial<KeyboardEventInit> = {}) => fireEvent.keyDown(grid(), { key: k, ...opts });
+
+function selectAllFromCell(pos: number, col: number) {
+  render(<WorksheetPane datasetId="w" />);
+  fireEvent.mouseDown(cellAt(pos, col));
+  grid().focus();
+  const id = active();
+  key("a", { ctrlKey: true });
+  return id;
+}
 
 describe("worksheet Ctrl+A", () => {
-  it("selects all cells and leaves the scroll position alone", async () => {
+  it("selects everything, keeps the active cell where it was, and copies the full block", async () => {
     let clip = "";
     Object.assign(navigator, { clipboard: { readText: () => Promise.resolve(clip), writeText: (t: string) => ((clip = t), Promise.resolve()) } });
-    render(<WorksheetPane datasetId="w" />);
-    const scroller = document.querySelector<HTMLElement>(".qzk-grid")!;
-    fireEvent.mouseDown(cellAt(0, 0));
-    grid().focus();
-    const before = scroller.scrollTop;
-    fireEvent.keyDown(grid(), { key: "a", ctrlKey: true });
-    expect(scroller.scrollTop).toBe(before);
-    expect(cellAt(0, 0)).toHaveAttribute("aria-selected", "true");
+    const before = selectAllFromCell(2, 0);
+    expect(active()).toBe(before); // not the last cell (old place() moved it, and the view with it)
+    expect(cellAt(2, 0)).toHaveAttribute("aria-selected", "true");
     await act(async () => {
-      fireEvent.keyDown(grid(), { key: "c", ctrlKey: true });
+      key("c", { ctrlKey: true });
     });
     const lines = clip.split("\n");
     expect(lines).toHaveLength(N);
     expect(lines[N - 1]).toBe(`${N - 1}\t${(N - 1) * 10}`);
+  });
+
+  it("an arrow key then moves from the pre-select-all cell and collapses the selection", () => {
+    selectAllFromCell(2, 0);
+    key("ArrowDown");
+    expect(active()).toBe(cellAt(3, 0).id);
+    expect(cellAt(2, 0)).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("typing after Ctrl+A edits the pre-select-all cell, not the last one", () => {
+    selectAllFromCell(2, 0);
+    key("7");
+    const input = document.activeElement as HTMLInputElement;
+    expect(input.value).toBe("7");
+    fireEvent.change(input, { target: { value: "75" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useApp.getState().datasets[0].data.values[2]).toEqual([75]);
+    expect(useApp.getState().datasets[0].data.values[N - 1]).toEqual([(N - 1) * 10]);
+  });
+
+  it("Delete still clears the whole selection", () => {
+    selectAllFromCell(2, 0);
+    key("Delete");
+    expect(useApp.getState().datasets[0].data.values[N - 1]).toEqual([NaN]);
   });
 });

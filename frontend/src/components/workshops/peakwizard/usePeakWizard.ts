@@ -80,7 +80,7 @@ export interface PeakWizardState {
   findError: string | null;
   /** `find`: run with these settings instead of the recipe's (see
    *  usePeakCandidates's `runFind`). */
-  runFind: (find?: PeakRecipe["find"]) => Promise<void>;
+  runFind: (find?: PeakRecipe["find"], opts?: { auto?: boolean }) => Promise<void>;
   togglePeak: (i: number) => void;
   removePeak: (i: number) => void;
   /** Delete the model's peak `k` (the k-th INCLUDED candidate). */
@@ -277,7 +277,7 @@ export function usePeakWizard(): PeakWizardState {
   // request already carries its own armed find, so it is not doubled here.
   const [autoFind, setAutoFind] = useState(false);
   useEffect(() => {
-    setAutoFind(step === 1 && !pendingFind && candidates.length === 0);
+    setAutoFind(step === 1 && !pendingFind && !cands.findBusy && candidates.length === 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- armed on entering the step only
   }, [step]);
   useEffect(() => {
@@ -286,7 +286,7 @@ export function usePeakWizard(): PeakWizardState {
       setAutoFind(false);
     } else if (segment.x.length === 0 || recipe.baseline.method === "none" || baseline !== null) {
       setAutoFind(false);
-      void runFind();
+      void runFind(undefined, { auto: true });
     } else if (baselineError) {
       setAutoFind(false);
     }

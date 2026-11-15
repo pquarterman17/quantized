@@ -99,6 +99,82 @@ describe("Peak Analyzer step chips with no peaks", () => {
   });
 });
 
+/** A find the test resolves by hand, so a result can land late. */
+function deferredFind() {
+  let resolve!: (v: typeof FOUND) => void;
+  findMock.mockImplementationOnce(() => new Promise<typeof FOUND>((r) => (resolve = r)));
+  return { resolve: (v: typeof FOUND = FOUND) => resolve(v) };
+}
+
+describe("Peak Analyzer auto-find races", () => {
+  it("a late auto-find never replaces peaks the user added while it ran", async () => {
+    const d = deferredFind();
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+    await waitFor(() => expect(result.current.findBusy).toBe(true));
+    act(() => result.current.addPeakAt(10));
+    expect(result.current.candidates).toHaveLength(1);
+    const manualCenter = result.current.candidates[0]!.center;
+    await act(async () => d.resolve());
+    await waitFor(() => expect(result.current.findBusy).toBe(false));
+    expect(result.current.candidates).toHaveLength(1);
+    expect(result.current.candidates[0]).toMatchObject({ manual: true, center: manualCenter });
+  });
+
+  it("leaving and re-entering step 2 while the first find is in flight does not start a second", async () => {
+    const d = deferredFind();
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+    await waitFor(() => expect(result.current.findBusy).toBe(true));
+    act(() => result.current.setStep(2));
+    act(() => result.current.setStep(1));
+    await act(async () => d.resolve());
+    await waitFor(() => expect(result.current.candidates).toHaveLength(1));
+    expect(findMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a find that lands after the dataset changed is dropped, not committed onto the new trace", async () => {
+    const d = deferredFind();
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+    await waitFor(() => expect(result.current.findBusy).toBe(true));
+    act(() => useApp.setState({ datasets: [ds, { ...ds, id: "d2", name: "other" }], activeId: "d2" }));
+    await act(async () => d.resolve());
+    await waitFor(() => expect(result.current.findBusy).toBe(false));
+    expect(result.current.candidates).toHaveLength(0);
+  });
+});
+
+describe("Peak Analyzer Next gate", () => {
+  it("says the find failed when it did, instead of only 'no peaks'", async () => {
+    findMock.mockRejectedValue(new Error("backend unreachable"));
+    render(<PeakWizardPanel />);
+    step("Find peaks");
+    await waitFor(() => expect(next()).toHaveAttribute("title", expect.stringMatching(/peak find failed.*backend unreachable/)));
+    expect(next()).toBeDisabled();
+  });
+
+  it("step 3 blocks Next too once its last peak is removed", async () => {
+    findMock.mockResolvedValue(FOUND);
+    render(<PeakWizardPanel />);
+    step("Find peaks");
+    await waitFor(() => expect(next()).toBeEnabled());
+    step("Model");
+    expect(next()).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "remove peak 1" }));
+    expect(next()).toBeDisabled();
+    expect(next()).toHaveAttribute("title", expect.stringMatching(/no peaks to fit/i));
+  });
+
+  it("the Report chip stays reachable with no peaks (the integrate-only path needs none)", async () => {
+    findMock.mockResolvedValue({ peaks: [], background: [] });
+    render(<PeakWizardPanel />);
+    step("Find peaks");
+    await waitFor(() => expect(next()).toBeDisabled());
+    expect(screen.getByText("Report", { selector: ".qzk-wizard-step" })).toBeEnabled();
+  });
+});
+
 describe("Peak Analyzer fit status", () => {
   it("says 'fitted' on the status line after a model fit", async () => {
     findMock.mockResolvedValue(FOUND);
