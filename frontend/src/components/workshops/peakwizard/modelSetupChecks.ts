@@ -7,7 +7,7 @@
 // positive ratio —, an area ratio only between peaks that have an area, no
 // cycle — an area ratio reads both peaks' other fields —, and an equal tie
 // ending on a varying parameter), min <= max, a free parameter's start inside
-// its bounds (widths > 0 by default, eta in [0, 1], Pearson VII m >= 0.5,
+// its bounds (widths > 0 by default, eta in [0, 1], Pearson VII m > 0.5,
 // Doniach–Šunjić alpha in [0, 0.99] by default), positive widths, and a Voigt
 // with a nonzero width.
 // Non-finite numbers first: every comparison with NaN is false, so without
@@ -22,7 +22,7 @@ import { NO_AREA_SHAPES, paramKind, paramLabel, tieOpsFor, type ModelParam, type
  *  (calc/peak_model_shapes.py's KIND_RULES). */
 const RULES: Record<string, [number, boolean, number, boolean, number, number]> = {
   eta: [0, true, 1, true, 0, 1],
-  m: [0.5, true, Infinity, false, 0.5, Infinity],
+  m: [0.5, false, Infinity, false, 0.51, Infinity], // m = 0.5: infinite area
   alpha: [0, true, 1, false, 0, 0.99],
 };
 const inRule = ([lo, loIn, hi, hiIn]: (typeof RULES)[string], v: number) =>

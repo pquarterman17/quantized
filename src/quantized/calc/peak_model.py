@@ -44,10 +44,12 @@ Conventions (stated once, relied on everywhere):
   peak's other fields). A cycle, an unknown target, a kind mismatch, an
   unknown ``tie_op`` and a coefficient without a tie are all refused.
 * Physical bounds are always applied: widths are > 0 (default ``min`` is
-  ``min(1e-6 * x-span, value/2)``), ``eta`` lies in [0, 1], Pearson VII ``m``
-  >= 0.5, Doniach-Sunjic ``alpha`` in [0, 1) (default max 0.99), a ratio
-  coefficient > 0. The one exception: a FIXED Voigt ``fwhm_g`` or ``fwhm_l``
-  may be exactly 0 (the pure Lorentzian / Gaussian limit), never both.
+  ``min(1e-6 * x-span, value/2)``; a width a tie resolves to must be > 0 as
+  well), ``eta`` lies in [0, 1], Pearson VII ``m`` > 0.5 (default min 0.51),
+  Doniach-Sunjic ``alpha`` in [0, 1) (default max 0.99), a ratio
+  coefficient > 0, and an area-ratio height must be finite at the start.
+  The one exception: a FIXED Voigt ``fwhm_g`` or ``fwhm_l`` may be exactly 0
+  (the pure Lorentzian / Gaussian limit), never both.
   Nothing else has a default bound, so an unconstrained height may go
   negative (the fitter warns).
 """
@@ -372,6 +374,19 @@ class PeakParams:
         # Widths never depend on an area-ratio height, so resolving the other
         # ties is enough to see each Voigt's starting widths.
         init = self._evaluate(self.ext_values, areas=False)
+        for i in self.order:
+            n = self.names[i]
+            if self.kinds[i] == "width" and not n.endswith((".fwhm_g", ".fwhm_l")) \
+                    and not init[i] > 0:
+                raise ValueError(f"{n}: its tie to {self.tie[i]} gives a width of "
+                                 f"{float(init[i]):g}; a width must be positive")
+        if "area_ratio" in self.op:
+            full = self._evaluate(self.ext_values)
+            for i in self.order:
+                if self.op[i] == "area_ratio" and not math.isfinite(float(full[i])):
+                    raise ValueError(
+                        f"{self.names[i]}: the area ratio to {self.tie[i]} is not finite at "
+                        "the start values (a peak whose area is infinite or zero there)")
         for n in self.names:
             if n.endswith(".fwhm_g"):
                 g, lw = self.index[n], self.index[n[:-1] + "l"]

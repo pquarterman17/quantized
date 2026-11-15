@@ -222,6 +222,16 @@ function remapName(name: string, map: (i: number) => number | null): string | nu
   return to === null || to >= MAX_RECIPE_PEAKS ? null : `p${to}.${m[2]}`;
 }
 
+/** Withdraw an edit's tie with its operation and coefficient: an orphaned
+ *  `tieOp` would otherwise turn the NEXT tie (a seed's plain copy, Share
+ *  FWHM) into a ratio or offset nobody chose. */
+export function dropTie(e: ParamEdit): void {
+  delete e.tie;
+  delete e.tieOp;
+  delete e.tieCoef;
+  delete e.tieCoefVary;
+}
+
 /** Keep every edit with its peak across a change of the included-peak list.
  *  `map(oldIndex)` is the peak's new index, or null when it left the model;
  *  its edits go, and an edit's tie to a peak that left is withdrawn (the seed
@@ -234,7 +244,7 @@ export function remapFitPeaks(fit: PeakRecipeFit, map: (i: number) => number | n
     const next: ParamEdit = { ...edit };
     if (typeof edit.tie === "string") {
       const tie = remapName(edit.tie, map);
-      if (tie === null) delete next.tie;
+      if (tie === null) dropTie(next);
       else next.tie = tie;
     }
     params[to] = next;
@@ -285,7 +295,7 @@ export function extractPeak(fit: PeakRecipeFit, k: number, ids: readonly number[
     const next: ParamEdit = { ...edit };
     if (typeof edit.tie === "string") {
       const ref = toRef(edit.tie);
-      if (ref === null) delete next.tie;
+      if (ref === null) dropTie(next);
       else next.tie = ref;
     }
     params[m[1]] = next;
@@ -313,7 +323,7 @@ export function insertPeak(fit: PeakRecipeFit, k: number, slice: PeakSlice, ids:
     const next: ParamEdit = { ...edit };
     if (typeof edit.tie === "string") {
       const tie = fromRef(edit.tie);
-      if (tie === null) delete next.tie;
+      if (tie === null) dropTie(next);
       else next.tie = tie;
     }
     params[`p${k}.${field}`] = next;

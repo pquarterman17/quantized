@@ -33,8 +33,8 @@ doniach_sunjic      fwhm, alpha              root finding         none
 ==================  =======================  ===================  ================
 
 Kinds and their physical rules (:data:`KIND_RULES`): every width is > 0 (a
-FIXED Voigt component may be 0); ``eta`` in [0, 1]; ``m`` >= 0.5 (start
-above it); ``alpha`` in [0, 1); ``inv_q`` (= 1/q, 0 = Lorentzian) is free.
+FIXED Voigt component may be 0); ``eta`` in [0, 1]; ``m`` > 0.5 (default
+min 0.51; the area diverges at 0.5); ``alpha`` in [0, 1); ``inv_q`` (= 1/q, 0 = Lorentzian) is free.
 """
 
 from __future__ import annotations
@@ -96,7 +96,9 @@ WIDTHS = ("fwhm", "fwhm_g", "fwhm_l", "fwhm_left", "fwhm_right")
 # when varying). A start value and any user bound must satisfy the value range.
 KIND_RULES: dict[str, tuple[float, bool, float, bool, tuple[float | None, float | None]]] = {
     "eta": (0.0, True, 1.0, True, (0.0, 1.0)),
-    "m": (0.5, True, math.inf, False, (0.5, None)),
+    # m = 0.5 exactly is a valid profile with an INFINITE area (review M2):
+    # excluded, so every Pearson VII area - and an area ratio on it - is finite.
+    "m": (0.5, False, math.inf, False, (0.51, None)),
     "alpha": (0.0, True, 1.0, False, (0.0, 0.99)),
 }
 

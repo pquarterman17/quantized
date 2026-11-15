@@ -14,7 +14,7 @@
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Select } from "../../primitives";
 import {
-  dependents, paramLabel, tieCoefDefault, tieOpsFor, tieTargets, type ModelParam, type TieOp,
+  dependents, NO_EXPR, paramLabel, tieCoefDefault, tieOpsFor, tieTargets, type ModelParam, type TieOp,
 } from "./peakModelParams";
 import type { ModelFitState } from "./useModelFit";
 
@@ -154,7 +154,7 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
             value={p.tie ?? ""}
             disabled={tieOptions.length < 2}
             style={{ width: COL.tie }}
-            onChange={(e) => model.patch(p.name, { tie: e.target.value || null })}
+            onChange={(e) => model.patch(p.name, { tie: e.target.value || null, ...NO_EXPR })}
           />
         </td>
       </tr>

@@ -22,7 +22,7 @@
 // the user never touched follows the data.
 
 import {
-  paramKind, type ModelBackground, type ModelShape, type ParamEdit, type PeakRecipeFit, type TieOp,
+  dropTie, paramKind, type ModelBackground, type ModelShape, type ParamEdit, type PeakRecipeFit, type TieOp,
 } from "../../../lib/peakRecipeFit";
 
 export { paramKind, type ModelBackground, type ModelShape, type TieOp };
@@ -223,6 +223,9 @@ export function applyEdits(seeded: ModelSetup, fit: Pick<PeakRecipeFit, "params"
     const next: ModelParam = { ...p, ...e };
     if (typeof e.tie === "string" && !(names.has(e.tie) && paramKind(e.tie) === paramKind(p.name) && e.tie !== p.name)) {
       next.tie = p.tie;
+      next.tieOp = p.tieOp;
+      next.tieCoef = p.tieCoef;
+      next.tieCoefVary = p.tieCoefVary;
     }
     return next;
   });
@@ -252,7 +255,10 @@ export function recordEdits(
     if (p.tieOp !== b.tieOp) d.tieOp = p.tieOp;
     if (p.tieCoef !== b.tieCoef) d.tieCoef = p.tieCoef;
     if (p.tieCoefVary !== b.tieCoefVary) d.tieCoefVary = p.tieCoefVary;
-    if (Object.keys(d).length > 0) out[p.name] = { ...out[p.name], ...d };
+    if (Object.keys(d).length === 0) continue;
+    const merged: ParamEdit = { ...out[p.name], ...d };
+    for (const k of Object.keys(merged) as (keyof ParamEdit)[]) if (merged[k] === undefined) delete merged[k];
+    out[p.name] = merged;
   }
   return out;
 }
@@ -303,8 +309,12 @@ export function dependents(params: readonly ModelParam[], name: string): string[
   return params.filter((p) => p.tie === name).map((p) => p.name);
 }
 
-const WIDTH_FIELDS = ["fwhm", "fwhm_g", "fwhm_l"];
+const WIDTH_FIELDS = ["fwhm", "fwhm_g", "fwhm_l", "fwhm_left", "fwhm_right"];
 const fieldOf = (name: string) => name.slice(name.indexOf(".") + 1);
+
+/** A plain copy tie: no operation or coefficient left over from an earlier
+ *  expression tie (review M1). */
+export const NO_EXPR = { tieOp: undefined, tieCoef: undefined, tieCoefVary: undefined } as const;
 
 /** Peak parameters of each field in `fields`, grouped; the first is the root. */
 function groups(params: readonly ModelParam[], fields: readonly string[]): ModelParam[][] {
@@ -327,9 +337,9 @@ function tieToFirst(setup: ModelSetup, fields: readonly string[], on: boolean): 
         shareVary[root.name] = false;
         patch.set(root.name, { vary: true });
       }
-      for (const p of rest) if (p.tie === null) patch.set(p.name, { tie: root.name });
+      for (const p of rest) if (p.tie === null) patch.set(p.name, { tie: root.name, ...NO_EXPR });
     } else {
-      for (const p of rest) if (p.tie === root.name) patch.set(p.name, { tie: null });
+      for (const p of rest) if (p.tie === root.name) patch.set(p.name, { tie: null, ...NO_EXPR });
       if (root.name in shareVary) {
         patch.set(root.name, { vary: shareVary[root.name] });
         delete shareVary[root.name];
@@ -379,8 +389,9 @@ export function withShareFwhm(fit: PeakRecipeFit, setup: ModelSetup, on: boolean
   for (const [root, ...rest] of groups(setup.params, WIDTH_FIELDS)) {
     for (const p of rest) {
       const e = params[p.name];
-      if (!e || !("tie" in e)) continue;
-      const { tie: _dropped, ...kept } = e;
+      if (!e || !("tie" in e || "tieOp" in e || "tieCoef" in e || "tieCoefVary" in e)) continue;
+      const kept = { ...e };
+      dropTie(kept);
       if (Object.keys(kept).length > 0) params[p.name] = kept;
       else delete params[p.name];
     }
@@ -398,7 +409,8 @@ export function withShareFwhm(fit: PeakRecipeFit, setup: ModelSetup, on: boolean
 /** True when every peak's width is tied to its field's first-peak root. */
 export function fwhmShared(params: readonly ModelParam[]): boolean {
   const g = groups(params, WIDTH_FIELDS);
-  return g.length > 0 && g.every(([root, ...rest]) => rest.every((p) => p.tie === root.name));
+  return g.length > 0 && g.every(([root, ...rest]) =>
+    rest.every((p) => p.tie === root.name && (p.tieOp ?? "equal") === "equal"));
 }
 
 /** Copy fitted values into the start values (untied parameters, clamped

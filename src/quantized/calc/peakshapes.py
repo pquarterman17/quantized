@@ -226,8 +226,10 @@ def pearson_vii(x: NDArray[np.float64], x0: float, fwhm: float, height: float,
     if m < 0.5:
         raise ValueError("the Pearson VII exponent m must be >= 0.5")
     u = (np.asarray(x, dtype=float) - x0) / fwhm
-    k = 2.0 ** (1.0 / m) - 1.0
-    return np.asarray(height * (1.0 + 4.0 * k * u**2) ** (-m), dtype=float)
+    k = math.expm1(_LN2 / m)  # 2^(1/m) - 1 without cancellation at large m
+    # exp(-m log1p(.)): at large m, 1 + 4k u^2 rounds to 1 and a plain power
+    # would flatten the profile.
+    return np.asarray(height * np.exp(-m * np.log1p(4.0 * k * u**2)), dtype=float)
 
 
 def pearson_vii_area(height: float, fwhm: float, m: float) -> float:
@@ -235,8 +237,11 @@ def pearson_vii_area(height: float, fwhm: float, m: float) -> float:
     at m = 1/2 (returned as inf)."""
     if m <= 0.5:
         return math.inf
-    k = 2.0 ** (1.0 / m) - 1.0
-    ratio = math.exp(math.lgamma(m - 0.5) - math.lgamma(m))
+    k = math.expm1(_LN2 / m)  # 2^(1/m) - 1 without cancellation at large m
+    if m > 1e4:  # lgamma's difference cancels: Gamma(m - 1/2)/Gamma(m) series
+        ratio = (1.0 + 3.0 / (8.0 * m) + 25.0 / (128.0 * m * m)) / math.sqrt(m)
+    else:
+        ratio = math.exp(math.lgamma(m - 0.5) - math.lgamma(m))
     return height * fwhm * math.sqrt(math.pi) * ratio / (2.0 * math.sqrt(k))
 
 
@@ -285,19 +290,41 @@ def doniach_sunjic(x: NDArray[np.float64], x0: float, fwhm: float, height: float
     return np.asarray(height * num / (math.cos(phi0) * (1.0 + u**2) ** (0.5 * beta)), dtype=float)
 
 
-def doniach_sunjic_fwhm(fwhm: float, alpha: float) -> float:
+def doniach_sunjic_fwhm(fwhm: float, alpha: float) -> float | None:
     """Full width at half maximum of :func:`doniach_sunjic`. With u = tan(t) the
     profile is g(t) = cos(phi0 + beta*t)*cos(t)^beta, increasing below
     t* = -pi*alpha/(2(2 - alpha)) (its maximum) and decreasing above, and 0 at
     t = +-pi/2; the two half-maximum crossings are found by bracketed root
-    finding (brentq) on each side. Exactly ``fwhm`` at alpha = 0."""
+    finding (brentq) on each side. Exactly ``fwhm`` at alpha = 0.
+
+    Each side is solved in its distance v from +-pi/2 (t = -pi/2 + v below,
+    t = pi/2 - v above), so cos(t) = sin(v) is exactly 0 at the bracket end -
+    cos(-pi/2) is 6e-17 in floating point, and raised to a small beta (alpha
+    near 1) that is not small at all - and tan(t) = -+1/tan(v) keeps full
+    relative precision however close the crossing gets to +-pi/2 (the width
+    diverges as alpha -> 1: ~1e7 x fwhm at 0.95, ~1e30 at 0.99). When v
+    underflows (alpha within ~1e-3 of 1 and beyond) the FWHM is None ("not
+    resolvable"), never an error."""
     beta, phi0 = 1.0 - alpha, 0.5 * math.pi * alpha
+    half_pi = 0.5 * math.pi
     t_max = -phi0 / (2.0 - alpha)
 
-    def g(t: float) -> float:
-        return float(math.cos(phi0 + beta * t) * max(math.cos(t), 0.0) ** beta)
+    def g_low(v: float) -> float:  # t = -pi/2 + v
+        return float(math.cos(phi0 + beta * (v - half_pi)) * math.sin(v) ** beta)
 
-    half = 0.5 * g(t_max)
-    lo = brentq(lambda t: g(t) - half, -0.5 * math.pi, t_max, xtol=1e-15, rtol=1e-15)
-    hi = brentq(lambda t: g(t) - half, t_max, 0.5 * math.pi, xtol=1e-15, rtol=1e-15)
-    return 0.5 * fwhm * (math.tan(float(hi)) - math.tan(float(lo)))
+    def g_high(v: float) -> float:  # t = pi/2 - v
+        return float(math.cos(phi0 + beta * (half_pi - v)) * math.sin(v) ** beta)
+
+    half = 0.5 * g_low(t_max + half_pi)
+    s_min = math.log(1e-300)  # solve in s = ln v: v spans hundreds of decades
+    try:
+        if g_low(math.exp(s_min)) >= half or g_high(math.exp(s_min)) >= half:
+            return None  # the crossing lies closer to +-pi/2 than doubles reach
+        vl = math.exp(float(brentq(lambda s: g_low(math.exp(s)) - half, s_min,
+                                   math.log(t_max + half_pi), xtol=1e-14, rtol=1e-15)))
+        vh = math.exp(float(brentq(lambda s: g_high(math.exp(s)) - half, s_min,
+                                   math.log(half_pi - t_max), xtol=1e-14, rtol=1e-15)))
+    except (ValueError, RuntimeError):
+        return None
+    w = 0.5 * fwhm * (1.0 / math.tan(vh) + 1.0 / math.tan(vl))
+    return w if math.isfinite(w) else None

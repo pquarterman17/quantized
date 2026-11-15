@@ -50,7 +50,10 @@ describe("the extra shapes", () => {
 
   it("checks the shape parameters' physical ranges", () => {
     const s = seed(["pearson_vii", "doniach_sunjic"]);
-    expect(setupProblems(patchParam(s, "p0.m", { value: 0.4 }))[0]).toBe("#1 m: m must lie in [0.5, ∞)");
+    expect(setupProblems(patchParam(s, "p0.m", { value: 0.4 }))[0]).toBe("#1 m: m must lie in (0.5, ∞)");
+    // m = 0.5 has an infinite area (review M2), and the default min sits above it.
+    expect(setupProblems(patchParam(s, "p0.m", { value: 0.5, vary: false }))).toEqual(["#1 m: m must lie in (0.5, ∞)"]);
+    expect(setupProblems(patchParam(s, "p0.m", { value: 0.505 }))[0]).toMatch(/outside \[0.51, Infinity\]/);
     expect(setupProblems(patchParam(s, "p1.alpha", { value: 1 }))[0]).toBe("#2 α: α must lie in [0, 1)");
     expect(setupProblems(patchParam(s, "p1.alpha", { value: 0.995 }))[0]).toMatch(/outside \[0, 0.99\]/);
   });
