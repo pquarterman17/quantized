@@ -237,7 +237,3 @@ def test_fixture_comparison_still_catches_real_differences() -> None:
     assert _mismatches(gam, {"gamma": {"gamma": [5.786155468978367e254]}}) == []
     assert _mismatches(gam, {"gamma": {"gamma": [5.7861554689e254]}}) != []
     assert _mismatches({"erf": [5.786155468978127e254]}, {"erf": [5.786155468978367e254]}) != []
-    gam = {"gamma": {"gamma": [5.786155468978127e254]}}
-    assert _mismatches(gam, {"gamma": {"gamma": [5.786155468978367e254]}}) == []
-    assert _mismatches(gam, {"gamma": {"gamma": [5.7861554689e254]}}) != []
-    assert _mismatches({"erf": [5.786155468978127e254]}, {"erf": [5.786155468978367e254]}) != []
