@@ -62,13 +62,24 @@ export function layoutTextColumns(
   textCols: readonly TextColumn[],
   anchors: readonly number[],
   visibleCols: readonly number[],
+  hidden?: ReadonlySet<number>,
+  pinned: readonly number[] = [],
 ): TextColumnLayout {
   const before: TextColumn[] = [];
   const trailing: TextColumn[] = [];
   const afterMap = new Map<number, TextColumn[]>();
   const visible = new Set(visibleCols);
+  const pinnedSet = new Set(pinned);
   textCols.forEach((col, i) => {
-    const a = anchors[i] ?? -1;
+    let a = anchors[i] ?? -1;
+    // Follow the anchor's DISPLAYED position: a hidden anchor leaves its text
+    // column after the nearest shown column before it, and one anchored in the
+    // pinned run is drawn right after that run.
+    while (a >= 0 && hidden?.has(a)) a--;
+    if (pinnedSet.has(a)) {
+      afterMap.set(pinned[pinned.length - 1], [...(afterMap.get(pinned[pinned.length - 1]) ?? []), col]);
+      return;
+    }
     if (a < 0) before.push(col);
     else if (visible.has(a)) afterMap.set(a, [...(afterMap.get(a) ?? []), col]);
     else trailing.push(col);

@@ -1,0 +1,140 @@
+{
+  "_doc": "Shared cases pinning tools/plot_corpus/frontend_view.py (the import scorer's Python mirror of what the frontend draws for an Origin figure) to the real frontend rules. Asserted by tests/test_plot_corpus_import_score.py against the mirror and by frontend/src/lib/plotCorpusFrontendView.test.ts against lib/originFigureSelection.ts, lib/errorbars.ts, lib/ownXSeries.ts and lib/originCurveText.ts. Values are rows of channels, as DataStruct.values.",
+  "datasets": {
+    "clean": {
+      "metadata": {"origin_book": "Clean", "origin_book_long": "Clean", "origin_column_names": ["B", "C", "D"], "x_column_name": "A", "column_designations": {}},
+      "time": [0, 1, 2],
+      "values": [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
+    },
+    "multi_x": {
+      "metadata": {"origin_book": "MultiX", "origin_book_long": "MultiX", "origin_column_names": ["B", "C", "D"], "x_column_name": "A", "column_designations": {"A": "X", "B": "Y", "C": "X", "D": "Y"}},
+      "time": [0, 1, 2],
+      "values": [[1, 10, 5], [2, 11, 6], [3, 12, 7]]
+    },
+    "multi_x_undesignated": {
+      "metadata": {"origin_book": "MultiX", "origin_book_long": "MultiX", "origin_column_names": ["B", "C", "D"], "x_column_name": "A", "column_designations": {}},
+      "time": [0, 1, 2],
+      "values": [[1, 10, 5], [2, 11, 6], [3, 12, 7]]
+    },
+    "errors": {
+      "metadata": {"origin_book": "Err", "origin_book_long": "Err", "origin_column_names": ["B", "C", "D"], "x_column_name": "A", "column_designations": {"A": "X", "B": "Y", "C": "Y-error", "D": "X-error"}},
+      "time": [0, 1, 2],
+      "values": [[1, 0.1, 0.2], [2, 0.1, 0.2], [3, 0.1, 0.2]]
+    },
+    "empty_y": {
+      "metadata": {"origin_book": "Clean", "origin_book_long": "Clean", "origin_column_names": ["B", "C"], "x_column_name": "A", "column_designations": {}},
+      "time": [0, 1, 2],
+      "values": [[1, null], [2, null], [3, null]]
+    }
+  },
+  "cases": [
+    {
+      "name": "decoded curve selects its Y on the default X",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "C", "style": "scatter"}]},
+      "selection": {"xKey": null, "yKeys": [1]},
+      "stat": false,
+      "kind": "scatter",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "C"}]
+    },
+    {
+      "name": "decoded curve on a secondary X sets xKey",
+      "dataset": "multi_x",
+      "figure": {"source_hint": "MultiX", "curves": [{"book": "MultiX", "x": "C", "y": "D", "style": "line"}]},
+      "selection": {"xKey": 1, "yKeys": [2]},
+      "stat": false,
+      "kind": "line",
+      "via": "selection",
+      "drawn": [{"x": "C", "y": "D"}]
+    },
+    {
+      "name": "no decoded curve: default view, nearest-preceding X, X column hidden",
+      "dataset": "multi_x",
+      "figure": {"source_hint": "MultiX", "curves": []},
+      "selection": null,
+      "stat": false,
+      "hidden": [1],
+      "ownX": {"2": 1},
+      "kind": "default",
+      "via": "default",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "C", "y": "D"}]
+    },
+    {
+      "name": "no designations decoded: every column is a Y on the first X",
+      "dataset": "multi_x_undesignated",
+      "figure": {"source_hint": "MultiX", "curves": []},
+      "selection": null,
+      "stat": false,
+      "hidden": [],
+      "ownX": {},
+      "kind": "default",
+      "via": "default",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}, {"x": "A", "y": "D"}]
+    },
+    {
+      "name": "error designations are hidden from the default view",
+      "dataset": "errors",
+      "figure": {"source_hint": "Err", "curves": []},
+      "selection": null,
+      "stat": false,
+      "hidden": [1, 2],
+      "ownX": {},
+      "kind": "default",
+      "via": "default",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "all-histogram figure opens the Stat stage",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "histogram"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": true,
+      "kind": "histogram",
+      "via": "stat",
+      "drawn": [{"x": null, "y": "B"}]
+    },
+    {
+      "name": "column and bar plot types draw bars",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "column"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "column",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "horizontal bar plot type",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "bar"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "bar",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "a curve whose Y has no finite data is skipped, falling back to default",
+      "dataset": "empty_y",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "C", "style": "line"}]},
+      "selection": null,
+      "stat": false,
+      "hidden": [],
+      "ownX": {},
+      "kind": "default",
+      "via": "default",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
+    },
+    {
+      "name": "curves on another book map nothing",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Other", "x": "A", "y": "B", "style": "line"}]},
+      "selection": null,
+      "stat": false,
+      "kind": "default",
+      "via": "default",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}, {"x": "A", "y": "D"}]
+    }
+  ]
+}

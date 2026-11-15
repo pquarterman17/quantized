@@ -23,6 +23,7 @@ import type { WorksheetView } from "./useWorksheetView";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
 import { legendFromParamsDialog, orderByParamDialog } from "./worksheetParamDialogs";
+import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 
@@ -39,9 +40,11 @@ export interface WorksheetMenusProps {
   onEditHeader: (col: number) => void;
   /** Open the Set Column Values dialog on a column, or for a new one. */
   onSetColumnValues: (target: ScvTarget) => void;
+  /** Hide / Show / Freeze for the column menu (absent = none offered). */
+  colView?: ColumnViewControls;
 }
 
-export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues }: WorksheetMenusProps) {
+export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues, colView }: WorksheetMenusProps) {
   if (!menu) return null;
   if (menu.kind === "text") {
     return (
@@ -59,7 +62,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
   }
   const readOnly = isRederived(ds);
   const t = menu.target;
-  const items = menu.kind === "col" ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues) : rowItems(ds, view, t, readOnly);
+  const items = menu.kind === "col" ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues, colView) : rowItems(ds, view, t, readOnly);
   return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }
 
@@ -70,6 +73,7 @@ function columnItems(
   readOnly: boolean,
   onEditHeader: (col: number) => void,
   onSetColumnValues: (target: ScvTarget) => void,
+  colView?: ColumnViewControls,
 ): ContextMenuItem[] {
   // The header selection when the clicked column is in it, else just the
   // clicked column — never a cell range that merely crosses it, so a header
@@ -108,6 +112,7 @@ function columnItems(
               ),
           }),
     }),
+    ...(colView ? [{ separator: true } as const, ...columnViewItems(colView, targets)] : []),
     ...(readOnly
       ? []
       : columnEditItems(col, {

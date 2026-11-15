@@ -64,9 +64,11 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
   const header = answer.header === true;
   try {
     const sheets = [];
+    let hiddenN = 0;
     for (const id of ids) {
       const ds = await s().resolveDataset(id);
       if (!ds) continue;
+      hiddenN += ds.hiddenCols?.length ?? 0; // hiding is view-only: those columns are written too
       const masked = answer.skipMasked === true ? excludedSet(ds) : new Set<number>();
       const rows = (scope.rows?.length && !several ? scope.rows : allRows(ds)).filter((r) => !masked.has(r));
       // A spreadsheet's own sheet name ("Run2") over the dataset's ("run.xlsx:Run2").
@@ -83,7 +85,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       }
     }
     const what = sheets.length === 1 ? `"${sheets[0].name}"` : `${sheets.length} worksheets`;
-    const msg = `exported ${what} as ${fmt.toUpperCase()}`;
+    const msg = `exported ${what} as ${fmt.toUpperCase()}${hiddenN ? ` (includes ${hiddenN} hidden column${hiddenN === 1 ? "" : "s"})` : ""}`;
     s().setStatus(msg);
     toast(msg, "ok");
   } catch (e) {

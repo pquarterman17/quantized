@@ -50,6 +50,9 @@ export interface GridStatsFooterProps {
   gutterWidth: number;
   rowHeight: number;
   textLayout: TextColumnLayout;
+  /** Pinned (frozen) columns + sticky `left`s, as GridRow. */
+  frozenCols?: number[];
+  frozenLeft?: (col: number) => number;
 }
 
 export default function GridStatsFooter({
@@ -64,6 +67,8 @@ export default function GridStatsFooter({
   gutterWidth,
   rowHeight,
   textLayout,
+  frozenCols = [],
+  frozenLeft = () => 0,
 }: GridStatsFooterProps) {
   if (statsErr) {
     return (
@@ -109,6 +114,17 @@ export default function GridStatsFooter({
             {colStats ? fmtNum(colStats[0]?.[key]) : "…"}
           </div>
           {textLayout.before.map(textCell)}
+          {frozenCols.map((c) => (
+            <div
+              key={c}
+              role="gridcell"
+              className="qzk-grid-cell"
+              style={{ position: "sticky", left: frozenLeft(c), zIndex: 3, background: "var(--surface-2)", width: widthOf(c), flexShrink: 0 }}
+            >
+              {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
+            </div>
+          ))}
+          {frozenCols.length > 0 && textLayout.after(frozenCols[frozenCols.length - 1]).map(textCell)}
           {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
           {visibleCols.map((c) => (
             <Fragment key={c}>
