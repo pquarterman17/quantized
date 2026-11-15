@@ -91,8 +91,19 @@ __all__: list[str] = []  # internal to the .opju figures subsystem; imported by 
 # `_real_tagged_trailer`). The strict `81` form is always tried first and
 # the wide form only as a retry, so previously-decoding records parse
 # byte-identically (see `_parse_real_record`).
+#
+# The 5th separator byte is a FLAG field, not a constant ``00``. Surveyed over
+# every layer anchor in the 359-file ``.opju`` corpus (2026-11-14): of the 244
+# records that only parse with a free 5th byte, it reads 00 (44), 40 (71),
+# 80 (82), c0 (21), 41 (6), 01 (7), 08 (6), 30 (3), 88 (3), 48 (1) -- bit
+# combinations (0x40|0x80 = c0, 0x08|0x80 = 88), the signature of flag bits.
+# Only the values Origin 2026b COM (``layer.x/y.from/to``, 23 files) CONFIRMS
+# are admitted: 00/40/80/88/c0 decode 60 records onto Origin's exact axis
+# values (the one disagreement, histogram_released_viruses Graph2 X, is a
+# separate value-token defect, not the separator). 01/08/30/41/48 have no
+# oracle coverage yet and stay unrecovered (fail closed) until one does.
 _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
-_SEP_WIDE = re.compile(rb"[\x80\x81]..\x00\x00\x01", re.DOTALL)
+_SEP_WIDE = re.compile(rb"[\x80\x81]..\x00[\x00\x40\x80\x88\xc0]\x01", re.DOTALL)
 # Specimen-form record markers (moved with _parse_specimen_record from
 # figures_opju, 2026-07-06).
 _Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])

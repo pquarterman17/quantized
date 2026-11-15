@@ -54,7 +54,18 @@ _OPJU_SEPS = (b"\x80\x12\x8d\x10", b"\x80\x16\x03\x00\x00\x01\x8a\x10")
 # The name charset + the trailing hi-bit byte remain the validity gates.
 # Order = the 0-based ordinal the folder tree references (Origin writes
 # headers grouped by folder, depth-first).
-_OPJU_WIN_HEAD_RE = re.compile(rb"\x0a\x00?\x80.(.)\x00\x00", re.DOTALL)
+#
+# ``<type>`` is a LEB128-style varint -- 1 byte below 0x80, else 2 bytes
+# ``[80-ff][00-7f]`` -- a per-window serial counting up through the file (0x69
+# .. 0x7f, then ``80 01`` .. ``95 01`` across the 359-file corpus; 1-byte
+# values >= 0x80 never occur). This pattern once read it as ONE byte of any
+# value, so every window whose serial passed 127 (``80 87 01 08 00 00
+# Graph2``: the ``01`` was taken for the length) was never enumerated -- its
+# graph anchors then fell into the PREVIOUS page's span (phantom layers) and
+# its columns into the previous page's book.
+_OPJU_WIN_HEAD_RE = re.compile(
+    rb"\x0a\x00?\x80(?:[\x00-\x7f]|[\x80-\xff][\x00-\x7f])(.)\x00\x00", re.DOTALL
+)
 _OPJU_WIN_NAME_RE = re.compile(rb"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
 
 

@@ -2540,6 +2540,35 @@ the "Remaining gap" note above. Implementation: `opju_figure_curves.py`;
 the counting decoders remain only as the fallback for id-table-less
 streams (synthetic fixtures, templates).
 
+**Page-header `<type>` is a varint (2026-11-14) — phantom layers.** The page
+header is `0a [00] 80 <type> <namelen+2> 00 00 <name> <hi>`; `<type>` is a
+LEB128-style varint — one byte below `0x80`, else two (`80 01` … `95 01` seen) —
+a per-window serial counting up through the file. The scan used to read it as
+one byte, so every window past the 127th (`0a 80 87 01 08 00 00 Graph2`: the
+`01` was taken as the length) was never enumerated. That is the whole
+"phantom layer" mechanism: the missing window's layer anchors fell inside the
+PREVIOUS page's span and were emitted as extra layers of that page (a 1-layer
+`Graph3` carried `Graph2`'s four), with the previous page's workbook bound to
+the curves and, for workbook pages, the column records attributed to the wrong
+book. Origin 2026b COM is the oracle: on 23 files phantoms go 2 → 0 and
+`ground_truth/<stem>/curve_style.json` curve bindings go 2 right / 9 wrong → 15
+right / 0 wrong (UnpolPlots, Hc2 data). 88 more files now resolve a folder tree
+whose window ordinals cover the enumerated windows exactly. No page-header
+form with a one-byte type `>= 0x80` exists in the 359-file corpus.
+
+**Separator 5th byte is a flag field (2026-11-14).** In
+`81|80 <id> <plen> 00 <flag> 01`, `<flag>` is not constant. Over the 244
+records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21,
+41 ×6, 01 ×7, 08 ×6, 30 ×3, 88 ×3, 48 ×1 (bit combinations: c0 = 40|80, 88 =
+08|80). The retry-only wide separator admits only the oracle-CONFIRMED values
+00/40/80/88/c0 (60 records match Origin's axes exactly; the one disagreement is
+a value-token defect, below). 01/08/30/41/48 await an oracle.
+
+Known open (reported, not fixed): `TEA_ExcelGraphs` `Graph12` Y decodes
+`[927.5, 1000]` vs Origin `[0, 1000]` — the geometry payload `82 03 fc 8c 40`
+fills as a tagged value and `y_from` (elided 0) is mis-read; and
+`histogram_released_viruses` `Graph2` X `[0, 4.0025]` vs `[1.0, 4.0]`.
+
 Axis-record grammar extensions found in the same pass
 (`opju_axis_real_form.py`): the span separator's lead byte can be `80` as
 well as `81` (strict-`81` is tried first so every pre-2026-07-05 record
