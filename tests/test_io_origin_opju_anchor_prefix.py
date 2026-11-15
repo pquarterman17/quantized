@@ -15,7 +15,7 @@ import pytest
 
 from quantized.io.origin_project.figure_geometry import opju_anchor_has_length_prefix
 from quantized.io.origin_project.figures_opju import extract_figures_opju
-from test_io_origin_figures_opju import _column_id_record, _layer_bytes
+from test_io_origin_figures_opju import _column_id_record, _id_curve_token, _layer_bytes
 from test_io_origin_opju_page_attribution import _header
 
 _TEXT = r"\l(1) %(1)"
@@ -67,6 +67,27 @@ def test_coincidental_anchor_does_not_shift_later_layers() -> None:
         ("Graph1", 1, 9.0),
         ("Graph1", 2, 5.0),
     ]
+
+
+def test_coincidental_anchor_does_not_cut_the_real_layers_window() -> None:
+    """The bare match is not a layer, so it must not END layer 1's window
+    either: layer 1's curve token sits AFTER the id table (the measured shape:
+    Figure 6 Graph3 layer 9, tokens past an id table), and layer 1 binds it.
+    Text still stops at the bare block -- what follows is another block, so
+    its printable bytes must not leak in as annotations."""
+    bare = b"\x03\x00\x00\x1f" + b"\x03\x00\x00\x20" * 3 + b"\x00" * 8
+    junk = b"\x00\x00LeakedBlobText\x00\x00"
+    figs = extract_figures_opju(
+        _project(
+            _PREFIX + _layer(9.0),
+            b"\xc0\xff" + bare + junk + _id_curve_token(0xBA, cid=2),
+            _PREFIX + _layer(5.0),
+        )
+    )
+    assert [(f["name"], f["layer"]) for f in figs] == [("Graph1", 1), ("Graph1", 2)]
+    assert figs[0]["curves"] == [{"book": "WBook", "x": "A", "y": "B"}]
+    assert figs[1]["curves"] == []
+    assert not any("LeakedBlobText" in a for a in figs[0]["annotations"])
 
 
 def test_undecodable_real_anchor_still_leaves_a_gap() -> None:

@@ -308,20 +308,41 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     page_starts = [off for off, _name in pages]
     page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
     anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
-    # A page whose anchors carry the record-length varint counts ONLY those: a
-    # bare 4-byte match without it is a coincidence inside another block, not a
-    # layer, and must not shift the ordinal of the real layers after it. A page
-    # with no such anchor (legacy/synthetic streams) keeps counting every match.
+
+    def _is_graph_page(pi: int) -> bool:
+        # owns no column records; needs the id table to tell book pages apart
+        return not legacy and pi >= 0 and pages[pi][1] not in table.book_pages
+
+    # On a GRAPH page whose anchors carry the record-length varint, a bare
+    # 4-byte match without it is a coincidence inside another block (an id
+    # table ``03 00 00 1f 03 00 00 20 ...``, a style block), not a layer. It is
+    # removed BEFORE the loop: left in the anchor list it would still be the
+    # ``next_anchor`` that ends the previous REAL layer's window and truncate
+    # that layer's curves, frame, text and axis record. A graph page with no
+    # such anchor (legacy/synthetic streams) keeps every match.
+    anchor_pages = [bisect_right(page_starts, a) - 1 for a in anchors]
     prefixed = [opju_anchor_has_length_prefix(b, a) for a in anchors]
     prefixed_pages = {
-        bisect_right(page_starts, a) - 1 for a, ok in zip(anchors, prefixed, strict=True) if ok
+        pi
+        for pi, ok in zip(anchor_pages, prefixed, strict=True)
+        if ok and _is_graph_page(pi)
     }
-    for idx, anchor in enumerate(anchors):
+    kept = [
+        (a, pi)
+        for a, pi, ok in zip(anchors, anchor_pages, prefixed, strict=True)
+        if ok or pi not in prefixed_pages
+    ]
+    # Dropped anchors still mark where the layer's TEXT ends: what follows one
+    # is a different block (measured: Figure 6 Graph3 layer 9 -- an id table,
+    # then a 640 KB embedded CorelDRAW zip), whose bytes the flat scrape reads
+    # as junk "annotations". Curves/frame/axis scan the full window to the next
+    # real anchor; the text scan stops here, exactly where it did before.
+    dropped = sorted(set(anchors) - {a for a, _ in kept})
+    for idx, (anchor, page_idx) in enumerate(kept):
         p = anchor + len(_ANCHOR)
-        next_anchor = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
+        next_anchor = kept[idx + 1][0] if idx + 1 < len(kept) else len(b)
         # Scope the window by the containing page span (see opju_figure_curves):
         # an anchor's curves/axis record never extend past its own page.
-        page_idx = bisect_right(page_starts, anchor) - 1
         if page_idx >= 0:
             page_end = page_starts[page_idx + 1] if page_idx + 1 < len(pages) else len(b)
             page_name = pages[page_idx][1]
@@ -335,10 +356,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         # (fail closed; Origin's layer N is the Nth anchor, decoded or not).
         # Anchors inside a workbook/report page are embedded (fit-report)
         # graphs: unnamed, layer 1.
-        is_graph_page = not legacy and page_name is not None and page_name not in table.book_pages
+        is_graph_page = _is_graph_page(page_idx)
         if is_graph_page:
-            if page_idx in prefixed_pages and not prefixed[idx]:
-                continue  # coincidental anchor match: not a layer, not counted
             page_layers[page_idx] = page_layers.get(page_idx, 0) + 1
         # Layer frame quad (12 00 20 22 marker; figure_geometry) -- with
         # the page size this places every panel of a multi-panel page.
@@ -382,6 +401,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             # a real Y reading with a stale/heuristic one.
             y_log = real_y_log
         text_end = min(window_end, anchor + _TEXT_WINDOW)
+        k = bisect_right(dropped, anchor)
+        if k < len(dropped):
+            text_end = min(text_end, dropped[k])
         window = b[anchor:text_end]
         texts = _texts_in(window)
         titles = _clean_annotations(
