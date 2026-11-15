@@ -4,7 +4,7 @@ import { fitModel } from "../../../lib/api";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { analysisSelectionData, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { partitionByColumn } from "../../../lib/byPartition";
-import { selectedFitData } from "../../../lib/fitselection";
+import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { parseFitParams, rowsAreDefault, type FitParamRow } from "../../../lib/fitParams";
 import { dyForFit } from "../../../lib/fitweights";
 import type { CalcResult, Dataset, FitModel, WeightMode } from "../../../lib/types";
@@ -92,7 +92,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     }
 
     const selected = selectedFitData(dataset, selection.xKey, selection.yKeys, null, selection);
-    if (!selected) throw new Error("No response column is available to fit.");
+    if (!selected) throw new Error(fitSelectionRefusal(dataset, selection.xKey, selection.yKeys, null) ?? "No response column is available to fit.");
     const pairs = dropGapRows(selected.x, selected.y);
     if (pairs.x.length === 0) throw new Error("No finite X/Y pairs are available to fit.");
     const request: Parameters<typeof fitModel>[0] = {

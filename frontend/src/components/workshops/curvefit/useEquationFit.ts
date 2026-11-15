@@ -32,7 +32,7 @@ import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowsta
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
-import { selectedFitData } from "../../../lib/fitselection";
+import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
 
 export type { EquationParamRow };
 
@@ -233,7 +233,7 @@ export function useEquationFit(
       if (!ds) return;
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!d) return;
+      if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
       const pairs = dropGapRows(d.x, d.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {

@@ -11,7 +11,7 @@ import { useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { odrFit, type OdrResult } from "../../../lib/api/fitStats";
-import { selectedFitData } from "../../../lib/fitselection";
+import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -56,6 +56,8 @@ export function useOdrFit(): OdrFitState {
       const ds = await resolveDataset(active.id);
       const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
       const xCh = xErrorChannel(ds);
+      const refused = ds && !d ? fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) : null;
+      if (refused) throw new Error(refused);
       if (!ds || !d || xCh == null) throw new Error("no X-error column is designated for this dataset");
       const pairs = dropGapRows(d.x, d.y);
       const xErr = sigmas(ds, xCh, pairs.keep);

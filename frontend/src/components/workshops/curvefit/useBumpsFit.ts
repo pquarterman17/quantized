@@ -14,7 +14,7 @@ import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowsta
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
-import { selectedFitData } from "../../../lib/fitselection";
+import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
 
 export type EngineChoice = "parity" | BumpsEngine;
 
@@ -78,7 +78,7 @@ export function useBumpsFit(): BumpsFitState {
       if (!ds) return;
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!d) return;
+      if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
       const pairs = dropGapRows(d.x, d.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {
