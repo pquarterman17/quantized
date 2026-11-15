@@ -8,8 +8,11 @@ instead.  This module owns the otherwise easy-to-get-wrong conversion
 
 and keeps the assumptions explicit: total moment needs sample mass and molar
 mass, mass-normalized moment needs molar mass, and an already-molar response is
-accepted unchanged.  Sample quantities and the field are treated as exact;
-response uncertainty is propagated through both divisions.
+accepted unchanged.  Sample quantities are treated as exact; response
+uncertainty is propagated through both divisions, and an optional applied-field
+uncertainty joins it in quadrature (``chi = y K / H`` so
+``sigma_chi^2 = (K sigma_y / H)^2 + (chi sigma_H / H)^2``, ``y`` and ``H``
+independent).
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ def curie_weiss_data_fit(
     sample_mass_g: float | None = None,
     molar_mass_g_mol: float | None = None,
     response_errors: list[list[float]] | None = None,
+    field_errors: list[list[float]] | None = None,
 ) -> dict[str, Any]:
     """Convert a loaded M(T)/chi(T) series and fit its Curie--Weiss regime.
 
@@ -58,6 +62,13 @@ def curie_weiss_data_fit(
     errors = [np.asarray(values, dtype=float).ravel() for values in (response_errors or [])]
     if any(values.size != t.size for values in errors):
         raise ValueError("every response-error series must match the data length")
+    h_errors = [np.asarray(values, dtype=float).ravel() for values in (field_errors or [])]
+    if any(values.size != t.size for values in h_errors):
+        raise ValueError("every applied-field uncertainty series must match the data length")
+    if h_errors and response_basis == "molar_susceptibility":
+        raise ValueError(
+            "applied-field uncertainty does not apply to an already-molar susceptibility "
+            "(the field is not used)")
 
     if response_basis == "molar_susceptibility":
         chi = y.copy()
@@ -72,6 +83,9 @@ def curie_weiss_data_fit(
         if not supported:
             raise ValueError(reason)
         h_oe = np.asarray(h * h_factor, dtype=float)
+        sigma_h_oe = np.zeros(t.size, dtype=float)
+        for values in h_errors:
+            sigma_h_oe = np.asarray(np.sqrt(sigma_h_oe**2 + (values * h_factor) ** 2), dtype=float)
         if molar_mass_g_mol is None or not math.isfinite(molar_mass_g_mol) or molar_mass_g_mol <= 0:
             raise ValueError("a positive finite molar mass is required")
         if response_basis == "total_moment":
@@ -113,10 +127,17 @@ def curie_weiss_data_fit(
     in_range = finite_t & (t >= lo) & (t <= hi)
     fit_values[in_range] = slope * t[in_range] + intercept
 
+    # Relative applied-field contribution |chi sigma_H / H| (0 without a field error).
+    field_part = np.zeros(t.size, dtype=float)
+    if h_errors:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            field_part = np.asarray(np.abs(chi * sigma_h_oe / h_oe), dtype=float)
+    series = list(errors) if errors else ([np.zeros(t.size)] if h_errors else [])
     chi_errors: list[list[float]] = []
     inverse_errors: list[list[float]] = []
-    for values in errors:
-        propagated = np.asarray(np.abs(values * scales), dtype=float)
+    for values in series:
+        propagated = np.asarray(
+            np.sqrt((values * scales) ** 2 + field_part**2), dtype=float)
         inverse = np.full(t.size, np.nan, dtype=float)
         usable = positive & np.isfinite(propagated)
         inverse[usable] = propagated[usable] / np.square(chi[usable])

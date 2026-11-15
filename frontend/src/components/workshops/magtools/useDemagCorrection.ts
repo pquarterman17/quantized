@@ -59,8 +59,42 @@ function correctionProblem(
   if (!VOLUME_MAG_UNITS.has(source.fromMoment)) {
     return `Magnetization must be volume-normalized; convert ${source.fromMoment || "the response"} to emu/cm³, A/m, or kA/m in the Units tab first.`;
   }
-  if ((ds.errorRoles ?? []).some((role) => role.axis === "x")) {
-    return "This dataset has applied-field uncertainty. Combining it with magnetization uncertainty is not supported yet, so no understated error bars will be created.";
+  const xProblem = fieldErrorProblem(ds, xKey, yKeys, seriesOrder, source.fromField);
+  if (xProblem) return xProblem;
+  return null;
+}
+
+/** The committed applied-field uncertainty roles of the plotted x axis (target
+ *  -1 = the dataset x axis, or the x column itself), deduplicated by channel. */
+function fieldErrorRoles(
+  ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null,
+): { used: ErrorBinding[]; foreign: boolean } {
+  const yKey = magXY(ds, xKey, yKeys, seriesOrder).yKey;
+  const ownX = ownXKey(ds, xKey, yKey);
+  const all = (ds.errorRoles ?? []).filter((role) => role.axis === "x");
+  const used = all.filter(
+    (role, i, roles) => (role.target === -1 ? ownX === null : role.target === ownX) &&
+      roles.findIndex((other) => other.channel === role.channel) === i,
+  );
+  return { used, foreign: all.length > used.length };
+}
+
+/** Fail closed when applied-field uncertainty exists but cannot be propagated
+ *  exactly: asymmetric (+/-) bars, a column in another unit, or an x-error
+ *  that describes a different x axis than the plotted one. */
+function fieldErrorProblem(
+  ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null, fromField: string,
+): string | null {
+  const { used, foreign } = fieldErrorRoles(ds, xKey, yKeys, seriesOrder);
+  if (foreign) {
+    return "This dataset has x uncertainty for a different x axis than the plotted field, so the internal-field uncertainty would be understated. Plot that axis or remove the unrelated x error binding.";
+  }
+  if (used.some((role) => role.side !== "both")) {
+    return "The applied-field uncertainty is asymmetric (+/-). Only symmetric field uncertainty can be combined with magnetization uncertainty; no understated error bars will be created.";
+  }
+  const bad = used.find((role) => (ds.data.units[role.channel] ?? "") !== "" && ds.data.units[role.channel] !== fromField);
+  if (bad) {
+    return `The applied-field uncertainty column is in ${ds.data.units[bad.channel]}, not the field unit ${fromField}; convert it in the Units tab first.`;
   }
   return null;
 }
@@ -122,6 +156,10 @@ export function useDemagCorrection() {
           roles.findIndex((other) => other.channel === role.channel && other.target === role.target && other.side === role.side) === index,
       );
       const substituted = yRoles.map((role) => substituteGaps(keptErrorSeries(ds, role, pairs.keep)));
+      const xRoles = fieldErrorRoles(ds, request.xKey, request.yKeys, request.seriesOrder).used;
+      const xSub = xRoles.map((role) => substituteGaps(keptErrorSeries(ds, role, pairs.keep)));
+      // Row finite-ness of the applied-field uncertainty: a gap in it leaves a gap in the result.
+      const xFinite = pairs.keep.map((_, i) => xSub.every((sub) => sub.finite[i]));
       const response = await demagCorrectField({
         field: pairs.x,
         magnetization: pairs.y,
@@ -129,10 +167,13 @@ export function useDemagCorrection() {
         field_unit: source.fromField!,
         magnetization_unit: source.fromMoment,
         magnetization_errors: substituted.map((series) => series.safe),
+        ...(xSub.length ? { field_errors: xSub.map((series) => series.safe) } : {}),
       });
       if (!resolvedSourceStillCurrent(request, ds.data)) return;
-      if (response.field_errors.length !== yRoles.length) {
-        throw new Error(`backend returned ${response.field_errors.length} uncertainty columns for ${yRoles.length} sent`);
+      // Applied-field-only uncertainty comes back as one column with no M role.
+      const expected = yRoles.length || (xSub.length ? 1 : 0);
+      if (response.field_errors.length !== expected) {
+        throw new Error(`backend returned ${response.field_errors.length} uncertainty columns for ${expected} expected`);
       }
 
       const correctedField = restoreGapRows(response.field, pairs);
@@ -141,20 +182,21 @@ export function useDemagCorrection() {
       const units = [source.fromMoment];
       const errorRoles: ErrorBinding[] = [];
       response.field_errors.forEach((error, index) => {
-        const sourceRole = yRoles[index];
-        const sourceValues = ds.data.values.map(
-          (row) => row[sourceRole.channel] ?? Number.NaN,
-        );
-        const yErrorChannel = labels.length;
-        labels.push(ds.data.labels[sourceRole.channel] ?? "Magnetization uncertainty");
-        units.push(ds.data.units[sourceRole.channel] || source.fromMoment);
-        outputValues.forEach((row, rowIndex) => row.push(sourceValues[rowIndex]));
-        errorRoles.push({ ...sourceRole, channel: yErrorChannel, target: 0 });
+        const sourceRole: ErrorBinding | undefined = yRoles[index];
+        if (sourceRole) {
+          const sourceValues = ds.data.values.map((row) => row[sourceRole.channel] ?? Number.NaN);
+          const yErrorChannel = labels.length;
+          labels.push(ds.data.labels[sourceRole.channel] ?? "Magnetization uncertainty");
+          units.push(ds.data.units[sourceRole.channel] || source.fromMoment);
+          outputValues.forEach((row, rowIndex) => row.push(sourceValues[rowIndex]));
+          errorRoles.push({ ...sourceRole, channel: yErrorChannel, target: 0 });
+        }
 
-        const finiteFieldError = restoreSubstituted(error, substituted[index].finite);
+        const finiteMask = (substituted[index]?.finite ?? xFinite).map((ok, i) => ok && xFinite[i]);
+        const finiteFieldError = restoreSubstituted(error, finiteMask);
         const fieldError = restoreGapRows(finiteFieldError, pairs);
         const xErrorChannel = labels.length;
-        const fieldSide = correctedFieldSide(sourceRole.side);
+        const fieldSide = sourceRole ? correctedFieldSide(sourceRole.side) : "both";
         const side = fieldSide === "both" ? "" : ` ${fieldSide}`;
         labels.push(`Internal field uncertainty${side}`);
         units.push(response.field_unit);
@@ -173,9 +215,9 @@ export function useDemagCorrection() {
             formula: "H_internal = H_applied - N M (SI)",
             source_field_unit: response.field_unit,
             magnetization_unit: response.magnetization_unit,
-            uncertainty: yRoles.length
-              ? "Propagated from committed magnetization uncertainty; N treated as exact."
-              : "No committed magnetization uncertainty was available; N treated as exact.",
+            uncertainty: yRoles.length || xRoles.length
+              ? `Propagated in quadrature from committed ${[yRoles.length ? "magnetization" : "", xRoles.length ? "applied-field" : ""].filter(Boolean).join(" and ")} uncertainty; N treated as exact.`
+              : "No committed uncertainty was available; N treated as exact.",
           },
         },
         ds.data,
@@ -187,7 +229,7 @@ export function useDemagCorrection() {
       // or the source bindings describe these rebuilt columns.
       for (const key of [
         "origin_column_names", "column_designations", "column_comments",
-        "all_column_names", "all_column_units", "y_column_indices", "error_roles",
+        "all_column_names", "all_column_units", "y_column_indices", "error_roles", "label_rows",
       ]) delete baseMetadata[key];
       const data: DataStruct = {
         time: correctedField,
@@ -205,7 +247,7 @@ export function useDemagCorrection() {
       addDataset({ id: outId, name: `${ds.name.replace(/\.[^.]+$/, "")} (internal field)`, data, errorRoles });
       const warnings = [];
       if (!pairs.complete) warnings.push(`${pairs.n - pairs.keep.length} gap rows remain gaps in the corrected field.`);
-      if (yRoles.length === 0) warnings.push("No committed magnetization uncertainty was available to propagate.");
+      if (yRoles.length === 0 && xRoles.length === 0) warnings.push("No committed magnetization or applied-field uncertainty was available to propagate.");
       setReadout({
         owners: [...owners, outId], nFactor: response.n_factor, nCgs: response.n_cgs,
         warning: warnings.length ? warnings.join(" ") : null, error: null,

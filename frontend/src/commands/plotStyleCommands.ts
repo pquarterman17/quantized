@@ -11,7 +11,5 @@ export const colorGradientCommand: Action = {
   group: "Plot",
   section: "Layout",
   label: "Colour gradient…",
-  description: "Spread a colormap across the graph's curves.",
-  keywords: "color colour colormap ramp increment",
   run: () => openFigureDialog({ kind: "colorGradient" }),
 };

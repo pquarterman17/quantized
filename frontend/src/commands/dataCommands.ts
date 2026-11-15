@@ -47,7 +47,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Import & query",
       label: "Query SQLite database…",
-      description: "Run a read-only query against a SQLite database and import the result as a dataset.",
       run: () => window.dispatchEvent(new Event(SHOW_SQLITE_QUERY)),
     },
     {
@@ -57,7 +56,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Import & query",
       label: "Find in project…",
-      description: "Search dataset names, columns, notes, and metadata across the entire project.",
       run: () => s().setSearchOpen(true),
     },
     {
@@ -67,7 +65,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Import & query",
       label: "Trash (restore deleted datasets)…",
-      description: "Review, restore, or permanently purge datasets moved to project trash.",
       run: () => s().setTrashOpen(true),
     },
     {
@@ -75,7 +72,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Combine & split",
       label: "Dataset math (combine two datasets)…",
-      description: "Create a derived dataset by mathematically combining two existing datasets.",
       run: () => s().setDatasetMathOpen(true),
     },
     {
@@ -85,22 +81,18 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Combine & split",
       label: "Resample / align to a common grid…",
-      description: "Interpolate one or more datasets onto a new x-grid or another dataset's x, with a live preview.",
-      keywords: "interpolate interp1 align regrid common grid match x resample reduce rows bin average duplicate x every nth decimate thin",
       run: () => openResampleDialog(seedIds(s)),
     },
-    { id: "meta-factors", group: "Data", section: "Combine & split", label: "Metadata → factors…", description: "Clean up metadata; add a metadata field as a factor column.", keywords: "promote sample unify", run: () => openMetaFactors(seedIds(s)) },
-    { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", description: "Swap worksheet rows and columns in a new derived dataset.", keywords: "reshape", run: () => openReshape(s, "transpose") },
-    { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", description: "Reshape selected wide columns into value and category columns in long form.", keywords: "jmp reshape stack long form wide", run: () => openReshape(s, "stack") },
-    { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", description: "Pivot category and value columns into separate columns in a wide worksheet.", keywords: "jmp unstack pivot wide long reshape", run: () => openReshape(s, "unstack") },
-    { id: "join-by-key", group: "Data", section: "Combine & split", label: "Join datasets by key…", description: "Combine two datasets by matching values in selected key columns.", keywords: "jmp join merge key combine text reshape", run: () => openReshape(s, "join") },
+    { id: "meta-factors", group: "Data", section: "Combine & split", label: "Metadata → factors…", run: () => openMetaFactors(seedIds(s)) },
+    { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", run: () => openReshape(s, "transpose") },
+    { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", run: () => openReshape(s, "stack") },
+    { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", run: () => openReshape(s, "unstack") },
+    { id: "join-by-key", group: "Data", section: "Combine & split", label: "Join datasets by key…", run: () => openReshape(s, "join") },
     {
       id: "tabulate",
       group: "Data",
       section: "Rows & summary",
       label: "Tabulate (group summary stats by column)…",
-      description: "Calculate grouped summary statistics and create a linked result table.",
-      keywords: "jmp tabulate group summary statistics aggregate",
       run: () => s().setTabulateOpen(true),
     },
     // Worksheet audit #19 — lazy bodies (store/worksheetStatsRun.ts).
@@ -109,8 +101,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Rows & summary",
       label: "Row statistics (mean, SD, min, max, sum, N across columns)…",
-      description: "Add computed columns holding each row's mean, standard deviation, minimum, maximum, sum or count across chosen columns.",
-      keywords: "origin row statistics across columns per row average",
       run: () => statsRun(s, "row"),
     },
     {
@@ -118,8 +108,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Rows & summary",
       label: "Frequency count (bin a column into a table)…",
-      description: "Bin one column into a new worksheet with bin edges and centers, counts, cumulative counts and percentages.",
-      keywords: "origin frequency count histogram bins table cumulative percent",
       run: () => statsRun(s, "freq"),
     },
     {
@@ -127,8 +115,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Pipeline (edit + re-run recorded steps)…",
-      description: "Inspect, edit, and rerun the reproducible transformation and analysis steps.",
-      keywords: "jmp jsl script recipe save replay reproducible",
       run: () => s().setPipelineOpen(true),
     },
     {
@@ -136,7 +122,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Recalculate now (run stale corrections + fits)",
-      description: "Immediately rerun corrections and fits whose inputs or settings have changed — or, in recalc mode None (which tracks no changes), every derived worksheet and fit.",
       run: () => {
         // Worksheet audit #22: "off" tracks nothing, so the request must
         // recalculate everything derived rather than an (always empty) stale set.
@@ -149,7 +134,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Recalculation",
       label: "Recalc mode (cycle auto → manual → None)",
-      description: "Choose whether stale calculations rerun automatically (Auto), are marked stale and rerun on request (Manual), or are not tracked at all (None — Recalculate now then reruns everything derived).",
       run: () => {
         const order = ["auto", "manual", "off"] as const;
         const cur = s().recalcMode;
@@ -163,8 +147,6 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Rows & summary",
       label: "Data filter (live per-column row filter)…",
-      description: "Filter worksheet rows interactively using conditions on one or more columns.",
-      keywords: "jmp local data filter rows condition level range",
       run: () => s().setDataFilterOpen(true),
     },
     // ── Data ──
@@ -173,12 +155,10 @@ export function buildDataCommands(s: StoreGet): Action[] {
       group: "Data",
       section: "Combine & split",
       label: "Merge selected datasets",
-      description: "Append the selected datasets' rows into one new dataset, by column position or name, with a live preview.",
-      keywords: "append concatenate reshape",
       run: () => s().mergeSelected(),
     },
-    { id: "duplicate", group: "Data", section: "Combine & split", label: "Duplicate active dataset", description: "Create an independent copy of the active dataset in the current folder.", run: () => { const id = s().activeId; if (id) return s().duplicateDataset(id); } },
-    { id: "reimport", group: "Data", section: "Recalculation", label: "Re-import active dataset", description: "Reload the active dataset from its recorded source using the saved import settings.", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
-    { id: "split", group: "Data", section: "Combine & split", label: "Split by column value…", description: "Create one derived dataset for each distinct value in a selected column.", keywords: "jmp by group split factor level separate", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
+    { id: "duplicate", group: "Data", section: "Combine & split", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) return s().duplicateDataset(id); } },
+    { id: "reimport", group: "Data", section: "Recalculation", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
+    { id: "split", group: "Data", section: "Combine & split", label: "Split by column value…", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
   ];
 }

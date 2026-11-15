@@ -106,6 +106,8 @@ class DemagCorrectRequest(BaseModel):
     field_unit: str
     magnetization_unit: str
     magnetization_errors: list[list[float]] = Field(default_factory=list)
+    # Applied-field 1-sigma columns (in field_unit), combined in quadrature.
+    field_errors: list[list[float]] = Field(default_factory=list)
 
 
 @router.post("/hysteresis")
@@ -204,6 +206,7 @@ def demag_correct(req: DemagCorrectRequest) -> dict[str, Any]:
         field_unit=req.field_unit,
         magnetization_unit=req.magnetization_unit,
         magnetization_errors=req.magnetization_errors,
+        field_errors=req.field_errors,
     )
     return {
         "field": to_jsonable(corrected),

@@ -3,6 +3,7 @@
 // literal per-channel colours. The canvas reaches it through the marks chunk
 // (`marksImpl`); the export spec builder (itself lazy) imports it.
 
+import { firstNumber } from "./firstNumber";
 import { effectiveChannels } from "./plotdata";
 import type { FigureDocument } from "./figureDocument";
 import { rampLive, type RampMap, type SeriesRamp } from "./seriesRamp";
@@ -102,16 +103,11 @@ export function rampColor(ramp: SeriesRamp, k: number, n: number): string {
   return `#${legibleRgb(ramp.map, sampleRamp(ramp.map, ramp.reverse ? 1 - t : t)).map(hex2).join("")}`;
 }
 
-const NUMBER = /[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/i;
-
 /** Each curve's rank when ordered by the first number in its label, or null
  *  unless EVERY label has one and no two are equal (review L11: a tie makes the
  *  order unreliable, so the plotted order is used instead). */
 export function valueRanks(labels: readonly string[]): number[] | null {
-  const vals = labels.map((l) => {
-    const m = NUMBER.exec(l);
-    return m ? Number(m[0]) : NaN;
-  });
+  const vals = labels.map((l) => firstNumber(l) ?? NaN);
   if (vals.some((v) => !Number.isFinite(v)) || new Set(vals).size < vals.length) return null;
   const order = vals.map((v, i) => [v, i] as const).sort((a, b) => a[0] - b[0]);
   const ranks = new Array<number>(vals.length);

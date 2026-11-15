@@ -32,12 +32,23 @@ def demag_correct_field(
     field_unit: str,
     magnetization_unit: str,
     magnetization_errors: list[ArrayLike] | None = None,
+    field_errors: list[ArrayLike] | None = None,
 ) -> tuple[NDArray[np.float64], list[NDArray[np.float64]]]:
-    """Return internal field and propagated magnetization-only uncertainties.
+    """Return internal field and its propagated uncertainties.
 
-    Each uncertainty array is absolute and row-aligned with ``field``.  The
-    demagnetizing factor is treated as exact; callers must not imply that the
-    returned uncertainty includes geometry-factor or applied-field uncertainty.
+    Each uncertainty array is absolute, in ``field_unit`` and row-aligned with
+    ``field``. The demagnetizing factor is treated as exact: the result never
+    includes geometry-factor uncertainty. With ``H_int = H - N M`` and ``H``,
+    ``M`` independent, ``sigma_Hint^2 = sigma_H^2 + (N sigma_M)^2``:
+
+    * one array per ``magnetization_errors`` entry, each combined in
+      quadrature with the applied-field uncertainty when ``field_errors`` is
+      given (several field-error arrays are themselves summed in quadrature);
+    * with only ``field_errors``, a single array: the applied-field
+      uncertainty carried through unchanged (``dH_int/dH = 1``).
+
+    A non-finite or wrong-length error array raises ``ValueError`` (fail
+    closed); finite-ness is checked only where the caller supplied a value.
     """
     h = np.asarray(field, dtype=float).ravel()
     m = np.asarray(magnetization, dtype=float).ravel()
@@ -62,12 +73,21 @@ def demag_correct_field(
         ) from exc
 
     corrected = np.asarray((h * h_to_si - n_factor * m * m_to_si) * h_from_si, dtype=float)
+    sigma_h = np.zeros(h.size)
+    for error in field_errors or []:
+        sh = np.asarray(error, dtype=float).ravel()
+        if sh.size != h.size:
+            raise ValueError("each applied-field uncertainty must match the data length")
+        if not np.all(np.isfinite(sh)):
+            raise ValueError("applied-field uncertainty must be finite")
+        sigma_h = np.asarray(np.sqrt(sigma_h**2 + sh**2), dtype=float)
     propagated: list[NDArray[np.float64]] = []
     for error in magnetization_errors or []:
         sigma = np.asarray(error, dtype=float).ravel()
         if sigma.size != h.size:
             raise ValueError("each magnetization uncertainty must match the data length")
-        propagated.append(
-            np.asarray(np.abs(sigma) * abs(n_factor * m_to_si * h_from_si), dtype=float)
-        )
+        from_m = np.abs(sigma) * abs(n_factor * m_to_si * h_from_si)
+        propagated.append(np.asarray(np.sqrt(sigma_h**2 + from_m**2), dtype=float))
+    if field_errors and not magnetization_errors:
+        propagated.append(sigma_h)
     return corrected, propagated

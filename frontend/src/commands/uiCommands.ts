@@ -28,7 +28,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Appearance",
       label: "Toggle theme",
-      description: "Switch the application between light and dark appearance.",
       run: () => s().setTheme(s().theme === "dark" ? "light" : "dark"),
     },
     {
@@ -36,7 +35,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Appearance",
       label: "Cycle density",
-      description: "Cycle interface spacing between compact, regular, and comfortable layouts.",
       run: () => {
         const order = ["compact", "regular", "comfy"] as const;
         s().setDensity(order[(order.indexOf(s().density) + 1) % order.length]);
@@ -47,7 +45,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Appearance",
       label: "Cycle accent color",
-      description: "Cycle the interface highlight color without changing plot series colors.",
       run: () => {
         const order = ["violet", "teal", "ocean", "amber", "rose"] as const;
         s().setAccent(order[(order.indexOf(s().accent) + 1) % order.length]);
@@ -59,7 +56,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       section: "Appearance",
       label: "Toggle greyed excluded rows",
       checked: () => s().excludedDisplay === "grey",
-      description: "Switch XY plot windows between greying and hiding excluded or filtered-out rows.",
       run: () => s().setPref("excludedDisplay", s().excludedDisplay === "grey" ? "hide" : "grey"),
     },
     {
@@ -67,7 +63,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       label: "Toggle library panel",
       checked: () => !s().leftCollapsed,
-      description: "Show or hide the left project library and dataset browser.",
       shortcut: "⌘[",
       run: () => s().toggleLeft(),
     },
@@ -76,7 +71,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       label: "Toggle inspector panel",
       checked: () => !s().rightCollapsed,
-      description: "Show or hide the right properties Inspector for the current selection.",
       shortcut: "⌘]",
       run: () => s().toggleRight(),
     },
@@ -87,7 +81,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       label: "Column switcher (flip through channels)…",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
-      description: "Quickly preview and switch the plotted data channels in the active dataset.",
       run: () => s().setColumnSwitcherOpen(true),
     },
     {
@@ -97,7 +90,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       checked: () => s().stageTab === "worksheet",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
-      description: "Switch the central stage to the active dataset's worksheet.",
       run: () => s().setStageTab("worksheet"),
     },
     {
@@ -108,7 +100,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       checked: () => s().stageTab === "technique" || s().stageTab === "analysis",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
-      description: "Show analysis steps for the active worksheet.",
       run: () => s().setStageTab("technique"),
     },
     // GUI_INTERACTION #10: restores every open-or-ever-opened floating
@@ -120,7 +111,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Panels & workspace",
       label: "Reset window positions",
-      description: "Restore floating analysis windows to visible default positions and sizes.",
       run: () => s().resetToolWindowPositions(),
     },
     {
@@ -130,7 +120,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       checked: () => s().stageTab === "plot",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
-      description: "Switch the central stage to the interactive plot.",
       run: () => s().setStageTab("plot"),
     },
     // ── Edit ──
@@ -138,7 +127,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "palette",
       group: "Edit",
       label: PALETTE_LABEL,
-      description: "Search available commands by name, purpose, alias, or shortcut.",
       shortcut: PALETTE_SHORTCUT,
       run: () => s().setCmdk(true),
     },
@@ -146,17 +134,13 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "paste-data",
       group: "Edit",
       label: "Paste data",
-      description: "Create a dataset from tabular text currently on the clipboard.",
       shortcut: "⌘V",
-      keywords: "clipboard import tsv csv table",
       run: () => void s().pasteDataFromClipboard(),
     },
     {
       id: "help",
       group: "Help",
       label: "Help topics…",
-      description: "Search tools, commands, import formats, shortcuts, and Origin migration guidance.",
-      keywords: "documentation guide how to search tools help",
       // Standalone store (store/help) — imported directly like toasts, not a
       // useApp flag (see store/help for why).
       run: () => openHelp("search"),
@@ -165,12 +149,11 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "shortcuts",
       group: "Help",
       label: "Keyboard shortcuts",
-      description: "Open the keyboard and mouse shortcut reference.",
       shortcut: "?",
       run: () => s().setShortcutsOpen(true),
     },
     // GOTO #11: the rich-text label micro-syntax reference (Help menu + ⌘K).
-    { id: "text-format-help", group: "Help", label: "Text formatting", description: "View syntax for Greek letters, scientific symbols, fractions, roots, and formatted plot text.", run: () => s().setTextFormatHelpOpen(true) },
+    { id: "text-format-help", group: "Help", label: "Text formatting", run: () => s().setTextFormatHelpOpen(true) },
     // P3.4: "copyable diagnostic bundle excludes raw/private data by default".
     // Shape and settings only — see lib/diagnostics.ts for what is withheld
     // and why, and diagnostics.test.ts for the redaction guarantee.
@@ -178,9 +161,6 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "copy-diagnostics",
       group: "Help",
       label: "Copy diagnostics",
-      description:
-        "Copy a plain-text report of app settings, display, and workspace size for a bug report — no dataset names, file paths, or measured values.",
-      keywords: "bug report support troubleshoot environment version bundle",
       run: () => {
         void (async () => {
           // Dynamic import: the bundle is only ever needed AFTER this action,
@@ -230,16 +210,12 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "what-is-this",
       group: "Help",
       label: "What is this?",
-      description: "Point at an interface control to reveal its concise contextual explanation.",
-      keywords: "inspect hover contextual help point identify tooltip",
       run: () => useHelp.getState().toggleWhatIsThis(),
     },
     {
       id: "interaction-hints",
       group: "Help",
       label: "Show interaction hints",
-      description: "Replay the first-use hints for right-click, double-click, dragging, and plot controls.",
-      keywords: "first run mouse right click double click drag drop tips",
       run: showInteractionHints,
     },
   ];

@@ -75,11 +75,37 @@ describe("CurveFitPanel — By grouping (JMP_GAP_PLAN J7 residual)", () => {
     await waitFor(() => expect(screen.getAllByText(/n=6/)).toHaveLength(2));
   });
 
-  it("discloses that By levels fit unweighted when a weight mode is active", async () => {
+  it("weights each By level with the panel's weighting (Poisson: dy = sqrt(max(|y|,1)) per level)", async () => {
     render(<CurveFitPanel />);
     fireEvent.change(await screen.findByLabelText("Weighting"), { target: { value: "poisson" } });
     fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
-    expect(await screen.findByText(/fit unweighted/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText(/n=6/)).toHaveLength(2));
+    expect(screen.queryByText(/fit unweighted/)).toBeNull();
+    const calls = vi.mocked(fitModel).mock.calls.map((c) => c[0]).filter((r) => r.y.length === 6).slice(-2);
+    expect(calls).toHaveLength(2);
+    expect(calls.every((r) => r.dy)).toBe(true);
+    for (const req of calls) expect(req.dy).toEqual(req.y.map((v) => Math.sqrt(Math.max(Math.abs(v), 1))));
+  });
+
+  it("takes each level's own sigma column rows for Y-error weighting and fails a bad level closed", async () => {
+    const data: DataStruct = {
+      time: BY_DATA.time,
+      values: BY_DATA.values.map((r, i) => [r[0], r[1], r[0] === 1 && i === 8 ? 0 : 1 + r[0] + i * 0.1]),
+      labels: ["grp", "y", "sy"],
+      units: ["", "", ""],
+      metadata: {},
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data }], errKeys: { 1: 2 } });
+    render(<CurveFitPanel />);
+    fireEvent.change(await screen.findByLabelText("Weighting"), { target: { value: "yerr" } });
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getAllByText(/n=6/)).toHaveLength(2));
+    const ok = vi.mocked(fitModel).mock.calls.map((c) => c[0]).filter((r) => r.dy);
+    expect(ok).toHaveLength(1); // level 1 holds a zero sigma: refused, never fitted unweighted
+    expect(ok[0].dy).toEqual(data.values.slice(0, 6).map((r) => r[2]));
+    expect(await screen.findByText(/non-positive or invalid/)).toBeInTheDocument();
+    expect(screen.getByText(/this level was not fitted/)).toBeInTheDocument();
+    expect(screen.queryByText(/fitting unweighted/)).toBeNull();
   });
 });
 

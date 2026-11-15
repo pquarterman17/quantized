@@ -135,3 +135,42 @@ def test_fit_requires_temperature_variation() -> None:
             response_basis="molar_susceptibility",
             fit_range=(100.0, 300.0),
         )
+
+
+def test_applied_field_uncertainty_adds_in_quadrature_and_converts_units() -> None:
+    temperature, moment, field = synthetic_moment()
+    sigma_m = np.asarray(moment) * 0.01  # 1 % moment error
+    sigma_h_t = np.full(len(field), 0.0001)  # 1 Oe expressed in tesla (0.1 % of 1000 Oe)
+    kwargs: dict = {
+        "response_basis": "total_moment", "sample_mass_g": 0.1, "molar_mass_g_mol": 200.0,
+        "fit_range": (150.0, 400.0),
+    }
+    both = curie_weiss_data_fit(
+        temperature, moment, field=(np.asarray(field) / 1e4).tolist(), field_unit="T",
+        response_errors=[sigma_m.tolist()], field_errors=[sigma_h_t.tolist()], **kwargs,
+    )
+    chi = 4.0 / (np.asarray(temperature) - 50.0)
+    # relative errors 1 % (moment) and 0.1 % (field) add in quadrature
+    rel = math.hypot(0.01, 0.001)
+    assert both["susceptibility_errors_molar"][0] == pytest.approx((chi * rel).tolist(), rel=1e-9)
+    assert both["inverse_errors"][0] == pytest.approx((rel / chi).tolist(), rel=1e-9)
+    # field uncertainty alone -> one series carrying only the field part
+    only_h = curie_weiss_data_fit(
+        temperature, moment, field=field, field_unit="Oe",
+        field_errors=[np.full(len(field), 1.0).tolist()],
+        **kwargs,
+    )
+    assert len(only_h["inverse_errors"]) == 1
+    expected = (chi * 0.001).tolist()
+    assert only_h["susceptibility_errors_molar"][0] == pytest.approx(expected, rel=1e-9)
+
+
+def test_applied_field_uncertainty_fails_closed() -> None:
+    temperature, moment, field = synthetic_moment()
+    with pytest.raises(ValueError, match="applied-field uncertainty series must match"):
+        curie_weiss_data_fit(temperature, moment, response_basis="total_moment", field=field,
+                             sample_mass_g=0.1, molar_mass_g_mol=200.0, fit_range=(150.0, 400.0),
+                             field_errors=[[1.0, 2.0]])
+    with pytest.raises(ValueError, match="already-molar"):
+        curie_weiss_data_fit(temperature, moment, response_basis="molar_susceptibility",
+                             fit_range=(150.0, 400.0), field_errors=[field])
