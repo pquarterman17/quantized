@@ -368,6 +368,10 @@ export type AxisLabelStyles = Partial<Record<AxisKey, AxisLabelStyle>>;
 // The fit recipe types (WeightMode / FitWeighting / FitSpec) live in
 // lib/fitTypes.ts; re-exported at the top of this file.
 
+/** One curve of a live multi-dataset graph: source dataset, its X (null = `.time`), its Y, legend label.
+ *  -1 = that source column was removed (drawn empty, never rebound). */
+export interface LinkedCurve { datasetId: string; xKey: number | null; yKey: number; label: string; labelFrom?: "name" | "nameCol" /* legend follows the source name; `label` = fallback */ }
+
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `data` is the currently displayed (corrected + formula-recomputed) view;
  *  `corrections` are the params that produced its base portion from `raw`.
@@ -432,6 +436,9 @@ export interface Dataset {
    *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
   derivedFrom?: { datasetId: string; pipeline: string };
   analysisRecipe?: import("./signalRecipe").SignalAnalysisRecipe; // linked analysis recipe
+  /** A LIVE multi-dataset graph's curves (gap audit 2 #1, lib/linkedCurves.ts): `data` is
+   *  re-assembled from these sources whenever one changes (store/linkedCurvesSync.ts). */
+  linkedCurves?: LinkedCurve[];
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the
    *  dataset (persist across dataset switches + round-trip .dwk), not in the

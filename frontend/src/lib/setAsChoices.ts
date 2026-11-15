@@ -1,4 +1,4 @@
-// The worksheet's "Set As" menu (components/Stage/worksheet/worksheetMenus.ts)
+// The worksheet's "Set As" menu (components/Stage/worksheet/worksheetMenuModel.ts)
 // and its action (store/columnDesignationActions.ts) share this list. Its own
 // module so it rides in the worksheet's chunk, not with the eager designation
 // readers in lib/columnmeta.ts.

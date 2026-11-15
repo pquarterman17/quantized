@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
-import { buildSelectionOverlay } from "./originOverlay";
-import { buildColumns } from "./plotdata";
 import { buildOverlayDataset, overlayBooks, overlayCurveLabels, overlayCurveStyles } from "./originOverlayFigure";
 import type { Dataset, OriginFigure } from "./types";
 
@@ -351,98 +349,5 @@ describe("buildOverlayDataset: unresolved x-letter (partial X decode)", () => {
       { book: "Book1", x: "C", y: "F" }, // sole survivor -> not an overlay
     ]);
     expect(buildOverlayDataset(fig, [partialX()])).toBeNull();
-  });
-});
-
-// PLOT_WORKFLOW_PLAN #3: "Plot selected together" generalizes the same
-// segment-concatenation core (assembleOverlay) to an arbitrary Library
-// multi-selection instead of an Origin figure's decoded curves.
-describe("buildSelectionOverlay", () => {
-  const plain = (id: string, name: string, time: number[], y: number[]): Dataset => ({
-    id,
-    name,
-    data: {
-      time,
-      values: time.map((_, i) => [y[i]]),
-      labels: ["Y"],
-      units: ["V"],
-      metadata: {},
-    },
-  });
-
-  it("returns null for fewer than 2 datasets", () => {
-    expect(buildSelectionOverlay([plain("a", "Sample A", [1, 2], [10, 20])])).toBeNull();
-  });
-
-  it("segment-concatenates mixed-length, mixed-x datasets, one curve per dataset, labelled by name", () => {
-    const a = plain("a", "Sample A", [1, 2, 3], [10, 20, 30]);
-    const b = plain("b", "Sample B", [5, 6], [50, 60]);
-    const out = buildSelectionOverlay([a, b]);
-    expect(out).not.toBeNull();
-    expect(out!.labels).toEqual(["Sample A", "Sample B"]);
-    expect(out!.time).toEqual([1, 2, 3, 5, 6]);
-    expect(out!.values.map((r) => r[0])).toEqual([10, 20, 30, NaN, NaN]);
-    expect(out!.values.map((r) => r[1])).toEqual([NaN, NaN, NaN, 50, 60]);
-    // no "book", so the books list falls back to the source dataset names.
-    expect(out!.metadata.origin_overlay_books).toEqual(["Sample A", "Sample B"]);
-  });
-
-  it("picks each dataset's own default (primaryChannel) y-channel, not always column 0", () => {
-    const wide: Dataset = {
-      id: "w",
-      name: "Wide",
-      data: {
-        time: [1, 2],
-        // column 0 is NaN-sparse (density heuristic excludes it), column 1 dense.
-        values: [
-          [NaN, 10],
-          [NaN, 20],
-        ],
-        labels: ["Sparse", "Dense"],
-        units: ["", "V"],
-        metadata: {},
-      },
-    };
-    const b = plain("b", "Sample B", [5, 6], [50, 60]);
-    const out = buildSelectionOverlay([wide, b]);
-    expect(out).not.toBeNull();
-    expect(out!.labels).toEqual(["Wide", "Sample B"]);
-    expect(out!.values.map((r) => r[0])).toEqual([10, 20, NaN, NaN]);
-  });
-
-  it("skips a dataset with no plottable channel honestly (never invents data)", () => {
-    const empty: Dataset = {
-      id: "e",
-      name: "Empty",
-      data: { time: [1, 2], values: [[], []], labels: [], units: [], metadata: {} },
-    };
-    const a = plain("a", "Sample A", [1, 2], [10, 20]);
-    const b = plain("b", "Sample B", [5, 6], [50, 60]);
-    const out = buildSelectionOverlay([empty, a, b]);
-    expect(out).not.toBeNull();
-    expect(out!.labels).toEqual(["Sample A", "Sample B"]);
-  });
-
-  it("keeps the sources' x-axis title, not the Origin column letter", () => {
-    // Two QD VSM loops: the parser names the x column, there is no Origin long name.
-    const vsm = (id: string): Dataset => {
-      const d = plain(id, `${id}.dat`, [5, 0, -5, 0, 4], [-1, 0, 1, 0, -1]);
-      return { ...d, data: { ...d.data, metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" } } };
-    };
-    const out = buildSelectionOverlay([vsm("a"), vsm("b")])!;
-    const payload = buildColumns(out, null, null);
-    expect([payload.xLabel, payload.xUnit]).toEqual(["Magnetic Field", "Oe"]);
-  });
-
-  it("names every source's x unit when they differ, so kelvins never sit on an Oe axis", () => {
-    const withX = (d: Dataset, name: string, unit: string): Dataset => ({
-      ...d,
-      data: { ...d.data, metadata: { x_column_name: name, x_column_unit: unit } },
-    });
-    const loop = withX(plain("h", "mvsh", [5, -5, 5], [1, -1, 1]), "Magnetic Field", "Oe");
-    const sweep = withX(plain("t", "mvst", [2, 300], [3, 1]), "Temperature", "K");
-    const bare = plain("n", "bare", [1, 2], [3, 4]); // no unit at all: not listed
-    expect(buildColumns(buildSelectionOverlay([loop, sweep, bare])!, null, null).xUnit).toBe("Oe / K");
-    expect(buildColumns(buildSelectionOverlay([loop, { ...loop, id: "h2" }])!, null, null).xUnit).toBe("Oe");
   });
 });

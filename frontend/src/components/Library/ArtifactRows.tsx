@@ -18,9 +18,10 @@
 // PR gives the tree row its own menu.
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
-import { spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
+import { innerTabIndex, spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import FigurePdfTick from "./FigurePdfTick";
 import { openLibraryNode } from "./libraryOpen";
 import {
   FROZEN_MARK,
@@ -126,6 +127,7 @@ export default function ArtifactRow({ node, depth, treeItem }: Props) {
       onContextMenu={select}
     >
       <span className="qzk-fig-name">
+        {node.kind === "editable-figure" && <FigurePdfTick id={node.entityId} name={node.name} tabIndex={innerTabIndex(treeItem)} />}
         <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL[node.kind]}>
           {LIBRARY_NODE_GLYPH[node.kind]}
         </span>

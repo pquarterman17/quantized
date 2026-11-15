@@ -183,3 +183,26 @@ describe("an inserted column, and a reimport's reset (pure helpers)", () => {
     expect([z.x, z.y, z.yErr]).toEqual([null, [ref(1, "b")], [ref(3, "b")]]);
   });
 });
+
+describe("removeFormula: a live graph's curves on this dataset follow the shift (gap audit 2 #1)", () => {
+  it("F3 stays F3; a curve ON the removed column goes empty, never onto its neighbour", () => {
+    const graph: Dataset = {
+      id: "g",
+      name: "graph",
+      data: { time: [], values: [], labels: ["F3", "F1", "other"], units: ["", "", ""], metadata: {} },
+      linkedCurves: [
+        { datasetId: "a", xKey: 2, yKey: 3, label: "F3" },
+        { datasetId: "a", xKey: null, yKey: 1, label: "F1" },
+        { datasetId: "b", xKey: null, yKey: 3, label: "other" },
+      ],
+    };
+    useApp.setState({ datasets: [ds(), ds("b"), graph] });
+    useApp.getState().removeFormula("a", 0); // F1, column 1
+    const curves = useApp.getState().datasets.find((d) => d.id === "g")!.linkedCurves!;
+    const a = useApp.getState().datasets[0].data.labels;
+    expect(a[curves[0].yKey]).toBe("F3");
+    expect(a[curves[0].xKey!]).toBe("F2");
+    expect(curves[1].yKey).toBe(-1); // its column is gone: drawn empty
+    expect(curves[2]).toEqual(graph.linkedCurves![2]); // another dataset's curve untouched
+  });
+});

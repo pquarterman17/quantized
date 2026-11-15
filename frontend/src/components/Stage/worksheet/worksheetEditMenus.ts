@@ -2,7 +2,7 @@
 // (Insert / Add New Column / Delete / Move, edit the header rows, Set Column
 // Values on a formula column, the display format, Sort Worksheet; Insert /
 // Delete / Move rows). Pure builders over an explicit context, like
-// ./worksheetMenus.ts; WorksheetMenus.tsx appends them to those menus and
+// ./worksheetMenuModel.ts; WorksheetMenus.tsx appends them to those menus and
 // supplies the callbacks (store/worksheetColumns.ts, store/moveRows.ts, and
 // the dialogs in ./worksheetDialogs.ts).
 

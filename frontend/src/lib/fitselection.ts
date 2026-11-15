@@ -13,6 +13,7 @@
 // tools) — all already lazy `workshops/` panels. See that file's own header
 // for the verified-no-eager-consumer rationale.
 
+import { ownXKey } from "./perSeriesX";
 import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
@@ -66,7 +67,10 @@ export function selectedFitData(
   );
   const yKey = channels[0];
   if (yKey === undefined) return null;
-  const allX = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  // A Y that belongs to a secondary X column (T1,R1,T2,R2) is fitted against
+  // ITS X, exactly as the plot draws it (lib/perSeriesX.ts).
+  const fitX = ownXKey(dataset, xKey, yKey);
+  const allX = fitX == null ? data.time : data.values.map((row) => row[fitX]);
   const allY = data.values.map((row) => row[yKey]);
   if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey };
   const sourceRows = view.rowIds ?? data.time.map((_value, index) => index);

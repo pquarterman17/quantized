@@ -583,7 +583,7 @@ feature checklist.
   (`Stage/SelectionMiniToolbar.tsx`) shares ToolHud's HUD slot (mutually
   exclusive by construction: HUD = non-pointer tools, toolbar = pointer +
   selection) offering the selected annotation/shape's registry actions as
-  buttons; the **worksheet column/row menus** (`worksheetMenus.ts`) and the
+  buttons; the **worksheet column/row menus** (`worksheetMenuModel.ts`) and the
   **annotation/shape object menus** (`annotationShapeActions.ts`, composed by
   `useAnnotationEdit`/`useShapeEdit`) rebuilt from registry entries with
   IDENTICAL menu output (parameterized pickers — Frame presets, swatches,

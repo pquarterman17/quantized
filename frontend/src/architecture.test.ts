@@ -3777,12 +3777,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   it("the eager walk reaches the command and api layers (corpus anchor for the comment stripper)", () => {
     const eager = eagerlyReachable();
     const anchors = [
-      "/appCommands.ts",
+      "/appCommandsCore.ts", // App's first-paint list; the full appCommands.ts (adds Analyze) loads right after mount
       "/commands/fileCommands.ts",
       "/commands/dataCommands.ts",
       "/commands/plotCommands.ts",
       "/commands/uiCommands.ts",
-      "/commands/analysisCommands.ts",
       "/lib/api.ts",
       "/lib/api/http.ts",
     ];

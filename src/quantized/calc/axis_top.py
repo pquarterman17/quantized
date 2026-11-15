@@ -3,7 +3,10 @@
 A second X axis along the top of the plot whose labels show a transform of
 the bottom axis: ``reciprocal`` (``factor / x``: 1/T, 1000/T), ``dspacing``
 (Bragg ``d = wavelength / (2 sin(x/2))`` for x = 2-theta in degrees) or
-``linear`` (``factor * x + shift``).
+``linear`` (``factor * x + shift``) or ``expr`` (any expression ``f(x)`` of the
+bottom axis -- ``1240/x``, ``sqrt(x)`` -- parsed without ``eval`` by
+``calc.axis_expr``; only the longest finite, strictly monotonic stretch of the
+bottom axis is labelled, so a range through a pole labels its valid side).
 
 A line-for-line port of ``frontend/src/lib/axisTop.ts`` so the screen and the
 export pick the SAME tick values and labels (``tests/test_axis_top.py`` and
@@ -14,11 +17,14 @@ matplotlib Axes. Pure: mapping in, matplotlib objects mutated.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
 from matplotlib.ticker import Formatter, Locator
+
+from quantized.calc.axis_expr import compile_expr
 
 __all__ = [
     "apply_top_axis",
@@ -33,12 +39,27 @@ __all__ = [
 TOP_TICK_TARGET = 8
 # Closest two top-axis labels may sit, as a fraction of the axis length.
 TOP_MIN_GAP = 0.05
+# ... and at least this much per character of the widest label (+1), so wide
+# labels such as "1200" never touch. Mirrors TOP_GAP_PER_CHAR in axisTop.ts.
+TOP_GAP_PER_CHAR = 0.015
+# A top axis shows at least this many ticks when the spacing rule allows: while
+# fewer survive, the next finer nice step is added (at most two finer levels).
+# Mirrors TOP_MIN_TICKS in axisTop.ts.
+TOP_MIN_TICKS = 5
+_MANTISSAS = (1.0, 2.0, 2.5, 5.0)
 # Where a transform is undefined at one end of the axis (1/x at 0, d-spacing at
 # 0 or 180 deg), the lower end of the drawn part starts this fraction of the
 # upper end above it. Mirrors TOP_SPAN_FLOOR in frontend/src/lib/axisTop.ts.
 TOP_SPAN_FLOOR = 0.01
 _DEG = math.pi / 180
 _DSPACING_MAX = 179.99
+# An ``expr`` axis samples the bottom axis this many times to find its valid,
+# monotonic stretch; mirrors EXPR_SAMPLES in axisTop.ts.
+EXPR_SAMPLES = 400
+# ... and trims a same-sign stretch to at most this change in magnitude (the end
+# next to a pole is cut back), so ticks do not crowd where the value explodes.
+EXPR_MAX_RATIO = 20.0
+_EXPR_BISECT = 80
 
 
 def _f(top: Mapping[str, Any], key: str, default: float) -> float:
@@ -46,8 +67,81 @@ def _f(top: Mapping[str, Any], key: str, default: float) -> float:
     return float(v) if isinstance(v, (int, float)) and math.isfinite(v) else default
 
 
+def _expr(top: Mapping[str, Any]) -> Callable[[float], float] | None:
+    src = top.get("expr")
+    return _compiled(src) if isinstance(src, str) else None
+
+
+@lru_cache(maxsize=64)
+def _compiled(src: str) -> Callable[[float], float] | None:
+    try:
+        return compile_expr(src)
+    except ValueError:
+        return None
+
+
+def _expr_span(fn: Callable[[float], float], lo: float, hi: float) -> tuple[float, float] | None:
+    """The longest stretch of [lo, hi] (sampled) where ``fn`` is finite and
+    strictly monotonic; a tie keeps the later one (the positive side of a pole)."""
+    if not (math.isfinite(lo) and math.isfinite(hi) and hi > lo):
+        return None
+    n = EXPR_SAMPLES
+    xs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+    ys = [fn(x) for x in xs]
+    best: tuple[float, float] | None = None
+    start, direction = 0, 0
+    for i in range(1, n + 1):
+        d = 0
+        if i < n and math.isfinite(ys[i]) and math.isfinite(ys[i - 1]):
+            d = (ys[i] > ys[i - 1]) - (ys[i] < ys[i - 1])
+        if i < n and d != 0 and (direction in (0, d)):
+            direction = d
+            continue
+        if i - 1 > start and (best is None or xs[i - 1] - xs[start] >= best[1] - best[0]):
+            best = (xs[start], xs[i - 1])
+        start, direction = (i - 1, d) if d != 0 else (i, 0)
+    return _trim_to_ratio(fn, best) if best else None
+
+
+def _trim_to_ratio(fn: Callable[[float], float], span: tuple[float, float]) -> tuple[float, float]:
+    lo, hi = span
+    flo, fhi = fn(lo), fn(hi)
+    if not flo * fhi > 0:
+        return span
+    big_is_lo = abs(flo) > abs(fhi)
+    cap = EXPR_MAX_RATIO * min(abs(flo), abs(fhi))
+    if max(abs(flo), abs(fhi)) <= cap:
+        return span
+    a, c = (lo, hi) if big_is_lo else (hi, lo)  # |f(a)| > cap >= |f(c)|
+    for _ in range(_EXPR_BISECT):
+        mid = (a + c) / 2
+        if abs(fn(mid)) > cap:
+            a = mid
+        else:
+            c = mid
+    return (c, hi) if big_is_lo else (lo, c)
+
+
+def _expr_inverse(fn: Callable[[float], float], t: float, span: tuple[float, float]) -> float:
+    lo, hi = span
+    flo, fhi = fn(lo), fn(hi)
+    if not (math.isfinite(t) and min(flo, fhi) <= t <= max(flo, fhi)):
+        return math.nan
+    rising = fhi > flo
+    for _ in range(_EXPR_BISECT):
+        mid = (lo + hi) / 2
+        if (fn(mid) < t) == rising:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
 def top_forward(top: Mapping[str, Any], x: float) -> float:
     """x -> the top axis' value, or NaN outside the transform's domain."""
+    if top.get("kind") == "expr":
+        fn = _expr(top)
+        return fn(x) if fn else math.nan
     factor = _f(top, "factor", 1.0)
     kind = top.get("kind")
     if kind == "reciprocal":
@@ -58,8 +152,16 @@ def top_forward(top: Mapping[str, Any], x: float) -> float:
     return lam / (2 * math.sin((x / 2) * _DEG)) if 0 < x < 180 else math.nan
 
 
-def top_inverse(top: Mapping[str, Any], t: float) -> float:
-    """The top axis' value -> x, or NaN outside the domain."""
+def _inverse_on(top: Mapping[str, Any], t: float, span: tuple[float, float] | None) -> float:
+    fn = _expr(top)
+    return _expr_inverse(fn, t, span) if fn and span else math.nan
+
+
+def top_inverse(top: Mapping[str, Any], t: float, rng: tuple[float, float] | None = None) -> float:
+    """The top axis' value -> x, or NaN outside the domain. An ``expr`` axis is
+    inverted numerically inside the valid stretch of the bottom range ``rng``."""
+    if top.get("kind") == "expr":
+        return _inverse_on(top, t, top_span(top, *rng) if rng else None)
     factor = _f(top, "factor", 1.0)
     kind = top.get("kind")
     if kind == "reciprocal":
@@ -77,10 +179,13 @@ def top_span(top: Mapping[str, Any], lo: float, hi: float) -> tuple[float, float
     monotonic, or ``None`` when no part is (1/x needs x > 0; d-spacing needs
     0 < x < 180). A range that runs into the singularity keeps only its valid
     side, starting a small fraction of the way in so the mapped range is finite."""
-    lo, hi = min(lo, hi), max(lo, hi)
+    lo, hi = float(min(lo, hi)), float(max(lo, hi))
     kind = top.get("kind")
     if kind == "linear":
         return (lo, hi)
+    if kind == "expr":
+        fn = _expr(top)
+        return _expr_span(fn, lo, hi) if fn else None
     if kind == "reciprocal":
         top_hi = hi
     elif kind == "dspacing":
@@ -90,6 +195,15 @@ def top_span(top: Mapping[str, Any], lo: float, hi: float) -> tuple[float, float
     if not (math.isfinite(lo) and math.isfinite(top_hi)) or top_hi <= 0 or lo >= top_hi:
         return None
     return (lo if lo > 0 else top_hi * TOP_SPAN_FLOOR, top_hi)
+
+
+def _nice_step(a: float, b: float, target: int) -> float | None:
+    lo, hi = min(a, b), max(a, b)
+    if not (math.isfinite(lo) and math.isfinite(hi) and hi > lo):
+        return None
+    raw = (hi - lo) / target
+    mag = 10.0 ** math.floor(math.log10(raw))
+    return next((m for m in (1, 2, 2.5, 5, 10) if m * mag >= raw * (1 - 1e-9)), 10) * mag
 
 
 def nice_ticks(a: float, b: float, target: int = TOP_TICK_TARGET) -> tuple[list[float], int]:
@@ -117,29 +231,90 @@ def top_label(value: float, decimals: int) -> str:
     return s[1:] if s.startswith("-") and float(s) == 0 else s
 
 
+def _step_parts(step: float) -> tuple[int, int]:
+    exp = math.floor(math.log10(step) + 1e-9)
+    mant = round(step / 10.0**exp, 6)
+    return exp, _MANTISSAS.index(mant) if mant in _MANTISSAS else 0
+
+
+def _levels(step: float, finer: int) -> list[float]:
+    """``step`` then the ``finer`` next smaller nice steps (1, 2, 2.5, 5 x 10^e)."""
+    exp, idx = _step_parts(step)
+    out = [step]
+    for _ in range(finer):
+        idx -= 1
+        if idx < 0:
+            idx, exp = len(_MANTISSAS) - 1, exp - 1
+        out.append(float(f"{_MANTISSAS[idx] * 10.0**exp:.12g}"))
+    return out
+
+
+def _step_decimals(step: float) -> int:
+    exp, idx = _step_parts(step)
+    return min(12, max(0, -exp + (1 if _MANTISSAS[idx] == 2.5 else 0)))
+
+
+def _select(
+    top: Mapping[str, Any],
+    valid: tuple[float, float],
+    values: tuple[float, float],
+    levels: list[float],
+    span: float,
+) -> list[tuple[float, float, str]]:
+    """Ticks from the nice multiples of every step in ``levels``. The coarsest
+    step a value is a multiple of is its rank; candidates are taken nicest first
+    and kept only when their centre sits far enough from every kept one: at
+    least TOP_MIN_GAP of the axis, and TOP_GAP_PER_CHAR per character of the
+    wider of the two labels (+1), so labels never touch."""
+    lo, hi = valid
+    decimals = _step_decimals(levels[-1])
+    ranked: dict[float, int] = {}
+    for rank, step in enumerate(levels):
+        first = math.ceil(min(values) / step - 1e-9)
+        for k in range(first, math.floor(max(values) / step + 1e-9) + 1):
+            ranked.setdefault(float(f"{k * step:.12g}"), rank)
+    cands: list[tuple[int, float, float, str]] = []
+    for value, rank in ranked.items():
+        pos = (
+            _inverse_on(top, value, valid) if top.get("kind") == "expr" else top_inverse(top, value)
+        )
+        if math.isfinite(pos) and lo - span * 1e-9 <= pos <= hi + span * 1e-9:
+            cands.append((rank, pos, value, top_label(value, decimals)))
+    cands.sort(key=lambda c: (c[0], c[1]))
+    kept: list[tuple[float, float, str]] = []
+    for _rank, pos, value, label in cands:
+        ok = True
+        for kpos, _kv, klabel in kept:
+            gap = max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (max(len(label), len(klabel)) + 1))
+            if abs(pos - kpos) < span * gap - span * 1e-9:
+                ok = False
+                break
+        if ok:
+            kept.append((pos, value, label))
+    kept.sort()
+    return kept
+
+
 def top_ticks(top: Mapping[str, Any], lo: float, hi: float) -> list[tuple[float, float, str]]:
     """``(position in x, value, label)`` per tick for a bottom axis showing
     [lo, hi]; only the part of the axis inside the transform's domain gets ticks, and
-    none when no part does."""
+    none when no part does. Where the nice-step ticks bunch up (1/T), finer steps
+    are added, nicest first, until TOP_MIN_TICKS fit without touching."""
     lo, hi = min(lo, hi), max(lo, hi)
     valid = top_span(top, lo, hi)
     if valid is None:
         return []
     span = hi - lo  # label spacing is measured on the whole axis
-    values, decimals = nice_ticks(top_forward(top, valid[0]), top_forward(top, valid[1]))
-    lo, hi = valid
-    out = []
-    for value in values:
-        pos = top_inverse(top, value)
-        if math.isfinite(pos) and lo - span * 1e-9 <= pos <= hi + span * 1e-9:
-            out.append((pos, value, top_label(value, decimals)))
-    out.sort()
-    # Keep a tick only when it sits at least TOP_MIN_GAP of the axis from the
-    # last kept one, so labels never overlap (mirrors frontend axisTop.ts).
+    values = (top_forward(top, valid[0]), top_forward(top, valid[1]))
+    step = _nice_step(values[0], values[1], TOP_TICK_TARGET)
+    if step is None:
+        return []
+    levels = _levels(step, 2)
     kept: list[tuple[float, float, str]] = []
-    for tick in out:
-        if not kept or tick[0] - kept[-1][0] >= span * TOP_MIN_GAP - span * 1e-9:
-            kept.append(tick)
+    for n in (1, 2, 3):
+        kept = _select(top, valid, values, levels[:n], span)
+        if len(kept) >= TOP_MIN_TICKS:
+            break
     return kept
 
 
@@ -201,17 +376,24 @@ def apply_top_axis(
 ) -> Any:
     """Add the top axis ``top`` describes to ``ax``; returns it (or ``None``
     when ``top`` is absent or cannot be drawn)."""
-    if not top or top.get("kind") not in ("reciprocal", "dspacing", "linear"):
+    if not top or top.get("kind") not in ("reciprocal", "dspacing", "linear", "expr"):
+        return None
+    if top.get("kind") == "expr" and _expr(top) is None:
         return None
     if top.get("kind") == "dspacing" and not _f(top, "wavelength", 0.0) > 0:
         return None
-    if top.get("kind") != "dspacing" and _f(top, "factor", 1.0) == 0:
+    if top.get("kind") not in ("dspacing", "expr") and _f(top, "factor", 1.0) == 0:
         return None
+    inverse = (
+        (lambda t: _inverse_on(top, t, top_span(top, *ax.get_xlim())))
+        if top.get("kind") == "expr"
+        else (lambda t: top_inverse(top, t))
+    )
     sec = ax.secondary_xaxis(
         "top",
         functions=(
             _vectorize(_clamped(ax, top, lambda x: top_forward(top, x), forward=True)),
-            _vectorize(_clamped(ax, top, lambda t: top_inverse(top, t), forward=False)),
+            _vectorize(_clamped(ax, top, inverse, forward=False)),
         ),
     )
     locator = _TopLocator(ax, top)

@@ -17,6 +17,7 @@ import { baseColumns, channelLetter } from "../lib/formula";
 import { frequencyTable, frequencyWorksheet } from "../lib/frequencyCount";
 import { lit } from "../lib/macro";
 import { analysisData } from "../lib/rowstate";
+import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { uniqueTemplateName } from "../lib/uniqueName";
 import { withRecomputedFormulas } from "./computedColumns";
@@ -83,6 +84,7 @@ export async function runRowStatistics(): Promise<void> {
   const ds = s.datasets.find((d) => d.id === s.activeId);
   if (!ds) return fail("Row statistics: select a worksheet first");
   if (ds.pending) return fail("Row statistics: wait for the full worksheet to load");
+  if (ds.linkedCurves) return fail(LINKED_GRAPH_EDIT_NOTICE);
   if (numericColumns(ds).length < 2) return fail("Row statistics: the worksheet needs at least two numeric value columns");
   const picked = await askParams("Row statistics", [
     ...columnFields(ds),

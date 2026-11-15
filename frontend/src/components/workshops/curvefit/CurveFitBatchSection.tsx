@@ -12,6 +12,7 @@ import { useApp } from "../../../store/useApp";
 import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
 import { nextDatasetId } from "../../../store/idSeq";
 import AnalysisBatchControls, { type AnalysisBatchOutcome, type AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { batchColumns, batchSummaryData, fitSummaryValues } from "./curveFitBatchSummary";
 import { parseFitStarts } from "./fitStarts";
 
@@ -68,8 +69,9 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
       if (weightMode !== "none") warnings.push("Factor-level batch fits are unweighted.");
       const results: CalcResult[] = [];
       for (const level of partition.levels) {
-        const x = selection.xKey === null ? level.data.time : level.data.values.map((row) => row[selection.xKey!]);
         const yKey = selection.yKeys[0];
+        const fitX = ownXKey(dataset, selection.xKey, yKey); // a secondary-X Y fits against its own X
+        const x = fitX === null ? level.data.time : level.data.values.map((row) => row[fitX]);
         const y = level.data.values.map((row) => row[yKey]);
         const pairs = dropGapRows(x, y);
         try {

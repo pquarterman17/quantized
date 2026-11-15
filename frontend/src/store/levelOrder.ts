@@ -62,7 +62,7 @@ import {
   orderLevels,
 } from "../lib/categorical";
 import { resolveRecodeChannel } from "../lib/recode";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { editRefusalNotice, isRederived } from "../lib/rederived";
 import type { DataStruct } from "../lib/types";
 import { resolvePendingEdit } from "./pendingEdit";
 import { toast } from "./toasts";
@@ -178,7 +178,7 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
     // which lacks this order, so a reorder would silently vanish (measured in
     // levelEditsRederived.test.ts). Refused here and again at commit.
     if (isRederived(ds)) {
-      toast(REDERIVED_EDIT_NOTICE, "danger");
+      toast(editRefusalNotice(ds), "danger");
       return;
     }
     set({
@@ -243,7 +243,7 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
       return false;
     }
     if (isRederived(ds)) {
-      toast(REDERIVED_EDIT_NOTICE, "danger");
+      toast(editRefusalNotice(ds), "danger");
       return false;
     }
     if (ds.pending != null) {

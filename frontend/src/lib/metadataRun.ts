@@ -22,6 +22,7 @@ import { applyCleanup, planCleanup, type CleanupPlan, type CleanupResult, type L
 import { factorColumn, planFactor, type FactorAs, type FactorPlan } from "./metadataFactor";
 import { isScalar, pathLabel, type MetaPath, type MetaScalar } from "./metadataKeys";
 import { plural } from "./plural";
+import { LINKED_GRAPH_EDIT_NOTICE } from "./rederived";
 import { applyFormulasWithErrors } from "./formula";
 import { asAlreadyComputed, baseColumns, carryComputedLevelOrder } from "./formulaInputs";
 import type { ComputedColumn, Dataset } from "./types";
@@ -50,6 +51,9 @@ async function resolveAll(s: StoreGet, ids: readonly string[]): Promise<Dataset[
     const d = s().datasets.find((x) => x.id === id);
     if (!d) throw new Error("a picked dataset is no longer in the workspace");
     if (d.pending) throw new Error(`the full data of “${d.name}” could not be loaded`);
+    // A live graph's metadata is assembled from its sources (and a factor column
+    // would be rebuilt away): edit the source workbook instead.
+    if (d.linkedCurves) throw new Error(`“${d.name}”: ${LINKED_GRAPH_EDIT_NOTICE}`);
     return d;
   });
 }
