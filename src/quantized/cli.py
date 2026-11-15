@@ -19,7 +19,9 @@
     qz convert FILES... --to {csv,xlsx,dwk} --out DIR
                         convert Origin projects (.opj/.opju), every book and
                         sheet, without Origin; fails closed per book and
-                        writes DIR/convert-report.json (quantized.cli_convert)
+                        writes DIR/convert-report.json (quantized.cli_convert).
+                        HDF5/NeXus, .mat, .ibw, images and other imported
+                        files convert to csv/xlsx, every dataset in them
 
 If the requested port is busy and ``--port`` was NOT given explicitly, qz
 falls back to a free ephemeral port automatically (the main app is often

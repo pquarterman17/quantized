@@ -36,6 +36,10 @@ _HDF5_MAGIC = b"\x89HDF"
 # billions of elements and make ``obj[()]`` allocate them all. 2**26 float64
 # elements is 512 MiB -- the upload cap's scale, far above any real 1-D trace.
 MAX_DATASET_ELEMENTS = 1 << 26
+# A compressed chunk is decompressed whole to read any element of it, and HDF5
+# allows a chunk larger than its dataset (unlimited maxshape): a 2-element
+# dataset can declare a multi-GiB chunk that a ~500 KB file inflates.
+MAX_CHUNK_BYTES = 64 << 20
 
 
 @dataclass
@@ -134,6 +138,13 @@ def _check_dataset(name: str, obj: Any) -> None:
             f"variable {name!r} declares {obj.size} elements "
             f"(limit {MAX_DATASET_ELEMENTS}); not read"
         )
+    if obj.chunks is not None:
+        chunk_bytes = int(np.prod(obj.chunks, dtype=np.int64)) * obj.dtype.itemsize
+        if chunk_bytes > MAX_CHUNK_BYTES:
+            raise ValueError(
+                f"variable {name!r} declares {chunk_bytes} bytes per storage chunk "
+                f"(limit {MAX_CHUNK_BYTES}); not read"
+            )
     # One element can be a whole sub-array or a long fixed string, so the
     # element count alone does not bound the read.
     nbytes = obj.size * obj.dtype.itemsize
