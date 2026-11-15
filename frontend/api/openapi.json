@@ -8099,6 +8099,11 @@
             ],
             "title": "Lines"
           },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
           "style": {
             "default": "default",
             "title": "Style",

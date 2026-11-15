@@ -13,7 +13,7 @@ import { useApp } from "../../../store/useApp";
 import { useFunctionPlot } from "./useFunctionPlot";
 
 export default function FunctionPlotPanel() {
-  const setOpen = useApp((s) => s.setFunctionPlotOpen);
+  const setOpen = useApp((s) => s.setDatasetMathOpen);
   const m = useFunctionPlot();
   const editing = m.selectedId !== "";
   return (

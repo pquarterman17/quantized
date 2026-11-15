@@ -102,15 +102,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Separate overlapping curves with an adjustable vertical offset.",
       run: () => s().setWaterfallOpen(true),
     },
-    {
-      id: "function-plot",
-      group: "Plot",
-      section: "Layout",
-      label: "Function plot (y = f(x))…",
-      description: "Add a curve y = f(x; parameters) to the graph.",
-      keywords: "function equation theory curve",
-      run: () => s().setFunctionPlotOpen(true),
-    },
+    { id: "contour-scattered", group: "Plot", section: "Layout", label: "Contour from scattered XYZ…", run: () => graphFormatCommand(s, (m) => m.contourFromScattered) },
+    { id: "function-plot", group: "Plot", section: "Layout", label: "Function plot (y = f(x))…", run: () => s().setDatasetMathOpen(true, "function") },
     {
       // P3.5: the unified browse surface. Plot-specific operations remain one
       // click away in the existing manager rather than being duplicated here.

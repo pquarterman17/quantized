@@ -33,8 +33,14 @@ MAX_SHEETS = 64
 _NOT_DATA = (ValueError, IndexError, KeyError)
 
 
+def _is_ole2_file(path: Path) -> bool:
+    """A legacy binary workbook by content (an .xlsx renamed .xls is a ZIP)."""
+    with path.open("rb") as fh:
+        return fh.read(4) == b"\xd0\xcf\x11\xe0"
+
+
 def _other_sheet(path: Path, index: int) -> DataStruct:
-    if path.suffix.lower() == ".xls":
+    if _is_ole2_file(path):
         with heavy_imports("quantized.io.excel_xls"):
             from quantized.io.excel_xls import import_xls
 
@@ -56,7 +62,7 @@ def import_workbook_sheets(
     0); a one-sheet workbook returns exactly ``[first_sheet(path)]``.
 
     Raises sheet 0's own error when no sheet holds data."""
-    if path.suffix.lower() == ".xls":
+    if _is_ole2_file(path):
         with heavy_imports("quantized.io.excel_xls"):
             from quantized.io.excel_xls import xls_sheet_titles
 

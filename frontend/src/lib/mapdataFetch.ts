@@ -144,6 +144,9 @@ function finiteExtent(grid: (number | null)[][]): { min: number | null; max: num
   return lo <= hi ? { min: lo, max: hi } : { min: null, max: null };
 }
 
+/** The on-screen badge and the export footnote: one wording for both. */
+export const interpolatedNote = (nPoints: number): string => `Interpolated onto a regular grid from ${nPoints} points`;
+
 /** `/api/plot/map` also reports whether the points were interpolated. */
 type MapResponseEx = MapResponse & { interpolated?: boolean; n_points?: number };
 

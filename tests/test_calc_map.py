@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -328,3 +329,48 @@ def test_collinear_points_fail_closed() -> None:
 def test_too_few_distinct_points_fail_closed() -> None:
     with pytest.raises(ValueError, match="distinct finite"):
         build_map([0, 0, 1, 1], [0, 0, 1, 1], [1, 2, 3, 4])
+
+
+def test_gridded_map_with_wildly_different_axis_scales_is_not_collinear() -> None:
+    # FMR S21(f, H): f in Hz (1e9..2e10) against H in T (0..1).
+    f, h = np.meshgrid(np.linspace(2e9, 20e9, 20), np.linspace(0.0, 1.0, 15))
+    m = build_map(f.ravel(), h.ravel(), np.sin(f.ravel() / 1e9) + h.ravel(), MapState(nx=20, ny=20))
+    assert np.isfinite(m.z_grid).sum() > 300
+    assert m.metadata["interpolated"] is False
+
+
+def test_scattered_points_in_metres_against_degrees_are_not_collinear() -> None:
+    rng = np.random.default_rng(5)
+    x = rng.uniform(0, 5e-9, 200)
+    y = rng.uniform(0, 90, 200)
+    m = build_map(x, y, x * 1e9 + y, MapState(nx=20, ny=20))
+    assert np.isfinite(m.z_grid).sum() > 200
+
+
+def test_collinear_in_mixed_units_still_fails_closed() -> None:
+    x = np.linspace(0, 5e-9, 30)
+    with pytest.raises(ValueError, match="collinear"):
+        build_map(x, 45 * x * 1e9, x)
+
+
+def _map_body(client: Any, x: np.ndarray, y: np.ndarray) -> dict[str, Any]:
+    from quantized.datastruct import DataStruct
+
+    ds = DataStruct.create(
+        np.arange(x.size, dtype=float), np.column_stack([x, y, x + y]),
+        labels=["X", "Y", "Z"], units=["", "", ""],
+    )
+    r = client.post(
+        "/api/plot/map",
+        json={"dataset": ds.to_dict(), "x_key": 0, "y_key": 1, "z_key": 2, "nx": 10, "ny": 10},
+    )
+    assert r.status_code == 200, r.text
+    return dict(r.json())
+
+
+def test_map_route_reports_interpolated_for_scattered_not_gridded(client: Any) -> None:
+    rng = np.random.default_rng(2)
+    body = _map_body(client, rng.uniform(0, 5, 40), rng.uniform(0, 5, 40))
+    assert body["interpolated"] is True and body["n_points"] == 40
+    gx, gy = np.meshgrid(np.arange(5.0), np.arange(4.0))
+    assert _map_body(client, gx.ravel(), gy.ravel())["interpolated"] is False

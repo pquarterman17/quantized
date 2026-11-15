@@ -8909,6 +8909,11 @@ export interface components {
             /** Lines */
             lines?: number[][] | null;
             /**
+             * Note
+             * @default
+             */
+            note?: string;
+            /**
              * Style
              * @default default
              */

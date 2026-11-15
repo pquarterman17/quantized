@@ -225,20 +225,37 @@ describe("map columns + tab gating (figures-audit #13)", () => {
     expect(canRenderMap(sweep)).toBe(false);
   });
 
-  it("offers a map for scattered random-position X,Y,Z (interpolated), not for a swept pair", () => {
+  it("never guesses scattered XYZ: ordinary 3-column magnetometry data gets no Map tab", () => {
+    const n = 40;
+    const mk = (time: number[], a: number[], b: number[]): DataStruct => ({
+      time, values: a.map((v, i) => [v, b[i]]), labels: ["A", "B"], units: ["", ""], metadata: {},
+    });
+    const up = Array.from({ length: n }, (_, i) => -100 + (200 * i) / (n - 1));
+    const loopH = [...up, ...[...up].reverse()];
+    const loopM = loopH.map((h, i) => Math.tanh(h / 30) + (i < n ? -0.1 : 0.1));
+    // hysteresis loop: H, M, dM (X goes up and back, M is non-monotonic)
+    expect(canRenderMap(mk(loopH, loopM, loopM.map((m) => m * 0.01)))).toBe(false);
+    // M(T) cooling sweep with jitter in the measured temperature
+    const temp = Array.from({ length: n }, (_, i) => 300 - i * 5 + Math.sin(i * 12.9) * 0.4);
+    expect(canRenderMap(mk(temp, temp.map((t, i) => 1 / t + (i % 2) * 1e-4), temp.map((t) => t / 100)))).toBe(false);
+    // a time series with a NaN hole in each of two columns
+    const t = Array.from({ length: n }, (_, i) => i);
+    const y = t.map((v) => v * 2);
+    y[5] = Number.NaN;
+    const tNaN = [...t];
+    tNaN[7] = Number.NaN;
+    expect(canRenderMap(mk(tNaN, y, t.map((v) => v * v)))).toBe(false);
+  });
+
+  it("offers a Map tab for scattered XYZ once the user opted in (metadata.scatteredXYZ)", () => {
     const n = 30;
     const px = Array.from({ length: n }, (_, i) => (i * 7919) % 31);
     const py = Array.from({ length: n }, (_, i) => (i * 104729) % 29);
     const scattered: DataStruct = {
-      time: px,
-      values: px.map((x, i) => [py[i], x + py[i]]),
-      labels: ["Y", "Z"],
-      units: ["", ""],
-      metadata: {},
+      time: px, values: px.map((x, i) => [py[i], x + py[i]]), labels: ["Y", "Z"], units: ["", ""], metadata: {},
     };
-    expect(canRenderMap(scattered)).toBe(true);
-    const sweep: DataStruct = { ...scattered, time: [...px].sort((a, b) => a - b) };
-    expect(canRenderMap(sweep)).toBe(false);
+    expect(canRenderMap(scattered)).toBe(false);
+    expect(canRenderMap({ ...scattered, metadata: { scatteredXYZ: true } })).toBe(true);
   });
 
   it("keeps a parser-flagged 2-D map's own channels (its ROI tools index them)", () => {

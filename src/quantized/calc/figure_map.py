@@ -92,6 +92,7 @@ def render_map_figure(
     lines: Sequence[Sequence[float]] | None = None,
     labels: Sequence[Mapping[str, Any]] | None = None,
     colorbar_log10: bool = False,
+    note: str = "",
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -248,6 +249,10 @@ def render_map_figure(
                 ticks = log_decade_ticks(*mappable.get_clim())
                 cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])
         fig.tight_layout()
+        if note:  # after tight_layout: a footnote must not shrink the axes
+            fig.text(
+                0.01, 0.005, safe_mathtext_label(note), fontsize=st.font_size * 0.7, va="bottom"
+            )
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 

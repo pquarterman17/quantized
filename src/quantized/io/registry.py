@@ -161,6 +161,19 @@ _import_excel_lazy.__qualname__ = "import_excel"
 _import_excel_lazy.__doc__ = """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
 
 
+def _head(path: Path, n: int = 8) -> bytes:
+    with path.open("rb") as fh:
+        return fh.read(n)
+
+
+def _is_ole2(path: Path) -> bool:
+    return _head(path).startswith(b"\xd0\xcf\x11\xe0")
+
+
+def _is_zip(path: Path) -> bool:
+    return _head(path).startswith(b"PK\x03\x04")
+
+
 def _import_xls_lazy(path: Path) -> DataStruct:
     """Deferred ``import_xls`` (xlrd loads only when a legacy ``.xls`` is parsed)."""
     with heavy_imports("quantized.io.excel_xls"):
@@ -230,7 +243,13 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".xye": [(_is_text_table, import_csv)],
     ".xlsx": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
     ".xlsm": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
-    ".xls": [(_accept_any, _import_xls_lazy)],
+    # Content, not the name: instruments often write TSV/HTML or a renamed
+    # .xlsx under .xls. OLE2 -> xlrd; ZIP -> the .xlsx reader; text -> a table.
+    ".xls": [
+        (_is_ole2, _import_xls_lazy),
+        (_is_zip, _import_excel_lazy),
+        (_is_text_table, import_csv),
+    ],
 }
 
 
@@ -395,7 +414,10 @@ def import_auto_sheets(path: str | Path) -> list[DataStruct]:
     (``io/excel_sheets.py``). The first entry is always the primary dataset;
     every non-workbook file gives exactly ``[import_auto(path)]``."""
     resolved = Path(path)
-    if resolved.suffix.lower() in (".xlsx", ".xlsm", ".xls") and match_filter(resolved) is None:
+    suffix = resolved.suffix.lower()
+    legacy = suffix == ".xls" and (_is_ole2(resolved) or _is_zip(resolved))
+    workbook = suffix in (".xlsx", ".xlsm") or legacy
+    if workbook and match_filter(resolved) is None:
         with heavy_imports("quantized.io.excel_sheets"):
             from quantized.io.excel_sheets import import_workbook_sheets
 

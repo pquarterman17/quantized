@@ -24,7 +24,7 @@ def test_create_app_does_not_import_optional_heavy_modules() -> None:
             "from quantized.app import create_app\n"
             "create_app()\n"
             "print(sorted(m for m in "
-            "('openpyxl', 'periodictable', 'matplotlib', 'pywebview') "
+            "('openpyxl', 'xlrd', 'periodictable', 'matplotlib', 'pywebview') "
             "if m in sys.modules))",
         ],
         capture_output=True,

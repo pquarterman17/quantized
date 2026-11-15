@@ -5,16 +5,16 @@
 //     there is no data yet);
 //   - once a function curve is selected, every valid edit rewrites its rows at
 //     once, and the graphs that hold it follow (store/linkedCurvesSync).
-// One undo step per editing session of a curve, not one per keystroke.
+//
+// Form and store stay in step both ways: selecting a curve loads its stored
+// definition into the form in the SAME update (so opening the panel never
+// writes), and a change made elsewhere (Undo, Redo, a deleted curve) is loaded
+// back into the form instead of being overwritten by it. One undo step per
+// editing session of a curve, not one per keystroke; Undo ends the session.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  functionParams,
-  functionPlotProblem,
-  readFunctionDef,
-  type FunctionPlotDef,
-} from "../../../lib/functionPlot";
+import { functionParams, functionPlotProblem, readFunctionDef, type FunctionPlotDef } from "../../../lib/functionPlot";
 import { addFunctionCurve, defaultFunctionRange, rewriteFunctionCurve, storedFunctionDef } from "../../../lib/functionPlotStore";
 import { useApp } from "../../../store/useApp";
 
@@ -27,7 +27,8 @@ export interface FunctionPlotState {
   expr: string;
   setExpr: (s: string) => void;
   paramNames: string[];
-  params: Record<string, number>;
+  /** A cleared box is undefined (a problem), never a silent 0. */
+  params: Record<string, number | undefined>;
   setParam: (name: string, v: number | undefined) => void;
   xMin: number;
   xMax: number;
@@ -40,6 +41,16 @@ export interface FunctionPlotState {
   add: () => void;
 }
 
+interface Form {
+  expr: string;
+  values: Record<string, number | undefined>;
+  xMin: number;
+  xMax: number;
+  n: number;
+}
+
+const fromDef = (d: FunctionPlotDef): Form => ({ expr: d.expr, values: { ...d.params }, xMin: d.xMin, xMax: d.xMax, n: d.n });
+
 export function useFunctionPlot(): FunctionPlotState {
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
@@ -48,71 +59,109 @@ export function useFunctionPlot(): FunctionPlotState {
     [datasets],
   );
   const [selectedId, setSelectedId] = useState(() => (curves.some((c) => c.id === activeId) ? (activeId ?? "") : ""));
-  const [initial] = useState(defaultFunctionRange);
-  const [expr, setExpr] = useState("a*sin(b*x)+c");
-  const [values, setValues] = useState<Record<string, number>>({ a: 1, b: 1, c: 0 });
-  const [xMin, setXMinState] = useState(initial[0]);
-  const [xMax, setXMaxState] = useState(initial[1]);
-  const [n, setNState] = useState(200);
-  const loaded = useRef<string | null>(null);
-  const undoStepped = useRef<string | null>(null);
+  const [form, setForm] = useState<Form>(() => {
+    const stored = selectedId ? storedFunctionDef(selectedId) : null;
+    if (stored) return fromDef(stored);
+    const [xMin, xMax] = defaultFunctionRange();
+    return { expr: "a*sin(b*x)+c", values: { a: 1, b: 1, c: 0 }, xMin, xMax, n: 200 };
+  });
+  const rangeTouched = useRef(false);
+  const inSession = useRef(false);
 
-  const parsed = useMemo(() => functionParams(expr), [expr]);
+  const parsed = useMemo(() => functionParams(form.expr), [form.expr]);
   const paramNames = parsed.params;
   const params = useMemo(
-    () => Object.fromEntries(paramNames.map((p) => [p, values[p] ?? 1])),
-    [paramNames, values],
+    () => Object.fromEntries(paramNames.map((p) => [p, p in form.values ? form.values[p] : 1])),
+    [paramNames, form.values],
   );
-  const def: FunctionPlotDef = { expr, params, xMin, xMax, n };
-  const problem = parsed.error ?? functionPlotProblem(def);
+  const def: FunctionPlotDef = {
+    expr: form.expr,
+    params: Object.fromEntries(paramNames.map((p) => [p, params[p] ?? 0])),
+    xMin: form.xMin,
+    xMax: form.xMax,
+    n: form.n,
+  };
+  const empty = paramNames.find((p) => params[p] === undefined);
+  const problem = parsed.error ?? (empty ? `enter a value for ${empty}` : functionPlotProblem(def));
+  const defKey = JSON.stringify(def);
 
-  // Load a selected curve's stored definition into the form.
+  // The selected curve's stored definition, as a key (null when absent).
+  const storedKey = useApp((s) => {
+    const d = selectedId ? readFunctionDef(s.datasets.find((x) => x.id === selectedId)) : null;
+    return d ? JSON.stringify(d) : null;
+  });
+  const formKey = useRef(defKey);
+  formKey.current = defKey;
+
+  // The curve vanished (deleted, or its Add was undone): back to a new curve.
   useEffect(() => {
-    if (!selectedId || loaded.current === selectedId) return;
+    if (selectedId && storedKey === null) {
+      setSelectedId("");
+      inSession.current = false;
+    }
+  }, [selectedId, storedKey]);
+
+  // The store changed under the form (Undo/Redo/another edit): take it, and
+  // end the editing session so the next edit records its own step.
+  useEffect(() => {
+    if (!selectedId || storedKey === null || storedKey === formKey.current) return;
     const stored = storedFunctionDef(selectedId);
     if (!stored) return;
-    loaded.current = selectedId;
-    setExpr(stored.expr);
-    setValues(stored.params);
-    setXMinState(stored.xMin);
-    setXMaxState(stored.xMax);
-    setNState(stored.n);
-  }, [selectedId]);
+    setForm(fromDef(stored));
+    inSession.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a store change reloads the form
+  }, [storedKey]);
 
-  // Live edit: a valid change to a selected curve rewrites its rows.
-  const defKey = JSON.stringify(def);
+  // Live edit: a valid change of the form writes the selected curve.
   useEffect(() => {
-    if (!selectedId || loaded.current !== selectedId || problem) return;
-    if (rewriteFunctionCurve(selectedId, def, undoStepped.current !== selectedId)) undoStepped.current = selectedId;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `defKey` is `def`
-  }, [defKey, selectedId, problem]);
+    if (!selectedId || problem) return;
+    if (storedKey === defKey) return;
+    if (rewriteFunctionCurve(selectedId, def, !inSession.current)) inSession.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a form edit (`defKey`) is the only trigger
+  }, [defKey]);
+
+  // A new curve follows the focused graph's x range until the user sets one.
+  useEffect(() => {
+    if (selectedId || rangeTouched.current) return;
+    const [xMin, xMax] = defaultFunctionRange();
+    setForm((f) => (f.xMin === xMin && f.xMax === xMax ? f : { ...f, xMin, xMax }));
+  }, [activeId, selectedId]);
 
   function add(): void {
     if (problem) return;
     const id = addFunctionCurve(def);
-    loaded.current = id;
-    undoStepped.current = null;
+    if (!id) return;
+    inSession.current = false;
     setSelectedId(id);
   }
 
+  const patch = (p: Partial<Form>): void => setForm((f) => ({ ...f, ...p }));
   return {
     curves,
     selectedId,
     select: (id) => {
-      loaded.current = null;
+      inSession.current = false;
+      const stored = id ? storedFunctionDef(id) : null;
+      if (stored) setForm(fromDef(stored)); // same update: the form equals the store, so nothing is written
       setSelectedId(id);
     },
-    expr,
-    setExpr,
+    expr: form.expr,
+    setExpr: (expr) => patch({ expr }),
     paramNames,
     params,
-    setParam: (name, v) => setValues((cur) => ({ ...cur, [name]: v ?? 0 })),
-    xMin,
-    xMax,
-    n,
-    setXMin: (v) => v !== undefined && setXMinState(v),
-    setXMax: (v) => v !== undefined && setXMaxState(v),
-    setN: (v) => v !== undefined && setNState(Math.round(v)),
+    setParam: (name, v) => setForm((f) => ({ ...f, values: { ...f.values, [name]: v } })),
+    xMin: form.xMin,
+    xMax: form.xMax,
+    n: form.n,
+    setXMin: (v) => {
+      rangeTouched.current = true;
+      if (v !== undefined) patch({ xMin: v });
+    },
+    setXMax: (v) => {
+      rangeTouched.current = true;
+      if (v !== undefined) patch({ xMax: v });
+    },
+    setN: (v) => v !== undefined && patch({ n: Math.round(v) }),
     problem,
     add,
   };

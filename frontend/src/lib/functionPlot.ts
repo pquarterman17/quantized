@@ -12,6 +12,7 @@ import { compileFormula } from "./formula";
 import type { DataStruct, Dataset } from "./types";
 
 export const MAX_FUNCTION_POINTS = 20000;
+const NEEDS_ROWS = "a function of x alone: lag, diff, row and column aggregates (mean, cumsum) need table rows";
 
 export interface FunctionPlotDef {
   /** The right-hand side as typed, e.g. `a*sin(b*x)+c` (a leading `y =` is dropped). */
@@ -34,9 +35,17 @@ export function functionParams(expr: string): { params: string[]; error: null } 
   if (!body) return { params: [], error: "enter an expression, e.g. a*sin(b*x)+c" };
   const names: string[] = [];
   try {
-    compileFormula(body, (name) => {
-      if (name !== "x" && !names.includes(name)) names.push(name);
-    });
+    let rowDependent = false;
+    compileFormula(
+      body,
+      (name) => {
+        if (name !== "x" && !names.includes(name)) names.push(name);
+      },
+      () => {
+        rowDependent = true;
+      },
+    );
+    if (rowDependent) return { params: [], error: NEEDS_ROWS };
   } catch (e) {
     return { params: [], error: e instanceof Error ? e.message : "invalid expression" };
   }
@@ -49,6 +58,14 @@ export function functionPlotProblem(def: FunctionPlotDef): string | null {
   if (def.xMin >= def.xMax) return "x min must be below x max";
   if (!Number.isInteger(def.n) || def.n < 2 || def.n > MAX_FUNCTION_POINTS) {
     return `points must be a whole number from 2 to ${MAX_FUNCTION_POINTS}`;
+  }
+  // Trial evaluation: anything that needs table rows (row(), cumsum, mean...)
+  // is refused here, with the engine's own words, never at draw time.
+  try {
+    compileFormula(stripLhs(def.expr))({ ...def.params, x: def.xMin });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "cannot evaluate";
+    return /row context/.test(msg) ? NEEDS_ROWS : msg;
   }
   return null;
 }

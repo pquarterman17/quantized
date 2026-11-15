@@ -2,6 +2,8 @@
 // picture is an interpolation of them (never present raw scatter as a measured
 // grid). Rendered from the backend's `interpolated` flag.
 
+import { interpolatedNote } from "../../lib/mapdataFetch";
+
 interface Props {
   nPoints: number;
 }
@@ -14,7 +16,7 @@ export default function MapInterpolatedBadge({ nPoints }: Props) {
       data-map-interpolated=""
       style={{ position: "absolute", left: 12, bottom: 12, padding: "2px 8px", pointerEvents: "none" }}
     >
-      Interpolated from {nPoints} scattered points
+      {interpolatedNote(nPoints)}
     </div>
   );
 }

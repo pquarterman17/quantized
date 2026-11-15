@@ -83,7 +83,7 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   },
   // ── Tables ───────────────────────────────────────────────────────────
   {
-    exts: [".csv", ".tsv", ".txt", ".xy", ".xye", ".xlsx", ".xlsm"],
+    exts: [".csv", ".tsv", ".txt", ".xy", ".xye", ".xlsx", ".xlsm", ".xls"],
     name: "Delimited text & Excel",
     category: "Tables & generic",
     note:

@@ -52,7 +52,8 @@ def _cell(book: Any, cell: Any) -> Any:
             return None
     if ctype == xlrd.XL_CELL_TEXT:
         return str(value) if str(value).strip() else None
-    return float(value)
+    num = float(value)  # an integral cell is an int, as openpyxl reads .xlsx
+    return int(num) if num.is_integer() and abs(num) < 2**53 else num
 
 
 def import_xls(path: str | Path, *, sheet: int | str = 0) -> DataStruct:
