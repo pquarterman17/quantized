@@ -51,6 +51,10 @@ export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
   dropUncertainty: false,
 };
 
+export function enteredFinite(value: string): boolean {
+  return value.trim() !== "" && Number.isFinite(Number(value));
+}
+
 export function measuredChannels(dataset: Dataset): number[] {
   const categorical = new Set(Object.keys(dataset.data.cat_levels ?? {}).map(Number));
   const errors = new Set((dataset.errorRoles ?? []).map((binding) => binding.channel));

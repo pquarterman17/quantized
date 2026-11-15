@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from quantized.calc.curve_average import average_curves
 from quantized.calc.resample_align import align_resample
+from quantized.calc.signal_ops import run_signal_op
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
@@ -147,5 +148,42 @@ def average(req: AverageRequest) -> Response:
             "warnings": res.warnings,
             "overlap": [v if v == v else None for v in res.overlap],
             "channels": res.channels,
+        }
+    )
+
+
+class SigopRequest(BaseModel):
+    dataset: dict[str, Any]
+    #: median | despike | lowess | convolve | deconvolve | hilbert | ifft |
+    #: reduce-bin | reduce-duplicates | reduce-nth (calc/signal_ops.py)
+    method: str
+    channels: list[int] = Field(default_factory=list)
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+class SigopResponse(BaseModel):
+    dataset: dict[str, Any]
+    warnings: list[str]
+    #: despike: channel index (string key) -> flagged row numbers, for the preview.
+    flagged: dict[str, list[int]]
+    rows_in: int
+    rows_out: int
+
+
+@router.post("/sigop", response_model=SigopResponse, response_class=DataStructResponse)
+def sigop(req: SigopRequest) -> Response:
+    """Median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT / Reduce XY."""
+    try:
+        data = DataStruct.from_dict(req.dataset)
+        res = run_signal_op(data, req.method, req.channels, req.args)
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DataStructResponse(
+        {
+            "dataset": datastruct_payload(res.data),
+            "warnings": res.warnings,
+            "flagged": {str(c): rows for c, rows in res.flagged.items()},
+            "rows_in": int(data.time.size),
+            "rows_out": int(res.data.time.size),
         }
     )

@@ -44,18 +44,17 @@ import {
 } from "./signalTransform";
 import { averageLabel, computeAverage, type AverageParams } from "./transformAverage";
 import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
+import { reviewTransform } from "./transformReview";
+import { computeSigop, sigopLabel, type SigopParams } from "./transformSigop";
 import { computeSims, simsLabel, type SimsParams } from "./transformSims";
 import { computeSimsCompare, simsCompareLabel, type SimsCompareParams } from "./transformSimsCompare";
 import {
-  actionable,
   analyzeAlgebra,
   analyzeJoin,
   analyzeStack,
   analyzeTranspose,
   analyzeUnstack,
-  needsConfirm,
   stampWarnings,
-  warningsText,
   type TransformWarning,
 } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
@@ -68,7 +67,6 @@ import {
   type JoinMode,
 } from "./worksheetTransforms";
 import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
-import { askConfirm } from "../store/confirmDialog";
 import { nextDatasetId, type AppState } from "../store/useApp";
 
 export { transformParamsOf } from "./transformParams";
@@ -98,6 +96,7 @@ export type TransformParams =
   | { op: "algebra"; operation: string; interp: string; with: DatasetRef }
   | { op: "split"; col: number; tolerance: number | null }
   | ResampleParams
+  | SigopParams
   | SimsParams
   | SimsCompareParams
   | AverageParams
@@ -175,6 +174,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "algebra": label = `Dataset math ${primaryName} ${p.operation} ${refs[0]}`; break;
     case "split": label = `Split ${primaryName} by column value`; break;
     case "resample": label = resampleLabel(p, primaryName); break;
+    case "sigop": label = sigopLabel(p, primaryName); break;
     case "sims": label = simsLabel(p, primaryName); break;
     case "simscompare": label = simsCompareLabel(p, primaryName); break;
     case "average": label = averageLabel(p, primaryName); break;
@@ -281,6 +281,10 @@ export async function computeTransform(
       const r = await computeResample(p, { name: primary.name, data: src }, m ? { name: m.name, data: m.data } : null);
       return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings, [[primary.name, src]]) };
     }
+    case "sigop": {
+      const r = await computeSigop(p, { name: primary.name, data: src }, { signal });
+      return { data: r.data, name: r.name, preview: preview(sigopLabel(p, primary.name), r.data, r.warnings, [[primary.name, src]]) };
+    }
     case "sims": {
       const r = await computeSims(p, { id: primary.id, name: primary.name, data: src });
       return { data: r.data, name: r.name, preview: preview("SIMS processing", r.data, r.warnings, [[primary.name, src]]) };
@@ -332,18 +336,7 @@ async function resolveRefs(s: StoreGet, refs: readonly DatasetRef[]): Promise<Da
   });
 }
 
-/** Interactive review: silent when there is nothing to say; a unit mismatch
- *  gets a danger-styled confirm whose button names what is being overridden. */
-export function reviewTransform(pv: TransformPreview): Promise<boolean> {
-  if (!actionable(pv.warnings).length) return Promise.resolve(true);
-  const units = needsConfirm(pv.warnings);
-  return askConfirm(
-    units ? `${pv.title}: units differ` : `${pv.title}: review before creating`,
-    warningsText(pv.summary, pv.warnings),
-    units ? "Create despite unit mismatch" : "Create",
-    units,
-  );
-}
+export { reviewTransform };
 
 /** One dataset a transform created. `key` tells replay which output is which
  *  when there are several: a split child's group label ("5 K"), "" otherwise. */

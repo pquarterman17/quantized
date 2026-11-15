@@ -31,6 +31,7 @@ export default function SpectralControls({
               { value: "magnitude", label: "Magnitude" },
               { value: "psd", label: "Power spectral density" },
               { value: "phase", label: "Phase" },
+              { value: "magnitude+phase", label: "Magnitude + phase (for Inverse FFT)" },
             ]} />
           </label>
           <label>Sides
