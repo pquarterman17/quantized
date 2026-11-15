@@ -11,6 +11,14 @@ so a run never attaches to or closes a window the owner has open. Use
 ``run_axis_oracle.py`` to drive many files: a Student-edition page-limit
 modal hangs COM silently, and that runner supplies the per-file timeout.
 
+Relation to ``tools/origin_trial/export_ground_truth.py``: that script
+exports worksheet CSVs and curve references for named top-level projects
+into ``specimens/ground_truth/<stem>/``. This one records only axis state,
+for arbitrary corpus-relative paths, which public files need because their
+stems collide. Its isolation is what keeps it safe on the owner's desktop.
+The LabTalk queries are the same. A COM-trap fix in one (e.g. the plot-count
+probe) belongs in both.
+
 Usage (Windows, Origin installed, pywin32 available)::
 
     uv run --with pywin32 python -I tools/origin_compare/export_axis_ranges.py <project> <out.json>
@@ -19,16 +27,43 @@ Usage (Windows, Origin installed, pywin32 available)::
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
 _SENTINEL = -987654321.0
 
 
+def _origin_pids() -> set[int]:
+    out = subprocess.run(
+        ["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=False
+    ).stdout
+    pids: set[int] = set()
+    for line in out.splitlines():
+        cols = [c.strip('"') for c in line.split('","')]
+        if len(cols) > 1 and cols[0].lower().startswith("origin"):
+            pids.add(int(cols[1].strip('"')))
+    return pids
+
+
+def pid_file(out: Path) -> Path:
+    """Sidecar naming the Origin instance THIS export started (see the runner)."""
+    return out.with_suffix(".pid")
+
+
 def export(src: Path, out: Path) -> None:
     import win32com.client as wc  # Windows-only optional dependency
 
+    # A COM server is not a child of this process (DCOM launches it), so the
+    # only way to name OUR instance is the PID that appeared across our own
+    # DispatchEx. It is written BEFORE Load, so a page-limit hang inside Load
+    # still leaves the runner an exact target. Two new PIDs in that window (the
+    # owner opened Origin at the same moment) is ambiguous: record none, and
+    # the runner then kills nothing.
+    before = _origin_pids()
     app = wc.DispatchEx("Origin.ApplicationSI")
+    new = sorted(_origin_pids() - before)
+    pid_file(out).write_text(json.dumps(new if len(new) == 1 else []), encoding="utf-8")
     try:
         app.Visible = 0
 
@@ -61,7 +96,9 @@ def export(src: Path, out: Path) -> None:
                         "y_to": ltn("layer.y.to"),
                         "x_type": ltn("layer.x.type"),
                         "y_type": ltn("layer.y.type"),
-                        "nplots": ltn("layer.nplots"),
+                        # No plot count: ``layer.nplots`` is not a live LabTalk
+                        # property (always null). export_ground_truth.py has
+                        # the working ``range -w`` probe if one is needed.
                     }
                 )
             lt("string __ln$ = page.longname$;")
