@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 
 import dwk034 from "./__fixtures__/workspace/v4-0.34.0.dwk.json";
+import { DEFAULT_MAP_VIEW } from "./mapView";
 import type { PlotWindow } from "./plotview";
 import type { SavedPlotSpec } from "./plotspec";
 import type { Dataset } from "./types";
@@ -97,6 +98,12 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxisOf = { [Object.keys(v.seriesStyles)[0] ?? "x0"]: 3 };
   },
   "Annotation.dot": (ws) => editView(ws, (v) => { v.annotations = [...v.annotations, { id: "t", x: 1, y: 2, text: "note", dot: false }]; }),
+  "MapViewState.view3d": (ws) => {
+    ws.mapViews = { a: { ...DEFAULT_MAP_VIEW, view3d: { kind: "surface", elev: 40, azim: 25, zLabel: "Z", zUnit: "u", style: "nature", title: "T" } } };
+  },
+  "RecipeMapView.view3d": (ws) => {
+    ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" } };
+  },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -203,6 +210,8 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/^\$\.savedPlotSpecs\[\]\.spec\.display$/, "DisplayBlock"],
   [/^\$\.plotRecipes\[\]\.visual$/, "RecipeVisual"],
   [/\.annotations\[\]$/, "Annotation"], // view, decor, recipe decorations, export overrides
+  [/^\$\.mapViews\.[^.[\]]+$/, "MapViewState"],
+  [/^\$\.plotRecipes\[\]\.map$/, "RecipeMapView"],
 ];
 
 /** Fields that existed in v0.34.0 but the frozen 0.34 file happens not to use
@@ -254,7 +263,9 @@ describe("kitchen sink: no new key path escapes the classification maps", () => 
     const problems: string[] = [];
     const classified: string[] = [];
     for (const p of head) {
-      if (old034.has(p) || p in KNOWN_034_PATHS) continue;
+      // `mapViews` and its per-dataset entries are v0.34 structure (P2.8), absent from the
+      // frozen 0.34 file only because it holds no map view; their FIELDS are classified.
+      if (old034.has(p) || p in KNOWN_034_PATHS || /^\$\.mapViews(\.[^.[\]]+)?$/.test(p)) continue;
       const why = classify(p, old034);
       if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
       else classified.push(why);
@@ -263,6 +274,8 @@ describe("kitchen sink: no new key path escapes the classification maps", () => 
     // Sanity: the walk saw the gated fields the edits added.
     expect(classified).toContain("DisplayBlock.ramp=gated");
     expect(classified).toContain("Dataset.linkedCurves=gated");
+    expect(classified).toContain("MapViewState.view3d=gated");
+    expect(classified).toContain("RecipeMapView.view3d=gated");
     expect(classified).toContain("Annotation.dot=gated");
   });
 });

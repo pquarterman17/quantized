@@ -12,6 +12,7 @@
 import type { ExtraYAxis } from "./multiYModel";
 import type { HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
+import type { Map3dView } from "./mapView3d";
 import type { CompositionKind } from "./composition";
 import type { ErrorSide } from "./errorRoles";
 import type { NormalizedFrameRect } from "./originPanels";
@@ -273,6 +274,8 @@ export interface RecipeMapView {
   colormap: ColormapName;
   logZ: boolean;
   colorLimits: HalfLim | null;
+  /** Additive: the static 3-D view (surface / scatter / waterfall), when set. */
+  view3d?: Map3dView;
 }
 
 /** A captured, data-free preview of the plot the recipe was saved from:

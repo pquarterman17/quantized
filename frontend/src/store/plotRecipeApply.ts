@@ -58,7 +58,8 @@
 
 import { spatialComposition } from "../lib/composition";
 import { createFigureDocument } from "../lib/figureDocument";
-import { mapViewFor } from "../lib/mapView";
+import { mapViewFor, type MapViewMap } from "../lib/mapView";
+import type { RecipeMapView } from "../lib/plotRecipeSchema";
 import type { PlotRecipe } from "../lib/plotRecipe";
 import type {
   RecipePanelBinding,
@@ -88,6 +89,14 @@ export type ResolveRecipeFn = (recipe: PlotRecipe, dataset: Dataset, opts?: Reso
  *  explicit rebinds, if any. */
 export function resolveOptionsFor(get: SliceGet, pending?: Pick<PendingPlotRecipeApplication, "panelBindings">): ResolveRecipeOptions {
   return { datasets: get().datasets, panelBindings: pending?.panelBindings };
+}
+
+/** The target's map views with the recipe's captured map view applied. The recipe
+ *  DECIDES the 3-D view: one saved without it returns the target to the 2-D map
+ *  rather than leaving whatever 3-D view the target already had. */
+export function withRecipeMap(views: MapViewMap, id: string, map: RecipeMapView): MapViewMap {
+  const { view3d: _prev, ...current } = mapViewFor(views, id);
+  return { ...views, [id]: { ...current, ...map } };
 }
 
 /** Re-key a resolved recipe's mapping+visual into a fresh `PlotView` seed --
@@ -143,7 +152,7 @@ export async function applyResolvedRecipe(
     get().focusWindow(state.createPanelWindow(datasetIds, layout));
     set((s) => ({
       status: `applied plot recipe "${recipe.name}"`,
-      ...(map ? { mapViews: { ...s.mapViews, [dataset.id]: { ...mapViewFor(s.mapViews, dataset.id), ...map } } } : {}),
+      ...(map ? { mapViews: withRecipeMap(s.mapViews, dataset.id, map) } : {}),
     }));
     await recordApplied(get, recipe);
     return true;
@@ -194,7 +203,7 @@ export async function applyResolvedRecipe(
     const { panels, map } = resolved;
     set((s) => ({
       ...(panels ? { composition: spatialComposition(panels.panels), facetKey: null } : {}),
-      ...(map ? { mapViews: { ...s.mapViews, [dataset.id]: { ...mapViewFor(s.mapViews, dataset.id), ...map } } } : {}),
+      ...(map ? { mapViews: withRecipeMap(s.mapViews, dataset.id, map) } : {}),
     }));
   }
   // Deliberately AFTER the early `return false` above: staging, refusing, or
