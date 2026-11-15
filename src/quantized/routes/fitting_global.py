@@ -291,6 +291,12 @@ def _checked_compare(req: GlobalFitRequest) -> _Problem:
     prob = _checked(req)
     if len(prob.series) < 2:
         raise HTTPException(status_code=422, detail="compare datasets needs at least two datasets")
+    given = [s.dy is not None for s in req.datasets]
+    if any(given) and not all(given):
+        raise HTTPException(
+            status_code=422,
+            detail="give dy for every dataset or for none: a pooled F-test over mixed "
+                   "weighted and unweighted datasets has no common variance scale")
     if not prob.constraints:
         raise HTTPException(
             status_code=422,

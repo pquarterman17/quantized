@@ -15,20 +15,20 @@ const BASE: Comparison = {
 
 describe("DatasetCompareResult", () => {
   it("renders nothing without a comparison", () => {
-    const { container } = render(<DatasetCompareResult comparison={null} compareAll />);
+    const { container } = render(<DatasetCompareResult comparison={null} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("states the rejection, the F(dfNum, dfDen) and both models' dof", () => {
-    render(<DatasetCompareResult comparison={BASE} compareAll={false} />);
+    render(<DatasetCompareResult comparison={BASE} />);
     expect(screen.getByText(/Reject one shared value of m/)).toBeInTheDocument();
     expect(screen.getByText(/F\(2, 10\)/)).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Dataset comparison table" })).toBeInTheDocument();
   });
 
-  it("states adequacy and names 'all parameters' when none was ticked", () => {
+  it("states adequacy and names 'all parameters' when the run tested every one", () => {
     render(
-      <DatasetCompareResult comparison={{ ...BASE, conclusion: "shared", test: { ...BASE.test, p: 0.6 } }} compareAll />,
+      <DatasetCompareResult comparison={{ ...BASE, sharedParams: ["m", "b"], conclusion: "shared", test: { ...BASE.test, p: 0.6 } }} />,
     );
     expect(screen.getByText(/One shared value of all parameters is adequate/)).toBeInTheDocument();
   });

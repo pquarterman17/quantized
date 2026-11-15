@@ -14,8 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { columnMetaAt } from "../../../lib/columnmeta";
 import type { Dataset } from "../../../lib/types";
 import { userParamRows, userParamValue } from "../../../lib/userParams";
-import { removeUserParam, setUserParam } from "../../../store/userParamActions";
-import { setColumnHeader } from "../../../store/worksheetColumns";
+import { applyHeaderEdit } from "../../../store/userParamActions";
 import { useDialogFocus } from "../../overlays/useDialogFocus";
 
 export interface HeaderEditTarget {
@@ -46,6 +45,9 @@ export default function HeaderEditor({
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(params.map((p) => [p.name, userParamValue(params, p.name, col)])),
   );
+  // Parameters marked with × are removed on Apply (Cancel keeps them), so a
+  // remove never throws away the other edits typed here.
+  const [removed, setRemoved] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [newValue, setNewValue] = useState("");
   const first = useRef<HTMLInputElement>(null);
@@ -69,10 +71,12 @@ export default function HeaderEditor({
 
   const name = col < 0 ? xName : (ds.data.labels[col] ?? `column ${col + 1}`);
   const apply = () => {
-    setColumnHeader(ds.id, col, { label, unit, ...(note !== comment ? { comment: note } : {}) });
-    for (const p of params) setUserParam(ds.id, p.name, col, values[p.name] ?? "");
-    // A new name needs a value, and must not shadow an existing parameter.
-    if (newName.trim() && !params.some((p) => p.name === newName.trim())) setUserParam(ds.id, newName, col, newValue);
+    // One undo step for the header rows and every parameter edit together.
+    applyHeaderEdit(ds.id, col, { label, unit, ...(note !== comment ? { comment: note } : {}) }, {
+      values,
+      removed,
+      ...(newName.trim() ? { added: { name: newName, value: newValue } } : {}),
+    });
     close();
   };
   const field = (text: string, value: string, set: (v: string) => void, ref?: React.Ref<HTMLInputElement>, aria?: string) => (
@@ -117,17 +121,14 @@ export default function HeaderEditor({
       {col >= 0 && (
         <>
           <div className="qzk-ds-meta">User parameters</div>
-          {params.map((p) => (
+          {params.filter((p) => !removed.includes(p.name)).map((p) => (
             <div key={p.name} style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <div style={{ flex: 1 }}>{field(p.name, values[p.name] ?? "", (v) => setValues((o) => ({ ...o, [p.name]: v })), undefined, `Parameter ${p.name}, ${name}`)}</div>
               <button
                 className="qz-btn"
-                title={`Remove the parameter "${p.name}" from every column`}
+                title={`Remove the parameter "${p.name}" from every column (when you press Apply)`}
                 aria-label={`Remove parameter ${p.name}`}
-                onClick={() => {
-                  removeUserParam(ds.id, p.name);
-                  close();
-                }}
+                onClick={() => setRemoved((r) => [...r, p.name])}
               >
                 ×
               </button>

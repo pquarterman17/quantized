@@ -229,7 +229,7 @@ export function useDemagCorrection() {
       // or the source bindings describe these rebuilt columns.
       for (const key of [
         "origin_column_names", "column_designations", "column_comments",
-        "all_column_names", "all_column_units", "y_column_indices", "error_roles",
+        "all_column_names", "all_column_units", "y_column_indices", "error_roles", "label_rows",
       ]) delete baseMetadata[key];
       const data: DataStruct = {
         time: correctedField,

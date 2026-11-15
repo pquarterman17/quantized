@@ -46,12 +46,47 @@ describe("userParamRows", () => {
   });
 });
 
+describe("file rows are promoted only when unambiguous (importer shapes)", () => {
+  const withMeta = (labels: string[], metadata: Record<string, unknown>) => ({ labels, metadata });
+  it("a title line with no values is not a parameter", () => {
+    const d = withMeta(["Moment"], { x_column_name: "Field", all_column_names: ["Field (Oe)", "Moment (emu)"],
+      label_rows: [{ index: 0, role: "label", x: "Hysteresis loop sample A", cells: [""] }] });
+    expect(userParamRows(d)).toEqual([]);
+  });
+  it("a date line is not a parameter", () => {
+    const d = withMeta(["M1", "M2"], { x_column_name: "Field", label_rows: [{ index: 0, role: "label", x: "Date: 2026-01-01", cells: ["", ""] }] });
+    expect(userParamRows(d)).toEqual([]);
+  });
+  it("a second header row (short names above the long names) is not a parameter", () => {
+    const d = withMeta(["Moment 1", "Moment 2"], { x_column_name: "Applied field", all_column_names: ["Applied field", "Moment 1", "Moment 2"],
+      label_rows: [{ index: 0, role: "label", x: "H", cells: ["M1", "M2"] }, { index: 1, role: "header", x: "Applied field", cells: ["Moment 1", "Moment 2"] }] });
+    expect(userParamRows(d)).toEqual([]);
+  });
+  it("a caption that is a column name is not a parameter", () => {
+    const d = withMeta(["Temperature", "B"], { label_rows: [{ index: 0, role: "label", x: "Temperature", cells: ["10", "20"] }] });
+    expect(userParamRows(d)).toEqual([]);
+  });
+  it("a captioned row with values still imports (Sample S1,S2 above the header)", () => {
+    const d = withMeta(["Moment 1", "Moment 2"], { x_column_name: "Applied field",
+      label_rows: [{ index: 0, role: "label", x: "Sample", cells: ["S1", "S2"] }] });
+    expect(userParamRows(d).map((r) => [r.name, r.cells])).toEqual([["Sample", ["S1", "S2"]]]);
+  });
+  it("a row the user made (explicit name) is always a parameter", () => {
+    const d = withMeta(["T"], { label_rows: [{ index: 0, role: "label", name: "T", x: "T", cells: [""] }] });
+    expect(userParamRows(d)).toHaveLength(1);
+  });
+});
+
 describe("parseParamNumber", () => {
   it.each([
-    ["300", 300], ["-5.5 K", -5.5], ["1e-3 T", 1e-3], [" 12 ", 12], ["50%", 50], [".5", 0.5],
+    ["300", 300], ["-5.5 K", -5.5], ["1e-3 T", 1e-3], [" 12 ", 12], ["50%", 50], [".5", 0.5], ["300K", 300],
   ])("%s -> %s", (text, v) => expect(parseParamNumber(text)).toBe(v));
-  it.each(["", "abc", "5th", "A1", "1,5", "1.2.3", "NaN"])("%j is not numeric", (text) => {
+  it.each(["", "abc", "NaN"])("%j is not numeric", (text) => {
     expect(parseParamNumber(text)).toBeNull();
+  });
+  it("reads the first number anywhere, like the gradient's legend order", () => {
+    expect(parseParamNumber("300K")).toBe(300);
+    expect(parseParamNumber("S1 300 K")).toBe(1);
   });
 });
 

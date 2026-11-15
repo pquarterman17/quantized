@@ -101,7 +101,7 @@ export function useCurveFitByLevel(
         if (weight && weight.mode !== "none") {
           const { dy, issue } = dyForData(lvl.data, yKey, weight, keep);
           if (!dy) {
-            return { label: lvl.label, n: x.length, result: null, error: issue ?? "weighting unavailable for this level" };
+            return { label: lvl.label, n: x.length, result: null, error: issue ? `${issue.replace(/ — fitting unweighted$/, "")} — this level was not fitted` : "weighting unavailable for this level — this level was not fitted" };
           }
           wfields = weightRequestFields(weight, keep.map((i) => dy[i]));
         }

@@ -126,7 +126,7 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
       <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         Global fits run unweighted over each series' included rows.
       </div>
-      <DatasetCompareResult comparison={s.comparison} compareAll={s.compareAll} />
+      <DatasetCompareResult comparison={s.comparison} />
       <GlobalFitResults s={s} />
     </div>
   );

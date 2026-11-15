@@ -275,7 +275,6 @@ describe("useGlobalFit — compare datasets (extra-sum-of-squares F-test)", () =
   it("tests ALL parameters as shared when none is ticked, via the compare job (not the global fit)", async () => {
     vi.mocked(pollJob).mockResolvedValue(VERDICT);
     const { result } = renderHook(() => useGlobalFit(MODEL));
-    expect(result.current.compareAll).toBe(true);
     await act(() => result.current.run("compare"));
     await waitFor(() => expect(result.current.comparison).toEqual(VERDICT));
     expect(globalFitJob).not.toHaveBeenCalled();
@@ -290,7 +289,6 @@ describe("useGlobalFit — compare datasets (extra-sum-of-squares F-test)", () =
     vi.mocked(pollJob).mockResolvedValueOnce(VERDICT);
     const { result } = renderHook(() => useGlobalFit(MODEL));
     act(() => result.current.setShared(0, true));
-    expect(result.current.compareAll).toBe(false);
     await act(() => result.current.run("compare"));
     await waitFor(() => expect(result.current.comparison).not.toBeNull());
     expect(vi.mocked(compareDatasetsJob).mock.calls[0]![0].constraints).toEqual([{ param_name: "m", datasets: [0, 1] }]);
@@ -298,5 +296,19 @@ describe("useGlobalFit — compare datasets (extra-sum-of-squares F-test)", () =
     await act(() => result.current.run("compare"));
     await waitFor(() => expect(result.current.error).toMatch(/unconverged/));
     expect(result.current.comparison).toBeNull();
+  });
+
+  it("drops the verdict when the ticks, picks or table change after it was computed", async () => {
+    vi.mocked(pollJob).mockResolvedValue(VERDICT);
+    const { result } = renderHook(() => useGlobalFit(MODEL));
+    act(() => result.current.setShared(0, true));
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.comparison).not.toBeNull());
+    act(() => result.current.setShared(0, false));
+    await waitFor(() => expect(result.current.comparison).toBeNull());
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.comparison).not.toBeNull());
+    act(() => result.current.setRow(0, { min: "0" }));
+    await waitFor(() => expect(result.current.comparison).toBeNull());
   });
 });

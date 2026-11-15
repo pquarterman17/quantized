@@ -182,4 +182,14 @@ describe("useCurieWeiss", () => {
     expect(magneticCurieWeissDataFit).toHaveBeenCalledTimes(1);
     expect(useApp.getState().datasets).toHaveLength(2);
   });
+
+  it("does not copy the source's descriptive header rows onto the derived columns", async () => {
+    const d = mt();
+    d.data.metadata = { ...d.data.metadata, label_rows: [{ index: 0, role: "label", name: "Temperature", x: "Temperature", cells: ["300 K", "", "50 K"] }] };
+    useApp.setState({ datasets: [d] });
+    const { result: hook } = renderHook(() => useCurieWeiss());
+    act(() => { hook.current.setSampleMass(100); hook.current.setMolarMass(200); });
+    await act(async () => { await hook.current.fit(); });
+    expect(useApp.getState().datasets[1].data.metadata.label_rows).toBeUndefined();
+  });
 });

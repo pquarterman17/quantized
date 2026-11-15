@@ -10,13 +10,17 @@
 // picker already offers them; they survive .dwk save/load as part of the data;
 // and a column insert / delete / move remaps the cells with the column
 // (lib/worksheetColumnOps.ts). A row is a parameter when its role is "label"
-// and it has a NAME: its own `name`, else the x-column cell (where a file puts
-// the row's caption). An unnamed descriptive row is ambiguous -- no parameter,
-// only a legend source. A repeated name keeps its FIRST row.
+// and it has a NAME: its own `name` (a row the user made), else, for a row read
+// from a FILE, the x-column cell (where a file puts the row's caption) -- but only
+// when that is unambiguous (`fileRowIsParam`): a title or date line with no
+// values, a caption that is a column name, and a second header row (its cells
+// abbreviate the header's) are NOT parameters, only legend sources. A repeated
+// name keeps its FIRST row.
 //
 // Values are text. A value is numeric only when it starts with a plain number
 // (`parseParamNumber`); anything else is never coerced.
 
+import { firstNumber } from "./firstNumber";
 import type { DataStruct } from "./types";
 
 export interface UserParamRow {
@@ -34,18 +38,47 @@ function rawRows(meta: Record<string, unknown> | undefined): RawRow[] {
   return Array.isArray(rows) ? rows.filter((r): r is RawRow => !!r && typeof r === "object") : [];
 }
 
+const alnum = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** True when `cell` can be an abbreviation of `full` (its letters and digits
+ *  appear in order within it): "M1" of "Moment 1". */
+function abbreviates(cell: string, full: string): boolean {
+  const a = alnum(cell);
+  const f = alnum(full);
+  let i = 0;
+  for (const ch of f) if (i < a.length && ch === a[i]) i++;
+  return a.length > 0 && i === a.length;
+}
+
+/** Whether a descriptive row read from a FILE (no explicit `name`) is
+ *  unambiguously a parameter: it has a caption AND at least one value (a title
+ *  or date line has none), the caption is not one of the dataset's column
+ *  names, and its values are not just a second header row (every value an
+ *  abbreviation of its column's own name). Anything doubtful is not promoted. */
+function fileRowIsParam(r: RawRow, caption: string, data: Pick<DataStruct, "metadata"> & { labels?: readonly string[] }): boolean {
+  const cells = (r.cells as unknown[]).map((c) => (typeof c === "string" ? c.trim() : ""));
+  if (!cells.some(Boolean)) return false;
+  const meta = data.metadata ?? {};
+  const names = [meta["x_column_name"], meta["x_column_long"], ...(Array.isArray(meta["all_column_names"]) ? meta["all_column_names"] : []), ...(data.labels ?? [])];
+  if (names.some((n) => typeof n === "string" && alnum(n) === alnum(caption))) return false;
+  const labels = data.labels ?? [];
+  const filled = cells.map((c, i) => [c, labels[i] ?? ""] as const).filter(([c]) => c);
+  return !(filled.length > 0 && filled.every(([c, l]) => l && abbreviates(c, l)));
+}
+
 function rowName(r: RawRow): string {
   const n = typeof r.name === "string" ? r.name : typeof r.x === "string" ? r.x : "";
   return n.trim();
 }
 
 /** The parameter rows of a dataset, in file/creation order. */
-export function userParamRows(data: Pick<DataStruct, "metadata">): UserParamRow[] {
+export function userParamRows(data: Pick<DataStruct, "metadata"> & { labels?: readonly string[] }): UserParamRow[] {
   const seen = new Set<string>();
   const out: UserParamRow[] = [];
   for (const r of rawRows(data.metadata)) {
     const name = rowName(r);
     if (r.role !== "label" || !name || seen.has(name) || typeof r.index !== "number" || !Array.isArray(r.cells)) continue;
+    if (typeof r.name !== "string" && !fileRowIsParam(r, name, data)) continue;
     seen.add(name);
     out.push({ index: r.index, name, cells: r.cells.map((c) => (typeof c === "string" ? c : "")) });
   }
@@ -57,15 +90,11 @@ export function userParamValue(rows: readonly UserParamRow[], name: string, col:
   return rows.find((r) => r.name === name)?.cells[col]?.trim() ?? "";
 }
 
-/** The leading number of a parameter value ("300", "1e-3 T", "-5.5 K"); null
- *  when the value does not start with a plain number. `"5th"` is NOT numeric:
- *  the number must stand alone or be followed by whitespace. */
-export function parseParamNumber(text: string): number | null {
-  const m = /^\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)(?:\s+\S.*|%|\s*)$/.exec(text);
-  if (!m) return null;
-  const v = Number(m[1]);
-  return Number.isFinite(v) ? v : null;
-}
+/** The number a parameter value carries: the first number in its text, read
+ *  exactly as the gradient's "Number in legend" does ("300K" -> 300,
+ *  "1e-3 T" -> 0.001), so ordering by a parameter and colouring by the same
+ *  legend text agree. Null when the value has none. */
+export const parseParamNumber = firstNumber;
 
 /** `label_rows` with parameter `name` set to `text` for channel `col` (the row
  *  is created, padded to `width`, when new). A blank `text` clears the cell. */

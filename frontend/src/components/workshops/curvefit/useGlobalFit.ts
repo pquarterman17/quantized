@@ -77,8 +77,6 @@ export interface GlobalFitState {
   run: (mode?: "fit" | "compare") => Promise<void>;
   /** The last dataset comparison (Origin "Compare Datasets"); null until run. */
   comparison: DatasetCompareResult | null;
-  /** True when no parameter is ticked "shared", so a comparison tests ALL of them. */
-  compareAll: boolean;
   cancel: () => Promise<void>;
   result: GlobalFitRun | null;
   /** Member whose curve is on the plot (null: none of them is plotted). */
@@ -148,6 +146,11 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     return candidates.filter((m) => selectedIds.includes(m.datasetId)).map(memberKey);
   }, [active, candidates, source, xKey, yKeys, seriesOrder, selectedIds]);
   const pickedKeys = picked ?? defaultPick;
+
+  // A verdict describes the picks, ticks and start/bound table it was run with:
+  // changing any of them (or the source) drops it rather than leaving it up.
+  const inputsKey = `${source}|${pickedKeys.join(",")}|${shared.map(Number).join("")}|${JSON.stringify(rows)}`;
+  useEffect(() => setComparison(null), [inputsKey]);
 
   // The member on the plot: the chosen one while its dataset is active, else
   // the active dataset's first member.
@@ -306,7 +309,6 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     error,
     run,
     comparison,
-    compareAll: !shared.some(Boolean),
     cancel,
     result,
     shownIndex,

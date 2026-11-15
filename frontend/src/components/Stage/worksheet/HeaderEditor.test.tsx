@@ -124,4 +124,49 @@ describe("user-parameter header rows", () => {
     expect(names(columnEditItems(0, wired))).toEqual(expect.arrayContaining(["Legend label from parameters…", "Order curves by parameter…"]));
     expect(names(columnEditItems(-1, wired))).not.toContain("Order curves by parameter…");
   });
+
+  it("Apply is ONE undo step for the header rows and every parameter edit together", () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='0']")!);
+    fireEvent.change(screen.getByRole("textbox", { name: "Units, A" }), { target: { value: "mV" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "New parameter name, A" }), { target: { value: "Sample" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "New parameter value, A" }), { target: { value: "S1" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Units, A" }), { key: "Enter" });
+    const st = useApp.getState();
+    expect(st.datasets[0].data.units[0]).toBe("mV");
+    expect(st.history).toHaveLength(1);
+    st.undo();
+    const back = useApp.getState().datasets[0];
+    expect(back.data.units[0]).toBe("");
+    expect(back.data.metadata.label_rows).toBeUndefined();
+  });
+
+  it("x marks a parameter for removal without closing, so typed edits survive; Cancel keeps it", () => {
+    const d = sheet();
+    d.data.metadata = { ...d.data.metadata, label_rows: [{ index: 0, role: "label", name: "T", x: "T", cells: ["5", ""] }] };
+    useApp.setState({ datasets: [d] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='0']")!);
+    fireEvent.change(screen.getByRole("textbox", { name: "Units, A" }), { target: { value: "mV" } });
+    fireEvent.click(screen.getByRole("button", { name: "Remove parameter T" }));
+    expect(screen.getByRole("dialog", { name: "Edit header of A" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Units, A" })).toHaveValue("mV");
+    expect(useApp.getState().datasets[0].data.metadata.label_rows).toHaveLength(1); // not applied yet
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    const after = useApp.getState().datasets[0];
+    expect(after.data.units[0]).toBe("mV");
+    expect(after.data.metadata.label_rows).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("Cancel after x leaves the parameter in place", () => {
+    const d = sheet();
+    d.data.metadata = { ...d.data.metadata, label_rows: [{ index: 0, role: "label", name: "T", x: "T", cells: ["5", ""] }] };
+    useApp.setState({ datasets: [d] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='0']")!);
+    fireEvent.click(screen.getByRole("button", { name: "Remove parameter T" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(useApp.getState().datasets[0].data.metadata.label_rows).toHaveLength(1);
+  });
 });

@@ -135,3 +135,47 @@ def test_route_returns_f_test_and_rejects_bad_requests() -> None:
     one = _req(x, y1, y2, shared_all)
     one["datasets"] = one["datasets"][:1]
     assert client.post("/api/fitting/compare-datasets/job", json=one).status_code == 422
+
+
+def _sine(x, p):  # noqa: ANN001, ANN202
+    return p[0] * np.sin(p[1] * x)
+
+
+def test_separate_fit_also_starts_from_the_callers_guess_so_a_second_basin_is_found() -> None:
+    # w truly 1.0 vs 3.0. From the shared optimum alone, dataset 0 stays in the
+    # w ~ 3 basin and the F-test wrongly reports "shared" (F 0.28, p 0.60).
+    rng = np.random.default_rng(1)
+    x = np.linspace(0, 10, 80)
+    y1 = np.sin(1.0 * x) + rng.normal(0, 0.05, x.size)
+    y2 = np.sin(3.0 * x) + rng.normal(0, 0.05, x.size)
+    out = compare_datasets([(x, y1), (x, y2)], _sine, ["A", "w"], ["w"],
+                           init_guess=[[1.0, 1.0], [1.0, 3.0]])
+    assert out["separate"]["rss"] < 0.5  # both basins found (RSS ~ 0.36)
+    assert out["test"]["F"] > 1000 and out["test"]["p"] < 1e-9
+    assert out["conclusion"] == "separate"
+
+
+def test_mixed_weighted_and_unweighted_datasets_are_refused() -> None:
+    x, y1, y2 = _data(2.8)
+    w = np.full(x.size, 4.0)
+    with pytest.raises(ValueError, match="every dataset or for none"):
+        compare_datasets([(x, y1), (x, y2)], _line, ["m", "b"], ["m", "b"],
+                         init_guess=[[1.0, 0.0]] * 2, weights=[w, None])
+    body = _req(x, y1, y2, [{"param_name": "m", "datasets": [0, 1]}])
+    body["datasets"][0]["dy"] = [0.01] * x.size
+    r = client.post("/api/fitting/compare-datasets", json=body)
+    assert r.status_code == 422 and "every dataset or for none" in r.json()["detail"]
+
+
+def test_weighted_information_criteria_include_the_log_weight_term() -> None:
+    x, y1, y2 = _data(2.8)
+    sig = 0.4
+    w = np.full(x.size, 1.0 / sig**2)
+    out = compare_datasets([(x, y1), (x, y2)], _line, ["m", "b"], ["m", "b"],
+                           init_guess=[[1.0, 0.0]] * 2, weights=[w, w])
+    sep = out["separate"]
+    from quantized.calc.fit_metrics import information_criteria
+
+    ref = information_criteria(sep["rss"], sep["n"], sep["nParams"], 2 * x.size * np.log(w[0]))
+    assert_allclose(sep["aicc"], ref["AICc"], rtol=1e-12)
+    assert_allclose(sep["bic"], ref["BIC"], rtol=1e-12)

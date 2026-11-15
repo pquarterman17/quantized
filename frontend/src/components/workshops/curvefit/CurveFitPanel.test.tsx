@@ -104,6 +104,8 @@ describe("CurveFitPanel — By grouping (JMP_GAP_PLAN J7 residual)", () => {
     expect(ok).toHaveLength(1); // level 1 holds a zero sigma: refused, never fitted unweighted
     expect(ok[0].dy).toEqual(data.values.slice(0, 6).map((r) => r[2]));
     expect(await screen.findByText(/non-positive or invalid/)).toBeInTheDocument();
+    expect(screen.getByText(/this level was not fitted/)).toBeInTheDocument();
+    expect(screen.queryByText(/fitting unweighted/)).toBeNull();
   });
 });
 

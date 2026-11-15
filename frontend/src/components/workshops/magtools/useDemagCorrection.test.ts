@@ -193,4 +193,14 @@ describe("useDemagCorrection", () => {
     });
     expect(useApp.getState().datasets).toHaveLength(1);
   });
+
+  it("does not copy the source's descriptive header rows onto the corrected columns", async () => {
+    const d = loop();
+    d.data.metadata = { ...d.data.metadata, label_rows: [{ index: 0, role: "label", name: "Temperature", x: "Temperature", cells: ["300 K", "50 K"] }] };
+    useApp.setState({ datasets: [d], activeId: "mh" });
+    const { result } = renderHook(() => useDemagCorrection());
+    act(() => result.current.setShape("Sphere"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets[1].data.metadata.label_rows).toBeUndefined();
+  });
 });

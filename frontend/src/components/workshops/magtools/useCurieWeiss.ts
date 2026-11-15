@@ -258,7 +258,7 @@ export function useCurieWeiss() {
       const metadata = { ...dataset.data.metadata };
       for (const key of [
         "origin_column_names", "column_designations", "column_comments",
-        "all_column_names", "all_column_units", "y_column_indices", "error_roles",
+        "all_column_names", "all_column_units", "y_column_indices", "error_roles", "label_rows",
       ]) delete metadata[key];
       const fitRows = sourceKeep.filter((_, index) => result.fit_mask[index]);
       const data: DataStruct = {

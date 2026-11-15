@@ -5,17 +5,12 @@
 import { fmtNum as fmt } from "../../../lib/format";
 import type { DatasetCompareResult as Comparison } from "../../../lib/api/globalFit";
 
-export default function DatasetCompareResult({
-  comparison,
-  compareAll,
-}: {
-  comparison: Comparison | null;
-  compareAll: boolean;
-}) {
+export default function DatasetCompareResult({ comparison }: { comparison: Comparison | null }) {
   if (!comparison) return null;
   const { test, shared, separate } = comparison;
   const separateWins = comparison.conclusion === "separate";
-  const what = compareAll ? "all parameters" : comparison.sharedParams.join(", ");
+  // The subject is what THIS run tested, read from the result itself.
+  const what = comparison.sharedParams.length === comparison.paramNames.length ? "all parameters" : comparison.sharedParams.join(", ");
   return (
     <div style={{ marginTop: 10 }} role="group" aria-label="Dataset comparison">
       <div className="qzk-ds-meta" style={{ fontWeight: 600 }}>
