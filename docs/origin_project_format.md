@@ -3014,6 +3014,25 @@ Oracle (103 files): 1,777 match / 7 wrong / 0 phantom -> 1,784 / 0 / 0. The 13
 changed records it does not score were checked over COM separately, and all
 match Origin (`docs/origin_re/validation_log.md`, 2026-11-15).
 
+- **Category-axis layers: the END separator ends `02` (2026-11-15,
+  ORIGIN_PLOT_TYPE_PARITY item 6).** Box / violin / strip layers write
+  `8x <id> <plen> 00 <flag> 01` before the Y span as usual but
+  `8x 35 08 00 00 02` after it. A third, retry-only pass of
+  `_parse_real_record` admits `02` on the end separator only
+  (`opju_axis_real_form._SEP_END_02`); `02` on BOTH separators (59
+  workbook-embedded graph records) stays undecoded. Plot corpus: 30 / 33 box /
+  violin / strip layers now decode, every one equal to Origin's
+  `layer.x/y.from/to`; real corpus: 50 new layers in 9 files, 50 / 50 equal
+  to COM, 0 changed records.
+- **Curve record byte 76 is the plot type in `.opju` too.** The byte
+  `opju_plot_gates` reads for error bars equals Origin C
+  `DataPlot::GetPlotType()` on every plot of the 231 built plot-corpus
+  specimens (25 types). 206 (box, violin, strip -- one code; the page
+  template tells them apart, `opju_stat_plots`) and 219 (histogram) curves
+  carry record X id 0 (`xof` = `_A`, no X column) and import from their Y
+  alone (`x == ""`, `plotType`); 203 column curves carry `plotType: column`
+  when they are the only column series of their layer.
+
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`
 oracles (`tools/origin_trial/score_curve_bindings.py`'s per-graph section +

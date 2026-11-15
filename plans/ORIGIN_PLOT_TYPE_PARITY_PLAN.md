@@ -285,16 +285,73 @@ None open.
          `Table1..`, `Figure 3 and 4 amplitude` 68) and 35 books of 5
          graph-only projects (all loose, kept by the fail-closed rule:
          `BD_*_all`, `RSOS_*_all`, `F72_...TB_Product`).
-   - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33**
-         (re-measured 2026-11-15, unchanged). Column, bar, stacked column/bar
-         and floating column: not recovered for {clean, descending_x,
-         huge_tiny, masked_rows, nan_gaps, noisy}; histogram for {huge_tiny}
-         only (masked_rows now recovered), but 10 / 11 histograms decode no
-         curve bindings (`no_curve_bindings_decoded`). Anchor `box/clean`.
-   - [ ] **Plot type: 0 decoded on `.opju`** (203, 207, 213, 215, 216, 206,
-         219 all draw the default line view); `.opju` sets no `plotType`.
-         Scorecard: 174 / 233 specimens omit plot type; the 43 matches are
-         the default line view on line-like types.
+   - [x] ~~**Box, violin and strip: no graph layer recovered on 33 / 33**~~
+         FIXED 2026-11-15 (`fix/plot-category-import`). Cause: a category
+         layer's axis record ENDS with `8x 35 08 00 00 02` (`02`, not `01`);
+         a third, retry-only real-form pass admits `02` on the end separator
+         only (`opju_axis_real_form._SEP_END_02`; `02` on both separators --
+         59 workbook-embedded records -- stays undecoded). Curves: Origin
+         plots these with no X column (`xof` = `_A`, record X id 0), so a
+         206 / 219 curve is kept from its Y alone (`x == ""`, `plotType`)
+         and box / violin / strip is told by the page template
+         (`opju_stat_plots`; `Box`/`BOX+DATA+`/`gBox` -> box, `Violin*` ->
+         violin, `ColumnSca` -> strip, anything else -> omitted
+         `box_kind_not_decoded`). The frontend opens the Stat Stage in that
+         mode, one box per plotted column (`figureStatState`; scorer mirror
+         `frontend_view.stat_view`, pinned by 3 new shared cases). Record
+         byte 76 = Origin's `GetPlotType()` on every plot of all 231 built
+         specimens. Scorer vs main `2f171d56`: box / violin / strip 0 -> 30
+         specimens with curves, plot type and axes match; axes 870 -> 1,050
+         match, curves 229 -> 301, drawn 262 -> 331, plot type 50 -> 85;
+         0 new wrong / phantom. Real corpus vs main (359 `.opju`, COM
+         `layer.x/y.from/to`, `GetPlotType()`, `range -w`, `xof` on all 10
+         changed files): 50 new layers, 50 / 50 axes equal to Origin; 547
+         newly drawn curves, 547 / 547 Origin's Y with no X and type 206 /
+         219; 0 main curves lost. PNG review: every box-kind page is a box
+         chart (some with data / half-violin overlays).
+   - [ ] **Box / violin / strip residue.** `huge_tiny` (3 specimens) layer
+         still not recovered. Real corpus: grouped (indexed) box charts and
+         box curves whose X field does not decode are omitted
+         (`stat_plot_x_not_decoded`, e.g. `fig04_box_raw_penguins` Graph9
+         column A); `MergeGrap` / user templates naming no kind (FedPB
+         `BoxplotCiteseer`/`BoxplotPubMed`, SOP_meas Graph80) omit
+         (`box_kind_not_decoded`); `soil deep` Graph1 (Violin) curve records
+         do not reconstruct; a box layer on a multi-layer page is omitted
+         (`stat_layer_in_multi_layer_page`, SOP_meas Graph41 etc.); a
+         rowless curve on sheet N with no sheet X (`x_sheet_unproven`,
+         Degree-of-impact Graph10 / 4A) is omitted although it needs no X.
+         Origin's box statistics (whisker rule, mean marker, data overlay)
+         are not decoded: quantized draws its own default box marks.
+   - [ ] **Histogram residue.** 1-column histograms now open the Stat
+         Stage histogram of that column (3 specimens; real corpus SOP_meas
+         Graph37/38/42/45); BIN WIDTH / START are NOT decoded -- quantized
+         uses its default bin rule, Origin its own (no COM readback found;
+         decode the record's bin fields against a by-construction oracle).
+         Several-column histogram layers stay omitted
+         (`histogram_of_several_columns`, 8 specimens; the Stat Stage bins
+         one column: creation gap #15). `huge_tiny` not recovered. A
+         1-row histogram (`single_point`) opens a stage that cannot bin one
+         value.
+   - [ ] **Column / bar layers not recovered** for {clean, descending_x,
+         huge_tiny, masked_rows, nan_gaps, noisy} (column, bar, stacked
+         column / bar, floating column): a different record mechanism from
+         the box family's `02` end separator. Anchor `column/clean`.
+   - [x] ~~**Plot type: 0 decoded on `.opju`**~~ PARTLY FIXED 2026-11-15:
+         record byte 76 sets `plotType` for 206 (box / violin / strip), 219
+         (histogram) and 203 (column) curves. A 203 curve keeps
+         `plotType: column` (bars from zero at each X on the XY stage) only
+         when it is its layer's ONLY column series: Origin draws several side
+         by side, quantized's bars would overlap. Scorer: column
+         `duplicates` / `single_point` plot type match; real corpus: 67
+         curves in 22 files now draw as bars, COM: 67 / 67 are
+         `GetPlotType()` 203, the only 203 of their layer, same X.
+   - [ ] **Plot type residue.** Multi-series column layers (8 specimens,
+         e.g. `column/clean`) need side-by-side grouped bars (no XY-stage
+         renderer; the Stat bar mode summarises per column, #14); stacked
+         column 213, horizontal bar 215 / 216 and floating column 207 stay
+         undrawn as bars (fail closed: they draw by line style as before;
+         #10-#12 creation gaps). The `.opj` reader's own `column` / `bar`
+         mapping still overlaps multi-series bars.
    - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
          plots against the text categories; quantized draws against the row
          index. The same 5 specimens hold the only category-family omitted

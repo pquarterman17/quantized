@@ -8,8 +8,9 @@ the four frontend rules involved, line for line:
   dataset a figure opens on;
 * ``lib/originFigureSelection.ts::figureChannelSelection`` -- decoded curves
   -> ``xKey``/``yKeys`` (``null`` when nothing maps);
-* ``lib/originFigureSelection.ts::figureStatState`` -- an all-histogram
-  figure opens the Stat stage;
+* ``lib/originFigureSelection.ts::figureStatState`` -- an all-histogram /
+  all-box / all-violin / all-strip figure opens the Stat stage (a histogram of
+  the first curve; one box / violin / strip per plotted channel);
 * the dataset DEFAULT view the apply falls back to when the selection is
   ``null`` (``figureSelectionState``): ``lib/errorbars.ts::
   bookDefaultHiddenChannels`` (non-Y/Z designations hidden) plus
@@ -35,6 +36,7 @@ __all__ = [
     "drawn_curves",
     "resolve_dataset",
     "stat_histogram_value",
+    "stat_view",
 ]
 
 # lib/columnmeta.ts DESIGNATIONS: anything else reads as undefined.
@@ -119,19 +121,31 @@ def channel_selection(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> dict[
     return {"xKey": x_key, "yKeys": y_keys} if y_keys else None
 
 
-def stat_histogram_value(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> int | None:
-    """The histogram value channel ``figureStatState`` opens (``-1`` = the X
-    column), or ``None`` when the figure stays on the XY stage."""
+_STAT_MODES = ("histogram", "box", "violin", "strip")
+
+
+def stat_view(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> tuple[str, int] | None:
+    """``(mode, value channel)`` of the Stat stage ``figureStatState`` opens
+    (``-1`` = the X column), or ``None`` when the figure stays on the XY
+    stage: every curve one of ``_STAT_MODES``, all the same."""
     curves = figure.get("curves") or []
-    if not curves or any(c.get("plotType") != "histogram" for c in curves):
+    mode = curves[0].get("plotType") if curves else None
+    if mode not in _STAT_MODES or any(c.get("plotType") != mode for c in curves):
         return None
     meta = ds["metadata"]
     letters = _letters(meta) or []
     y = curves[0].get("y")
     xname = str(meta.get("x_column_name") or "")
     if y == xname:
-        return -1
-    return letters.index(y) if y in letters else None
+        return str(mode), -1
+    return (str(mode), letters.index(y)) if y in letters else None
+
+
+def stat_histogram_value(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> int | None:
+    """The histogram value channel ``figureStatState`` opens (``-1`` = the X
+    column), or ``None`` when the figure is not an all-histogram figure."""
+    got = stat_view(figure, ds)
+    return got[1] if got is not None and got[0] == "histogram" else None
 
 
 def default_view(ds: Mapping[str, Any]) -> dict[str, Any]:
@@ -160,7 +174,7 @@ def drawn_curves(
 ) -> dict[str, Any]:
     """``{"dataset", "via", "kind", "curves": [{book, x, y}]}`` for one figure.
 
-    ``via``: ``selection`` (decoded curves mapped), ``stat`` (histogram stage),
+    ``via``: ``selection`` (decoded curves mapped), ``stat`` (Stat stage),
     ``default`` (no decoded curve mapped: the dataset default view) or
     ``none`` (no dataset resolved: nothing drawn). ``kind`` is what that view
     draws (``import_compare.drawn_kind`` of the curves the selection mapped;
@@ -174,12 +188,16 @@ def drawn_curves(
     book = str(meta.get("origin_book") or "")
     letters = _letters(meta) or []
     x_letter = str(meta.get("x_column_name") or "")
-    hv = stat_histogram_value(figure, ds)
-    if hv is not None:
-        y = x_letter if hv < 0 else letters[hv]
-        return {"dataset": book, "via": "stat", "kind": "histogram",
-                "curves": [{"book": book, "x": None, "y": y}]}
+    sv = stat_view(figure, ds)
     sel = channel_selection(figure, ds)
+    if sv is not None:
+        mode, hv = sv
+        if mode == "histogram":  # a histogram of the first curve's column
+            ys = [x_letter if hv < 0 else letters[hv]]
+        else:  # one box / violin / strip per plotted channel
+            ys = [letters[k] for k in sel["yKeys"]] if sel is not None else []
+        return {"dataset": book, "via": "stat", "kind": mode,
+                "curves": [{"book": book, "x": None, "y": y} for y in ys]}
     if sel is not None:
         x = letters[sel["xKey"]] if sel["xKey"] is not None else x_letter
         curves = [{"book": book, "x": x, "y": letters[k]} for k in sel["yKeys"]]

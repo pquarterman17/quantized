@@ -174,6 +174,8 @@ def test_styles_score_only_planted_fields() -> None:
 def test_drawn_kind_and_plot_type() -> None:
     assert ic.drawn_kind([]) == "default"
     assert ic.drawn_kind([{"plotType": "histogram"}, {"plotType": "histogram"}]) == "histogram"
+    assert ic.drawn_kind([{"plotType": "violin", "x": ""}, {"plotType": "violin"}]) == "violin"
+    assert ic.drawn_kind([{"plotType": "box"}, {"plotType": "strip"}]) == "default"
     assert ic.drawn_kind([{"plotType": "bar", "style": "line"}]) == "bar"
     assert ic.drawn_kind([{"style": "line"}, {"style": "scatter"}]) == "mixed"
     assert ic.score_plot_type("line", [200], "default")["by_default"] is True
@@ -273,7 +275,7 @@ def _ds(name: str) -> dict[str, Any]:
 def test_frontend_view_mirror(case: dict[str, Any]) -> None:
     ds = _ds(case["dataset"])
     assert frontend_view.channel_selection(case["figure"], ds) == case["selection"]
-    assert (frontend_view.stat_histogram_value(case["figure"], ds) is not None) is case["stat"]
+    assert (frontend_view.stat_view(case["figure"], ds) is not None) is case["stat"]
     if "hidden" in case:
         view = frontend_view.default_view(ds)
         assert view["hidden"] == case["hidden"]

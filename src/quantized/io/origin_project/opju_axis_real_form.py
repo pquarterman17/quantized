@@ -118,6 +118,18 @@ _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
 _SEP_WIDE = re.compile(
     rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0]\x01", re.DOTALL
 )
+# The END separator of a category-axis layer (box / violin / strip and the
+# box-family real files) ends in ``02``, not ``01``: ``80 35 08 00 00 02``
+# after an ordinary ``80 04 07 00 00 01`` first separator. Measured
+# 2026-11-15 on the plot corpus: all 30 box / violin / strip specimens whose
+# layer did not decode carry it, and the third pass below decodes every one
+# to Origin's own ``layer.x/y.from/to`` (oracle.json). Admitted ONLY on the
+# end separator, after a first separator ending ``01`` (a third, retry-only
+# pass): records with ``02`` on BOTH separators (workbook-embedded graphs)
+# stay undecoded.
+_SEP_END_02 = re.compile(
+    rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0]\x02", re.DOTALL
+)
 # Specimen-form record markers (moved with _parse_specimen_record from
 # figures_opju, 2026-07-06).
 _Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])
@@ -283,29 +295,6 @@ def _real_fills(b: bytes, pos: int, end: int, n: int, bare: bool) -> list[tuple[
     return out
 
 
-def real_form_bare_pair(b: bytes, start: int, end: int) -> tuple[float, float] | None:
-    """``(from, to)`` from two REAL-FORM value tokens exactly filling
-    ``[start, end)`` — the "hybrid" axis record (§13.2 #13): a specimen-form
-    skeleton (``_Y_TRANSITION`` marker + ``7b 40`` X-scale filler) whose X/Y
-    span nevertheless stores real-corpus RLE/tagged value tokens, produced when
-    a plotted graph is later customized (``layer.plotN.*`` edits) instead of
-    ranged. An optional 1-2 byte leading flag (``0x81..0x8f``) precedes the
-    first value; try each skip and accept only a UNIQUE two-token exact fill
-    (fail-closed on ambiguity — never guessed). The tokens themselves are the
-    same oracle-validated ``_real_rle``/``_real_tagged`` used by the real form,
-    so a hit reproduces Origin's own range (verified: symbol_kinds.opju X span
-    ``89 c3 33 03 eb 3f 9a c2 99 02 18 40`` -> (0.85, 6.15), matching COM)."""
-    accepted: set[tuple[float, float]] = set()
-    for skip in (0, 1, 2):
-        if start + skip > end:
-            continue
-        fills = _real_fills(b, start + skip, end, 2, bare=False)
-        pairs = {(f[0], f[1]) for f in fills}
-        if len(pairs) == 1:
-            accepted |= pairs
-    return accepted.pop() if len(accepted) == 1 else None
-
-
 def _real_span_pair(
     b: bytes, start: int, end: int, bare: bool, lead: float | None = None
 ) -> tuple[float, float, float | None] | None:
@@ -377,9 +366,10 @@ def _parse_real_record(
     with the wide ``[80|81]`` lead that Hc2's Graph8/Graph12-family records
     need -- a record only ever reaches the wide pass after failing the
     strict one, so the retry can add parses but never change one."""
-    for sep_re, every in ((_SEP_STRICT, False), (_SEP_WIDE, True)):
+    passes = ((_SEP_STRICT, None, False), (_SEP_WIDE, None, True), (_SEP_WIDE, _SEP_END_02, True))
+    for sep_re, end_re, every in passes:
         try:
-            got = _parse_real_record_sep(b, p, window_end, sep_re, every=every)
+            got = _parse_real_record_sep(b, p, window_end, sep_re, every=every, end_re=end_re)
         except UnprovenSlot:
             return None  # a span filled, its zero's slot did not prove out
         if got is not None:
@@ -404,9 +394,16 @@ def _sep_hits(
 
 
 def _parse_real_record_sep(
-    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes], *, every: bool = False
+    b: bytes,
+    p: int,
+    window_end: int,
+    sep_re: re.Pattern[bytes],
+    *,
+    every: bool = False,
+    end_re: re.Pattern[bytes] | None = None,
 ) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
-    """One separator-form attempt of `_parse_real_record` (see above).
+    """One separator-form attempt of `_parse_real_record` (see above); the end
+    separator matches ``end_re`` when given (`_SEP_END_02`), else ``sep_re``.
 
     With ``every`` (the wide retry only) each separator candidate is tried in
     order and the first whose record parses FULLY wins: the X span must
@@ -432,12 +429,12 @@ def _parse_real_record_sep(
         # over in the strict pass.
         seen_m2 = False
         # lazy: the wide pass stops at the first second separator that parses
-        for m2 in _sep_hits(sep_re, b, y_lo + plen, hi2, every=every):
+        for m2 in _sep_hits(end_re or sep_re, b, y_lo + plen, hi2, every=every):
             seen_m2 = True
             got = _real_y_record(b, window_end, y_lo, plen, xpair, m2)
             if got is not None:
                 return got
-        if not seen_m2:
+        if not seen_m2 and end_re is None:  # the 02 pass needs its end separator
             got = _real_y_record(b, window_end, y_lo, plen, xpair, None)
             if got is not None:
                 return got
