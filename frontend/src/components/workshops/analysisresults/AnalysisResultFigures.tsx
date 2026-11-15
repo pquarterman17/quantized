@@ -59,7 +59,7 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
       <div className="qz-analysis-figure-actions">
         <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : fitted ? "Open fitted plot" : "Open plot"}</Button>
         <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>{sourceOnly || fitted ? "Build source figure" : "Build figure"}</Button>
-        <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : fitted ? "Send fitted plot to report…" : "Send to report…"}</Button>
+        <Button size="sm" disabled={fittedPlotUnavailable || (fitted && liveBinding?.xChannel === undefined)} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : fitted ? "Send fitted plot to report…" : "Send to report…"}</Button>
       </div>
     </div>
   </article>;

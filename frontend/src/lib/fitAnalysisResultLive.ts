@@ -28,14 +28,15 @@ function xKeyFor(dataset: Dataset, spec: FitSpec): number | null | undefined {
 export function liveFitPlotBinding(result: AnalysisResult, dataset: Dataset): {
   datasetId: string;
   channels: number[];
-  xChannel: number | null;
+  /** Absent = a legacy fit that never recorded its X: the plot keeps its X, and
+   *  the fit is refused there (store/analysisResultActions' fit-draw gate). */
+  xChannel?: number | null;
 } | null {
   if (result.settingsRef?.field !== "fitSpec" || result.settingsRef.datasetId !== dataset.id || !dataset.fitSpec) return null;
   const yKey = yKeyFor(dataset, dataset.fitSpec);
   const xKey = xKeyFor(dataset, dataset.fitSpec);
-  return yKey === null || xKey === undefined
-    ? null
-    : { datasetId: dataset.id, channels: [yKey], xChannel: xKey };
+  if (yKey === null) return null;
+  return { datasetId: dataset.id, channels: [yKey], ...(xKey === undefined ? {} : { xChannel: xKey }) };
 }
 
 export function fitAnalysisResult(

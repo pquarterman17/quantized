@@ -7,21 +7,21 @@ import { analysisPeakTableCsv } from "../lib/analysisPeakTable";
 import { fitModel } from "../lib/api";
 import { listFitModels } from "../lib/api/curvefit";
 import { dropGapRows } from "../lib/api/finitePairs";
-import { fitBands } from "../lib/api/fitStats";
 import { analysisResultTableCsv } from "../lib/analysisResultTable";
 import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
-import { fullPlottedX } from "../lib/fitselectionActions";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
 import { announceFitRecomputed } from "../lib/fitRecomputeEvents";
 import { fitDataForSpec } from "../lib/fitselection";
 import { statsVersionField } from "../lib/fitStatsVersion";
 import { weightRequestFields } from "../lib/fitweights";
-import type { Dataset, OverlayBinding } from "../lib/types";
+import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
-import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
+import type { FigureSpec } from "../lib/api/figures";
+import { openResultPlot, specCarriesFit } from "./analysisResultPlotOpen";
+import type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
@@ -177,91 +177,30 @@ export function freezeAnalysisResult(id: string): string | null {
   return frozenId;
 }
 
-export async function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
-  const prepared = await resolveAnalysisResultPlot(id, bindingIndex);
-  if (!prepared) return null;
-  let state = useApp.getState();
-  const result = state.analysisResults.find((item) => item.id === id);
-  const fitDatasetId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
-  const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
-  const fitSpec = fitDataset?.fitSpec;
-  let fitY: (number | null)[] | null = null;
-  let fitBinding: OverlayBinding | null = null;
-  if (fitDatasetId && (!fitDataset || !fitSpec)) {
-    state.setStatus("can't open fitted plot: the saved fit is missing");
-    return null;
-  }
-  if (fitDataset && fitSpec && !fitSpec.params?.length) {
-    state.setStatus("can't open fitted plot: the saved fit has no parameter values");
-    return null;
-  }
-  // The plot opens on the RESOLVED X/Y (`prepared`: a one-channel sheet's
-  // missing yKey is channel 0, a stale xKey is time), but the fit is evaluated
-  // and drawn only where it was computed: the resolved X must be exactly the X
-  // the fit recorded (`null` = time) and the Y the recorded Y (when recorded).
-  // Anything else would draw the model against an X it never read.
-  const savedX = prepared.xChannel;
-  const savedY = prepared.channels[0];
-  const refit = !!fitSpec && (fitSpec.xKey === undefined || fitSpec.xKey !== savedX ||
-    (fitSpec.yKey !== undefined && fitSpec.yKey !== savedY));
-  if (fitDataset && fitSpec && !refit) {
-    fitBinding = { yKey: savedY as number, xKey: fitSpec.xKey as number | null }; // recorded === resolved (refit is false)
-    const xs = fullPlottedX(fitDataset.data, fitSpec.xKey as number | null);
-    const finite = xs.flatMap((value, index) => Number.isFinite(value) ? [{ value, index }] : []);
-    if (!finite.length) {
-      state.setStatus("can't open fitted plot: the saved X channel has no finite values");
-      return null;
-    }
-    try {
-      const evaluated = await fitBands({
-        model: fitSpec.model,
-        params: fitSpec.params ?? [], // non-empty: checked above
-        covar: null,
-        x: finite.map((entry) => entry.value),
-        // Only yFit is read (covar null -> no bands), so the counts are nominal.
-        n_points: fitSpec.nPoints ?? finite.length,
-        n_free: fitSpec.nFree ?? (fitSpec.params?.length ?? 0),
-      });
-      if (!Array.isArray(evaluated.yFit) || evaluated.yFit.length !== finite.length ||
-          !evaluated.yFit.every((value) => value === null || (typeof value === "number" && Number.isFinite(value)))) {
-        throw new Error("model evaluation returned the wrong number of fitted values");
-      }
-      fitY = Array.from({ length: xs.length }, () => null);
-      finite.forEach((entry, index) => { fitY![entry.index] = evaluated.yFit[index] ?? null; });
-    } catch (error) {
-      useApp.getState().setStatus(`can't open fitted plot: ${error instanceof Error ? error.message : "model evaluation failed"}`);
-      return null;
-    }
-    state = useApp.getState();
-    const current = state.analysisResults.find((item) => item.id === id);
-    const currentDataset = state.datasets.find((item) => item.id === fitDataset.id);
-    if (current?.settingsRef?.field !== "fitSpec" || current.settingsRef.datasetId !== fitDataset.id ||
-        currentDataset?.fitSpec !== fitSpec || currentDataset.data !== fitDataset.data) {
-      state.setStatus("can't open fitted plot: the fit changed while its curve was loading");
-      return null;
-    }
-  }
-  state.setActive(prepared.dataset.id);
-  if (prepared.xChannel !== undefined) state.setXKey(prepared.xChannel);
-  state.setYKeys(prepared.channels);
-  useApp.setState({
-    stageTab: "plot",
-    fitOverlay: fitY && fitBinding ? { datasetId: prepared.dataset.id, binding: fitBinding, y: fitY } : null,
-  });
-  if (refit) {
-    useApp.getState().setStatus("opened the plot without the fit: it does not match the saved X/Y channels; use Edit / Re-fit first");
-  }
-  return prepared;
+/** Open a result's plot (and its fit, only where it was computed). The gate
+ * and its I4 rules live in store/analysisResultPlotOpen.ts. */
+export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Promise<PreparedAnalysisResultPlot | null> {
+  return openResultPlot(id, bindingIndex, "open");
 }
 
-/** Use the same prepared binding as Open plot, then hand the live store to
- * the existing report command. Keeping this in the lazy action module avoids
- * an imperative store read in the React component and one more UI/backend
- * behavior fork. */
+/** Use the same gate as Open plot, then hand the live store to the existing
+ * report command. A fitted plot is never sent without its fit: a fit the gate
+ * refuses stops the send before anything changes, and a drawn fit the built
+ * figure does not carry (a grouped/faceted/stat view) fails the send. */
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
-  if (!await prepareAnalysisResultPlot(id, bindingIndex)) return false;
+  const opened = await openResultPlot(id, bindingIndex, "report");
+  if (!opened) return false;
+  let refused = false;
+  const require = opened.fitDrawn
+    ? (spec: FigureSpec | null) => {
+        if (specCarriesFit(spec, opened.dataset)) return null;
+        refused = true;
+        return "this view's figure cannot carry the fit (a polar, grouped, faceted or stat view); show it as a plain plot first";
+      }
+    : undefined;
   try {
-    return await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState));
+    const sent = await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState, require));
+    return sent && !refused;
   } catch (error) {
     useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`);
     return false;
@@ -414,7 +353,8 @@ export async function recalculateFitAnalysisResult(
     const overlayWasVisible = current.fitOverlay?.datasetId === sourceId;
     const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows) : null;
     current.recordHistory(`recalculate ${result.name}`);
-    current.setFitSpec(sourceId, stampRecompute(spec, fitted));
+    // Records the X/Y this re-fit actually read (I3), as commitRecomputedFit does.
+    current.setFitSpec(sourceId, stampRecompute({ ...spec, xKey: selection.xKey, yKey: selection.yKey }, fitted));
     if (overlayWasVisible) useApp.setState({
       fitOverlay: nextOverlay ? { datasetId: sourceId, binding: { yKey: selection.yKey, xKey: selection.xKey }, y: nextOverlay } : null,
     });

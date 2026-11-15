@@ -52,9 +52,7 @@ import { droppedRows, pruneToLiveDataset } from "./rowstate";
 import { breakCompositionFromData } from "./facet";
 import { facetSplitChannels } from "./facetDomains";
 import { perSeriesXSpec } from "./figureSpecPerSeriesX";
-// The screen-parity override projection moved to lib/figureViewOverrides.ts to
-// fund P3.3 against the 500-line ceiling. Imported, NOT re-exported (no barrel pulling it in).
-import { viewOverrides } from "./figureViewOverrides";
+import { viewOverrides } from "./figureViewOverrides"; // moved out for the ceiling (P3.3); NOT re-exported
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct, DefaultTrace } from "./types";
 import { axisTitleWire } from "./exportAxisTitles";
@@ -160,18 +158,20 @@ export function buildFigureSpec(
   stem: string,
   o: FigureRenderOpts,
   extras: { autoSeriesStyles?: boolean; waterfallSpan?: number | null; waterfallXSpan?: number | null } = {},
+  view: PlotView = liveFigureView(s(), ds), // a caller that also reads the view passes the one it reads
 ): FigureSpec {
-  const raw = s();
-  // R7: `raw` is the live singleton, which a refocus-mid-export race can
-  // desync from `ds` -- neutralize facetKey rather than resolve it against
-  // the wrong dataset's channels.
-  const st = raw.activeId === ds.id ? raw : { ...raw, facetKey: null };
-  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, {
+  return buildFigureSpecForView(view, ds.data, ds.channelRoles, ds.errorRoles, stem, o, {
     liveDataset: ds,
     autoSeriesStyles: extras.autoSeriesStyles,
     waterfallSpan: extras.waterfallSpan,
     waterfallXSpan: extras.waterfallXSpan,
   });
+}
+
+/** The live view a spec for `ds` is built from. R7: a refocus mid-export can desync
+ *  the singleton from `ds`, so facetKey is neutralized, never resolved against it. */
+export function liveFigureView(raw: PlotView & { activeId: string | null }, ds: Dataset): PlotView {
+  return raw.activeId === ds.id ? raw : { ...raw, facetKey: null };
 }
 
 /** Build the common export transport from a complete PlotView projection. The
@@ -451,9 +451,9 @@ export function buildFigureSpecFromDocument(
   dataset: Dataset | null | undefined,
   stem: string,
   overrides: FigureDocumentRenderOpts = {},
+  view: PlotView = figureDocumentToPlotView(document), // as `buildFigureSpec`'s
 ): FigureSpec {
   const resolved = resolveFigureDocumentData(document, dataset);
-  const view = figureDocumentToPlotView(document);
   // `null` is an explicit "use this export's stem" override; only omitted
   // (`undefined`) inherits the saved document filename.
   const filename = overrides.filename === undefined ? document.output.filename : overrides.filename;

@@ -13,7 +13,7 @@
 import { emptyGraphReason } from "./linkedCurvesLite";
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
-import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { buildFigureSpec, buildFigureSpecFromDocument, liveFigureView, type FigureRenderOpts } from "./figureSpec";
 import { figureDocumentToPlotView } from "./figureDocument";
 import { withAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
@@ -105,9 +105,16 @@ export function buildStageFigureSpec(
   // FALLBACK branch below (a live-view spec, which never sees
   // `document.publication`) would otherwise cycle while the canvas — which reads
   // the pin straight off the focused window — refuses.
+  // THE view this figure is built from -- the document's on that route, the live
+  // store's otherwise -- resolved ONCE and handed to the builder AND the overlays
+  // below, so every overlay decision (placement, shown curves, offsets gate,
+  // palette slot) is made from the object the spec came from (I2, lib/overlayPlacement).
+  // (On the document route `windowsForSave` has folded the live view into it.)
+  const view = canRouteThroughDocument ? figureDocumentToPlotView(document) : liveFigureView(st, ds);
   // `count`: the canvas' plotted channels (`usePlotPayload.fetchChannels`) — past
-  // the palette's eight the cycle engages on its own, as on screen.
-  const count = effectiveChannels(ds.data, st.yKeys, st.xKey, ds.channelRoles, st.seriesOrder).length;
+  // the palette's eight the cycle engages on its own, as on screen. Counted on
+  // `view`, as the overlays' palette slots are (lib/figureSpecOverlays).
+  const count = effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder).length;
   const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document, count);
   // BUG-013 review round: the y-span the FOCUSED canvas actually measured its
   // waterfall stagger from — the one thing about this export that cannot be
@@ -141,34 +148,21 @@ export function buildStageFigureSpec(
         greyExcluded: o.greyExcluded,
         defaultTrace,
         defaultLineWidth,
-      })
-    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
-  // The offset-bearing view fields come from the SAME source as the base
-  // series' `log_offsets` (the document's view on that route, else the live
-  // store), so an overlay is offset by the styles of the curve it rides.
-  const src = canRouteThroughDocument ? figureDocumentToPlotView(document) : st;
-  const overlayView = {
-    ...st,
-    seriesStyles: src.seriesStyles,
-    hiddenChannels: src.hiddenChannels,
-    waterfall: src.waterfall,
-    facetKey: src.facetKey,
-    stackMode: src.stackMode,
-    polarMode: src.polarMode,
-    statMode: src.statMode,
-  };
+      }, view)
+    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan }, view);
   // An automatic tick increment marks the ticks the canvas drew (lib/liveTickSteps.ts).
   const spec = withLiveTickSteps(built, ds.id);
-  // The fit / baseline / peak overlays the canvas splices on after `count`
-  // channels (lib/figureSpecOverlays.ts). Not on a frozen document: it renders
+  // The fit / baseline / peak overlays the canvas splices on after its plotted
+  // channels (lib/figureSpecOverlays.ts), decided from `view`. Not on a frozen document: it renders
   // its own snapshot, not the rows the overlay was computed on.
   const overlaid = withLiveLegendCorner( // an "auto" legend where the screen put it
     document?.data.mode === "frozen"
       ? spec
-      : withAnalysisOverlays(spec, ds, overlayView, count, {
-          screen: st.excludedDisplay === "grey",
-          wire: Boolean(o.greyExcluded),
-        }),
+      : withAnalysisOverlays(
+          spec, ds, view,
+          { fitOverlay: st.fitOverlay, baselineOverlay: st.baselineOverlay, peakOverlay: st.peakOverlay, defaultTrace, defaultLineWidth },
+          { screen: st.excludedDisplay === "grey", wire: Boolean(o.greyExcluded) },
+        ),
   );
   return extra.transparent === undefined ? overlaid : { ...overlaid, transparent: extra.transparent };
 }

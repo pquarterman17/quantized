@@ -3,6 +3,35 @@
 // (Stage/usePerSeriesX) and the figure export (lib/figureSpecOverlays), so the
 // screen and the SVG/PDF can never put a curve in different places.
 //
+// THE OVERLAY INVARIANTS (every producer and consumer of an overlay obeys
+// these; each is pinned by tests across its callers --
+// components/Stage/overlayInvariants.test.ts runs each one through every caller):
+//  I1 An overlay is drawn ONLY at the X and against the Y it was computed on
+//     (`OverlayBinding`, set by its producer). No owner is ever guessed, no
+//     other X is fallen back to, no block but its X's is drawn on.
+//  I2 The canvas and every export path (direct, through the focused window's
+//     document, Send to report) decide placement, scaling and visibility the
+//     SAME way from the SAME data: the export reads ONE view -- the very
+//     PlotView its spec was built from (figureSpecStage.buildStageFigureSpec)
+//     -- and appends nothing when the spec's curves are not that view's. The
+//     decade-offset gate is one predicate (logOffsetWire.exportLogOffsetsApply)
+//     for a curve and its overlay.
+//  I3 A saved result never loses or falsifies provenance: it records the X/Y
+//     it actually used, never an X-designated or role column as the fitted Y.
+//     Provenance (what was fitted) is separate from drawing (where markers go:
+//     a fallback peak fit records its channel but its markers bind -1).
+//  I4 Plot-open and fit-draw are separate decisions. The plot may open on the
+//     legacy-tolerant resolved X/Y; the fit is evaluated and drawn only when
+//     that IS the X/Y it was fitted on, else refused with re-fit guidance --
+//     a legacy fit with no recorded X included. Every consumer goes through one
+//     gate (store/analysisResultPlotOpen.openResultPlot): Open shows the plot
+//     without the fit, Send to report refuses rather than ship it fitless.
+//  I5 A single-X view keeps its behaviour except where I1/I4 refuse a
+//     mismatched overlay; a legacy unbound overlay passes through only on a
+//     one-block view on the plot's X.
+//  I6 No redundant work: placement is memoised per (overlay, layout), so an
+//     unrelated edit (rename, toggling another curve) returns the same object.
+//
 // A per-series-X view is the source's n rows repeated once per distinct X
 // (block b = rows b*n .. b*n+n-1). An overlay is built at the source's n rows
 // for ONE curve, and records that curve when it is made (`OverlayBinding`:

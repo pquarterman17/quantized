@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { FigureSpec } from "./api/figures";
 import { resolveToHex } from "./color";
 import type { StoreGet } from "./exportActive";
-import { withAnalysisOverlays, type OverlayView } from "./figureSpecOverlays";
+import { withAnalysisOverlays, type OverlayGrey, type OverlaySources, type OverlayView } from "./figureSpecOverlays";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
@@ -27,7 +27,10 @@ const DS: Dataset = {
   },
 };
 
-const VIEW: OverlayView = {
+/** A view plus its overlay sources, as one test fixture. */
+type TestView = OverlayView & OverlaySources;
+
+const VIEW: TestView = {
   fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9] },
   baselineOverlay: null,
   peakOverlay: { datasetId: "d1", binding: SINGLE_X, y: [null, 5, null, null] },
@@ -43,7 +46,11 @@ const VIEW: OverlayView = {
   stackMode: false,
   polarMode: false,
   statMode: false,
+  groupKey: null,
 };
+
+const overlay = (spec: FigureSpec, ds: Dataset, v: TestView, grey?: OverlayGrey) =>
+  withAnalysisOverlays(spec, ds, v, v, grey);
 
 function flat(over: Partial<FigureSpec> = {}): FigureSpec {
   return {
@@ -65,8 +72,8 @@ describe("withAnalysisOverlays", () => {
       { label: "95% PI low", y: [0.5, 4, 1.5, 0.3], legend: "95% prediction band" },
       { label: "95% PI high", y: [1.7, 5.8, 2.7, 1.5], legend: "" },
     ];
-    const view: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9], band } };
-    const out = withAnalysisOverlays(flat(), DS, view, 1);
+    const view: TestView = { ...VIEW, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9], band } };
+    const out = overlay(flat(), DS, view);
     // Before the fix the band was dropped: fit and peaks only.
     expect(out.dataset.labels).toEqual(["Intensity", "fit", "95% CI low", "95% CI high", "95% PI low", "95% PI high", "peaks"]);
     expect(out.y_keys).toEqual([0, 1, 2, 3, 4, 5, 6]);
@@ -85,12 +92,12 @@ describe("withAnalysisOverlays", () => {
   });
 
   it("drops a band whose edges do not span the worksheet, keeping the curve", () => {
-    const view: OverlayView = { ...VIEW, peakOverlay: null, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9], band: [{ label: "lo", y: [1] }, { label: "hi", y: [2] }] } };
-    expect(withAnalysisOverlays(flat(), DS, view, 1).dataset.labels).toEqual(["Intensity", "fit"]);
+    const view: TestView = { ...VIEW, peakOverlay: null, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1.1, 4.9, 2.1, 0.9], band: [{ label: "lo", y: [1] }, { label: "hi", y: [2] }] } };
+    expect(overlay(flat(), DS, view).dataset.labels).toEqual(["Intensity", "fit"]);
   });
 
   it("appends the fit as a line and the peaks as markers, each with a legend entry", () => {
-    const out = withAnalysisOverlays(flat(), DS, VIEW, 1);
+    const out = overlay(flat(), DS, VIEW);
     expect(out.y_keys).toEqual([0, 1, 2]);
     expect(out.dataset.labels).toEqual(["Intensity", "fit", "peaks"]);
     expect(col(out, 1)).toEqual([1.1, 4.9, 2.1, 0.9]);
@@ -107,21 +114,20 @@ describe("withAnalysisOverlays", () => {
 
   it("keeps the source spec untouched when no overlay belongs to the exported dataset", () => {
     const spec = flat();
-    const other: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d2", binding: SINGLE_X, y: [1, 2, 3, 4] }, peakOverlay: null };
-    expect(withAnalysisOverlays(spec, DS, other, 1)).toBe(spec);
+    const other: TestView = { ...VIEW, fitOverlay: { datasetId: "d2", binding: SINGLE_X, y: [1, 2, 3, 4] }, peakOverlay: null };
+    expect(overlay(spec, DS, other)).toBe(spec);
   });
 
   it("drops an overlay shorter than the data (the canvas cannot align it either)", () => {
-    const short: OverlayView = { ...VIEW, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1, 2] }, peakOverlay: null };
-    expect(withAnalysisOverlays(flat(), DS, short, 1).y_keys).toEqual([0]);
+    const short: TestView = { ...VIEW, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1, 2] }, peakOverlay: null };
+    expect(overlay(flat(), DS, short).y_keys).toEqual([0]);
   });
 
   it("extends every y_keys-aligned list so nothing misaligns", () => {
-    const out = withAnalysisOverlays(
+    const out = overlay(
       flat({ error_spans: [null], waterfall_offsets: [0], log_offsets: [0] }),
       DS,
       { ...VIEW, peakOverlay: null },
-      1,
     );
     expect(out.error_spans).toEqual([null, null]);
     expect(out.waterfall_offsets).toEqual([0, 0]);
@@ -130,42 +136,45 @@ describe("withAnalysisOverlays", () => {
 
   it("scales the overlay by its parent's decade offset, as the canvas does", () => {
     const view = { ...VIEW, peakOverlay: null, seriesStyles: { 0: { logOffset: 2 } } };
-    const out = withAnalysisOverlays(flat({ log_offsets: [2] }), DS, view, 1);
+    const out = overlay(flat({ log_offsets: [2] }), DS, view);
     expect(col(out, 1)).toEqual([110.00000000000001, 490.00000000000006, 210, 90]);
     expect(out.log_offsets).toEqual([2, 0]);
   });
 
-  it("takes the offset by the bound CHANNEL even when the request's y_keys do not list it", () => {
-    // Fit bound to channel 0 (3 decades); the request lists only channel 1.
-    const two: Dataset = {
-      ...DS,
-      data: { ...DS.data, values: [[1, 7], [5, 7], [2, 7], [1, 7]], labels: ["A", "B"], units: ["", ""] },
-    };
-    const view: OverlayView = {
-      ...VIEW, peakOverlay: null, seriesStyles: { 0: { logOffset: 3 }, 1: { logOffset: 1 } },
-    };
-    const out = withAnalysisOverlays(
-      { ...flat({ log_offsets: [1] }), dataset: two.data, y_keys: [1] }, two, view, 1,
-    );
-    expect(col(out, 2)).toEqual([1.1, 4.9, 2.1, 0.9].map((v) => v * 1000));
+  // Two channels A (0) and B (1); the fit is bound to A.
+  const TWO: Dataset = {
+    ...DS,
+    data: { ...DS.data, values: [[1, 7], [5, 7], [2, 7], [1, 7]], labels: ["A", "B"], units: ["", ""] },
+  };
+
+  it("does not export a fit whose curve the view does not draw (canvas parity: it is not drawn there)", () => {
+    // The view shows only B; a fit of A is placed nowhere on the canvas
+    // (lib/overlayPlacement: bound Y not shown), so the export carries none --
+    // not one scaled by A's offset on a figure that does not contain A.
+    const view: TestView = { ...VIEW, peakOverlay: null, yKeys: [1], seriesStyles: { 0: { logOffset: 3 } } };
+    const spec = { ...flat(), dataset: TWO.data, y_keys: [1] };
+    expect(overlay(spec, TWO, view)).toBe(spec);
+    expect(overlay(spec, TWO, { ...view, hiddenChannels: [0], yKeys: null })).toBe(spec);
   });
 
-  it("scales a fit bound to an offset channel even when no LISTED channel is offset (canvas parity)", () => {
-    // Channel 0 carries 3 decades and is bound; the request lists only channel 1
-    // (offset 0), so the spec carries NO `log_offsets` -- the canvas still scales.
-    const two: Dataset = {
-      ...DS,
-      data: { ...DS.data, values: [[1, 7], [5, 7], [2, 7], [1, 7]], labels: ["A", "B"], units: ["", ""] },
-    };
-    const view: OverlayView = {
-      ...VIEW, peakOverlay: null, seriesStyles: { 0: { logOffset: 3 } },
-    };
-    const base = { ...flat(), dataset: two.data, y_keys: [1] };
-    expect(base.log_offsets).toBeUndefined();
-    const out = withAnalysisOverlays(base, two, view, 1);
-    expect(col(out, 2)).toEqual([1.1, 4.9, 2.1, 0.9].map((v) => v * 1000));
-    // ...and a mode the canvas does not offset in (waterfall) leaves it unscaled.
-    const wf = withAnalysisOverlays(base, two, { ...view, waterfall: 0.5 }, 1);
+  it("appends nothing when the spec's curves are not the view's (never a mix of two sources)", () => {
+    // The view shows A and B, the request lists only B: they were not built
+    // from the same view, so no overlay decision can be trusted.
+    const spec = { ...flat(), dataset: TWO.data, y_keys: [1] };
+    expect(overlay(spec, TWO, { ...VIEW, peakOverlay: null, yKeys: null })).toBe(spec);
+  });
+
+  it("a repeated Y channel is one curve: its overlays still ride", () => {
+    const spec = { ...flat(), dataset: TWO.data, y_keys: [0, 1] };
+    expect(overlay(spec, TWO, { ...VIEW, peakOverlay: null, yKeys: [0, 0, 1] }).dataset.labels).toContain("fit");
+  });
+
+  it("scales the fit by its bound curve's offset, under the predicate logOffsetWire uses", () => {
+    const view: TestView = { ...VIEW, peakOverlay: null, yKeys: null, seriesStyles: { 0: { logOffset: 3 } } };
+    const spec = { ...flat({ log_offsets: [3, 0] }), dataset: TWO.data, y_keys: [0, 1] };
+    expect(col(overlay(spec, TWO, view), 2)).toEqual([1.1, 4.9, 2.1, 0.9].map((v) => v * 1000));
+    // A view the canvas does not offset in (waterfall) leaves it unscaled.
+    const wf = overlay({ ...spec, log_offsets: undefined }, TWO, { ...view, waterfall: 0.5 });
     expect(col(wf, 2)).toEqual([1.1, 4.9, 2.1, 0.9]);
   });
 
@@ -174,7 +183,7 @@ describe("withAnalysisOverlays", () => {
     const pruned = flat({
       dataset: { ...DS.data, time: [10, 30, 40], values: [[1], [2], [1]] },
     });
-    const out = withAnalysisOverlays(pruned, ds, { ...VIEW, peakOverlay: null }, 1);
+    const out = overlay(pruned, ds, { ...VIEW, peakOverlay: null });
     expect(col(out, 1)).toEqual([1.1, 2.1, 0.9]);
   });
 
@@ -191,7 +200,7 @@ describe("withAnalysisOverlays", () => {
       y_keys: [0, 1],
       series_styles: [{ color: "#111111" }, { color: "#999999" }],
     });
-    const out = withAnalysisOverlays(ghost, ds, { ...VIEW, peakOverlay: null }, 1, {
+    const out = overlay(ghost, ds, { ...VIEW, peakOverlay: null }, {
       screen: true,
       wire: true,
     });
@@ -205,7 +214,7 @@ describe("withAnalysisOverlays", () => {
   it("does not touch request shapes the overlays cannot ride", () => {
     for (const over of [{ group_col: 0 }, { facets: [] }, { encoding: {} }] as Partial<FigureSpec>[]) {
       const spec = flat(over);
-      expect(withAnalysisOverlays(spec, DS, VIEW, 1)).toBe(spec);
+      expect(overlay(spec, DS, VIEW)).toBe(spec);
     }
   });
 });

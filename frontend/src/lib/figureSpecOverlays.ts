@@ -31,6 +31,12 @@
 // view rows; each overlay is placed into its bound X's block by
 // lib/overlayPlacement -- the placement the canvas draws -- and the wire's X
 // must match the view's X row for row, or nothing is appended (fail closed).
+// Every decision here (the shown curves, the blocks, the offsets gate, the
+// palette position) is read from `view`, which MUST be the very PlotView the
+// spec was built from (lib/figureSpecStage.buildStageFigureSpec, the one
+// builder Export, Copy and Send-to-report share); and the spec's
+// own curve list must agree with it, or nothing is appended -- an overlay
+// never rides a request that does not draw its curve (I2, lib/overlayPlacement).
 // Imported only by lazily-loaded export modules.
 
 import type { FigureSpec } from "./api/figures";
@@ -39,40 +45,33 @@ import { traceSeriesStyles } from "./exportDefaultTrace";
 import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { canvasLineWidth } from "./plotTemplates";
 import type { ExportSeriesStyle } from "./publicationStyles";
-import { logOffsetsApply, overlayDecadesFromStyles } from "./logOffset";
-import { overlayModesMatchTheCanvas } from "./seriesStyleCycle";
+import { overlayDecadesFromStyles } from "./logOffset";
+import { exportLogOffsetsApply } from "./logOffsetWire";
+import { effectiveChannels } from "./plotdata";
+import type { PlotView } from "./plotview";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
-import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay, SeriesStyle } from "./types";
+import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
 
-/** The live view fields the overlays are read from (all on the app store). */
-export interface OverlayView {
+/** The view fields the overlays are decided from: a slice of the SAME PlotView
+ *  the spec was built from -- never re-assembled from two sources. */
+export type OverlayView = Pick<
+  PlotView,
+  | "xKey" | "yKeys" | "seriesOrder" | "hiddenChannels" | "seriesStyles" | "waterfall"
+  | "groupKey" | "facetKey" | "stackMode" | "polarMode" | "statMode" | "plotTemplate"
+>;
+
+/** What is not view state: the analysis overlays (store state the canvas reads
+ *  too) and the Preferences trace / line width the spec builder was handed. */
+export interface OverlaySources {
   fitOverlay: FitOverlay | null;
   baselineOverlay: BaselineOverlay | null;
   peakOverlay: PeakOverlay | null;
-  plotTemplate: string;
   defaultLineWidth?: number;
   defaultTrace?: DefaultTrace;
-  /** The plot binding, which decides the per-series-X blocks (lib/shownCurves). */
-  xKey: number | null;
-  yKeys: number[] | null;
-  seriesOrder: number[] | null;
-  hiddenChannels: readonly number[];
-  /** Per-channel styles: the decade offsets an overlay inherits. REQUIRED and
-   *  taken from the SAME source as the base series' `log_offsets` (the focused
-   *  document's view when the export routes through one, else the live store),
-   *  so a fit is never offset by a different style map than its curve. */
-  seriesStyles: Record<number, SeriesStyle>;
-  /** With the mode flags below, the inputs of the offsets' shared predicate
-   *  (`logOffsetsApply` + `overlayModesMatchTheCanvas`), from that same source. */
-  waterfall: number;
-  facetKey: number | null;
-  stackMode: boolean;
-  polarMode: boolean;
-  statMode: boolean;
 }
 
 /** The rows the overlays align to: `ds` itself, or on a per-series-X sheet the
@@ -81,6 +80,15 @@ function overlayTarget(ds: Dataset, view: OverlayView): { target: Dataset; layou
   const shown = shownCurves(ds.data, view, ds.channelRoles);
   const v = perSeriesXDataset(ds, view.xKey, shown);
   return { target: v?.dataset ?? ds, layout: overlayLayout(ds, view.xKey, v?.blocks, shown) };
+}
+
+/** The request draws exactly the curves `view` shows: its source channels
+ *  (ghost companions sit past them) less an explicit X-as-Y, which the canvas
+ *  never draws. Anything else means the spec and the view disagree. */
+function drawsShownCurves(keys: readonly number[], ds: Dataset, view: OverlayView, shown: readonly number[]): boolean {
+  const listed = new Set(keys.filter((k) => k < ds.data.labels.length && k !== view.xKey));
+  const drawn = new Set(shown); // as sets: a repeated channel is one curve
+  return listed.size === drawn.size && [...drawn].every((c) => listed.has(c));
 }
 
 /** Same X, row for row (NaN = NaN): the wire really is `target`'s rows. */
@@ -123,36 +131,36 @@ export interface OverlayGrey {
 }
 
 /** `spec` with the canvas' analysis overlays for `ds` appended as extra
- *  series, or `spec` itself when there are none it can carry. `canvasSeries`
- *  is how many channel series the canvas draws before them. */
+ *  series, or `spec` itself when there are none it can carry. `view` is the
+ *  PlotView `spec` was built from (see the module header). */
 export function withAnalysisOverlays(
   spec: FigureSpec,
   ds: Dataset,
   view: OverlayView,
-  canvasSeries: number,
+  sources: OverlaySources,
   grey: OverlayGrey = { screen: false, wire: false },
 ): FigureSpec {
   if (spec.polar || spec.facets || spec.encoding || spec.group_col != null) return spec;
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
   const { target, layout } = overlayTarget(ds, view);
+  if (!drawsShownCurves(keys as number[], ds, view, layout.shown)) return spec; // fail closed
   const n = target.data.time.length;
   const candidates: [string, FitOverlay | null | undefined, boolean][] = [
-    ["fit", placeOverlay(view.fitOverlay, layout), false],
-    ["baseline", placeOverlay(view.baselineOverlay, layout), false],
-    ["peaks", placeOverlay(view.peakOverlay, layout), true],
+    ["fit", placeOverlay(sources.fitOverlay, layout), false],
+    ["baseline", placeOverlay(sources.baselineOverlay, layout), false],
+    ["peaks", placeOverlay(sources.peakOverlay, layout), true],
   ];
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
   // (0 = not a band edge); an odd value is a lower edge.
   // The bound Y's offset: the canvas' rule (lib/logOffset.overlayDecadesFromStyles),
-  // read from the series styles by CHANNEL, so it does not depend on which
-  // channels this request lists. Whether offsets apply at all is the predicate
-  // `logOffsetWire` uses, NOT the presence of `spec.log_offsets` (which is
-  // omitted when no LISTED channel is offset while a bound one is).
-  const offsetsApply =
-    logOffsetsApply(view.waterfall, null) && overlayModesMatchTheCanvas({ ...view, groupKey: null });
+  // read from the series styles by CHANNEL. Whether offsets apply at all is the
+  // SAME predicate `logOffsetWire` asked for this spec (`exportLogOffsetsApply`,
+  // same view, the spec's own `group_col`), NOT the presence of
+  // `spec.log_offsets` (omitted when no LISTED channel is offset).
+  const offsetsApply = exportLogOffsetsApply(view, spec.group_col ?? null);
   const factorFor = (o: { binding?: OverlayBinding | null }): number =>
-    offsetsApply ? 10 ** overlayDecadesFromStyles(o.binding, view.seriesStyles, keys as number[], view.hiddenChannels) : 1;
+    offsetsApply ? 10 ** overlayDecadesFromStyles(o.binding, view.seriesStyles, layout.shown, []) : 1;
   const present = candidates.flatMap(([label, o, points]) => {
     if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
@@ -176,7 +184,9 @@ export function withAnalysisOverlays(
     }),
   ]);
   // The canvas colours each display series by its position: channels, then
-  // their grey companions when any row is greyed, then the overlays.
+  // their grey companions when any row is greyed, then the overlays. The channel
+  // count is the canvas' plotted list (`usePlotPayload.fetchChannels`), hidden ones included.
+  const canvasSeries = effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder).length;
   const before = canvasSeries * (grey.screen && droppedRows(ds).size > 0 ? 2 : 1);
   const lineKeys = present.map((_p, i) => width + i);
   const base: ExportSeriesStyle[] = present.map(({ legend, points, band }, i) => {
@@ -193,9 +203,9 @@ export function withAnalysisOverlays(
   });
   // The two LINES take the canvas' default trace and line width, as an
   // unstyled channel does; the markers and band edges are fully specified.
-  const traced = traceSeriesStyles(base, lineKeys, view.defaultTrace, {}) ?? base;
+  const traced = traceSeriesStyles(base, lineKeys, sources.defaultTrace, {}) ?? base;
   const widened =
-    lineWidthSeriesStyles(traced, lineKeys, canvasLineWidth(view.plotTemplate, view.defaultLineWidth)) ?? traced;
+    lineWidthSeriesStyles(traced, lineKeys, canvasLineWidth(view.plotTemplate, sources.defaultLineWidth)) ?? traced;
   const styles = widened.map((st, i) => (present[i].points || present[i].band ? base[i] : st));
   const pad = <T>(list: T[] | undefined, v: T): T[] | undefined => (list ? [...list, ...present.map(() => v)] : undefined);
   return {

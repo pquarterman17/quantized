@@ -23,6 +23,7 @@
 // itself — shared deliberately so this dialog's style list and greyscale
 // field cannot drift from "Export figure…"'s.
 import { askParams } from "../store/paramDialog";
+import type { FigureSpec } from "./api/figures";
 import type { ParamField } from "./params";
 import type { ReportEntry, ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
 import { stampReportTransformProvenance } from "./reportTransformProvenance";
@@ -245,17 +246,22 @@ export function addFigureToReport(
 // Guard the shared command so menu, palette, and context-menu callers agree.
 const sendingPlots = new WeakSet<StoreGet>();
 
-export async function runSendFigureToReportCommand(s: StoreGet): Promise<void> {
+/** `require` (optional): a last check of the BUILT spec, returning why it must
+ *  not be sent (e.g. a fitted result plot whose fit the figure does not carry,
+ *  store/analysisResultActions) -- the figure is then refused, not sent. */
+export async function runSendFigureToReportCommand(s: StoreGet, require?: SendRequirement): Promise<void> {
   if (sendingPlots.has(s)) return;
   sendingPlots.add(s);
   try {
-    await sendActivePlot(s);
+    await sendActivePlot(s, require);
   } finally {
     sendingPlots.delete(s);
   }
 }
 
-async function sendActivePlot(s: StoreGet): Promise<void> {
+export type SendRequirement = (spec: FigureSpec | null) => string | null;
+
+async function sendActivePlot(s: StoreGet, require?: SendRequirement): Promise<void> {
   // Finding #3 (P3.6 review round 2): checked BEFORE any dialog opens, not
   // after the user has already answered target/caption/style/etc — asking
   // those questions only to then discover there is nothing to send wastes
@@ -279,6 +285,8 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
       // Stat mode: the stat renderer's PNG as the block's image (lib/statFigureCommands.ts).
       const stat = activeStatExporter(s());
       if (stat) {
+        const refused = require?.(null); // a stat figure carries no row-aligned overlay
+        if (refused) throw new Error(refused);
         const statBlock = await statReportBlock(stat, { style: opts.style, dpi: REPORT_FIGURE_DPI, signal }, stem, caption);
         return addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
       }
@@ -300,7 +308,10 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
         excludedChoiceMatters,
         s().excludedDisplay,
       );
-      if (!picked || !(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
+      if (!picked) return false;
+      const refused = require?.(picked.value); // checked before the screen-only question
+      if (refused) throw new Error(refused);
+      if (!(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);
       addFigureToReport(s, targetId, block, stem, ds.id, newReportName, refs);
       // Estimated by walking the spec, never by serializing it (see
