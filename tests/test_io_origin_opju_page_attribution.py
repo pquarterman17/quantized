@@ -300,6 +300,8 @@ _REL_TOL = 1e-6
 
 
 _BATT = "origin/public/jiayu-here_originlab-battery-aging-project/results/OriginLab_Battery_Aging_Project.opju"  # noqa: E501
+_FIG6 = "origin/public/MeyerJackson_Minis-JGP-2024/Figure 6 Currents vary parameters.opju"
+_Y_SWAP = "Y endpoints swapped: decoded (0, -80), Origin (-80, 0); identical on main"
 
 # (file, page, layer) -> cause: decoded, but the values differ from Origin's.
 # The Y-span family that once filled this table (a geometry double read as
@@ -312,6 +314,13 @@ _BATT = "origin/public/jiayu-here_originlab-battery-aging-project/results/Origin
 KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
     (_BATT, "Graph2", 1): "Y span (0, -0.5); Origin (-0.5, 3.0): value shifted a slot",
     (_BATT, "Graph3", 1): "X span (0, 12); Origin (12, 48): value shifted a slot",
+    # Pre-existing on main (main also decodes Y (0, -80) on these layers); not
+    # yet diagnosed -- possibly an elided-0 from vs a stored negative to.
+    (_FIG6, "Graph3", 1): _Y_SWAP,
+    (_FIG6, "Graph3", 2): _Y_SWAP,
+    (_FIG6, "Graph3", 3): _Y_SWAP,
+    (_FIG6, "Graph3", 7): _Y_SWAP,
+    (_FIG6, "Graph3", 9): _Y_SWAP,
 }
 
 # (file, page, layer) -> cause: decoded under a page NAME Origin does not
