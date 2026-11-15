@@ -89,6 +89,18 @@ export async function runSendToOrigin(
       toast(msg, "danger");
       return;
     }
+    // Owner decision (2026-11-15): COM attaches to the Origin session the
+    // user already has open, so say so and ask before touching it.
+    const n = targets.length;
+    const ok = await askConfirm(
+      "Send to Origin?",
+      `Add ${n} workbook${n === 1 ? "" : "s"} to the Origin project you have open?`,
+      "Send",
+    );
+    if (!ok) {
+      s().setStatus("send to Origin cancelled");
+      return;
+    }
     // #38 deferred edge: a multi-selection can include datasets never
     // activated/rendered — resolve every target's full data first (bounded
     // concurrency) rather than silently sending previews.
