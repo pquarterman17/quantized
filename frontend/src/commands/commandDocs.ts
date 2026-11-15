@@ -246,6 +246,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "graph-template-save": { description: "Save this graph's style (not its data) as a reusable template.", keywords: "style otp" },
   "graph-template-apply": { description: "Restyle this graph with a saved template; its data is kept.", keywords: "style otp" },
+  "graph-template-default": {
+    description: "Save this graph's style as the template every new graph opens with (change or clear it in Preferences ▸ Plot)",
+    keywords: "style otp theme default template new graphs house lab look",
+  },
   "copy-format": { description: "Copy this graph's style (not its data).", keywords: "style" },
   "paste-format": { description: "Apply the copied style to this graph; its data is kept.", keywords: "style" },
   "graph-template-apply-many": {
