@@ -55,7 +55,7 @@ export default function SigopBody({ active, method, onPick, onClose }: {
   const source = analysisData(active) ?? active.data;
   const channel = method === "ifft" ? form.magnitudeChannel : channels[0] ?? available[0] ?? 0;
   const flagged = useMemo(
-    () => (run.result?.flagged[String(channel)] ?? []).flatMap((row) => {
+    () => (run.result && run.result.rowsIn === source.time.length ? run.result.flagged[String(channel)] ?? [] : []).flatMap((row) => {
       const y = source.values[row]?.[channel];
       return typeof y === "number" ? [[source.time[row], y] as const] : [];
     }),

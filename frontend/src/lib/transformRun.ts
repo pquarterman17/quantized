@@ -44,19 +44,17 @@ import {
 } from "./signalTransform";
 import { averageLabel, computeAverage, type AverageParams } from "./transformAverage";
 import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
+import { reviewTransform } from "./transformReview";
 import { computeSigop, sigopLabel, type SigopParams } from "./transformSigop";
 import { computeSims, simsLabel, type SimsParams } from "./transformSims";
 import { computeSimsCompare, simsCompareLabel, type SimsCompareParams } from "./transformSimsCompare";
 import {
-  actionable,
   analyzeAlgebra,
   analyzeJoin,
   analyzeStack,
   analyzeTranspose,
   analyzeUnstack,
-  needsConfirm,
   stampWarnings,
-  warningsText,
   type TransformWarning,
 } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
@@ -69,7 +67,6 @@ import {
   type JoinMode,
 } from "./worksheetTransforms";
 import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
-import { askConfirm } from "../store/confirmDialog";
 import { nextDatasetId, type AppState } from "../store/useApp";
 
 export { transformParamsOf } from "./transformParams";
@@ -263,7 +260,10 @@ export async function computeTransform(
     }
     case "algebra": {
       const b = others[0];
-      // A non-finite result arrives as JSON null; stored as NaN so the `.dwk` reopens.
+      // A non-finite result (a divide by zero, log/sqrt of an out-of-domain
+      // value) arrives as JSON null; stored as NaN so the `.dwk` reopens --
+      // the same fix `transformSims.ts`/`transformResample.ts` apply
+      // (lib/blankCells.ts).
       const data = blanksToNaN(await datasetAlgebra({
         dataset_a: primary.data,
         dataset_b: b.data,
@@ -302,8 +302,10 @@ export async function computeTransform(
       return { data: r.data, name: r.name, preview: preview("Average curves", r.data, r.warnings, all.map((d) => [d.name, d.data])), datasetPatch: r.datasetPatch };
     }
     case "signal": {
-      // Signal Processing deliberately reads the full worksheet (its UI discloses
-      // the scope); row state is not silently baked into the linked output.
+      // Signal Processing deliberately reads the full worksheet. Its UI
+      // discloses included/excluded counts and the full-row scope; unlike
+      // statistical transforms, row state is not silently baked into the
+      // linked output.
       const secondary = others[0];
       const r = await computeSignalTransform(p, primary, signal, options, secondary);
       return {
@@ -334,18 +336,7 @@ async function resolveRefs(s: StoreGet, refs: readonly DatasetRef[]): Promise<Da
   });
 }
 
-/** Interactive review: silent when there is nothing to say; a unit mismatch
- *  gets a danger-styled confirm whose button names what is being overridden. */
-export function reviewTransform(pv: TransformPreview): Promise<boolean> {
-  if (!actionable(pv.warnings).length) return Promise.resolve(true);
-  const units = needsConfirm(pv.warnings);
-  return askConfirm(
-    units ? `${pv.title}: units differ` : `${pv.title}: review before creating`,
-    warningsText(pv.summary, pv.warnings),
-    units ? "Create despite unit mismatch" : "Create",
-    units,
-  );
-}
+export { reviewTransform };
 
 /** One dataset a transform created. `key` tells replay which output is which
  *  when there are several: a split child's group label ("5 K"), "" otherwise. */

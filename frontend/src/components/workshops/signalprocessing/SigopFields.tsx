@@ -40,7 +40,7 @@ function ReduceStats({ form, set }: Pick<Props, "form" | "set">) {
         <Select aria-label="Average" value={form.stat} options={STAT} onChange={(e) => set({ stat: e.target.value as SigopForm["stat"] })} />
       </label>
       <Checkbox checked={form.withSd} onChange={(withSd) => set({ withSd })}>Add a standard-deviation column per channel</Checkbox>
-      <Checkbox checked={form.withCount} onChange={(withCount) => set({ withCount })}>Add a point-count column</Checkbox>
+      <Checkbox checked={form.withCount} onChange={(withCount) => set({ withCount })}>Add a point-count column per channel</Checkbox>
     </>
   );
 }
@@ -96,7 +96,7 @@ export default function SigopFields({ method, form, set, dataset, xUnit }: Props
           <label>Phase column (degrees)
             <Select aria-label="Phase column" value={String(form.phaseChannel)} options={options} onChange={(e) => set({ phaseChannel: Number(e.target.value) })} />
           </label>
-          <p className="qz-muted">Run the FFT with Window = none (once for Magnitude, once for Phase) and join the two spectra on Frequency. Edit the magnitude column (zero a band, notch a line), then invert it.</p>
+          <p className="qz-muted">Run Spectrum · FFT with Output = Magnitude + phase and Window = none, optionally edit the Magnitude column (zero a band, notch a line), then invert it. Spectra from other sources are refused: the scale and length come from the FFT's own record.</p>
         </>
       );
     }

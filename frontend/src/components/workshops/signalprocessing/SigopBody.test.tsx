@@ -2,7 +2,7 @@
 // spikes shown, and Create commits through runTransform as a recorded `sigop` step.
 
 import type { ReactNode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SigopRequest, SigopResult } from "../../../lib/api/sigop";
@@ -79,7 +79,19 @@ describe("Signal Processing: despike", () => {
     fireEvent.change(screen.getByLabelText("Window (odd, rows)"), { target: { value: "4" } });
     expect(await screen.findByRole("alert")).toHaveTextContent(/odd/);
     expect(screen.getByRole("button", { name: "Create worksheet" })).toBeDisabled();
-    expect(sigopDataset).not.toHaveBeenCalledWith(expect.objectContaining({ args: { window: 4 } }), expect.anything());
+    // The request is debounced 180 ms: wait it out, or a regression that still
+    // sends the bad window would only fire after this assertion had passed.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+    expect(vi.mocked(sigopDataset).mock.calls.some(([body]) => body.args?.window === 4)).toBe(false);
+  });
+
+  it("re-previews when a row is excluded with the panel open (preview must match Create)", async () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "median" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create worksheet" })).toBeEnabled());
+    expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].dataset.time).toHaveLength(6);
+    act(() => useApp.setState({ datasets: [{ ...dataset, excludedRows: [2] }] }));
+    await waitFor(() => expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].dataset.time).toHaveLength(5));
   });
 });
 

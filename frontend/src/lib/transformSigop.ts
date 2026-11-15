@@ -107,5 +107,11 @@ export function sigopParamsOf(raw: Record<string, unknown>): SigopParams {
     if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") clean[k] = v;
     else throw new Error(`"${method}" argument "${k}" must be a number, text or yes/no`);
   }
+  if (method === "ifft") {
+    const [m, p] = [clean.magnitudeChannel, clean.phaseChannel];
+    if (!Number.isInteger(m) || !Number.isInteger(p) || (m as number) < 0 || (p as number) < 0 || m === p) {
+      throw new Error('"ifft" needs two different whole-number column indices (magnitudeChannel, phaseChannel)');
+    }
+  }
   return { op: "sigop", method, channels: channels as number[], args: clean };
 }

@@ -31,6 +31,7 @@ from .signal_filters import (
     median_filter,
 )
 from .signal_ifft import inverse_fft_mag_phase
+from .spectral_workbench import _frequency_unit as frequency_unit
 
 __all__ = ["FILTER_METHODS", "REDUCE_METHODS", "SignalOpResult", "run_signal_op"]
 
@@ -115,51 +116,90 @@ def _filter_column(
     if out not in ("envelope", "hilbert"):
         raise ValueError("output must be envelope or hilbert")
     env = hilbert_envelope(
-        x, y, remove_mean=bool(args.get("removeMean", True)), output=cast(Any, out)
+        x, y, remove_mean=_bool_arg(args, "removeMean", True), output=cast(Any, out)
     )
     return env, "envelope" if out == "envelope" else "Hilbert", None
 
 
+_TIME_UNITS = ("s", "ms", "\u00b5s", "ns")
+_HZ_TO_TIME = {"Hz": "s", "kHz": "ms", "MHz": "\u00b5s", "GHz": "ns"}
+
+
+def _time_unit(freq_unit: str) -> str:
+    """The unit of the inverse axis: 1/s -> s, Hz -> s, kHz -> ms, 1/nm -> nm."""
+    u = freq_unit.strip()
+    if u in _HZ_TO_TIME:
+        return _HZ_TO_TIME[u]
+    if not u:
+        return ""
+    inv = frequency_unit(u)  # strips a leading "1/" or a trailing ^-1, else "1/u"
+    return inv
+
+
+def _bool_arg(args: dict[str, Any], key: str, default: bool) -> bool:
+    v = args.get(key, default)
+    if not isinstance(v, bool):
+        raise ValueError(f"{key} must be true or false")
+    return v
+
+
 def _inverse_fft(data: DataStruct, args: dict[str, Any]) -> SignalOpResult:
-    mi, pi = _i(args, "magnitudeChannel"), _i(args, "phaseChannel")
+    """Inverse FFT of a worksheet written by the FFT workbench with Output =
+    Magnitude + phase. Fails closed: the scale, window, sidedness and transform
+    length all come from that worksheet's own provenance block, never from a
+    default."""
     spec = data.metadata.get("spectralAnalysis")
-    params = spec.get("parameters", {}) if isinstance(spec, dict) else {}
-    window = params.get("window", "none")
+    params = spec.get("parameters") if isinstance(spec, dict) else None
+    if not isinstance(params, dict) or params.get("outputType") != "magnitude+phase":
+        raise ValueError(
+            "Inverse FFT needs a spectrum made by the FFT with Output = Magnitude + phase "
+            "(this worksheet has no such record, e.g. a joined or edited copy); re-run the FFT"
+        )
+    window = params.get("window")
     if window != "none":
         raise ValueError(
             f"this spectrum was made with a {window} window, which can't be undone "
-            "from the spectrum alone; "
-            "re-run the FFT with Window = none"
+            "from the spectrum alone; re-run the FFT with Window = none"
         )
-    sided = str(args.get("sided") or params.get("sided") or "one")
-    rec = args.get("recordLength", params.get("recordLength"))
+    sided, rec, nfft = params.get("sided"), params.get("recordLength"), params.get("nfft")
+    if sided not in ("one", "two") or not isinstance(rec, int) or not isinstance(nfft, int):
+        raise ValueError("the FFT record is incomplete (no transform length); re-run the FFT")
+    n_cols = data.values.shape[1] if data.values.ndim == 2 else 1
+    mi, pi = _i(args, "magnitudeChannel"), _i(args, "phaseChannel")
+    if not (0 <= mi < n_cols and 0 <= pi < n_cols) or mi == pi:
+        raise ValueError("choose two different, existing magnitude and phase columns")
     vals = np.asarray(data.values, dtype=float)
     t, y = inverse_fft_mag_phase(
         np.asarray(data.time, dtype=float),
         vals[:, mi],
         vals[:, pi],
-        sided=sided,
-        record_length=None if rec in (None, "", 0) else int(rec),
+        sided=str(sided),
+        record_length=rec,
+        nfft=nfft,
     )
     meta = drop_row_sidecars(data.metadata)
-    for k in _ROSTER_KEYS + ("spectralAnalysis",):
+    for k in (*_ROSTER_KEYS, "spectralAnalysis"):
         meta.pop(k, None)
     xu = str(data.metadata.get("xUnit") or data.metadata.get("x_column_unit") or "")
-    tu = {"Hz": "s", "kHz": "ms", "MHz": "µs", "GHz": "ns"}.get(xu, f"1/{xu}" if xu else "")
+    tu = _time_unit(xu)
+    is_time = tu in _TIME_UNITS
     meta.update(
         {
-            "xLabel": "Time" if tu in ("s", "ms", "µs", "ns") else "X",
+            "xLabel": "Time" if is_time else "X",
             "xUnit": tu,
-            "x_column_name": "Time" if tu in ("s", "ms", "µs", "ns") else "X",
+            "x_column_name": "Time" if is_time else "X",
             "x_column_unit": tu,
             "signalOp": {"method": "ifft", "sided": sided},
         }
     )
-    base = data.labels[mi].split(" · ")[0]
-    unit = data.units[mi]
+    base = data.labels[mi].split(" \u00b7 ")[0]
     return SignalOpResult(
         DataStruct.create(
-            t, y.reshape(-1, 1), labels=[f"{base} · inverse FFT"], units=[unit], metadata=meta
+            t,
+            y.reshape(-1, 1),
+            labels=[f"{base} \u00b7 inverse FFT"],
+            units=[data.units[mi]],
+            metadata=meta,
         )
     )
 
@@ -177,8 +217,8 @@ def run_signal_op(
         common: dict[str, Any] = {
             "stat": str(a.get("stat", "mean")),
             "channels": channels,
-            "with_sd": bool(a.get("withSd", False)),
-            "with_count": bool(a.get("withCount", False)),
+            "with_sd": _bool_arg(a, "withSd", False),
+            "with_count": _bool_arg(a, "withCount", False),
         }
         if method == "reduce-duplicates":
             out = average_duplicates(data, tolerance=_f(a, "tolerance", 0.0), **common)
@@ -213,7 +253,7 @@ def run_signal_op(
         labels.append(f"{data.labels[c]} · {tag}")
         if mask is not None:
             flagged[c] = [int(i) for i in np.flatnonzero(mask)]
-    meta = drop_row_sidecars(data.metadata)
+    meta = dict(data.metadata)  # same rows, same order: row sidecars stay valid
     for k in _ROSTER_KEYS:
         meta.pop(k, None)
     meta["signalOp"] = {"method": method, "args": a, "sourceChannels": chans}

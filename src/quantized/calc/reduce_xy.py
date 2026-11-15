@@ -30,7 +30,7 @@ from numpy.typing import NDArray
 
 from ..cat_levels import surviving_level_order
 from ..datastruct import DataStruct
-from ..row_sidecars import drop_row_sidecars
+from ..row_sidecars import drop_row_sidecars, slice_row_sidecars
 
 __all__ = ["average_duplicates", "bin_average", "keep_every_nth"]
 
@@ -82,43 +82,55 @@ def _group(
     centres: NDArray[np.float64] | None,
     meta_extra: dict[str, Any],
 ) -> DataStruct:
-    """One output row per distinct group id, in first-appearance (source) order.
-    ``centres[g]`` (when given) is the X written for group ``g``; otherwise the
-    group's mean X."""
-    uniq, first = np.unique(groups, return_index=True)
-    order = uniq[np.argsort(first)]
-    xs: list[float] = []
-    cols: list[list[float]] = [[] for _ in chans]
-    sds: list[list[float]] = [[] for _ in chans]
-    counts: list[float] = []
-    for g in order:
-        sel = groups == g
-        xs.append(float(centres[g]) if centres is not None else float(np.mean(x[sel])))
-        counts.append(float(sel.sum()))
-        for j, c in enumerate(chans):
-            v = vals[sel, c]
-            v = v[np.isfinite(v)]
-            if v.size == 0:
-                cols[j].append(math.nan)
-                sds[j].append(math.nan)
-                continue
-            cols[j].append(float(np.mean(v) if stat == "mean" else np.median(v)))
-            sds[j].append(float(np.std(v, ddof=1)) if v.size > 1 else math.nan)
-    out_cols = [np.asarray(c, dtype=float) for c in cols]
+    """One output row per run of equal group id, in source order. Because X is
+    monotonic, bins and duplicate groups are CONTIGUOUS runs, so everything is a
+    single O(n) ``reduceat`` pass. ``centres[g]`` (when given) is the X written
+    for group ``g``; otherwise the run's mean X. Counts, means and SDs use the
+    finite values of each channel separately."""
+    starts = np.flatnonzero(np.concatenate([[True], np.diff(groups) != 0]))
+    lens = np.diff(np.append(starts, groups.size)).astype(float)
+    if centres is not None:
+        xo = np.asarray(centres[groups[starts]], dtype=float)
+    else:
+        xo = np.asarray(np.add.reduceat(x, starts) / lens, dtype=float)
+    means: list[NDArray[np.float64]] = []
+    sds: list[NDArray[np.float64]] = []
+    counts: list[NDArray[np.float64]] = []
+    for c in chans:
+        v = vals[:, c]
+        fin = np.isfinite(v)
+        vz = np.where(fin, v, 0.0)
+        cnt = np.add.reduceat(fin.astype(float), starts)
+        mu = np.where(cnt > 0, np.add.reduceat(vz, starts) / np.maximum(cnt, 1.0), np.nan)
+        centre = mu
+        if stat == "median":
+            centre = np.array(
+                [
+                    float(np.median(seg[np.isfinite(seg)])) if np.isfinite(seg).any() else math.nan
+                    for seg in np.split(v, starts[1:])
+                ]
+            )
+        dev = np.where(fin, v - np.repeat(mu, lens.astype(int)), 0.0)  # SD is about the mean
+        ss = np.add.reduceat(dev**2, starts)
+        sd = np.where(cnt > 1, np.sqrt(ss / np.maximum(cnt - 1, 1.0)), np.nan)
+        means.append(np.asarray(centre, dtype=float))
+        sds.append(np.asarray(sd, dtype=float))
+        counts.append(np.asarray(cnt, dtype=float))
+    out_cols = list(means)
     labels = [data.labels[c] for c in chans]
     units = [data.units[c] for c in chans]
     if with_sd:
-        out_cols += [np.asarray(s, dtype=float) for s in sds]
+        out_cols += sds
         labels += [f"{data.labels[c]} SD" for c in chans]
         units += [data.units[c] for c in chans]
     if with_count:
-        out_cols.append(np.asarray(counts, dtype=float))
-        labels.append("N points")
-        units.append("")
+        out_cols += counts
+        labels += [f"{data.labels[c]} N" for c in chans]
+        units += [""] * len(chans)
     meta = drop_row_sidecars(data.metadata)
     meta["reduceXY"] = meta_extra
     return DataStruct.create(
-        np.asarray(xs, dtype=float),
+        xo,
         np.column_stack(out_cols),
         labels=labels,
         units=units,
@@ -138,7 +150,8 @@ def bin_average(
     x_mode: Literal["mean", "center"] = "mean",
 ) -> DataStruct:
     """Bin-average by X. Give ``bin_width`` or ``n_bins`` (not both). Bins start
-    at the smallest X; the last bin is closed on the right. Empty bins emit no
+    at the smallest X; the last bin is closed on the right (X = max never
+    becomes a lone extra bin). Empty bins emit no
     row. ``x_mode`` puts each output row at the mean X of its points or at the
     bin centre. ``stat`` is ``mean`` or ``median``; SD is the sample SD (NaN for
     a single point)."""
@@ -157,7 +170,7 @@ def bin_average(
         if not (math.isfinite(bin_width) and bin_width > 0):
             raise ValueError("bin width must be positive")
         width = float(bin_width)
-        n = int(math.floor(span / width + 1e-9)) + 1
+        n = max(1, int(math.ceil(span / width - 1e-9)))
     else:
         assert n_bins is not None
         if int(n_bins) != n_bins or n_bins < 1:
@@ -193,6 +206,22 @@ def bin_average(
         )
 
 
+def _anchored_groups(x: NDArray[np.float64], tolerance: float) -> NDArray[np.intp]:
+    """Group ids: a row joins the current group while it is within ``tolerance``
+    of the group's FIRST X (not of the previous row, which would chain a slow
+    sweep into one group)."""
+    if tolerance == 0:
+        return np.asarray(np.cumsum(np.concatenate([[True], np.diff(x) != 0])) - 1, dtype=np.intp)
+    ids = np.zeros(x.size, dtype=np.intp)
+    anchor, gid = x[0], 0
+    for i in range(1, x.size):
+        if abs(x[i] - anchor) > tolerance:
+            gid += 1
+            anchor = x[i]
+        ids[i] = gid
+    return ids
+
+
 def average_duplicates(
     data: DataStruct,
     *,
@@ -202,16 +231,15 @@ def average_duplicates(
     with_count: bool = False,
     tolerance: float = 0.0,
 ) -> DataStruct:
-    """Average rows whose X repeats. Equal means ``|dx| <= tolerance`` between
-    consecutive rows (default exact); non-consecutive repeats are NOT merged
+    """Average rows whose X repeats. Equal means within ``tolerance`` of the
+    group's first X (default exact); non-consecutive repeats are NOT merged
     (see the module note on loops)."""
     if stat not in ("mean", "median"):
         raise ValueError("stat must be mean or median")
     if not (math.isfinite(tolerance) and tolerance >= 0):
         raise ValueError("tolerance must be zero or positive")
     x, vals, chans, dropped = _clean(data, channels)
-    new_group = np.concatenate([[True], np.abs(np.diff(x)) > tolerance])
-    groups = np.asarray(np.cumsum(new_group) - 1, dtype=np.intp)
+    groups = _anchored_groups(x, tolerance)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         return _group(
@@ -245,7 +273,7 @@ def keep_every_nth(data: DataStruct, *, n: int, offset: int = 0) -> DataStruct:
     vals = np.asarray(data.values, dtype=float)
     if vals.ndim == 1:
         vals = vals.reshape(-1, 1)
-    meta = drop_row_sidecars(data.metadata)
+    meta = slice_row_sidecars(data.metadata, rows.tolist())
     meta["reduceXY"] = {
         "method": "every-nth",
         "n": int(n),

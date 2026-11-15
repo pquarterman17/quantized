@@ -32,12 +32,13 @@ def inverse_fft_mag_phase(
     *,
     sided: str = "one",
     record_length: int | None = None,
+    nfft: int | None = None,
 ) -> tuple[Vec, Vec]:
     """Return ``(time, signal)`` from a magnitude / phase(deg) spectrum on ``freq``.
 
-    One-sided spectra assume an even transform length ``2*(bins-1)`` (what the
-    FFT produces for its default power-of-two length); two-sided spectra are the
-    fftshift-ed layout the FFT writes."""
+    ``nfft`` is the transform length the FFT used (it can be odd when zero
+    padding was set); without it a one-sided spectrum assumes the even length
+    ``2*(bins-1)``. Two-sided spectra are the fftshift-ed layout the FFT writes."""
     f = np.asarray(freq, dtype=float).ravel()
     mag = np.asarray(magnitude, dtype=float).ravel()
     ph = np.asarray(phase_deg, dtype=float).ravel()
@@ -56,12 +57,17 @@ def inverse_fft_mag_phase(
     if sided == "one":
         if abs(f[0]) > 1e-9 * abs(df):
             raise ValueError("a one-sided spectrum must start at frequency 0")
-        nfft = 2 * (f.size - 1)
+        if nfft is None:
+            nfft = 2 * (f.size - 1)
+        elif nfft // 2 + 1 != f.size:
+            raise ValueError(f"transform length {nfft} does not match {f.size} one-sided bins")
         scale = float(record_length or nfft)
         amp = mag.copy()
         amp[1:-1] /= 2.0
         sig = np.fft.irfft(amp * scale * phasor, n=nfft)
     else:
+        if nfft is not None and nfft != f.size:
+            raise ValueError(f"transform length {nfft} does not match {f.size} two-sided bins")
         nfft = f.size
         scale = float(record_length or nfft)
         sig = np.real(np.fft.ifft(np.fft.ifftshift(mag * scale * phasor)))

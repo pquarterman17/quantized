@@ -45,11 +45,13 @@ class TestMedian:
         y = RNG.normal(size=40)
         got = median_filter(y, 5)
         ref = nd_median(y, size=5, mode="nearest")
-        np.testing.assert_allclose(got, ref, atol=1e-15)
+        np.testing.assert_allclose(got[2:-2], ref[2:-2], atol=1e-15)  # interior
+        # ends: the window keeps its full length and shifts inward
+        assert got[0] == np.median(y[:5]) and got[-1] == np.median(y[-5:])
 
     def test_hand_computed(self):
         got = median_filter(np.array([1.0, 9.0, 2.0, 3.0, 8.0]), 3)
-        np.testing.assert_array_equal(got, [1.0, 2.0, 3.0, 3.0, 8.0])
+        np.testing.assert_array_equal(got, [2.0, 2.0, 3.0, 3.0, 3.0])
 
     def test_nan_stays_nan_and_is_ignored_by_neighbours(self):
         got = median_filter(np.array([1.0, np.nan, 3.0, 5.0, 7.0]), 3)
@@ -98,10 +100,10 @@ class TestDespike:
         assert not mask.any()
 
     def test_spike_in_constant_signal(self):
-        y = np.ones(30)
-        y[12] = 3.0
+        y = np.full(30, 1.5)
+        y[12] = 9.5
         cleaned, mask = despike(y, 5, 5.0)
-        assert list(np.flatnonzero(mask)) == [12] and cleaned[12] == 1.0
+        assert list(np.flatnonzero(mask)) == [12] and cleaned[12] == 1.5
 
 
 class TestDespikeEdges:
@@ -129,7 +131,7 @@ class TestLowess:
         np.testing.assert_allclose(lowess(x, 3 * x + 1, 0.4), 3 * x + 1, atol=1e-9)
 
     def test_keeps_row_order_and_nan_rows(self):
-        x = np.array([3.0, 1.0, 2.0, 5.0, 4.0, 6.0, 7.0, 8.0])
+        x = np.array([8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0])  # descending is fine
         y = 2 * x
         y[2] = np.nan
         out = lowess(x, y, 0.8, 0)
@@ -194,15 +196,19 @@ class TestWienerDeconvolution:
         # explicit definition on the reflect-padded record
         half = k.size // 2
         pad = min(2 * half, blurred.size - 1)
-        ext = np.pad(blurred, pad, mode="reflect")
+        mu = blurred.mean()
+        ext = np.pad(blurred - mu, pad, mode="reflect")
         import scipy.fft as sf
 
         n = sf.next_fast_len(ext.size + k.size)
         kern = np.roll(np.concatenate([k, np.zeros(n - k.size)]), -half)
         h = np.fft.rfft(kern)
-        ref = np.fft.irfft(np.fft.rfft(ext, n) * np.conj(h) / (np.abs(h) ** 2 + lam), n)[
-            pad : pad + 64
-        ]
+        ref = (
+            np.fft.irfft(np.fft.rfft(ext, n) * np.conj(h) / (np.abs(h) ** 2 + lam), n)[
+                pad : pad + 64
+            ]
+            + mu
+        )
         np.testing.assert_allclose(est, ref, atol=1e-12)
 
     def test_recovers_peak_positions_and_sharpens(self):
@@ -292,39 +298,117 @@ class TestInverseFFT:
             np.arange(5.0),
             np.ones(5),
             np.zeros(5),
-            metadata={"spectralAnalysis": {"parameters": {"window": "hanning", "sided": "one"}}},
+            metadata={
+                "spectralAnalysis": {
+                    "parameters": {"outputType": "magnitude+phase", "window": "hanning"}
+                }
+            },
         )
         with pytest.raises(ValueError, match="window"):
             run_signal_op(spec, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
 
-    def test_dispatcher_uses_recorded_record_length(self):
-        n = 50
-        x = np.arange(n) * 0.02
-        y = np.cos(2 * np.pi * 3 * x)
+    def test_missing_or_joined_provenance_fails_closed(self):
+        # A join nests the source metadata, so spectralAnalysis is not at the top.
+        # It used to default to window=none / one-sided and invert garbage.
+        joined = _ds(
+            np.arange(5.0),
+            np.ones(5),
+            np.zeros(5),
+            metadata={"worksheet_transform": "join", "left_metadata": {"spectralAnalysis": {}}},
+        )
+        with pytest.raises(ValueError, match="Magnitude \+ phase"):
+            run_signal_op(joined, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
+        old = _ds(  # a pre-nfft FFT record: incomplete, not guessed
+            np.arange(5.0),
+            np.ones(5),
+            np.zeros(5),
+            metadata={
+                "spectralAnalysis": {
+                    "parameters": {
+                        "outputType": "magnitude+phase",
+                        "window": "none",
+                        "sided": "one",
+                    }
+                }
+            },
+        )
+        with pytest.raises(ValueError, match="incomplete"):
+            run_signal_op(old, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
+
+    @staticmethod
+    def _fft_sheet(y, dt, **kw):
         from quantized.calc.spectral_workbench import spectral_workbench
 
-        src = _ds(x, y, labels=["Y"], metadata={"xUnit": "s"})
-        mag = spectral_workbench(
+        src = _ds(np.arange(len(y)) * dt, y, labels=["Y"], metadata={"xUnit": "s"})
+        return spectral_workbench(
             src,
             operation="fft",
             channels=[0],
             window="none",
             detrend="none",
-            output_type="magnitude",
+            output_type="magnitude+phase",
+            **kw,
         )
-        ph = spectral_workbench(
-            src, operation="fft", channels=[0], window="none", detrend="none", output_type="phase"
-        )
-        both = DataStruct.create(
-            mag.time,
-            np.column_stack([mag.values[:, 0], ph.values[:, 0]]),
-            labels=["Y · Magnitude", "Y · Phase"],
-            units=["", "deg"],
-            metadata=mag.metadata,
-        )
-        res = run_signal_op(both, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
+
+    def test_magnitude_plus_phase_output_round_trips_with_one_provenance_block(self):
+        y = RNG.normal(size=50)  # 50 rows, padded to 64: needs recordLength
+        sheet = self._fft_sheet(y, 0.02)
+        assert list(sheet.labels) == ["Y \u00b7 Magnitude", "Y \u00b7 Phase"]
+        p = sheet.metadata["spectralAnalysis"]["parameters"]
+        assert p["outputType"] == "magnitude+phase" and p["recordLength"] == 50 and p["nfft"] == 64
+        res = run_signal_op(sheet, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
         np.testing.assert_allclose(res.data.values[:, 0], y, atol=1e-12)
-        assert res.data.time.size == n
+        np.testing.assert_allclose(res.data.time, np.arange(50) * 0.02, atol=1e-12)
+
+    def test_odd_transform_length_inverts_exactly(self):
+        y = RNG.normal(size=101)
+        sheet = self._fft_sheet(y, 0.01, zero_pad=101)
+        assert sheet.metadata["spectralAnalysis"]["parameters"]["nfft"] == 101
+        res = run_signal_op(sheet, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
+        np.testing.assert_allclose(res.data.values[:, 0], y, atol=1e-12)
+        np.testing.assert_allclose(res.data.time[1], 0.01)  # dt exact, not 0.0101
+
+    def test_two_sided_round_trip_and_time_axis_unit_label(self):
+        y = RNG.normal(size=64)
+        sheet = self._fft_sheet(y, 0.01, sided="two")
+        assert sheet.metadata["xUnit"] == "1/s"
+        res = run_signal_op(sheet, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
+        np.testing.assert_allclose(res.data.values[:, 0], y, atol=1e-12)
+        assert res.data.metadata["xUnit"] == "s"  # was "1/1/s"
+        assert res.data.metadata["xLabel"] == "Time"
+
+    def test_filtered_magnitude_column_still_inverts(self):
+        y = np.sin(2 * np.pi * 6 / 0.64 * np.arange(64) * 0.01) + np.sin(
+            2 * np.pi * 20 / 0.64 * np.arange(64) * 0.01
+        )
+        sheet = self._fft_sheet(y, 0.01)
+        mag = sheet.values[:, 0].copy()
+        mag[sheet.time > 12.0] = 0.0
+        edited = DataStruct.create(
+            sheet.time,
+            np.column_stack([mag, sheet.values[:, 1]]),
+            labels=sheet.labels,
+            units=sheet.units,
+            metadata=sheet.metadata,
+        )
+        res = run_signal_op(edited, "ifft", [], {"magnitudeChannel": 0, "phaseChannel": 1})
+        np.testing.assert_allclose(
+            res.data.values[:, 0], np.sin(2 * np.pi * 6 / 0.64 * np.arange(64) * 0.01), atol=1e-9
+        )
+
+    def test_argument_validation(self):
+        sheet = self._fft_sheet(RNG.normal(size=64), 0.01)
+        for args in (
+            {"magnitudeChannel": -1, "phaseChannel": 1},
+            {"magnitudeChannel": 1, "phaseChannel": 1},
+            {"magnitudeChannel": 0, "phaseChannel": 7},
+        ):
+            with pytest.raises(ValueError, match="different, existing"):
+                run_signal_op(sheet, "ifft", [], args)
+        with pytest.raises(ValueError, match="true or false"):
+            run_signal_op(
+                _ds(np.arange(9.0), np.arange(9.0)), "hilbert", [0], {"removeMean": "false"}
+            )
 
 
 class TestReduceBin:
@@ -333,13 +417,15 @@ class TestReduceBin:
         y = np.array([1.0, 3.0, 5.0, 10.0, 20.0, 7.0, 9.0])
         out = bin_average(_ds(x, y, labels=["Y"]), bin_width=1.0, with_sd=True, with_count=True)
         # bins [0,1): .0,.2,.9 | [1,2): 1.1,1.5 | [2,3): 2.5 | [3,4]: 3.0
-        np.testing.assert_allclose(out.time, [np.mean([0, 0.2, 0.9]), 1.3, 2.5, 3.0])
-        np.testing.assert_allclose(out.values[:, 0], [3.0, 15.0, 7.0, 9.0])
+        # span 3 / width 1 = 3 bins, the last closed on the right: x = 3.0 joins 2.5
+        np.testing.assert_allclose(out.time, [np.mean([0, 0.2, 0.9]), 1.3, 2.75])
+        np.testing.assert_allclose(out.values[:, 0], [3.0, 15.0, 8.0])
         np.testing.assert_allclose(
-            out.values[:, 1], [np.std([1, 3, 5], ddof=1), np.std([10, 20], ddof=1), np.nan, np.nan]
+            out.values[:, 1],
+            [np.std([1, 3, 5], ddof=1), np.std([10, 20], ddof=1), np.std([7, 9], ddof=1)],
         )
-        np.testing.assert_allclose(out.values[:, 2], [3, 2, 1, 1])
-        assert list(out.labels) == ["Y", "Y SD", "N points"]
+        np.testing.assert_allclose(out.values[:, 2], [3, 2, 2])
+        assert list(out.labels) == ["Y", "Y SD", "Y N"]
 
     def test_median_and_bin_count_and_centre_x(self):
         x = np.arange(10.0)
@@ -351,9 +437,7 @@ class TestReduceBin:
     def test_empty_bins_emit_no_row_and_descending_x_keeps_order(self):
         x = np.array([10.0, 9.8, 9.7, 5.2, 5.0])
         out = bin_average(_ds(x, x * 2), bin_width=1.0)
-        assert out.time.size == 3 and np.all(
-            np.diff(out.time) < 0
-        )  # 10.0 opens the closed last bin; order kept
+        assert out.time.size == 2 and np.all(np.diff(out.time) < 0)  # order kept
 
     def test_loop_is_refused(self):
         x = np.concatenate([np.linspace(0, 5, 11), np.linspace(5, 0, 11)])
@@ -490,3 +574,110 @@ class TestSigopRoute:
             },
         )
         assert r.json()["rows_out"] == 4
+
+
+class TestReviewFixes:
+    """One regression per gap-4 lane C review finding (each failed before its fix)."""
+
+    def test_h1_lowess_refuses_a_hysteresis_loop(self):
+        h = np.concatenate([np.linspace(-2, 2, 100), np.linspace(2, -2, 100)])
+        m = np.tanh(2 * (h - np.r_[np.full(100, 1.0), np.full(100, -1.0)]))
+        with pytest.raises(ValueError, match="reverses direction"):
+            lowess(h, m, 0.1, 0)
+        with pytest.raises(ValueError, match="reverses direction"):
+            run_signal_op(_ds(h, m), "lowess", [0], {"fraction": 0.1, "iterations": 0})
+
+    def test_m4_sparse_counts_are_not_destroyed(self):
+        rng = np.random.default_rng(11)
+        y = rng.poisson(0.2, 500).astype(float)
+        cleaned, mask = despike(y, 7, 5.0)
+        assert not mask.any()  # was: 82 of 91 non-zero counts flagged
+        np.testing.assert_array_equal(cleaned, y)
+        y[250] = 60.0
+        _, mask = despike(y, 7, 5.0)
+        assert list(np.flatnonzero(mask)) == [250]
+
+    def test_m4_constant_float_signal_flags_nothing(self):
+        _, mask = despike(np.full(20, 2.5), 5, 5.0)
+        assert not mask.any()
+
+    def test_m6_reduce_is_linear_time(self):
+        import time
+
+        n = 40000
+        d = _ds(np.arange(n, dtype=float), RNG.normal(size=n), RNG.normal(size=n))
+        t0 = time.perf_counter()
+        out = average_duplicates(d)
+        assert out.time.size == n
+        assert time.perf_counter() - t0 < 3.0  # was 10.6 s
+
+    def test_m6_median_stat_matches_a_loop_reference(self):
+        x = np.array([1.0, 1, 1, 2, 2, 3])
+        y = np.array([1.0, 9, 2, 4, 6, 5])
+        out = average_duplicates(_ds(x, y), stat="median", with_sd=True)
+        np.testing.assert_allclose(out.values[:, 0], [2.0, 5.0, 5.0])
+        np.testing.assert_allclose(out.values[1, 1], np.std([4, 6], ddof=1))
+
+    def test_m7_window_memory_is_bounded_and_work_capped(self):
+        import tracemalloc
+
+        y = RNG.normal(size=20000)
+        tracemalloc.start()
+        median_filter(y, 1001)
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert peak < 120e6  # unchunked this was an n x w matrix: 160 MB+
+        with pytest.raises(ValueError, match="too much work"):
+            median_filter(np.zeros(200_000), 20001)
+
+    def test_m7_lowess_iterations_capped(self):
+        with pytest.raises(ValueError, match="0 to 10"):
+            lowess(np.arange(10.0), np.arange(10.0), 0.5, 1000)
+
+    def test_l1_two_adjacent_end_spikes_are_removed(self):
+        y = np.sin(np.linspace(0, 3, 100)) * 0.1 + 0.001 * np.arange(100) % 0.01
+        truth = y.copy()
+        y[-2:] += 50.0
+        cleaned, mask = despike(y, 7, 3.0)
+        assert mask[-2:].all()
+        assert np.abs(cleaned[-2:] - truth[-2:]).max() < 1.0
+
+    def test_l2_median_removes_a_spike_at_either_end(self):
+        y = np.zeros(20)
+        y[0] = y[-1] = 10.0
+        out = median_filter(y, 5)
+        assert out[0] == 0.0 and out[-1] == 0.0
+
+    def test_l3_exact_multiple_span_has_no_lone_last_bin(self):
+        x = np.arange(11.0)
+        out = bin_average(_ds(x, x), bin_width=2.0, with_count=True)
+        assert out.time.size == 5
+        assert out.values[-1, 1] == 3  # 8, 9, 10 -- not a singleton at 10
+
+    def test_l4_tolerance_does_not_chain_a_slow_sweep(self):
+        x = np.array([0.0, 0.4, 0.8, 1.2, 1.6])
+        out = average_duplicates(_ds(x, x), tolerance=0.5)
+        assert out.time.size == 3  # {0, 0.4} {0.8, 1.2} {1.6}; chaining gave 1
+
+    def test_l5_count_is_per_channel_finite_samples(self):
+        x = np.array([1.0, 1.0, 1.0])
+        a = np.array([1.0, 2.0, 3.0])
+        b = np.array([5.0, np.nan, np.nan])
+        out = average_duplicates(_ds(x, a, b, labels=["A", "B"]), with_count=True)
+        assert list(out.labels) == ["A", "B", "A N", "B N"]
+        assert list(out.values[0, 2:]) == [3.0, 1.0]
+
+    def test_l6_text_sidecars_follow_the_kept_rows(self):
+        meta = {"text_columns": {"Sample": ["a", "b", "c", "d", "e"]}}
+        d = _ds(np.arange(5.0), np.arange(5.0), metadata=meta)
+        nth = keep_every_nth(d, n=2)
+        assert nth.metadata["text_columns"]["Sample"] == ["a", "c", "e"]
+        med = run_signal_op(d, "median", [0], {"window": 3}).data
+        assert med.metadata["text_columns"]["Sample"] == ["a", "b", "c", "d", "e"]
+
+    def test_l9_wiener_does_not_shrink_a_baseline(self):
+        x = np.linspace(0, 50, 1001)
+        y = 1000.0 + np.exp(-(((x - 25) / 0.5) ** 2))
+        blurred = convolve_kernel(x, y, "gaussian", 1.0)
+        est = deconvolve_wiener(x, blurred, "gaussian", 1.0, 1e-3)
+        assert abs(est[100] - 1000.0) < 1e-3  # was -1.0 (gain 1/(1+lambda))

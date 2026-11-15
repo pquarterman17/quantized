@@ -55,5 +55,8 @@ describe("sigopParamsOf (replay validation)", () => {
     expect(() => sigopParamsOf({ method: "bogus" })).toThrow(/unknown signal operation/);
     expect(() => sigopParamsOf({ method: "median", channels: ["a"] })).toThrow(/channels/);
     expect(() => sigopParamsOf({ method: "median", channels: [0], args: { w: {} } })).toThrow(/argument/);
+    const bad = { magnitudeChannel: -1, phaseChannel: 1 };
+    expect(() => sigopParamsOf({ method: "ifft", channels: [], args: bad })).toThrow(/different whole-number/);
+    expect(() => sigopParamsOf({ method: "ifft", channels: [], args: { magnitudeChannel: 1, phaseChannel: 1 } })).toThrow(/different/);
   });
 });

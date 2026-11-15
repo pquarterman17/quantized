@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { analysisData } from "../../../lib/rowstate";
+import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
 import { computeSigop, type SigopComputed, type SigopParams } from "../../../lib/transformSigop";
 import type { Dataset } from "../../../lib/types";
 import { createSigopFromApp } from "../../../store/sigopCommand";
@@ -30,7 +30,9 @@ export function useSigopRun(dataset: Dataset | null, params: SigopParams | strin
   const inFlight = useRef(false);
   // `params` is rebuilt every render; its JSON is the stable identity.
   const paramsKey = typeof params === "object" && params ? JSON.stringify(params) : "";
-  const data = dataset?.data;
+  // Row exclusions and the Data Filter change what analysisData() reads without
+  // changing `data`; spreading the sanctioned identity keeps preview == Create.
+  const rowState = rowStateIdentity(dataset);
 
   useEffect(() => {
     setDone(null);
@@ -61,7 +63,7 @@ export function useSigopRun(dataset: Dataset | null, params: SigopParams | strin
     };
     // `params` is covered by `paramsKey`; `dataset` by its id + data identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataset?.id, data, dataset?.pending, paramsKey]);
+  }, [dataset?.id, ...rowState, dataset?.pending, paramsKey]);
 
   const commit = async (): Promise<boolean> => {
     if (!dataset || typeof params !== "object" || !params || inFlight.current) return false;
