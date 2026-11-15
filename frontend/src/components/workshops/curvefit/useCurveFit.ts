@@ -360,6 +360,7 @@ export function useCurveFit(): CurveFitState {
           fitData: {
             x: pairs.x, y: pairs.y, xKey: fitXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
             weightMode: finiteDy ? weight.mode : "none", scaleErrors: weight.scaleErrors !== false,
+            ...(custom && parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
           },
           datasetId: ds.id,
           model: modelName,

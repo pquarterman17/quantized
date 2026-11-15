@@ -7,6 +7,7 @@
 
 import { useMemo, useState } from "react";
 
+import { INDEX_X, numericMetaFields, paramNamesOf, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import type { PeakRecipe } from "../../../lib/peakwizard";
@@ -14,6 +15,7 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { Button, Select, StatusDot } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
+import SummaryXPicker from "../analysisselection/SummaryXPicker";
 import PeakBatchTable from "./PeakBatchTable";
 import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchRows";
 import { usePeakBatch } from "./usePeakBatch";
@@ -34,6 +36,13 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
   // The sort lives here so the table and the CSV share one order.
   const [sort, setSort] = useState<BatchSort | null>(null);
   const shown = useMemo(() => (sort ? sortRows(rows, sort.key, sort.dir) : rows), [rows, sort]);
+  const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
+  const ranSets = useMemo(() => {
+    const ids = new Set(b.results?.map((r) => r.datasetId) ?? []);
+    return datasets.filter((d) => ids.has(d.id));
+  }, [b.results, datasets]);
+  const xFields = useMemo(() => numericMetaFields(ranSets), [ranSets]);
+  const xParams = useMemo(() => paramNamesOf(ranSets), [ranSets]);
   const busy = b.phase === "preparing" || b.phase === "fitting" || b.phase === "cancelling";
   const ch = b.channels;
 
@@ -43,7 +52,7 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
     saveBlob(csvBlob(batchCsv(shown)), `peak-batch-${safe}.csv`);
   };
   const addTable = () => {
-    const id = b.addAsTable();
+    const id = b.addAsTable(xChoice);
     if (id) toast("batch table added to the library");
   };
 
@@ -110,8 +119,9 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
       {b.results && (
         <>
           <PeakBatchTable rows={shown} sort={sort} onSort={(key) => setSort((s) => nextSort(s, key))} />
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Button size="sm" onClick={exportCsv}>Export CSV</Button>
+            <SummaryXPicker choice={xChoice} onChange={setXChoice} metaFields={xFields} params={xParams} />
             <Button size="sm" onClick={addTable}>Add as table</Button>
           </div>
         </>

@@ -13,6 +13,8 @@ import { useMemo, useRef, useState } from "react";
 
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
+import SummaryXPicker from "../analysisselection/SummaryXPicker";
+import { INDEX_X, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import ApplyRecipeSection from "./ApplyRecipeSection";
 import { useTemplates } from "./useTemplates";
 import { deriveExpectations, expectationsText, recordingInputId } from "../../../lib/recipeExpect";
@@ -24,6 +26,8 @@ export default function TemplatesSection() {
   const [description, setDescription] = useState("");
   const [picked, setPicked] = useState("");
   const [applying, setApplying] = useState(false);
+  // The batch summary's X (index, or a parameter read off each file).
+  const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
@@ -161,10 +165,16 @@ export default function TemplatesSection() {
             hidden
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []);
-              if (files.length && picked && !pipelineRunning) void t.runBatch(picked, files);
+              if (files.length && picked && !pipelineRunning) void t.runBatch(picked, files, xChoice);
               e.target.value = "";
             }}
           />
+        </div>
+      )}
+      {t.templates.length > 0 && picked && (
+        <div style={{ marginTop: 4 }}>
+          <SummaryXPicker typed choice={xChoice} onChange={setXChoice} disabled={pipelineRunning} />
+          <div className="qzk-ds-meta" style={{ whiteSpace: "normal" }}>Batch puts this on the summary worksheet X; a file without it is left blank and reported.</div>
         </div>
       )}
       {recipe && (recipe.description || recipe.expects) && (

@@ -152,6 +152,52 @@ describe("TemplatesSection", () => {
     expect(a.data.labels).toContain("d");
   });
 
+  it("batch with X from the name: sorted rows, and the toast reports the file left blank", async () => {
+    saveTemplate(TEMPLATE);
+    uploadMock.mockResolvedValue(DATA);
+    fitMock.mockResolvedValue({ params: [2, 0], errors: [0.1, 0.1], R2: 0.999 });
+    emitMock.mockResolvedValue({ report: { title: "t", sections: [] } });
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
+    fireEvent.change(screen.getByLabelText("summary X from"), { target: { value: "name" } });
+    fireEvent.click(screen.getByLabelText("Sort rows by X"));
+    const input = document.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("run_300K.dat"), file("plain.dat"), file("run_100K.dat")] } });
+    await waitFor(() => expect(useApp.getState().datasets.some((d) => d.name.includes("summary"))).toBe(true));
+    const summary = useApp.getState().datasets.find((d) => d.name.includes("summary"))!;
+    expect(summary.data.time.slice(0, 2)).toEqual([100, 300]);
+    expect(summary.data.time[2]).toBeNaN();
+    expect(summary.data.metadata.files).toEqual(["run_100K.dat", "run_300K.dat", "plain.dat"]);
+    const msg = useToasts.getState().toasts.at(-1)?.msg ?? "";
+    expect(msg).toContain("X left blank for 1");
+    expect(msg).toContain("plain.dat: no number in its name");
+  });
+
+  it("a cancelled batch also reports the kept files whose X is blank", async () => {
+    saveTemplate(TEMPLATE);
+    uploadMock.mockResolvedValue(DATA);
+    let markSecondFitStarted!: () => void;
+    const secondFitStarted = new Promise<void>((resolve) => { markSecondFitStarted = resolve; });
+    fitMock
+      .mockResolvedValueOnce({ params: [2, 0], errors: [0.1, 0.1], R2: 0.999 })
+      .mockImplementationOnce((_request, signal: AbortSignal | undefined) => new Promise((_resolve, reject) => {
+        markSecondFitStarted();
+        signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+      }));
+    emitMock.mockResolvedValue({ report: { title: "t", sections: [] } });
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved template" }), { target: { value: "linear flow" } });
+    fireEvent.change(screen.getByLabelText("summary X from"), { target: { value: "name" } });
+    const input = document.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("done.dat"), file("in-flight.dat")] } });
+    await secondFitStarted;
+    act(() => usePendingOps.getState().ops.find((item) => item.label.includes("linear flow"))?.cancel?.());
+    await waitFor(() => expect(useApp.getState().pipelineRunning).toBe(false));
+    const msg = useToasts.getState().toasts.at(-1)?.msg ?? "";
+    expect(msg).toContain("batch cancelled — kept 1 completed file");
+    expect(msg).toContain("X left blank for 1: done.dat: no number in its name");
+  });
+
   it("batch preflight flags an invalid template without mutating the imported worksheet", async () => {
     saveTemplate(toTemplate(
       "broken flow",
