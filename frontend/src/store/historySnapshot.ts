@@ -168,6 +168,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   // the live store on every undo/redo (harmless today, a silent clobber the
   // day AppState gains a real `view` field).
   const { view, carriedComposition, ...fields } = snap;
+  const survives = fitOverlaySurvives(s, snap);
   return {
     ...fields,
     ...hydrateView(view),
@@ -210,12 +211,12 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     ...focusTransientReset(),
     // Preserve scratch across unrelated edits, but clear it when restored
     // worksheet state may no longer match the rendered fit curve.
-    fitOverlay: fitOverlaySurvives(s, snap) ? s.fitOverlay : null,
+    fitOverlay: survives ? s.fitOverlay : null,
     // Then the window-scoped fit (gap audit 5 lane C, review N3): a restore
     // that changes the focused window, or leaves its fit slot empty, hands
     // the slot to the restored window's own saved fit -- never another
     // window's fit drawn meanwhile, never a lost one.
-    ...restoredFitSlot(s, snap),
+    ...overlaysNow()?.restoredSlot(s, snap, survives),
     // After the reset, which nulls `composition`: a snapshotted break or
     // spatial arrangement comes back.
     composition: carriedComposition,
@@ -224,14 +225,6 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     openReportId: hasId(snap.reports, s.openReportId) ? s.openReportId : null,
     openAnalysisResultId: hasId(snap.analysisResults, s.openAnalysisResultId) ? s.openAnalysisResultId : null,
   };
-}
-
-function restoredFitSlot(s: AppState, snap: HistorySnapshot): Partial<AppState> {
-  const focusChanged = snap.focusedWindowId !== s.focusedWindowId;
-  if (!focusChanged && fitOverlaySurvives(s, snap) && s.fitOverlay) return {};
-  const target = snap.plotWindows.find((w) => w.id === snap.focusedWindowId);
-  const patch = overlaysNow()?.handoff(target, { datasets: snap.datasets, staleFits: s.staleFits, baselineOverlay: s.baselineOverlay });
-  return patch ?? {};
 }
 
 /** Does the drawn fit curve still describe its worksheet after this restore?

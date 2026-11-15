@@ -31,7 +31,7 @@ import { figureDocumentToPlotView } from "../lib/figureDocument";
 import { backgroundFromDocument, captureFit, fitFromDocument, overlayRowsKey, sanitizeFigureOverlays } from "../lib/figureOverlays";
 import { overlayLayout, placeOverlay } from "../lib/overlayPlacement";
 import { perSeriesXDataset } from "../lib/perSeriesX";
-import type { PlotView, PlotWindow } from "../lib/plotview";
+import { snapshotView, type PlotView, type PlotWindow } from "../lib/plotview";
 import { shownCurves } from "../lib/shownCurves";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../lib/types";
 import { asRestore } from "./autosaveTrigger";
@@ -163,6 +163,29 @@ function captured(cur: FitOverlay, ds: Dataset, bg: BaselineOverlay | null): Ret
   const overlays = captureFit(cur, ds, key, bg);
   sections.set(cur, { key, bg, overlays });
   return overlays;
+}
+
+/** The focused window's document for an undo snapshot, or null when it is
+ *  unchanged (store/windowDocuments.windowsWithLiveFit): folded without
+ *  recording, against the LIVE view (review 3 R1). */
+export function snapshotDocument(w: PlotWindow, s: AppState): FigureDocument | null {
+  if (w.kind !== "plot" || !w.document) return null;
+  const doc = fold(w.document, s, w.id, false, snapshotView(s));
+  return doc === w.document ? null : doc;
+}
+
+/** The fit slot after a history restore (store/historySnapshot): unchanged
+ *  when the focus stays and the drawn fit `survives` the restore; otherwise
+ *  the restored focused window's own saved fit (HANDOFF) -- never another
+ *  window's fit drawn meanwhile, never a lost one (review N3). */
+export function restoredSlot(
+  s: AppState,
+  snap: Pick<AppState, "focusedWindowId" | "plotWindows" | "datasets">,
+  survives: boolean,
+): Partial<AppState> {
+  if (snap.focusedWindowId === s.focusedWindowId && survives && s.fitOverlay) return {};
+  const target = snap.plotWindows.find((w) => w.id === snap.focusedWindowId);
+  return handoff(target, { datasets: snap.datasets, staleFits: s.staleFits, baselineOverlay: s.baselineOverlay });
 }
 
 /** `w` (the focused window) with its fold applied; see `fold` for `view`. */

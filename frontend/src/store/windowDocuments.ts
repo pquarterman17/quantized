@@ -177,18 +177,12 @@ export function commitFocusedWindow(w: PlotWindow, s: AppState, record = true): 
  *  the fit's placement is checked against that LIVE view, not the document's
  *  stale one, or a fit on a column plotted since focus is lost (review 3 R1). */
 export function windowsWithLiveFit(s: AppState): AppState["plotWindows"] {
-  const m = overlaysNow();
-  const i = m ? s.plotWindows.findIndex((w) => w.id === s.focusedWindowId) : -1;
-  if (!m || i < 0) return s.plotWindows;
-  const w = s.plotWindows[i];
-  if (w.kind !== "plot" || !w.document) return s.plotWindows;
-  const doc = m.fold(w.document, s, w.id, false, snapshotView(s));
-  if (doc === w.document) return s.plotWindows;
+  const i = s.plotWindows.findIndex((w) => w.id === s.focusedWindowId);
+  const doc = i < 0 ? null : overlaysNow()?.snapshotDocument(s.plotWindows[i]!, s);
   // Only `overlays` differs (the view stays the window's own), so no deep
   // copy: this runs on EVERY undo step while a fit is shown (review 3 L4).
   // The section object is the module's immutable per-curve capture.
-  const snap: PlotWindow = { ...w, document: doc };
-  return s.plotWindows.map((x, j) => (j === i ? snap : x));
+  return doc ? s.plotWindows.map((x, j) => (j === i ? { ...x, document: doc } : x)) : s.plotWindows;
 }
 
 /** Replace a plot window's canonical document and regenerate every legacy
