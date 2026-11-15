@@ -374,13 +374,11 @@ def test_realdata_sop_old_layer5_binds_sheet_two(corpus_dir: Path) -> None:
 def test_realdata_sop_graph73_binds_sheet_five(corpus_dir: Path) -> None:
     """Origin plots SOPvsHPPCA123_B@5/_C@5/_D@5 against _A@5. The importer
     makes B the X column of ``SOPvsHPPCA123@5``, so B cannot be drawn as a
-    Y and is diagnosed; C and D bind by name. Graph73 is only decoded once
-    the separator-flag admission (#681) is in; until then it is skipped."""
+    Y and is diagnosed; C and D bind by name. Graph73 decodes since the
+    separator-flag admission (#681): a missing layer is a regression, so it
+    fails here; the test skips only when the corpus file is absent."""
     figs, books = _import(corpus_dir, _SOP)
-    got = [f for f in figs if (f["name"], f["layer"]) == ("Graph73", 1)]
-    if not got:
-        pytest.skip("Graph73 layer 1 not decoded on this branch (needs #681)")
-    f = got[0]
+    f = _layer(figs, "Graph73", 1)
     assert {(c["book"], c["x"], c["y"]) for c in f["curves"]} == {
         ("SOPvsHPPCA123@5", "A", "C"),
         ("SOPvsHPPCA123@5", "A", "D"),

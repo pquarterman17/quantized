@@ -175,6 +175,24 @@ describe("runTemplateOnFolder", () => {
     expect(s.pipelineRunning).toBe(false); // released even on success
   });
 
+  it("X from a metadata field: sorted summary, blank row reported in the toast", async () => {
+    useApp.setState({ datasets: [
+      ds("d1", "grp", { data: { ...raw, metadata: { Temperature: "300 K" } } }),
+      ds("d2", "sub"), // no Temperature
+      ds("d3"),
+    ] });
+    vi.mocked(askParams).mockResolvedValue({ template: "T", xFrom: "Metadata field", xName: "Temperature", xSort: true });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 2], R2: 0.9 });
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+    await runTemplateOnFolder(fld("grp"));
+    const summary = useApp.getState().datasets.find((d) => d.name.startsWith("T — grp"))!;
+    expect(summary.data.time[0]).toBe(300);
+    expect(summary.data.time[1]).toBeNaN();
+    expect(summary.data.metadata.files).toEqual(["d1.dat", "d2.dat"]);
+    const msg = useToasts.getState().toasts.at(-1)?.msg ?? "";
+    expect(msg).toContain("X left blank for 1: d2.dat: no Temperature");
+  });
+
   it("a cancelled picker runs nothing", async () => {
     vi.mocked(askParams).mockResolvedValue(null);
     await runTemplateOnFolder(fld("grp"));

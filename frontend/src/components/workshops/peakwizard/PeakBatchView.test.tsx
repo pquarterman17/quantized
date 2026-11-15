@@ -207,6 +207,27 @@ describe("PeakBatchView", () => {
     expect((added.data.metadata.text_columns as Record<string, string[]>).Dataset).toHaveLength(5);
   });
 
+  it("puts a metadata field on the table's X, sorted, blank and reported for a dataset without it", async () => {
+    const withT = (d: Dataset, t: string): Dataset => ({ ...d, data: { ...d.data, metadata: { Temperature: t } } });
+    useApp.setState({ datasets: [withT(A, "300 K"), B, withT(C, "100 K")] });
+    await runAll();
+    await screen.findByRole("table", { name: "batch results" });
+    fireEvent.change(screen.getByLabelText("summary X from"), { target: { value: `meta:${JSON.stringify(["Temperature"])}` } });
+    fireEvent.click(screen.getByLabelText("Sort rows by X"));
+    fireEvent.click(screen.getByRole("button", { name: "Add as table" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
+    const added = useApp.getState().datasets[3]!;
+    const dsNames = (added.data.metadata.text_columns as Record<string, string[]>).Dataset;
+    // scan c (100 K) first, then scan a (300 K) rows, the unmeasured scan b last and blank.
+    expect(dsNames[0]).toBe("scan c");
+    expect(added.data.time[0]).toBe(100);
+    expect(added.data.time.at(-1)).toBeNaN();
+    expect(dsNames.at(-1)).toBe("scan b");
+    expect(added.data.metadata.x_column_name).toBe("Temperature");
+    expect(useApp.getState().status).toContain("left blank");
+    expect(useApp.getState().status).toContain("scan b");
+  });
+
   it("says why it cannot run", () => {
     render(<PeakBatchView recipes={[]} current="" pollMs={5} />);
     expect(screen.getByRole("button", { name: "Run batch" })).toBeDisabled();

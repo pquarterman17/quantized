@@ -178,4 +178,4 @@ def test_missing_bumps_is_422_with_install_hint(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setitem(sys.modules, "bumps", None)  # forces ImportError on import
     r = client.post("/api/reflectivity/dream", json=_body())
     assert r.status_code == 422
-    assert "quantized[bumps]" in r.json()["detail"]
+    assert "quantized-lab[bumps]" in r.json()["detail"]

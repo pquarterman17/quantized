@@ -23,7 +23,8 @@ the MATLAB original; the GUI is a ground-up revamp.
 
 **Import instrument data** — Quantum Design VSM/PPMS/MPMS, Lake Shore VSM,
 PANalytical XRDML (1-D scans *and* 2-D reciprocal-space maps with Q-space),
-Rigaku, NCNR reflectometry/PNR, refl1d, SIMS, generic CSV/Excel — with
+Rigaku, NCNR reflectometry/PNR, refl1d, SIMS, generic CSV, Excel
+(`.xlsx` and legacy `.xls`) — with
 content sniffing for ambiguous extensions, drag-drop, paste, guided import
 wizard, and one-click re-import when the source file changes.
 
@@ -31,7 +32,9 @@ wizard, and one-click re-import when the source file changes.
 readers recover workbooks, figures (with styles, legends, annotations),
 and notes; the `.opj` writer produces projects real Origin loads; plus
 Origin-ASCII + `.ogs` scripts, `.otp` template import, and an optional
-Windows COM "Send to Origin" bridge.
+Windows COM "Send to Origin" bridge. `qz convert FILES... --to
+{csv,xlsx,dwk} --out DIR` batch-converts `.opj`/`.opju` projects without
+Origin, and reports (rather than writes) any book it could not read in full.
 
 **Explore interactively** — an Origin-style pointer tool (drag, resize,
 and pin plot text; draggable legends), multi-window MDI with linked
@@ -61,9 +64,11 @@ rich-text labels (µ₀H, Å⁻¹, χ″…), journal size presets
 and a multi-panel figure composer for Fig. 1(a)–(d)-style pages.
 
 **Stay reproducible** — every correction is a replayable pipeline step
-with a recalculation DAG, a macro recorder emits runnable scripts,
-workspaces save to a single `.dwk` file, and everything is scriptable
-through the HTTP API and a plugin system.
+with a recalculation DAG, the recorded pipeline exports as a runnable Python
+script, workspaces save to a single `.dwk` file, and everything is
+scriptable through the public Python API (`import quantized.api as qz`:
+load, fit, convert Origin projects, save tables), the HTTP API and a plugin
+system.
 
 **DiraCulator** — the built-in materials calculators (units, X-ray/neutron,
 crystallography, SLD, semiconductors, superconductors, magnetism, optics,

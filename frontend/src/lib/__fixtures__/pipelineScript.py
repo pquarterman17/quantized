@@ -2,7 +2,7 @@
 """Quantized pipeline: reproducible analysis script (7 steps).
 
 Re-runs the recorded data pipeline headless with the public quantized.api
-(pip install quantized). It runs in this process: no app or server is needed,
+(pip install quantized-lab). It runs in this process: no app or server is needed,
 and the project open in the app is not changed. Steps with no quantized.api
 equivalent are kept as comments that say so.
 

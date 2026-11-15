@@ -93,6 +93,8 @@ describe("useCurveFit edited start table", () => {
     // Before: p0 [1, 0] — the registry's slope 1, not the data's 10.
     expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ p0: [10, 0], fixed: [false, true] }));
     expect(autoGuess).toHaveBeenCalledWith("Linear", [0, 1, 2, 3], [10, 20, 30, 40]);
+    // The held flags travel with the fit, so a results table can say "(fixed)".
+    expect(result.current.fitData?.fixed).toEqual([false, true]);
   });
 });
 

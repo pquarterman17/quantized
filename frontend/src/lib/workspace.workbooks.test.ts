@@ -172,9 +172,9 @@ describe("parseWorkspace workbooks (v4, LIBRARY_WORKBOOK_UX_PLAN PR A2)", () => 
     );
   });
 
-  it("rejects a version 6 document (5 is the P2.5 transform-steps version)", () => {
+  it("rejects a version 7 document (5 = transform steps, 6 = features v0.34.0 drops)", () => {
     expect(() =>
-      parseWorkspace(JSON.stringify({ format: WORKSPACE_FORMAT, version: 6, datasets: [] })),
+      parseWorkspace(JSON.stringify({ format: WORKSPACE_FORMAT, version: 7, datasets: [] })),
     ).toThrow(/unsupported workspace version/);
   });
 

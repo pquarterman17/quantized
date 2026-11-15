@@ -222,3 +222,71 @@ The tests fit synthetic noisy data for every model, using several random true
 parameter sets. The fit must recover each parameter within 6 standard errors.
 quantized's fitter must also match scipy's `curve_fit` to 1e-6 of the data
 range.
+
+## Peak-model shapes and ties (Peak Analyzer, multi-peak fits)
+
+The multi-peak model (`calc/peak_model.py`, shape table in
+`calc/peak_model_shapes.py`) is separate from the curve-fit registry above.
+Each peak is one shape plus a shared polynomial background. Every shape
+starts with `center, height`, and `height` is the value **at** `center`
+above the background. For Fano and Doniach–Šunjić the maximum lies off
+`center`, but the reported centre and height are still the parameters.
+
+| Shape | Further parameters | FWHM | Area |
+|---|---|---|---|
+| Gaussian | fwhm | fwhm | closed form |
+| Lorentzian | fwhm | fwhm | closed form |
+| Pseudo-Voigt | fwhm, eta (0–1) | fwhm | closed form |
+| Voigt | fwhm_g, fwhm_l | Olivero–Longbothum | closed form |
+| Split Gaussian, Split Lorentzian | fwhm_left, fwhm_right | mean of the two halves | closed form |
+| Split pseudo-Voigt | fwhm_left, fwhm_right, eta | mean of the two halves | closed form |
+| Pearson VII | fwhm, m (> 0.5) | fwhm | closed form (Gamma functions) |
+| Fano / BWF | fwhm, inv_q (= 1/q; 0 = Lorentzian) | closed form, only when abs(inv_q) < 1 | none (diverges) |
+| Doniach–Šunjić | fwhm, alpha (0 ≤ alpha < 1) | found numerically | none (diverges) |
+
+Doniach–Šunjić tails toward higher x (the binding-energy convention). Fano
+and Doniach–Šunjić report no area, so they cannot take part in an area-ratio
+tie, and a fit containing one says why it cannot be published as areas.
+
+**Ties.** A parameter may follow another one (`tie`). `tie_op` says how;
+the coefficient `c` is fixed, or fitted as one extra parameter, and its
+standard error is carried through the tie by the chain rule:
+
+| tie_op | Tied value | Applies to |
+|---|---|---|
+| equal (default) | t | any parameter of the same kind |
+| offset | t + c | centres (a doublet's splitting) |
+| ratio | c · t, c > 0 | heights or widths of the same kind |
+| area_ratio | the height whose area is c times the target peak's area | a height tied to another peak's height (XPS doublets); both shapes need an area |
+
+An unknown operation, a coefficient without a tie, mismatched kinds, a
+non-positive ratio, an area ratio on a shape without an area, and any cycle
+of ties are refused before fitting.
+
+## Weighted By-level fits and Compare datasets (F-test)
+
+**By levels** (Curve Fit's group-by panel) fits each level of a category
+separately and applies the panel's weighting to each level's own error
+column. A level whose sigma is invalid fails on its own; the other levels
+still fit.
+
+**Compare datasets** (Global fit; `POST /api/fitting/compare-datasets`,
+`calc/dataset_compare.py`) is Origin's NLFit "Compare Datasets". It asks
+whether one shared value of the named parameters describes every dataset,
+with two nested fits of the same model to the same points:
+
+- restricted: the named parameters take one value across all datasets;
+- full: every parameter is fitted per dataset.
+
+With RSS the (weighted) residual sum of squares and df = n − p for each fit,
+the extra-sum-of-squares statistic is
+
+    F = ((RSS_r − RSS_f) / (df_r − df_f)) / (RSS_f / df_f)
+
+on (df_r − df_f, df_f) degrees of freedom (Motulsky & Christopoulos 2004,
+ch. 22). A small p-value means the datasets differ in those parameters. The
+full fit starts from both the restricted optimum and your own starting
+values and keeps the lower RSS; it is still a local search. The test refuses
+to run with fewer than two datasets, no named parameter, nothing to test
+(df_r = df_f), no residual degrees of freedom, a non-finite fit, an
+unconverged full fit, or a mix of weighted and unweighted datasets.

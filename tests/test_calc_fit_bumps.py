@@ -191,5 +191,5 @@ def test_missing_bumps_raises_install_hint(monkeypatch: pytest.MonkeyPatch) -> N
         monkeypatch.setitem(sys.modules, mod, None)  # forces ImportError on import
     assert not bumps_available()
     x, y, dy = _gaussian_data()
-    with pytest.raises(ValueError, match=r"quantized\[bumps\]"):
+    with pytest.raises(ValueError, match=r"quantized-lab\[bumps\]"):
         fit_bumps(x, y, dy, model="Gaussian", p0=P0)
