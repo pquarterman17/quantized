@@ -296,6 +296,7 @@ def _render_impl(
     y2_scale: str | None = None,
     y2_fmt: Mapping[str, Any] | None = None,
     y2_step: float | None = None,
+    extra_y: Sequence[Mapping[str, Any]] = (),  # Y3+ (gap audit 4 G11): calc.figure_multi_y
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes | dict[str, Any]:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
@@ -329,10 +330,10 @@ def _render_impl(
     ``None``/all-``False`` (the default) is today's single-axis behaviour,
     byte-identical. ``y2_label``/``y2_scale``/``y2_fmt``/``y2_step`` mirror
     their primary-axis counterparts but apply only to the secondary axis;
-    a fixed secondary range rides ``overrides["y2_lim"]`` (see
-    ``figure_y2.render_with_secondary_axis``'s doc). Not compatible with
-    ``x_breaks`` (raises ``ValueError``) -- a broken figure has several
-    axes already and gains no coherent secondary-axis meaning.
+    a fixed secondary range rides ``overrides["y2_lim"]``; ``extra_y`` adds
+    Y3, Y4, ... (see ``figure_y2.render_with_secondary_axis``'s doc). Neither
+    is compatible with ``x_breaks`` (raises ``ValueError``) -- a broken figure
+    has several axes already and gains no coherent secondary-axis meaning.
     ``greyscale`` (P3.3 print-safe export) rewrites ``series_styles`` via
     :func:`quantized.calc.figure_greyscale.apply_greyscale` before any of
     the branches below run -- see that function's doc for exactly what it
@@ -351,7 +352,7 @@ def _render_impl(
     y2_mask_list = list(y2_mask) if y2_mask is not None else [False] * len(series)
     if len(y2_mask_list) != len(series):
         raise ValueError("y2_mask must have the same length as series")
-    has_y2 = any(y2_mask_list)
+    has_y2 = any(y2_mask_list) or bool(extra_y)
 
     # render_scope scopes typography to this render (see figure_fonts.style_rc) and holds
     # the process-wide render lock (see calc.figure_render).
@@ -361,7 +362,8 @@ def _render_impl(
     xv: NDArray[np.float64] = np.asarray(x, dtype=float)
     x_breaks = ov.get("x_breaks")
     if has_y2 and x_breaks:
-        raise ValueError("y2_keys is not supported together with x_breaks")
+        which = "y2_keys" if any(y2_mask_list) else "y_axes"  # name what the request carried
+        raise ValueError(f"{which} is not supported together with x_breaks")
     with render_scope(rc):
         # Rich-text labels (GOTO #5): valid $...$ mathtext passes through to
         # matplotlib untouched; INVALID mathtext is de-mathed here so it
@@ -430,7 +432,7 @@ def _render_impl(
                 title=title, x_label=x_label, y_label=y_label,
                 x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
                 y2_label=y2_label, y2_scale=y2_scale,
-                y2_fmt=y2_fmt, y2_step=y2_step, error_spans=error_spans,
+                y2_fmt=y2_fmt, y2_step=y2_step, error_spans=error_spans, extra_y=extra_y,
             )
         else:
             artists = draw_series_axes(

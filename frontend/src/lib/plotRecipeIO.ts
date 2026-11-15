@@ -12,6 +12,8 @@
 // route through the same per-field validators, so "strict throw" and
 // "tolerant drop" never silently diverge on what counts as well-formed.
 
+import { sanitizeYAxes } from "./multiYModel";
+
 import {
   legendXYOrNull,
   sanitizeAnnotations,
@@ -50,6 +52,9 @@ import {
   sanitizePreview,
   sanitizeTransformRef,
 } from "./plotRecipeMigrate";
+
+/** A saved Y3+ axis number (gap audit 4 G11). */
+const isYAxisNo = (n: unknown): n is number => [3, 4, 5, 6, 7, 8].includes(n as number);
 
 function sanitizeRecipeRefLines(value: unknown) {
   const ids = new Set<string>();
@@ -304,6 +309,9 @@ function sanitizeVisual(v: unknown): RecipeVisual {
     // display verbatim.
     seriesStyles: keyedRecord<SeriesStyle>(o.seriesStyles, isSeriesStyle),
     seriesLabels: keyedRecord<string>(o.seriesLabels, isString),
+    // Gap audit 4 G11: validated as a .dwk's are; an axis number past the saved
+    // axes is kept and, applied, draws on Y1 with a status note (lib/multiY.ts).
+    ...(Array.isArray(o.yAxes) ? { yAxes: sanitizeYAxes(o.yAxes, isAxisFormat), yAxisOf: keyedRecord<number>(o.yAxisOf, isYAxisNo) } : {}),
     seriesOrder: Array.isArray(o.seriesOrder)
       ? o.seriesOrder.filter((x): x is string => typeof x === "string")
       : null,

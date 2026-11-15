@@ -63,7 +63,7 @@ to all 57 fields and is not repeated per row.
 | **Builder** | `store/figureLifecycle.ts`'s `patchFigurePublicationDraft`/`applyFigurePublicationEdit`, driven by `useFigureBuilder.ts`'s `setCanonicalView`/`setCanonicalOutput` — patches `draft.plot.view`/`draft.output` **directly**, bypassing Bridge, because a Publication Preview draft is a bare `FigureDocument` clone with no `PlotWindow`/live-singleton facade to sync from. `applyFigurePublicationEdit` is the one place the draft is later folded back onto the real document. |
 | **Legacy-shape** | Only `errKeys`: a second, older *shape* for the same information (see below). |
 
-## PlotView canonical fields (51)
+## PlotView canonical fields (53)
 
 | Field | `mapsTo` (contract intent) | Owner today (code) | Writer(s) | Removable? |
 |---|---|---|---|---|
@@ -111,6 +111,8 @@ to all 57 fields and is not repeated per row.
 | `y2Scale` | `axes.y2.scale` | `plot.view.y2Scale` | Setter `setY2Scale`; Bulk (Recipe, Origin) | no |
 | `y2Step` | `axes.y2.step` | `plot.view.y2Step` | No direct setter, cleared by `setY2Lim`/`setY2Keys`; Bulk (Recipe, Origin decode) only writer | no |
 | `y2AxisLabel` | `axes.y2.label` | `plot.view.y2AxisLabel` | Setter `setY2AxisLabel`, cleared by `setY2Keys(empty)`; Bulk (Origin) | no |
+| `yAxes` | `axes.yExtra` | `plot.view.yAxes` | Setter `setExtraYAxis` (`lib/multiYEdit.ts`, Plot ▸ Y Axis Settings…), pruned by `setSeriesYAxis`; Bulk (Recipe, graph template / Copy Format) | no |
+| `yAxisOf` | `series.yAxis` | `plot.view.yAxisOf` | Setter `setSeriesYAxis` (`lib/multiYEdit.ts`, Inspector / Plot Details; a Y2 change routes through `setY2Keys`); Bulk (Recipe, graph template / Copy Format) | no |
 | `refLines` | `decor.referenceLines` | `plot.view.refLines` | Setter `addRefLine`/`removeRefLine`/`updateRefLine`; Bulk (Recipe re-mints ids via the same `nextRefLineId()` counter) | no |
 | `annotations` | `decor.annotations` | `plot.view.annotations` | Setter `addAnnotation`/`removeAnnotation` + `updateAnnotation` (`store/pointerTool.ts`); Bulk (Recipe, Origin) | no |
 | `regionShades` | `decor.regionShades` | `plot.view.regionShades` | Setter `addRegionShade`/`updateRegionShade`/`removeRegionShade` (`store/regionShades.ts`); Bulk (Recipe, Origin) | no |

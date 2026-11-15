@@ -2053,6 +2053,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   y2Scale: "axis scale mode, not channel-indexed",
   y2Step: "y2-axis tick step, not a column index",
   y2AxisLabel: "text, not channel-indexed",
+  yAxes: "the Y3+ axes' settings (range, scale, format, title, colour), indexed by AXIS, not by channel -- the channel side is yAxisOf, registered with channelRemap",
   refLines: "RefLine[] keyed by its own id + axis + value, not a column index",
   annotations: "Annotation[] pinned at data/page coordinates, not a column index",
   regionShades: "RegionShade[] pinned at data coordinates, not a column index",

@@ -37,6 +37,15 @@ export function axisExtrasApplier(): ExtrasModule["applyAxisExtras"] | null {
   return extras?.applyAxisExtras ?? null;
 }
 
+/** The Y3+ axis builder (gap audit 4 G11, lib/uplotMultiY.ts), which rides
+ *  the axis-extras chunk: null before it has loaded. `useMultiY` loads that
+ *  chunk before it hands any axis on, so a plot with Y3+ axes always has it. */
+export function extraYAxesPusher(): ExtrasModule["pushExtraYAxes"] | null {
+  // (its result sizes the right-axis slots, run after the extras applier)
+  return extras?.pushExtraYAxes ?? null;
+}
+
+
 /** The loaded gadget plugins, or null before they have loaded. */
 export function gadgetPlugins(): GadgetsModule | null {
   return gadgets;

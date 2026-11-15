@@ -17,6 +17,7 @@ import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
+import { yScaleKey } from "./multiYModel";
 
 /** The per-series style inputs `buildSeriesDefs` reads (all of them). */
 export type SeriesDefArgs = Pick<
@@ -129,7 +130,7 @@ export function buildSeriesDefs(
       const stroke = resolveDrawColor(seriesColor(i, style), isDarkBg, inkColor);
       strokes[i] = stroke;
       const label = labels[i];
-      const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
+      const scale = yScaleKey(s.axis); // y, y2, y3 ... (lib/multiY.ts)
       const show = !args.hidden?.[i]; // interactive legend visibility
       // Selected companion (#50 brush): accent, filled larger markers, no line.
       if (s.selected) {

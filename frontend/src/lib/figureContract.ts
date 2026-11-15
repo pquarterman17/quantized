@@ -104,6 +104,8 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   y2Scale: canonical("axes.y2.scale"),
   y2Step: canonical("axes.y2.step"),
   y2AxisLabel: canonical("axes.y2.label"),
+  yAxes: canonical("axes.yExtra", "Y3, Y4, ... settings (gap audit 4 G11, lib/multiY.ts)."),
+  yAxisOf: canonical("series.yAxis", "Channel -> extra Y axis number; an orphan is kept and drawn on Y1 with a note."),
   refLines: canonical("decor.referenceLines"),
   annotations: canonical("decor.annotations"),
   regionShades: canonical("decor.regionShades"),
@@ -188,6 +190,7 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   y2_scale: derived("axes.y2.scale"),
   y2_fmt: derived("axes.y2.format"),
   y2_step: derived("axes.y2.step"),
+  y_axes: derived("axes.yExtra", "Y3+ axes resolved against the drawn series (lib/multiYWire.ts), with series.yAxis membership."),
   group_col: derived("bindings.group.channel"),
   encoding: derived(
     null,

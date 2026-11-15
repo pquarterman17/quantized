@@ -25,7 +25,7 @@ import type { PlotPayload } from "./plotdata";
  *  each payload row (empty where no bar is drawn). */
 export interface BarEnds {
   series: number; // 0-based display series
-  on: "x" | 0 | 1;
+  on: "x" | number; // a Y axis: 0 = Y1, 1 = Y2, 2 = Y3 ...
   rows: number[][];
 }
 
@@ -51,7 +51,7 @@ export function errorReach(
       const rows = xs.map((x, r) =>
         ok(x) && ok(ys[r]) ? [(base[r] as number) + (plus[r] ?? NaN), (base[r] as number) - (minus[r] ?? NaN)].filter(ok) : [],
       );
-      if (rows.some((e) => e.length)) out.push({ series: i, on: axis === "x" ? "x" : s.axis === 1 ? 1 : 0, rows });
+      if (rows.some((e) => e.length)) out.push({ series: i, on: axis === "x" ? "x" : s.axis ?? 0, rows });
     }
   });
   return out.length ? out : null;
@@ -106,7 +106,7 @@ const barFloor = (min: number, positiveOnly: boolean) => (positiveOnly ? min / 1
  *  that no fixed limit or loop scan already ranges: {} without bars on it, so
  *  the scale is exactly uPlot's own. X spans every row; Y the rows uPlot
  *  scanned for the points (the series' `idxs`, the current X window). */
-export function errorRange(reach: BarEnds[] | null, on: "x" | 0 | 1, positiveOnly: boolean): Pick<uPlot.Scale, "range"> {
+export function errorRange(reach: BarEnds[] | null, on: "x" | number, positiveOnly: boolean): Pick<uPlot.Scale, "range"> {
   const ends = reach?.filter((e) => e.on === on) ?? [];
   if (!ends.length) return {};
   const isX = on === "x";
@@ -148,7 +148,7 @@ export function withXBarRows(payload: PlotPayload, reach: BarEnds[] | null, hidd
 export function fullYExtents(
   payload: PlotPayload,
   hidden: boolean[] | undefined,
-  axis: 0 | 1,
+  axis: number,
   positiveOnly: boolean,
   reach: BarEnds[] | null = null,
 ): [number, number] | null {

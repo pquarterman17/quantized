@@ -4983,6 +4983,111 @@
         "title": "EstimateRequest",
         "type": "object"
       },
+      "ExtraYAxisSpec": {
+        "description": "One extra Y axis: its channels and how it draws.",
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "fmt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickFormatSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keys": {
+            "description": "Its plotted channels, a subset of `y_keys`.",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "lim": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lim"
+          },
+          "scale": {
+            "anyOf": [
+              {
+                "pattern": "^(linear|log|reciprocal)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "ExtraYAxisSpec",
+        "type": "object"
+      },
       "FFTThicknessRequest": {
         "properties": {
           "intensity": {
@@ -6085,6 +6190,22 @@
               }
             ],
             "title": "Y2 Step"
+          },
+          "y_axes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExtraYAxisSpec"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Y3, Y4, ... on the right, each pushed one 60 pt slot further out (Origin's multiple Y axes); null/empty = none.",
+            "title": "Y Axes"
           },
           "y_fmt": {
             "anyOf": [

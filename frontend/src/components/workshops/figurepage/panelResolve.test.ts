@@ -216,6 +216,38 @@ describe("panelFigure — figdoc kind", () => {
   });
 });
 
+// Gap audit 4 G11 review H1: a graph with Y3+ axes on a Figure Page. The page
+// renderer draws Y1 / Y2 only, so the panel is sent without `y_axes` (the route
+// would refuse it and fail the whole page) and the status line says so.
+describe("a multi-Y figure on a page", () => {
+  const MULTI: FigureDocument = createFigureDocument({
+    id: "figure-multi",
+    name: "Multi",
+    datasetId: "d1",
+    view: { ...defaultPlotView(), yKeys: [0, 1], yAxes: [{ lim: null, scale: null, step: null, fmt: null, label: "", color: null }], yAxisOf: { 1: 3 } },
+  });
+
+  beforeEach(() => {
+    useApp.setState({ editableFigures: [MULTI], status: "" });
+    return () => useApp.setState({ editableFigures: [] });
+  });
+
+  it("a session panel carries no Y3+ axes, its series on Y1, and says so", async () => {
+    const spec = await panelFigure({ kind: "figure", id: "figure-multi", name: "Multi" });
+    expect(spec).not.toBeNull();
+    expect(spec).not.toHaveProperty("y_axes");
+    expect(spec?.y_keys).toEqual([0, 1]);
+    expect(spec?.y2_keys).toBeUndefined();
+    expect(useApp.getState().status).toMatch(/Y3\+ axes are drawn on Y1/);
+  });
+
+  it("a saved page exported from the Library too", async () => {
+    const page = createPageDocument({ id: "p", name: "P", panels: [{ figureId: "figure-multi", label: null, title: null }] });
+    const spec = await buildPageSpecFromDocument(page, [MULTI]);
+    expect(spec?.panels[0].figure).not.toHaveProperty("y_axes");
+  });
+});
+
 // A page panel draws each source's unstyled series in the Preferences default
 // trace, as that source's canvas does (`lib/exportDefaultTrace.ts`).
 describe("the default trace on page panels", () => {

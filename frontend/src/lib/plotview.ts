@@ -30,6 +30,7 @@ import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 import { sanitizeAxisExtras } from "./axisFormat";
+import { sanitizeYAxes, sanitizeYAxisOf, type ExtraYAxis } from "./multiYModel";
 
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
@@ -177,6 +178,8 @@ export interface PlotView {
   y2Scale: AxisScale | null;
   y2Step: number | null;
   y2AxisLabel: string;
+  /** Y3, Y4, ... (gap audit 4 G11, lib/multiY.ts) and channel -> axis number (3+). */
+  yAxes: ExtraYAxis[]; yAxisOf: Record<number, number>;
   refLines: RefLine[];
   annotations: Annotation[];
   regionShades: RegionShade[];
@@ -246,6 +249,7 @@ export function defaultPlotView(): PlotView {
     y2Scale: null,
     y2Step: null,
     y2AxisLabel: "",
+    yAxes: [], yAxisOf: {},
     refLines: [],
     annotations: [],
     regionShades: [],
@@ -463,6 +467,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
+    yAxes: sanitizeYAxes(o.yAxes, isAxisFormat), yAxisOf: sanitizeYAxisOf(o.yAxisOf), // an orphan is kept, drawn on Y1 + reported
     refLines: uniqueIds(sanitizeRefLines(o.refLines)),
     annotations: uniqueIds(sanitizeAnnotations(o.annotations)),
     regionShades: uniqueIds(sanitizeRegionShades(o.regionShades)),

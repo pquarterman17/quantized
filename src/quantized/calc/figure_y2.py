@@ -46,6 +46,7 @@ from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, drawable_lim, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["draw_secondary_axes", "render_with_secondary_axis"]
 
@@ -211,6 +212,7 @@ def render_with_secondary_axis(
     y2_fmt: Mapping[str, Any] | None,
     y2_step: float | None,
     error_spans: Sequence[Mapping[str, Any] | None] | None = None,
+    extra_y: Sequence[Mapping[str, Any]] = (),
 ) -> list[Any]:
     """The twinx orchestration ``calc.figure._render_impl`` dispatches to
     when ``y2_mask`` has at least one ``True`` entry: split ``series`` by
@@ -252,15 +254,23 @@ def render_with_secondary_axis(
     already treats every ``series:*`` id as a plain, non-draggable hit box
     ("per-series styles live on the plot side"), so the index doesn't drive
     any interaction -- only whether SOMETHING is hit-testable there.
+
+    ``extra_y`` (gap audit 4 G11): Y3, Y4, ... -- each a mapping with a
+    ``mask`` parallel to ``series`` plus its label/scale/fmt/step/lim/color,
+    drawn by :mod:`quantized.calc.figure_multi_y` on further twins pushed
+    outward slot by slot. An extra axis wins over a ``y2_mask`` entry. With
+    extra axes but no Y2 series the twin above is kept (the inset and the
+    shades expect it) but drawn as nothing.
     """
-    primary, primary_styles, y2_series, y2_styles = _split_by_mask(
-        series, series_styles, y2_mask
-    )
+    axis_of = _axis_of(y2_mask, extra_y, len(series))
+    primary, primary_styles, _, _ = _split_by_mask(series, series_styles, [a != 0 for a in axis_of])
+    y2_mask = [a == 1 for a in axis_of]
+    _, _, y2_series, y2_styles = _split_by_mask(series, series_styles, y2_mask)
     # Each series' error bars ride to the axes it is drawn on (the screen draws
     # them on both); `error_spans` is parallel to `series`, like `y2_mask`.
     given = list(error_spans or [])
     spans = [given[i] if i < len(given) else None for i in range(len(series))]
-    primary_spans = [s for s, on_y2 in zip(spans, y2_mask, strict=False) if not on_y2]
+    primary_spans = [s for s, a in zip(spans, axis_of, strict=False) if a == 0]
     y2_spans = [s for s, on_y2 in zip(spans, y2_mask, strict=False) if on_y2]
     # Export-fidelity gap (2026-08-11): axis-1 region shades belong on ax2,
     # which does not exist yet -- strip them from the ov the primary
@@ -268,6 +278,8 @@ def render_with_secondary_axis(
     # `ov` is passed through UNCHANGED so a render with no y2-tagged shades
     # stays byte-identical to before this feature existed).
     primary_shades, secondary_shades = _split_region_shades_by_axis(ov.get("region_shades"))
+    if not y2_series:  # no real Y2 axis: axis-1 shades stay primary, as on a plain figure
+        primary_shades, secondary_shades = list(ov.get("region_shades") or []), []
     primary_ov = ov if not secondary_shades else {**ov, "region_shades": primary_shades}
     # The magnifier inset shows BOTH axes' series, so it is drawn below once
     # the twin exists (calc.figure_inset), not by the primary-only pass.
@@ -293,16 +305,20 @@ def render_with_secondary_axis(
         y_fmt=y2_fmt, y_step=y2_step, color_offset=len(primary),
         minor_ticks=minor_ticks, error_spans=y2_spans,
     )
-    ax2.spines["right"].set_visible(True)
-    apply_axis_titles(fig, {"y2": ax2}, ov.get("axis_titles"))  # the y2 title's Format + drag
-    y2_lim = ov.get("y2_lim")
+    if y2_series:
+        ax2.spines["right"].set_visible(True)
+        apply_axis_titles(fig, {"y2": ax2}, ov.get("axis_titles"))  # the y2 title's Format + drag
+    else:
+        ax2.set_axis_off()
+    y2_lim = ov.get("y2_lim") if y2_series else None
     if y2_lim is not None:
         lo, hi = y2_lim
         # A side <= 0 on a log or reciprocal y2 is auto, as on the primary axes.
         ax2.set_ylim(*drawable_lim(
             ax2, "y", None if lo is None else float(lo), None if hi is None else float(hi)
         ))
-    apply_axis_style(ax2, "y", y2_fmt, side="right", grid_alpha=st.grid_alpha)
+    if y2_series:
+        apply_axis_style(ax2, "y", y2_fmt, side="right", grid_alpha=st.grid_alpha)
     # After the y2 limits (audit #11): a shade's log-floor clamp and its
     # off-scale warning read the FINAL secondary range.
     _apply_region_shades(ax2, secondary_shades)
@@ -315,19 +331,63 @@ def render_with_secondary_axis(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
     )
-    apply_layers(ax2, ov)
-    _combined_legend(fig, ax, st, ov, artists, y2_artists, y2_mask, n_series=len(series))
-    return artists + y2_artists
+    extras = _draw_extras(
+        fig, ax, xv, series, series_styles, spans, axis_of, extra_y,
+        st=st, first_slot=1 if y2_series else 0, color_offset=len(primary) + len(y2_series),
+        minor_ticks=minor_ticks,
+    )
+    apply_layers(extras[-1][0] if extras else ax2, ov)  # over every twin's curves
+    groups = [artists, y2_artists, *(arts for _, arts in extras)]
+    _combined_legend(fig, ax, st, ov, groups, axis_of, n_series=len(series))
+    return [a for g in groups for a in g]
 
 
-def _display_order(primary: list[Any], secondary: list[Any], y2_mask: Sequence[bool]) -> list[Any]:
-    """Interleave the two axes' per-series artists back into request (display)
-    order -- the order the canvas legend lists them in. Falls back to primary
-    then secondary if the counts do not line up with the mask."""
-    if len(primary) + len(secondary) != len(y2_mask) or sum(map(bool, y2_mask)) != len(secondary):
-        return primary + secondary
-    p, s = iter(primary), iter(secondary)
-    return [next(s) if on_y2 else next(p) for on_y2 in y2_mask]
+def _axis_of(
+    y2_mask: Sequence[bool], extra_y: Sequence[Mapping[str, Any]], n: int
+) -> list[int]:
+    """Each series' axis: 0 = Y1, 1 = Y2, 2 + k = ``extra_y[k]`` (which wins)."""
+    out = [1 if i < len(y2_mask) and y2_mask[i] else 0 for i in range(n)]
+    for k, spec in enumerate(extra_y):
+        for i, on in enumerate(list(spec.get("mask") or [])[:n]):
+            if on:
+                out[i] = 2 + k
+    return out
+
+
+def _draw_extras(
+    fig: Any, ax: Any, xv: NDArray[np.float64],
+    series: Sequence[tuple[str, ArrayLike]],
+    series_styles: Sequence[Mapping[str, Any] | None] | None,
+    spans: list[Mapping[str, Any] | None],
+    axis_of: list[int],
+    extra_y: Sequence[Mapping[str, Any]],
+    **kw: Any,
+) -> list[tuple[Any, list[Any]]]:
+    if not extra_y:
+        return []
+    with heavy_imports("quantized.calc.figure_multi_y"):
+        from quantized.calc.figure_multi_y import draw_extra_axes
+
+    subsets = []
+    for k, spec in enumerate(extra_y):
+        mask = [a == 2 + k for a in axis_of]
+        _, _, sub, sub_styles = _split_by_mask(series, series_styles, mask)
+        if sub:  # an axis with no series is not drawn (the canvas draws none)
+            own = [s for s, on in zip(spans, mask, strict=False) if on]
+            subsets.append((spec, sub, sub_styles, own))
+    return draw_extra_axes(fig, ax, xv, subsets, draw_axis=draw_secondary_axes, **kw)
+
+
+def _display_order(groups: Sequence[list[Any]], axis_of: Sequence[int]) -> list[Any]:
+    """Interleave each axis' per-series artists back into request (display)
+    order -- the order the canvas legend lists them in. Falls back to the axes
+    in turn if the counts do not line up with ``axis_of``."""
+    flat = [a for g in groups for a in g]
+    counts = [list(axis_of).count(k) for k in range(len(groups))]
+    if len(flat) != len(axis_of) or counts != [len(g) for g in groups]:
+        return flat
+    its = [iter(g) for g in groups]
+    return [next(its[k]) for k in axis_of]
 
 
 def _combined_legend(
@@ -335,9 +395,8 @@ def _combined_legend(
     ax: Any,
     st: FigureStyle,
     ov: Mapping[str, Any],
-    primary: list[Any],
-    secondary: list[Any],
-    y2_mask: Sequence[bool],
+    groups: Sequence[list[Any]],
+    axis_of: Sequence[int],
     *,
     n_series: int,
 ) -> None:
@@ -361,7 +420,7 @@ def _combined_legend(
         existing.remove()
     if kw is None:
         return
-    ordered = _display_order(primary, secondary, y2_mask)
+    ordered = _display_order(groups, axis_of)
     tag_series_slots(ordered)  # display slots across BOTH axes (figure_legend_order)
     handles = [h for h in ordered if not str(h.get_label()).startswith("_")]
     draw_legend(ax, ov, kw, handles)

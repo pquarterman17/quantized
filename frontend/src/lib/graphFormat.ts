@@ -17,6 +17,7 @@ import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { cleanSymbols, validAlpha, validEvery } from "./symbolSanitize";
+import { captureMultiY, multiYPatch, sanitizeMultiY, type GraphFormatMultiY } from "./graphFormatMultiY";
 import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 export const GRAPH_FORMAT_VERSION = 1;
@@ -31,7 +32,8 @@ export type GraphFormatFields = Pick<
   | "plotTemplate" | "axisLabelStyles"
 >;
 
-export interface GraphFormat extends GraphFormatFields {
+/** `GraphFormatMultiY`: the Y3+ axes' looks and per-position assignment (gap audit 4 G11). */
+export interface GraphFormat extends GraphFormatFields, GraphFormatMultiY {
   version: typeof GRAPH_FORMAT_VERSION;
   /** One style per plotted series POSITION (null = that position uses the
    *  automatic style). */
@@ -71,7 +73,7 @@ function withBreaksOf(fmt: AxisFormat, keep: AxisFormat | null | undefined): Axi
 /** Capture the format of `view`, whose plotted series are `plotted` (in
  *  display order). */
 export function captureGraphFormat(
-  view: GraphFormatFields & Pick<PlotView, "seriesStyles"> & Partial<Pick<PlotView, "seriesRamp">>,
+  view: GraphFormatFields & Pick<PlotView, "seriesStyles"> & Partial<Pick<PlotView, "seriesRamp" | "yAxes" | "yAxisOf">>,
   plotted: readonly number[],
 ): GraphFormat {
   return {
@@ -95,6 +97,7 @@ export function captureGraphFormat(
       return style ? structuredClone(style) : null;
     }),
     seriesRamp: view.seriesRamp ? { ...view.seriesRamp } : null,
+    ...captureMultiY(view, plotted),
   };
 }
 
@@ -108,7 +111,7 @@ export function graphFormatPatch(
   format: GraphFormat,
   plotted: readonly number[],
   currentStyles: Readonly<Record<number, SeriesStyle>>,
-  current?: Pick<PlotView, "xFmt" | "yFmt" | "y2Fmt">,
+  current?: Pick<PlotView, "xFmt" | "yFmt" | "y2Fmt"> & Partial<Pick<PlotView, "yAxes" | "yAxisOf" | "y2Keys">>,
 ): Partial<PlotView> {
   const seriesStyles: Record<number, SeriesStyle> = { ...currentStyles };
   plotted.forEach((ch, position) => {
@@ -136,6 +139,7 @@ export function graphFormatPatch(
     axisLabelStyles: structuredClone(format.axisLabelStyles),
     seriesStyles,
     ...(format.seriesRamp === undefined ? {} : { seriesRamp: format.seriesRamp ? { ...format.seriesRamp } : null }),
+    ...multiYPatch(format, plotted, current ?? {}),
   };
 }
 
@@ -177,6 +181,7 @@ export function sanitizeGraphFormat(v: unknown): GraphFormat | null {
       : {},
     series: o.series.map((s) => (typeof s === "object" && s !== null ? portableStyle(s as SeriesStyle) : null)),
     ...(o.seriesRamp === undefined ? {} : { seriesRamp: sanitizeSeriesRamp(o.seriesRamp) }),
+    ...sanitizeMultiY(o, isFmt),
   };
 }
 

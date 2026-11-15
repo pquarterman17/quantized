@@ -9,6 +9,7 @@
 // the capture half; matching lives in `plotRecipeMatch.ts`, the untrusted
 // `.dwk`/import boundary in `plotRecipeIO.ts`).
 
+import type { ExtraYAxis } from "./multiYModel";
 import type { HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CompositionKind } from "./composition";
@@ -185,6 +186,11 @@ export interface RecipeVisual {
   seriesLabels: Record<string, string>;
   seriesOrder: string[] | null;
   hiddenChannels: string[];
+  /** Gap audit 4 G11: the Y3+ axes and which channel (by signature id) rides
+   *  which axis number. Additive and OPTIONAL (no schema bump): an older
+   *  recipe lacks them and applies with every series on Y1 / Y2. */
+  yAxes?: ExtraYAxis[];
+  yAxisOf?: Record<string, number>;
   decorations: RecipeDecorations;
   /** Which arrangement (`lib/composition.ts`'s `CompositionKind`) was active
    *  at capture time, or null for a plain single-panel plot. FACET and BREAK

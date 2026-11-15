@@ -61,6 +61,7 @@ function everyFieldChanged(): PlotView {
     plotTitle: "Ti", xAxisLabel: "X", yAxisLabel: "Y",
     xKey: 0, yKeys: [1], groupKey: 2, facetKey: 2, y2Keys: [2],
     y2Lim: [5, 6], y2Scale: "log", y2Step: 1, y2AxisLabel: "Y2",
+    yAxes: [{ lim: [1, 9], scale: "log", step: 2, fmt: { mode: "fixed", digits: 1, minor: 2 }, label: "Y3 title", color: "#aa3300" }], yAxisOf: { 1: 3, 5: 4 },
     refLines: [{ id: "r", axis: "x", value: 1 }],
     annotations: [{ id: "a", groupId: "g", x: 1, y: 2, text: "hi", axis: 1, size: 12, anchor: "data", frame: { fill: "#fff", pad: 2 } }],
     regionShades: [{ id: "s", x1: 0, y1: 0, x2: 1, y2: 1, fill: "#ff0000", axis: 1 }],
