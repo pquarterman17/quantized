@@ -24,6 +24,7 @@ import { useMemo, useState } from "react";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { subtractHysteresisBackground, subtractMagBackground } from "../../../lib/api/magnetometry";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { ownXKey } from "../../../lib/perSeriesX";
 import {
   detectMagXKind,
   magXAxis,
@@ -46,7 +47,7 @@ export function magXY(
 ): { x: number[]; y: number[]; yKey: number } {
   const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder) ?? 0;
   return {
-    x: fullPlottedX(ds.data, xKey),
+    x: fullPlottedX(ds.data, ownXKey(ds, xKey, yKey)), // a secondary-X Y reads its own X
     y: ds.data.values.map((row) => row[yKey]),
     yKey,
   };
@@ -73,9 +74,9 @@ export type MagBgFit =
 export function sourceUnits(
   ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null,
 ): { fromField: string | null; xLabel: string; xUnit: string; fromMoment: string } {
-  const axis = magXAxis(ds.data, xKey);
-  const isField = detectMagXKind(axis.label, axis.unit).kind === "field";
   const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder) ?? 0;
+  const axis = magXAxis(ds.data, ownXKey(ds, xKey, yKey));
+  const isField = detectMagXKind(axis.label, axis.unit).kind === "field";
   return {
     fromField: isField ? axis.unit || "Oe" : null,
     xLabel: axis.label,
@@ -201,9 +202,11 @@ export function useMagTools(): MagToolsState {
 
   const detection = useMemo<MagXDetection>(() => {
     if (!active) return { kind: "unknown", reason: "no dataset is selected" };
-    const axis = magXAxis(active.data, xKey);
+    // The Y's OWN X decides field vs temperature (T1,R1,H2,M2: M2 is vs H2).
+    const yKey = plottedYKey(active, xKey, yKeys, seriesOrder) ?? 0;
+    const axis = magXAxis(active.data, ownXKey(active, xKey, yKey));
     return detectMagXKind(axis.label, axis.unit);
-  }, [active, xKey]);
+  }, [active, xKey, yKeys, seriesOrder]);
   const src = active ? sourceUnits(active, xKey, yKeys, seriesOrder) : null;
 
   const bgPath: MagBgPath | null =
@@ -327,7 +330,7 @@ export function useMagTools(): MagToolsState {
               : { mag_bg_subtracted: true }),
           },
           ds.data,
-          request.xKey,
+          ownXKey(ds, request.xKey, yKey), // the X `time` was read from
         ),
       };
       const suffix = bgPath === "mh" ? "loop bg-sub" : "bg-sub";

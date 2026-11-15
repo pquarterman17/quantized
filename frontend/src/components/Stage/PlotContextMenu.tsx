@@ -25,7 +25,9 @@ import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
 import { createAnnotationFromDialog } from "./annotationShapeActions";
-import { hitTest } from "./curveHit";
+import { hiddenByFilter, hitTest, pointNear } from "./curveHit";
+import { openLayerContents } from "../../lib/plotSelectedTogether";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import type { PlotStageActions } from "./usePlotStageActions";
 import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 
@@ -189,6 +191,15 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       },
       includeAll: () => st.clearRowExclusions(activeDs.id),
     } : undefined;
+    // Gap audit 3 N2: mask / unmask the one point under the cursor.
+    const hit = activeDs && zone === "plot" ? pointNear(u, x, y, payload, plotted, activeDs, st.xKey) : null;
+    const near = hit && "row" in hit ? hit.row : null;
+    const pointUnder = hit && activeDs ? {
+      row: near ?? -1,
+      excluded: near !== null && excluded.has(near),
+      refused: "refused" in hit ? hit.refused : near !== null ? hiddenByFilter(activeDs, near, st.datasets) : undefined,
+      toggle: () => near !== null && st.setRowsExcluded(activeDs.id, excluded.has(near) ? [...excluded].filter((r) => r !== near) : [...excluded, near]),
+    } : undefined;
 
     return buildPlotMenu({
       series,
@@ -242,6 +253,11 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       peakRange,
       fitPeakRange,
       pointMask,
+      pointUnder,
+      layerContents: activeDs ? openLayerContents : undefined,
+      linkXAxis: st.plotWindows.filter((w) => w.kind === "plot").length > 1
+        ? () => void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure)
+        : undefined,
       openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor

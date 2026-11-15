@@ -74,12 +74,8 @@ _KNOWN_GAPS: dict[str, str] = {
     # (FAIRmat_RSM.brml was registered here as a declined multi-scan RSM;
     # FIXED 2026-10-03 — io/bruker_brml_map.py assembles it into a 2-D map,
     # anchored in test_io_bruker_brml_rsm.py.)
-    # Matrix-only Origin project: the matrix (MBook) codec is undecoded
-    # (origin format gap register §13.2 #9); a clean OriginProjectError with
-    # guidance is the pinned contract (test_io_origin_fuzz).
-    "origin/specimens/matrix_spec.opju": (
-        "matrix-only Origin project: MBook codec undecoded (format gap register 13.2 #9)"
-    ),
+    # (matrix_spec.opju was registered here as a matrix-only project with an
+    # undecoded MBook codec; it decodes now -- anchored in test_io_origin_fuzz.)
     # Negative fixture (test-data/orso/MANIFEST.md): bare columns named .ort
     # with no ORSO first line. Refusing it is the pinned contract
     # (test_io_orso.test_realdata_orsopy_examples).

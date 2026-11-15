@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { magXAxis } from "../../../lib/magDataKind";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
@@ -101,15 +102,17 @@ function baselineInput(
 ): BaselineInput | null {
   const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
   if (yKey == null) return null;
-  const x = fullPlottedX(ds.data, xKey);
+  // A secondary-X Y (R2 in T1,R1,T2,R2) is estimated against its OWN X.
+  const ownX = ownXKey(ds, xKey, yKey);
+  const x = fullPlottedX(ds.data, ownX);
   const y = ds.data.values.map((row) => row[yKey]);
   if (x.length === 0 || x.length !== y.length) return null;
   return {
     binding: {
       datasetId: ds.id,
-      xKey,
+      xKey: ownX,
       yKey,
-      xLabel: xKey == null ? magXAxis(ds.data, null).label || "Time" : (ds.data.labels[xKey] ?? `Channel ${xKey + 1}`),
+      xLabel: ownX == null ? magXAxis(ds.data, null).label || "Time" : (ds.data.labels[ownX] ?? `Channel ${ownX + 1}`),
       yLabel: ds.data.labels[yKey] ?? `Channel ${yKey + 1}`,
     },
     x,

@@ -17,6 +17,6 @@ export { buildErrorColumns } from "./errorbars";
 export function stackErrorSpans(active: Dataset, xKey: number | null, channels: readonly number[]): Map<number, ErrorSpan[]>[] {
   const roles = active.errorRoles;
   if (!roles?.length) return [];
-  const data = perSeriesXData(active, xKey)?.data ?? active.data;
+  const data = perSeriesXData(active, xKey, channels)?.data ?? active.data;
   return channels.map((ch) => buildErrorSpans(data, [ch], roles));
 }

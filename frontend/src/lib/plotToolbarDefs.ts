@@ -56,7 +56,7 @@ export const INSPECT_TOOLS: ToolDef[] = [
   { id: "cursor", glyph: "✛", name: "Data Cursor", desc: "Click a point to read its coordinates" },
   { id: "measure", glyph: "∡", name: "Measure", desc: "Drag between two points for Δx, Δy, slope" },
   { id: "stats", glyph: "Σ", name: "Region Stats", desc: "Drag a range to compute summary statistics" },
-  { id: "select", glyph: "⬚", name: "Select Rows", desc: "Drag an x-range to select rows in the worksheet" },
+  { id: "select", glyph: "⬚", name: "Select Rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
 ];
 
 // ── Analyze: region tools whose result persists as a chip (∫ / ∩) or a live

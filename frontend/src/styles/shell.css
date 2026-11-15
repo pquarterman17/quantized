@@ -1176,6 +1176,12 @@ body {
 /* Item 14 — a Library dataset drag hovering THIS frame ("drop = rebind");
    stronger than the focus ring so the target reads unambiguously mid-drag. */
 .qzk-plotwin.dropping { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+/* Gap audit 3 N1: over the plot body the drop ADDS the data as curves — say so. */
+.qzk-plotwin.dropping-add .qzk-plotwin-body::after { content: "+ Add as curves"; }
+.qzk-plotwin.dropping-add .qzk-plotwin-body::after, .qzk-graph-drop-add {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); font-weight: 600; pointer-events: none; z-index: 5;
+}
 /* GUI_INTERACTION #3 sub-item 2b: the SAME resting "legal drop target" tint
    FolderRow uses, applied to the second real drop-target family that shares
    `activeDrag` (store/libraryPanel.ts) — every eligible window frame lights

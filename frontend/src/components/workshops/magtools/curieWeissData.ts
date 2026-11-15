@@ -1,4 +1,5 @@
 import { detectMagXKind, magXAxis } from "../../../lib/magDataKind";
+import { ownXKey } from "../../../lib/perSeriesX";
 import type { CurieWeissResponseBasis } from "../../../lib/api/magnetic";
 import type { DataStruct, Dataset } from "../../../lib/types";
 
@@ -63,7 +64,7 @@ export function curieWeissProblem(
   fieldKey: number | null,
 ): string | null {
   if (!dataset) return "Select a dataset first.";
-  const axis = magXAxis(dataset.data, xKey);
+  const axis = magXAxis(dataset.data, ownXKey(dataset, xKey, yKey)); // the fitted Y's OWN X, as magXY reads it
   const detected = detectMagXKind(axis.label, axis.unit);
   if (detected.kind !== "temperature") {
     return `The plotted x axis is not a declared temperature (${detected.reason}).`;
