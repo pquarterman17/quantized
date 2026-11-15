@@ -105,7 +105,26 @@ export interface SeriesStyle {
   markerFill?: "solid" | "hollow";
   /** Error-bar styling for this series' bars (gap audit 2 #6). */
   errorBar?: ErrorBarStyle;
+  /** Marker SIZE from a column (gap audit 3 N5): a dataset channel index whose
+   *  finite range maps linearly onto `sizeRange` px — `lib/sizescatter.ts`
+   *  on the canvas (`colorScatterPlugin`), `calc/figure_sizes.py` on export.
+   *  Independent of `colorBy`; the points are drawn whether or not `marker` is
+   *  on, and the connecting line (if any) is the series' own. */
+  sizeBy?: number | null;
+  /** `[min, max]` marker diameter for `sizeBy`; default `DEFAULT_SIZE_RANGE`. */
+  sizeRange?: [number, number];
+  /** Drop lines (gap audit 3 N6): `"x"` runs each point DOWN to the X axis,
+   *  `"y"` LEFT to the Y axis, `"both"` does both. Canvas:
+   *  `uplotOverlays.dropLinesPlugin`; export: `calc/figure_marks.apply_drop_lines`. */
+  dropLines?: DropLines;
+  /** Spline line connect (gap audit 3 N6, Origin's "Spline"): a natural cubic
+   *  spline through the points. Only where X is strictly ascending — a loop is
+   *  drawn straight in row order (`lib/cubicSpline.ts`). Absent = straight. */
+  connect?: "spline";
 }
+
+/** Which axis a drop line runs to (see `SeriesStyle.dropLines`). */
+export type DropLines = "x" | "y" | "both";
 
 /** One series' error-bar look, shared by the canvas (`uplotErrorRange.
  *  styleErrorDraw`) and the export (`calc/figure_errorbars.py`, as the wire

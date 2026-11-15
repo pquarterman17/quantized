@@ -105,7 +105,7 @@ export function expandWaterfallX(
     ]),
   );
   const colorByColumns = new Map(
-    [...companions.colorByColumns].map(([k, spec]): [number, ColorScatterSpec] => [k, { ...spec, z: at(spec.z, k) }]),
+    [...companions.colorByColumns].map(([k, spec]): [number, ColorScatterSpec] => [k, { ...spec, z: at(spec.z, k), diam: spec.diam && at(spec.diam, k) }]),
   );
   const data = [xs, ...ys.map((col, i) => at(col, i + 1))] as unknown as uPlot.AlignedData;
   return { displayPayload: { ...payload, data, blockRows: rows, xStep: step }, errorBars, errorSpans, colorByColumns };
