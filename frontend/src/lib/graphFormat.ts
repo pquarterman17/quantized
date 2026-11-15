@@ -157,7 +157,9 @@ function isFmt(v: unknown): v is AxisFormat {
 export function sanitizeGraphFormat(v: unknown): GraphFormat | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
-  if (o.version !== GRAPH_FORMAT_VERSION || !Array.isArray(o.series)) return null;
+  // Any version up to this build's: the field-level fallbacks below read an older
+  // format; a NEWER one (fields this build cannot know) is refused.
+  if (typeof o.version !== "number" || !(o.version >= 1 && o.version <= GRAPH_FORMAT_VERSION) || !Array.isArray(o.series)) return null;
   const scale = (x: unknown): AxisScale => (isAxisScale(x) ? x : "linear");
   const bool = (x: unknown, d: boolean): boolean => (typeof x === "boolean" ? x : d);
   const fmt = (x: unknown): AxisFormat => (isFmt(x) ? sanitizeAxisExtras(x) : { mode: "auto", digits: 2 });

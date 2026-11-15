@@ -44,12 +44,12 @@
 // running that guard's three "lib/ layering guard" tests green with this
 // import in place (see the PR report for the exact command).
 
-import { datasetViewDefaults } from "../store/windowDefaults";
+import { newGraph } from "../store/windowDefaults";
 import { effectiveDesignations } from "./columnmeta";
 import { figureSeedErrorBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
 import { is2DMap } from "./mapdata";
-import { defaultPlotView, type PlotView } from "./plotview";
+import type { PlotView } from "./plotview";
 import { techniqueOf } from "./techniqueDefaults";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { DataStruct, Dataset, Technique } from "./types";
@@ -238,7 +238,7 @@ export function quickPlotFigureSeed(
       // through `figureSeedErrorBindings`, which yields the same list.)
       const held = new Set(withhold.map((b) => b.channel));
       const seeded = { ...dataset, errorRoles: figureSeedErrorBindings(dataset).filter((b) => !held.has(b.channel)) };
-      const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory) };
+      const view = newGraph(seeded, memory); // a new graph: the default template under the dataset defaults
       view.hiddenChannels = [...new Set([...view.hiddenChannels, ...held])];
       const rich = figureSeedErrorBindings(seeded).filter((b) => b.axis !== "y" || b.side !== "both");
       return {
