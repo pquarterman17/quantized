@@ -39,7 +39,7 @@ D = [8.0, 6.5, 5.0, 3.5, 2.0, 0.5, -1.0, -2.5]
 
 def main() -> None:
     SPEC.mkdir(exist_ok=True)
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
 
     def lt(cmd: str) -> bool:

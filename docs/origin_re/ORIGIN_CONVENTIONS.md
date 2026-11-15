@@ -687,13 +687,23 @@ OriginLab syntax, not GPL code).
 ## 8. COM oracle methodology
 
 All ground truth in this subsystem comes from Origin's own COM automation
-(`Origin.ApplicationSI`), scripted from Python via `win32com.client` and a
+(`Origin.Application`), scripted from Python via `win32com.client` and a
 `LTStr`/`LTVar`/`Execute` bridge — never from GPL `liborigin` source.
+
+**Never dispatch `Origin.ApplicationSI` for oracle or specimen runs.** It is
+single-instance: even through `DispatchEx` it **attaches to an Origin the owner
+already has open**. Measured 2026-11-15: no new process, and it sees the other
+instance's LabTalk variables. The run then loads a corpus project into that
+window, and its `Exit()` closes it, unsaved work included. `Origin.Application`
+always starts its own process, shares no state, and its `Exit()` closes only
+itself. (The product's live "Send to Origin" path, `io/origin_com.py`, still
+uses `ApplicationSI` deliberately, because sending into the user's open
+session is that feature's purpose.)
 
 ### 8.1 The bridge pattern
 
 ```python
-app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+app = wc.gencache.EnsureDispatch("Origin.Application")
 app.Visible = 0
 
 def lt(cmd: str) -> bool:

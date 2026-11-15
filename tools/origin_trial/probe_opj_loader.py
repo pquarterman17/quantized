@@ -348,7 +348,7 @@ def build_pq_variants() -> None:
 def run(names: list[str]) -> None:
     import win32com.client as wc
 
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
     for name in names:
         print(f"PROBE {name} ...", flush=True)
@@ -377,7 +377,7 @@ def verify(name: str, books: list[str]) -> None:
     the item-34 data-integrity leg (values/names/units survive the loader)."""
     import win32com.client as wc
 
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
     ok = bool(app.Load(str(PROBES / name)))
     print(f"LOAD {name} -> {ok}", flush=True)

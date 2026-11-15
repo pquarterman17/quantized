@@ -57,7 +57,7 @@ Z = [0.5, 1.5, 4.5, 13.5, 40.5, 121.5, 364.5, 1093.5]  # 0.5*3^n — log-friendl
 def main() -> None:
     SPEC.mkdir(exist_ok=True)
     CONVERTED.mkdir(exist_ok=True)
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
 
     def lt(cmd: str) -> None:

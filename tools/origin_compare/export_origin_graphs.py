@@ -48,9 +48,10 @@ the ones specific to THIS script (found live, 2026-07-09, while building it):
   wedge on a modal dialog with no visible symptom. This script always runs
   Origin VISIBLE (``app.Visible = 1``) and, more importantly, wraps every
   risky COM call with a heartbeat watchdog thread: if the main thread goes
-  quiet for longer than the current timeout, the watchdog force-kills
-  ``Origin64.exe`` and hard-exits this process (``os._exit``) rather than
-  hanging forever. The caller (a human, or an orchestrating loop) simply
+  quiet for longer than the current timeout, the watchdog force-kills the
+  ONE Origin PID this run started (``origin_proc``; never by image name,
+  which would close the owner's own windows) and hard-exits this process
+  (``os._exit``) rather than hanging forever. The caller (a human, or an orchestrating loop) simply
   re-invokes the script; the manifest checkpoint means it resumes instead
   of restarting.
 * **The "confirm overwrite" dialog hangs even with ``@ASK=0``.** Calling
@@ -88,7 +89,7 @@ the ones specific to THIS script (found live, 2026-07-09, while building it):
   faults every subsequent call in the SAME process -- this is exactly why
   a watchdog-triggered kill also hard-exits this whole script rather than
   trying to recover and continue; a fresh process gets a fresh
-  ``EnsureDispatch``.
+  ``DispatchEx``.
 * **The COM collections (``WorksheetPages``/``GraphPages``) iterator
   throws.** Windows are enumerated via ``doc -e W {...}`` / ``doc -e P
   {...}`` LabTalk string accumulation instead (proven pattern, see
@@ -104,7 +105,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -147,6 +147,7 @@ class Watchdog:
     def __init__(self, hb: Heartbeat, timeout_s: float) -> None:
         self.hb = hb
         self.timeout_s = timeout_s
+        self.pids: list[int] = []  # the instance THIS run started; set after dispatch
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -162,33 +163,16 @@ class Watchdog:
         while not self._stop.is_set():
             time.sleep(2)
             if self.hb.idle_for() > self.timeout_s:
+                # Kill ONLY the instance this run started (exact PID, never by
+                # image name: that would close the owner's own Origin windows).
+                killed = [p for p in self.pids if kill_origin_pid(p)]
                 print(
-                    f"[watchdog] no progress for >{self.timeout_s:.0f}s -- "
-                    "killing Origin64.exe and hard-exiting (re-run to resume)",
+                    f"[watchdog] no progress for >{self.timeout_s:.0f}s -- killed "
+                    f"{killed or 'nothing (no exact PID recorded)'}; "
+                    "hard-exiting (re-run to resume)",
                     flush=True,
                 )
-                subprocess.run(
-                    ["taskkill", "/IM", "Origin64.exe", "/F"],
-                    capture_output=True, check=False,
-                )
                 os._exit(3)  # hard exit; a checkpointed manifest survives this
-
-
-def kill_stale_origin() -> bool:
-    """Kill any orphaned Origin*.exe left by a previous watchdog-killed run.
-    Returns True (and prints what it found) so the caller can report it --
-    a dead COM server faults every subsequent call in a NEW process too."""
-    out = subprocess.run(
-        ["tasklist", "/FI", "IMAGENAME eq Origin*"],
-        capture_output=True, text=True, check=False,
-    ).stdout
-    found = ".exe" in out
-    if found:
-        print(f"[startup] orphaned Origin process found, killing:\n{out}", flush=True)
-        subprocess.run(["taskkill", "/IM", "Origin64.exe", "/F"], capture_output=True, check=False)
-        subprocess.run(["taskkill", "/IM", "Origin.exe", "/F"], capture_output=True, check=False)
-        time.sleep(2)
-    return found
 
 
 # ── PNG dimension read without any imaging dependency ───────────────────────
@@ -209,6 +193,12 @@ def png_dims(path: Path) -> tuple[int, int] | None:
 # ── manifest checkpoint helpers (extracted: manifest_checkpoint.py) ──────────
 
 from manifest_checkpoint import load_manifest, write_manifest  # noqa: E402
+from origin_proc import (  # noqa: E402
+    dispatch_recording_pid,
+    kill_origin_pid,
+    kill_recorded_origin,
+    origin_pids,
+)
 
 # ── the export run ───────────────────────────────────────────────────────────
 
@@ -243,13 +233,18 @@ def main() -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     manifest_path = outdir / "manifest.json"
 
-    if kill_stale_origin():
+    # Stale-instance cleanup: ONLY the PID a previous run of this tool recorded
+    # (``origin.pid``), and only while it is still an Origin process. An Origin
+    # nobody here started is the owner's: left alone, never killed by name.
+    pid_sidecar = outdir / "origin.pid"
+    if kill_recorded_origin(pid_sidecar):
         print(
-            "[startup] WARNING: an orphaned Origin process was found and killed "
-            "before this run started -- a previous invocation likely hit the "
-            "watchdog. Continuing with a fresh instance.",
+            "[startup] killed the Origin instance a previous run recorded -- it "
+            "likely hit the watchdog. Continuing with a fresh instance.",
             flush=True,
         )
+    elif origin_pids():
+        print("[startup] an Origin not started by this tool is running; leaving it.", flush=True)
 
     manifest = load_manifest(manifest_path, project)
     manifest["target_width_px"] = args.target_width
@@ -261,7 +256,14 @@ def main() -> int:
     wd = Watchdog(hb, LOAD_WATCHDOG_S)
 
     hb.beat()
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    # Origin.Application (never ApplicationSI, which ATTACHES to a running
+    # Origin -- see export_axis_ranges.py): a NEW instance, so this run never
+    # attaches to, loads into, or Exit()s a window the owner has open. Its PID
+    # (the one that appeared across the dispatch) is recorded before Load.
+    app, pids = dispatch_recording_pid(
+        lambda: wc.DispatchEx("Origin.Application"), pid_sidecar
+    )
+    wd.pids = pids
     app.Visible = 1  # NEVER headless here -- see module docstring
 
     def lt(cmd: str) -> bool:
@@ -479,6 +481,7 @@ def main() -> int:
         wd.cancel()
         try:
             app.Exit()
+            pid_sidecar.unlink(missing_ok=True)  # kept if Exit fails: next run cleans up
         except Exception:
             pass
 
