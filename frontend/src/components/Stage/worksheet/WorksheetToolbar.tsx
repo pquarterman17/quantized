@@ -17,6 +17,8 @@
 import { useRef, useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
+import ColumnViewButton from "./ColumnViewButton";
+import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetToolbarFit } from "./worksheetToolbarOverflow";
 
@@ -74,6 +76,8 @@ export interface WorksheetToolbarProps {
    *  selection highlights plotted points; "Set As › X"/"Plot as Y" edit it
    *  directly)? Shown as an explicit badge — never a silent assumption. */
   plotLinked: boolean;
+  /** Hide / Show / Freeze columns (view only); absent = no "Columns" button. */
+  columnView?: ColumnViewControls;
 }
 
 /** One toolbar cluster: its rendered buttons, and the SAME actions again as
@@ -113,6 +117,7 @@ export default function WorksheetToolbar({
   onAnalyzeSelection,
   onClearColSelection,
   plotLinked,
+  columnView,
 }: WorksheetToolbarProps) {
   const [propagate, setPropagate] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -123,13 +128,9 @@ export default function WorksheetToolbar({
   // + everyday actions) is never the one to go.
   const groups: ToolbarGroup[] = [
     {
-      // Group 0 — see fitToolGroups' floor rule: ALWAYS shown, so this stays
-      // just the formula bar itself, never bundled with ordinary action
-      // buttons (Stats/Copy/Export, below) — those still need to be able to
-      // collapse at a common width (measured: the formula bar + ± errors +
-      // Add column alone already runs ~520px; adding Stats/Copy/Export pushed
-      // the combined group past 1280px-class windows entirely, taking the
-      // "⋯" button down to a wrapped second line with it).
+      // Group 0 — see fitToolGroups' floor rule: ALWAYS shown, so just the
+      // formula bar, never bundled with the Stats/Copy/Export buttons below
+      // (those must stay able to collapse: the bar alone runs ~520px).
       label: "Formula",
       node: (
         <>
@@ -192,6 +193,7 @@ export default function WorksheetToolbar({
     },
   ];
 
+  if (columnView) groups.push({ label: "Columns", node: <ColumnViewButton controls={columnView} />, items: columnViewItems(columnView) });
   // MAIN #34: rectangular + row operations — a cell cursor's own 1x1 "block"
   // (useGridCursor) makes these the common case, not the rare one, which is
   // exactly why they're first to collapse rather than exempt from it.

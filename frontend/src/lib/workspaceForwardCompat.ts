@@ -101,7 +101,7 @@ export const DATASET: Classify<Dataset> = {
   tags: V, group: V, folderId: V, order: V, formulas: V, formulaErrors: V, derivedFrom: V, analysisRecipe: V,
   channelRoles: V, columnDesignations: V, errorRoles: V, importedAt: V, channelTypes: V, excludedRows: V,
   filter: V, pending: V, source: V, versionOf: V, workbookId: V,
-  linkedCurves: G, columnProps: G,
+  linkedCurves: G, columnProps: G, hiddenCols: G, frozenCols: G,
 };
 
 /** Every classification map by type name (the test's ratchet reads this). */
