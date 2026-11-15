@@ -37,6 +37,7 @@ from quantized.io.origin_project.opju_graph_pages import (
     GraphPageReport,
     unrecovered_graph_pages,
 )
+from quantized.io.origin_project.opju_layer_kind import apply_layer_kinds
 from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_summary
 
 __all__ = ["origin_figures_and_fidelity"]
@@ -63,6 +64,8 @@ def origin_figures_and_fidelity(
             # curves re-bound to a sheet the import did not produce are
             # omitted + diagnosed, not left for the frontend to skip silently
             raw_figs = unbound_rebinds(extract_figures_opju(raw), books)
+            # polar / offset-stacked layers left out, bubble / colour-mapped noted
+            raw_figs = apply_layer_kinds(raw_figs, raw)
             raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
             missed = unrecovered_graph_pages(raw, {str(f.get("name")) for f in raw_figs})
         figs, fidelity = assess_origin_figures(

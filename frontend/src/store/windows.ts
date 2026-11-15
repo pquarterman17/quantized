@@ -32,7 +32,7 @@ import { fitNewWindowGeometry, newWindowGeometry, reboundWindowTitle } from "../
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
-import { datasetViewDefaults } from "./windowDefaults";
+import { datasetViewDefaults, openNewGraph } from "./windowDefaults";
 import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
@@ -187,7 +187,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       // re-places the result at the drop point — clamped against the live
       // canvas bounds (same fallback size tileWindows uses when the Plot tab
       // hasn't reported real bounds yet).
-      const id = get().createWindow(datasetId);
+      const id = openNewGraph(get(), datasetId); // a new graph (default template)
       set((s) => ({
         plotWindows: s.plotWindows.map((w) =>
           w.id === id
@@ -230,7 +230,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const priorDs = s.datasets.find((d) => d.id === win.datasetId);
         const currentView = plotWindowView(win);
         const memory = captureTechniqueView(priorDs, currentView, s.techniqueViewMemory); // item 5
-        const reboundView = { ...currentView, ...datasetViewDefaults(ds, priorDs, memory, { outgoing: currentView }) };
+        const reboundView = { ...currentView, ...datasetViewDefaults(ds, priorDs, memory, { outgoing: currentView, win: windowId }) };
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
             w.id === windowId

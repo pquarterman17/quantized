@@ -34,6 +34,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.autosave.stash", // the synchronous on-hide autosave generation (lib/autosave.ts)
   "qz.calcHistory",
   "qz.customFitModels",
+  "qz.defaultGraphTemplate",
   "qz.graphTemplates",
   "qz.interactionHints.seen",
   "qz.interactionPrefs",

@@ -58,7 +58,10 @@ from quantized.io.origin_project.opju_book_checks import (
     x_unconfirmed,
 )
 from quantized.io.origin_project.opju_codec import scan_marked_columns, shared_fpc_decodes
+from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
+from quantized.io.origin_project.opju_record_meta import record_column_metadata
 from quantized.io.origin_project.opju_reports import scan_marked_report_columns
+from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 from quantized.io.origin_project.opju_worksheet import MatrixBook, scan_worksheet
 from quantized.io.origin_project.windows import BookMeta
 from quantized.io.origin_project.windows_opju import opju_window_metadata
@@ -152,7 +155,17 @@ def _window_metadata(
         if wide is not None and all(wide.columns.get(c) == m for c, m in base.columns.items()):
             columns = {**wide.columns, **base.columns}
         merged[book] = BookMeta(base.short, base.long_name, columns)
-    return merged
+    unlabelled = {k: v for k, v in columns_by_book.items() if k not in merged and v}
+    if unlabelled:  # non-Text&Numeric columns: no markers (opju_record_meta)
+        merged.update(_record_metadata(b, unlabelled))
+    return {k: merged[k] for k in columns_by_book if k in merged}
+
+
+def _record_metadata(b: bytes, wanted: dict[str, list[str]]) -> dict[str, BookMeta]:
+    pages = opju_pages(b)
+    table = column_id_table(b, pages)
+    off_sheet, _gates = sheet_map_with_segments(b, table)
+    return record_column_metadata(b, pages, table, off_sheet, wanted)
 
 
 def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
