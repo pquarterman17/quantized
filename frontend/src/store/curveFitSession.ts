@@ -26,6 +26,9 @@ export interface FittedData {
    *  its error-scaling switch; absent on a fit recorded before these. */
   weightMode?: string;
   scaleErrors?: boolean;
+  /** Which parameters the fit HELD (the table's fixed flags), when any were; a
+   *  held parameter has no error, and a results table says "(fixed)" for it. */
+  fixed?: boolean[];
 }
 
 /** The weighting a fit would use now (components/workshops/curvefit/fitWeighting). */

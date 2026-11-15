@@ -83,6 +83,17 @@ describe("number format edge cases (L1, M7)", () => {
   });
 });
 
+describe("held parameters (M7)", () => {
+  const result = { params: [2, 0.5], errors: [0.1, Number.NaN], R2: 1, chiSqRed: 1 };
+  it("a held parameter says (fixed); a free one without an error says (no error)", () => {
+    const rows = singleFitTable(["A", "B"], result, { r2: false, chiSqRed: false, chiSq: false, n: false }, [false, true]);
+    expect(rows[1]![1]).toBe("2.00 ± 0.10");
+    expect(rows[2]![1]).toBe("0.5 (fixed)");
+    expect(singleFitTable(["A", "B"], result, { r2: false, chiSqRed: false, chiSq: false, n: false })[2]![1]).toBe("0.5 (no error)");
+    expect(batchFitTable(["B"], [{ name: "a", params: [0.5], errors: [Number.NaN], R2: 1, chiSqRed: 1 }], DEFAULT_WANT, [true])[1]![1]).toBe("0.5 (fixed)");
+  });
+});
+
 describe("the layer", () => {
   it("is a valid table layer with a header row; oversize tables are cut to the caps", () => {
     const layer = fitTableLayer("t1", [["Parameter", "Value"], ["A", "1 ± 0.1"]]);

@@ -46,9 +46,13 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   // own model and columns, never the panel's current ones: picking another
   // model after a run used to label that run's values with the new model's
   // parameter names.
-  const ran = useRef<{ model: string; columns: string[] } | null>(null);
+  const ran = useRef<{ model: string; columns: string[]; fixed?: boolean[] } | null>(null);
   const runItem = useCallback(async (dataset: Dataset, selection: AnalysisSelectionItem): Promise<AnalysisBatchOutcome> => {
-    ran.current = { model: modelName, columns: batchColumns(model?.paramNames ?? paramRows.map((r) => r.name)) };
+    ran.current = {
+      model: modelName, columns: batchColumns(model?.paramNames ?? paramRows.map((r) => r.name)),
+      // The parameters this run held: they have no error, and the graph table says so.
+      ...(!rowsAreDefault(paramRows, model) && paramRows.some((r) => r.fixed) ? { fixed: paramRows.map((r) => r.fixed) } : {}),
+    };
     const parsed = parseFitParams(paramRows, model);
     if (parsed.error) throw new Error(parsed.error);
     const custom = !rowsAreDefault(paramRows, model);
@@ -158,6 +162,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
           ran.current ? ran.current.columns.slice(6).filter((_, k) => k % 2 === 0) : names,
           batchTableInputs(inputs, ran.current ? (ran.current.columns.length - 6) / 2 : names.length),
           want,
+          ran.current?.fixed,
         )}
       />;
     }}

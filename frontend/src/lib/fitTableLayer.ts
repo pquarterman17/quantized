@@ -27,8 +27,9 @@ const wide = (a: number) => a !== 0 && (a < 1e-3 || a >= 1e5);
  *  with no usable error is marked "(no error)": a held (fixed) parameter and
  *  one the data could not determine both reach here, and neither may read as
  *  an exact number. */
-export function valueWithError(v: unknown, e: unknown): string {
+export function valueWithError(v: unknown, e: unknown, fixed = false): string {
   if (!fin(v)) return DASH;
+  if (fixed) return `${plain(v, 4)} (fixed)`;
   if (!fin(e) || e <= 0) return `${plain(v, 4)} (no error)`;
   // One exponent for the pair, from the larger of the two.
   const top = Math.max(Math.abs(v), e);
@@ -76,11 +77,11 @@ export function fitToCaps(rows: string[][]): { rows: string[][]; cut: boolean } 
 }
 
 /** A single fit: a Parameter / Value ± error table, then the chosen statistics. */
-export function singleFitTable(names: readonly string[], result: CalcResult, want: FitTableWant): string[][] {
+export function singleFitTable(names: readonly string[], result: CalcResult, want: FitTableWant, fixed?: readonly boolean[]): string[][] {
   const params = Array.isArray(result.params) ? (result.params as unknown[]) : [];
   const errors = Array.isArray(result.errors) ? (result.errors as unknown[]) : [];
   const rows: string[][] = [["Parameter", "Value"]];
-  params.forEach((v, i) => rows.push([names[i] ?? `p${i}`, valueWithError(v, errors[i])]));
+  params.forEach((v, i) => rows.push([names[i] ?? `p${i}`, valueWithError(v, errors[i], fixed?.[i] === true)]));
   if (want.r2) rows.push(["R²", plain(result.R2, 5)]);
   if (want.chiSqRed) rows.push(["Reduced χ²", plain(result.chiSqRed)]);
   if (want.chiSq) rows.push(["χ²", plain(result.chiSq)]);
@@ -128,10 +129,11 @@ export function batchFitTable(
   names: readonly string[],
   inputs: readonly { name: string; params: readonly unknown[]; errors: readonly unknown[]; R2: unknown; chiSqRed: unknown }[],
   want: FitTableWant,
+  fixed?: readonly boolean[],
 ): string[][] {
   const rows: string[][] = [["Input", ...names, ...(want.r2 ? ["R²"] : []), ...(want.chiSqRed ? ["Reduced χ²"] : [])]];
   for (const r of inputs) {
-    rows.push([r.name, ...names.map((_, j) => valueWithError(r.params[j], r.errors[j])),
+    rows.push([r.name, ...names.map((_, j) => valueWithError(r.params[j], r.errors[j], fixed?.[j] === true)),
       ...(want.r2 ? [plain(r.R2, 5)] : []), ...(want.chiSqRed ? [plain(r.chiSqRed)] : [])]);
   }
   return rows;

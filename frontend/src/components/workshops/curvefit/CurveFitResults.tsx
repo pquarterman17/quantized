@@ -117,7 +117,7 @@ export default function CurveFitResults(p: Props) {
           <FitReportSection result={result} fitData={fitData} paramNames={names} fileStem={`${stemFromName(active.name)}-${modelName}`} />
           <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} />
           <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
-          <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want)} />
+          <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want, fitData.fixed)} />
           <FitDiagnosticsSection result={result} fitData={fitData} />
         </>
       )}
