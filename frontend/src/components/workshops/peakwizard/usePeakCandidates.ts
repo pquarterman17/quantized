@@ -119,8 +119,18 @@ export function usePeakCandidates(inp: Inputs) {
   // `override`: the find settings to use INSTEAD of the recipe's — step ②'s
   // Advanced "Find again" patches the recipe and finds in one gesture, and
   // this closure still holds the pre-patch `find` at that moment.
-  const runFind = useCallback(async (override?: PeakRecipe["find"]) => {
+  //
+  // A late answer is DROPPED when it is no longer this panel's to land: a newer
+  // find superseded it (`findSeq`), the working segment changed under it (a new
+  // dataset or range: it was computed on the old trace), or, for the automatic
+  // find on entering step 2 (`auto`), the user already added peaks by hand
+  // while it ran, which it must never replace.
+  const findSeq = useRef(0);
+  const segmentRef = useRef(segment);
+  segmentRef.current = segment;
+  const runFind = useCallback(async (override?: PeakRecipe["find"], opts?: { auto?: boolean }) => {
     if (!active || !segment || !workingY) return;
+    const id = ++findSeq.current;
     setFindBusy(true);
     setFindError(null);
     try {
@@ -130,15 +140,19 @@ export function usePeakCandidates(inp: Inputs) {
       }
       // Shared with the batch runner (./recipeSteps).
       const found = await recipeFind(segment.x, workingY, override ?? find);
+      if (findSeq.current !== id || segmentRef.current !== segment) return;
+      if (opts?.auto && listRef.current.length > 0) return;
       commit(found.map((p: Peak) => ({
         id: nextCandidateId++,
         center: p.center, height: p.height, bg: p.bg, fwhm: p.fwhm, included: true, manual: false,
       })));
       onReplaced();
     } catch (e) {
+      if (findSeq.current !== id || segmentRef.current !== segment) return;
       setFindError(e instanceof Error ? e.message : "peak find failed");
     } finally {
-      setFindBusy(false);
+      // Only the newest find owns the busy flag; a superseded one leaves it to its successor.
+      if (findSeq.current === id) setFindBusy(false);
     }
   }, [active, segment, workingY, find, commit, onReplaced]);
 

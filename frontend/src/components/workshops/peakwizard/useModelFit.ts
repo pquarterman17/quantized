@@ -180,6 +180,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const { active, segment, workingY, baseline, baselineOn, peaks, model, fit, setFit } = inp;
   const engine = fit.engine;
   const setFitOverlay = useApp((s) => s.setFitOverlay);
+  const setStatus = useApp((s) => s.setStatus);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +316,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
         bgAtCenter: peakBackgrounds(res, segment.x, baselineOn ? baseline : null),
       });
       publish(res, active, segment);
+      setStatus(`fitted ${peaks.length} peak${plural(peaks.length)}`);
     } catch (e) {
       if (seq.current !== id) return;
       setError(e instanceof Error ? e.message : "model fit failed");
