@@ -209,9 +209,11 @@ def test_without_captions_renumbers_curve_references(
 
 
 def test_unalignable_sheet_fails_closed_with_unknown_sheet() -> None:
-    """Two ``B`` ids but one ``B`` dataset: no sheet is proven for either."""
+    """Two ``B`` ids but one ``B`` dataset: the rank alignment proves neither.
+    Id 4's X partner (A, id 3) is on sheet 2, which stores no ``WBook_B@2``,
+    so the second signal (``opju_sheet_signals``) proves nothing either."""
     figs = extract_figures_opju(
-        _blob(["WBook_A", "WBook_B", "WBook_A@2"], _id_curve_token(0xBA, cid=2))
+        _blob(["WBook_A", "WBook_B", "WBook_A@2"], _id_curve_token(0xBA, cid=4))
     )
     assert figs[0]["curves"] == []
     assert figs[0]["curve_sheet_omitted"] == [

@@ -254,6 +254,30 @@ describe("FigureRow — PR C additions", () => {
     expect(region).not.toHaveTextContent("not a sheet");
   });
 
+  it("offers Recover for a .opju graph with curves left out, and names each one there", async () => {
+    const left: OriginFigureEntry = {
+      ...entry("g4", "s1"),
+      siblingIds: ["s1"],
+      figure: {
+        ...entry("g4", "s1").figure,
+        curves: [{ book: "NLFit1", x: "A", y: "B" }],
+        curve_sheet_omitted: [
+          { book: "NLFit1", x: "A", y: "C", recorded: "", reason: "sheet_unknown" },
+          { book: "NLFit1", x: "A", y: "D", recorded: "NLFit1@3", reason: "column_not_imported" },
+        ],
+        fidelity: { status: "best_effort", recovered: [], omissions: ["curve_sheet_unresolved"] },
+      },
+    };
+    useApp.setState({ datasets: [sheetBook("s1", "NLFit1")], originFigures: [left] });
+    render(<FigureRow entry={left} treeMode />);
+    fireEvent.click(screen.getByRole("button", { name: "See the curves left out of MokeGraph" }));
+    const region = await screen.findByRole("region", { name: "Recover MokeGraph" });
+    expect(region).toHaveTextContent("Left out of this graph");
+    expect(region).toHaveTextContent("NLFit1 column C (X A): the sheet it plots could not be proven");
+    expect(region).toHaveTextContent("NLFit1 column D (X A): that column of NLFit1@3 was not imported");
+    expect(region).not.toHaveTextContent("records a curve's column on another sheet");
+  });
+
   it("explains an unresolved graph even when no sibling workbook survived import", async () => {
     const unresolvedEntry = {
       ...entry("g2", null),
