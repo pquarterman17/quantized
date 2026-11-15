@@ -85,6 +85,24 @@ describe("usePlotStageActions linked row brushing", () => {
   });
 });
 
+describe("usePlotStageActions brush on a decimated payload (gap audit 3 N2 review)", () => {
+  it("an x band selects every DATASET row in it, not the drawn subset's positions", async () => {
+    const n = 20_000;
+    const ds = {
+      id: "big", name: "big",
+      data: { time: Array.from({ length: n }, (_, r) => r), values: Array.from({ length: n }, (_, r) => [r % 7]), labels: ["Y"], units: [""], metadata: {} },
+    };
+    const ids = Array.from({ length: n / 100 }, (_, i) => i * 100);
+    const reduced: PlotPayload = {
+      data: [ids, ids.map((r) => r % 7)], series: [{ label: "Y", unit: "" }], xLabel: "t", xUnit: "", decimated: true, rowIds: ids,
+    };
+    useApp.setState({ datasets: [ds], activeId: "big", xKey: null, selection: null });
+    const { result } = renderHook(() => usePlotStageActions({ current: null }, reduced, ds, undefined, [0]));
+    result.current.onRangeSelect(15_000, 15_004);
+    await vi.waitFor(() => expect(useApp.getState().selection?.rows).toEqual([15_000, 15_001, 15_002, 15_003, 15_004]));
+  });
+});
+
 // Finding 2 (Group AB adversarial review, round 2): plottedYExtent must skip
 // a secondary-axis (axis:1) series — e.g. a dy/dx differentiate overlay —
 // when clamping the y-box, since that series' range is on a totally

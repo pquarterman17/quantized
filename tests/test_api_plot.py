@@ -542,3 +542,33 @@ def test_columns_transport_with_x_only_dataset() -> None:
     assert resp.status_code == as_json.status_code
     if resp.status_code == 200:
         assert _decoded(resp) == as_json.json()
+
+
+# Gap audit 3 N2 review: a reduced payload names the dataset row of every row
+# it returns, so masking a drawn point maps back to the right row.
+
+
+def test_plot_series_decimated_payload_names_each_rows_dataset_row() -> None:
+    dataset = _dense_dataset(50_000, spike_at=31_234)
+    body = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 100}).json()
+    rows = body["rows"]
+    assert body["decimated"] is True
+    assert len(rows) == len(body["data"][0]) < 50_000
+    spike = body["data"][1].index(999.0)
+    assert rows[spike] == 31_234
+    assert all(body["data"][0][i] == dataset["time"][r] for i, r in enumerate(rows))
+
+
+def test_plot_series_windowed_payload_rows_are_absolute() -> None:
+    dataset = _dense_dataset(20_000)
+    body = client.post(
+        "/api/plot/series",
+        json={"dataset": dataset, "decimate_width": 100, "x_min": 5_000, "x_max": 6_000},
+    ).json()
+    assert all(body["data"][0][i] == r for i, r in enumerate(body["rows"]))
+    assert min(body["rows"]) >= 5_000
+
+
+def test_plot_series_full_payload_has_no_row_map() -> None:
+    body = client.post("/api/plot/series", json={"dataset": _dense_dataset(500)}).json()
+    assert body["rows"] is None

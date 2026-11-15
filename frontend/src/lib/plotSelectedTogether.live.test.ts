@@ -8,13 +8,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushLinkedCurves } from "../store/linkedCurvesSync";
 import { useApp } from "../store/useApp";
 import { useToasts } from "../store/toasts";
-import { addCurveFrom, plotSelectedTogether } from "./plotSelectedTogether";
+import { appendCurvesTo } from "../store/layerContentsApply";
+import { plotSelectedTogether } from "./plotSelectedTogether";
 import type { Dataset } from "./types";
 import { parseWorkspace } from "./workspace";
 import { serializeWorkspace } from "./workspaceSerialize";
 
-vi.mock("../store/paramDialog", () => ({ askParams: vi.fn() }));
-import { askParams } from "../store/paramDialog";
 
 const plain = (id: string, name: string, time: number[], y: number[], extra: number[] = y): Dataset => ({
   id,
@@ -51,18 +50,17 @@ describe("Plot selected together makes a LIVE graph", () => {
     flushLinkedCurves();
     expect(col(0)).toEqual([99, 2, 3, NaN, NaN]);
 
-    // A masked source row drops out of the graph too.
+    // A masked source point is masked on the graph too (drawn per the mask
+    // display; the mask stays keyed to the source point).
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "b" ? { ...d, excludedRows: [1] } : d)) }));
     flushLinkedCurves();
-    expect(col(1)).toEqual([NaN, NaN, NaN, 50, NaN]);
+    expect(col(1)).toEqual([NaN, NaN, NaN, 50, 60]);
+    expect(graph().excludedRows).toEqual([4]);
   });
 
-  it("Add curve from… adds another dataset's X/Y to the graph; Undo takes it back", async () => {
+  it("Layer Contents adds another dataset's X/Y to the graph; Undo takes it back", async () => {
     await plotSelectedTogether(["a", "b"]);
-    vi.mocked(askParams)
-      .mockResolvedValueOnce({ dataset: "Sample B" })
-      .mockResolvedValueOnce({ x: "Y", y: "Z" });
-    await addCurveFrom();
+    appendCurvesTo(graph().id, [{ datasetId: "b", xKey: 0, yKey: 1, label: "Sample B: Z", labelFrom: "nameCol" }]);
     expect(graph().linkedCurves?.[2]).toEqual({ datasetId: "b", xKey: 0, yKey: 1, label: "Sample B: Z", labelFrom: "nameCol" });
     // Its own block: x = b's Y column (50, 60), y = b's Z column (7, 8).
     expect(graph().data.time.slice(-2)).toEqual([50, 60]);
@@ -74,7 +72,7 @@ describe("Plot selected together makes a LIVE graph", () => {
     expect(graph().data.labels).toEqual(["Sample A", "Sample B"]);
   });
 
-  it("Add curve from… on a plain multi-X sheet's graph keeps each drawn Y on its own X", async () => {
+  it("adding to a plain multi-X sheet's graph keeps each drawn Y on its own X", () => {
     // T1 (time), R1, T2 (Set As X), R2: R1 on T1, R2 on T2 (gap-2 #2).
     const sheet: Dataset = {
       id: "m", name: "multix",
@@ -82,10 +80,7 @@ describe("Plot selected together makes a LIVE graph", () => {
       columnDesignations: { 1: "X" },
     };
     useApp.setState({ datasets: [a, b, sheet], activeId: "m", xKey: null, yKeys: null, hiddenChannels: [1], seriesLabels: {}, seriesStyles: {} });
-    vi.mocked(askParams)
-      .mockResolvedValueOnce({ dataset: "Sample A" })
-      .mockResolvedValueOnce({ x: "(its own X)", y: "Y" });
-    await addCurveFrom();
+    appendCurvesTo("m", [{ datasetId: "a", xKey: null, yKey: 0, label: "Sample A: Y", labelFrom: "nameCol" }]);
     expect(graph().linkedCurves).toEqual([
       { datasetId: "m", xKey: null, yKey: 0, label: "R1" },
       { datasetId: "m", xKey: 1, yKey: 2, label: "R2" },

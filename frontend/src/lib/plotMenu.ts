@@ -132,6 +132,13 @@ export interface PlotMenuContext {
   };
   /** Gap audit 2 #8: open the Plot Details dialog on a curve. */
   openDetails?: (channel: number) => void;
+  /** Gap audit 3 N2: the data point under the right-click (`row` = its
+   *  dataset row) and a toggle masking / unmasking just that point. */
+  pointUnder?: { row: number; excluded: boolean; toggle: () => void; refused?: string };
+  /** Gap audit 3 N1: open Layer Contents for this graph. */
+  layerContents?: () => void;
+  /** Gap audit 3 N3: link this graph's X axis with other graph windows. */
+  linkXAxis?: () => void;
 }
 
 /** Palette swatches: the 8 re-themeable `--series-N` tokens + black/white/grey. */
@@ -268,6 +275,12 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   }
 
   // Gap audit 2 #7: exclude / include the brushed points, Origin's "mask".
+  const p = ctx.pointUnder;
+  if (p) {
+    if (p.refused) items.push({ label: `Can't mask this point: ${p.refused}`, run: () => undefined, disabled: true, title: p.refused });
+    else items.push({ label: p.excluded ? `Unmask this point (row ${p.row + 1})` : `Mask this point (row ${p.row + 1})`, run: p.toggle });
+    if (!(ctx.pointMask && (ctx.pointMask.selected > 0 || ctx.pointMask.excluded > 0))) items.push({ separator: true });
+  }
   const m = ctx.pointMask;
   if (m && (m.selected > 0 || m.excluded > 0)) {
     if (m.selected > 0) {
@@ -322,6 +335,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     ],
   });
   items.push({ label: ctx.showGrid ? "Hide grid" : "Show grid", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
+  if (ctx.layerContents) items.push({ label: "Layer Contents…", run: ctx.layerContents });
+  if (ctx.linkXAxis) items.push({ label: "Link X axis with…", run: ctx.linkXAxis });
   items.push({
     label: "Tools",
     submenu: [
