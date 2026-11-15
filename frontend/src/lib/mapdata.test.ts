@@ -225,6 +225,22 @@ describe("map columns + tab gating (figures-audit #13)", () => {
     expect(canRenderMap(sweep)).toBe(false);
   });
 
+  it("offers a map for scattered random-position X,Y,Z (interpolated), not for a swept pair", () => {
+    const n = 30;
+    const px = Array.from({ length: n }, (_, i) => (i * 7919) % 31);
+    const py = Array.from({ length: n }, (_, i) => (i * 104729) % 29);
+    const scattered: DataStruct = {
+      time: px,
+      values: px.map((x, i) => [py[i], x + py[i]]),
+      labels: ["Y", "Z"],
+      units: ["", ""],
+      metadata: {},
+    };
+    expect(canRenderMap(scattered)).toBe(true);
+    const sweep: DataStruct = { ...scattered, time: [...px].sort((a, b) => a - b) };
+    expect(canRenderMap(sweep)).toBe(false);
+  });
+
   it("keeps a parser-flagged 2-D map's own channels (its ROI tools index them)", () => {
     const rsm: DataStruct = { ..._ds(), metadata: { is2D: true } };
     expect(canRenderMap(rsm)).toBe(true);

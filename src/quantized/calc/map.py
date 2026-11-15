@@ -206,6 +206,28 @@ def _resolve_auto_method(
     return "natural"
 
 
+def _require_2d_support(
+    xv: NDArray[np.float64], yv: NDArray[np.float64], zv: NDArray[np.float64]
+) -> None:
+    """Fail closed when the finite points cannot span a surface: fewer than 3
+    distinct (x, y) positions, or all on one line (a triangulation of them is
+    empty and the map would silently come back blank)."""
+    ok = np.isfinite(xv) & np.isfinite(yv) & np.isfinite(zv)
+    pts = np.unique(np.column_stack([xv[ok], yv[ok]]), axis=0)
+    if pts.shape[0] < 3:
+        raise ValueError(
+            f"cannot build a 2-D map: only {pts.shape[0]} distinct finite (x, y) "
+            "positions (need at least 3 that do not lie on one line)"
+        )
+    centred = pts - pts.mean(axis=0)
+    sv = np.linalg.svd(centred, compute_uv=False)
+    if sv[0] <= 0 or sv[-1] <= 1e-9 * sv[0]:
+        raise ValueError(
+            "cannot build a 2-D map: the (x, y) positions are collinear "
+            "(all on one line), so there is no surface to interpolate"
+        )
+
+
 def build_map(
     x: ArrayLike,
     y: ArrayLike,
@@ -233,6 +255,9 @@ def build_map(
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
     zv = np.asarray(z, dtype=float).ravel()
+    _require_2d_support(xv, yv, zv)
+    ok = np.isfinite(xv) & np.isfinite(yv) & np.isfinite(zv)
+    scattered = detect_regular_grid(xv[ok], yv[ok]) is None
     method = _resolve_auto_method(state.method, xv, yv, zv)
     xq, yq, zq = regrid2d(
         xv,
@@ -259,7 +284,13 @@ def build_map(
         y_unit=y_unit,
         z_label=z_label,
         z_unit=z_unit,
-        metadata=dict(metadata) if metadata is not None else {},
+        metadata={
+            **(dict(metadata) if metadata is not None else {}),
+            # Points that are not on a regular grid are INTERPOLATED onto the
+            # display grid; the UI says so, so it is not read as raw data.
+            "interpolated": scattered,
+            "n_points": int(ok.sum()),
+        },
     )
 
 

@@ -60,6 +60,8 @@ export interface MapPayload {
   /** Set when this payload came from the offline client regrid, not the
    *  backend -- see `MapFallback`. */
   fallback?: MapFallback;
+  /** Backend: the source points were scattered (not gridded) and interpolated. */
+  interpolated?: { nPoints: number };
 }
 
 /** Resolve a channel index from an int index or a label string. */
@@ -142,7 +144,10 @@ function finiteExtent(grid: (number | null)[][]): { min: number | null; max: num
   return lo <= hi ? { min: lo, max: hi } : { min: null, max: null };
 }
 
-function fromResponse(r: MapResponse): MapPayload {
+/** `/api/plot/map` also reports whether the points were interpolated. */
+type MapResponseEx = MapResponse & { interpolated?: boolean; n_points?: number };
+
+function fromResponse(r: MapResponseEx): MapPayload {
   return {
     xAxis: r.x_axis,
     yAxis: r.y_axis,
@@ -155,6 +160,7 @@ function fromResponse(r: MapResponse): MapPayload {
     zUnit: r.z.unit,
     zMin: r.z.min,
     zMax: r.z.max,
+    ...(r.interpolated ? { interpolated: { nPoints: r.n_points ?? 0 } } : {}),
   };
 }
 

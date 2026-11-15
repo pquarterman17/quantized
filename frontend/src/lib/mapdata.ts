@@ -35,6 +35,15 @@ export function repeats(col: (number | null | undefined)[]): boolean {
   return seen.size >= 2;
 }
 
+/** Random-position XYZ (X, Y, Z only; neither position column sweeps in order):
+ *  the Map tab interpolates it onto a grid and labels the result as such. */
+function isScatteredXYZ(data: DataStruct): boolean {
+  if (data.labels.length !== 2 || data.values.length < 8) return false;
+  const swept = (col: number[]) => col.every((v, i) => i === 0 || v >= col[i - 1]) || col.every((v, i) => i === 0 || v <= col[i - 1]);
+  const ys = data.values.map((row) => row[0]);
+  return !swept(data.time) && !swept(ys) && new Set(data.time.map((x, i) => `${x},${ys[i]}`)).size === data.time.length;
+}
+
 const mappableCache = new WeakMap<DataStruct, boolean>();
 
 /** Can this dataset produce a 2-D map at all? (owner request 2026-07-25)
@@ -61,7 +70,7 @@ export function canRenderMap(data: DataStruct | null | undefined): boolean {
   for (let c = 0; c < data.labels.length && gridAxes < 2; c++) {
     if (repeats(data.values.map((row) => row[c]))) gridAxes++;
   }
-  const ok = gridAxes >= 2;
+  const ok = gridAxes >= 2 || isScatteredXYZ(data);
   mappableCache.set(data, ok);
   return ok;
 }

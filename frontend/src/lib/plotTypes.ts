@@ -61,7 +61,7 @@ export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall",
 export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): string | null {
   if (!dataset) return "Select a dataset first.";
   if (id === "contour" && !canRenderMap(dataset.data)) {
-    return "Needs X, Y and Z columns on a grid (long-form XYZ), e.g. X,Y,Z.";
+    return "Needs X, Y and Z columns (long-form XYZ), e.g. X,Y,Z. Scattered points are interpolated.";
   }
   const columns = dataset.data.labels.length;
   if ((id === "doubleY" || id === "waterfall" || id === "stacked") && columns < 2) return "Needs at least two Y columns.";

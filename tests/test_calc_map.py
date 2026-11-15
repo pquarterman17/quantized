@@ -295,3 +295,36 @@ def test_auto_qspace_map_builds_fast_on_real_corpus(corpus_dir: Path) -> None:
     # real guard -- never tighten this into a performance benchmark.
     assert elapsed < 90.0, f"auto-selected method took {elapsed:.2f}s (want < 90s) on {n} pts"
     assert m.z_grid.shape == (200, 200)
+
+
+# --- scattered XYZ (gap audit 4 G15): interpolated, labelled, fails closed ----
+
+
+def test_scattered_xyz_is_interpolated_and_flagged() -> None:
+    rng = np.random.default_rng(3)
+    x = rng.uniform(0, 10, 60)
+    y = rng.uniform(0, 5, 60)
+    m = build_map(x, y, 2 * x + y, MapState(nx=20, ny=20))
+    assert m.metadata["interpolated"] is True
+    assert m.metadata["n_points"] == 60
+    inside = np.isfinite(m.z_grid)
+    assert inside.sum() > 100
+    xx, yy = np.meshgrid(m.x_axis, m.y_axis)
+    np.testing.assert_allclose(m.z_grid[inside], (2 * xx + yy)[inside], atol=0.6)
+
+
+def test_gridded_xyz_is_not_flagged_interpolated() -> None:
+    gx, gy = np.meshgrid(np.arange(6.0), np.arange(5.0))
+    m = build_map(gx.ravel(), gy.ravel(), gx.ravel() + gy.ravel(), MapState(nx=10, ny=10))
+    assert m.metadata["interpolated"] is False
+
+
+def test_collinear_points_fail_closed() -> None:
+    x = np.arange(10.0)
+    with pytest.raises(ValueError, match="collinear"):
+        build_map(x, 2 * x + 1, x**2)
+
+
+def test_too_few_distinct_points_fail_closed() -> None:
+    with pytest.raises(ValueError, match="distinct finite"):
+        build_map([0, 0, 1, 1], [0, 0, 1, 1], [1, 2, 3, 4])
