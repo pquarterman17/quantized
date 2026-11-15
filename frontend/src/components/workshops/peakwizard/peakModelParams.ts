@@ -21,16 +21,26 @@
 // those field edits. So a stored edit survives any re-seed, and every field
 // the user never touched follows the data.
 
-import { paramKind, type ModelBackground, type ModelShape, type ParamEdit, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
+import {
+  paramKind, type ModelBackground, type ModelShape, type ParamEdit, type PeakRecipeFit, type TieOp,
+} from "../../../lib/peakRecipeFit";
 
-export { paramKind, type ModelBackground, type ModelShape };
+export { paramKind, type ModelBackground, type ModelShape, type TieOp };
 
 export const MODEL_SHAPES: { value: ModelShape; label: string }[] = [
   { value: "gaussian", label: "Gaussian" },
   { value: "lorentzian", label: "Lorentzian" },
   { value: "pseudo_voigt", label: "Pseudo-Voigt" },
   { value: "voigt", label: "Voigt" },
+  { value: "split_gaussian", label: "Asym. Gaussian (split)" },
+  { value: "split_lorentzian", label: "Asym. Lorentzian (split)" },
+  { value: "split_pseudo_voigt", label: "Asym. pseudo-Voigt (split)" },
+  { value: "pearson_vii", label: "Pearson VII" },
+  { value: "fano", label: "Fano / BWF" },
+  { value: "doniach_sunjic", label: "Doniach–Šunjić" },
 ];
+/** Shapes whose integral diverges (no area, so no area-ratio tie). */
+export const NO_AREA_SHAPES: ReadonlySet<string> = new Set(["fano", "doniach_sunjic"]);
 export const MODEL_BACKGROUNDS: { value: ModelBackground; label: string }[] = [
   { value: "none", label: "None" },
   { value: "constant", label: "Constant" },
@@ -43,7 +53,15 @@ const SHAPE_FIELDS: Record<ModelShape, readonly string[]> = {
   lorentzian: ["center", "height", "fwhm"],
   pseudo_voigt: ["center", "height", "fwhm", "eta"],
   voigt: ["center", "height", "fwhm_g", "fwhm_l"],
+  split_gaussian: ["center", "height", "fwhm_left", "fwhm_right"],
+  split_lorentzian: ["center", "height", "fwhm_left", "fwhm_right"],
+  split_pseudo_voigt: ["center", "height", "fwhm_left", "fwhm_right", "eta"],
+  pearson_vii: ["center", "height", "fwhm", "m"],
+  fano: ["center", "height", "fwhm", "inv_q"],
+  doniach_sunjic: ["center", "height", "fwhm", "alpha"],
 };
+/** Start values of the shape parameters that are not widths or eta. */
+const SHAPE_SEEDS: Record<string, number> = { m: 1.5, inv_q: 0, alpha: 0.1 };
 const BG_TERMS: Record<ModelBackground, number> = { none: 0, constant: 1, linear: 2, quadratic: 3 };
 /** fwhm_g = fwhm_l = VOIGT_SPLIT x FWHM gives a Voigt of ~that FWHM. */
 const VOIGT_SPLIT = 0.61;
@@ -55,6 +73,11 @@ export interface ModelParam {
   min: number | null;
   max: number | null;
   tie: string | null;
+  /** How a tied row follows its target (absent = "equal", a plain copy);
+   *  `tieCoef` is the offset or ratio, fitted when `tieCoefVary`. */
+  tieOp?: TieOp;
+  tieCoef?: number;
+  tieCoefVary?: boolean;
 }
 
 export interface ModelSetup {
@@ -108,7 +131,8 @@ export function paramNames(shapes: readonly ModelShape[], background: ModelBackg
 export function paramLabel(name: string): string {
   const m = /^p(\d+)\.(.+)$/.exec(name);
   if (!m) return name.replace(".", " ");
-  const field = m[2] === "fwhm" ? "FWHM" : m[2] === "eta" ? "η" : m[2].replace("fwhm_", "FWHM ");
+  const named: Record<string, string> = { fwhm: "FWHM", eta: "η", alpha: "α", inv_q: "1/q" };
+  const field = named[m[2]] ?? m[2].replace("fwhm_", "FWHM ");
   return `#${Number(m[1]) + 1} ${field}`;
 }
 
@@ -170,8 +194,9 @@ export function seedSetup(
       const name = `p${i}.${f}`;
       if (f === "center") params.push(free(name, center, lo, hi));
       else if (f === "height") params.push(free(name, height, 0, null));
-      else if (f === "fwhm") params.push(free(name, width, null, span));
+      else if (f === "fwhm" || f === "fwhm_left" || f === "fwhm_right") params.push(free(name, width, null, span));
       else if (f === "eta") params.push(free(name, 0.5, null, null));
+      else if (f in SHAPE_SEEDS) params.push(free(name, SHAPE_SEEDS[f], null, null));
       else params.push(free(name, VOIGT_SPLIT * width, null, span));
     }
   });
@@ -224,6 +249,9 @@ export function recordEdits(
     if (p.min !== b.min) d.min = p.min;
     if (p.max !== b.max) d.max = p.max;
     if (p.tie !== b.tie) d.tie = p.tie;
+    if (p.tieOp !== b.tieOp) d.tieOp = p.tieOp;
+    if (p.tieCoef !== b.tieCoef) d.tieCoef = p.tieCoef;
+    if (p.tieCoefVary !== b.tieCoefVary) d.tieCoefVary = p.tieCoefVary;
     if (Object.keys(d).length > 0) out[p.name] = { ...out[p.name], ...d };
   }
   return out;
@@ -240,6 +268,34 @@ export function tieTargets(params: readonly ModelParam[], name: string): string[
   return params
     .filter((p) => p.name !== name && p.tie === null && p.vary && paramKind(p.name) === kind)
     .map((p) => p.name);
+}
+
+/** The tie operations a row of this kind may use: an offset for centres, a
+ *  ratio for heights and widths, an area ratio for a height whose peak has an
+ *  area (mirrors calc/peak_model.py's `_OP_KINDS`). */
+export function tieOpsFor(name: string, shapes: readonly ModelShape[]): TieOp[] {
+  const kind = paramKind(name);
+  if (kind === "center") return ["equal", "offset"];
+  if (kind === "width") return ["equal", "ratio"];
+  if (kind !== "height") return ["equal"];
+  const peak = Number(/^p(\d+)\./.exec(name)?.[1]);
+  return NO_AREA_SHAPES.has(shapes[peak]) ? ["equal", "ratio"] : ["equal", "ratio", "area_ratio"];
+}
+
+/** The coefficient a fresh tie of `op` starts from (an offset 0, a ratio 1). */
+export const tieCoefDefault = (op: TieOp): number => (op === "offset" ? 0 : 1);
+
+const num = (c: number) => String(Number(c.toPrecision(6)));
+
+/** "#1 center + 5", "0.5 × #1 height", "area 0.5 × #1" — a tie in words. */
+export function tieText(p: { tie: string | null; tie_op?: string | null; tie_coef?: number | null }): string {
+  if (!p.tie) return "";
+  const t = paramLabel(p.tie);
+  const c = p.tie_coef ?? 0;
+  if (p.tie_op === "offset") return `${t} ${c < 0 ? "−" : "+"} ${num(Math.abs(c))}`;
+  if (p.tie_op === "ratio") return `${num(c)} × ${t}`;
+  if (p.tie_op === "area_ratio") return `area ${num(c)} × ${t.split(" ")[0]}`;
+  return t;
 }
 
 /** Names of the parameters tied to `name` (they would break if it were fixed). */
@@ -374,6 +430,10 @@ export function modelFitBody(setup: ModelSetup, x: number[], y: number[], yErr?:
     background: setup.background,
     parameters: setup.params.map((p) => ({
       name: p.name, value: p.value, vary: p.vary, min: p.min, max: p.max, tie: p.tie,
+      // An expression tie only with a target (the backend refuses one without).
+      ...(p.tie !== null && p.tieOp && p.tieOp !== "equal"
+        ? { tie_op: p.tieOp, tie_coef: p.tieCoef ?? tieCoefDefault(p.tieOp), tie_coef_vary: p.tieCoefVary ?? false }
+        : {}),
     })),
     bg_x_ref: setup.xRef,
   };

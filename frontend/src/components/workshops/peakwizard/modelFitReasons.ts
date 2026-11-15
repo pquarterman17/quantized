@@ -27,24 +27,41 @@ export function paramErrorReason(result: Result, p: ParamOut, depth = 0): string
   if (p.tie) {
     const target = result.parameters.find((q) => q.name === p.tie);
     const why = target && depth < 8 ? paramErrorReason(result, target, depth + 1) : null;
-    return `tied to ${paramLabel(p.tie)}` + (why ? ` (${why})` : "");
+    const coef = p.tie_op && p.tie_op !== "equal" && p.tie_coef_vary && p.tie_coef_stderr == null
+      ? "; its fitted coefficient has no error" : "";
+    return `tied to ${paramLabel(p.tie)}` + (why ? ` (${why})` : "") + coef;
   }
   if (!p.vary) return "fixed: not fitted, so it has no error";
   if (p.at_bound) return "on a bound: the error is not reported there";
   return "undetermined: the data do not pin this parameter down independently (fix or tie it)";
 }
 
+const WIDTH_FIELDS: Record<string, string[]> = {
+  voigt: ["fwhm_g", "fwhm_l"],
+  split_gaussian: ["fwhm_left", "fwhm_right"],
+  split_lorentzian: ["fwhm_left", "fwhm_right"],
+  split_pseudo_voigt: ["fwhm_left", "fwhm_right"],
+};
+/** The shape parameter (if any) the FWHM and area also read. */
+const SHAPE_FIELD: Record<string, string> = {
+  pseudo_voigt: "eta", split_pseudo_voigt: "eta", pearson_vii: "m", fano: "inv_q", doniach_sunjic: "alpha",
+};
+
 function fieldsFor(shape: string, key: DerivedKey): string[] {
-  const widths = shape === "voigt" ? ["fwhm_g", "fwhm_l"] : ["fwhm"];
+  const widths = WIDTH_FIELDS[shape] ?? ["fwhm"];
+  const extra = SHAPE_FIELD[shape] ? [SHAPE_FIELD[shape]] : [];
   if (key === "center" || key === "height") return [key];
-  if (key === "fwhm") return widths;
-  return ["height", ...widths, ...(shape === "pseudo_voigt" ? ["eta"] : [])];
+  // A pseudo-Voigt's eta mixes two profiles of ONE width: it moves the area,
+  // never the FWHM; the other shape parameters change both.
+  if (key === "fwhm") return [...widths, ...(extra[0] === "eta" ? [] : extra)];
+  return ["height", ...widths, ...extra];
 }
 
 /** Why peak `k`'s derived `key` has no error, or null when it has one. */
 export function derivedErrorReason(result: Result, k: number, key: DerivedKey): string | null {
   const peak = result.peaks[k];
   if (!peak || peak[`${key}_stderr`] !== null) return null;
+  if (peak[key] === null) return `not defined: a ${peak.shape.replaceAll("_", " ")} peak has no finite ${key}`;
   if (!result.success) return NOT_CONVERGED;
   const rows = fieldsFor(peak.shape, key)
     .map((f) => result.parameters.find((q) => q.name === `p${k}.${f}`))

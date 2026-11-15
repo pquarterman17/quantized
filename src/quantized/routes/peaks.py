@@ -231,11 +231,14 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
 # worst-case request time until long fits move onto the job queue.
 MODEL_FIT_MAX_POINTS = 100_000
 MODEL_FIT_MAX_PEAKS = 50
-MODEL_FIT_MAX_PARAMETERS = 4 * MODEL_FIT_MAX_PEAKS + 3
+MODEL_FIT_MAX_PARAMETERS = 5 * MODEL_FIT_MAX_PEAKS + 3
 MODEL_FIT_MAX_DEADLINE_S = 30.0
 
 FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
-PeakShape = Literal["gaussian", "lorentzian", "pseudo_voigt", "voigt"]
+PeakShape = Literal["gaussian", "lorentzian", "pseudo_voigt", "voigt", "split_gaussian",
+                    "split_lorentzian", "split_pseudo_voigt", "pearson_vii", "fano",
+                    "doniach_sunjic"]
+TieOp = Literal["equal", "offset", "ratio", "area_ratio"]
 # A null (or non-finite) x / y / y_err entry marks a row the fit drops.
 Column = list[float | None]
 # Parameter names are ASCII (p0.center, bg.c1), so error text echoing one is too.
@@ -243,8 +246,10 @@ _PARAM_NAME = r"^[a-z0-9_.]+$"
 
 
 class PeakModelParameter(BaseModel):
-    """``p{i}.{center|height|fwhm|eta|fwhm_g|fwhm_l}`` or ``bg.c{k}``: start
-    ``value``, ``vary``, optional bounds and an identity ``tie``."""
+    """``p{i}.{field}`` (fields by shape: calc/peak_model_shapes.py) or
+    ``bg.c{k}``: start ``value``, ``vary``, optional bounds and a ``tie``
+    (``tie_op`` equal / offset / ratio / area_ratio with coefficient
+    ``tie_coef``, fitted when ``tie_coef_vary``; calc/peak_model.py)."""
 
     name: str = Field(min_length=1, max_length=32, pattern=_PARAM_NAME)
     value: FiniteFloat
@@ -252,6 +257,9 @@ class PeakModelParameter(BaseModel):
     min: FiniteFloat | None = None
     max: FiniteFloat | None = None
     tie: str | None = Field(default=None, max_length=32, pattern=r"^[a-z0-9_.]*$")
+    tie_op: TieOp | None = None
+    tie_coef: FiniteFloat | None = None
+    tie_coef_vary: bool = False
 
 
 class PeakModelProblem(BaseModel):
@@ -291,6 +299,10 @@ class PeakModelParameterOut(BaseModel):
     vary: bool
     tie: str | None
     at_bound: bool
+    tie_op: str | None = None
+    tie_coef: float | None = None
+    tie_coef_stderr: float | None = None
+    tie_coef_vary: bool = False
 
 
 class PeakModelPeakOut(BaseModel):
