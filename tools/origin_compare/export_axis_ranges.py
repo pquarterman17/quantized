@@ -6,8 +6,14 @@ ranges and types Origin itself holds. This is the independent oracle the
 ``.opju`` graph-page recovery work is checked against (see
 ``test-data/origin/ground_truth_public/README.md``).
 
-Always ``DispatchEx("Origin.ApplicationSI")``: a NEW, separate instance,
-so a run never attaches to or closes a window the owner has open. Use
+Always ``DispatchEx("Origin.Application")``: a NEW, separate instance,
+so a run never attaches to or closes a window the owner has open. NEVER
+``Origin.ApplicationSI``: that ProgID is single-instance and, even through
+``DispatchEx``, ATTACHES to an already-running Origin (measured 2026-11-15:
+no new PID, and it sees the other instance's LabTalk variables). A run would
+then load a corpus project into the owner's window, and its ``Exit()`` closes
+that window, unsaved work included. PID bookkeeping cannot catch it, because
+no kill is involved. Use
 ``run_axis_oracle.py`` to drive many files: a Student-edition page-limit
 modal hangs COM silently, and that runner supplies the per-file timeout.
 
@@ -47,7 +53,7 @@ def export(src: Path, out: Path) -> None:
     # owner opened Origin at the same moment) is ambiguous: record none, and
     # the runner then kills nothing.
     before = origin_pids()
-    app = wc.DispatchEx("Origin.ApplicationSI")
+    app = wc.DispatchEx("Origin.Application")
     new = sorted(origin_pids() - before)
     pid_file(out).write_text(json.dumps(new if len(new) == 1 else []), encoding="utf-8")
     try:

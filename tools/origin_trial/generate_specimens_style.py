@@ -41,7 +41,7 @@ YS = [[float(10 * (k + 1) + i) for i in range(8)] for k in range(8)]
 
 def main() -> None:
     SPEC.mkdir(exist_ok=True)
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
 
     def lt(cmd: str) -> bool:

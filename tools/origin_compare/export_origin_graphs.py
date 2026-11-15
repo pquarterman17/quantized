@@ -256,11 +256,12 @@ def main() -> int:
     wd = Watchdog(hb, LOAD_WATCHDOG_S)
 
     hb.beat()
-    # DispatchEx: a NEW instance (like export_axis_ranges.py), so this run never
+    # Origin.Application (never ApplicationSI, which ATTACHES to a running
+    # Origin -- see export_axis_ranges.py): a NEW instance, so this run never
     # attaches to, loads into, or Exit()s a window the owner has open. Its PID
     # (the one that appeared across the dispatch) is recorded before Load.
     app, pids = dispatch_recording_pid(
-        lambda: wc.DispatchEx("Origin.ApplicationSI"), pid_sidecar
+        lambda: wc.DispatchEx("Origin.Application"), pid_sidecar
     )
     wd.pids = pids
     app.Visible = 1  # NEVER headless here -- see module docstring

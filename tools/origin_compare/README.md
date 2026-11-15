@@ -15,7 +15,11 @@ piece of work — this script only produces the Origin-side oracle images.
 ## Requirements
 
 - Windows, with OriginPro installed and licensed (COM automation needs a
-  real, launchable `Origin.ApplicationSI`).
+  real, launchable `Origin.Application`). The scripts dispatch
+  `Origin.Application`, which always starts a new instance. Never use
+  `Origin.ApplicationSI` for these tools: it attaches to an Origin you
+  already have open, loads the corpus project into it, and its `Exit()`
+  closes your window.
 - `pywin32` importable from whichever Python runs the script. This repo's
   own `.venv` has it as an optional extra (`uv pip install pywin32` if
   missing) — but see "pywin32 gotcha" below: a partially-installed pywin32
