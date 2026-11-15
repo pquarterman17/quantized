@@ -98,4 +98,13 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   await ask.getByRole("button", { name: "Link" }).click();
   await expect.poll(async () => (await state(page)).linkY).toEqual([1, 1]);
   expect((await state(page)).linkX).toEqual([null, null]);
+
+  // ── A linked window whose Y scale changes kind leaves the group, and says so ──
+  await runPaletteCommand(page, "Axis…");
+  const again = page.getByRole("dialog", { name: "Axis" });
+  await again.getByRole("tab", { name: "Y" }).click();
+  await again.getByRole("combobox", { name: "Y axis Type" }).selectOption("log");
+  await again.getByRole("button", { name: "Apply" }).click();
+  await expect.poll(async () => (await state(page)).linkY.filter((g) => g === null).length).toBe(1);
+  await expect(page.getByText(/Y axis unlinked/)).toBeVisible();
 });
