@@ -34,6 +34,7 @@ import { carriedExclusions, nextPeakId, xChannelIdentity } from "../../../lib/pe
 import type { Dataset } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { derivedErrorReason, paramErrorReason, type DerivedKey } from "./modelFitReasons";
+import { NO_AREA_SHAPES } from "./peakModelParams";
 
 /** What a publish reads: a live fit's result (its curves are not needed). */
 export type PublishableFit = Pick<
@@ -116,6 +117,11 @@ export function modelFitPublishProblem(res: PublishableFit): string | null {
   for (let k = 0; k < res.peaks.length; k++) {
     const p = res.peaks[k];
     const bad = DERIVED.find((key) => p[key] === null || !Number.isFinite(p[key]));
+    // A Fano / Doniach–Šunjić peak has no finite area (or a broad Fano no
+    // FWHM) by definition — say so, rather than blame the numbers.
+    if (bad && p[bad] === null && (bad === "area" || bad === "fwhm") && NO_AREA_SHAPES.has(p.shape)) {
+      return `peak ${k + 1} (${p.shape.replaceAll("_", " ")}) has no finite ${bad === "area" ? "area" : "FWHM"}, which the peak table needs`;
+    }
     if (bad) return `peak ${k + 1}'s ${bad} is not a finite number`;
   }
   return null;

@@ -101,6 +101,9 @@ export interface BatchTableRow {
 export const DERIVED: DerivedKey[] = ["center", "fwhm", "height", "area"];
 const SHAPE_LABEL: Record<string, string> = {
   gaussian: "Gaussian", lorentzian: "Lorentzian", pseudo_voigt: "Pseudo-Voigt", voigt: "Voigt",
+  split_gaussian: "Asym. Gaussian", split_lorentzian: "Asym. Lorentzian",
+  split_pseudo_voigt: "Asym. pseudo-Voigt", pearson_vii: "Pearson VII", fano: "Fano / BWF",
+  doniach_sunjic: "Doniach–Šunjić",
 };
 
 /** Peak `k`'s parameters (and the background's) that ended on a bound / were
