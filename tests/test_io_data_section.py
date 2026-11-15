@@ -96,3 +96,33 @@ def test_no_roles_given_keeps_a_text_column_as_text() -> None:
     assert s.roles == ["x", "label", "y"]
     assert ds.labels == ("R",)
     assert ds.metadata["text_columns"] == {"Sample": ["a", "b", "c"]}
+
+
+def test_vote_lines_runs_the_section_regex_only_on_bracket_lines(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The heading regex runs only on lines that start with ``[``.
+
+    ``vote_lines`` walks EVERY line of the file, so an unguarded
+    ``is_section_marker`` call cost one regex match per data row (1,000,001
+    calls on a 1M-row CSV, ~15% of the whole import). Pinned as a call count,
+    not a wall-clock budget, so it holds on any machine.
+    """
+    import quantized.io._delimiter_vote as dv
+
+    seen: list[str] = []
+    real = dv.is_section_marker
+
+    def counting(line: str) -> bool:
+        seen.append(line)
+        return real(line)
+
+    monkeypatch.setattr(dv, "is_section_marker", counting)
+    rows = [f"{i},{i * 0.5},{i * 2}" for i in range(5000)]
+    text = "\n".join(["# comment", "[Header]", "a,b,c", *rows, "  [Notes]  ", ""])
+    out = dv.vote_lines(text)
+    # Only the two bracket lines ever reach the regex (the `[DATA]` anchor
+    # scan in `data_section_start` checks "[Header]" too); no data row does.
+    assert {line.strip() for line in seen} == {"[Header]", "[Notes]"}
+    assert len(seen) <= 3
+    assert out == ["a,b,c", *rows]  # headings and comments skipped, data kept

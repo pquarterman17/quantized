@@ -179,3 +179,76 @@ hand).
 3rd ed. (Prentice Hall, 2001), Ch. 2 (Bragg's law); Atkins, P. & de Paula,
 J., *Physical Chemistry*, 11th ed. (Oxford, 2018), §20.3 (the Arrhenius
 equation and the linearized $\ln k$ vs. $1/T$ plot).
+
+## Signal operations: filters, (de)convolution, Hilbert, inverse FFT, Reduce XY
+
+`calc/signal_filters.py`, `calc/signal_ifft.py` and `calc/reduce_xy.py`,
+reached through `POST /api/transform/sigop` (a recordable `sigop` transform)
+and the Signal Processing and Resample workshops.
+
+**Row order is never changed.** Every operation works on the rows in the
+order they were acquired, so a hysteresis loop or a there-and-back sweep is
+never sorted. Non-finite values stay NaN; none is invented.
+
+- **Median filter.** A running median over an odd window of rows. At the
+  ends the window keeps its full length and shifts inward, so an end spike
+  is still removed.
+- **Despike (Hampel).** A row is a spike when
+  $|y-\tilde y| > t\cdot 1.4826\cdot\mathrm{MAD}$ over its window, where
+  $\tilde y$ is the window median and $t$ the threshold. Where the window
+  MAD is 0, the column's global MAD of $y-\tilde y$ stands in; if that is 0
+  too, non-negative integer data (counts) uses the Poisson spread
+  $\sqrt{\max(\tilde y,1)}$ and other data the mean absolute deviation.
+  Spikes are replaced by linear interpolation between surviving neighbours,
+  against X when X is monotonic and against the row index otherwise.
+- **LOWESS** (Cleveland 1979). At every row's own X, a straight line is
+  fitted to the $k=\lfloor fn\rfloor$ nearest points in X with tricube
+  weights; each extra iteration down-weights outliers with bisquare weights
+  on the residuals ($6\times$ the median absolute residual). It follows
+  `statsmodels.nonparametric.lowess` and matches it to about $10^{-15}$ for
+  $f \gtrsim 0.03$. It **refuses an X that reverses direction**: on a loop
+  both branches share the same X and every local fit would average them.
+- **Convolution** with a unit-area Gaussian or Lorentzian kernel of a given
+  FWHM (Gaussian sampled to $\pm3$ FWHM, Lorentzian to $\pm10$ FWHM, which
+  drops about 3% of its area before renormalisation), reflected edges.
+- **Deconvolution** (Wiener): $X = Y\,H^*/(|H|^2+\lambda)$ in the frequency
+  domain, with $|H(0)|=1$ so $\lambda$ is a noise-to-signal power ratio
+  (larger is smoother and rings less). The record mean is removed before and
+  restored after, and the record is reflect-padded against wrap-around.
+- **Hilbert envelope** $|y + i\,\mathcal H[y]|$ (`scipy.signal.hilbert`), or
+  $\mathcal H[y]$ itself, with the mean removed first by default.
+- Convolution, deconvolution and the Hilbert transform need a **uniform,
+  monotonic X** (steps within 1%); anything else is refused with "resample
+  onto a uniform grid first". They also need finite values throughout.
+- **Inverse FFT** rebuilds the time-domain record from the FFT workbench's
+  own magnitude and phase output, so FFT → edit the spectrum → inverse is
+  exact where the maths allows. The FFT must have used no window (a window
+  cannot be undone from the spectrum), and the mean or trend the FFT removed
+  is not restored (only a kept DC bin restores a constant).
+- **Reduce XY** makes a new, smaller dataset: bin by X (width or count;
+  mean or median, with optional SD and count columns), average rows that
+  repeat an X value, or keep every Nth row. Binning and duplicate-averaging
+  **refuse an X that reverses direction**, because a bin spanning both
+  branches of a loop would average them into one meaningless curve; split
+  the branches first. Repeated X values, as in a sweep that dwells at each
+  field, are fine. Keeping every Nth row never looks at X, so it works on
+  loops.
+
+## Applied-field uncertainty in Curie–Weiss and demagnetization correction
+
+An applied-field error column, when bound, now joins the moment error in
+quadrature instead of the run being refused. It must be symmetric, in the
+field's unit and on the field axis; anything else is still refused.
+
+- **Curie–Weiss data** (`calc/magnetic_curie_weiss_data.py`): with
+  $\chi = yK/H$ ($K$ the exact sample-quantity conversion) and $y$, $H$
+  independent,
+  $$\sigma_\chi^2 = \left(\frac{K\sigma_y}{H}\right)^2 + \left(\frac{\chi\,\sigma_H}{H}\right)^2.$$
+- **Demagnetization correction** (`calc/magnetometry_demag.py`): with
+  $H_\mathrm{int} = H - NM$ and $H$, $M$ independent,
+  $$\sigma_{H_\mathrm{int}}^2 = \sigma_H^2 + (N\sigma_M)^2.$$
+  The demagnetizing factor $N$ is treated as exact. Several field-error
+  columns are first combined in quadrature with each other.
+
+The extra-sum-of-squares F-test for comparing datasets is described in
+[`docs/fit_models.md`](../fit_models.md#weighted-by-level-fits-and-compare-datasets-f-test).

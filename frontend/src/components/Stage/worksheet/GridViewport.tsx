@@ -24,18 +24,13 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { categoricalLevels } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/originTextColumns";
 import {
-  buildOffsets,
   computeAxisWindow,
-  computeAxisWindowOffsets,
-  DEFAULT_COL_OVERSCAN,
   DEFAULT_COL_WIDTH,
-  DEFAULT_FALLBACK_COLS,
   DEFAULT_FALLBACK_ROWS,
   DEFAULT_GUTTER_WIDTH,
   DEFAULT_ROW_HEIGHT,
   DEFAULT_ROW_OVERSCAN,
   revealScrollOffset,
-  windowIndices,
 } from "../../../lib/gridwindow";
 import type { OriginDesignation } from "../../../lib/columnmeta";
 import type { ColumnProps } from "../../../lib/columnProps";
@@ -47,8 +42,10 @@ import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit, type CellEditApi } from "./useCellEdit";
 import { useLineSelect } from "./useLineSelect";
 import { useColResize } from "./useColResize";
+import { useColumnMarks, useGridColumnAxis } from "./useGridColumnAxis";
 import { useTextColumnLayout } from "./useTextColumnLayout";
 
+const NO_COLS: ReadonlySet<number> = new Set();
 const DATE_X_COL_WIDTH = 168; // px: a full "YYYY-MM-DD HH:MM:SS" in the mono cell font
 
 export interface GridViewportProps {
@@ -115,6 +112,12 @@ export interface GridViewportProps {
   columnProps?: Record<number, ColumnProps>;
   /** Double-click a header: the Long Name / Units / Comments editor. */
   onHeaderDoubleClick?: (col: number, e: React.MouseEvent) => void;
+  /** Worksheet view (lib/worksheetColumnView.ts): hidden value columns are not
+   *  drawn; the first `frozenCols` columns stay pinned while scrolling sideways.
+   *  `onShowCols` un-hides a run from the header's "hidden" marker. */
+  hiddenCols?: ReadonlySet<number>;
+  frozenCols?: number;
+  onShowCols?: (cols: number[]) => void;
 }
 
 /** What the cursor hook hands the grid: the per-cell marks and handlers
@@ -185,6 +188,9 @@ export default function GridViewport({
   cursor,
   columnProps,
   onHeaderDoubleClick,
+  hiddenCols = NO_COLS,
+  frozenCols = 0,
+  onShowCols,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
@@ -224,20 +230,18 @@ export default function GridViewport({
   // A date X needs room for "2026-03-01 12:00:00" (audit #7) until the user sizes it.
   const widthOf = (c: number) => colWidths[c] ?? (c < 0 && xIsDate ? DATE_X_COL_WIDTH : colWidth);
   const colResize = useColResize(widthOf, onResizeCol);
-  // Any VALUE column resized? (An x-only resize doesn't affect the scrolling
-  // axis — it just widens the pinned cell — so the fast path still applies.)
-  const hasCustomCols = useMemo(
-    () => Object.keys(colWidths).some((k) => Number(k) >= 0),
-    [colWidths],
-  );
-  // Prefix-sum column offsets, built ONLY when some value column was resized
-  // (the uniform fast path needs no array at all) and rebuilt only when the
-  // widths/count change — a resize updates ONE array + the windowed slice,
-  // never the full grid (the perf tests measure this).
-  const colOffsets = useMemo(
-    () => (hasCustomCols ? buildOffsets(colCount, (c) => colWidths[c] ?? DEFAULT_COL_WIDTH) : null),
-    [hasCustomCols, colCount, colWidths],
-  );
+  // Hidden/frozen columns and the windowed run over the rest (./useGridColumnAxis.ts).
+  const axis = useGridColumnAxis({
+    colCount,
+    hidden: hiddenCols,
+    frozen: frozenCols,
+    xWidth: widthOf(-1),
+    colWidths,
+    scrollLeft: scroll.left,
+    viewportWidth: metrics.width,
+    gutterWidth,
+  });
+  const { visibleCols, leadingSpacer: leadingColSpacer, trailingSpacer: trailingColSpacer, frozenCols: pinnedCols } = axis;
 
   const rowCount = order.length + (cursor?.entryRow ? 1 : 0);
   const rowWindow = computeAxisWindow(scroll.top, metrics.height, rowCount, {
@@ -245,29 +249,12 @@ export default function GridViewport({
     overscan: DEFAULT_ROW_OVERSCAN,
     fallbackCount: DEFAULT_FALLBACK_ROWS,
   });
-  // The gutter + x column are pinned, so only the remaining width actually
-  // scrolls the value/computed columns.
-  const availableColWidth = Math.max(0, metrics.width - gutterWidth - widthOf(-1));
-  const colWindow = colOffsets
-    ? computeAxisWindowOffsets(scroll.left, availableColWidth, colOffsets, {
-        overscan: DEFAULT_COL_OVERSCAN,
-        fallbackCount: DEFAULT_FALLBACK_COLS,
-      })
-    : computeAxisWindow(scroll.left, availableColWidth, colCount, {
-        itemSize: colWidth,
-        overscan: DEFAULT_COL_OVERSCAN,
-        fallbackCount: DEFAULT_FALLBACK_COLS,
-      });
 
   const visibleRows = order.slice(rowWindow.start, Math.min(rowWindow.end, order.length));
-  const visibleCols = windowIndices(colWindow);
   const leadingRowSpacer = rowWindow.offset;
   const trailingRowSpacer = (rowCount - rowWindow.end) * metrics.rowHeight;
-  const leadingColSpacer = colWindow.offset;
-  const trailingColSpacer = colOffsets
-    ? colWindow.totalSize - colOffsets[colWindow.end]
-    : (colCount - colWindow.end) * colWidth;
-  const { anchors: textAnchors, layout: textLayout } = useTextColumnLayout(data, textCols, visibleCols);
+  const { anchors: textAnchors, layout: textLayout } = useTextColumnLayout(data, textCols, visibleCols, hiddenCols, pinnedCols);
+  const { runs, colPos } = useColumnMarks(colCount, hiddenCols, textCols, textAnchors);
 
   // Reveal (store/worksheetReveal.ts): scroll once per request key. Reads the
   // live element — rows sit under the sticky header, and the gutter
@@ -283,20 +270,20 @@ export default function GridViewport({
     const top = revealScrollOffset(reveal.pos * rh, rh, el.scrollTop, el.clientHeight - headerH, true);
     const c = reveal.column;
     const textIdx = typeof c === "string" ? textCols.findIndex((t) => t.shortName === c) : -1;
-    const at = (i: number) => (colOffsets ? colOffsets[i] : i * colWidth);
     const value = typeof c === "number" && c >= 0 && c < colCount;
     // A revealed text column's approximate scroll target: right after its
     // anchor channel (-1 means before every channel, i.e. position 0) — see
     // useTextColumnLayout's doc for why this needs `textAnchors`, not `textLayout`.
     const textAnchor = textIdx >= 0 ? textAnchors[textIdx] ?? -1 : -1;
-    const start = textIdx >= 0 ? (textAnchor < 0 ? 0 : at(textAnchor + 1)) : value ? at(c) : null;
+    // A hidden or frozen column never scrolls (null start): nothing to reveal.
+    const start = textIdx >= 0 ? (textAnchor < 0 ? 0 : axis.startAfterCol(textAnchor)) : value ? axis.startOfCol(c) : null;
     const size = (value && colWidths[c]) || colWidth;
-    const avail = el.clientWidth - gutterWidth - (colWidths[-1] ?? (xIsDate ? DATE_X_COL_WIDTH : colWidth));
+    const avail = el.clientWidth - axis.fixedWidth;
     const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
     el.scrollTop = top;
     el.scrollLeft = left;
     setScroll({ top, left });
-  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, gutterWidth, colOffsets, xIsDate]);
+  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate]);
 
   // The blank entry row (cursor.entryRow) renders at display position
   // `order.length`, past every data row; it has no original row yet.
@@ -331,6 +318,9 @@ export default function GridViewport({
       fmtOf={fmtOf}
       cursor={cursor && { pos, ...cursor }}
       entry={entry}
+      frozenCols={pinnedCols}
+      frozenLeft={axis.frozenLeft}
+      colPos={colPos}
     />
   );
 
@@ -343,6 +333,7 @@ export default function GridViewport({
       id={cursor?.gridId}
       aria-label={cursor?.label}
       aria-multiselectable={cursor ? true : undefined}
+      aria-colcount={colPos?.count}
       aria-activedescendant={cursor?.activeCellId}
       tabIndex={cursor ? 0 : undefined}
     >
@@ -374,6 +365,11 @@ export default function GridViewport({
         onChangeChannelType={onChangeChannelType}
         onHeaderDoubleClick={onHeaderDoubleClick}
         commentOf={(c) => columnProps?.[c]?.comment}
+        frozenCols={pinnedCols}
+        frozenLeft={axis.frozenLeft}
+        hiddenRuns={runs}
+        onShowCols={onShowCols}
+        colPos={colPos}
       />
       {leadingRowSpacer > 0 && <div style={{ height: leadingRowSpacer }} aria-hidden="true" />}
       {visibleRows.map((r, i) => rowAt(rowWindow.start + i, r, false))}
@@ -392,6 +388,8 @@ export default function GridViewport({
           gutterWidth={gutterWidth}
           rowHeight={metrics.rowHeight}
           textLayout={textLayout}
+          frozenCols={pinnedCols}
+          frozenLeft={axis.frozenLeft}
         />
       )}
     </div>

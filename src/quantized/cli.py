@@ -7,7 +7,7 @@
     qz --no-browser     don't open a browser (headless / CI; never auto-exits);
                         open the printed launch URL yourself
     qz --dev            Vite dev server (HMR) + auto-reloading backend
-    qz --desktop        native window (pywebview; pip install quantized[desktop])
+    qz --desktop        native window (pywebview; pip install quantized-lab[desktop])
     qz --calc           calculator-only view (DiraCulator materials calculators),
                         opens /?view=calc; combine with --desktop for a small
                         native window titled "DiraCulator", or with --dev to

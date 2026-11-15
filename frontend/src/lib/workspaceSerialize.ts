@@ -46,8 +46,17 @@ import { stringifyWithCells } from "./dataStructJson";
 import type { WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
-import { WORKSPACE_FORMAT, WORKSPACE_VERSION, WORKSPACE_VERSION_TRANSFORM_STEPS, type WorkspaceState } from "./workspace";
+import {
+  WORKSPACE_FORMAT,
+  WORKSPACE_VERSION,
+  WORKSPACE_VERSION_NEW_FEATURES,
+  WORKSPACE_VERSION_TRANSFORM_STEPS,
+  type WorkspaceState,
+} from "./workspace";
 import type { PlotWindow } from "./plotview";
+import { featuresV034WouldDrop } from "./workspaceForwardCompat";
+
+export { featuresV034WouldDrop };
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
  *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
@@ -289,6 +298,8 @@ export function serializeWorkspace(
       ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
       ...(d.columnDesignations && Object.keys(d.columnDesignations).length ? { columnDesignations: d.columnDesignations } : {}),
       ...(d.columnProps && Object.keys(d.columnProps).length ? { columnProps: d.columnProps } : {}),
+      ...(d.hiddenCols?.length ? { hiddenCols: d.hiddenCols } : {}),
+      ...(d.frozenCols ? { frozenCols: d.frozenCols } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       fitSpec: d.fitSpec,
@@ -361,6 +372,11 @@ export function serializeWorkspace(
       ...(d.versionOf ? { versionOf: d.versionOf } : {}),
     })),
   };
+  // Forward compatibility: a file holding a field v0.34.0 would silently DROP
+  // on open + save (lib/workspaceForwardCompat.ts) is written as v6, which
+  // v0.34.0 refuses ("unsupported workspace version"). Every other file keeps
+  // v4/v5 and still opens there.
+  if (featuresV034WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_NEW_FEATURES;
   return stringifyWithCells((hole) => ({
     ...doc,
     datasets: doc.datasets.map((e) => ({ ...e, data: hole(e.data), raw: hole(e.raw) })),

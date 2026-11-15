@@ -1,0 +1,1064 @@
+{
+ "workspace": {
+  "datasets": [
+   {
+    "id": "a",
+    "name": "run-a.csv",
+    "data": {
+     "time": [
+      0,
+      1,
+      2,
+      3
+     ],
+     "values": [
+      [
+       10,
+       100
+      ],
+      [
+       20,
+       200
+      ],
+      [
+       30,
+       300
+      ],
+      [
+       40,
+       400
+      ]
+     ],
+     "labels": [
+      "Field",
+      "Moment"
+     ],
+     "units": [
+      "Oe",
+      "emu"
+     ],
+     "metadata": {
+      "technique": "magnetometry.mvsh"
+     }
+    },
+    "folderId": "f1",
+    "workbookId": "wb-1"
+   },
+   {
+    "id": "b",
+    "name": "run-b.xy",
+    "data": {
+     "time": [
+      0,
+      1,
+      2
+     ],
+     "values": [
+      [
+       5,
+       50
+      ],
+      [
+       15,
+       150
+      ],
+      [
+       25,
+       250
+      ]
+     ],
+     "labels": [
+      "2theta",
+      "Intensity"
+     ],
+     "units": [
+      "deg",
+      "cps"
+     ],
+     "metadata": {
+      "technique": "xrd.powder"
+     }
+    },
+    "workbookId": "wb-2"
+   },
+   {
+    "id": "c",
+    "name": "Book1",
+    "data": {
+     "time": [
+      10,
+      20,
+      30,
+      40,
+      50
+     ],
+     "values": [
+      [
+       1,
+       100,
+       0.1
+      ],
+      [
+       2,
+       90,
+       0.12
+      ],
+      [
+       2.5,
+       85,
+       0.11
+      ],
+      [
+       3.5,
+       70,
+       0.15
+      ],
+      [
+       5,
+       60,
+       0.13
+      ]
+     ],
+     "labels": [
+      "R1",
+      "R2",
+      "dR1"
+     ],
+     "units": [
+      "ohm",
+      "ohm",
+      "ohm"
+     ],
+     "metadata": {
+      "source_format": "origin",
+      "origin_book": "Book1",
+      "origin_sheet": "Sheet1",
+      "x_column_name": "T"
+     }
+    },
+    "errorRoles": [
+     {
+      "channel": 2,
+      "target": 0,
+      "axis": "y",
+      "side": "both"
+     }
+    ],
+    "columnDesignations": {
+     "2": "Y-error"
+    },
+    "workbookId": "wbm-1"
+   }
+  ],
+  "folders": [
+   {
+    "id": "f1",
+    "name": "Magnetometry",
+    "parentId": null,
+    "order": 0
+   }
+  ],
+  "workbooks": [
+   {
+    "id": "wb-1",
+    "name": "run-a.csv",
+    "folderId": "f1",
+    "order": 0
+   },
+   {
+    "id": "wb-2",
+    "name": "run-b.xy",
+    "order": 0
+   },
+   {
+    "id": "wbm-1",
+    "name": "Book1",
+    "originBook": "Book1",
+    "order": 0
+   }
+  ],
+  "activeId": "a",
+  "selectedIds": [
+   "a",
+   "b"
+  ],
+  "expandedFolders": [
+   "f1"
+  ],
+  "originFigures": [],
+  "originFidelity": [],
+  "smartFolders": [],
+  "reports": [],
+  "analysisResults": [],
+  "staleDatasets": [],
+  "staleFits": [],
+  "macroSteps": [
+   {
+    "id": "step-3",
+    "kind": "expression",
+    "label": "Add column ratio",
+    "code": "qz.addColumn(\"ratio\", \"A / B\")",
+    "params": {
+     "name": "ratio",
+     "expr": "A / B"
+    },
+    "enabled": true
+   },
+   {
+    "id": "step-4",
+    "kind": "fit",
+    "label": "Fit Gaussian",
+    "code": "qz.fit(\"Gaussian\")",
+    "params": {
+     "model": "Gaussian"
+    },
+    "enabled": true
+   }
+  ],
+  "recalcMode": "manual",
+  "figureDocs": [
+   {
+    "id": "fd-034",
+    "name": "Saved figure (0.34)",
+    "datasetId": "c",
+    "config": {
+     "xKey": null,
+     "yKeys": [
+      0,
+      1
+     ],
+     "xScale": "linear",
+     "yScale": "linear",
+     "title": "Book1 graph",
+     "xLabel": "T (K)",
+     "yLabel": "R (ohm)",
+     "style": "publication",
+     "fmt": "pdf",
+     "dpi": 300,
+     "overrides": null,
+     "seriesStyles": [
+      {
+       "color": "#d62728",
+       "width": 2,
+       "marker": true,
+       "marker_size": 6
+      },
+      null
+     ]
+    },
+    "live": true
+   }
+  ],
+  "editableFigures": [
+   {
+    "schema": "quantized.figure",
+    "version": 2,
+    "id": "figure-1",
+    "name": "MvsH loop figure",
+    "bindings": {
+     "datasetId": "a",
+     "xKey": null,
+     "yKeys": null,
+     "y2Keys": null,
+     "groupKey": null,
+     "facetKey": null,
+     "errors": []
+    },
+    "data": {
+     "mode": "live"
+    },
+    "plot": {
+     "mark": "line",
+     "view": {
+      "yScale": "linear",
+      "xScale": "linear",
+      "showGrid": true,
+      "showLegend": true,
+      "legendStatic": false,
+      "showAxisBox": false,
+      "xReversed": false,
+      "stackMode": false,
+      "insetMode": false,
+      "polarMode": false,
+      "statMode": false,
+      "statHideEmptyLevels": false,
+      "statShowGroupN": true,
+      "statShowSummary": false,
+      "statMarks": {},
+      "statPicks": {},
+      "legendPos": "ne",
+      "legendXY": null,
+      "legendSize": null,
+      "legendFrameXY": null,
+      "legendTitle": null,
+      "inset": null,
+      "axisLabelOffsets": {},
+      "axisLabelStyles": {},
+      "plotTemplate": "screen",
+      "xLim": null,
+      "yLim": null,
+      "xStep": null,
+      "yStep": null,
+      "xFmt": {
+       "mode": "auto",
+       "digits": 2
+      },
+      "yFmt": {
+       "mode": "auto",
+       "digits": 2
+      },
+      "y2Fmt": null,
+      "plotTitle": "MvsH loop",
+      "xAxisLabel": "",
+      "yAxisLabel": "",
+      "y2Lim": null,
+      "y2Scale": null,
+      "y2Step": null,
+      "y2AxisLabel": "",
+      "refLines": [],
+      "annotations": [],
+      "regionShades": [],
+      "shapes": [],
+      "seriesStyles": {},
+      "seriesLabels": {},
+      "seriesOrder": null,
+      "hiddenChannels": [],
+      "waterfall": 0,
+      "waterfallDx": 0,
+      "panelFit": "frames",
+      "pageSetup": null
+     },
+     "axisBreaks": {
+      "x": [],
+      "y": [],
+      "y2": []
+     }
+    },
+    "output": {
+     "format": "pdf",
+     "stylePreset": "default",
+     "dpi": 300,
+     "transparent": false,
+     "filename": null
+    }
+   },
+   {
+    "schema": "quantized.figure",
+    "version": 2,
+    "id": "figure-034",
+    "name": "Book1 with axis break",
+    "bindings": {
+     "datasetId": "c",
+     "xKey": null,
+     "yKeys": [
+      0,
+      1
+     ],
+     "y2Keys": [
+      1
+     ],
+     "groupKey": null,
+     "facetKey": null,
+     "errors": [
+      {
+       "channel": 2,
+       "target": 0,
+       "axis": "y",
+       "side": "both"
+      }
+     ]
+    },
+    "data": {
+     "mode": "live"
+    },
+    "plot": {
+     "mark": "line",
+     "view": {
+      "yScale": "linear",
+      "xScale": "linear",
+      "showGrid": true,
+      "showLegend": true,
+      "legendStatic": false,
+      "showAxisBox": true,
+      "xReversed": false,
+      "stackMode": false,
+      "insetMode": false,
+      "polarMode": false,
+      "statMode": false,
+      "statHideEmptyLevels": false,
+      "statShowGroupN": true,
+      "statShowSummary": false,
+      "statMarks": {},
+      "statPicks": {},
+      "legendPos": "auto",
+      "legendXY": null,
+      "legendSize": null,
+      "legendFrameXY": null,
+      "legendTitle": null,
+      "inset": null,
+      "axisLabelOffsets": {},
+      "axisLabelStyles": {},
+      "plotTemplate": "screen",
+      "xLim": null,
+      "yLim": null,
+      "xStep": null,
+      "yStep": null,
+      "xFmt": {
+       "mode": "auto",
+       "digits": 2
+      },
+      "yFmt": {
+       "mode": "auto",
+       "digits": 2,
+       "minor": 1,
+       "ticks": "in",
+       "breaks": [
+        [
+         2.6,
+         3.4
+        ]
+       ]
+      },
+      "y2Fmt": null,
+      "plotTitle": "Book1 graph",
+      "xAxisLabel": "T (K)",
+      "yAxisLabel": "R1 (ohm)",
+      "y2Lim": null,
+      "y2Scale": null,
+      "y2Step": null,
+      "y2AxisLabel": "R2 (ohm)",
+      "refLines": [],
+      "annotations": [],
+      "regionShades": [],
+      "shapes": [],
+      "seriesStyles": {
+       "0": {
+        "color": "#d62728",
+        "width": 2,
+        "marker": true,
+        "markerShape": "square",
+        "markerSize": 6
+       },
+       "1": {
+        "color": "#1f77b4",
+        "line": "dash"
+       }
+      },
+      "seriesLabels": {
+       "0": "R1 sample"
+      },
+      "seriesOrder": null,
+      "hiddenChannels": [],
+      "waterfall": 0,
+      "waterfallDx": 0,
+      "panelFit": "frames",
+      "pageSetup": null
+     },
+     "axisBreaks": {
+      "x": [],
+      "y": [
+       [
+        2.6,
+        3.4
+       ]
+      ],
+      "y2": []
+     }
+    },
+    "output": {
+     "format": "pdf",
+     "stylePreset": "default",
+     "dpi": 300,
+     "transparent": false,
+     "filename": null
+    }
+   }
+  ],
+  "pages": [],
+  "migrationWarnings": [],
+  "plotWindows": [
+   {
+    "id": "w-034",
+    "kind": "plot",
+    "title": "Book1 graph",
+    "datasetId": "c",
+    "geometry": {
+     "x": 40,
+     "y": 40,
+     "w": 640,
+     "h": 480
+    },
+    "z": 1,
+    "winState": "normal",
+    "view": {
+     "yScale": "linear",
+     "xScale": "linear",
+     "showGrid": true,
+     "showLegend": true,
+     "legendPos": "auto",
+     "legendXY": null,
+     "legendSize": null,
+     "legendFrameXY": null,
+     "legendStatic": false,
+     "legendTitle": null,
+     "axisLabelOffsets": {},
+     "axisLabelStyles": {},
+     "plotTemplate": "screen",
+     "showAxisBox": true,
+     "xReversed": false,
+     "stackMode": false,
+     "insetMode": false,
+     "inset": null,
+     "polarMode": false,
+     "statMode": false,
+     "statHideEmptyLevels": false,
+     "statShowGroupN": true,
+     "statShowSummary": false,
+     "statMarks": {},
+     "statPicks": {},
+     "xLim": null,
+     "yLim": null,
+     "xStep": null,
+     "yStep": null,
+     "xFmt": {
+      "mode": "auto",
+      "digits": 2
+     },
+     "yFmt": {
+      "mode": "auto",
+      "digits": 2,
+      "minor": 1,
+      "ticks": "in",
+      "breaks": [
+       [
+        2.6,
+        3.4
+       ]
+      ]
+     },
+     "y2Fmt": null,
+     "plotTitle": "Book1 graph",
+     "xAxisLabel": "T (K)",
+     "yAxisLabel": "R1 (ohm)",
+     "y2Lim": null,
+     "y2Scale": null,
+     "y2Step": null,
+     "y2AxisLabel": "R2 (ohm)",
+     "refLines": [],
+     "annotations": [],
+     "regionShades": [],
+     "shapes": [],
+     "seriesStyles": {
+      "0": {
+       "color": "#d62728",
+       "width": 2,
+       "marker": true,
+       "markerShape": "square",
+       "markerSize": 6
+      },
+      "1": {
+       "color": "#1f77b4",
+       "line": "dash"
+      }
+     },
+     "seriesLabels": {
+      "0": "R1 sample"
+     },
+     "seriesOrder": null,
+     "hiddenChannels": [],
+     "waterfall": 0,
+     "waterfallDx": 0,
+     "panelFit": "frames",
+     "pageSetup": null,
+     "xKey": null,
+     "yKeys": [
+      0,
+      1
+     ],
+     "groupKey": null,
+     "facetKey": null,
+     "y2Keys": [
+      1
+     ],
+     "errKeys": {
+      "0": 2
+     }
+    },
+    "bg": "theme",
+    "linkGroup": null,
+    "pinned": false,
+    "document": {
+     "schema": "quantized.figure",
+     "version": 2,
+     "id": "figure-w-034",
+     "name": "Book1 graph",
+     "bindings": {
+      "datasetId": "c",
+      "xKey": null,
+      "yKeys": [
+       0,
+       1
+      ],
+      "y2Keys": [
+       1
+      ],
+      "groupKey": null,
+      "facetKey": null,
+      "errors": [
+       {
+        "channel": 2,
+        "target": 0,
+        "axis": "y",
+        "side": "both"
+       }
+      ]
+     },
+     "data": {
+      "mode": "live"
+     },
+     "plot": {
+      "mark": "line",
+      "view": {
+       "yScale": "linear",
+       "xScale": "linear",
+       "showGrid": true,
+       "showLegend": true,
+       "legendPos": "auto",
+       "legendXY": null,
+       "legendSize": null,
+       "legendFrameXY": null,
+       "legendStatic": false,
+       "legendTitle": null,
+       "axisLabelOffsets": {},
+       "axisLabelStyles": {},
+       "plotTemplate": "screen",
+       "showAxisBox": true,
+       "xReversed": false,
+       "stackMode": false,
+       "insetMode": false,
+       "inset": null,
+       "polarMode": false,
+       "statMode": false,
+       "statHideEmptyLevels": false,
+       "statShowGroupN": true,
+       "statShowSummary": false,
+       "statMarks": {},
+       "statPicks": {},
+       "xLim": null,
+       "yLim": null,
+       "xStep": null,
+       "yStep": null,
+       "xFmt": {
+        "mode": "auto",
+        "digits": 2
+       },
+       "yFmt": {
+        "mode": "auto",
+        "digits": 2,
+        "minor": 1,
+        "ticks": "in",
+        "breaks": [
+         [
+          2.6,
+          3.4
+         ]
+        ]
+       },
+       "y2Fmt": null,
+       "plotTitle": "Book1 graph",
+       "xAxisLabel": "T (K)",
+       "yAxisLabel": "R1 (ohm)",
+       "y2Lim": null,
+       "y2Scale": null,
+       "y2Step": null,
+       "y2AxisLabel": "R2 (ohm)",
+       "refLines": [],
+       "annotations": [],
+       "regionShades": [],
+       "shapes": [],
+       "seriesStyles": {
+        "0": {
+         "color": "#d62728",
+         "width": 2,
+         "marker": true,
+         "markerShape": "square",
+         "markerSize": 6
+        },
+        "1": {
+         "color": "#1f77b4",
+         "line": "dash"
+        }
+       },
+       "seriesLabels": {
+        "0": "R1 sample"
+       },
+       "seriesOrder": null,
+       "hiddenChannels": [],
+       "waterfall": 0,
+       "waterfallDx": 0,
+       "panelFit": "frames",
+       "pageSetup": null
+      },
+      "axisBreaks": {
+       "x": [],
+       "y": [],
+       "y2": []
+      }
+     },
+     "output": {
+      "format": "pdf",
+      "stylePreset": "default",
+      "dpi": 300,
+      "transparent": false,
+      "filename": null
+     }
+    }
+   }
+  ],
+  "focusedWindowId": "w-034",
+  "toolWindowLayout": {},
+  "savedPlotSpecs": [
+   {
+    "id": "pspec-034",
+    "name": "Book1 builder",
+    "createdAt": "2026-11-14T12:00:00.000Z",
+    "modifiedAt": "2026-11-14T12:00:00.000Z",
+    "spec": {
+     "version": 2,
+     "zones": {
+      "x": {
+       "datasetId": "c",
+       "channel": -1
+      },
+      "y": [
+       {
+        "datasetId": "c",
+        "channel": 0
+       },
+       {
+        "datasetId": "c",
+        "channel": 1
+       }
+      ],
+      "group": null,
+      "facet": null,
+      "yErr": [],
+      "xErr": null
+     },
+     "mark": "line",
+     "display": {
+      "series": {
+       "0": {
+        "color": "#d62728",
+        "width": 2
+       }
+      },
+      "order": [
+       1,
+       0
+      ],
+      "labels": {
+       "0": "R1",
+       "1": "R2"
+      }
+     }
+    }
+   }
+  ],
+  "techniqueViewMemory": {},
+  "savedRois": [],
+  "mapViews": {},
+  "quickPlotTemplates": [
+   {
+    "id": "qpt-1",
+    "name": "MvsH standard",
+    "createdAt": "2026-08-17T00:00:00.000Z",
+    "modifiedAt": "2026-08-17T00:00:00.000Z",
+    "scope": {
+     "kind": "schema"
+    },
+    "technique": "magnetometry.mvsh",
+    "signature": {
+     "channels": [
+      {
+       "label": "Field",
+       "unit": "Oe",
+       "errorRole": "value"
+      },
+      {
+       "label": "Moment",
+       "unit": "emu",
+       "errorRole": "value"
+      }
+     ]
+    },
+    "mapping": {
+     "xKey": 0,
+     "yKeys": [
+      1
+     ],
+     "errorBindings": [],
+     "ignoredKeys": []
+    },
+    "style": "line",
+    "labels": {
+     "0": "Field",
+     "1": "Moment"
+    }
+   }
+  ],
+  "librarySelection": null,
+  "workbookLastChild": {},
+  "expandedWorkbookIds": [],
+  "collections": [],
+  "savedSampleProfiles": [],
+  "visibleDetailsColumns": [],
+  "plotRecipes": [
+   {
+    "id": "recipe-1",
+    "name": "MvsH loop",
+    "description": "",
+    "createdAt": "2026-08-22T00:00:00.000Z",
+    "modifiedAt": "2026-08-22T00:00:00.000Z",
+    "schemaVersion": 3,
+    "provenance": {
+     "sourceDatasetLabel": "run-a.csv",
+     "appVersion": "0"
+    },
+    "technique": "magnetometry.mvsh",
+    "signature": [
+     {
+      "id": "x0",
+      "role": "x",
+      "label": "Field",
+      "unit": "Oe",
+      "errorRole": "value",
+      "aliases": []
+     },
+     {
+      "id": "y0",
+      "role": "y",
+      "label": "Moment",
+      "unit": "emu",
+      "errorRole": "value",
+      "aliases": []
+     }
+    ],
+    "mapping": {
+     "xId": "x0",
+     "yIds": [
+      "y0"
+     ],
+     "y2Ids": [],
+     "groupId": null,
+     "facetId": null,
+     "errors": []
+    },
+    "visual": {
+     "mark": "line",
+     "xScale": "linear",
+     "yScale": "linear",
+     "y2Scale": null,
+     "xRange": {
+      "mode": "auto"
+     },
+     "yRange": {
+      "mode": "auto"
+     },
+     "y2Range": {
+      "mode": "auto"
+     },
+     "xFmt": {
+      "mode": "auto",
+      "digits": 2
+     },
+     "yFmt": {
+      "mode": "auto",
+      "digits": 2
+     },
+     "y2Fmt": null,
+     "axisBreaks": {
+      "x": [],
+      "y": [],
+      "y2": []
+     },
+     "refLines": [],
+     "showLegend": true,
+     "legendPos": "ne",
+     "legendXY": null,
+     "legendSize": null,
+     "legendTitle": null,
+     "legendStatic": false,
+     "stackMode": false,
+     "waterfall": 0,
+     "plotTemplate": "screen",
+     "seriesStyles": {},
+     "seriesLabels": {},
+     "seriesOrder": null,
+     "hiddenChannels": [],
+     "decorations": {
+      "annotations": [],
+      "shapes": [],
+      "regionShades": []
+     },
+     "compositionKind": null
+    },
+    "preview": null,
+    "outlierPolicy": null,
+    "transform": null,
+    "panels": null,
+    "map": null
+   }
+  ],
+  "recipeSourcesComplete": true,
+  "projectFitModels": [],
+  "fitModelCarry": [],
+  "projectTemplates": []
+ },
+ "graphTemplates": [
+  {
+   "name": "Book1 style (0.34)",
+   "style": "publication",
+   "overrides": null,
+   "seriesStyles": [
+    {
+     "color": "#d62728"
+    },
+    null
+   ],
+   "format": {
+    "version": 1,
+    "xScale": "linear",
+    "yScale": "linear",
+    "y2Scale": null,
+    "xReversed": false,
+    "xFmt": {
+     "mode": "auto",
+     "digits": 2
+    },
+    "yFmt": {
+     "mode": "auto",
+     "digits": 2,
+     "minor": 1,
+     "ticks": "in"
+    },
+    "y2Fmt": null,
+    "showGrid": true,
+    "showAxisBox": true,
+    "showLegend": true,
+    "legendPos": "auto",
+    "legendStatic": false,
+    "plotTemplate": "screen",
+    "axisLabelStyles": {},
+    "series": [
+     {
+      "color": "#d62728",
+      "width": 2,
+      "marker": true,
+      "markerShape": "square",
+      "markerSize": 6
+     },
+     {
+      "color": "#1f77b4",
+      "line": "dash"
+     }
+    ]
+   }
+  }
+ ],
+ "recipe": {
+  "id": "recipe-1",
+  "name": "MvsH loop",
+  "description": "",
+  "createdAt": "2026-08-22T00:00:00.000Z",
+  "modifiedAt": "2026-08-22T00:00:00.000Z",
+  "schemaVersion": 3,
+  "provenance": {
+   "sourceDatasetLabel": "run-a.csv",
+   "appVersion": "0"
+  },
+  "technique": "magnetometry.mvsh",
+  "signature": [
+   {
+    "id": "x0",
+    "role": "x",
+    "label": "Field",
+    "unit": "Oe",
+    "errorRole": "value",
+    "aliases": []
+   },
+   {
+    "id": "y0",
+    "role": "y",
+    "label": "Moment",
+    "unit": "emu",
+    "errorRole": "value",
+    "aliases": []
+   }
+  ],
+  "mapping": {
+   "xId": "x0",
+   "yIds": [
+    "y0"
+   ],
+   "y2Ids": [],
+   "groupId": null,
+   "facetId": null,
+   "errors": []
+  },
+  "visual": {
+   "mark": "line",
+   "xScale": "linear",
+   "yScale": "linear",
+   "y2Scale": null,
+   "xRange": {
+    "mode": "auto"
+   },
+   "yRange": {
+    "mode": "auto"
+   },
+   "y2Range": {
+    "mode": "auto"
+   },
+   "xFmt": {
+    "mode": "auto",
+    "digits": 2
+   },
+   "yFmt": {
+    "mode": "auto",
+    "digits": 2
+   },
+   "y2Fmt": null,
+   "axisBreaks": {
+    "x": [],
+    "y": [],
+    "y2": []
+   },
+   "refLines": [],
+   "showLegend": true,
+   "legendPos": "ne",
+   "legendXY": null,
+   "legendSize": null,
+   "legendTitle": null,
+   "legendStatic": false,
+   "stackMode": false,
+   "waterfall": 0,
+   "plotTemplate": "screen",
+   "seriesStyles": {},
+   "seriesLabels": {},
+   "seriesOrder": null,
+   "hiddenChannels": [],
+   "decorations": {
+    "annotations": [],
+    "shapes": [],
+    "regionShades": []
+   },
+   "compositionKind": null
+  },
+  "preview": null,
+  "outlierPolicy": null,
+  "transform": null,
+  "panels": null,
+  "map": null
+ }
+}

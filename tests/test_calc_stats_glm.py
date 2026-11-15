@@ -206,7 +206,7 @@ def test_glm_logistic_import_error_when_statsmodels_missing(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "statsmodels", None)
 
-    with pytest.raises(RuntimeError, match=r"quantized\[stats\]"):
+    with pytest.raises(RuntimeError, match=r"quantized-lab\[stats\]"):
         stats_glm.logistic_regression([[1.0, 2.0, 3.0]], [0.0, 1.0, 1.0])
 
 

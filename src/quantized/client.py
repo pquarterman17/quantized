@@ -11,7 +11,7 @@ counterpart to :mod:`quantized.api`, and deliberately a DIFFERENT shape:
   same ``/api/*`` surface the SPA drives. No dataset state lives on the
   server between requests — every method is a self-contained round trip.
 
-Requires the optional ``client`` extra (``pip install quantized[client]``);
+Requires the optional ``client`` extra (``pip install quantized-lab[client]``);
 core installs stay lean. Never imports fastapi/pydantic/starlette — this
 module is a plain HTTP client, not part of the server.
 
@@ -64,7 +64,7 @@ try:
 except ImportError as exc:  # pragma: no cover - exercised only without the extra
     raise ImportError(
         "quantized.client requires the optional 'client' extra: "
-        "pip install quantized[client] (or: uv sync --extra client)"
+        "pip install quantized-lab[client] (or: uv sync --extra client)"
     ) from exc
 
 from quantized.datastruct import DataStruct

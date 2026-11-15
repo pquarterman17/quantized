@@ -104,13 +104,15 @@ import { plural } from "./plural";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { Dataset } from "./types";
-import { parseWorkspace, WORKSPACE_FORMAT, WORKSPACE_VERSION } from "./workspace";
+import { featuresV034WouldDrop, parseWorkspace, WORKSPACE_FORMAT, WORKSPACE_VERSION } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
 import { rewriteTransferredDatasetRefs } from "./workbookTransferSignal";
 import { lastBookError, truncateReason } from "./bookData";
 import { fetchReferencedPackage, MAX_STORED_TRANSFER_BYTES, readTransferRef, storeAsReference } from "./workbookTransferRef";
 export const WORKBOOK_TRANSFER_FORMAT = "quantized-workbook-transfer";
 export const WORKBOOK_TRANSFER_VERSION = 1;
+/** A package holding a field v0.34.0 drops (lib/workspaceForwardCompat.ts): v0.34.0 accepts only 1, so it refuses. */
+export const WORKBOOK_TRANSFER_VERSION_NEW_FEATURES = 2;
 
 /** SIZE BOUND (frozen-scope item 1), checked AFTER serializing (the true
  *  cost — an estimate over nested arrays could under/over-count). 8,000,000
@@ -232,6 +234,7 @@ export function buildTransferPackage(
     reports,
     quickPlotTemplates,
   };
+  if (featuresV034WouldDrop(pkg).length) pkg.version = WORKBOOK_TRANSFER_VERSION_NEW_FEATURES;
   // BUG-017/BUG-023: clipboard text applies the same sentinel encoding as a
   // full workspace to both dataset cells and frozen FigureDocument snapshots.
   // `pkg` itself stays live/in-memory, and ordinary finite JSON is unchanged.
@@ -307,7 +310,7 @@ export function parseTransferPackage(text: string, limit = MAX_STORED_TRANSFER_B
   if (o.format !== WORKBOOK_TRANSFER_FORMAT) {
     return { ok: false, reason: "clipboard does not contain a Quantized workbook" };
   }
-  if (o.version !== WORKBOOK_TRANSFER_VERSION) {
+  if (o.version !== WORKBOOK_TRANSFER_VERSION && o.version !== WORKBOOK_TRANSFER_VERSION_NEW_FEATURES) {
     return { ok: false, reason: `unsupported workbook transfer version: ${String(o.version)}` };
   }
   if (typeof o.workbook !== "object" || o.workbook === null || typeof (o.workbook as { id?: unknown }).id !== "string") {

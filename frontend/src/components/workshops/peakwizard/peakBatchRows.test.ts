@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import type { PeakBatchFit, PeakBatchResult } from "../../../lib/api/peakBatch";
 import { parseWorkspace } from "../../../lib/workspace";
 import { serializeWorkspace } from "../../../lib/workspaceSerialize";
+import { summaryX } from "../../../lib/batchSummaryX";
 import { modelFitResponse } from "./modelFit.testkit";
 import {
   batchCsv,
@@ -159,6 +160,19 @@ describe("batchDataStruct (the library table)", () => {
     sources: PREPS.map((p) => ({ id: p.datasetId, name: p.name })), ranAt: "2026-09-25T12:00:00.000Z",
   };
   const data = batchDataStruct(rows, prov);
+
+  it("puts a physical parameter on X (blank where a dataset has none), rows kept with their X", () => {
+    const meta: Record<string, Record<string, unknown>> = { [PREPS[0]!.datasetId]: { T: "50 K" }, [PREPS[1]!.datasetId]: { T: "10 K" } };
+    const x = summaryX(rows.map((r) => ({ name: r.dataset, metadata: meta[r.datasetId] })), { source: { kind: "meta", path: ["T"] }, sort: true });
+    const d = batchDataStruct(rows, prov, x);
+    expect(d.time).toHaveLength(6);
+    // scan B (10 K) sorts first, scan A's two peaks (50 K) next, the rest blank.
+    expect(d.time.slice(0, 3)).toEqual([10, 50, 50]);
+    expect(d.time.slice(3).every(Number.isNaN)).toBe(true);
+    expect((d.metadata.text_columns as { Dataset: string[] }).Dataset.slice(0, 3)).toEqual(["scan B", "scan A", "scan A"]);
+    expect(d.metadata.x_column_name).toBe("T");
+    expect(batchDataStruct(rows, prov).time).toEqual([1, 2, 3, 4, 5, 6]);
+  });
 
   it("numbers are channels (missing = NaN), text is text_columns, provenance names recipe + sources", () => {
     expect(data.values).toHaveLength(6);
