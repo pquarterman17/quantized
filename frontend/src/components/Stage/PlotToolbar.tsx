@@ -83,7 +83,7 @@ interface BtnSpec {
   onClick: () => void;
 }
 
-const LASSO_STACK_NOTE = "Lasso Mask works on a single graph: turn the multi-panel layout off, or mask rows in the worksheet";
+const LASSO_STACK_NOTE = "Lasso Mask works on a single graph only";
 
 function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
   const reason = disabled && disabledReason ? disabledReason : undefined;

@@ -57,7 +57,7 @@ export const INSPECT_TOOLS: ToolDef[] = [
   { id: "measure", glyph: "∡", name: "Measure", desc: "Drag between two points for Δx, Δy, slope" },
   { id: "stats", glyph: "Σ", name: "Region Stats", desc: "Drag a range to compute summary statistics" },
   { id: "select", glyph: "⬚", name: "Select Rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
-  { id: "lasso", glyph: "◌", name: "Lasso Mask", desc: "Drag a free-form outline around points to mask them; Shift+drag unmasks" },
+  { id: "lasso", glyph: "◌", name: "Lasso Mask", desc: "Drag an outline around points to mask them; Shift unmasks" },
 ];
 
 // ── Analyze: region tools whose result persists as a chip (∫ / ∩) or a live

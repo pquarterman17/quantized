@@ -131,6 +131,7 @@ async function linkAxisWith(axis: "x" | "y"): Promise<void> {
     return;
   }
   if (changes.size === 0) return;
+  ensureLinkGuard();
   now.recordHistory(`link ${A} axes`);
   useApp.setState((st) => ({
     plotWindows: st.plotWindows.map((w) => (changes.has(w.id) ? { ...w, [field]: changes.get(w.id)! } : w)),
@@ -162,7 +163,10 @@ export function linkClashes(s: ReturnType<typeof useApp.getState>, field: LinkFi
 
 /** Watch the store once: a linked window whose scale kind changes leaves its
  *  link group, with a status message, instead of being blanked by its
- *  partners' ranges. Installed by a linked plot (Stage/PlotViewport.tsx). */
+ *  partners' ranges. Installed on linking, and by any linked window drawn in
+ *  the background (windows/BackgroundPlotWindow.tsx) -- a saved workspace's
+ *  links. The sync hook itself never pushes a range a partner cannot place
+ *  (lib/windowsync.ts), so nothing goes blank before the guard is up. */
 export function ensureLinkGuard(): void {
   if (guarded) return;
   guarded = true;

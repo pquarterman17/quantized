@@ -39,7 +39,7 @@
 // together — the item-4 row-state proof, extended per-mode by the item-15
 // tests.
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
 import type { ErrorBinding } from "../../lib/errorRoles";
@@ -195,6 +195,12 @@ function BackgroundXYWindow({
 }: BackgroundPlotWindowProps & { dataset: Dataset }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  // Linked windows always include an unfocused one, drawn here: it starts the
+  // guard that unlinks a window whose scale kind changes (lib/windowLinkX.ts).
+  // Kept in this lazy chunk rather than the eager PlotViewport.
+  useEffect(() => {
+    if (linkGroup != null || linkYGroup != null) void import("../../lib/windowLinkX").then((m) => m.ensureLinkGuard(), () => undefined);
+  }, [linkGroup, linkYGroup]);
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const excludedDisplay = useApp((s) => s.excludedDisplay);

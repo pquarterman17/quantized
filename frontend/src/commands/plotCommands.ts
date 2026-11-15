@@ -303,22 +303,15 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: openLayerContents,
     },
     colorGradientCommand, // origin gap audit 4 G1 (commands/plotStyleCommands.ts)
-    {
-      // Gap audit 3 N3: the named way to set the windows' x link group.
-      id: "link-x-axis",
+    // Gap audit 3 N3 / 4 G19: the named way to set the windows' X or Y link
+    // group ("link-x-axis", "link-y-axis").
+    ...(["x", "y"] as const).map((a): Action => ({
+      id: `link-${a}-axis`,
       group: "Plot",
       section: "Layout",
-      label: "Link X axis with…",
-      run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure),
-    },
-    {
-      // Gap audit 4 G19: the same, for the primary Y axis.
-      id: "link-y-axis",
-      group: "Plot",
-      section: "Layout",
-      label: "Link Y axis with…",
-      run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => m.linkYAxisWith(), onLoadFailure),
-    },
+      label: `Link ${a.toUpperCase()} axis with…`,
+      run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => (a === "x" ? m.linkXAxisWith() : m.linkYAxisWith()), onLoadFailure),
+    })),
     {
       id: "add-curve-from",
       group: "Plot",
