@@ -10,6 +10,7 @@ import type { Dataset } from "../../../lib/types";
 import { addDerivedColumn } from "../../../store/derivedColumnRun";
 import { useApp } from "../../../store/useApp";
 import FitOutputSection from "./FitOutputSection";
+import { SINGLE_X } from "../../../test/overlayBinding";
 
 vi.mock("../../../store/derivedColumnRun", () => ({ addDerivedColumn: vi.fn(async () => ({ ok: true, message: "" })) }));
 vi.mock("../../../lib/api/fitStats", () => ({ fitBands: vi.fn() }));
@@ -78,7 +79,7 @@ describe("FitOutputSection", () => {
   });
 
   it("adds the result worksheet without leaving the fitted one, as one undo step", async () => {
-    const curve = { datasetId: "d1", y: [1, 3, 5] };
+    const curve = { datasetId: "d1", binding: SINGLE_X, y: [1, 3, 5] };
     const ds = { ...DS, fitSpec: { model: "Pseudo-Voigt", params: [1, 1, 1, 0.5] } };
     useApp.setState({ datasets: [ds], activeId: "d1", selectedIds: ["d1"], fitOverlay: curve, history: [], future: [] });
     render(<FitOutputSection dataset={ds} model="Pseudo-Voigt" paramNames={["A", "x0", "w", "eta"]} result={RESULT} fitData={FIT} />);

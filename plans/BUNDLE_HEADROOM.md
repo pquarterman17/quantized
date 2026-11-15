@@ -1,5 +1,11 @@
 # Bundle headroom campaign
 
+**Slice 28 (2026-11-15):** one async-only seam, the Duplicate body
+(`store/duplicateDatasetRun.ts`), taken to offset the overlay-binding
+branch's ~1.4 kB of irreducible render-path code. **816,658 -> 815,502 B
+(-1,156 B)**; the pin is NOT moved (816,042), 540 B of headroom remain. See
+"Slice 28".
+
 **Current state (2026-11-14, after slice 27):** three pieces left the
 startup chunk: the tool-dock plugins (pan, cursor readout, measure, region
 statistics, integrate, FWHM), warmed once the plot toolbar mounts; the
@@ -3457,6 +3463,35 @@ not a diet slice).
 **Pin:** lowered to `measured + 6,000`, the slice-24/25/26 form, for the same
 queued wave of feature branches. When the wave has merged, lower it to
 `measured + 1,024`.
+
+### Slice 28 — the Duplicate body behind one async seam — **DONE (2026-11-15)**
+
+**Measured net eager delta -1,156 B — pin unchanged (816,042 B), 540 B headroom**
+
+The overlay-binding branch measured 816,658 B, 616 B over the pin: about
+1.0 kB of that is `lib/overlayPlacement.ts`, which the canvas render path
+(`Stage/usePerSeriesX.ts`) reads on every plot build, so it stays eager. The
+offset came from the "already-async store actions whose bodies are still
+eager" list in slice 25's candidates.
+
+- **`duplicateDataset`** (`store/datasetListEdits.ts`) now awaits
+  `resolveDataset`, then `import("./duplicateDatasetRun")` and runs the clone
+  builder and per-dataset view reset there, moved verbatim. Callers are the
+  Library row menu, the dataset context action and the "Duplicate active
+  dataset" command, all user gestures that already `await`/`void` a promise;
+  no clipboard or file-picker activation is involved and the signature is
+  unchanged. A chunk that will not load reports a status line and a danger
+  toast ("Duplicate failed to load: ...") and mutates nothing, the slice-17
+  contract. `architecture.test.ts` has a SEAMS entry for the module; its
+  imports are all shared with eager modules, so no DRAGGED_OUT entries.
+
+Exact bytes (`npm ci`, `.vite` wiped, `tsc -b --force`, `npm run build`):
+816,658 before, 815,502 after (-1,156).
+
+#### Candidates still not taken
+
+`createDerivedWorksheet` 1,081 B and `pasteDataFromClipboard` 763 B (slice 25
+list), unchanged.
 
 ## What this does NOT change
 

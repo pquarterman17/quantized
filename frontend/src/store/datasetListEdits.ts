@@ -42,7 +42,6 @@
 // the move.
 
 import { formulaExtension } from "../lib/formulaExt";
-import { cloneDataStruct } from "../lib/dataset";
 import {
   createFolder as treeCreateFolder,
   moveDatasetToFolder as treeMoveDatasetToFolder,
@@ -51,12 +50,11 @@ import {
   updateFolder as treeUpdateFolder,
 } from "../lib/foldertree";
 import type { SmartFolder } from "../lib/smartfolders";
-import { nextStageTab } from "../lib/stagetab";
-import type { Dataset, FolderNode } from "../lib/types";
-import { refreshFitRefsLater } from "./computedColumns";
+import type { FolderNode } from "../lib/types";
 import { deleteFolderWithTrash } from "./folderDelete";
-import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
+import { nextFolderId, nextSmartFolderId } from "./idSeq";
 import { removeDatasetsWithTrash } from "./removeDatasets";
+import { toast } from "./toasts";
 import { openTransformPreview, seedIds } from "./transformPreviewDialog";
 import type { AppState } from "./useApp";
 
@@ -153,72 +151,17 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
     // Lands right after the source and becomes active, resetting per-dataset view.
     duplicateDataset: async (id) => {
       await get().resolveDataset(id);
-      get().recordHistory("duplicate dataset");
-      set((s) => {
-        const idx = s.datasets.findIndex((d) => d.id === id);
-        if (idx < 0) return {};
-        const src = s.datasets[idx];
-        const clone: Dataset = {
-          id: nextDatasetId(),
-          name: `${src.name} (copy)`,
-          data: cloneDataStruct(src.data),
-          ...(src.raw ? { raw: cloneDataStruct(src.raw) } : {}),
-          ...(src.corrections ? { corrections: { ...src.corrections } } : {}),
-          ...(src.bgRef ? { bgRef: { ...src.bgRef } } : {}),
-          ...(src.notes ? { notes: src.notes } : {}),
-          ...(src.tags?.length ? { tags: [...src.tags] } : {}),
-          ...(src.group ? { group: src.group } : {}),
-          ...(src.formulas?.length ? { formulas: src.formulas.map((f) => ({ ...f })) } : {}),
-          ...(src.channelRoles ? { channelRoles: { ...src.channelRoles } } : {}),
-          ...(src.channelTypes ? { channelTypes: { ...src.channelTypes } } : {}),
-          ...(src.columnDesignations ? { columnDesignations: { ...src.columnDesignations } } : {}),
-          ...(src.columnProps ? { columnProps: { ...src.columnProps } } : {}),
-          ...(src.errorRoles ? { errorRoles: [...src.errorRoles] } : {}), // F5: [] is truthy, carries the O1 marker too
-        };
-        const datasets = [...s.datasets];
-        datasets.splice(idx + 1, 0, clone);
-        return {
-          datasets,
-          activeId: clone.id,
-          worksheetId: null, // item 15: the clone becomes the plot AND worksheet target
-          selectedIds: [clone.id],
-          librarySelection: null, // L0.25 coherence (retrospective-audit fix)
-          stageTab: nextStageTab(clone, s.stageTab),
-          xKey: null,
-          yKeys: null,
-          groupKey: null,
-          facetKey: null,
-          y2Keys: null,
-          y2Lim: null,
-          y2Scale: null,
-          y2Step: null,
-          y2AxisLabel: "",
-          seriesStyles: {},
-          errKeys: {},
-          hiddenChannels: [],
-          xLim: null,
-          yLim: null,
-          xStep: null,
-          yStep: null,
-          composition: null, // #54 — the clone becomes active, not an arrangement
-          rsmPeaks: null,
-          integral: null,
-          fwhmResult: null,
-          qfitRoi: null,
-          qfitResult: null,
-          qfitBusy: false,
-          qfitError: null,
-          gadgetBusy: false,
-          gadgetError: null,
-          gadgetIntegrateResult: null,
-          gadgetStatsResult: null,
-          gadgetDerivResult: null,
-          gadgetFftPreview: null,
-          gadgetCursors: null,
-          gadgetCursorResult: null,
-        };
-      });
-      refreshFitRefsLater(get().activeId ?? "", get); // P2.5: the clone has no saved fit of its own
+      // The clone builder loads on the first Duplicate (bundle diet slice 28).
+      let run: typeof import("./duplicateDatasetRun");
+      try {
+        run = await import("./duplicateDatasetRun");
+      } catch (e) {
+        const msg = `Duplicate failed to load: ${e instanceof Error ? e.message : "error"}`;
+        get().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
+      run.duplicateDatasetRun(id, set, get);
     },
     // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
     // +1 = down). No-op at the ends or for an unknown id. Order drives the list and

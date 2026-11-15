@@ -18,7 +18,6 @@
 // for THAT range is in (usePeakBaseline's result is tied to its segment).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ownXKey } from "../../../lib/perSeriesX";
 import { usePeakBaseline } from "./usePeakBaseline";
 import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
@@ -209,6 +208,7 @@ export function usePeakWizard(): PeakWizardState {
       y: pairs.y,
       kept: pairs.keep.map((i) => cut.kept[i]!),
       yKey: sel.yKey,
+      binding: { yKey: sel.yKey, xKey: sel.xKey }, // what every wizard overlay is drawn against
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
     };
@@ -230,7 +230,7 @@ export function usePeakWizard(): PeakWizardState {
   }, [segment, baseline, recipe.baseline.method]);
 
   // The segment's Y reads its OWN X (R2 -> T2): markers and provenance follow it.
-  const segX = active && segment ? ownXKey(active, xKey, segment.yKey) : xKey;
+  const segX = segment ? segment.binding.xKey : xKey;
   const cands = usePeakCandidates({
     active, step, segment, workingY, baseline, find: recipe.find, xKey: segX, onReplaced: dropResults, peakLeft, peakJoined,
   });

@@ -17,6 +17,7 @@ import { applyCorrections as applyCorrectionsApi, fitModel } from "../lib/api";
 import { fitRowXFingerprint } from "../lib/fitRowFingerprint";
 import { buildDataCommands } from "../commands/dataCommands";
 import { loadFormulaExtension } from "../lib/formulaExt";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const data = (): DataStruct => ({
   time: [1, 2, 3],
@@ -60,7 +61,7 @@ describe("recalc engine (#1)", () => {
       datasets: [ds("a", { data: gapped, fitSpec: { model: "Linear", xKey: null, yKey: 0 } })],
       activeId: "a",
       staleFits: ["a"],
-      fitOverlay: { datasetId: "a", y: [2, Number.NaN, 6] },
+      fitOverlay: { datasetId: "a", binding: SINGLE_X, y: [2, Number.NaN, 6] },
     });
 
     await useApp.getState().recalcNow();
@@ -76,7 +77,7 @@ describe("recalc engine (#1)", () => {
     useApp.setState({
       datasets: [ds("a", { fitSpec: { model: "Linear" } })],
       activeId: "a",
-      fitOverlay: { datasetId: "a", y: [2, 4, 6] },
+      fitOverlay: { datasetId: "a", binding: SINGLE_X, y: [2, 4, 6] },
     });
 
     // a burst of edits → ONE downstream pass
@@ -486,10 +487,10 @@ describe("derived worksheets (K5c/K5d)", () => {
       ],
       staleDatasets: ["b"],
       status: "",
-      fitOverlay: { datasetId: "b", y: [1, 2, 3] },
-      peakOverlay: { datasetId: "b", y: [1, 2, 3] },
-      baselineOverlay: { datasetId: "b", y: [1, 2, 3] },
-      derivOverlay: { datasetId: "b", y: [1, 2, 3] },
+      fitOverlay: { datasetId: "b", binding: SINGLE_X, y: [1, 2, 3] },
+      peakOverlay: { datasetId: "b", binding: SINGLE_X, y: [1, 2, 3] },
+      baselineOverlay: { datasetId: "b", binding: SINGLE_X, y: [1, 2, 3] },
+      derivOverlay: { datasetId: "b", binding: SINGLE_X, y: [1, 2, 3] },
     });
 
     await useApp.getState().recalcNow();
@@ -512,11 +513,11 @@ describe("derived worksheets (K5c/K5d)", () => {
         ds("b", { derivedFrom: { datasetId: "a", pipeline: "x" }, corrections: {}, excludedRows: [1] }),
       ],
       staleDatasets: ["b"],
-      fitOverlay: { datasetId: "b", y: [1, 2, 3] },
+      fitOverlay: { datasetId: "b", binding: SINGLE_X, y: [1, 2, 3] },
     });
     await useApp.getState().recalcNow();
     expect(useApp.getState().datasets.find((d) => d.id === "b")?.excludedRows).toEqual([1]);
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "b", y: [1, 2, 3] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "b", binding: SINGLE_X, y: [1, 2, 3] });
   });
 
   it("a source that no longer exists leaves the sheet stale instead of throwing", async () => {

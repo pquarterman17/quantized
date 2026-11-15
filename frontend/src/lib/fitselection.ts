@@ -35,6 +35,9 @@ export interface FitSelection {
   x: number[];
   y: number[];
   yKey: number;
+  /** The X column `x` was read from -- the Y's own X (`ownXKey`; null = the
+   *  time column). With `yKey`, the binding an overlay of this fit records. */
+  xKey: number | null;
   /** Positions in analysisData(dataset) retained by an explicit row/range
    * selection. Absent for the historical full-analysis-view path. */
   analysisRows?: number[];
@@ -72,7 +75,7 @@ export function selectedFitData(
   const fitX = ownXKey(dataset, xKey, yKey);
   const allX = fitX == null ? data.time : data.values.map((row) => row[fitX]);
   const allY = data.values.map((row) => row[yKey]);
-  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey };
+  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey, xKey: fitX };
   const sourceRows = view.rowIds ?? data.time.map((_value, index) => index);
   const selectedRows = subset.rowIds === null ? null : new Set(subset.rowIds);
   const analysisRows: number[] = [];
@@ -86,6 +89,7 @@ export function selectedFitData(
     x: analysisRows.map((index) => allX[index]),
     y: analysisRows.map((index) => allY[index]),
     yKey,
+    xKey: fitX,
     analysisRows,
     sourceRows: analysisRows.map((index) => sourceRows[index]),
     sourceRowCount: dataset.data.time.length,

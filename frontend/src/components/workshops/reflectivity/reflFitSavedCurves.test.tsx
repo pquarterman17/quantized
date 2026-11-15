@@ -67,7 +67,7 @@ describe("a saved fit's stored curves", () => {
     expect(await screen.findByLabelText("saved fit")).toBeTruthy();
     expect(screen.getByText("The fit's curves are stored with it.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Overlay on data" }));
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "xrr", y: [0.9, null, 0.4, null, 0.1, null] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "xrr", binding: { yKey: 0, xKey: null }, y: [0.9, null, 0.4, null, 0.1, null] });
 
     fireEvent.click(screen.getByRole("button", { name: "Add fit curves" }));
     const added = useApp.getState().datasets.slice(1);

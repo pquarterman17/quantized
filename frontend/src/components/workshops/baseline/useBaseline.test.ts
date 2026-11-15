@@ -58,7 +58,7 @@ describe("useBaseline", () => {
     expect(baselineALS).toHaveBeenCalledWith({ y: [10, 12, 11, 13], lam: 1e6, p: 0.01 });
     expect(result.current.baseline).toEqual([1, 1, 1, 1]);
     const ov = useApp.getState().baselineOverlay;
-    expect(ov).toEqual({ datasetId: "d1", y: [1, 1, 1, 1] });
+    expect(ov).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [1, 1, 1, 1] });
   });
 
   it("dispatches to the selected method with its params", async () => {
@@ -503,7 +503,7 @@ describe("useBaseline anchor method (GOTO #2)", () => {
       ],
       method: "linear",
     });
-    expect(useApp.getState().baselineOverlay).toEqual({ datasetId: "d1", y: [10, 11, 12, 13] });
+    expect(useApp.getState().baselineOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [10, 11, 12, 13] });
   });
 
   it("live preview (debounced) fires once the 2nd anchor lands", async () => {
@@ -514,7 +514,7 @@ describe("useBaseline anchor method (GOTO #2)", () => {
     expect(baselineAnchor).not.toHaveBeenCalled(); // 1 anchor: no preview yet
     act(() => useApp.getState().baselineAnchorEdit!.addAnchor(4, 13));
 
-    await waitFor(() => expect(useApp.getState().baselineOverlay).toEqual({ datasetId: "d1", y: [10, 11, 12, 13] }));
+    await waitFor(() => expect(useApp.getState().baselineOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [10, 11, 12, 13] }));
     expect(baselineAnchor).toHaveBeenCalledTimes(1);
   });
 

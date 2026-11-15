@@ -266,7 +266,7 @@ export function useBaseline(): BaselineState {
       const res = await callBaseline(method, x, y, params, anchors);
       setBaseline(res.baseline);
       setEstimateBinding(input.binding);
-      setBaselineOverlay({ datasetId: ds.id, y: res.baseline });
+      setBaselineOverlay({ datasetId: ds.id, binding: { yKey: input.binding.yKey, xKey: input.binding.xKey }, y: res.baseline });
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed");
     } finally {

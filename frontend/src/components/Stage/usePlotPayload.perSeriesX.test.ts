@@ -105,21 +105,22 @@ describe("per-series X on the live plot", () => {
     expect(p.data[sel]).toEqual([null, null, null, null, null, 300]);
   });
 
-  // Overlays are built at the source's 3 rows for ONE Y; the plot has 2 blocks x 3 rows.
-  // Until overlays carry an explicit (yKey, xKey) binding they are dropped, never misdrawn.
-  it("a fit overlay is NOT drawn on a multi-X view (no series at wrong coordinates)", async () => {
+  // An overlay is built at the source's 3 rows for the ONE Y its producer bound
+  // it to; the view draws it in that Y's X block (lib/overlayPlacement.ts).
+  it("draws a fit of R2 (and its band) in the T2 block only, whatever the draw order", async () => {
     const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
       initialProps: params({
         seriesOrder: [2, 0],
-        fitOverlay: { datasetId: "mx", y: [1, 2, 3], band: [{ label: "lo", y: [0, 1, 2] }] },
+        fitOverlay: {
+          datasetId: "mx", binding: { yKey: 2, xKey: 1 }, y: [1, null, 3], band: [{ label: "lo", y: [0, null, 2] }],
+        },
       }),
     });
     await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
     const p = result.current.displayPayload!;
-    expect(p.data[0]).toHaveLength(6);
-    const labels = p.series.map((x) => x.label);
-    expect(labels).toEqual(expect.arrayContaining(["R1", "R2"]));
-    expect(labels).not.toContain("fit");
-    expect(labels).not.toContain("lo");
+    const col = (s: string) => p.data[p.series.findIndex((x) => x.label === s) + 1];
+    expect(p.data[0]).toEqual([1, 2, 3, 5, 3, 9]);
+    expect(col("fit")).toEqual([null, null, null, 1, null, 3]);
+    expect(col("lo")).toEqual([null, null, null, 0, null, 2]);
   });
 });

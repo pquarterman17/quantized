@@ -139,7 +139,7 @@ describe("usePeakManualEdits", () => {
     expect(overlayFitted).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: "d1" }),
       [expect.objectContaining({ center: 1 })],
-      [0, 1, 2],
+      expect.objectContaining({ fullX: [0, 1, 2] }),
     );
   });
 });
