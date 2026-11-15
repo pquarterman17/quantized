@@ -342,15 +342,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Owner gates
 
-- **"Send to Origin" attaches to your open Origin session** (2026-11-15).
-  `io/origin_com.py` dispatches `Origin.ApplicationSI`, which is
-  single-instance: it sends data into the Origin you already have open,
-  rather than starting a new instance. That is probably the feature's intent,
-  but nothing asks first. Measured: an `ApplicationSI` `Exit()` closes that
-  shared window. Decide whether the feature should confirm before sending, or
-  avoid calling `Exit()` on an attached instance. The oracle and specimen
-  tools were switched to `Origin.Application` in #676, so they always start
-  their own instance.
+None open.
 
 ---
 
@@ -1183,6 +1175,13 @@ the shipped contract)
   The `Book1D_F@27` row-1 sub-task is NOT proven and moves to item 71 with
   its evidence. Anchored in `tests/test_io_origin_opju_token_x.py`
   (synthetic shapes + realdata anchors).
+- ~~**Owner gate: "Send to Origin" attaches to the open Origin session**~~
+  (2026-11-15) — DECIDED: keep sending into the running Origin, but confirm
+  first. `runSendToOrigin` now asks "Add N workbook(s) to the Origin project
+  you have open?" (Send / Cancel) before any request; cancel sends nothing.
+  `tests/test_origin_com.py` guards that `io/origin_com.py` never calls
+  `Exit()`/`Quit()` on the COM app. Oracle tools stay on `Origin.Application`
+  (#676).
 
 - ~~**66. Admit the remaining separator flag values `01/08/30/41/48`**~~
   (2026-11-15). Scored per value against the Origin 2026b COM axis oracle
