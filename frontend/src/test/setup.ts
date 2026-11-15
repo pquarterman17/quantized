@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup, configure } from "@testing-library/react";
+import { Path2D as NapiPath2D } from "@napi-rs/canvas";
 import { JSDOM } from "jsdom";
 import { afterEach } from "vitest";
 
@@ -14,11 +15,22 @@ import { monospaceEstimate, setLabelMeasurer } from "../components/Stage/statLab
 // existing 20 s per-test ceiling.
 configure({ asyncUtilTimeout: 5_000 });
 
-// node-canvas gives jsdom a REAL `measureText`, in whatever monospace font
+// @napi-rs/canvas gives jsdom a REAL `measureText`, in whatever monospace font
 // this machine resolves — the Stat Stage's label metrics would then differ
 // per machine. Pin the count-based estimate so the axis layout tests pin
 // numbers; a test that wants to measure installs its own (see the module).
 setLabelMeasurer(monospaceEstimate);
+
+// jsdom has no `Path2D`. Its canvas backend (@napi-rs/canvas, jsdom 31's
+// peer; node-canvas before it) validates what `ctx.clip(path)` receives and
+// throws on anything that is not ITS Path2D, whereas node-canvas silently
+// ignored the argument, so a test stubbing a no-op `Path2D` class used to
+// "work" only because nothing checked. Install the real one globally, as every
+// browser has it; the many `g.Path2D ??= class {...}` stubs then stay unused,
+// and a test that must RECORD path calls extends it.
+if (!("Path2D" in globalThis)) {
+  Object.defineProperty(globalThis, "Path2D", { value: NapiPath2D, configurable: true, writable: true });
+}
 
 // Node 20+ ships its OWN `localStorage` global (experimental, file-backed).
 // It is an own accessor on globalThis, so vitest's jsdom environment skips
