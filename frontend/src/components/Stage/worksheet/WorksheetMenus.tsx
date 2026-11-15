@@ -22,6 +22,7 @@ import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 import type { WorksheetView } from "./useWorksheetView";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
+import { legendFromParamsDialog, orderByParamDialog } from "./worksheetParamDialogs";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 
@@ -117,6 +118,8 @@ function columnItems(
           fill: (kind) => void fillColumnsDialog(ds, targets, kind),
           setRowCount: () => void setRowCountDialog(ds),
           numberFormat: () => void numberFormatDialog(ds, targets),
+          legendFromParams: () => void legendFromParamsDialog(ds, targets),
+          orderByParam: () => void orderByParamDialog(ds, targets),
           insertColumn: (c) => insertColumn(ds.id, Math.max(0, c)),
           addColumn: () => insertColumn(ds.id, baseCount),
           deleteColumns: () => {
