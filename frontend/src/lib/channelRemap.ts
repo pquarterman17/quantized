@@ -202,6 +202,32 @@ export function remapFitSpec(spec: FitSpec | undefined, removedCol: ColumnShift)
   };
 }
 
+/** `hidden` after `shift`, sorted and unique; `undefined` when none remain
+ *  (the store's "absent rather than empty" convention). */
+export function remapHiddenCols(hidden: readonly number[] | undefined, shift: ColumnShift): number[] | undefined {
+  if (!hidden?.length) return undefined;
+  const next = [...new Set(remapChannelList([...hidden], shift))].sort((a, b) => a - b);
+  return next.length ? next : undefined;
+}
+
+/** The frozen-prefix length after `shift`: a column inserted inside the prefix
+ *  or moved into it widens it, one deleted or moved out of it narrows it. A
+ *  column inserted right AT the boundary stays outside. */
+export function remapFrozenCols(frozen: number | undefined, shift: ColumnShift): number | undefined {
+  if (!frozen) return undefined;
+  let n = frozen;
+  if (typeof shift === "number") {
+    if (shift < frozen) n -= 1;
+  } else if ("inserted" in shift) {
+    if (shift.inserted < frozen) n += 1;
+  } else {
+    const { from, to } = shift;
+    if (from < frozen && to >= frozen) n -= 1;
+    else if (from >= frozen && to < frozen) n += 1;
+  }
+  return n > 0 ? n : undefined;
+}
+
 /** The dataset-scoped index-keyed fields (the half fixed in 2026-07-05). */
 export interface DatasetChannelState {
   channelRoles?: Record<number, ChannelRole>;
@@ -214,6 +240,9 @@ export interface DatasetChannelState {
   linkedCurves?: LinkedCurve[];
   /** Worksheet column comments + display number formats (lib/columnProps.ts). */
   columnProps?: Record<number, ColumnProps>;
+  /** Worksheet view: hidden columns and the frozen prefix length (lib/worksheetColumnView.ts). */
+  hiddenCols?: number[];
+  frozenCols?: number;
 }
 
 export function remapDatasetChannels(
@@ -237,6 +266,8 @@ export function remapDatasetChannels(
         ? d.linkedCurves.filter((_, i) => i !== removedCol)
         : d.linkedCurves,
     columnProps: remapKeyedRecord(d.columnProps, removedCol),
+    hiddenCols: remapHiddenCols(d.hiddenCols, removedCol),
+    frozenCols: remapFrozenCols(d.frozenCols, removedCol),
   };
 }
 
