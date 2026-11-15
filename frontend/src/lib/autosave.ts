@@ -40,30 +40,46 @@ let health: AutosaveHealth = { savedAt: null, error: null, count: 0 };
 
 /** The on-hide stash (soak test: edits inside the debounce were lost on a tab
  *  close). IndexedDB is async end to end, and a closing page does not live to
- *  finish it, so a page being left writes ONE generation here synchronously
- *  instead; a restore weighs it with the rest (newest wins) and the next real
- *  save removes it. Needs the codec already loaded — it is, from the startup
- *  restore — and a workspace small enough for localStorage, else it declines. */
+ *  finish it, so a page being left ALSO writes one generation here,
+ *  synchronously. It is a generation like any other: a restore weighs it with
+ *  the rest (newest wins), and the next real save folds it into the rotation
+ *  and only then removes it — never a stash newer than the state it wrote.
+ *  Declines (the async save still runs) without the codec loaded, on the
+ *  localStorage backend (already synchronous, and the two would share one
+ *  quota), or for a workspace over STASH_MAX_CHARS. Stored as `<at>\n<text>`
+ *  so the text is not escaped a second time. */
 export const STASH_KEY = "qz.autosave.stash";
+/** ~4 MB of UTF-16 at most: leaves room for every other `qz.*` key. */
+export const STASH_MAX_CHARS = 2_000_000;
 let codecNow: Awaited<ReturnType<typeof workspaceCodec>> | null = null;
+/** The last serialized size, so an oversized workspace is declined BEFORE a
+ *  synchronous serialize on every hide. */
+let lastChars = 0;
 
 const SERIALIZE = { fitModelLibrary: false, compact: true } as const;
 
-/** Synchronously stash `ws`; false when it could not (the caller saves async). */
+/** Synchronously stash `ws`; false when it did not (the async save covers it).
+ *  An empty library removes any stash instead: Remove all must not come back. */
 export function stashAutosave(ws: WorkspaceState, now = Date.now()): boolean {
   try {
-    if (!codecNow || ws.datasets.length === 0) return false;
-    localStorage.setItem(STASH_KEY, JSON.stringify({ at: now, text: codecNow.serializeWorkspace(ws, SERIALIZE) }));
+    if (ws.datasets.length === 0) return (localStorage.removeItem(STASH_KEY), false);
+    if (!codecNow || backend.kind === "localstorage" || lastChars > STASH_MAX_CHARS) return false;
+    const text = codecNow.serializeWorkspace(ws, SERIALIZE);
+    lastChars = text.length;
+    if (lastChars > STASH_MAX_CHARS) return false;
+    localStorage.setItem(STASH_KEY, `${now}\n${text}`);
     return true;
   } catch {
     return false;
   }
 }
 
-/** A real save (or clear) supersedes the stash. Never fails the save. */
-function dropStash(): void {
+/** Remove the stash when it is no newer than `upTo` (default: always).
+ *  Never fails the caller. */
+function dropStash(upTo = Infinity): void {
   try {
-    localStorage.removeItem(STASH_KEY);
+    const g = stashed()[0];
+    if (g && g.at <= upTo) localStorage.removeItem(STASH_KEY);
   } catch {
     /* storage blocked: there is no stash either */
   }
@@ -71,11 +87,19 @@ function dropStash(): void {
 
 function stashed(): Generation[] {
   try {
-    const g = JSON.parse(localStorage.getItem(STASH_KEY) ?? "null") as Generation | null;
-    return typeof g?.text === "string" && typeof g.at === "number" ? [g] : [];
+    const raw = localStorage.getItem(STASH_KEY) ?? "";
+    const cut = raw.indexOf("\n");
+    const at = cut > 0 ? Number(raw.slice(0, cut)) : Number.NaN;
+    return Number.isFinite(at) ? [{ at, text: raw.slice(cut + 1) }] : [];
   } catch {
     return [];
   }
+}
+
+/** Test seam: forget the loaded codec and size memo (a fresh page). */
+export function resetAutosaveStashState(): void {
+  codecNow = null;
+  lastChars = 0;
 }
 
 /** Swap the backing store. Tests use `memoryBackend()`; production never calls
@@ -110,28 +134,37 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
   try {
     if (ws.datasets.length === 0) {
       await backend.clear();
-      dropStash();
+      dropStash(now);
       health = { savedAt: health.savedAt, error: null, count: 0 };
       return true;
     }
     // Inside the try: a codec chunk that will not load is reported like any
     // other failed save (persistent health warning), and the next save retries.
     const { serializeWorkspace } = (codecNow = await workspaceCodec());
-    const existing = await backend.read();
+    const text = serializeWorkspace(ws, SERIALIZE);
+    lastChars = text.length;
+    // The stash joins the rotation (read AFTER the await, so a stash written
+    // while this save waited is seen); the newest generation wins either way.
+    const read = await backend.read();
+    const stash = stashed();
     // Three bounds, applied in sequence, each preserving the newest
     // generation on its own axis (count / age / size) — see
     // autosaveGenerations.ts's docs on rotate/capByAge/capBySize.
     const kept = capBySize(
       // P2.7: the fit-model CARRY only, not the library — a restore happens
       // on this machine, whose library is newer (lib/fitModelsProject.ts).
-      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, SERIALIZE) }), now),
+      capByAge(rotate([...stash, ...read], { at: now, text }), now),
       AUTOSAVE_BUDGET_BYTES,
     );
     await backend.write(kept);
-    dropStash();
+    // Only the stash this save wrote out, or one older than it: a stash
+    // written while the write was in flight is newer, and waits for the next.
+    dropStash(Math.max(now, stash[0]?.at ?? now));
     health = { savedAt: now, error: null, count: kept.length };
     return true;
   } catch (e: unknown) {
+    // A full store: an older stash only competes for the same quota.
+    if (e instanceof DOMException && e.name === "QuotaExceededError") dropStash(now);
     health = { ...health, error: e instanceof Error ? e.message : "storage unavailable" };
     return false;
   }
@@ -182,7 +215,7 @@ export async function loadAutosaveGeneration(): Promise<
 export async function listAutosaveGenerations(): Promise<Generation[]> {
   try {
     const { parseWorkspace } = await workspaceCodec();
-    return (await withLegacyGeneration(await backend.read(), parseWorkspace)).sort((a, b) => b.at - a.at);
+    return [...(await withLegacyGeneration(await backend.read(), parseWorkspace)), ...stashed()].sort((a, b) => b.at - a.at);
   } catch {
     return [];
   }
@@ -219,6 +252,7 @@ async function withLegacyGeneration(generations: Generation[], parseWorkspace: P
 export async function clearAutosave(): Promise<string | null> {
   try {
     await backend.clear();
+    dropStash(); // "Clear autosaved workspace" means every copy
     health = { savedAt: null, error: null, count: 0 };
     return null;
   } catch (e) {

@@ -82,6 +82,26 @@ describe("undo/redo after a window switch keeps each window's own zoom", () => {
     expect(record("B").yLim).toEqual([-1, 1]);
   });
 
+  it("undoing a rebind brings the old data back with ITS range, not the new data's (review Z1)", () => {
+    app().setXLim([-20000, 20000]); // B on mh
+    app().rebindWindow("B", "xrd"); // an undo step
+    app().setXLim([30, 60]); // the xrd zoom
+    app().undo();
+    expect(app().activeId).toBe("mh");
+    expect(app().xLim).toEqual([-20000, 20000]);
+  });
+
+  it("a background window whose zoom did not change keeps its record object (review Z2)", () => {
+    app().focusWindow("A");
+    app().setXLim([30, 60]);
+    app().focusWindow("B"); // A's zoom now lives in its (document) record
+    app().setPlotTitle("edit on B");
+    const before = app().plotWindows.find((w) => w.id === "A");
+    app().undo();
+    expect(app().plotWindows.find((w) => w.id === "A")).toBe(before);
+    expect(record("A").xLim).toEqual([30, 60]);
+  });
+
   it("an undo on the same window still keeps a later zoom (unchanged rule)", () => {
     app().setPlotTitle("t");
     app().setXLim([1, 2]);

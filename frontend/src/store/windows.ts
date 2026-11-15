@@ -33,7 +33,7 @@ import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults, openNewGraph } from "./windowDefaults";
-import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
+import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, forgetWindowStageTab, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 
@@ -253,7 +253,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     // call sites — the other is focusWindow) and following the same "focus
     // switch" contract focusWindow does below (activeId/selectedIds track the
     // new focus's dataset; transient tool state clears — item 4).
-    closeWindow: (id) => (get().recordHistory("close window"),
+    closeWindow: (id) => (get().recordHistory("close window"), forgetWindowStageTab(id),
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target) return {}; // id not found

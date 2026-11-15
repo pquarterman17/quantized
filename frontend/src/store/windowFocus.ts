@@ -14,6 +14,7 @@ import type { AppState } from "./useApp";
 import { plotWindowDatasetId, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults, mainWindow as createMainWindow, openNewGraph } from "./windowDefaults";
 import { windowHasUserEdits } from "./windowUserEdits";
+import { onWorkspaceReplace } from "./workspaceReplace";
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
 let _winSeq = 0;
@@ -64,7 +65,7 @@ export function arrangedWindowsPatch(s: AppState, kind: "tile" | "cascade"): Par
 export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string | null, view: PlotView, s: AppState): Partial<AppState> {
   return {
     ...extra,
-    ...stageTabHandoff(s, id, datasetId),
+    ...stageTabHandoff(s, id, datasetId, extra.plotWindows ?? s.plotWindows),
     focusedWindowId: id,
     activeId: datasetId,
     selectedIds: datasetId ? [datasetId] : [],
@@ -75,22 +76,55 @@ export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: s
     ...focusTransientReset(),
   };
 }
-/** The Plot / Map / Worksheet tab each plot window was last shown on, by id.
- *  `stageTab` is one global field; this remembers it per window so a focus
- *  switch brings a window back as it was left (soak test: a 2-D map window
- *  came back as a 1-D scatter after a visit to another window). Transient UI,
- *  like `stageTab` itself: never saved or undone. */
-const windowStageTabs = new Map<string, StageTab>();
+/** The Plot / Map / Worksheet tab each plot window was last shown on, and the
+ *  dataset it was showing then. `stageTab` is one global field; this lets a
+ *  focus switch bring a window back as it was left (soak test: a 2-D map
+ *  window came back as a 1-D scatter after a visit to another window).
+ *  Transient UI, like `stageTab` itself: never saved or undone, forgotten
+ *  when the workspace is replaced and when its window closes. */
+const windowStageTabs = new Map<string, { tab: StageTab; datasetId: string | null }>();
+/** Set by `setStageTab` for the rest of the current tick (`noteCallerStageTab`). */
+let callerTab = false;
 
-/** The `stageTab` patch for a focus handoff from `s.focusedWindowId` to `id`.
- *  The Technique/Analysis views are not per window and stay put. A window seen
- *  before gets its own tab back; one never seen gets its dataset's default
+/** Forget every remembered tab (a replaced workspace; tests). */
+export function resetWindowStageTabs(): void {
+  windowStageTabs.clear();
+  callerTab = false;
+}
+onWorkspaceReplace(resetWindowStageTabs);
+
+/** `closeWindow`: a closed window's tab goes with it. */
+export function forgetWindowStageTab(id: string): void {
+  windowStageTabs.delete(id);
+}
+
+/** `setStageTab` calls this: a caller that sets the tab and then focuses a
+ *  window in the same tick keeps ITS tab — the focus handoff does not
+ *  override a choice made for it a moment earlier (review T3). A user's tab
+ *  click and a later window click are separate events, so they never meet. */
+export function noteCallerStageTab(): void {
+  if (callerTab) return;
+  callerTab = true;
+  queueMicrotask(() => {
+    callerTab = false;
+  });
+}
+
+/** The `stageTab` patch for a focus handoff from `s.focusedWindowId` to `id`
+ *  (`windows`: the window list after the handoff — a window closing as it
+ *  hands focus on is not remembered). The Technique/Analysis
+ *  views are not per window and stay put. A window gets its remembered tab
+ *  back while it still shows the same dataset (review T1: a rebind or drop
+ *  makes the old data's tab meaningless); otherwise its dataset's default
  *  (`nextStageTab`: Map for a 2-D map, else Plot, Worksheet kept). */
-function stageTabHandoff(s: AppState, id: string, datasetId: string | null): Partial<AppState> {
+function stageTabHandoff(s: AppState, id: string, datasetId: string | null, windows: readonly PlotWindow[]): Partial<AppState> {
   if (s.stageTab === "technique" || s.stageTab === "analysis") return {};
-  if (s.focusedWindowId) windowStageTabs.set(s.focusedWindowId, s.stageTab);
+  if (callerTab) return {};
+  const out = s.focusedWindowId;
+  if (out && windows.some((w) => w.id === out)) windowStageTabs.set(out, { tab: s.stageTab, datasetId: s.activeId });
+  const kept = windowStageTabs.get(id);
   const ds = s.datasets.find((d) => d.id === datasetId);
-  return { stageTab: windowStageTabs.get(id) ?? (ds ? nextStageTab(ds, s.stageTab) : s.stageTab) };
+  return { stageTab: kept && kept.datasetId === datasetId ? kept.tab : ds ? nextStageTab(ds, s.stageTab) : s.stageTab };
 }
 
 /** A brand-new sole main window — the ≥1-window invariant's default: one

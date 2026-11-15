@@ -21,6 +21,20 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
   ".mat", ".ibw", ".png", ".tif", ".tiff", ".jpg", ".jpeg",
 ]);
 
+/** The real cause and remedy for an error that never reached the backend's
+ *  code — the server is down (`fetch` rejected: "Failed to fetch" in Chrome,
+ *  "NetworkError…" in Firefox, "Load failed" in Safari) or this page's token
+ *  is stale (a relaunched `qz` mints a new one, so every call is 401) — as a
+ *  " — …" suffix, or "" for any other error. Shared by the import summary and
+ *  the workshops' own error lines (Curve Fit, Peaks), which said only
+ *  "Failed to fetch". */
+export function connectionHint(message: string): string {
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return " — the qz server is not responding (if you relaunched qz, reload this page)";
+  }
+  return /invalid API token/i.test(message) ? " — qz was relaunched; reload this page" : "";
+}
+
 /** The hint for a failed import of `name`: the wizard for a text-like file,
  *  nothing for a binary container (its error already says what to do).
  *  Soak-test fix: a failure that never reached a parser is not the file's
@@ -29,10 +43,8 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
  *  one, so every call is 401) gets its real cause and remedy, never the
  *  wizard, which would fail the same way. */
 export function importFailureHint(name: string, message = ""): string {
-  if (/failed to fetch|networkerror|load failed/i.test(message)) {
-    return " — the qz server is not responding (if you relaunched qz, reload this page)";
-  }
-  if (/invalid API token/i.test(message)) return " — qz was relaunched; reload this page";
+  const cause = connectionHint(message);
+  if (cause) return cause;
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
   return BINARY_EXTS.has(ext) ? "" : " — try the Import wizard (⌘K → Import wizard…)";

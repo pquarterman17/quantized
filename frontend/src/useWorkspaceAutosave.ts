@@ -266,6 +266,9 @@ function autosavePausedCause(): { key: string; message: string } {
  *  (the same "never trust a snapshot from before the debounce elapsed"
  *  discipline `store/workspaceIO.ts`'s `runSaveWorkspace` already uses for
  *  its own quick-save gate). Exported for direct testing. */
+/** Saves started and not yet settled: a page closing mid-save stashes too. */
+let savesInFlight = 0;
+
 export async function flushAutosaveNow(): Promise<void> {
   if (autosaveGateBlocked()) {
     const cause = autosavePausedCause();
@@ -276,7 +279,13 @@ export async function flushAutosaveNow(): Promise<void> {
     return;
   }
   resetAutosavePausedReporting(); // silent — the save below reports the real "resumed" outcome
-  const ok = await saveAutosave(workspaceForSave());
+  savesInFlight++;
+  let ok: boolean;
+  try {
+    ok = await saveAutosave(workspaceForSave());
+  } finally {
+    savesInFlight--;
+  }
   // #32: report through the store so the warning PERSISTS until the next
   // SUCCESS, instead of a status line that scrolls away.
   reportAutosaveHealth(autosaveHealth());
@@ -396,25 +405,34 @@ export function useWorkspaceAutosave(): void {
       // setCurrentProject call, which runs after this subscriber fires (see
       // store/project.ts's header on why ordering there is safe).
       useApp.getState().markProjectDirty();
+      stashedNow = false;
       clearTimeout(timer);
       timer = setTimeout(flushPending, 800);
     });
     // Soak test: an edit made inside the debounce window was lost when the
     // tab closed or reloaded. Leaving the page (pagehide, or hidden — the last
-    // event a mobile/bfcache page reliably gets) writes the pending save now,
-    // SYNCHRONOUSLY (`stashAutosave`): the async IndexedDB save does not
-    // outlive a closing page. Only if the stash declines (codec not loaded,
-    // too big for localStorage, gate closed) does the async save start. Once
-    // the timer is cleared, a second hide event (both fire on a close) or the
-    // timer itself finds nothing pending — one write.
-    function flushPending(hiding?: boolean): void {
+    // event a mobile/bfcache page reliably gets) with an edit pending, or a
+    // save still in flight, does two things:
+    //  1. stashes the state SYNCHRONOUSLY (`stashAutosave`) — the async
+    //     IndexedDB save does not outlive a closing page;
+    //  2. starts the pending async save at once — a page that stays alive (a
+    //     tab switch) then has it in IndexedDB too, and that save folds the
+    //     stash into the rotation (lib/autosave.ts).
+    // Each happens once per state: `stashedNow` holds until the next edit, and
+    // a cleared timer leaves nothing for a second hide event or the timer.
+    let stashedNow = false;
+    function flushPending(): void {
       if (timer === undefined) return;
       clearTimeout(timer);
       timer = undefined;
-      if (!(hiding === true && !autosaveGateBlocked() && stashAutosave(workspaceForSave()))) void flushAutosaveNow();
+      void flushAutosaveNow();
     }
     const onHide = (e: Event) => {
-      if (e.type === "pagehide" || document.visibilityState === "hidden") flushPending(true);
+      if (e.type !== "pagehide" && document.visibilityState !== "hidden") return;
+      if ((timer !== undefined || savesInFlight > 0) && !stashedNow && !autosaveGateBlocked()) {
+        stashedNow = stashAutosave(workspaceForSave());
+      }
+      flushPending();
     };
     const off = new AbortController(), opts = { signal: off.signal };
     window.addEventListener("pagehide", onHide, opts);

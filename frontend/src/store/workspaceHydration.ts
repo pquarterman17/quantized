@@ -68,6 +68,7 @@ import { notifyMigrationWarnings, toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { focusTransientReset, mainWindow } from "./windows";
 import { nextWorkbookId } from "./workbookIds";
+import { announceWorkspaceReplace } from "./workspaceReplace";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -280,6 +281,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
       });
       adoptFitModels(ws, set, get);
       relinkLoadedGraphs(ws.datasets);
+      announceWorkspaceReplace();
     },
     appendWorkspace: (ws) => (relinkLoadedGraphs(ws.datasets), runAppendWorkspace(set, get, ws)),
     // Reuses loadWorkspace's "replace everything" reset (clears per-dataset

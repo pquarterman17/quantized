@@ -10,8 +10,8 @@
 // any field to AppState.
 
 import type { BreakComposition, SpatialComposition } from "../lib/composition";
-import { hydrateView, NAV_VIEW_KEYS, navigationView, snapshotView, type NavigationView, type PlotView, type PlotWindow } from "../lib/plotview";
-import { plotWindowView, syncPlotWindow } from "./windowDocuments";
+import { hydrateView, navigationView, snapshotView, type NavigationView, type PlotView, type PlotWindow } from "../lib/plotview";
+import { plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { focusTransientReset } from "./windows";
 import type { LibrarySelection } from "./libraryPanel";
 import type { AppState } from "./useApp";
@@ -180,7 +180,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   return {
     ...fields,
     ...hydrateView(view),
-    ...liveNavigation(s, snap.focusedWindowId),
+    ...liveNavigation(s, snap.plotWindows.find((w) => w.id === snap.focusedWindowId)),
     expandedFolders: restoredExpandedFolders(s, snap),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
     // L0.25 on undo/redo (hardening review fix — undo was a SEVENTH
@@ -208,7 +208,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       return hasId(pools[sel.kind], sel.id) ? sel : null;
     })(),
     plotWindows: snap.plotWindows.map((w) =>
-      withLiveNavigation(s, w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w),
+      withLiveNavigation(s, w, w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w),
     ),
     ...focusTransientReset(),
     // Preserve scratch across unrelated edits, but clear it when restored
@@ -224,20 +224,25 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   };
 }
 
-/** Live PLOT window `id`'s current zoom/pan (undefined when there is none):
- *  the focused window's from the live singleton fields (its record is stale
- *  while it is focused), any other window's from its own record. */
-function liveNavigation(s: AppState, id: string | null): NavigationView | undefined {
-  const w = s.plotWindows.find((l) => l.id === id && l.kind === "plot");
-  return w && navigationView(w.id === s.focusedWindowId ? s : plotWindowView(w));
+/** The live zoom/pan of the window the snapshot's `restored` record names
+ *  (undefined when there is none to carry): the focused window's from the
+ *  live singleton fields (its record is stale while it is focused), any
+ *  other window's from its own record. Carried ONLY while the window still
+ *  shows the same data (review Z1): undoing a rebind must bring the old data
+ *  back with its own range, not the new data's. */
+function liveNavigation(s: AppState, restored: PlotWindow | undefined): NavigationView | undefined {
+  const w = restored && s.plotWindows.find((l) => l.id === restored.id && l.kind === "plot");
+  if (!w || plotWindowDatasetId(w) !== plotWindowDatasetId(restored)) return undefined;
+  return navigationView(w.id === s.focusedWindowId ? s : plotWindowView(w));
 }
 
 /** Restored window `w` with its stored zoom/pan replaced by the live one
- *  (unchanged when there is none, or it is the same). */
-function withLiveNavigation(s: AppState, w: PlotWindow): PlotWindow {
-  const nav = liveNavigation(s, w.id);
-  const stored = plotWindowView(w);
-  return !nav || NAV_VIEW_KEYS.every((k) => stored[k] === nav[k]) ? w : syncPlotWindow(w, { ...stored, ...nav });
+ *  (unchanged when there is none, or it is equal — by value: a document
+ *  window's view is a fresh clone every read, review Z2). */
+function withLiveNavigation(s: AppState, w: PlotWindow, bound: PlotWindow): PlotWindow {
+  const nav = liveNavigation(s, w);
+  const stored = plotWindowView(bound);
+  return !nav || JSON.stringify(navigationView(stored)) === JSON.stringify(nav) ? bound : syncPlotWindow(bound, { ...stored, ...nav });
 }
 
 /** Does the drawn fit curve still describe its worksheet after this restore?

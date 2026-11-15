@@ -53,6 +53,9 @@ export default function BumpsSection({ modelName }: { modelName: string }) {
       <Select
         options={ENGINE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         value={engine}
+        // A running job keeps its engine (setEngine refuses), so say so here
+        // rather than let the choice silently snap back.
+        disabled={busy}
         onChange={(e) => setEngine(e.target.value as EngineChoice)}
       />
 

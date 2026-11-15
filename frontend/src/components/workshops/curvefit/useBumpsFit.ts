@@ -22,6 +22,7 @@ import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowsta
 import { useApp } from "../../../store/useApp";
 import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
+import { onWorkspaceReplace } from "../../../store/workspaceReplace";
 import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
 
 export type EngineChoice = "parity" | BumpsEngine;
@@ -60,6 +61,9 @@ interface BumpsSession {
   error: string | null;
   /** The live DREAM job, while one is being polled. */
   jobId: string | null;
+  /** The dataset `result`/`error` (and a running job) belong to: the panel
+   *  shows them only beside THAT dataset (review D1). */
+  datasetId: string | null;
 }
 
 const INITIAL: BumpsSession = {
@@ -70,14 +74,24 @@ const INITIAL: BumpsSession = {
   progress: null,
   error: null,
   jobId: null,
+  datasetId: null,
 };
 
 const useBumpsSession = create<BumpsSession>(() => INITIAL);
 
-/** Back to a fresh session (tests; the app never calls it). */
+/** Bumped by every reset: a run that started before it is orphaned and
+ *  writes nothing more into the session (or the plot). */
+let generation = 0;
+
+/** Back to a fresh session, cancelling a job still running. Called when the
+ *  workspace is replaced (New / Open / Remove all), and by tests. */
 export function resetBumpsFitSession(): void {
+  const { jobId } = useBumpsSession.getState();
+  generation += 1;
   useBumpsSession.setState(INITIAL, true);
+  if (jobId) void cancelJob(jobId).catch(() => undefined);
 }
+onWorkspaceReplace(resetBumpsFitSession);
 
 const patch = (p: Partial<BumpsSession>): void => useBumpsSession.setState(p);
 
@@ -105,7 +119,12 @@ async function run(modelName: string): Promise<void> {
   const { engine, busy, dream } = useBumpsSession.getState();
   const activeId = useApp.getState().activeId;
   if (!activeId || engine === "parity" || busy) return;
-  patch({ busy: true, error: null, result: null });
+  const mine = generation;
+  // Every write below is this run's only while no reset has happened since.
+  const patchMine = (p: Partial<BumpsSession>): void => {
+    if (generation === mine) patch(p);
+  };
+  patch({ busy: true, error: null, result: null, datasetId: activeId });
   // P3.4: the run is one op in the shared StatusBar location (percent +
   // Cancel once the DREAM job exists), not only this panel's own bar.
   const op = trackJob(engine === "dream" ? "Bumps DREAM fit" : `Bumps ${engine} fit`);
@@ -131,15 +150,16 @@ async function run(modelName: string): Promise<void> {
     });
     let fit: BumpsFitResult;
     if (isJobSubmit(resp)) {
-      patch({ jobId: resp.job_id, progress: 0 });
+      patchMine({ jobId: resp.job_id, progress: 0 });
       op.cancellable(() => void cancel());
       fit = await pollJob<BumpsFitResult>(resp.job_id, (f) => {
-        patch({ progress: f });
+        patchMine({ progress: f });
         op.progress(f);
       });
     } else {
       fit = resp;
     }
+    if (generation !== mine) return; // the workspace it was for is gone
     patch({ result: fit });
     // Overlay the fitted curve, expanded back to full row count so it stays
     // in register with the full-length plot x (same as the parity path).
@@ -152,22 +172,26 @@ async function run(modelName: string): Promise<void> {
     }
   } catch (e) {
     if (!(e instanceof JobCancelledError)) {
-      patch({ error: e instanceof Error ? e.message : "bumps fit failed" });
+      patchMine({ error: e instanceof Error ? e.message : "bumps fit failed" });
     }
     // a deliberate cancel is not an error — just return to idle
   } finally {
     op.end();
-    patch({ jobId: null, busy: false, progress: null });
+    patchMine({ jobId: null, busy: false, progress: null });
   }
 }
 
 export function useBumpsFit(): BumpsFitState {
   const hasDataset = useApp((s) => s.datasets.some((d) => d.id === s.activeId));
+  const activeId = useApp((s) => s.activeId);
   const engine = useBumpsSession((s) => s.engine);
   const dream = useBumpsSession((s) => s.dream);
+  // A result or error is shown only beside its own dataset. `busy` stays
+  // global: a job is running either way, and a second one must not start.
+  const mine = useBumpsSession((s) => s.datasetId === activeId);
   const result = useBumpsSession((s) => s.result);
   const busy = useBumpsSession((s) => s.busy);
   const progress = useBumpsSession((s) => s.progress);
   const error = useBumpsSession((s) => s.error);
-  return { hasDataset, engine, setEngine, dream, setDream, result, busy, progress, error, run, cancel };
+  return { hasDataset, engine, setEngine, dream, setDream, result: mine ? result : null, busy, progress, error: mine ? error : null, run, cancel };
 }

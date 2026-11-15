@@ -30,6 +30,7 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { clearSelectionForTool } from "../../../store/analysisSelection";
 import PeakAnalysisInputs from "./PeakAnalysisInputs";
+import { connectionHint } from "../../../lib/importFailureHint";
 // Stable fallback: a fresh [] would needlessly reset selection each render.
 const NO_FITTED_PEAKS: FittedPeak[] = [];
 // Opened on demand only: its chunk loads on the first "Batch integrate…".
@@ -257,11 +258,7 @@ export default function PeaksPanel() {
         </div>
       )}
       {active && busy && <div className="qzk-ds-meta">Finding peaks…</div>}
-      {active && error && (
-        <div className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
-          {error}
-        </div>
-      )}
+      {active && error && <div className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>{error}{connectionHint(error)}</div>}
       {active && !busy && !error && peaks.length === 0 && (
         <div className="qzk-ds-meta" style={faint}>
           No peaks found.
@@ -321,8 +318,8 @@ export default function PeaksPanel() {
       </div>
 
       {fitError && (
-        <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
-          {fitError}
+        <div className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)", marginTop: 6 }}>
+          {fitError}{connectionHint(fitError)}
         </div>
       )}
 
