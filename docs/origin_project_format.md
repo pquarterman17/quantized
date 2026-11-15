@@ -1323,8 +1323,13 @@ The marker does not name the designation; the record's offset-17 code does
 whose record does not prove its code reads by the marker only when that is
 unambiguous (X, Y, disregard); an unproven `30 61` / `20 61` keeps counting
 its column but carries no designation. The marker bytes also occur in label
-text (`20 61` = " a", `30 61` = "0a"); because columns are bound by run
-POSITION, such a stray marker shifts a book's labels (decode-plan item 73).
+text (`20 61` = " a", `30 61` = "0a", `21 61` = "!a"), so a run read by
+POSITION shifts every later column's label after one stray marker. Since
+decode-plan item 73 (2026-11-15) a sheet is labelled from its own column
+records BY NAME (offset 18, searched only inside the book's own window
+span), and a positional reading a record of that span contradicts is
+dropped; on 113 COM-checked files that left 0 wrong designations, long
+names or units (`opju_record_meta.py`, `opju._bind_by_record`).
 
 **These markers exist only for Text & Numeric columns (2026-11-15).** The
 column record is the `.opj` column property block in CPYUA's sparse grammar;
@@ -1487,6 +1492,36 @@ consumed by `opju_window_metadata`, so its extra-sheet pseudo-books fall
 back to the plain Origin short designation (A, B, C, …) for labels. Full
 Book→Sheet nesting in the UI was a deliberate descope (frontend
 pseudo-books read `"Book@N (sheet N)"`).
+
+### 5.1 `.opju` loose datasets are not books (2026-11-15)
+
+A `<Book>_<Col>[@N]` dataset whose `<Book>` is the name of **no window**
+in the file is a *loose* dataset: Origin's own book list (COM
+`WorksheetPages`, `doc -e W`) does not hold it. `opju_loose_books` drops
+such groups from the book list (`metadata["origin_worksheet_fidelity"]
+["loose_books_omitted"]` names them). Window names come from
+`tree_opju.iter_opju_windows` and compare **case-insensitively**, as
+Origin's do — window `CuSCH3vac` owns datasets `Cusch3vac_B` … `@5`
+(renamed in case only) and its graphs plot them.
+
+Sources seen (Origin 2026b COM, plot corpus + real corpus):
+
+- **Stacked area / column / bar** write their cumulative sums to
+  `CS_1` … `CS_n`; the graph plots the source sheet (`%Z` never names `CS`).
+- **A deleted sheet** leaves its datasets under a new window-less name:
+  sheet `Gone` (id 2) of `Del` becomes `DelA_A@2`; the live sheets keep
+  `Del_A` / `Del_A@3`, so the sheet ids of the survivors are Origin's own
+  dataset ids (`doc -e S`) and keep their `Del@3` key.
+- `TableN`-style and `<Book>A` / `<Book>B` leftovers of renamed or
+  deleted books.
+
+Fail closed: nothing is dropped when the file has no window header, or when
+every book is loose (graph-only projects: the loose data is all there is).
+Real corpus (359 `.opju`): 111 books dropped in 22 files, **0** of them a
+COM `WorksheetPages` book, **0** COM books vanished, **0** decoded curves
+changed. 4 dropped datasets are plotted by Origin graphs whose curves the
+figure decode does not bind (open item, `ORIGIN_PLOT_TYPE_PARITY_PLAN`
+item 5).
 
 ---
 

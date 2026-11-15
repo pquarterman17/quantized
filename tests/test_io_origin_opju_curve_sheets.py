@@ -372,20 +372,21 @@ def test_realdata_sop_old_layer5_binds_sheet_two(corpus_dir: Path) -> None:
 
 @pytest.mark.realdata
 def test_realdata_sop_graph73_binds_sheet_five(corpus_dir: Path) -> None:
-    """Origin plots SOPvsHPPCA123_B@5/_C@5/_D@5 against _A@5. The importer
-    makes B the X column of ``SOPvsHPPCA123@5``, so B cannot be drawn as a
-    Y and is diagnosed; C and D bind by name. Graph73 decodes since the
-    separator-flag admission (#681): a missing layer is a regression, so it
-    fails here; the test skips only when the corpus file is absent."""
+    """Origin plots SOPvsHPPCA123_B@5/_C@5/_D@5 against _A@5 (COM, Origin
+    2026b). Sheet 5's labels now bind to its own column records by name
+    (decode-plan item 73), so A is its X and B a Y, as ``wks.col.type``
+    reads them; the positional reading made B the X and dropped the B curve
+    as ``y_is_sheet_x``. Graph73 decodes since the separator-flag admission
+    (#681): a missing layer is a regression, so it fails here; the test
+    skips only when the corpus file is absent."""
     figs, books = _import(corpus_dir, _SOP)
     f = _layer(figs, "Graph73", 1)
-    assert {(c["book"], c["x"], c["y"]) for c in f["curves"]} == {
+    assert [(c["book"], c["x"], c["y"]) for c in f["curves"]] == [
+        ("SOPvsHPPCA123@5", "A", "B"),
         ("SOPvsHPPCA123@5", "A", "C"),
         ("SOPvsHPPCA123@5", "A", "D"),
-    }
-    assert [(n["recorded"], n["y"], n["reason"]) for n in f["curve_sheet_omitted"]] == [
-        ("SOPvsHPPCA123@5", "B", "y_is_sheet_x")
     ]
+    assert f.get("curve_sheet_omitted", []) == []
     x, _y = _drawn(books, f["curves"][0])
     _assert_origin(x, 9, 15.0, 95.0)  # SOPvsHPPCA123_A@5
 
