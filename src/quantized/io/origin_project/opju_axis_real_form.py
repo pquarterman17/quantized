@@ -24,9 +24,12 @@ escape — ``c2`` = a run of exactly 5 repeated bytes, ``c3`` = exactly 6; the
 byte after the repeated byte is a context/tag byte, skipped, not a count),
 and **bare compact** (1-3 significant bytes, no tag, right after a flag
 token). The optional X flag token (``89 01``/``89 18``/``97 03``/``91 09`` =
-2 bytes; a bare ``91`` before a run-first RLE value = 1 byte; absent when
-the record opens with a tagged value) is skipped via a deterministic length
-rule; its semantics stay undecoded.
+2 bytes; a single ``81..9f`` byte before a run-first RLE value, ``89 c3 ff 02
+ef 3f`` = 0.9999999999999999 -- Origin 1.0; absent when the record opens with
+a tagged value) is skipped via a deterministic length rule; its semantics stay
+undecoded. A LENGTH-HEADED first value (``96 03 <3 bytes>`` / ``97 02 <2
+bytes>``, ``tag low nibble + nn == 9``; see ``_real_x_lead``) is one compact
+value, never re-split: ``96 03 80 56 40`` is 90, not ``80`` + ``56 40``.
 
 **Y-axis scale flag — solved 2026-07-04** (the rf_* 4-file by-construction
 oracle: ``rf_linlin``/``rf_logx``/``rf_logy``/``rf_loglog.opju``, the SAME
@@ -102,9 +105,8 @@ __all__: list[str] = []  # internal to the .opju figures subsystem; imported by 
 # combinations (0x40|0x80 = c0, 0x08|0x80 = 88), the signature of flag bits.
 # Only the values Origin 2026b COM (``layer.x/y.from/to``, 23 files) CONFIRMS
 # are admitted: 00/40/80/88/c0 decode 60 records onto Origin's exact axis
-# values (the one disagreement, histogram_released_viruses Graph2 X, is a
-# separate value-token defect, not the separator). 01/08/30/41/48 have no
-# oracle coverage yet and stay unrecovered (fail closed) until one does.
+# values. 01/08/30/41/48 have no oracle coverage yet and stay unrecovered
+# (fail closed) until one does.
 _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
 _SEP_WIDE = re.compile(rb"[\x80\x81]..\x00[\x00\x40\x80\x88\xc0]\x01", re.DOTALL)
 # Specimen-form record markers (moved with _parse_specimen_record from
@@ -284,15 +286,18 @@ def real_form_bare_pair(b: bytes, start: int, end: int) -> tuple[float, float] |
 
 
 def _real_span_pair(
-    b: bytes, start: int, end: int, bare: bool
+    b: bytes, start: int, end: int, bare: bool, lead: float | None = None
 ) -> tuple[float, float, float | None] | None:
     """``[from, to, step]`` (n=3) else ``[to, step]`` with from elided (n=2),
     exact-fill; accepted only when the fill set at that arity is unique on
     the ``(from, to)`` pair (the historical acceptance rule — §13.2 #8 added
     the STEP as a third returned value: the tick increment, ``None`` when
-    the accepted fills disagree on it)."""
+    the accepted fills disagree on it). ``lead``: a first token already read
+    (`_real_x_lead`); ``start`` is then past it, only the rest is enumerated."""
     for n in (3, 2):
-        fills = _real_fills(b, start, end, n, bare)
+        fills = _real_fills(b, start, end, n - (lead is not None), bare)
+        if lead is not None:
+            fills = [(lead, *f) for f in fills]
         pairs = {(f[0], f[1]) if n == 3 else (0.0, f[0]) for f in fills}
         if len(pairs) == 1:
             fr, to = pairs.pop()
@@ -303,13 +308,27 @@ def _real_span_pair(
     return None
 
 
+def _real_x_lead(b: bytes, p: int, end: int) -> tuple[float, int] | None:
+    """``9T nn <nn bytes>``, ``T + nn == 9`` (corpus: ``96 03``, ``97 02``): the
+    X span's first value, ``nn`` bytes of compact payload, delimited by its own
+    header instead of left to the span fill (which would split ``80 56 40`` as
+    ``80`` + ``56 40``)."""
+    if p + 2 > end:
+        return None
+    tag, nn = b[p], b[p + 1]
+    if not (0x90 <= tag <= 0x9F) or (tag & 0x0F) + nn != 9 or not 1 <= nn <= 3:
+        return None
+    v = _decode_compact(b[p + 2 : p + 2 + nn]) if p + 2 + nn < end else None
+    return (v, 2 + nn) if v is not None else None
+
+
 def _real_x_flag_len(b: bytes, p: int, end: int) -> int:
     """Deterministic length of the optional X flag token (see module docstring):
-    0 when the record opens with a tagged value, 1 for a bare ``91`` before a
-    run-first RLE value, else 2 (every other observed flag is 2 bytes)."""
+    0 when the record opens with a tagged value, 1 for a single ``81..9f`` byte
+    before a run-first RLE value, else 2 (every other observed flag is 2 bytes)."""
     if _real_tagged(b, p, end) is not None:
         return 0
-    if p + 1 < end and b[p] == 0x91 and b[p + 1] in (0xC2, 0xC3):
+    if p + 1 < end and 0x81 <= b[p] <= 0x9F and b[p + 1] in (0xC2, 0xC3):
         return 1
     return 2
 
@@ -410,10 +429,11 @@ def _parse_real_record_sep(
     discard the record the real separator makes decodable."""
     hi1 = min(window_end, p + _TAG_SEARCH_SPAN)
     for m1 in _sep_hits(sep_re, b, p, hi1, every=every):
-        x_start = p + _real_x_flag_len(b, p, m1.start())
+        lead = _real_x_lead(b, p, m1.start())
+        x_start = p + (lead[1] if lead else _real_x_flag_len(b, p, m1.start()))
         if x_start >= m1.start():
             continue
-        xpair = _real_span_pair(b, x_start, m1.start(), bare=True)
+        xpair = _real_span_pair(b, x_start, m1.start(), bare=True, lead=lead[0] if lead else None)
         if xpair is None:
             continue
         plen = b[m1.start() + 2]

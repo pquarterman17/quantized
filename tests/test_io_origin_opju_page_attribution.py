@@ -300,16 +300,11 @@ _REL_TOL = 1e-6
 
 _SCI = "origin/public/ARETE-zzwl_origin-meteohydro-skills/python-origin-plotting/assets/scientific_color_reference/origin_scientific_colors.opju"  # noqa: E501
 _TEA = "origin/public/niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju"
-_HIST = "origin/public/pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/histogram_released_viruses.opju"  # noqa: E501
 _SOP = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
 _RISK5 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig3_ExtFig5/PerceivedRiskandPrediction.opju"  # noqa: E501
 _RISK9 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig4_ExtFig9/PerceivedRiskandPrediction.opju"  # noqa: E501
 
 _Y_MISREAD = "Y span misread (value-token defect); decoded by the unfixed decoder too"
-_TAIL_BYTE = (
-    "value looks like Origin's with its last mantissa byte dropped (88/90, 136/140, "
-    "1984/2000); decoded identically by the unfixed decoder"
-)
 
 # (file, page, layer) -> cause: decoded, but the values differ from Origin's.
 KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
@@ -328,15 +323,7 @@ KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
         "Graph12",
         1,
     ): "y_from 927.5 vs Origin 0: geometry payload 82 03 fc 8c 40 fills as a value",
-    (_HIST, "Graph2", 1): "X [0, 4.0025] vs Origin [1, 4] (X value-token defect)",
-    (_SOP, "fig_SOPvsHPPC_A123", 1): "x_to 88 vs 90: " + _TAIL_BYTE,
-    (_SOP, "Graph3", 1): "x_to 88 vs 90: " + _TAIL_BYTE,
-    (_SOP, "Graph24", 1): "X [2, 128] vs Origin [0, 130]: " + _TAIL_BYTE,
-    (_SOP, "Graph12", 1): "x_to 136 vs 140: " + _TAIL_BYTE,
-    (_SOP, "Graph30", 1): "x_to 136 vs 140: " + _TAIL_BYTE,
-    (_SOP, "Graph58", 10): "X [2, 1984] vs Origin [0, 2000]: " + _TAIL_BYTE,
     (_SOP, "fig_SHAP_stability", 1): "y_from 731.17 vs Origin 0 (" + _Y_MISREAD + ")",
-    (_SOP, "fig_AgingSummary", 1): "X [2, 1984] vs Origin [0, 2000]: " + _TAIL_BYTE,
 }
 
 # (file, page, layer) -> cause: decoded under a page NAME Origin does not

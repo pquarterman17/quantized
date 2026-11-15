@@ -2561,8 +2561,8 @@ form with a one-byte type `>= 0x80` exists in the 359-file corpus.
 records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21,
 41 ×6, 01 ×7, 08 ×6, 30 ×3, 88 ×3, 48 ×1 (bit combinations: c0 = 40|80, 88 =
 08|80). The retry-only wide separator admits only the oracle-CONFIRMED values
-00/40/80/88/c0 (60 records match Origin's axes exactly; the one disagreement is
-a value-token defect, below). 01/08/30/41/48 await an oracle.
+00/40/80/88/c0 (60 records match Origin's axes exactly). 01/08/30/41/48 await
+an oracle.
 
 **Layer numbering is the anchor ordinal (2026-11-14).** A graph page's layer
 `N` is its `N`-th layer anchor (`03 00 00 1f` / `5f`), counted whether or not
@@ -2596,11 +2596,8 @@ Known open (reported, not fixed; each is pinned, strict-xfail style, in
 
 - `TEA_ExcelGraphs` `Graph12` Y decodes `[927.5, 1000]` vs Origin `[0, 1000]` —
   the geometry payload `82 03 fc 8c 40` fills as a tagged value and `y_from`
-  (elided 0) is mis-read; `histogram_released_viruses` `Graph2` X
-  `[0, 4.0025]` vs `[1.0, 4.0]`; `origin_scientific_colors` `ColorPage1/2`
-  several Y spans (e.g. `y_from` 438.4 for 0).
-- `SOP_meas` X spans that read like Origin's with the last mantissa byte
-  dropped (88 for 90, 136 for 140, 1984 for 2000).
+  (elided 0) is mis-read; `origin_scientific_colors` `ColorPage1/2` several Y
+  spans (e.g. `y_from` 438.4 for 0).
 - **Page-header names with an escape.** `fig_ c0 43 06 Verr…` is Origin's page
   `fig_CCCVerror`, `Graph c0 31 …` is `Graph111`: the header name is read
   truncated (`fig_`, `Graph`) or the page is not enumerated at all
@@ -2619,6 +2616,40 @@ splits are unaffected); and the Y-start scan reaches one byte further
 (plen=5 records carry an 11-byte geometry payload the old 6-byte scan
 missed by exactly one). Result: 51 of Hc2's anchors decode (was 32),
 covering 38 of its 40 graph pages.
+
+**X-span value-token grammar: length-headed first value, 1-byte flag
+(2026-11-15).** Two X-span misreads, both pinned earlier as "value-token
+defects", were one mechanism: the flag/header bytes in front of the first X
+value were skipped by a fixed 2-byte rule and the value bytes then re-split by
+the exact-fill search, which prefers three tokens over two.
+
+- **`9T nn <nn bytes>` with `T + nn == 9`** (`96 03`, `97 02`; the only forms in
+  the 359-file corpus, 98 01 once, undecoded): the first X value is `nn` compact
+  bytes (reversed BE top bytes) delimited by its own header. `96 03 80 56 40 83
+  02 24 40` is `to` = `0x405680` = 90, step 10 (`from` elided), but the fill
+  search split it `80` + `56 40` = `-0.0`, 88 (three tokens, unique, accepted).
+  Same for `96 03 40 60 40` (130 read as `[2, 128]`), `80 61 40` (140 read
+  136), `40 9f 40` (2000 read `[2, 1984]`) and `97 02 3f 40` (31 read
+  `[3.05e-5, 2]`).
+- **A single `81..9f` flag byte before a run-first RLE value** (was: `91`
+  only): `89 c3 ff 02 ef 3f 83 02 10 40 83 02 f0 3f` is `from` = `ff*6 ef 3f` =
+  0.9999999999999999 (Origin's own `layer.x.from`), `to` 4.0, step 1.0; the
+  2-byte rule swallowed the `c3` marker and read the tail as a bare double
+  (4.0025). The hybrid reader's COM-verified `89 c3 33 03 eb 3f` (0.85,
+  `symbol_kinds`) is the same token.
+
+Whole corpus (359 files, every layer anchor, 4,199): 90 records change, all
+with a first X token of one of these forms. Against Origin's axis ranges (47
+files): 8 wrong values become correct (`histogram_released_viruses` `Graph2`;
+`SOP_meas` `fig_SOPvsHPPC_A123`, `Graph3`, `Graph24`, `Graph12`, `Graph30`,
+`Graph58` layer 10, `fig_AgingSummary`), 1 previously unrecovered layer is
+recovered correctly (`Bqqbar` `Graph2`), 2 stay wrong only on Y
+(`origin_scientific_colors` `ColorPage1` 7 / `ColorPage2` 12; X now 180 not 176)
+and 2 phantoms keep their (page-name-escape) identity with corrected X. Every
+record that matched Origin before is byte-identical. Of the 90, 77 have no
+oracle: 56 `x_to` 88/54/124-style values become 90/55/125-style, and 21
+undecoded layers now decode to round Origin-style spans (e.g. `[0, 800]`,
+`[0.7, 3.3]` step 1).
 
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`
