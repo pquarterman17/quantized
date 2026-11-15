@@ -69,6 +69,13 @@ describe("placeOverlay", () => {
     expect(placeOverlay(fit({ y: [1, 2, 3] }), BOTH)).toBeNull();
   });
 
+  it("fails closed for a binding to no curve (yKey -1) on a multi-X view, passes through on one X", () => {
+    const orphan = fit({ binding: { yKey: -1, xKey: null }, y: R1 });
+    expect(placeOverlay(orphan, BOTH)).toBeNull();
+    expect(placeOverlay(orphan, layoutFor([0]))).toBe(orphan);
+    expect(placeOverlay(orphan, null)).toBe(orphan);
+  });
+
   it("never guesses an unbound (legacy) overlay into a block, but keeps it on a one-X view", () => {
     const legacy = { datasetId: "own", y: R2 } as unknown as FitOverlay;
     expect(placeOverlay(legacy, BOTH)).toBeNull();

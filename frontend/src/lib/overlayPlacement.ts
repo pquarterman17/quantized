@@ -17,7 +17,7 @@
 // curves hidden -- including a multi-X sheet whose shown curves all sit on the
 // plot's X, so the view collapses to that one X), or a row count that is not
 // the source's is NOT drawn. An overlay with no binding (an object from before
-// bindings existed) is drawn only where the view has one X, as it always was,
+// bindings existed) or a binding to no curve (yKey < 0) is drawn only where the view has one X, as it always was,
 // never guessed into a block. On a sheet with ONE X (no curve owns another)
 // there is no layout and every overlay passes through untouched, exactly as
 // before per-series X.
@@ -91,7 +91,10 @@ export function placeOverlay<T extends Placeable>(o: T | null, layout: OverlayLa
 function place<T extends Placeable>(o: T, layout: OverlayLayout): T | null {
   const b = o.binding;
   const one = layout.blocks.length === 1;
-  if (!b) return one ? o : null; // unbound (legacy): drawn where there is one X, as before
+  // Unbound (a legacy object) or bound to no curve (yKey -1: the peak wizard's
+  // markers with no working segment): drawn where there is one X, as before --
+  // never guessed onto the plot's X in a block.
+  if (!b || b.yKey < 0) return one ? o : null;
   const own = layout.own[b.yKey];
   if ((own === undefined ? layout.xKey : own) !== b.xKey) return null; // that Y is not drawn on that X
   const block = layout.blocks.indexOf(b.xKey);

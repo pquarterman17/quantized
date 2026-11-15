@@ -1,6 +1,6 @@
 // usePerSeriesX: the view changes only when the SET OF SHOWN X BLOCKS changes,
 // and the canvas and the figure export derive the same blocks for one state.
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { perSeriesXSpec } from "../../lib/figureSpecPerSeriesX";
@@ -73,17 +73,30 @@ describe("canvas and export agree on the blocks", () => {
 });
 
 describe("overlay placement cost", () => {
-  it("a rename or an exclusion toggle returns the SAME placed overlay (nothing recomposes)", () => {
+  it("a rename or an exclusion toggle returns the SAME placed overlay (nothing recomposes)", async () => {
     const ds = t1r1t2r2();
     const fitOverlay = { datasetId: "own", binding: { yKey: 2, xKey: 1 }, y: [7, 8, 9, 10] };
     const { result, rerender } = renderHook(({ d }: { d: Dataset }) => usePerSeriesX(d, null, null, { ...plot(), fitOverlay }), {
       initialProps: { d: ds },
     });
+    // lib/overlayPlacement loads lazily: a multi-X view draws nothing until it is in
+    expect(result.current.overlays.fitOverlay).toBeNull();
+    await waitFor(() => expect(result.current.overlays.fitOverlay).not.toBeNull());
     const placed = result.current.overlays.fitOverlay;
     expect(placed?.y).toEqual([null, null, null, null, 7, 8, 9, 10]);
     rerender({ d: { ...ds, name: "renamed.csv" } });
     expect(result.current.overlays.fitOverlay).toBe(placed);
     rerender({ d: { ...ds, excludedRows: [2] } });
     expect(result.current.overlays.fitOverlay).toBe(placed);
+  });
+});
+
+describe("overlay placement on a one-X sheet", () => {
+  it("passes the overlay through synchronously, untouched, without loading the placement", () => {
+    const ds = threeCurves();
+    const one: Dataset = { ...ds, columnDesignations: {} };
+    const fitOverlay = { datasetId: "three", binding: { yKey: 0, xKey: null }, y: [1, 2, 3, 4] };
+    const { result } = renderHook(() => usePerSeriesX(one, null, null, { ...plot(), fitOverlay }));
+    expect(result.current.overlays.fitOverlay).toBe(fitOverlay);
   });
 });

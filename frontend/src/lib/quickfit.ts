@@ -44,7 +44,7 @@ export function selectRoiRows(
   active: Dataset | null,
   roi: readonly [number, number] | null,
   col: number | null,
-  xCol: number | null = null,
+  xCol: number | null,
 ): RoiRowSelection {
   const empty: RoiRowSelection = { x: [], y: [], rows: [] };
   if (!active || !roi || col == null) return empty;
