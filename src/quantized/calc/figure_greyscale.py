@@ -90,6 +90,12 @@ MARKER_SHAPES: tuple[str, ...] = (
 # dict (beside its ``style``, U2), read by :func:`greyscale_facet_panels`.
 GREY_SLOT_KEY = "grey_slot"
 
+# Per-series wire key (gap audit 4 G1): the curve's rank in its graph's colour
+# gradient. When every ramped series has one and there are no P1.4 slots, it is
+# the grey slot, so the print greys the curves in the gradient's order (a
+# "number in legend" gradient over shuffled curves stays monotonic).
+RAMP_RANK_KEY = "ramp_rank"
+
 
 def _grey_keys(
     styles: Sequence[Mapping[str, Any] | None] | None, n: int
@@ -101,13 +107,15 @@ def _grey_keys(
     unslotted series. A ``color_by`` series' entry is never read."""
     raw = [styles[i] if styles and i < len(styles) else None for i in range(n)]
     ramped = [s for s in raw if not (s and s.get("color_by") is not None)]
-    slots = [s.get(GREY_SLOT_KEY) if s else None for s in ramped]
-    ints = [k for k in slots if isinstance(k, int) and not isinstance(k, bool)]
-    if not slots or len(ints) != len(slots):
-        return list(range(n)), n
-    rank = {k: r for r, k in enumerate(sorted(set(ints)))}
-    keys = [rank[s[GREY_SLOT_KEY]] if s and s.get("color_by") is None else 0 for s in raw]
-    return keys, len(rank)
+    for key in (GREY_SLOT_KEY, RAMP_RANK_KEY):
+        slots = [s.get(key) if s else None for s in ramped]
+        ints = [k for k in slots if isinstance(k, int) and not isinstance(k, bool)]
+        if not slots or len(ints) != len(slots):
+            continue
+        rank = {k: r for r, k in enumerate(sorted(set(ints)))}
+        keys = [rank[s[key]] if s and s.get("color_by") is None else 0 for s in raw]
+        return keys, len(rank)
+    return list(range(n)), n
 
 
 def _y_from_lstar(lstar: float) -> float:
@@ -194,12 +202,15 @@ def apply_greyscale(
         raw = styles[i] if styles and i < len(styles) else None
         spec: dict[str, Any] = dict(raw) if raw else {}
         spec.pop(GREY_SLOT_KEY, None)
+        spec.pop(RAMP_RANK_KEY, None)
         if spec.get("color_by") is not None:
             out.append(spec)  # untouched -- see the doc above
             continue
         k = keys[i]
         spec["color"] = ramp[k]
-        spec.pop("error_color", None)  # error bars follow the grey line
+        # error bars and symbol edge / fill follow the grey line
+        for key in ("error_color", "marker_edge", "marker_face"):
+            spec.pop(key, None)
         if not spec.get("line"):
             spec["line"] = LINE_CYCLE[k % len(LINE_CYCLE)]
         if spec.get("marker") and not spec.get("marker_shape"):

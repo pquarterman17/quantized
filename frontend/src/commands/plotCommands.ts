@@ -16,6 +16,7 @@ import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
+import { colorGradientCommand } from "./plotStyleCommands";
 
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
@@ -332,6 +333,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       keywords: "layer contents curves add remove reorder rebind plot dataset book",
       run: openLayerContents,
     },
+    colorGradientCommand, // origin gap audit 4 G1 (commands/plotStyleCommands.ts)
     {
       // Gap audit 3 N3: the named way to set the windows' x link group.
       id: "link-x-axis",

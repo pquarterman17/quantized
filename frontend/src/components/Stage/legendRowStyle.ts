@@ -48,5 +48,8 @@ export function legendRowStyle(
       : s.band
         ? BAND_SAMPLE
         : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
-  return { swatch, sample };
+  // Gap audit 4 review L9: a literal symbol edge / fill colour gets the canvas'
+  // contrast check too (`uplotSeries` resolves them for `symbolPoints`).
+  const lit = (c?: string) => (c && !c.startsWith("--") ? resolveDrawColor(c, isDarkBg, inkColor) : c);
+  return { swatch, sample: sample && { ...sample, markerEdge: lit(sample.markerEdge), markerFillColor: lit(sample.markerFillColor) } };
 }

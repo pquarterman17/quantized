@@ -103,6 +103,21 @@ export interface SeriesStyle {
    *  Absent = as before (closed glyphs filled, uPlot's white-filled circle).
    *  Open glyphs (plus, cross, star) have no interior either way. */
   markerFill?: "solid" | "hollow";
+  /** Symbol details (gap audit 4 G10), all on the closed glyphs a series draws
+   *  with `marker` (canvas `markers.seriesPoints`, export `calc/figure_symbols`):
+   *  the EDGE colour and the FILL colour (a token or hex; absent = the series
+   *  colour), the fill's opacity 0..1 (absent = opaque; the edge stays opaque),
+   *  and "symbol every N points": a symbol on every Nth drawn point of the
+   *  series in row order (absent or 1 = every point; the line is unchanged). */
+  markerEdge?: string;
+  markerFillColor?: string;
+  markerAlpha?: number;
+  markerEvery?: number;
+  /** DERIVED, never stored: a curve's rank in its graph's colour gradient
+   *  (gap audit 4 G1), set by `seriesRampImpl.rampSeriesStyles` so a
+   *  greyscale export greys the curves in the gradient's order (wire key
+   *  `ramp_rank`, `calc.figure_greyscale`). */
+  rampRank?: number;
   /** Error-bar styling for this series' bars (gap audit 2 #6). */
   errorBar?: ErrorBarStyle;
   /** Marker SIZE from a column (gap audit 3 N5): a dataset channel index whose
@@ -137,4 +152,10 @@ export interface ErrorBarStyle {
   width?: number;
   /** A token (`"--series-3"`) or literal hex; absent = the series colour. */
   color?: string;
+  /** Draw the Y error as a translucent band from y - minus to y + plus instead
+   *  of bars (gap audit 4 G8), in the error colour at the fill translucency.
+   *  The band follows ROW order, one quad per drawn segment, so a descending X
+   *  or a hysteresis loop is shaded along the curve, never sorted. X error
+   *  bars, if any, are still drawn as bars. */
+  band?: boolean;
 }

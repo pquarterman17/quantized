@@ -69,12 +69,13 @@ export function markerPaths(
   if (shape === "circle") return undefined;
   const r = size / 2;
   const closed = FILLED_SHAPES.has(shape);
-  return (u, sidx, i0, i1) => {
+  return (u, sidx, i0, i1, filt) => {
     const path = new Path2D();
     const xd = u.data[0] as (number | null)[];
     const yd = u.data[sidx] as (number | null)[];
     const yScale = u.series[sidx].scale ?? "y";
-    for (let i = i0; i <= i1; i++) {
+    for (let k = filt ? 0 : i0; k <= (filt ? filt.length - 1 : i1); k++) { // `filt`: a symbol skip (G10)
+      const i = filt ? filt[k] : k;
       const xv = xd[i];
       const yv = yd[i];
       if (xv == null || yv == null) continue;
@@ -160,6 +161,7 @@ export function seriesPoints(
   const paths = markerPaths(shape, size);
   // Gap audit 2 #6: an open symbol paints no interior ("transparent": uPlot
   // fills an unset point fill white); a solid one fills the circle too.
+  // (Gap audit 4 G10's edge / fill / opacity / skip: `lib/symbolDetails.ts`.)
   const interior = style?.markerFill === "hollow" ? { fill: "transparent" }
     : style?.markerFill === "solid" ? { fill: stroke } : null;
   return paths

@@ -109,6 +109,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   regionShades: canonical("decor.regionShades"),
   shapes: canonical("decor.shapes"),
   seriesStyles: canonical("series.styles"),
+  seriesRamp: canonical("series.colorRamp"),
   seriesLabels: canonical("series.labels"),
   errKeys: canonical("bindings.errors"),
   seriesOrder: canonical("series.order"),

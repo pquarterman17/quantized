@@ -183,20 +183,6 @@ export function fullYExtents(
  *  ("draw bound errors with caps") settles it in favour of agreement. */
 export const ERROR_CAP_HALF_PX = 3;
 
-/** The error-bar plugins' shared draw setup (`uplotOverlays`'
- *  errorBarsPlugin / errorSpansPlugin): save, clip to the plot area so
- *  off-range whiskers do not bleed into the axes, 1 px, and a SOLID line --
- *  a dashed series (a fit band) leaves its dash on the shared context, which
- *  drew every error bar dashed (re-audit #6). The caller restores. */
-export function beginErrorDraw(ctx: CanvasRenderingContext2D, bbox: { left: number; top: number; width: number; height: number }): void {
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
-  ctx.clip();
-  ctx.lineWidth = 1;
-  ctx.setLineDash([]);
-}
-
 /** A series' error-bar paint as `uplotSeries.buildSeriesDefs` resolves it onto
  *  the uPlot series (`qzErr`) from `SeriesStyle.errorBar` (gap audit 2 #6):
  *  the colour already resolved for the canvas. */
@@ -204,20 +190,9 @@ export interface ErrorBarPaint {
   cap?: number;
   width?: number;
   color?: string;
+  band?: boolean; // gap audit 4 G8: shaded, not barred (`lib/uplotErrorBand.ts`)
 }
 
-/** Style one column's bars before they are drawn (`uplotOverlays`' error
- *  plugins) and return the cap half-width to draw them with. Unstyled bars keep
- *  the defaults: the series' own stroke (else `color`), 1 px, `defaultCap`.
- *  A styled cap/width is in POINTS like the export's `capsize`/`elinewidth`:
- *  a cap is drawn 4/3 px per point (the `ERROR_CAP_HALF_PX` conversion: the
- *  default 2 pt is its 3 px), a width as that many px — the same canvas
- *  pixels the defaults are drawn in, so restating a default changes nothing. */
-export function styleErrorDraw(u: uPlot, col: number, color: string, defaultCap: number): number {
-  const s = u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint };
-  const e = s?.qzErr ?? {};
-  const ink = typeof s?.stroke === "function" ? (s.stroke as (u: uPlot, i: number) => string | null)(u, col) : null;
-  u.ctx.strokeStyle = e.color || ink || color;
-  u.ctx.lineWidth = (e.width ?? 0) > 0 ? e.width! : 1; // a bad stored value draws the default
-  return (e.cap ?? -1) >= 0 ? (e.cap! * 4) / 3 : defaultCap;
-}
+/** Does this uPlot column draw its Y error as a band (gap audit 4 G8)? */
+export const isErrorBand = (u: uPlot, col: number): boolean =>
+  !!(u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint })?.qzErr?.band;

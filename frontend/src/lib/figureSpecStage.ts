@@ -14,6 +14,7 @@ import { emptyGraphReason } from "./linkedCurvesLite";
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { windowRampApplies } from "./seriesRampImpl";
 import { withAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
@@ -141,7 +142,10 @@ export function buildStageFigureSpec(
         defaultTrace,
         defaultLineWidth,
       })
-    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
+    // Review L7: the fallback never sees the document's pin / encodings, so the canvas'
+    // gradient refusal (`windowRampApplies`) is applied to the live view it reads.
+    : buildFigureSpec(windowRampApplies(st, document) ? s : () => ({ ...s(), seriesRamp: null }), ds, stem,
+      { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
   // An automatic tick increment marks the ticks the canvas drew (lib/liveTickSteps.ts).
   const spec = withLiveTickSteps(built, ds.id);
   // The fit / baseline / peak overlays the canvas splices on after `count`

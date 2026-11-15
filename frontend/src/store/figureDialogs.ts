@@ -19,6 +19,8 @@ export type FigureDialog =
   | { kind: "layerContents" }
   /** Gap audit 3 #15: one graph layer's properties (inset graph / image / table). */
   | { kind: "graphLayer"; id: string; draft?: import("../lib/graphLayers").GraphLayer }
+  /** Gap audit 4 G1: the focused graph's colour gradient across its curves. */
+  | { kind: "colorGradient" }
   | null;
 
 export const useFigureDialog = create<{ open: FigureDialog }>(() => ({ open: null }));

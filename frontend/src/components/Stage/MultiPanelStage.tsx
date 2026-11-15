@@ -78,6 +78,7 @@ import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { useFacetEncoding } from "./useFacetEncoding";
 import { useGreyedFacets } from "./useGreyedFacets";
 import { useBreakSeriesStyles } from "./useBreakSeriesStyles";
+import { useFocusedRampedStyles } from "./useSeriesRamp";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 import SpatialPanelLegend from "./SpatialPanelLegend";
@@ -144,9 +145,10 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     excludedDisplay,
   );
   const shown = useGreyedFacets(composition, active, facetKey, xKey, excludedDisplay); // F4.2c (a)
+  const rampedStyles = useFocusedRampedStyles(active, useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document)); // G1, as the flat plot
   // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.
   const breakSeriesStyles = useBreakSeriesStyles(
-    selectFocusedWindowCycles, composition, active, { xKey, yKeys, seriesOrder, seriesStyles },
+    selectFocusedWindowCycles, composition, active, { xKey, yKeys, seriesOrder, seriesStyles: rampedStyles },
   );
   const stackActive = useMemo(() => stackDataset(active), [active]); // the rows the flat plot draws
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({

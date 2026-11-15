@@ -45,6 +45,7 @@ export function captureLiveBlocks(base: PlotSpec, getState: StoreGet): PlotSpec 
     s.hiddenChannels,
     s.seriesOrder,
     channelLabels,
+    s.seriesRamp,
   );
   const axes = buildAxesBlock({
     title: s.plotTitle,
