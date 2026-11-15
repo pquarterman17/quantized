@@ -82,7 +82,8 @@ def grid_map_datastruct(
     """A ``(ny, nx)`` grid as the shared 2-D map DataStruct.
 
     ``z[j, i]`` sits at ``(x_axis[i], y_axis[j])``; rows run y-outer, x-inner,
-    so ``map_shape`` is ``[ny, nx]``."""
+    so ``map_shape`` is ``[ny, nx]``. Stamps ``map_grid = "native"``: the grid is
+    the data, so the map path returns it as stored instead of interpolating."""
     zz = np.asarray(z, dtype=float)
     if zz.ndim != 2 or zz.shape != (len(y_axis), len(x_axis)):
         raise ValueError(
@@ -101,6 +102,9 @@ def grid_map_datastruct(
         **(metadata or {}),
         "is2D": True,
         "map_shape": [int(zz.shape[0]), int(zz.shape[1])],
+        # The rows ARE the grid: the Map tab shows it cell for cell, not
+        # regridded to 200 x 200 (calc/map.py ``_native_map``).
+        "map_grid": "native",
         "x_column_name": x_label,
         "x_column_unit": x_unit,
     }

@@ -38,8 +38,10 @@ SRC = ROOT / "src" / "quantized"
 # "liborigin" also blocks the "python-liborigin2" wrapper.
 GPL_PACKAGES = {
     "rosettasciio", "rsciio", "hyperspy", "exspy", "holospy", "liborigin", "ropj",
-    # Igor .ibw readers on PyPI are LGPL/GPL: io/igor_ibw.py is in-house.
-    "igor2", "pyigor", "igorpy",
+    # Igor .ibw readers on PyPI (``igor`` 0.3 and ``igor2`` are LGPL-3+, checked
+    # against their metadata): io/igor_ibw.py is in-house. "igor" also blocks
+    # "igor2" (substring match).
+    "igor", "pyigor", "igorpy",
 }
 MAX_MODULE_LINES = 500
 # plugins/ is pure too: the plugin machinery (discovery, contract, registration)
@@ -74,6 +76,14 @@ def test_no_gpl_in_runtime_deps() -> None:
         joined = " ".join(deps).lower()
         for pkg in GPL_PACKAGES:
             assert pkg not in joined, f"GPL package '{pkg}' in extra '{extra}'"
+
+
+def test_igor_readers_are_not_in_the_lockfile() -> None:
+    """The lockfile resolves transitive dependencies too: no ``igor`` package
+    may arrive through one (the pyproject scan alone cannot see it)."""
+    lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    names = re.findall(r'^name = "([^"]+)"', lock, flags=re.M)
+    assert not [n for n in names if "igor" in n.lower()]
 
 
 def test_no_god_modules() -> None:

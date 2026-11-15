@@ -170,6 +170,9 @@ class MapRequest(CachedDatasetRequest):
     extrapolation: str = "none"
     smoothing: float = 0.0
     idw_power: float = 2.0
+    # A native-grid dataset (image, Igor wave, NeXus grid) is returned cell for
+    # cell; true regrids it with ``method``/``nx``/``ny`` anyway.
+    resample: bool = False
 
 
 @router.post("/map")
@@ -186,6 +189,7 @@ def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
             extrapolation=req.extrapolation,
             smoothing=req.smoothing,
             idw_power=req.idw_power,
+            resample=req.resample,
         )
         m = map_from_datastruct(ds, req.x_key, req.y_key, req.z_key, state)
     except CALC_ERRORS as exc:

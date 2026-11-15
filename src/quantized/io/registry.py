@@ -48,6 +48,7 @@ __all__ = [
     "import_auto",
     "import_auto_sheets",
     "import_structure",
+    "is_packable_data_name",
     "is_recognised_data_name",
     "is_structure_file",
     "register_parser",
@@ -372,6 +373,21 @@ def is_recognised_data_name(filename: str) -> bool:
     if ext[1:].isdigit():  # OPUS's sample.0, sample.1, ... (resolve_parser sniffs them)
         return True
     return match_filter(Path(filename)) is not None
+
+
+# General-purpose file types the importers now read (pictures, MATLAB
+# workspaces): a Pack Project source of one of these is as likely a private
+# photo or scan as lab data, so the sharing gate keeps flagging them as it did
+# before they were importable (``portable/attention.py``).
+_NOT_AUTO_PACKABLE = frozenset({".png", ".tif", ".tiff", ".jpg", ".jpeg", ".mat"})
+
+
+def is_packable_data_name(filename: str) -> bool:
+    """``is_recognised_data_name`` minus the general-purpose types in
+    ``_NOT_AUTO_PACKABLE``: the predicate the Pack Project attention gate uses."""
+    if Path(filename).suffix.lower() in _NOT_AUTO_PACKABLE:
+        return False
+    return is_recognised_data_name(filename)
 
 
 # Extensions the browser Open dialog offers but no parser reads: say why.

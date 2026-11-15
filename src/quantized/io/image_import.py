@@ -23,6 +23,10 @@ channels (not rounded back to an integer). Pass ``channel="R"``/``"G"``/``"B"``
 (or ``"A"`` for an alpha channel) to take that one channel unchanged.
 Palette images are expanded to RGB first.
 
+**Orientation.** An EXIF orientation (a phone JPEG stored sideways) is applied,
+so the map shows the picture as a viewer does; the value is recorded as
+``metadata.exif_orientation`` and named in ``image_conversion``.
+
 **Safety.** The pixel count is read from the header and checked BEFORE any pixel
 is decoded (``MAX_MAP_POINTS``, 2048 x 2048). Multi-page TIFFs give each page as
 its own book, within the same budget in total.
@@ -115,8 +119,27 @@ def _intensity(im: Any, channel: str) -> tuple[NDArray[np.float64], str]:
     raise ValueError(f"unsupported image mode {mode!r}")
 
 
+def _upright(im: Any) -> tuple[Any, int]:
+    """``(image, EXIF orientation)``: the frame turned/flipped the way a viewer
+    shows it. A phone JPEG stored sideways with Orientation=6 would otherwise
+    import rotated against what the user sees (``ImageOps.exif_transpose``;
+    1 = already upright)."""
+    with heavy_imports("PIL", "PIL.ImageOps"):
+        from PIL import ImageOps  # noqa: PLC0415
+    try:
+        orientation = int(im.getexif().get(0x0112, 1))
+    except (TypeError, ValueError, OSError, SyntaxError):
+        return im, 1
+    if orientation in (2, 3, 4, 5, 6, 7, 8):
+        return ImageOps.exif_transpose(im), orientation
+    return im, 1
+
+
 def _frame_book(im: Any, path: Path, channel: str, page: int | None) -> DataStruct:
+    im, orientation = _upright(im)
     z, how = _intensity(im, channel)
+    if orientation != 1:
+        how += f"; turned upright by its EXIF orientation ({orientation})"
     h, w = z.shape
     meta: dict[str, Any] = {
         "source": str(path),
@@ -127,6 +150,8 @@ def _frame_book(im: Any, path: Path, channel: str, page: int | None) -> DataStru
         "image_size": [int(w), int(h)],
         "y_axis": "bottom-up",
     }
+    if orientation != 1:
+        meta["exif_orientation"] = orientation
     if page is not None:
         meta["image_page"] = page
         meta["sheet_name"] = f"page {page + 1}"
@@ -150,17 +175,14 @@ def read_image_books(path: str | Path, *, channel: str = "luminance") -> list[Da
         n_frames = int(getattr(im, "n_frames", 1))
         budget = MAX_MAP_POINTS
         books: list[DataStruct] = []
-        skipped = 0
         for k in range(min(n_frames, MAX_BOOKS)):
             im.seek(k)
             w, h = im.size
             if budget - w * h < 0:
-                skipped = n_frames - k
                 break
             budget -= w * h
             books.append(_frame_book(im, p, channel, k if n_frames > 1 else None))
-        if n_frames > MAX_BOOKS:
-            skipped = n_frames - MAX_BOOKS
+        skipped = n_frames - len(books)
     finally:
         im.close()
     if skipped:

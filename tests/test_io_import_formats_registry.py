@@ -84,7 +84,7 @@ def test_igor_reader_is_in_house_and_no_igor_package_is_a_dependency() -> None:
 
 def test_repo_gpl_list_names_the_igor_packages() -> None:
     gate = (Path(__file__).parent / "test_repo_integrity.py").read_text(encoding="utf-8")
-    assert '"igor2"' in gate
+    assert '"igor"' in gate
 
 
 # --- the import wire ---------------------------------------------------------------

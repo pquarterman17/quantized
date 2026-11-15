@@ -288,14 +288,16 @@ def test_non_hdf5_file_is_refused_with_a_clear_message(tmp_path: Path, suffix: s
 
 
 def test_declared_huge_dataset_is_refused_before_it_is_allocated(tmp_path: Path) -> None:
-    """A never-written dataset reads back as its fill value: ~1 KB declares gigabytes."""
+    """A never-written dataset reads back as its fill value: ~1 KB declares
+    gigabytes. It is skipped and named; the file's good dataset still imports."""
     p = tmp_path / "bomb.h5"
     with h5py.File(p, "w") as f:
         f.create_dataset("big", shape=(1 << 27,), dtype="f8")
         f.create_dataset("ok", data=Y)
     assert p.stat().st_size < 50_000
-    with pytest.raises(ValueError, match="declares"):
-        import_auto(p)
+    (ds,) = import_auto_sheets(p)
+    assert ds.labels == ("ok",)
+    assert any("big" in n and "declares" in n for n in ds.metadata["notes"])
 
 
 def test_external_storage_is_never_read(tmp_path: Path) -> None:

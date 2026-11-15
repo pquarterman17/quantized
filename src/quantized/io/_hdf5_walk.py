@@ -16,6 +16,7 @@ Pure layer. ``h5py`` is imported lazily through ``heavy_imports``.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +29,7 @@ from quantized.heavy_import import heavy_imports
 from quantized.io.netcdf import MAX_DATASET_ELEMENTS, _check_dataset
 
 __all__ = [
+    "MAX_DEPTH",
     "MAX_NODES",
     "MAX_TOTAL_ELEMENTS",
     "Budget",
@@ -37,6 +39,7 @@ __all__ = [
     "is_hdf5",
     "is_numeric_dataset",
     "open_hdf5",
+    "same_file_child",
     "read_numeric",
     "resolve_child",
     "walk_groups",
@@ -56,6 +59,20 @@ class Budget:
 
     elements: int = MAX_TOTAL_ELEMENTS
     notes: list[str] = field(default_factory=list)
+    root: str = ""  # real path of the file that was opened
+
+    def bind(self, h5file: Any) -> None:
+        """Remember the opened file: every later object must live in it."""
+        self.root = os.path.realpath(h5file.filename)
+
+    def same_file(self, obj: Any, name: str = "") -> None:
+        """Refuse an object stored in ANOTHER file. An external link (or a soft
+        link whose path crosses one) makes h5py open that file, which may be
+        any HDF5/NetCDF4 file the user can read, outside the import roots."""
+        if self.root and os.path.realpath(obj.file.filename) != self.root:
+            raise ValueError(
+                f"{name or obj.name!r} lives in another file (an external link); not read"
+            )
 
     def take(self, name: str, n: int) -> None:
         if n > self.elements:
@@ -101,6 +118,13 @@ def open_hdf5(path: Path) -> Any:
         raise ValueError(f"not a readable HDF5 file ({exc}): {path.name}") from exc
 
 
+def same_file_child(parent: Any, name: str, budget: Budget) -> Any:
+    """``parent[name]``, refused when it is stored in another file."""
+    child = parent[name]
+    budget.same_file(child, f"{parent.name}/{name}")
+    return child
+
+
 def attr_str(obj: Any, name: str) -> str:
     """A string attribute (bytes, numpy bytes/str, or a 1-element array), else ``""``."""
     if name not in obj.attrs:
@@ -133,20 +157,26 @@ def is_numeric_dataset(h5py: Any, obj: Any) -> bool:
 
 def read_numeric(name: str, dset: Any, budget: Budget) -> NDArray[np.float64]:
     """The dataset as float64, after the hostile-input checks and the budget."""
+    budget.same_file(dset, name)
     _check_dataset(name, dset)
     budget.take(name, int(dset.size))
     return np.asarray(dset[()], dtype=np.float64)
 
 
-def resolve_child(h5py: Any, group: Any, name: str, *, follow_soft: bool) -> Any:
+def resolve_child(
+    h5py: Any, group: Any, name: str, *, follow_soft: bool, budget: Budget | None = None
+) -> Any:
     """``group[name]`` for a hard link (and a soft one when asked); ``None`` for
     a missing child, an external link, or a soft link that does not resolve."""
     link = group.get(name, getlink=True)
     if isinstance(link, h5py.HardLink) or (follow_soft and isinstance(link, h5py.SoftLink)):
         try:
-            return group[name]
+            child = group[name]
         except KeyError:
             return None
+        if budget is not None:
+            budget.same_file(child, f"{group.name}/{name}")
+        return child
     return None
 
 
@@ -165,7 +195,7 @@ def walk_groups(h5py: Any, root: Any, budget: Budget) -> Iterator[tuple[str, Any
             if nodes > MAX_NODES:
                 budget.notes.append(f"Only the first {MAX_NODES:,} HDF5 objects were scanned.")
                 return
-            child = resolve_child(h5py, group, name, follow_soft=False)
+            child = resolve_child(h5py, group, name, follow_soft=False, budget=budget)
             if isinstance(child, h5py.Group) and child.id not in seen and depth < MAX_DEPTH:
                 seen.add(child.id)
                 children.append((f"{path.rstrip('/')}/{name}", child))
