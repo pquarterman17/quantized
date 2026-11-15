@@ -18,9 +18,11 @@ export function perSeriesXSpec<E extends { liveDataset?: Dataset | null }>(
   extras: E,
 ): [PlotView, DataStruct, E] {
   const live = extras.liveDataset ?? null;
-  const v = perSeriesXData({ data, columnDesignations: live?.columnDesignations }, st.xKey);
+  // The export drops hidden channels (figureSpec), so only the shown ones decide the blocks.
+  const shown = effectiveChannels(data, st.yKeys, st.xKey, channelRoles).filter((c) => !st.hiddenChannels.includes(c));
+  const v = perSeriesXData({ data, columnDesignations: live?.columnDesignations }, st.xKey, shown);
   if (!v) return [st, data, extras];
   const yKeys = effectiveChannels(v.data, st.yKeys, st.xKey, channelRoles);
-  const liveView = live ? (perSeriesXDataset(live, st.xKey)?.dataset ?? null) : live;
+  const liveView = live ? (perSeriesXDataset(live, st.xKey, shown)?.dataset ?? null) : live;
   return [{ ...st, xKey: null, yKeys }, v.data, { ...extras, liveDataset: liveView }];
 }

@@ -50,12 +50,16 @@ export function ownXKey(ds: Pick<Dataset, "data" | "columnDesignations">, xKey: 
 const cache = new WeakMap<DataStruct, Map<string, { data: DataStruct; blocks: (number | null)[] }>>();
 
 /** The X blocks (shared X first) and the concatenated DataStruct, or null
- *  when every curve shares the plot's X (the source plots unchanged). */
+ *  when every SHOWN curve shares the plot's X (the source plots unchanged).
+ *  `shown` = the channels actually drawn (hidden ones excluded); a curve not
+ *  in it gets no block of its own, so a hidden R2 neither widens the X data
+ *  nor puts "T1 / T2" in the X title. Omit it to treat every curve as shown. */
 export function perSeriesXData(
   ds: Pick<Dataset, "data" | "columnDesignations">,
   xKey: number | null,
+  shown?: readonly number[] | null,
 ): { data: DataStruct; blocks: (number | null)[] } | null {
-  const own = curveX(ds, xKey);
+  const own = curveX(ds, xKey).map((x, c) => (shown && !shown.includes(c) ? undefined : x));
   const blocks: (number | null)[] = [xKey];
   for (const x of own) if (x !== undefined && !blocks.includes(x)) blocks.push(x);
   if (blocks.length < 2) return null;
@@ -96,8 +100,12 @@ export function perSeriesXData(
 
 /** `ds` as the one-X plot must see it under `xKey` (see the module doc), or
  *  null when no per-series X applies. The view's X is always `.time`. */
-export function perSeriesXDataset(ds: Dataset, xKey: number | null): { dataset: Dataset; blockRows: number } | null {
-  const v = perSeriesXData(ds, xKey);
+export function perSeriesXDataset(
+  ds: Dataset,
+  xKey: number | null,
+  shown?: readonly number[] | null,
+): { dataset: Dataset; blockRows: number } | null {
+  const v = perSeriesXData(ds, xKey, shown);
   if (!v) return null;
   const n = ds.data.time.length;
   const dropped = [...droppedRows(ds)].sort((a, b) => a - b);

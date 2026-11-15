@@ -6,6 +6,7 @@
 
 import { useMemo } from "react";
 
+import { effectiveChannels } from "../../lib/plotdata";
 import { perSeriesXDataset, viewRows } from "../../lib/perSeriesX";
 import type { Dataset } from "../../lib/types";
 
@@ -15,8 +16,15 @@ export function usePerSeriesX(
   active: Dataset | null | undefined,
   xKey: number | null,
   selection: Selection,
+  plot: { yKeys: number[] | null; seriesOrder: number[] | null; hiddenChannels: readonly number[] },
 ): { active: Dataset | null | undefined; xKey: number | null; selection: Selection; blockRows: number | undefined } {
-  const view = useMemo(() => (active ? perSeriesXDataset(active, xKey) : null), [active, xKey]);
+  const { yKeys, seriesOrder, hiddenChannels } = plot;
+  // Only the SHOWN curves decide the blocks: a hidden R2 must not widen the X.
+  const shown = useMemo(
+    () => (active ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder).filter((c) => !hiddenChannels.includes(c)) : []),
+    [active, xKey, yKeys, seriesOrder, hiddenChannels],
+  );
+  const view = useMemo(() => (active ? perSeriesXDataset(active, xKey, shown) : null), [active, xKey, shown]);
   const viewSelection = useMemo(
     () =>
       view && selection

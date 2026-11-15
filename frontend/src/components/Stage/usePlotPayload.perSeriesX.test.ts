@@ -84,6 +84,17 @@ describe("per-series X on the live plot", () => {
     expect(pairs(r2)).toEqual([[5, 100], [9, 300]]);
   });
 
+  it("R2 hidden: the X is T1 alone -- no T2 block, no widened title", async () => {
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: params({ hiddenChannels: [1, 2] }),
+    });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+    const p = result.current.displayPayload!;
+    expect(p.data[0]).toEqual([1, 2, 3]);
+    expect(p.xLabel).toBe("T1");
+    expect(p.blockRows).toBeUndefined();
+  });
+
   it("a selection is echoed in every block", async () => {
     const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
       initialProps: params({ selection: { datasetId: "mx", rows: [2] } }),

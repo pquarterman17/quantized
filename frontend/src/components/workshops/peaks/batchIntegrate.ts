@@ -21,6 +21,7 @@
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { IntegrateBatchRequest, IntegrateBatchResponse } from "../../../lib/api/peaks";
 import { selectedFitData } from "../../../lib/fitselection";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { parseQuantity } from "../../../lib/metadataCleanup";
 import { metaValue, pathLabel, type MetaPath } from "../../../lib/metadataKeys";
 import { analysisData } from "../../../lib/rowstate";
@@ -69,9 +70,11 @@ export function integrateChannels(
   const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
   const labels = active?.data.labels ?? [];
   if (!sel || labels[sel.yKey] === undefined) return null;
-  const xLabel = xKey === null ? null : (labels[xKey] ?? null);
-  if (xKey !== null && xLabel === null) return null;
-  return { xLabel, yLabel: labels[sel.yKey], xIndex: xKey, yIndex: sel.yKey };
+  // The Y's OWN X (R2 in T1,R1,T2,R2 integrates against T2, not the plot's T1).
+  const ownX = active ? ownXKey(active, xKey, sel.yKey) : xKey;
+  const xLabel = ownX === null ? null : (labels[ownX] ?? null);
+  if (ownX !== null && xLabel === null) return null;
+  return { xLabel, yLabel: labels[sel.yKey], xIndex: ownX, yIndex: sel.yKey };
 }
 
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {

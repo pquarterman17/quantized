@@ -13,6 +13,7 @@ import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResul
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { activeCorrectionNames, fitSpecFrom } from "../../../lib/fitselectionActions";
 import { bindFitRowIdentity } from "../../../lib/fitRowIdentity";
 import {
@@ -225,7 +226,7 @@ export function useCurveFit(): CurveFitState {
     shown &&
     shown.datasetId === active?.id &&
     shown.model === modelName &&
-    shown.xKey === xKey &&
+    shown.xKey === (active && plottedYKeyNow !== null ? ownXKey(active, xKey, plottedYKeyNow) : xKey) &&
     shown.yKey === plottedYKeyNow
       ? shown
       : null;
@@ -298,6 +299,7 @@ export function useCurveFit(): CurveFitState {
       const runYKeys = runSelection?.yKeys ?? state.yKeys;
       const localXy = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
       if (!localXy) return;
+      const fitXKey = ownXKey(ds, runXKey, localXy.yKey); // recorded X = the one the points came from
       const pairs = dropGapRows(localXy.x, localXy.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {
@@ -310,7 +312,7 @@ export function useCurveFit(): CurveFitState {
           fitData: null,
           datasetId: ds.id,
           model: modelName,
-          xKey: runXKey,
+          xKey: fitXKey,
           yKey: localXy.yKey,
         });
       } else {
@@ -355,12 +357,12 @@ export function useCurveFit(): CurveFitState {
         const done: Fitted = {
           result: r,
           fitData: {
-            x: pairs.x, y: pairs.y, xKey: runXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
+            x: pairs.x, y: pairs.y, xKey: fitXKey, yKey: localXy.yKey, ...fittedWeighting(weight.mode, finiteDy),
             weightMode: finiteDy ? weight.mode : "none", scaleErrors: weight.scaleErrors !== false,
           },
           datasetId: ds.id,
           model: modelName,
-          xKey: runXKey,
+          xKey: fitXKey,
           yKey: localXy.yKey,
         };
         setFitted(done);
@@ -372,7 +374,7 @@ export function useCurveFit(): CurveFitState {
         // cannot silently run on differently-preprocessed data.
         const spec = fitSpecFrom(
           modelName,
-          runXKey,
+          fitXKey,
           {
             ...localXy,
             x: pairs.x,

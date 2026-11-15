@@ -7,6 +7,7 @@
 import { selectedFitData } from "../../../lib/fitselection";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
@@ -54,15 +55,18 @@ export function peakInputs(
   seriesOrder: number[] | null,
   selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): PeakInputs {
-  const fullX = fullPlottedX(ds.data, xKey);
   const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
+  // `sel.x` is the Y's OWN X (R2 -> T2); the marker overlay and the recorded
+  // provenance must follow it, not the plot's shared X.
+  const usedX = sel ? ownXKey(ds, xKey, sel.yKey) : xKey;
+  const fullX = fullPlottedX(ds.data, usedX);
   if (sel) {
     const pairs = dropGapRows(sel.x, sel.y);
     return {
       x: pairs.x,
       y: pairs.y,
       fullX,
-      xKeyUsed: xKey,
+      xKeyUsed: usedX,
       yKeyUsed: sel.yKey,
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
