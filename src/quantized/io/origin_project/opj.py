@@ -74,6 +74,7 @@ from quantized.io.origin_project.opj_books import _group as _group
 from quantized.io.origin_project.opj_books import _group_named as _group_named
 from quantized.io.origin_project.opj_books import _inventory as _inventory
 from quantized.io.origin_project.opj_books import _label_for as _label_for
+from quantized.io.origin_project.opj_lost import lost_columns_by_book
 from quantized.io.origin_project.opj_matrix import matrix_books, matrix_sheets
 from quantized.io.origin_project.opj_scan import (
     DatasetScan,
@@ -195,6 +196,8 @@ class _ParseResult:
     # Book key -> the sheet id its datasets carry, for a one-sheet book
     # named as the book (`opj_sheets.sole_sheet_books`), so the `@N` is not lost.
     sheet_ids: dict[str, str] = field(default_factory=dict)
+    # Book key -> {column letter: why it was not decoded} (`opj_lost`).
+    lost_columns: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 _LEGACY_NOTICE = (
@@ -336,6 +339,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         imag_books, matrices, diagnostics, header_driven,
         sheet_columns, lost_books, scan.unowned_losses > 0,
         {book: key.partition("@")[2] for key, book in sole.items()},
+        lost_columns_by_book(scan.problems, sole),
     )  # fmt: skip
 
 
@@ -382,6 +386,10 @@ def _book(parsed: _ParseResult, key: str) -> DataStruct:
         lost_columns=parsed.unowned_loss or key in parsed.lost_books,
     )
     if parsed.header_driven:
+        if key in parsed.lost_columns:  # fail closed: say the book is incomplete
+            book = dataclasses.replace(
+                book, metadata={**book.metadata, "origin_columns_lost": parsed.lost_columns[key]}
+            )
         if key in parsed.sheet_ids:
             book = dataclasses.replace(
                 book, metadata={**book.metadata, "origin_sheet_id": parsed.sheet_ids[key]}

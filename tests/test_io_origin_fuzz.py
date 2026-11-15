@@ -235,24 +235,33 @@ def test_perf_budget_127mb_project() -> None:
 
 
 @pytest.mark.realdata
-def test_matrix_specimens_fail_closed_and_degrade(tmp_path) -> None:
-    """Matrix (MBook) pages are undecoded (§13.2 #9 recon 2026-07-06: their
-    data uses a distinct compact codec — no FPC name records, no raw f64
-    runs — cracked only with new RE). The CONTRACT this pins: a matrix-only
-    project raises a clean OriginProjectError (guidance, never garbage), and
-    a MIXED project still decodes its worksheets exactly while matrix pages
-    are skipped — graceful degradation for arbitrary real-world projects."""
+def test_matrix_specimens_decode_and_degrade(tmp_path) -> None:
+    """Matrix (MBook) pages decode through ``opju_matrix``/``opj_matrix``
+    (the format-gap register's old "undecoded" verdict is superseded). The
+    specimen's planted ground truth is Z[r, c] = 10*r + c over a 4 x 6
+    matrix; the matrix-only project returns it as one ``origin_matrix``
+    book (long form: X/Y are the 1-based cell indices because the file's
+    own coordinates were not recovered, and the book says so), and a MIXED
+    project still decodes its worksheet exactly beside its matrix."""
     spec = _CORPUS / "specimens"
     mat_only = spec / "matrix_spec.opju"
     mixed = spec / "matrix_mixed.opju"
     if not mat_only.exists() or not mixed.exists():
         pytest.skip("matrix specimens not present on this machine")
-    with pytest.raises(OriginProjectError):
-        read_origin_project(mat_only)
+    ds = read_origin_project(mat_only)
+    assert ds.metadata["origin_book"] == "MatBook"
+    assert ds.values.shape == (24, 3) and list(ds.labels) == ["X", "Y", "Z"]
+    assert ds.metadata["origin_matrix"]["rows"] == 4
+    assert ds.metadata["origin_matrix"]["cols"] == 6
+    assert ds.metadata["origin_matrix"]["coordinates_recovered"] is False
+    x, y, z = ds.values[:, 0], ds.values[:, 1], ds.values[:, 2]
+    assert np.array_equal(z, 10.0 * (y - 1.0) + (x - 1.0))
     books = read_origin_books(mixed)
-    assert [b.metadata.get("origin_book") for b in books] == ["WBook"]
-    assert list(books[0].time) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    assert list(books[0].values[:, 0]) == [1.0, 4.0, 9.0, 16.0, 25.0, 36.0]
+    assert [b.metadata.get("origin_book") for b in books] == ["WBook", "MatB"]
+    wbook = books[0]
+    assert list(wbook.time) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    assert list(wbook.values[:, 0]) == [1.0, 4.0, 9.0, 16.0, 25.0, 36.0]
+    assert books[1].values.shape == (4, 3)
 
 
 def test_opju_record_gate_accepts_wide_varints() -> None:

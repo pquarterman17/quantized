@@ -292,6 +292,8 @@ export interface PlotSeriesResponse {
    *  carried `decimate_width` and the route honored it — ascending x, no
    *  `full_resolution` override). Absent/false means every row came back. */
   decimated?: boolean;
+  /** A reduced (decimated/windowed) response: the dataset row of each row (gap audit 3 N2). */
+  rows?: number[] | null;
   /** P3.4 zoom-refetch residual: the X window the server actually filtered to
    *  before decimating, echoing the request's `x_min`/`x_max` back (a bound
    *  that was NaN comes back `null` — see routes/plot.py). null/absent means

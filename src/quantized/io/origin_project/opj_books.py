@@ -220,6 +220,10 @@ def _build_book(
             "origin_books": inventory,
             "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
         }
+        if report_cols:
+            # Its cells are live cell:// references Origin evaluates on load;
+            # the file holds the references, not the values they resolve to.
+            meta_empty["origin_values_unresolved"] = True
         return DataStruct(time=np.empty(0), values=np.empty((0, 0)), metadata=meta_empty)
 
     base_book, _, sheet_no = book.partition("@")

@@ -15,6 +15,8 @@ export type FigureDialog =
   | { kind: "axis"; axis: AxisId }
   | { kind: "plotType" }
   | { kind: "plotDetails"; channel: number }
+  /** Gap audit 3 N1: the focused graph's curves — add, remove, reorder, re-bind. */
+  | { kind: "layerContents" }
   | null;
 
 export const useFigureDialog = create<{ open: FigureDialog }>(() => ({ open: null }));
