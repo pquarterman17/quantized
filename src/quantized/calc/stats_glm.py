@@ -3,7 +3,7 @@
 GAP_PLAN #30 (stats extra) — GLM via statsmodels (BSD-3). Result-dict shapes
 match ``stats_multivar.multiple_regression`` so downstream code (routes, report
 sheets) treats linear/logistic/Poisson alike. Rows with any non-finite value
-are dropped (listwise deletion). Requires ``pip install quantized[stats]``.
+are dropped (listwise deletion). Requires ``pip install quantized-lab[stats]``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def _check_statsmodels() -> None:
             import statsmodels  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
-            "GLM methods require statsmodels. Install with: pip install quantized[stats]"
+            "GLM methods require statsmodels. Install with: pip install quantized-lab[stats]"
         ) from exc
 
 

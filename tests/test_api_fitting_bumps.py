@@ -151,4 +151,4 @@ def test_missing_bumps_is_422_with_install_hint(monkeypatch: pytest.MonkeyPatch)
         monkeypatch.setitem(sys.modules, mod, None)  # forces ImportError on import
     r = client.post("/api/fitting/bumps", json=_payload())
     assert r.status_code == 422
-    assert "quantized[bumps]" in r.json()["detail"]
+    assert "quantized-lab[bumps]" in r.json()["detail"]

@@ -24,7 +24,7 @@ __all__ = [
 
 # pywebview's documented dialog-kind constants. Resolved from the module
 # when it is importable, with these as the fallback, because `webview` is
-# an OPTIONAL extra (`pip install quantized[desktop]`): requiring it merely
+# an OPTIONAL extra (`pip install quantized-lab[desktop]`): requiring it merely
 # to name a constant would make an importing module untestable on a plain
 # install, even though the only part that genuinely needs pywebview is the
 # window object the launcher injects.

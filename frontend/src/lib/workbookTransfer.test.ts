@@ -12,6 +12,7 @@ import {
   pasteTransferPackage,
   WORKBOOK_TRANSFER_FORMAT,
   WORKBOOK_TRANSFER_VERSION,
+  WORKBOOK_TRANSFER_VERSION_NEW_FEATURES,
   type TransferExistingIds,
   type TransferIdGenerators,
   type TransferSourceState,
@@ -104,6 +105,26 @@ function makeState(over: Partial<TransferSourceState> = {}): TransferSourceState
     ...over,
   };
 }
+
+describe("forward compatibility with v0.34.0 (its reader accepts only version 1)", () => {
+  const versionOf = (text: string): number => (JSON.parse(text) as { version: number }).version;
+
+  it("a plain workbook stays version 1, so v0.34.0 can paste it", () => {
+    const result = buildTransferPackage("wb-1", makeState());
+    expect(result.ok && versionOf(result.text)).toBe(WORKBOOK_TRANSFER_VERSION);
+  });
+
+  it("a workbook holding a field v0.34.0 drops is version 2, which 0.34 refuses, and this build reads it", () => {
+    const state = makeState({ datasets: [ds("ds-1", "Sheet 1", { workbookId: "wb-1", columnProps: { 0: { comment: "note" } } })] });
+    const result = buildTransferPackage("wb-1", state);
+    if (!result.ok) throw new Error(result.reason);
+    expect(versionOf(result.text)).toBe(WORKBOOK_TRANSFER_VERSION_NEW_FEATURES);
+    const parsed = parseTransferPackage(result.text);
+    expect(parsed.ok && parsed.pkg.datasets[0].columnProps).toEqual({ 0: { comment: "note" } });
+    const future = JSON.stringify({ ...JSON.parse(result.text), version: 3 });
+    expect(parseTransferPackage(future)).toMatchObject({ ok: false, reason: "unsupported workbook transfer version: 3" });
+  });
+});
 
 describe("buildTransferPackage", () => {
   it("refuses when the workbook does not exist", () => {
