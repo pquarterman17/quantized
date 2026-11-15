@@ -59,6 +59,7 @@ from quantized.io.origin_project.opju_book_checks import (
 )
 from quantized.io.origin_project.opju_codec import scan_marked_columns, shared_fpc_decodes
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
+from quantized.io.origin_project.opju_loose_books import loose_books
 from quantized.io.origin_project.opju_record_meta import (
     contradicted_books,
     record_column_metadata,
@@ -209,6 +210,12 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         )
     books = _group(scan.columns)
     text_books = _group_named(scan.text_columns)
+    loose = loose_books(b, dict.fromkeys([*books, *text_books, *report_books]))
+    if loose:  # datasets no worksheet window owns: not Origin books
+        for group in (books, text_books, report_books):
+            for k in loose:
+                group.pop(k, None)
+    fidelity = {**scan.fidelity, "loose_books_omitted": loose}
     columns_by_book = {k: [c for c, _ in v] for k, v in books.items()}
     for k, tcols in text_books.items():
         known = columns_by_book.setdefault(k, [])
@@ -235,7 +242,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         report_books=report_books,
         books_meta=books_meta,
         inventory=inventory,
-        fidelity=scan.fidelity,
+        fidelity=fidelity,
         matrices=scan.matrices,
         column_status=scan.column_status,
         losses=scan.losses,
