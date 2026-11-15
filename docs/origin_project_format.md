@@ -2561,8 +2561,12 @@ form with a one-byte type `>= 0x80` exists in the 359-file corpus.
 records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21,
 41 ×6, 01 ×7, 08 ×6, 30 ×3, 88 ×3, 48 ×1 (bit combinations: c0 = 40|80, 88 =
 08|80). The retry-only wide separator admits only the oracle-CONFIRMED values
-00/40/80/88/c0 (60 records match Origin's axes exactly). 01/08/30/41/48 await
-an oracle.
+00/40/80/88/c0 (60 records match Origin's axes exactly). 01/08/30/41/48 were
+admitted 2026-11-15 once the 103-file oracle covered them: every corpus record
+carrying them (01 ×7, 08 ×6, 30 ×3, 41 ×6, 48 ×1, all 23 in oracle files)
+decodes onto Origin's exact axes, and every other record in the 359-file corpus
+is byte-identical. Admitting any 5th byte recovers the same 23 and nothing
+more; other values stay unadmitted (fail closed).
 
 **Layer numbering is the anchor ordinal (2026-11-14).** A graph page's layer
 `N` is its `N`-th layer anchor (`03 00 00 1f` / `5f`), counted whether or not

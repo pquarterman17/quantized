@@ -11,8 +11,9 @@ COM ``layer.x/y.from/to`` as the independent oracle):
    reported with ``Graph2``'s four layers) -- with the wrong workbook bound
    to the curves.
 2. **Layer-geometry separator.** ``81|80 <id> <plen> 00 <flag> 01``: the 5th
-   byte is a flag field. Origin-confirmed values 40/80/88/c0 now decode
-   (retry-only); unconfirmed values stay unrecovered.
+   byte is a flag field. Origin-confirmed values 00/40/80/88/c0 (2026-11-14)
+   and 01/08/30/41/48 (2026-11-15) decode (retry-only); any other value stays
+   unrecovered.
 
 A third rule: ``layer`` is the anchor's ordinal within its graph page, counted
 whether or not the record decodes, so an undecodable layer leaves a gap.
@@ -155,7 +156,7 @@ def _with_sep_flag(flag: int, lead: int = 0x81) -> bytes:
 
 
 @pytest.mark.parametrize("lead", [0x81, 0x80])
-@pytest.mark.parametrize("flag", [0x00, 0x40, 0x80, 0x88, 0xC0])
+@pytest.mark.parametrize("flag", [0x00, 0x01, 0x08, 0x30, 0x40, 0x41, 0x48, 0x80, 0x88, 0xC0])
 def test_confirmed_separator_flags_decode(flag: int, lead: int) -> None:
     figs = extract_figures_opju(_with_sep_flag(flag, lead))
     assert len(figs) == 1
@@ -164,11 +165,12 @@ def test_confirmed_separator_flags_decode(flag: int, lead: int) -> None:
     assert (f["y_from"], f["y_to"]) == (1.0, 450000.0)
 
 
-@pytest.mark.parametrize("flag", [0x01, 0x08, 0x30, 0x41, 0x48, 0x02, 0xFF])
-def test_unconfirmed_separator_flags_stay_unrecovered(flag: int) -> None:
+@pytest.mark.parametrize("lead", [0x81, 0x80])
+@pytest.mark.parametrize("flag", [0x02, 0x04, 0x10, 0x20, 0x49, 0xC8, 0xFF])
+def test_unconfirmed_separator_flags_stay_unrecovered(flag: int, lead: int) -> None:
     """Fail closed: a flag value no oracle has confirmed drops the record
     (omitted, never guessed)."""
-    assert extract_figures_opju(_with_sep_flag(flag)) == []
+    assert extract_figures_opju(_with_sep_flag(flag, lead)) == []
 
 
 def test_strict_separator_records_are_unchanged() -> None:
@@ -390,3 +392,52 @@ def test_realdata_decoded_layers_match_origin(
     assert not fixed, (
         f"KNOWN_DEFECTS entries now match Origin (or vanished) -- delete them: {fixed}"
     )
+
+
+# One oracle anchor per separator flag value admitted 2026-11-15 (item 66).
+# Each layer was unrecovered before; it must now decode and carry Origin's own
+# axis values (read from the oracle JSON, never restated here). The corpus-wide
+# check above already covers them; these name the instance per flag so losing
+# one flag value fails by name.
+_SOP = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
+_FLAG_ANCHORS: dict[int, tuple[str, str, int]] = {
+    0x01: (
+        "origin/public/twl252411_Differentiable_optimization_2D_hard_particle_systems/"
+        "figures/Figure-1/Figure-1.opju",
+        "Graph1",
+        2,
+    ),
+    0x08: (_SOP, "Graph58", 6),
+    0x30: (
+        "origin/public/pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/"
+        "likelihood_profile.opju",
+        "Graph4",
+        1,
+    ),
+    0x41: (
+        "origin/public/stunnerx_CTDHNN-data-code/code/fig3/plot/Fig3_b_模式示意图.opju",
+        "Graph3",
+        1,
+    ),
+    0x48: (_SOP, "fig_Aging_Speaman", 1),
+}
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize("flag", sorted(_FLAG_ANCHORS), ids=lambda f: f"flag{f:02x}")
+def test_realdata_admitted_flag_anchor_matches_origin(corpus_dir: Path, flag: int) -> None:
+    rel, page, layer = _FLAG_ANCHORS[flag]
+    oracle_path = corpus_dir / _AXIS_JSON
+    project = corpus_dir / rel
+    if not (oracle_path.is_file() and project.is_file()):
+        pytest.skip(f"{_AXIS_JSON} or {rel} not present")
+    oracle = json.loads(oracle_path.read_text(encoding="utf-8"))["files"][rel][page]
+    lay = next(x for x in oracle["layers"] if int(x["layer"]) == layer)
+    want = (lay["x_from"], lay["x_to"], lay["y_from"], lay["y_to"])
+    got = [
+        (f["x_from"], f["x_to"], f["y_from"], f["y_to"])
+        for f in extract_figures_opju(project.read_bytes())
+        if (f["name"], f["layer"]) == (page, layer)
+    ]
+    assert len(got) == 1, f"{page} layer {layer} not recovered"
+    assert _same(got[0], want)

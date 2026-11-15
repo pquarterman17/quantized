@@ -14,7 +14,7 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (`.opju` curves now bind the sheet they plot:
+**Updated:** 2026-11-15 (item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, SCORE_PLACEHOLDER. Earlier: `.opju` curves now bind the sheet they plot:
 3,508 curves re-bound to `Book@N` plus 531 previously deduped away, 875
 omitted and diagnosed; 495 of 498 COM-checked re-bound curves draw
 Origin's exact data. Items 67-70 booked. Earlier: items 64-65 fixed: the axis record is run-length
@@ -1024,11 +1024,6 @@ item 40 CLOSED same day, see Completed)
 
 ### Tier 3 — Nice-to-Have
 
-66. **Admit the remaining separator flag values** `01/08/30/41/48` (#676
-    admits only the Origin-confirmed `00/40/80/88/c0`). The axis oracle now
-    covers files carrying them. Each value needs oracle-matching records
-    across the corpus, and none may change an existing match.
-
 47. **Recover Origin drawn graphic objects + richer annotation types on
     import** (LOW PRIORITY, booked 2026-07-12 from the owner's shapes/
     annotations work). *Use:* an imported Origin figure that carries
@@ -1141,6 +1136,18 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**66. Admit the remaining separator flag values `01/08/30/41/48`**~~
+  (2026-11-15). Scored per value against the Origin 2026b COM axis oracle
+  (`axis_ranges.json`, 103 files), over all 359 corpus `.opju` files:
+  01 ×7, 08 ×6, 30 ×3, 41 ×6, 48 ×1 records, all 23 in oracle files, all 23
+  exact to Origin's x/y from/to (and linear, as Origin's `x/y.type`). No
+  other record changed (axes, scales or curve bindings), none was lost, and
+  no wrong or phantom appeared. Score 1,777 / 7 / 0 → 1,800 / 7 / 0 (match /
+  wrong / phantom; the 7 are #64-65). Admitting ANY 5th byte recovers the
+  same 23 and nothing more; other values stay unadmitted (fail closed).
+  Anchored per value by a realdata test in
+  `test_io_origin_opju_page_attribution`.
 
 - ~~**`.opju` curves bind the sheet they plot**~~ (2026-11-15) — a curve
   token's column id resolves to `(book page, column)` with no sheet, so

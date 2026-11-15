@@ -35,7 +35,7 @@ shape, solved 2026-07-04 against the 4-file ground-truth oracle — see
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
 8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
                                   and is only a search-window hint; 8x =
-                                  81 or 80; <flag> = 00/40/80/88/c0, see
+                                  81 or 80; <flag>: an admitted flag, see
                                   ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
 8x <id> <plen> 00 <flag> 01 …     end separator
