@@ -20,7 +20,8 @@ import { sortWorksheetRows } from "../../../store/sortRows";
 import { deleteColumns, insertColumn, moveColumn } from "../../../store/worksheetColumns";
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 import type { WorksheetView } from "./useWorksheetView";
-import { numberFormatDialog, setColumnValuesDialog, sortWorksheetDialog } from "./worksheetDialogs";
+import type { ScvTarget } from "../../../lib/setColumnValues";
+import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 
@@ -35,9 +36,11 @@ export interface WorksheetMenusProps {
   onClose: () => void;
   /** Open the header-row editor for `col` near (x, y). */
   onEditHeader: (col: number) => void;
+  /** Open the Set Column Values dialog on a column, or for a new one. */
+  onSetColumnValues: (target: ScvTarget) => void;
 }
 
-export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader }: WorksheetMenusProps) {
+export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues }: WorksheetMenusProps) {
   if (!menu) return null;
   if (menu.kind === "text") {
     return (
@@ -55,7 +58,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader }
   }
   const readOnly = isRederived(ds);
   const t = menu.target;
-  const items = menu.kind === "col" ? columnItems(ds, view, t, readOnly, onEditHeader) : rowItems(ds, view, t, readOnly);
+  const items = menu.kind === "col" ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues) : rowItems(ds, view, t, readOnly);
   return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }
 
@@ -65,6 +68,7 @@ function columnItems(
   col: number,
   readOnly: boolean,
   onEditHeader: (col: number) => void,
+  onSetColumnValues: (target: ScvTarget) => void,
 ): ContextMenuItem[] {
   // The header selection when the clicked column is in it, else just the
   // clicked column — never a cell range that merely crosses it, so a header
@@ -85,7 +89,7 @@ function columnItems(
       sortDesc: (c) => sortWorksheetRows(ds.id, c, -1),
       viewSortMark: view.sortMark,
       toggleViewSort: view.toggleSort,
-      onNewColumn: () => void view.promptColumn(),
+      onNewColumn: () => onSetColumnValues({ kind: "new" }),
       showStats: view.showStats,
       onToggleStats: () => view.setShowStats((v) => !v),
       onPlotSelection: () => view.plotCols(targets, "replace"),
@@ -108,7 +112,9 @@ function columnItems(
           baseCount,
           targets,
           editHeader: onEditHeader,
-          setColumnValues: (c) => void setColumnValuesDialog(ds, c),
+          setColumnValues: (c) => onSetColumnValues({ kind: "column", col: c }),
+          fill: (kind) => void fillColumnsDialog(ds, targets, kind),
+          setRowCount: () => void setRowCountDialog(ds),
           numberFormat: () => void numberFormatDialog(ds, targets),
           insertColumn: (c) => insertColumn(ds.id, Math.max(0, c)),
           addColumn: () => insertColumn(ds.id, baseCount),
@@ -156,6 +162,7 @@ function rowItems(ds: Dataset, view: WorksheetView, row: number, readOnly: boole
             const now = moveWorksheetRows(ds.id, targets, where);
             if (now && view.selected.has(row)) view.setRowSelection(now);
           },
+          setRowCount: () => void setRowCountDialog(ds),
         })),
   ];
 }

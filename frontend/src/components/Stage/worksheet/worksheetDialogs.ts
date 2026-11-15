@@ -1,15 +1,18 @@
 // The worksheet's small parameter dialogs — Sort Worksheet (up to three
-// keys), the column display format, and Set Column Values on an existing
-// formula column (Origin reopens the dialog with the CURRENT formula; this
-// used to be impossible: `updateFormula` had no UI). Each one asks through
-// the shared ParamDialog and applies through the store, one undo step.
+// keys), the column display format, Fill Column With and Set Row Count (gap
+// audit 4, G12). Each one asks through the shared ParamDialog and applies
+// through the store, one undo step. Set Column Values has its own dialog
+// (./SetColumnValuesDialog.tsx).
 
 import { channelLetter } from "../../../lib/formula";
 import { NUMBER_FORMAT_KINDS, NUMBER_FORMAT_LABELS, type NumberFormat } from "../../../lib/columnProps";
 import type { TextColumn } from "../../../lib/originTextColumns";
 import type { Dataset } from "../../../lib/types";
 import { sortWorksheetRowsBy, type SortSpec } from "../../../store/sortRows";
-import { editColumnFormula, setColumnFormat } from "../../../store/worksheetColumns";
+import type { FillSpec } from "../../../lib/fillSeries";
+import { sidecarRowCount } from "../../../lib/rowSidecars";
+import { setColumnFormat } from "../../../store/worksheetColumns";
+import { fillColumns, setRowCount } from "../../../store/worksheetFill";
 import { askParams } from "../../overlays/ParamDialog";
 
 const NONE = "(none)";
@@ -63,21 +66,32 @@ export async function numberFormatDialog(ds: Dataset, cols: readonly number[]): 
   setColumnFormat(ds.id, cols, format);
 }
 
-/** Set Column Values on computed column `col`, reopened with its formula. */
-export async function setColumnValuesDialog(ds: Dataset, col: number): Promise<void> {
-  const base = ds.data.labels.length - (ds.formulas?.length ?? 0);
-  const index = col - base;
-  const f = ds.formulas?.[index];
-  if (!f) return;
+/** Fill Column With (G12): a linear sequence or random numbers, asked for;
+ *  row numbers need nothing and fill at once. */
+export async function fillColumnsDialog(ds: Dataset, cols: readonly number[], kind: FillSpec["kind"]): Promise<void> {
+  if (kind === "rownum") return fillColumns(ds.id, cols, { kind });
+  const seed = { key: "seed", label: "Seed", type: "number", default: 1, hint: "the same seed gives the same numbers (numpy RandomState)" } as const;
+  const fields =
+    kind === "linear"
+      ? [{ key: "a", label: "Start", type: "number", default: 1 }, { key: "b", label: "Step", type: "number", default: 1 }] as const
+      : kind === "uniform"
+        ? [{ key: "a", label: "From (low)", type: "number", default: 0 }, { key: "b", label: "To (high)", type: "number", default: 1 }, seed] as const
+        : [{ key: "a", label: "Mean", type: "number", default: 0 }, { key: "b", label: "SD", type: "number", default: 1 }, seed] as const;
+  const title = { linear: "Fill with a linear sequence", uniform: "Fill with uniform random numbers", normal: "Fill with normal random numbers" }[kind];
+  const p = await askParams(title, [...fields], { confirmLabel: "Fill", message: "Every row of the selected column(s); one undo step." });
+  if (!p) return;
+  const [a, b, s] = [Number(p.a), Number(p.b), Number(p.seed)];
+  const spec: FillSpec = kind === "linear" ? { kind, start: a, step: b } : kind === "uniform" ? { kind, seed: s, low: a, high: b } : { kind, seed: s, mean: a, sd: b };
+  fillColumns(ds.id, cols, spec);
+}
+
+/** Set Row Count (G12). */
+export async function setRowCountDialog(ds: Dataset): Promise<void> {
+  const now = sidecarRowCount(ds.data.metadata, ds.data.time.length);
   const p = await askParams(
-    `Set Column Values — ${f.name}`,
-    [
-      { key: "name", label: "Column name", type: "text", default: f.name },
-      { key: "expr", label: "Formula", type: "text", default: f.expr },
-    ],
-    { confirmLabel: "Apply", message: `Column ${channelLetter(col)} = the formula, recalculated whenever its inputs change.` },
+    "Set row count",
+    [{ key: "rows", label: "Rows", type: "number", default: now, hint: `now ${now}` }],
+    { confirmLabel: "Set", message: "More rows are added blank at the end; fewer cuts the rows past the count, in every column. Undo restores them." },
   );
-  const expr = p ? String(p.expr).trim() : "";
-  if (!p || !expr) return;
-  editColumnFormula(ds.id, col, String(p.name), expr);
+  if (p) setRowCount(ds.id, Number(p.rows));
 }
