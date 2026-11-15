@@ -299,29 +299,14 @@ _AXIS_JSON = "origin/ground_truth_public/axis_ranges.json"
 _REL_TOL = 1e-6
 
 
-_BATT = "origin/public/jiayu-here_originlab-battery-aging-project/results/OriginLab_Battery_Aging_Project.opju"  # noqa: E501
-_FIG6 = "origin/public/MeyerJackson_Minis-JGP-2024/Figure 6 Currents vary parameters.opju"
-_Y_SWAP = "Y endpoints swapped: decoded (0, -80), Origin (-80, 0); identical on main"
-
 # (file, page, layer) -> cause: decoded, but the values differ from Origin's.
-# The Y-span family that once filled this table (a geometry double read as
-# ``y_from``, a real-form record taken by the specimen parser) is fixed; see
-# ``test_io_origin_opju_y_span``. The two below surfaced when the oracle grew
-# to 96 files (test-data 6fb31e8). Both are value-token defects (a span value
-# shifted into the neighbouring slot), NOT attribution: main (3f5be063) and
-# 472e4c7b emit the identical values. Not yet diagnosed. Stale entries fail the
+# Empty (2026-11-15). The Y-span family that once filled it (a geometry double
+# read as ``y_from``, a real-form record taken by the specimen parser) is fixed
+# in ``test_io_origin_opju_y_span``; the last seven (items 64-65: Figure 6
+# Graph3's Y (-80, 0) read as (0, -80), and Battery Aging Graph2/Graph3 read
+# one slot early) in ``test_io_origin_opju_zero_slot``. Stale entries fail the
 # test by design.
-KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
-    (_BATT, "Graph2", 1): "Y span (0, -0.5); Origin (-0.5, 3.0): value shifted a slot",
-    (_BATT, "Graph3", 1): "X span (0, 12); Origin (12, 48): value shifted a slot",
-    # Pre-existing on main (main also decodes Y (0, -80) on these layers); not
-    # yet diagnosed -- possibly an elided-0 from vs a stored negative to.
-    (_FIG6, "Graph3", 1): _Y_SWAP,
-    (_FIG6, "Graph3", 2): _Y_SWAP,
-    (_FIG6, "Graph3", 3): _Y_SWAP,
-    (_FIG6, "Graph3", 7): _Y_SWAP,
-    (_FIG6, "Graph3", 9): _Y_SWAP,
-}
+KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {}
 
 # (file, page, layer) -> cause: decoded under a page NAME Origin does not
 # list, so keyed (page, layer) it has no counterpart. Empty (2026-11-15): the

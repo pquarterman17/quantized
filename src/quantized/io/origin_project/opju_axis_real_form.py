@@ -91,6 +91,7 @@ from quantized.io.origin_project.opju_axis_scale_flags import (
     _real_x_log_flag,
     _real_y_log_flag,
 )
+from quantized.io.origin_project.opju_axis_zero_slot import UnprovenSlot, resolve_elided
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
 
@@ -305,8 +306,9 @@ def real_form_bare_pair(b: bytes, start: int, end: int) -> tuple[float, float] |
 def _real_span_pair(
     b: bytes, start: int, end: int, bare: bool, lead: float | None = None
 ) -> tuple[float, float, float | None] | None:
-    """``[from, to, step]`` (n=3) else ``[to, step]`` with from elided (n=2),
-    exact-fill; accepted only when the fill set at that arity is unique on
+    """``[from, to, step]`` (n=3) else two tokens with one endpoint elided
+    (n=2: ``from`` or ``to`` is 0.0, decided by `resolve_elided`), exact-fill;
+    accepted only when the fill set at that arity is unique on
     the ``(from, to)`` pair (the historical acceptance rule — §13.2 #8 added
     the STEP as a third returned value: the tick increment, ``None`` when
     the accepted fills disagree on it). ``lead``: a first token already read
@@ -319,7 +321,15 @@ def _real_span_pair(
         if len(pairs) == 1:
             fr, to = pairs.pop()
             steps = {f[2] if n == 3 else f[1] for f in fills}
-            return (fr, to, steps.pop() if len(steps) == 1 else None)
+            step = steps.pop() if len(steps) == 1 else None
+            if n == 2:  # which endpoint is the elided 0.0 (opju_axis_zero_slot)
+                firsts = [start] if lead is not None else [
+                    start + c for _, c in _real_candidates(b, start, end, bare)
+                ]
+                fr, to = resolve_elided(
+                    b, end, to, firsts, lambda q: _real_fills(b, q, end, 1, bare)
+                )
+            return (fr, to, step)
         if len(pairs) > 1:
             return None  # ambiguous: drop, never guess
     return None
@@ -365,7 +375,10 @@ def _parse_real_record(
     need -- a record only ever reaches the wide pass after failing the
     strict one, so the retry can add parses but never change one."""
     for sep_re, every in ((_SEP_STRICT, False), (_SEP_WIDE, True)):
-        got = _parse_real_record_sep(b, p, window_end, sep_re, every=every)
+        try:
+            got = _parse_real_record_sep(b, p, window_end, sep_re, every=every)
+        except UnprovenSlot:
+            return None  # a span filled, its zero's slot did not prove out
         if got is not None:
             return got
     return None
