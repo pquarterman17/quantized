@@ -18,6 +18,7 @@ import { useApp } from "../../../store/useApp";
 import type { TickMode } from "../../../lib/types";
 import { commitAxisDraft, currentAxisDraft } from "../../../lib/figureDialogActions";
 import { axisDraftErrors, otherAxisKind, type AxisDraft } from "../../../lib/axisDialogModel";
+import { exchangeAxisClash } from "../../../lib/exchangeXY";
 
 const AXIS_NAMES: Record<AxisId, string> = { x: "X axis", y: "Y axis", y2: "Y2 (right) axis" };
 
@@ -77,7 +78,8 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
   const [current, setCurrent] = useState<AxisId>(axis);
   const [draft, setDraft] = useState<AxisDraft>(() => currentAxisDraft(axis));
   const other = useApp((s) => otherAxisKind(s, current));
-  const errors = axisDraftErrors(draft, current, other);
+  const exchanged = useApp((s) => s.exchangeXY);
+  const errors = [...axisDraftErrors(draft, current, other), ...[exchangeAxisClash(exchanged, current, draft)].filter(Boolean)];
   const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const text = (k: Exclude<keyof AxisDraft, "reverse">, label: string, placeholder = "auto") => (
     <Row label={label}>

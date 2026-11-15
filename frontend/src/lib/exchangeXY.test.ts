@@ -15,11 +15,13 @@ import uPlot from "uplot";
 
 import { buildPlotCommands } from "../commands/plotCommands";
 import { useApp } from "../store/useApp";
-import { exchangeBlocker, type ExchangeState } from "./exchangeXY";
+import { exchangeAxisClash, exchangeBlocker, type ExchangeState } from "./exchangeXY";
 import { viewOverrides } from "./figureViewOverrides";
 import type { PlotPayload } from "./plotdata";
 import { buildPlotMenu, type PlotMenuContext } from "./plotMenu";
-import { defaultPlotView, sanitizePlotView } from "./plotview";
+import type { FigureDocument } from "./figureDocument";
+import { withValidFigureLayers, withValidLayers } from "./graphLayersSanitize";
+import { defaultPlotView, sanitizePlotView, type PlotWindow } from "./plotview";
 import { buildOpts } from "./uplotOpts";
 import { orientArgs, orientAxes } from "./uplotOrient";
 
@@ -27,20 +29,22 @@ interface Case {
   name: string;
   x: { title: string; scale: "linear" | "log"; lim: [number, number] | null; reversed: boolean };
   y: { title: string; scale: "linear" | "log"; lim: [number, number] | null };
+  data: { x: number[]; y: number[] };
   vertical: "x";
 }
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "tests", "fixtures", "wire", "exchange_xy.json");
-const cases = (JSON.parse(readFileSync(FIXTURE, "utf8")) as { cases: Case[] }).cases;
+const table = JSON.parse(readFileSync(FIXTURE, "utf8")) as { cases: Case[]; conflicts: string[] };
+const cases = table.cases;
 
-const payload = (xLabel: string, yLabel: string): PlotPayload => ({
-  data: [[1, 10, 100], [20, 300, 5000]] as PlotPayload["data"],
+const payload = (xLabel: string, yLabel: string, data = { x: [1, 10, 100], y: [20, 300, 5000] }): PlotPayload => ({
+  data: [data.x, data.y] as PlotPayload["data"],
   series: [{ label: yLabel, unit: "" }],
   xLabel,
   xUnit: "",
 });
 
 function opts(c: Case, exchangeXY: boolean): uPlot.Options {
-  return buildOpts(payload(c.x.title, c.y.title), {
+  return buildOpts(payload(c.x.title, c.y.title, c.data), {
     width: 600, height: 400, tool: "zoom", onReadout: vi.fn(), linearPaths: uPlot.paths.linear!(),
     xScale: c.x.scale, yScale: c.y.scale, xLim: c.x.lim, yLim: c.y.lim, xReversed: c.x.reversed,
     xAxisLabel: c.x.title, yAxisLabel: c.y.title, exchangeXY,
@@ -105,9 +109,26 @@ describe("exchangeBlocker", () => {
     ["facet", { facetKey: 2 }],
     ["break layout", { composition: { kind: "break" } }],
     ["broken Y axis", { yFmt: { ...ok.yFmt, breaks: [[1, 2]] as [number, number][] } }],
+    ["broken Y2 axis", { y2Fmt: { ...ok.yFmt, breaks: [[1, 2]] as [number, number][] } }],
     ["inset", { insetMode: true }],
+    ["top X axis", { xFmt: { ...ok.yFmt, top: { kind: "reciprocal" as const, factor: 1 } } }],
+    ["Y3+ axes", { yAxes: [{}] }],
+    ["horizontal bars (already turned)", { seriesStyles: { 0: { bars: "horizontal" as const } } }],
   ])("refuses %s with a reason", (_n, patch) => {
     expect(exchangeBlocker({ ...ok, ...patch })).toMatch(/^Not available for /);
+  });
+  it("the shared table's conflicts are all covered by the blocker", () => {
+    const names = ["inset", "y breaks", "y2 breaks", "top x axis", "y3+ axes", "x breaks"];
+    expect(table.conflicts).toEqual(names);
+    const patches: Record<string, Partial<ExchangeState>> = {
+      inset: { insetMode: true },
+      "y breaks": { yFmt: { ...ok.yFmt, breaks: [[1, 2]] } },
+      "y2 breaks": { y2Fmt: { ...ok.yFmt, breaks: [[1, 2]] } },
+      "top x axis": { xFmt: { ...ok.yFmt, top: { kind: "reciprocal", factor: 1 } } },
+      "y3+ axes": { yAxes: [{}] },
+      "x breaks": { composition: { kind: "break" } },
+    };
+    for (const n of names) expect(exchangeBlocker({ ...ok, ...patches[n] }), n).toMatch(/^Not available for /);
   });
   it("lets an exchanged view be turned back whatever else is set", () => {
     expect(exchangeBlocker({ ...ok, exchangeXY: true, polarMode: true })).toBeUndefined();
@@ -155,6 +176,19 @@ describe("the command and the store", () => {
     expect(useApp.getState().exchangeXY).toBe(false);
   });
 
+  it("is off on a horizontal bar graph, saying it is already turned (a checked state must not lie)", () => {
+    useApp.setState({ seriesStyles: { 0: { bars: "horizontal" } } });
+    try {
+      const a = command();
+      expect(on(a)).toBe(true);
+      expect((a.disabledReason as () => string)()).toBe("Not available for horizontal bars (already turned)");
+      a.run();
+      expect(useApp.getState().exchangeXY).toBe(false);
+    } finally {
+      useApp.setState({ seriesStyles: {} });
+    }
+  });
+
   it("the context menu offers the same toggle, checked and disabled the same way", () => {
     const base = { series: null, zone: "plot", hasY2: false } as unknown as PlotMenuContext;
     const toggle = vi.fn();
@@ -163,6 +197,41 @@ describe("the command and the store", () => {
     expect(entry({ on: true, toggle })).toMatchObject({ checked: true, disabled: false });
     expect(entry({ on: false, blocker: "Not available for maps", toggle })).toMatchObject({ disabled: true, title: "Not available for maps" });
     expect(entry(undefined)).toBeUndefined();
+  });
+});
+
+describe("exchangeAxisClash", () => {
+  const d = { breakFrom: "", breakTo: "", topKind: "none" as const };
+  it("flags a Y break or a top X axis only while exchanged", () => {
+    expect(exchangeAxisClash(true, "y", { ...d, breakFrom: "1" })).toMatch(/exchanged/);
+    expect(exchangeAxisClash(true, "y2", { ...d, breakTo: "2" })).toMatch(/exchanged/);
+    expect(exchangeAxisClash(true, "x", { ...d, topKind: "reciprocal" })).toMatch(/exchanged/);
+    expect(exchangeAxisClash(false, "y", { ...d, breakFrom: "1" })).toBe("");
+    expect(exchangeAxisClash(true, "y", d)).toBe("");
+    expect(exchangeAxisClash(true, "x", { ...d, breakFrom: "1" })).toBe(""); // an X draft has no break
+  });
+});
+
+describe("a saved view holding both", () => {
+  const win = (view: Partial<ReturnType<typeof defaultPlotView>>) =>
+    ({ id: "w", kind: "plot", view: { ...defaultPlotView(), exchangeXY: true, ...view } }) as unknown as PlotWindow;
+
+  it("loses the exchange when it also holds something the turn cannot draw", () => {
+    expect(withValidLayers(win({})).view.exchangeXY).toBe(true);
+    expect(withValidLayers(win({ insetMode: true })).view.exchangeXY).toBe(false);
+    expect(withValidLayers(win({ polarMode: true })).view.exchangeXY).toBe(false);
+    expect(withValidLayers(win({ facetKey: 1 })).view.exchangeXY).toBe(false);
+    expect(withValidLayers(win({ yFmt: { ...defaultPlotView().yFmt, breaks: [[1, 2]] } })).view.exchangeXY).toBe(false);
+    expect(withValidLayers(win({ seriesStyles: { 0: { bars: "horizontal" } } })).view.exchangeXY).toBe(false);
+    expect(withValidLayers(win({ insetMode: true })).view.insetMode).toBe(true); // the rest of the view is kept
+  });
+
+  it("and so does a saved figure document's own view (its facet binding counts)", () => {
+    const doc = (view: object, facetKey: number | null) =>
+      ({ plot: { view: { ...defaultPlotView(), exchangeXY: true, ...view } }, bindings: { facetKey } }) as unknown as FigureDocument;
+    expect(withValidFigureLayers(doc({}, null)).plot.view.exchangeXY).toBe(true);
+    expect(withValidFigureLayers(doc({ insetMode: true }, null)).plot.view.exchangeXY).toBe(false);
+    expect(withValidFigureLayers(doc({}, 2)).plot.view.exchangeXY).toBe(false);
   });
 });
 

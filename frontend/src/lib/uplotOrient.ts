@@ -31,6 +31,10 @@ export function hasHorizontalBars(styles: readonly (SeriesStyle | undefined)[] |
 export const isTurned = (styles: readonly (SeriesStyle | undefined)[] | undefined, exchange?: boolean): boolean =>
   !!exchange || hasHorizontalBars(styles);
 
+/** `isTurned` of a store state (the Stage toolbar, the drop bands, the axis hit test). */
+export const turnedOf = (s: { seriesStyles: Record<number, SeriesStyle | undefined>; exchangeXY: boolean }): boolean =>
+  isTurned(Object.values(s.seriesStyles), s.exchangeXY);
+
 /** `{scales, axes}`, rotated for a turned layer; unchanged otherwise. The
  *  X axis moves to the left (side 3) with the Y axis's measured gutter, the
  *  Y axis to the bottom (side 2) with the X axis's band height, and a
@@ -81,7 +85,7 @@ export function orientAxes(
  *  positions along the upright axes. */
 export const TURNED_TOOLS: readonly PlotTool[] = ["pointer", "zoom", "cursor"];
 export const TURNED_TOOL_NOTE =
-  "Not available on a horizontal bar graph or with X and Y exchanged (the plot is turned)";
+  "Not available on a horizontal bar graph or exchanged X–Y";
 
 /** `args` for a turned plot: a pointer-driven tool falls back to zoom, and
  *  wheel zoom and every drag-to-edit hook are off. Unchanged otherwise. */

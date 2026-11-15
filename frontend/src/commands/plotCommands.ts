@@ -15,14 +15,19 @@ import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
+import { useApp } from "../store/useApp";
 import { onLoadFailure, runLazy } from "./fileCommands";
 import { colorGradientCommand } from "./plotStyleCommands";
 
-/** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes) is a lazy chunk the
- *  session starts loading with this module, as `lib/uplotOrient.ts` does for its
- *  overlay half: its few hundred bytes of reasons stay out of the entry chunk. */
+/** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes, and the store guard
+ *  that keeps it honest) is a lazy chunk the session starts loading with this
+ *  module, as `lib/uplotOrient.ts` does for its overlay half. Until it lands the
+ *  command reads "Loading…" and is off; a menu render after a failed load asks
+ *  again. */
 let xy: typeof import("../lib/exchangeXY") | undefined;
-void import("../lib/exchangeXY").then((m) => { xy = m; }, () => {});
+const xyNow = () => xy ?? void import("../lib/exchangeXY").then((m) => { xy = m; m.installExchangeGuard(useApp, toast); }, () => {});
+xyNow();
+const xyWhy = (s: StoreGet) => (xyNow() ? xy!.exchangeBlocker(s()) : "Loading…");
 
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
@@ -180,10 +185,9 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Axes",
       label: "Exchange X–Y axes",
       checked: () => s().exchangeXY,
-      // Fail closed until the blocker's chunk lands (the first moments of a session).
-      disabled: () => !xy || !!xy.exchangeBlocker(s()),
-      disabledReason: () => xy?.exchangeBlocker(s()),
-      run: () => void (xy && !xy.exchangeBlocker(s()) && s().toggleExchangeXY()),
+      disabled: () => !!xyWhy(s),
+      disabledReason: () => xyWhy(s),
+      run: () => void (xyWhy(s) || s().toggleExchangeXY()),
     },
     {
       id: "grid",

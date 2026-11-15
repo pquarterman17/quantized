@@ -45,6 +45,31 @@ async function screenTitles(page: Page, texts: string[]): Promise<Record<string,
     return out;
   }, texts);
 }
+/** The numeric tick labels the canvas drew left of the plot area (the vertical axis), as numbers. */
+const screenVerticalTicks = (page: Page): Promise<number[]> =>
+  page.evaluate(() => {
+    type Op = { op: string; text?: string; x?: number };
+    const canvas = document.querySelector(".qzk-stage canvas") as HTMLCanvasElement;
+    const draws = (window as unknown as { __qzDraw: { log: (c: HTMLCanvasElement) => Op[] } }).__qzDraw.log(canvas);
+    const c = canvas.getBoundingClientRect();
+    const over = document.querySelector(".qzk-stage .u-over")!.getBoundingClientRect();
+    const k = canvas.width / c.width;
+    return draws
+      .filter((o) => o.op === "text" && /^-?[\d.]+$/.test(o.text ?? "") && c.left + o.x! / k <= over.left)
+      .map((o) => Number(o.text));
+  });
+
+/** The numeric tick labels of the SVG's leftmost label column (the vertical axis). */
+function svgVerticalTicks(svg: string): number[] {
+  const re = /<text[^>]* x="([\d.]+)" y="[\d.]+" transform="rotate\(-?0[^"]*"[^>]*>(-?[\d.]+)<\/text>/g;
+  const cols = new Map<number, number[]>();
+  for (const m of svg.matchAll(re)) {
+    const x = Math.round(Number(m[1]));
+    cols.set(x, [...(cols.get(x) ?? []), Number(m[2])]);
+  }
+  return cols.get(Math.min(...cols.keys())) ?? [];
+}
+
 const titleSide = async (page: Page, text: string) => (await screenTitles(page, [text]))[text]?.side;
 
 /** `{text: [rotation, x, y]}` for every <text> of an SVG. */
@@ -97,6 +122,28 @@ test("Exchange X-Y axes: the screen and the exported SVG put the same title on t
   const ticks = Object.entries(text).filter(([k]) => k !== X_TITLE && k !== Y_TITLE);
   expect(x[1]).toBeLessThan(Math.min(...ticks.map(([, v]) => v[1]))); // left of every tick label
   expect(y[2]).toBeGreaterThan(Math.max(...ticks.map(([, v]) => v[2]))); // below every tick label
+
+  // The data lands inside the exported axes: the vertical axis is Time over ITS range
+  // (0..50), exactly the screen's, never the counts' range (0..20000).
+  const screenTicks = await screenVerticalTicks(page);
+  const exportTicks = svgVerticalTicks(svg);
+  expect(screenTicks.length).toBeGreaterThan(2);
+  expect(Math.max(...exportTicks)).toBe(Math.max(...screenTicks));
+  expect(Math.max(...exportTicks)).toBeLessThanOrEqual(60);
+  expect(Math.min(...exportTicks)).toBe(Math.min(...screenTicks));
+
+  // Hit testing follows the turn: double-clicking the LEFT gutter (X now) opens the X axis dialog.
+  const over = (await page.locator(".qzk-stage .u-over").first().boundingBox())!;
+  await page.mouse.dblclick(over.x - 25, over.y + over.height / 2);
+  const dialog = page.getByRole("dialog", { name: "Axis" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("tab", { name: "X", selected: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  // ...and right-clicking the BOTTOM gutter (Y now) offers Y axis entries, not X's.
+  await page.mouse.click(over.x + over.width / 2, over.y + over.height + 25, { button: "right" });
+  await expect(page.getByText(/Autoscale Y/).first()).toBeVisible();
+  await expect(page.getByText(/Autoscale X/)).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
   // Toggling twice is the identity; the toggle is ONE undo step.
   await runPaletteCommand(page, "Exchange X–Y axes");

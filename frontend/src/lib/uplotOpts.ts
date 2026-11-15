@@ -601,8 +601,9 @@ export interface BuildOptsArgs {
   } | null;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
-  yLim?: [number, number] | null; xReversed?: boolean; exchangeXY?: boolean; // Plot > Exchange X-Y axes (uplotOrient)
-   // x high-to-low: uPlot dir -1 (cursor/posToVal/zoom honour it)
+  yLim?: [number, number] | null;
+  xReversed?: boolean; // x high-to-low: uPlot dir -1 (cursor/posToVal/zoom honour it)
+  exchangeXY?: boolean; // Plot > Exchange X-Y axes: the layer turns on its side (lib/uplotOrient.ts)
   /** Secondary (right) Y axis: explicit range + scale. An applied Origin
    *  double-Y figure carries layer 2's own axis state here; null/undefined =
    *  autoscale / inherit yScale (the pre-2026-07-06 behaviour). */

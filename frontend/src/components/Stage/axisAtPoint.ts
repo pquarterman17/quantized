@@ -11,11 +11,13 @@ type Box = Pick<DOMRect, "left" | "right" | "top" | "bottom">;
 /** Figures-audit #6: which axis a double-click at (x, y) landed on -- the
  *  band between the plot area (uPlot's `.u-over`) and the chart's outer
  *  box: below it = X, left = Y, right = Y2 (only when one is drawn). Null
- *  inside the plot area or in a corner. */
-export function axisAtPoint(over: Box, root: Box, x: number, y: number, hasY2: boolean): AxisId | null {
+ *  inside the plot area or in a corner. `turned` swaps the gutters. */
+export function axisAtPoint(over: Box, root: Box, x: number, y: number, hasY2: boolean, turned = false): AxisId | null {
   if (x < root.left || x > root.right || y < root.top || y > root.bottom) return null;
   const inX = x >= over.left && x <= over.right;
   const inY = y >= over.top && y <= over.bottom;
+  // Turned (horizontal bars / Exchange X-Y): Y below, X at the left, Y2 across the top.
+  if (turned) return inX && y > over.bottom ? "y" : inY && x < over.left ? "x" : inX && y < over.top && hasY2 ? "y2" : null;
   if (inX && y > over.bottom) return "x";
   if (inY && x < over.left) return "y";
   if (inY && x > over.right && hasY2) return "y2";
@@ -34,11 +36,11 @@ export function rightAxisLefts(root: Element, overRight: number): number[] {
  *  has Y3+ axes (gap audit 4 G11) -- the right-hand axis under the pointer,
  *  found from the drawn axes' left edges (`axes`: the chart element, or those
  *  edges already read, sorted). */
-export function openAxisAt(over: Box, root: Box, x: number, y: number, hasY2: boolean, axes: Element | readonly number[]): void {
-  const rights = "querySelectorAll" in axes ? rightAxisLefts(axes, over.right) : axes;
+export function openAxisAt(over: Box, root: Box, x: number, y: number, hasY2: boolean, axes: Element | readonly number[], turned = false): void {
+  const rights = turned ? [] : "querySelectorAll" in axes ? rightAxisLefts(axes, over.right) : axes; // Y3+ is not drawn turned
   const inY = y >= over.top && y <= over.bottom;
   const rank = Math.max(0, rights.filter((left) => left <= x).length - 1);
   if (inY && x > over.right && x <= root.right && rights.length > 0 && openRightAxis(useApp.getState, rank)) return;
-  const axis = axisAtPoint(over, root, x, y, hasY2);
+  const axis = axisAtPoint(over, root, x, y, hasY2, turned);
   if (axis) openFigureDialog({ kind: "axis", axis });
 }

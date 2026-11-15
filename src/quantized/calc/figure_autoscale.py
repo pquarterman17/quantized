@@ -34,6 +34,13 @@ On a log axis:
   does not stretch the view; the bar runs to the axis floor, as the screen's
   ``lib/uplotErrorRange.ts`` ``barFloor``.
 
+A TURNED axes (:class:`~quantized.calc.figure_orient.TransposedAxes`: horizontal
+bars, Exchange X-Y) is unwrapped here: the LOGICAL ``axis`` ("x" = the X
+quantity) sits on the real axes' other physical axis, so each function reads
+the real artists' swapped coordinate and sets the real swapped limit, while the
+rule it applies (X's flat/scan rule, Y's padded one) stays the logical axis's,
+as on the screen.
+
 Pure layer (matplotlib + numpy only).
 """
 
@@ -49,6 +56,7 @@ from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.container import ErrorbarContainer
 from numpy.typing import NDArray
 
+from quantized.calc.figure_orient import TransposedAxes
 from quantized.calc.figure_ticks import _pow10
 
 __all__ = [
@@ -155,7 +163,7 @@ def _scan_range(lo: float, hi: float, axis: str) -> tuple[float, float]:
     )
 
 
-def _x_scanned(axes: list[Any]) -> bool:
+def _x_scanned(axes: list[Any], turned: bool = False) -> bool:
     """Does the canvas range x by its full scan? It does for a non-ascending
     x (``xIsAscending``) and for an x whose first or last row no series
     draws (uPlot's own autoscale would range over those blank rows)."""
@@ -164,14 +172,14 @@ def _x_scanned(axes: list[Any]) -> bool:
         lines = [ln for ln in a.lines if ln.get_transform() == a.transData and id(ln) not in caps]
         if not lines:
             continue
-        xs = np.asarray(lines[0].get_xdata(), dtype=float)
+        xs = np.asarray(lines[0].get_ydata() if turned else lines[0].get_xdata(), dtype=float)
         finite = xs[np.isfinite(xs)]
         if finite.size > 1 and np.any(np.diff(finite) < 0):
             return True
         ys = [
-            np.asarray(ln.get_ydata(), dtype=float)
+            np.asarray(ln.get_xdata() if turned else ln.get_ydata(), dtype=float)
             for ln in lines
-            if len(ln.get_xdata()) == len(xs)
+            if len(ln.get_ydata() if turned else ln.get_xdata()) == len(xs)
         ]
         for r in (0, len(xs) - 1):
             if xs.size and ys and not any(np.isfinite(y[r]) for y in ys if y.size > r):
@@ -212,9 +220,17 @@ def _axes_of(ax: Any, axis: str) -> list[Any]:
     return list(shared.get_siblings(ax))
 
 
+def _real(ax: Any, axis: str) -> tuple[Any, str, bool]:
+    """``(real axes, its physical axis for the logical ``axis``, turned)``."""
+    if isinstance(ax, TransposedAxes):
+        return ax.real, "y" if axis == "x" else "x", True
+    return ax, axis, False
+
+
 def mask_nonpositive(ax: Any, axis: str) -> None:
     """NaN every value <= 0 in the drawn copy of ``ax``'s data lines along
     ``axis`` (see the module doc)."""
+    ax, axis, _ = _real(ax, axis)
     for line in ax.lines:
         if line.get_transform() != ax.transData:
             continue
@@ -225,8 +241,8 @@ def mask_nonpositive(ax: Any, axis: str) -> None:
 
 
 def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Point coordinates and error-bar end coordinates (index ``i``: 0 = x)
-    across ``axes``, finite only."""
+    """Point coordinates and error-bar end coordinates (index ``i``: 0 = the
+    real x coordinate) across ``axes``, finite only."""
     pts: list[NDArray[np.float64]] = []
     ends: list[NDArray[np.float64]] = []
     for a in axes:
@@ -253,6 +269,7 @@ def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
     """Apply the screen's autoscale rule to ``ax``'s ``axis`` (module doc).
     Call after every series and error bar is drawn and before typed limits;
     an axis whose limits are already set (a break panel's x) is left alone."""
+    logical, (ax, axis, turned) = axis, _real(ax, axis)  # `axis` is now the physical one
     if not (ax.get_autoscalex_on() if axis == "x" else ax.get_autoscaley_on()):
         return
     axes = _axes_of(ax, axis)
@@ -276,10 +293,10 @@ def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
         lo, hi = get_lim()
         flip = lo > hi
         d_lo, d_hi = float(both.min()), float(both.max())
-        x_axes = axes if axis == "x" else _axes_of(ax, "x")
-        if _x_scanned(x_axes):
-            new_lo, new_hi = _scan_range(d_lo, d_hi, axis)
-        elif axis == "x":
+        x_axes = axes if logical == "x" else _axes_of(ax, "y" if turned else "x")
+        if _x_scanned(x_axes, turned):
+            new_lo, new_hi = _scan_range(d_lo, d_hi, logical)
+        elif logical == "x":
             new_lo, new_hi = flat_auto_range(d_lo, d_hi) or (d_lo, d_hi)
         else:
             new_lo, new_hi = range_num(d_lo, d_hi)

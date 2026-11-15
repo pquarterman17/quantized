@@ -31,7 +31,7 @@ from typing import Any
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
-__all__ = ["TransposedAxes", "horizontal_bars", "oriented"]
+__all__ = ["TransposedAxes", "horizontal_bars", "oriented", "validate_exchange"]
 
 # Attribute names that address one axis: the "x"/"y" in them is swapped.
 _AXIS_NAME = re.compile(
@@ -184,3 +184,29 @@ def oriented(
     if isinstance(ax, TransposedAxes) or not (exchange or horizontal_bars(series_styles)):
         return ax
     return TransposedAxes(ax)
+
+
+def validate_exchange(
+    ov: Mapping[str, Any],
+    *,
+    x_fmt: Mapping[str, Any] | None,
+    y_fmt: Mapping[str, Any] | None,
+    y2_fmt: Mapping[str, Any] | None,
+    extra_y: Sequence[Any] = (),
+) -> None:
+    """Refuse ``overrides["exchange_xy"]`` together with what the turn cannot
+    draw honestly -- the magnifier inset, Y / Y2 axis breaks, a top X axis and
+    Y3+ axes (the screen's ``lib/exchangeXY.ts`` blocks the same set both ways);
+    ``x_breaks`` is refused by ``_validate_overrides``. ``ValueError`` -> 422."""
+    if not ov.get("exchange_xy"):
+        return
+    clash = (
+        "inset" if ov.get("inset")
+        else "Y axis breaks" if (y_fmt or {}).get("breaks")
+        else "Y2 axis breaks" if (y2_fmt or {}).get("breaks")
+        else "a top X axis" if (x_fmt or {}).get("top")
+        else "Y3+ axes" if extra_y
+        else ""
+    )
+    if clash:
+        raise ValueError(f"exchange_xy is not supported together with {clash}")

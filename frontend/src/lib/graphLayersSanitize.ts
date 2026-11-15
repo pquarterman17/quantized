@@ -4,6 +4,7 @@
 // in the workspace-parse worker) validates layers without the renderer's
 // imports. Pure; types only. lib/graphLayers.ts re-exports all of it.
 
+import { dropStaleExchange } from "./exchangeXY";
 import type { FigureDocument } from "./figureDocument";
 import type { PlotWindow } from "./plotview";
 import type { LinkedCurve } from "./types";
@@ -168,12 +169,13 @@ export function sanitizeLayers(v: unknown): GraphLayer[] {
 export function withValidLayers(w: PlotWindow): PlotWindow {
   if (w.kind !== "plot") return w;
   const document = w.document && withValidFigureLayers(w.document);
-  const view = { ...w.view, layers: sanitizeLayers(w.view.layers), seriesStyles: cleanSymbolStyles(w.view.seriesStyles) };
+  const view = dropStaleExchange({ ...w.view, layers: sanitizeLayers(w.view.layers), seriesStyles: cleanSymbolStyles(w.view.seriesStyles) });
   return { ...w, view, ...(document ? { document } : {}) };
 }
 
 /** A loaded figure document with its layers (and symbol values) validated in full. */
 export function withValidFigureLayers(d: FigureDocument): FigureDocument {
   const v = d.plot.view;
-  return { ...d, plot: { ...d.plot, view: { ...v, layers: sanitizeLayers(v.layers), seriesStyles: cleanSymbolStyles(v.seriesStyles) } } };
+  const view = dropStaleExchange({ ...v, layers: sanitizeLayers(v.layers), seriesStyles: cleanSymbolStyles(v.seriesStyles) }, d.bindings.facetKey);
+  return { ...d, plot: { ...d.plot, view } };
 }
