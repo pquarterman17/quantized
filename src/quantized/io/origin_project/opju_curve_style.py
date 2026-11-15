@@ -34,7 +34,7 @@ _STYLE_BYTES = {0xC8: "line", 0xC9: "scatter"}
 # curve objects closer than 400 B aliased the next curve's style (2026-07-06
 # genericity audit). A false positive of this pattern only SHRINKS the search
 # window (worst case an honest ``None``), never widens it.
-_NEXT_TOKEN_RE = re.compile(rb"\x01\x01\x01\x80[\x01\x03]|\x01.\x01\x80\x03.\x00", re.DOTALL)
+_NEXT_TOKEN_RE = re.compile(rb"\x01\x01\x01\x80[\x01-\x0f]|\x01.\x01\x80\x03.\x00", re.DOTALL)
 
 
 def curve_plot_style(b: bytes, token_start: int) -> str | None:
