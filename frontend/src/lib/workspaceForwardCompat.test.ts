@@ -104,6 +104,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" } };
   },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
+  "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
+  "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },
