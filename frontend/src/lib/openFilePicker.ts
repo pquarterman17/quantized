@@ -15,7 +15,8 @@
 // accept list cannot say "any number", and a higher one needs "All files".
 export const IMPORT_ACCEPT =
   ".dat,.csv,.tsv,.txt,.xy,.xye,.xrdml,.brml,.raw,.refl,.pnr,.ort,.datA,.datB,.datC,.datD," +
-  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls,.spc,.opus,.0,.1,.2,.3,.4,.5,.6,.7,.8,.9,.opj,.opju";
+  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls,.spc,.opus,.0,.1,.2,.3,.4,.5,.6,.7,.8,.9,.opj,.opju," +
+  ".h5,.hdf5,.nxs,.mat,.ibw,.png,.tif,.tiff,.jpg,.jpeg";
 
 // DEFECT B (Sol audit P1-6, 2026-08-21): a canceled OS file dialog used to
 // fire NO event at all — `onchange` only fires on an actual pick — so any

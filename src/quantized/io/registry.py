@@ -22,10 +22,14 @@ from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.cif import import_cif
 from quantized.io.delimited import import_csv
+from quantized.io.hdf5_read import import_hdf5, is_hdf5, read_hdf5_books
+from quantized.io.igor_ibw import import_ibw
+from quantized.io.image_import import import_image, read_image_books
 from quantized.io.import_filters import match_filter
 from quantized.io.import_preview import parse_import
 from quantized.io.jcamp import import_jcamp
 from quantized.io.lakeshore import import_lake_shore, is_lakeshore_file
+from quantized.io.matlab_mat import import_mat, read_mat_books
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.netcdf import import_netcdf
 from quantized.io.opus import import_opus, is_numbered_opus
@@ -44,6 +48,7 @@ __all__ = [
     "import_auto",
     "import_auto_sheets",
     "import_structure",
+    "is_packable_data_name",
     "is_recognised_data_name",
     "is_structure_file",
     "register_parser",
@@ -82,6 +87,25 @@ _EXT_MAP: dict[str, Parser] = {
     # importOxford stays unported: "format varies by software version" with
     # no spec and no example file — nothing to implement against honestly.
     ".opus": import_opus,  # Bruker OPUS FTIR/NIR/Raman binary
+    # Array containers and images (gap-5 lane D). Each parser checks its own
+    # content and refuses with a reason; .h5/.hdf5/.nxs are sniffed below.
+    ".mat": import_mat,  # MATLAB v5 (scipy.io) and v7.3 (HDF5)
+    ".ibw": import_ibw,  # Igor Pro binary wave, versions 2 and 5
+    ".png": import_image,  # an image is a 2-D map (grayscale intensity)
+    ".tif": import_image,
+    ".tiff": import_image,
+    ".jpg": import_image,
+    ".jpeg": import_image,
+}
+
+# Parsers whose file holds several datasets: ``import_auto`` imports the first,
+# ``import_auto_sheets`` offers every one (the same wire path as a multi-sheet
+# workbook). Keyed by the registered parser, so a plugin cannot add a second
+# registration here.
+_ALL_BOOKS: dict[Parser, Callable[[Path], list[DataStruct]]] = {
+    import_hdf5: read_hdf5_books,
+    import_mat: read_mat_books,
+    import_image: read_image_books,
 }
 
 
@@ -245,6 +269,11 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".xlsm": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
     # Content, not the name: instruments often write TSV/HTML or a renamed
     # .xlsx under .xls. OLE2 -> xlrd; ZIP -> the .xlsx reader; text -> a table.
+    # HDF5 containers (quantized's own export, NeXus, generic): the HDF5
+    # signature, at offset 0 or after a user block. Not-HDF5 -> the hint below.
+    ".h5": [(is_hdf5, import_hdf5)],
+    ".hdf5": [(is_hdf5, import_hdf5)],
+    ".nxs": [(is_hdf5, import_hdf5)],
     ".xls": [
         (_is_ole2, _import_xls_lazy),
         (_is_zip, _import_excel_lazy),
@@ -346,8 +375,28 @@ def is_recognised_data_name(filename: str) -> bool:
     return match_filter(Path(filename)) is not None
 
 
+# General-purpose file types the importers now read (pictures, MATLAB
+# workspaces): a Pack Project source of one of these is as likely a private
+# photo or scan as lab data, so the sharing gate keeps flagging them as it did
+# before they were importable (``portable/attention.py``).
+_NOT_AUTO_PACKABLE = frozenset({".png", ".tif", ".tiff", ".jpg", ".jpeg", ".mat"})
+
+
+def is_packable_data_name(filename: str) -> bool:
+    """``is_recognised_data_name`` minus the general-purpose types in
+    ``_NOT_AUTO_PACKABLE``: the predicate the Pack Project attention gate uses."""
+    if Path(filename).suffix.lower() in _NOT_AUTO_PACKABLE:
+        return False
+    return is_recognised_data_name(filename)
+
+
 # Extensions the browser Open dialog offers but no parser reads: say why.
 _UNSUPPORTED_HINTS: dict[str, str] = {}
+for _ext in (".h5", ".hdf5", ".nxs"):
+    _UNSUPPORTED_HINTS[_ext] = (
+        "not an HDF5 file (no HDF5 signature); it may be damaged, truncated, or another "
+        "format saved under this extension"
+    )
 
 # Origin's single-window and template files share the project family but are
 # not projects: Quantized reads .opj/.opju projects only (audit 2026-11 -- these
@@ -422,4 +471,8 @@ def import_auto_sheets(path: str | Path) -> list[DataStruct]:
             from quantized.io.excel_sheets import import_workbook_sheets
 
         return import_workbook_sheets(resolved, import_auto)
-    return [import_auto(resolved)]
+    parser = resolve_parser(resolved)
+    all_books = _ALL_BOOKS.get(parser)
+    if all_books is not None:
+        return [stamp_technique(book, parser) for book in all_books(resolved)]
+    return [stamp_technique(parser(resolved), parser)]

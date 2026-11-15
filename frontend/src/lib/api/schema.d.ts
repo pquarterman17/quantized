@@ -9123,6 +9123,11 @@ export interface components {
              */
             ny?: number;
             /**
+             * Resample
+             * @default false
+             */
+            resample?: boolean;
+            /**
              * Smoothing
              * @default 0
              */
