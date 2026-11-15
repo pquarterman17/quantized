@@ -19,7 +19,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { globalFitJob, type GlobalFitRequest, type GlobalFitResult } from "../../../lib/api/globalFit";
+import {
+  compareDatasetsJob,
+  globalFitJob,
+  type DatasetCompareResult,
+  type GlobalFitRequest,
+  type GlobalFitResult,
+} from "../../../lib/api/globalFit";
 import { reportEmit } from "../../../lib/api/report";
 import { boundsForWire, parseFitParams, rowsFromModel, type FitParamRow } from "../../../lib/fitParams";
 import { fmtNum } from "../../../lib/format";
@@ -68,7 +74,11 @@ export interface GlobalFitState {
   /** The running job's last message ("Nelder-Mead iteration n"); null when idle. */
   progress: string | null;
   error: string | null;
-  run: () => Promise<void>;
+  run: (mode?: "fit" | "compare") => Promise<void>;
+  /** The last dataset comparison (Origin "Compare Datasets"); null until run. */
+  comparison: DatasetCompareResult | null;
+  /** True when no parameter is ticked "shared", so a comparison tests ALL of them. */
+  compareAll: boolean;
   cancel: () => Promise<void>;
   result: GlobalFitRun | null;
   /** Member whose curve is on the plot (null: none of them is plotted). */
@@ -101,6 +111,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GlobalFitRun | null>(null);
+  const [comparison, setComparison] = useState<DatasetCompareResult | null>(null);
   const [shown, setShown] = useState<number | null>(null);
   const [reporting, setReporting] = useState(false);
   const jobRef = useRef<string | null>(null);
@@ -113,6 +124,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     setRows(rowsFromModel(model as FitModel | undefined));
     setSharedFlags([]);
     setResult(null);
+    setComparison(null);
     takeBackOverlay(ownOverlay.current);
   }, [modelKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -157,7 +169,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   // On unmount, take back only OUR overlay.
   useEffect(() => () => takeBackOverlay(ownOverlay.current), []);
 
-  async function run(): Promise<void> {
+  async function run(mode: "fit" | "compare" = "fit"): Promise<void> {
     if (!model || busy) return;
     setError(null);
     const members = candidates.filter((m) => pickedKeys.includes(memberKey(m)));
@@ -175,7 +187,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     }
     setBusy(true);
     setProgress("queued");
-    const op = trackJob("Global fit");
+    const op = trackJob(mode === "compare" ? "Compare datasets" : "Global fit");
     try {
       const data = [];
       for (const m of members) {
@@ -189,22 +201,33 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       const req: GlobalFitRequest = {
         ...(model.equation ? { equation: model.equation } : { model: model.name }),
         datasets: data.map(({ d }) => ({ x: d.x, y: d.y })),
-        constraints: shareConstraints(model.paramNames, shared, members.length),
+        // Compare tests the ticked parameters; none ticked tests them all.
+        constraints: shareConstraints(
+          model.paramNames,
+          mode === "compare" && !shared.some(Boolean) ? model.paramNames.map(() => true) : shared,
+          members.length,
+        ),
         ...(startsEdited ? { p0: parsed.p0 } : {}),
         lower: boundsForWire(parsed.lower),
         upper: boundsForWire(parsed.upper),
       };
-      const { job_id } = await globalFitJob(req);
+      const { job_id } = await (mode === "compare" ? compareDatasetsJob(req) : globalFitJob(req));
       jobRef.current = job_id;
       op.cancellable(() => void cancel());
-      const fit = await pollJob<GlobalFitResult>(job_id, (f, msg) => {
+      const onProgress = (f: number, msg?: string) => {
         setProgress(msg || null);
         op.progress(f, msg);
-      });
+      };
+      if (mode === "compare") {
+        setComparison(await pollJob<DatasetCompareResult>(job_id, onProgress));
+        return;
+      }
+      const fit = await pollJob<GlobalFitResult>(job_id, onProgress);
       const overlays = data.map(({ ds, d }, i) => memberOverlay(ds, d.pairs, fit.yFit[i] ?? []));
       setShown(null);
       setResult({ fit, members, overlays });
     } catch (e) {
+      if (mode === "compare") setComparison(null);
       if (!(e instanceof JobCancelledError)) setError(e instanceof Error ? e.message : "global fit failed");
     } finally {
       op.end();
@@ -282,6 +305,8 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     progress,
     error,
     run,
+    comparison,
+    compareAll: !shared.some(Boolean),
     cancel,
     result,
     shownIndex,

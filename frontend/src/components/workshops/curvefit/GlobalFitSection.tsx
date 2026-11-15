@@ -5,6 +5,7 @@
 
 import { Button, Select } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
+import DatasetCompareResult from "./DatasetCompareResult";
 import GlobalFitResults from "./GlobalFitResults";
 import { memberKey, type GlobalSource } from "./globalFitData";
 import { useGlobalFit, type GlobalModel } from "./useGlobalFit";
@@ -98,6 +99,14 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
         >
           {s.busy ? "Fitting…" : "Fit globally"}
         </Button>
+        <Button
+          size="sm"
+          disabled={s.busy}
+          title="F-test: does one shared value of the ticked parameters (all when none ticked) fit every series, or does each need its own?"
+          onClick={() => void s.run("compare")}
+        >
+          Compare datasets
+        </Button>
         {s.busy && (
           <Button size="sm" variant="ghost" onClick={() => void s.cancel()}>
             Cancel
@@ -117,6 +126,7 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
       <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         Global fits run unweighted over each series' included rows.
       </div>
+      <DatasetCompareResult comparison={s.comparison} compareAll={s.compareAll} />
       <GlobalFitResults s={s} />
     </div>
   );

@@ -8,10 +8,9 @@
 // result renders in its own section, but none of it touches the shared plot
 // overlay, the recorded macro/pipeline step, or the durable FitSpec — those
 // are singleton per-dataset concepts a multi-level fan-out has no single
-// answer for. Weighting is also scoped out for v1: every level fits
-// UNWEIGHTED regardless of the panel's weight mode (dyForFit needs a Dataset
-// + its exclusion state, which a level's bare sliced DataStruct doesn't
-// carry) — disclosed by the panel, not hidden.
+// answer for. The panel's weighting rides along per level: the sigma /
+// weight column is a sibling channel of each level's sliced rows, resolved
+// by dyForData (invalid weighting fails that level closed, never silent).
 //
 // Guard #11 is satisfied upstream: `data` is already the analysis view
 // (lib/rowstate.analysisData), so every level below is post-exclusion/-filter.
@@ -19,8 +18,9 @@
 import { useEffect, useState } from "react";
 
 import { fitModel } from "../../../lib/api";
+import { dyForData, weightRequestFields } from "../../../lib/fitweights";
 import { ownXKey } from "../../../lib/perSeriesX";
-import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
+import type { CalcResult, Dataset, DataStruct, FitWeighting } from "../../../lib/types";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 
 export interface CurveFitLevelResult {
@@ -63,6 +63,7 @@ export function useCurveFitByLevel(
   xKey: number | null,
   yKey: number | null,
   start: CurveFitByLevelStart | undefined,
+  weight: FitWeighting | undefined = undefined,
   initialByCol: number | null = null,
 ): CurveFitByLevelState {
   const byPartition = useByPartition(active, data, columns, initialByCol);
@@ -85,17 +86,31 @@ export function useCurveFitByLevel(
         const n = Math.min(xv.length, yv.length);
         const x: number[] = [];
         const y: number[] = [];
+        const keep: number[] = [];
         for (let i = 0; i < n; i++) {
           if (Number.isFinite(xv[i]) && Number.isFinite(yv[i])) {
             x.push(xv[i]);
             y.push(yv[i]);
+            keep.push(i);
           }
+        }
+        // Weighted levels: the sigma / weight column rides along in the
+        // level's own rows. Fail closed — a level whose weighting is invalid
+        // reports an error instead of silently fitting unweighted.
+        let wfields: ReturnType<typeof weightRequestFields> = {};
+        if (weight && weight.mode !== "none") {
+          const { dy, issue } = dyForData(lvl.data, yKey, weight, keep);
+          if (!dy) {
+            return { label: lvl.label, n: x.length, result: null, error: issue ?? "weighting unavailable for this level" };
+          }
+          wfields = weightRequestFields(weight, keep.map((i) => dy[i]));
         }
         try {
           const result = await fitModel({
             model: modelName,
             x,
             y,
+            ...wfields,
             ...(start
               ? {
                   p0: start.p0,
@@ -125,7 +140,7 @@ export function useCurveFitByLevel(
     return () => {
       cancelled = true;
     };
-  }, [byPartition.levels, modelName, xKey, yKey, start, active]);
+  }, [byPartition.levels, modelName, xKey, yKey, start, active, weight]);
 
   const { byOptions, byCol, setByCol, levels, totalLevels } = byPartition;
   return { byOptions, byCol, setByCol, levels, totalLevels, results, busy };

@@ -95,8 +95,8 @@ export interface CurveFitState {
   weightNote: string | null;
   // ── "By" grouping (JMP_GAP J7 residual) ─────────────────────────────────
   // Display-only: none of it touches the plot overlay, the recorded macro/
-  // pipeline step, or the durable FitSpec, and every level fits UNWEIGHTED
-  // regardless of weightMode (see useCurveFitByLevel's header doc).
+  // pipeline step, or the durable FitSpec, and levels honour the panel's
+  // weighting (see useCurveFitByLevel's header doc).
   byOptions: ByColumnOption[];
   byCol: number | null;
   setByCol: (i: number | null) => void;
@@ -268,8 +268,13 @@ export function useCurveFit(): CurveFitState {
     return { p0: parsed.p0, lower: parsed.lower, upper: parsed.upper, fixed: parsed.fixed };
   }, [paramsCustom, paramRows, model]);
 
+  const byWeight = useMemo<FitWeighting | undefined>(
+    () => (plottedYKeyNow == null || weightMode === "none" ? undefined
+      : weightingOf(weightMode, errKeys, manualKey, scaleErrors, plottedYKeyNow)),
+    [weightMode, errKeys, manualKey, scaleErrors, plottedYKeyNow],
+  );
   const byLevel = useCurveFitByLevel(
-    active, data, byColumns, modelName, xKey, plottedYKeyNow, customStart,
+    active, data, byColumns, modelName, xKey, plottedYKeyNow, customStart, byWeight,
     selected?.factorKeys[0] ?? null,
   );
 

@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_equation import equation_model
 from quantized.calc.fit_equation_init import auto_start
+from quantized.calc.dataset_compare import compare_datasets
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import weights_from_dy
 from quantized.calc.global_curve_fit import (
@@ -250,6 +251,75 @@ def global_fit_job(req: GlobalFitRequest) -> dict[str, Any]:
     def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
         try:
             return _solve(prob, progress, abort_check)
+        except GlobalFitCancelled as exc:
+            raise JobCancelled(str(exc)) from exc
+
+    try:
+        return {"job_id": jobs.submit(run_job)}
+    except JobQueueFullError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+
+_COMPARE_FIT_KEYS = ("params", "errors", "shared", "exitFlag", "warnings", "nTotal", "nFree")
+
+
+def _compare(
+    prob: _Problem,
+    progress: ProgressFn | None = None,
+    abort_check: AbortFn | None = None,
+) -> dict[str, Any]:
+    shared = [str(c["param_name"]) for c in prob.constraints]
+    for c in prob.constraints:
+        if sorted(c["datasets"]) != list(range(len(prob.series))):
+            raise ValueError("compare datasets tests parameters shared across ALL datasets")
+    out = compare_datasets(
+        list(prob.series), prob.fcn, prob.names, shared,
+        init_guess=prob.p0, lower=prob.lower, upper=prob.upper, weights=prob.weights,
+        fixed=prob.fixed, covariance=prob.covariance, max_iter=prob.max_iter,
+        progress_callback=progress, abort_check=abort_check,
+    )
+    for key in ("sharedFit", "separateFit"):
+        out[key] = {k: out[key][k] for k in _COMPARE_FIT_KEYS if k in out[key]}
+    res: dict[str, Any] = to_jsonable(out)
+    res["paramNames"] = prob.names
+    return res
+
+
+def _checked_compare(req: GlobalFitRequest) -> _Problem:
+    """``_checked`` plus the compare-specific rules (>= 2 datasets, a named
+    shared parameter), so both routes 422 before any fitting starts."""
+    prob = _checked(req)
+    if len(prob.series) < 2:
+        raise HTTPException(status_code=422, detail="compare datasets needs at least two datasets")
+    if not prob.constraints:
+        raise HTTPException(
+            status_code=422,
+            detail="name at least one parameter to test as shared across the datasets (constraints)")
+    return prob
+
+
+@router.post("/compare-datasets")
+def compare_datasets_route(req: GlobalFitRequest) -> dict[str, Any]:
+    """Extra-sum-of-squares F-test: do the ``constraints`` parameters share ONE
+    value across all datasets (restricted fit) or does each dataset need its own
+    (full fit)? Same request as ``/global``; the constraints are the hypothesis
+    under test and must each span every dataset."""
+    prob = _checked_compare(req)
+    try:
+        return _compare(prob)
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/compare-datasets/job")
+def compare_datasets_job(req: GlobalFitRequest) -> dict[str, Any]:
+    """Queue the dataset comparison on the poll-model job runner (two global
+    fits); cancel stops it at the next model evaluation."""
+    prob = _checked_compare(req)
+
+    def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
+        try:
+            return _compare(prob, progress, abort_check)
         except GlobalFitCancelled as exc:
             raise JobCancelled(str(exc)) from exc
 
