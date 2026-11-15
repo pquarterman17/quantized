@@ -116,6 +116,7 @@ from quantized.io.origin_project.curve_style_color import (
     style_fields,
 )
 from quantized.io.origin_project.opju_codec import curve_plot_style
+from quantized.io.origin_project.opju_column_fixed import fixed_column_record
 from quantized.io.origin_project.opju_curve_range import range_reason
 from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
 from quantized.io.origin_project.opju_curve_token import (
@@ -126,6 +127,7 @@ from quantized.io.origin_project.opju_curve_token import (
 )
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
+from quantized.io.origin_project.opju_plot_gates import error_bar_reason, withhold_step_style
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
@@ -234,7 +236,9 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     A record whose fields don't resolve is skipped; an id claimed twice with
     *different* ``(book, column)`` is poisoned (removed entirely) — fail
     closed, never guess. Records outside any page span cannot be attributed
-    to a book and are ignored.
+    to a book and are ignored. A record the field walk rejects is read at its
+    fixed offsets (``opju_column_fixed``: a column whose format is not Text &
+    Numeric); such records only add ids the field walk did not resolve.
     """
     ids: dict[int, tuple[str, str]] = {}
     poisoned: set[int] = set()
@@ -244,24 +248,32 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     yerr: set[int] = set()
     book_pages: set[str] = set()
     bounds = [*pages, (len(b), "")]
+    walked: list[tuple[str, int, tuple[str, str | None, int | None]]] = []
+    fixed: list[tuple[str, int, tuple[str, str | None, int | None]]] = []
     for (start, book), (end, _next) in zip(bounds, bounds[1:], strict=False):
-        for _off, cid, fields in column_id_records(b, start, end):
+        for off, cid, fields in column_id_records(b, start, end):
             parsed = _parse_column_record(b, fields - 1)  # it skips one <pb> byte
-            if parsed is None:
-                continue
-            name, desig, partner = parsed
-            if cid in ids and ids[cid] != (book, name):
-                poisoned.add(cid)
-                continue
-            ids[cid] = (book, name)
-            book_pages.add(book)
-            if partner is not None:
-                x_partner[cid] = partner
-            if desig == "Y-error":
-                yerr.add(cid)
-            if desig == "X":
-                x_ids.append(cid)
-                book_x.setdefault(book, name)
+            if parsed is not None:
+                walked.append((book, cid, parsed))
+            elif (got := fixed_column_record(b, off)) is not None:
+                fixed.append((book, cid, got))  # a non-Text&Numeric column
+    # the fixed-offset records only ADD ids: one the field walk already
+    # resolved (or poisoned) is never touched by them (opju_column_fixed)
+    walked_ids = {cid for _book, cid, _p in walked}
+    added = [rec for rec in fixed if rec[1] not in walked_ids]
+    for book, cid, (name, desig, partner) in [*walked, *added]:
+        if cid in ids and ids[cid] != (book, name):
+            poisoned.add(cid)
+            continue
+        ids[cid] = (book, name)
+        book_pages.add(book)
+        if partner is not None:
+            x_partner[cid] = partner
+        if desig == "Y-error":
+            yerr.add(cid)
+        if desig == "X":
+            x_ids.append(cid)
+            book_x.setdefault(book, name)
     for cid in poisoned:
         ids.pop(cid, None)
         x_partner.pop(cid, None)
@@ -400,10 +412,13 @@ def extract_curves_by_id(
             curve.update(style_fields(record))
         if not reason:  # a plot of part of its column: no row-range binding
             reason = range_reason(b, record, sheet or book, y_col)
+        # an error-bar DataPlot: bars drawn from designations, never a line
+        reason = error_bar_reason(record) or reason
         # the shipped 8f-tag reader stays authoritative for line/scatter
         style = curve_plot_style(b, m.start())
         if style:
             curve["style"] = style
+        withhold_step_style(curve, record)  # drawn as straight segments otherwise
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)

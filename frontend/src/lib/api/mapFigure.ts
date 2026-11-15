@@ -6,7 +6,7 @@
 // `signal` (P3.4): the caller's runCancellable signal; a cancelled download
 // saves nothing (postDownload re-checks it right before writing).
 
-import { postDownload } from "./http";
+import { postBlob, postDownload } from "./http";
 import type { components } from "./schema";
 
 /** Gap cells travel as `null` (the route reads them as NaN), exactly as
@@ -21,4 +21,11 @@ export function exportMapFigure(body: MapFigureSpec, signal?: AbortSignal): Prom
     `${body.filename ?? "map"}.${body.fmt ?? "pdf"}`,
     signal,
   );
+}
+
+/** The same route, returned as image bytes instead of a download: the Map
+ *  stage's static 3-D preview. The caller sends the export's own body with
+ *  only `fmt` (and `filename`) changed, so the preview is the figure. */
+export function renderMapFigure(body: MapFigureSpec, signal?: AbortSignal): Promise<Blob> {
+  return postBlob("/api/export/map-figure", body, signal);
 }

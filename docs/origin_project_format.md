@@ -1320,6 +1320,25 @@ CPYUA's framing:
 exercised them — so only these three are wired; anything else falls back
 to plain `Y`, matching `.opj`'s own default.)
 
+**These markers exist only for Text & Numeric columns (2026-11-15).** The
+column record is the `.opj` column property block in CPYUA's sparse grammar;
+expanded from its first chunk the fields sit at fixed offsets: `4` u16 id,
+`17` designation code, `18..28` short name (11 chars + NUL; Origin cuts a
+longer name there), `30` display format (0 numeric, 1 text, 3 date, 9 text &
+numeric), `35` u16 associated column id, `37`/`38` flags. The bytes read
+above as "markers" are offsets 37-38: bit `0x20` of 37 and bit `0x01` of 38
+are set only for a text-capable format, `0x10` of 37 marks an error column,
+and 38's high nibble is 5 for X, 4 for disregard, 6 otherwise. A Numeric
+column (every book filled over COM / LabTalk) therefore writes `01 50` /
+`01 60` / `10 60` and no `09` byte. Designation codes, from a COM matched
+pair (same book, format 1 vs 9) and `wks.col.type` of `designations.opju` /
+Altaxo `WksDifferentDiagramAssoc.opju`: **0 Y, 1 disregard, 2 Y-error, 3 X,
+4 label, 5 Z, 6 X-error** (7, 8 = LabTalk types 8, 9). Note this
+contradicts the `21 41` = label / `20 61` + code 4 = Z / code 5 = X-error
+reading below: `21 41` is disregard, code 4 label, 5 Z, and a real X-error
+column (code 6) carries `30 61` (booked as decode-plan item 72). Readers:
+`opju_column_fixed.py`, `opju_record_meta.py`.
+
 **2. A fixed-shape run of default column-format doubles follows every
 marker**, then an OPTIONAL length-prefixed embedded blob
 (`<len:u8><tag=0x01><bytes><NUL>`) holding that column's `ColumnInfo`/

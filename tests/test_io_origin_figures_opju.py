@@ -1491,6 +1491,17 @@ def test_realdata_curve_bindings_vs_plots_oracle(stem: str) -> None:
     wrong = decoded - oracle
     assert not wrong, f"{stem}: decoded curve(s) contradict the oracle: {sorted(wrong)}"
 
+    # plots.json lists error-bar plots too; they are not curves (their
+    # token's plot byte is 231/233, COM-proven 2026-11-15: opju_plot_gates)
+    # and are left out on purpose -- still plotted, so still in the oracle
+    bars = {
+        (n["book"], n["y"])
+        for f in figs
+        for n in f.get("curve_sheet_omitted") or []
+        if n["reason"] == "error_bar_plot"
+    }
+    assert bars <= oracle, f"{stem}: error bars Origin does not plot: {sorted(bars - oracle)}"
+    oracle -= bars
     recall = len(decoded & oracle) / len(oracle) if oracle else 1.0
     floor = _RECALL_FLOOR[stem]
     assert recall >= floor - 1e-9, f"{stem}: recall {recall:.3f} regressed below floor {floor:.3f}"
