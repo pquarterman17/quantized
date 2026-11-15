@@ -101,9 +101,13 @@ def apply_waterfall_x_offsets(
     if styles is not None:
         out_styles = []
         for i, spec in enumerate(styles):
-            cb = spec.get("color_by") if spec else None
-            if spec and isinstance(cb, (list, tuple)) and i < blocks:
-                out_styles.append({**spec, "color_by": _place(cb, i, rows, blocks, math.nan)})
+            if spec and i < blocks:
+                styled: dict[str, Any] = dict(spec)
+                for key in ("color_by", "size_by"):
+                    cb = spec.get(key)
+                    if isinstance(cb, (list, tuple)):
+                        styled[key] = _place(cb, i, rows, blocks, math.nan)
+                out_styles.append(styled)
             else:
                 out_styles.append(spec)
     out_spans: Spans = None

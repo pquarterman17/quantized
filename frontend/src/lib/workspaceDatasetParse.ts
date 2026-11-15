@@ -16,7 +16,7 @@
 // validated independently from its raw JSON plus its own array index (used
 // only for a stable fallback id/name and in error messages).
 
-import { sanitizeDataStruct } from "./categorical";
+import { sanitizeDataStruct } from "./dataStructSanitize";
 import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFiniteCells";
 import { noteLegacyNulls, readLegacyNullStruct, type LegacyNullTally } from "./legacyNullCells";
 import { parseDatasetSource } from "./datasetSource";

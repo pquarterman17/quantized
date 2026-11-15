@@ -60,6 +60,14 @@ import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
 
+/** A style without the three marks: a break panel cannot draw them (the export warns the same). */
+export const plainStyle = (s: SeriesStyle | undefined): SeriesStyle | undefined => {
+  if (!s || (s.connect == null && s.dropLines == null && s.sizeBy == null)) return s;
+  const { connect: _c, dropLines: _d, sizeBy: _s, ...rest } = s;
+  void _c; void _d; void _s;
+  return rest;
+};
+
 /** Everything a break panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed panel box), `xLim` (the
  *  panel's own x-segment), `seriesLabels` and `seriesStyles` are per-panel and
@@ -221,7 +229,8 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       // channel it was made for even when this panel's channel list differs
       // from its neighbour's.
       seriesLabels: p.channels.map((ch) => args.seriesLabels[ch]),
-      seriesStyles: p.channels.map((ch) => args.seriesStyles[ch]),
+      // Spline / size-by / drop lines are not drawn in break panels (the export warns the same).
+      seriesStyles: p.channels.map((ch) => plainStyle(args.seriesStyles[ch])),
       hidden: p.channels.map((ch) => args.hiddenChannels.includes(ch)),
       ...bars[i],
       linearPaths: LINEAR_PATHS,

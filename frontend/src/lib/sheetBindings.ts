@@ -11,7 +11,7 @@ export function sheetIdsRead(f: ComputedColumn): string[] {
   return (f.sheets ?? []).flatMap((b) => (b.id === null ? [] : [b.id]));
 }
 
-function mapLinked(datasets: readonly Dataset[], fn: (f: ComputedColumn) => ComputedColumn): { datasets: Dataset[]; changed: string[] } {
+export function mapLinked(datasets: readonly Dataset[], fn: (f: ComputedColumn) => ComputedColumn): { datasets: Dataset[]; changed: string[] } {
   const changed: string[] = [];
   const out = datasets.map((d) => {
     if (!d.formulas?.some((f) => f.sheets?.length)) return d;
@@ -34,19 +34,3 @@ export function cutSheetRefs(datasets: readonly Dataset[], ids: ReadonlySet<stri
   );
 }
 
-/** An appended project's datasets: links are remapped through `idMap` (old
- *  id -> new id), like `bgRef`; one whose target was not part of the append
- *  is cut. Returns how many links were cut. */
-export function remapSheetRefIds(incoming: readonly Dataset[], idMap: ReadonlyMap<string, string>): { datasets: Dataset[]; dropped: number } {
-  let dropped = 0;
-  const { datasets } = mapLinked(incoming, (f) => ({
-    ...f,
-    sheets: f.sheets!.map((b) => {
-      if (b.id === null) return b;
-      const id = idMap.get(b.id) ?? null;
-      if (id === null) dropped++;
-      return { ...b, id };
-    }),
-  }));
-  return { datasets, dropped };
-}

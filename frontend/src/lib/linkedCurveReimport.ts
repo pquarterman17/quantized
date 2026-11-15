@@ -18,13 +18,7 @@ export function remapLinkedCurvesByLabel(
   oldLabels: readonly string[],
   newLabels: readonly string[],
 ): Dataset[] | null {
-  const count = (list: readonly string[], l: string) => list.filter((x) => x === l).length;
-  const move = (c: number): number => {
-    if (c < 0) return c;
-    const label = oldLabels[c];
-    if (label === undefined || count(oldLabels, label) !== 1 || count(newLabels, label) !== 1) return -1;
-    return newLabels.indexOf(label);
-  };
+  const move = moveByLabel(oldLabels, newLabels);
   let changed = false;
   const next = datasets.map((d) => {
     if (!d.linkedCurves?.some((c) => c.datasetId === id)) return d;
@@ -37,4 +31,18 @@ export function remapLinkedCurvesByLabel(
     };
   });
   return changed ? next : null;
+}
+
+/** The column move by LABEL from `oldLabels` to `newLabels`: a column that
+ *  vanished, or whose label repeats in either list, is -1 (missing). Graph
+ *  layers' inset curves follow a re-import by the same rule
+ *  (lib/graphLayerRemap.ts, origin gap audit 3 #15). */
+export function moveByLabel(oldLabels: readonly string[], newLabels: readonly string[]): (c: number) => number {
+  const count = (list: readonly string[], l: string) => list.filter((x) => x === l).length;
+  return (c) => {
+    if (c < 0) return c;
+    const label = oldLabels[c];
+    if (label === undefined || count(oldLabels, label) !== 1 || count(newLabels, label) !== 1) return -1;
+    return newLabels.indexOf(label);
+  };
 }

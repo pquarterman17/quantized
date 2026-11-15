@@ -10,10 +10,12 @@
 // dataset's OWN fields (`remapDatasetChannels`, formulas) stay with each caller.
 // It also covers OTHER datasets' formulas that read this one through
 // `sheet("Name", L)` (lib/sheetRefs.ts) and live graphs' curves that read it
-// (lib/channelRemap's remapLinkedCurveSources) — returned as a `datasets` override.
+// (lib/channelRemap's remapLinkedCurveSources) — returned as a `datasets` override —
+// and graph layers' inset curves that read it (lib/graphLayerRemap.ts).
 
 import {
   type ColumnShift,
+  remapChannel,
   remapFigureBindings,
   remapFigureViewChannels,
   remapLinkedCurveSources,
@@ -22,10 +24,11 @@ import {
 } from "../lib/channelRemap";
 import { remapLegacyFigureConfig, remapPlotSpecRefs } from "../lib/channelRemapDocs";
 import { formulaExtension } from "../lib/formulaExt";
+import { layerSourcesPatch } from "../lib/graphLayerRemap";
 import type { Dataset } from "../lib/types";
 import { recomputeFormulaData } from "./computedColumns";
 import type { AppState } from "./useApp";
-import { syncDatasetWindowDocuments } from "./windowDocuments";
+import { plotWindowView, syncDatasetWindowDocuments, syncPlotWindow } from "./windowDocuments";
 
 export function columnRemovalRefsPatch(
   s: AppState,
@@ -46,7 +49,7 @@ export function columnRemovalRefsPatch(
       : null;
   // Live graphs' curves that read this dataset follow their columns (lib/linkedCurves.ts).
   const override = remapLinkedCurveSources(reread ?? datasets, id, removedCol) ?? reread;
-  return {
+  const patch: Partial<AppState> = {
     ...(override ? { datasets: override } : {}),
     plotWindows: syncDatasetWindowDocuments(
       remapWindowViews(s.plotWindows, id, removedCol),
@@ -86,5 +89,15 @@ export function columnRemovalRefsPatch(
           composition: null,
         }
       : {}),
+  };
+  // Graph layers' inset curves reading this dataset (ANY plot's, lib/graphLayerRemap.ts).
+  return {
+    ...patch,
+    ...layerSourcesPatch(
+      { layers: s.layers, plotWindows: patch.plotWindows!, editableFigures: patch.editableFigures! },
+      id,
+      (c) => (c < 0 ? c : (remapChannel(c, removedCol) ?? -1)),
+      { view: plotWindowView, sync: (w, v) => syncPlotWindow(w, v) },
+    ),
   };
 }

@@ -14,7 +14,7 @@ import type { FigureOverrides } from "./figureOverrides";
 /** The overrides that belong to a figure's DATA: axis ranges, and every
  *  decoration placed in data coordinates (or on the data's breaks). */
 export const DATA_ANCHORED_OVERRIDES = [
-  "x_lim", "y_lim", "y2_lim", "x_breaks", "annotations", "shapes", "ref_lines", "region_shades", "inset",
+  "x_lim", "y_lim", "y2_lim", "x_breaks", "annotations", "shapes", "ref_lines", "region_shades", "inset", "layers",
 ] as const satisfies readonly (keyof FigureOverrides)[];
 
 type DataKey = (typeof DATA_ANCHORED_OVERRIDES)[number];

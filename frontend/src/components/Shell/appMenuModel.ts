@@ -1,6 +1,7 @@
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { reopenRecent } from "../../lib/reopenRecent";
-import { recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
+import type { RecentFile } from "../../lib/recentFiles";
+import { recentParentLabel, relativeTime } from "../../lib/recentLabels";
 import { runAction, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 

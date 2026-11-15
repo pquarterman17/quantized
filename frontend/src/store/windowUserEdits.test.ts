@@ -11,7 +11,8 @@ import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 import { datasetViewDefaults } from "./windowDefaults";
 import { plotWindowView } from "./windowDocuments";
-import { focusedWindowGuardsAgainst, viewHasUserEdits, windowHasUserEdits } from "./windowUserEdits";
+import { focusedWindowGuardsAgainst } from "./windowOpenGuard";
+import { viewHasUserEdits, windowHasUserEdits } from "./windowUserEdits";
 
 function data(technique = "generic", labels = ["M", "R", "dM"]): DataStruct {
   return {

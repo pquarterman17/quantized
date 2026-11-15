@@ -28,11 +28,6 @@ export function recentKey(entry: Pick<RecentFile, "name" | "path">): string {
   return entry.path ?? entry.name;
 }
 
-/** Compact parent-folder disambiguator for the Recent surfaces. */
-export function recentParentLabel(path: string | undefined): string {
-  return path?.replace(/\\/g, "/").split("/").at(-2) ?? "";
-}
-
 /** Prepend `entry`, drop only the same source identity, and cap the list. */
 export function addRecentEntry(list: RecentFile[], entry: RecentFile, max = MAX): RecentFile[] {
   const key = recentKey(entry);
@@ -85,17 +80,3 @@ export function clearRecentMeta(): void {
   }
 }
 
-/** Coarse "2m ago" / "yesterday" label for an ISO time, given `nowMs`. Pure so
- *  the bucketing is testable without a clock. */
-export function relativeTime(at: string, nowMs: number): string {
-  const t = Date.parse(at);
-  if (Number.isNaN(t)) return "";
-  const s = Math.max(0, Math.round((nowMs - t) / 1000));
-  if (s < 45) return "just now";
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.round(h / 24);
-  return d === 1 ? "yesterday" : `${d}d ago`;
-}

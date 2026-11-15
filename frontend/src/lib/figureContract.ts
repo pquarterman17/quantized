@@ -68,6 +68,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   stackMode: canonical("plot.stack.enabled"),
   insetMode: canonical("plot.inset.enabled"),
   inset: canonical("plot.inset.geometry"),
+  layers: canonical("decor.layers", "Inset graphs of other data, images and tables: placement, curve bindings, axes, cells."),
   polarMode: canonical("plot.coordinateSystem", "Represent the current polar mode as an explicit coordinate system."),
   statMode: canonical("plot.statMode"),
   statHideEmptyLevels: canonical("plot.stat.hideEmptyLevels"),

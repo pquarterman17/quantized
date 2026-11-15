@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { downstreamOf, markStale, recalcNodes, sortForRecalc, wouldCreateCycle } from "./recalc";
+import { downstreamOf, markStale, recalcNodes, wouldCreateCycle } from "./recalc";
+import { sortForRecalc } from "./recalcOrder";
 import type { ComputedColumn, Dataset, DataStruct } from "./types";
 
 const data: DataStruct = { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} };
