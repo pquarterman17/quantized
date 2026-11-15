@@ -364,6 +364,7 @@ describe("I4 -- plot-open and fit-draw are separate, and every consumer honours 
     expect(useApp.getState().reports).toEqual([]);
     expect(useApp.getState().status).toContain("cannot carry the fit");
     expect(mocks.ask).not.toHaveBeenCalled(); // no answers asked for, then thrown away
+    expect(useApp.getState()).toMatchObject({ yKeys: [0], xKey: null, fitOverlay: null }); // nothing changed
   });
 
   it("the built-figure check counts only a fit series on a shape overlays can ride", () => {

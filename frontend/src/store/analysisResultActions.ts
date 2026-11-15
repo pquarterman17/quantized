@@ -183,25 +183,31 @@ export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Pro
   return openResultPlot(id, bindingIndex, "open");
 }
 
+function refuseView(): false {
+  useApp.getState().setStatus("can't send fitted plot: a polar, stat or faceted view's figure cannot carry the fit; show it as a plain plot first");
+  return false;
+}
+
 /** Use the same gate as Open plot, then hand the live store to the existing
  * report command. A fitted plot is never sent without its fit: a fit the gate
- * refuses stops the send before anything changes; a polar / stat / faceted
- * view is refused before the dialog (the plot it opened stays open); and the
- * built figure must carry THIS fit -- the overlay object the gate drew, on the
- * dataset it opened -- or the send fails. */
+ * refuses, and a polar / stat view (never an overlay-carrying figure), stop
+ * the send before anything changes; a facet that survives the open is refused
+ * before the dialog (the opened plot stays); and the built figure must carry
+ * THIS fit -- the overlay object the gate drew, on the dataset it opened -- or
+ * the send fails. */
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
+  const before = useApp.getState();
+  const fitted = before.analysisResults.find((item) => item.id === id)?.settingsRef?.field === "fitSpec";
+  if (fitted && (before.polarMode || before.statMode)) return refuseView(); // opening changes neither mode
   const opened = await openResultPlot(id, bindingIndex, "report");
   if (!opened) return false;
   const { fit, dataset } = opened;
-  const st = useApp.getState();
-  if (fit && (st.polarMode || st.statMode || st.facetKey !== null)) { // these figures never carry an overlay
-    st.setStatus("can't send fitted plot: a polar, stat or faceted view's figure cannot carry the fit; show it as a plain plot first");
-    return false;
-  }
+  if (fit && useApp.getState().facetKey !== null) return refuseView();
   const require = fit
     ? (spec: FigureSpec | null) => {
         const now = useApp.getState();
         if (now.activeId !== dataset.id || now.fitOverlay !== fit) return "the plot changed while sending; send it again";
+        if (!spec) return "a stat figure cannot carry the fit";
         return specCarriesFit(spec, dataset) ? null
           : "the figure does not carry the fit (its curve is not drawn there, or the view splits or encodes series)";
       }

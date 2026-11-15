@@ -25,7 +25,8 @@
 import { askParams } from "../store/paramDialog";
 import type { FigureSpec } from "./api/figures";
 import type { ParamField } from "./params";
-import type { ReportEntry, ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
+import { NEW_REPORT, reportChoices } from "./reportChoices";
+import type { ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
 import { stampReportTransformProvenance } from "./reportTransformProvenance";
 import { cancelled, exportActive, stemFromName, type StoreGet } from "./exportActive";
 import { chooseExcludedRows } from "./excludedRowsChoice";
@@ -50,8 +51,7 @@ import { beginOp, endOp } from "../store/pendingOps";
 import { TOAST_ACTION_TTL, toast } from "../store/toasts";
 import { asOneEditStep } from "../store/undoStep";
 
-/** The "make a new report" choice in the Report picker. */
-export const NEW_REPORT = "New report";
+export { NEW_REPORT, reportChoices }; // lib/reportChoices.ts
 /** The spec's `dpi` — the Export dialog's own default, sent so the spec
  *  matches what "Export figure…" would post. The report renderer does NOT
  *  use it: `routes.report_figures.render_spec` rasterises every report PNG
@@ -60,23 +60,6 @@ export const NEW_REPORT = "New report";
 export const REPORT_FIGURE_DPI = 300;
 /** The one undo label every send records. */
 export const SEND_UNDO_LABEL = "send figure to report";
-
-/** One picker label per report, index-aligned with `reports` and unique
- *  (a select can only hand back the label): the report's name, with its id
- *  appended when that name collides — with another report, with
- *  {@link NEW_REPORT}, or with another report's id-suffixed label (a second
- *  pass). A pathological set still colliding after that is numbered by
- *  position, which is unique by construction. */
-export function reportChoices(reports: readonly ReportEntry[]): string[] {
-  const colliding = (ls: string[]) =>
-    ls.map((l) => l === NEW_REPORT || ls.indexOf(l) !== ls.lastIndexOf(l));
-  let labels = reports.map((r) => r.name);
-  for (let pass = 0; pass < 2; pass++) {
-    const bad = colliding(labels);
-    labels = labels.map((l, i) => (bad[i] && l === reports[i].name ? `${l} (${reports[i].id})` : l));
-  }
-  return colliding(labels).some(Boolean) ? labels.map((l, i) => `${i + 1}. ${l}`) : labels;
-}
 
 /** The Send dialog's field list, shared by both send paths (the active-plot
  *  command and the Library editable-figure action below) so the target
