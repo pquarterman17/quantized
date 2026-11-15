@@ -24,8 +24,8 @@ export default function MacroCard() {
   };
 
   const downloadScript = (): void => {
-    saveBlob(new Blob([pipelineToScript(steps)], { type: "text/plain" }), "macro.qzm");
-    setStatus(`saved macro.qzm — ${steps.length} steps`);
+    saveBlob(new Blob([pipelineToScript(steps)], { type: "text/plain" }), "macro.py");
+    setStatus(`saved macro.py (Python script) — ${steps.length} steps`);
   };
 
   return (
@@ -63,7 +63,7 @@ export default function MacroCard() {
           Copy script
         </Button>
         <Button size="sm" onClick={downloadScript} disabled={steps.length === 0}>
-          Download .qzm
+          Download .py
         </Button>
       </div>
     </Card>

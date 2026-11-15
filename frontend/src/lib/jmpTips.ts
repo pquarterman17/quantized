@@ -93,7 +93,7 @@ export const JMP_TIPS: readonly JmpTip[] = [
     id: "saved-script-to-pipeline",
     jmp: "File > Save / Run Script (JSL scripts save and replay an analysis sequence)",
     quantized:
-      "Data ▸ Pipeline (edit + re-run recorded steps)… records every transformation and analysis; open it to inspect, edit, and rerun the steps. For headless scripting, export a Python recipe and run quantized.api in script mode.",
+      "Data ▸ Pipeline (edit + re-run recorded steps)… records your steps; open it to inspect, edit, and rerun them. Export script saves a Python script on quantized.api that re-runs the import, corrections and fits headless; steps with no API equivalent (formula columns, transforms) stay as comments.",
     keywords: "script pipeline recipe save replay recalc reproduce reproducible",
   },
 ];

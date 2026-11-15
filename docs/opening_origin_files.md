@@ -52,6 +52,68 @@ you don't need to convert anything first.
   `"Book@N (sheet N)"` pseudo-datasets so their data isn't lost, even
   though quantized doesn't (yet) show a nested Book→Sheet tree.
 
+## Converting many projects at once (no Origin, no app)
+
+`qz convert` turns an archive of projects into CSV, Excel or Quantized
+workspaces from the command line, every book and every sheet:
+
+```bash
+qz convert "archive/**/*.opj" "archive/**/*.opju" --to xlsx --out converted/
+```
+
+- `--to csv`: one file per sheet, `<file>__<Book>.csv` and
+  `<file>__<Book>__sheet<k>.csv` for sheet 2 onwards.
+- `--to xlsx`: one workbook per Origin book, `<file>__<Book>.xlsx`, a tab per sheet.
+- `--to dwk`: one workspace per project, `<file>.dwk`: the same Library an
+  import of the project in quantized gives (names, folders, workbooks,
+  error-bar roles, the primary book active, figures and the fidelity summary);
+  open it with File ▸ Open.
+
+Tables keep the Long Name and Units header rows, so they re-import with the
+same names. A matrix is written as its X, Y, Z columns; a text-only sheet
+(notes, a sample list) as its text columns. An Origin book's column
+designations, comments and date formats go on one extra line above the
+header, `# quantized-columns: {...}` (cell A1 in Excel); quantized reads it
+back on import, so a re-imported X,Y,X,Y sheet pairs each Y with its own X
+again. Other programs see a comment line. The line is plain ASCII (any other
+character is escaped), is written only with the header rows, and is at most
+32,000 characters, so an Excel cell never cuts it; a crafted or damaged line is
+ignored on import with a note. Where the line cannot be carried,
+the report says so for that book.
+
+Each project gets a summary line, and the whole run a report,
+`converted/convert-report.json`, listing every book, its output, any problem
+and any note. File names are taken literally when the file exists
+(`sample[2].opj` is a name, not a pattern); a pattern that matches nothing is
+a failed entry.
+
+**It fails closed.** The project is read and checked the way quantized's own
+import does, including the file-length check that catches a truncated `.opj`.
+
+- A book that lost data (a column the reader could not decode, an X it could
+  not recover, cells it blanked as implausible, a sheet it could not identify,
+  values that fail their checksum, a matrix without its coordinates, a complex
+  column's imaginary part, or a file read only by the legacy content scan) is
+  reported and **not written**.
+- A loss that belongs to no recovered book (a truncated file, a dataset or
+  matrix the reader could not place) writes **nothing** for that project: its
+  output cannot be vouched for.
+- `--allow-partial` writes all of it anyway, every problem still in the
+  report.
+
+**It never overwrites.** An output file (or the report) that already exists
+is left alone, and its book is reported "exists, not overwritten", unless you
+pass `--overwrite`. Even then nothing is ever written to one of the input
+projects, into one, or through a symlink that points at one.
+`quantized.api.save_table` follows the same rule (`overwrite=False` by
+default; `protect=[...]` names files it must never replace).
+
+The exit status is 0 only when every input converted completely; otherwise 1.
+
+From Python, the same is `quantized.api.convert_origin_project(path, out_dir,
+"csv")`, and `quantized.api.read_origin_books(path)` returns every book as a
+DataStruct (`quantized.api.load` returns only the primary, largest one).
+
 ## Known limitations
 
 Import is thorough but not lossless. In particular:

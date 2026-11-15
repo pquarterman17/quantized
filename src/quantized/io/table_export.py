@@ -59,6 +59,12 @@ class ExportSheet:
 
     name: str
     columns: Sequence[ExportColumn]
+    #: Lines written above the header rows, one per line (a CSV line as
+    #: given, an Excel row with the text in its first cell) — the column-roles
+    #: line of ``io/_column_marker.py``. Written only with ``header``: a
+    #: headerless table has no header block for it to sit above.
+    #: Empty for the app's own exports.
+    preamble: Sequence[str] = ()
 
 
 def _check(sheet: ExportSheet) -> int:
@@ -132,6 +138,8 @@ def format_delimited(sheet: ExportSheet, delimiter: str = ",", *, header: bool =
     n_rows = _check(sheet)
     out = io.StringIO()
     writer = csv.writer(out, delimiter=delimiter, lineterminator="\n")
+    for line in sheet.preamble if header else ():
+        out.write(line + "\n")
     if header:
         writer.writerows(_header_rows(sheet))
     for r in range(n_rows):
@@ -163,6 +171,8 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
     for sheet in sheets:
         n_rows = _check(sheet)
         ws = wb.create_sheet(_sheet_title(sheet.name, taken))
+        for line in sheet.preamble if header else ():
+            ws.append([line])
         if header:
             for row in _header_rows(sheet):
                 ws.append(row)

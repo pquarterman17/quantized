@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { executeSteps, type ExecuteResult, type StepLogEntry, type StepStatus } from "./executeSteps";
-import { makeStep, regenerateStep, validateExpression, type PipelineStep } from "../../../lib/pipeline";
+import { fitParamsForEdit, makeStep, regenerateStep, validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analyzePipeline, type PipelineReview } from "../../../lib/pipelineStudio";
 import type { Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -140,10 +140,11 @@ export function usePipeline(): PipelineState {
   }, [loadSteps, recordHistory]);
 
   const editStep = useCallback(
-    (id: string, params: Record<string, unknown>, text?: { label: string; code: string }) => {
+    (id: string, edited: Record<string, unknown>, text?: { label: string; code: string }) => {
       // An Apply that changes nothing (a double-click) is not an undo step.
       const st = useApp.getState().macroSteps.find((s) => s.id === id);
       if (!st) return;
+      const params = fitParamsForEdit(st, edited);
       const same = JSON.stringify(st.params) === JSON.stringify(params);
       if (same && (!text || (text.label === st.label && text.code === st.code))) return;
       recordHistory("edit pipeline step");

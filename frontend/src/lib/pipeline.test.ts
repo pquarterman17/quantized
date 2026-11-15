@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import {
   makeStep,
   moveStep,
-  pipelineToScript,
   regenerateStep,
   validateExpression,
 } from "./pipeline";
@@ -35,17 +34,6 @@ describe("makeStep / regenerateStep", () => {
     });
     const edited = regenerateStep({ ...s, params: { ...s.params, expr: "A * C * 2" } });
     expect(edited.code).toBe('qz.addColumn("P", "A * C * 2", { errors: true })');
-  });
-});
-
-describe("pipelineToScript", () => {
-  it("emits enabled steps and comments out disabled ones", () => {
-    const a = makeStep("expression", "Add column r", 'qz.addColumn("r", "A")');
-    const b = { ...makeStep("ui", "Y log", "qz.setYLog(true)"), enabled: false };
-    const script = pipelineToScript([a, b]);
-    expect(script).toContain('qz.addColumn("r", "A")');
-    expect(script).toContain("// off: qz.setYLog(true)");
-    expect(script).toContain("2 steps");
   });
 });
 

@@ -238,6 +238,12 @@ export async function executeSteps(
           const request = {
             model: spec.model, x: pairs.x, y: pairs.y,
             ...(finiteDy ? weightRequestFields(spec.weight, finiteDy) : {}),
+            // The recorded starts / bounds / holds, sent as the interactive
+            // Curve Fit sent them (useCurveFit), so this run and the exported
+            // script fit the same thing (tests/test_pipeline_fit_parity.py).
+            ...(spec.p0
+              ? { p0: spec.p0, lower: spec.lower, upper: spec.upper, ...(spec.fixed?.some(Boolean) ? { fixed: spec.fixed } : {}) }
+              : {}),
             // A step recorded under the old statistics replays under them.
             ...statsVersionField(spec),
           };

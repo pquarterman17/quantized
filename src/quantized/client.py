@@ -25,6 +25,14 @@ Example — connect, import a file, apply a correction, fit it::
     fit = client.fit("Gaussian", list(corrected.time), list(corrected.column(0)))
     print(fit["r2"])
 
+What it cannot do: reach the project open in the app. The server keeps no
+workbook state the API exposes — the open project's worksheets live in the
+browser tab — so this client can neither list, read nor write them. To redo
+an analysis outside the app, export the pipeline (Pipeline panel ▸ Export
+script): that writes a Python script on :mod:`quantized.api` which re-runs the
+recorded steps in-process from the input files and saves the result
+(``docs/pipeline-studio-replay.md``).
+
 Mandatory identity check: the first request of any kind runs
 ``GET /api/health`` and refuses to continue unless it answers
 ``app == "quantized"`` — this is the same field ``app.py``'s own health

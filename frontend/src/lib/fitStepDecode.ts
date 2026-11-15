@@ -57,5 +57,19 @@ export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec 
   if (Number.isInteger(params.nPoints) && (params.nPoints as number) >= 0) {
     spec.nPoints = params.nPoints as number;
   }
+  // The user's start values / bounds / held flags (recorded since gap audit 4
+  // lane E): replayed as the interactive fit sent them. Each list must hold
+  // one entry per start value; anything else is dropped whole.
+  if (Array.isArray(params.p0) && params.p0.every((v) => typeof v === "number" && Number.isFinite(v))) {
+    const n = params.p0.length;
+    spec.p0 = params.p0 as number[];
+    const bound = (v: unknown): v is (number | null)[] =>
+      Array.isArray(v) && v.length === n && v.every((b) => b === null || (typeof b === "number" && Number.isFinite(b)));
+    if (bound(params.lower)) spec.lower = params.lower;
+    if (bound(params.upper)) spec.upper = params.upper;
+    if (Array.isArray(params.fixed) && params.fixed.length === n && params.fixed.every((f) => typeof f === "boolean")) {
+      spec.fixed = params.fixed as boolean[];
+    }
+  }
   return spec;
 }

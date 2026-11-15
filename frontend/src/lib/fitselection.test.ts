@@ -250,6 +250,7 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
     );
     expect(fitStepParams("Gaussian", spec)).toEqual({
       model: "Gaussian",
+      p0: null, // the model's own starts (gap audit 4 lane E, M5)
       xKey: 0,
       yKey: 1,
       range: [1, 1],
@@ -258,10 +259,17 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
     });
   });
 
+  it("records the user's start values, bounds and held flags (M5)", () => {
+    const spec = { model: "Linear", yKey: 0, p0: [5, 0], lower: [0, null], upper: [10, null], fixed: [true, false] };
+    expect(fitStepParams("Linear", spec)).toEqual({
+      model: "Linear", yKey: 0, p0: [5, 0], lower: [0, null], upper: [10, null], fixed: [true, false],
+    });
+  });
+
   it("omits weight when mode is none and round-trips a null xKey (time axis)", () => {
     const spec = fitSpecFrom("Linear", null, { x: [1], y: [2], yKey: 0 }, { params: [1] });
     const params = fitStepParams("Linear", spec);
-    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
+    expect(params).toEqual({ model: "Linear", p0: null, xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
     expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0, range: [1, 1], nPoints: 1 });
   });
 
