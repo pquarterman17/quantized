@@ -13,8 +13,7 @@
 import { fftSpectral, fitModel, peaksIntegrate } from "../lib/api";
 import { statsDescriptive } from "../lib/api/statsDescriptive";
 import { centralDifference, sortByX } from "../lib/differentiate";
-import { effectiveChannels } from "../lib/plotdata";
-import { firstVisiblePlottedChannel, selectRoiRows } from "../lib/quickfit";
+import { gadgetCurve, selectRoiRows } from "../lib/quickfit";
 import { expandToFull } from "../lib/rowstate";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import type { AppState } from "./useApp";
@@ -66,9 +65,8 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active || !s.qfitRoi) return;
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
+      const curve = gadgetCurve(active, s); // the first visible curve, on its OWN X
+      const sel = selectRoiRows(active, s.qfitRoi, curve?.yKey ?? null, curve?.xKey ?? null);
       if (sel.x.length < 2) {
         set({ qfitError: "not enough points in the selected region", qfitBusy: false });
         return;
@@ -82,15 +80,15 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       try {
         const r = await fitModel({ model, x: sel.x, y: sel.y });
         if (stale()) return;
-        set({ qfitResult: r, qfitResultModel: model, qfitBusy: false });
+        set({ qfitResult: r, qfitResultModel: model, qfitResultCurve: curve, qfitBusy: false });
         const yFit = r.yFit as (number | null)[] | undefined;
-        if (Array.isArray(yFit)) {
+        if (Array.isArray(yFit) && curve) {
           // yFit aligns to the ROI-sliced rows; expand back to the full row
           // count (null outside the ROI / excluded / filtered) so it overlays
           // the full-length plot x in register — the expandToFull pattern
           // useCurveFit uses for the whole-dataset case (rowstate.ts).
           const y = expandToFull(yFit, sel.rows, active.data.time.length);
-          set({ fitOverlay: { datasetId: active.id, y } });
+          set({ fitOverlay: { datasetId: active.id, binding: curve, y } });
         }
       } catch (e) {
         if (stale()) return;
@@ -101,9 +99,8 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
+      const curve = gadgetCurve(active, s); // the first visible curve, on its OWN X
+      const sel = selectRoiRows(active, s.qfitRoi, curve?.yKey ?? null, curve?.xKey ?? null);
       if (sel.x.length < 2) {
         set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetIntegrateResult: null });
         return;
@@ -121,9 +118,8 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
+      const curve = gadgetCurve(active, s); // the first visible curve, on its OWN X
+      const sel = selectRoiRows(active, s.qfitRoi, curve?.yKey ?? null, curve?.xKey ?? null);
       if (sel.y.length < 1) {
         set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetStatsResult: null });
         return;
@@ -137,9 +133,8 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active || !s.qfitRoi) return;
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
+      const curve = gadgetCurve(active, s); // the first visible curve, on its OWN X
+      const sel = selectRoiRows(active, s.qfitRoi, curve?.yKey ?? null, curve?.xKey ?? null);
       const result = centralDifference(sel.x, sel.y);
       if (!result) {
         set({ gadgetError: "not enough points in the selected region", gadgetDerivResult: null, derivOverlay: null });
@@ -147,15 +142,14 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       }
       set({ gadgetError: null, gadgetDerivResult: result });
       const y = expandToFull(result.dydx, sel.rows, active.data.time.length);
-      set({ derivOverlay: { datasetId: active.id, y } });
+      if (curve) set({ derivOverlay: { datasetId: active.id, binding: curve, y } });
     },
     runGadgetFft: async () => {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-      const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-      const sel = selectRoiRows(active, s.qfitRoi, col);
+      const curve = gadgetCurve(active, s); // the first visible curve, on its OWN X
+      const sel = selectRoiRows(active, s.qfitRoi, curve?.yKey ?? null, curve?.xKey ?? null);
       if (sel.x.length < 4) {
         set({ gadgetError: "need at least 4 points in the selected region", gadgetBusy: false, gadgetFftPreview: null });
         return;

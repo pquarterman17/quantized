@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import { liveFitPlotBinding } from "../../../lib/fitAnalysisResultLive";
+import { fitDrawBinding } from "../../../lib/fitDrawBinding";
 import { statisticalResultFigureDrafts, type StatisticalResultFigureDraft } from "../../../lib/statisticalResultFigures";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -47,6 +48,9 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
   const unavailable = !dataset || channels.length === 0;
   const sourceOnly = result.settingsRef?.field === "peakTable";
   const fittedPlotUnavailable = unavailable || (fitted && (!liveBinding || !dataset?.fitSpec?.params?.length));
+  // The reopen gate's own question (lib/fitDrawBinding): a fit it would refuse
+  // still opens (without its fit), but is never sent to a report.
+  const fitRefused = fitted && !!liveBinding && !!dataset?.fitSpec && fitDrawBinding(dataset, liveBinding, dataset.fitSpec) === null;
   return <article className={`qz-analysis-figure-card${unavailable ? " unavailable" : ""}`}>
     <div className="qz-analysis-figure-preview">
       {path ? <svg viewBox="0 0 200 64" role="img" aria-label={`Preview of ${dataset!.name}`} preserveAspectRatio="none">
@@ -59,7 +63,7 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
       <div className="qz-analysis-figure-actions">
         <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : fitted ? "Open fitted plot" : "Open plot"}</Button>
         <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>{sourceOnly || fitted ? "Build source figure" : "Build figure"}</Button>
-        <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : fitted ? "Send fitted plot to report…" : "Send to report…"}</Button>
+        <Button size="sm" disabled={fittedPlotUnavailable || fitRefused} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : fitted ? "Send fitted plot to report…" : "Send to report…"}</Button>
       </div>
     </div>
   </article>;

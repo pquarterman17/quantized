@@ -234,7 +234,7 @@ describe("CurveFitPanel — a background re-fit", () => {
     const edited = { ...before, data: { ...before.data, values: [[1], [3], [6], [10], [13]] } };
     act(() => useApp.setState({ datasets: [edited] }));
     const pairs = dropGapRows(edited.data.time, edited.data.values.map((r) => r[0]!));
-    act(() => commitRecomputedFit(useApp.setState, useApp.getState, edited, edited.fitSpec!, pairs, REFIT));
+    act(() => commitRecomputedFit(useApp.setState, useApp.getState, edited, edited.fitSpec!, pairs, { yKey: 0, xKey: null }, REFIT));
   }
 
   it("is followed by the open panel: no original-fit numbers beside the re-fitted curve", async () => {
@@ -261,7 +261,7 @@ describe("CurveFitPanel — a background re-fit", () => {
     const other = { ...useApp.getState().datasets[0]!, fitSpec: { model: "Linear", params: [9, 9] } };
     act(() => useApp.setState({ datasets: [other] }));
     const pairs = dropGapRows(other.data.time, other.data.values.map((r) => r[0]!));
-    act(() => commitRecomputedFit(useApp.setState, useApp.getState, other, other.fitSpec, pairs, REFIT));
+    act(() => commitRecomputedFit(useApp.setState, useApp.getState, other, other.fitSpec, pairs, { yKey: 0, xKey: null }, REFIT));
     expect(screen.queryByText("0.75")).toBeNull();
     expect(screen.getByText("0.98")).toBeInTheDocument();
   });

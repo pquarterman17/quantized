@@ -33,7 +33,7 @@ describe("followRefits", () => {
     const { ds } = setup({ mode: "direct", errKey: 0 });
     announceFitRecomputed({
       datasetId: "d1", previousSpec: ds.fitSpec!, result: { params: [1.1, 0] },
-      x: [0, 1, 2], y: [1, 2, 3], dy: [2, 0, 1], curve: null,
+      x: [0, 1, 2], y: [1, 2, 3], dy: [2, 0, 1], curve: null, binding: { yKey: 0, xKey: null },
     });
     expect(retainedFit("d1")?.fitted.fitData).toMatchObject({ dy: null, weights: [2, 0, 1] });
   });
@@ -42,7 +42,7 @@ describe("followRefits", () => {
     const { ds } = setup({ mode: "yerr", errKey: 0 });
     announceFitRecomputed({
       datasetId: "d1", previousSpec: ds.fitSpec!, result: { params: [1.1, 0] },
-      x: [0, 1, 2], y: [1, 2, 3], dy: [0.1, 0.2, 0.3], curve: null,
+      x: [0, 1, 2], y: [1, 2, 3], dy: [0.1, 0.2, 0.3], curve: null, binding: { yKey: 0, xKey: null },
     });
     expect(retainedFit("d1")?.fitted.fitData).toEqual(expect.objectContaining({ dy: [0.1, 0.2, 0.3] }));
     expect(retainedFit("d1")?.fitted.fitData?.weights).toBeUndefined();

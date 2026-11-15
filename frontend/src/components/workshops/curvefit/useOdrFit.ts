@@ -68,7 +68,7 @@ export function useOdrFit(): OdrFitState {
       const n = ds.data.time.length;
       const kept = activeRowIndices(n, droppedRows(ds));
       const aligned = restoreGapRows(pairs.x.map((x) => r.slope * x + r.intercept), pairs);
-      setFitOverlay({ datasetId: ds.id, y: kept.length === n ? aligned : expandToFull(aligned, kept, n) });
+      setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n) });
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "ODR fit failed");

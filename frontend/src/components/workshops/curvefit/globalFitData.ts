@@ -56,6 +56,8 @@ export function datasetMembers(
 }
 
 export interface MemberData {
+  /** The X column `x` came from (the Y's own X; null = time). */
+  xKey: number | null;
   x: number[];
   y: number[];
   pairs: FinitePairs;
@@ -69,7 +71,7 @@ export function memberData(ds: Dataset, m: GlobalMember): MemberData | null {
   const x = xKey == null ? data.time : data.values.map((row) => row[xKey]);
   const y = data.values.map((row) => row[m.yKey]);
   const pairs = dropGapRows(x, y);
-  return { x: pairs.x, y: pairs.y, pairs };
+  return { xKey, x: pairs.x, y: pairs.y, pairs };
 }
 
 /** A fitted curve aligned to ALL of the dataset's rows (gaps and dropped rows

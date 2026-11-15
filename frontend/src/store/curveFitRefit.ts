@@ -34,13 +34,15 @@ export function followRefits(): void {
     // later — never the superseded curve.
     const drawn = s.fitOverlay?.datasetId === e.datasetId ? s.fitOverlay : null;
     if (drawn) rememberCurveFitOverlay(drawn);
-    const curve = drawn ?? (e.curve ? { datasetId: e.datasetId, y: e.curve } : null);
+    // Bound to the X/Y the re-fit READ (the event says, even for a legacy spec), not the pre-refit pair.
+    const curve = drawn ?? (e.curve ? { datasetId: e.datasetId, binding: e.binding, y: e.curve } : null);
     replaceRetainedFit(
       {
         ...f,
+        xKey: e.binding.xKey, yKey: e.binding.yKey, // what the re-fit read, as fitData below
         result: e.result,
         fitData: {
-          x: e.x, y: e.y, xKey: f.xKey, yKey: f.yKey, ...fittedWeighting(e.previousSpec.weight?.mode, e.dy),
+          x: e.x, y: e.y, xKey: e.binding.xKey, yKey: e.binding.yKey, ...fittedWeighting(e.previousSpec.weight?.mode, e.dy),
           weightMode: e.dy ? (e.previousSpec.weight?.mode ?? "none") : "none",
           scaleErrors: e.previousSpec.weight?.scaleErrors !== false,
         },

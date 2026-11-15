@@ -23,8 +23,11 @@
 // itself — shared deliberately so this dialog's style list and greyscale
 // field cannot drift from "Export figure…"'s.
 import { askParams } from "../store/paramDialog";
+import type { FigureSpec } from "./api/figures";
+import type { Dataset } from "./types";
 import type { ParamField } from "./params";
-import type { ReportEntry, ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
+import { NEW_REPORT, reportChoices } from "./reportChoices";
+import type { ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
 import { stampReportTransformProvenance } from "./reportTransformProvenance";
 import { cancelled, exportActive, stemFromName, type StoreGet } from "./exportActive";
 import { chooseExcludedRows } from "./excludedRowsChoice";
@@ -49,8 +52,7 @@ import { beginOp, endOp } from "../store/pendingOps";
 import { TOAST_ACTION_TTL, toast } from "../store/toasts";
 import { asOneEditStep } from "../store/undoStep";
 
-/** The "make a new report" choice in the Report picker. */
-export const NEW_REPORT = "New report";
+export { NEW_REPORT, reportChoices }; // lib/reportChoices.ts
 /** The spec's `dpi` — the Export dialog's own default, sent so the spec
  *  matches what "Export figure…" would post. The report renderer does NOT
  *  use it: `routes.report_figures.render_spec` rasterises every report PNG
@@ -59,23 +61,6 @@ export const NEW_REPORT = "New report";
 export const REPORT_FIGURE_DPI = 300;
 /** The one undo label every send records. */
 export const SEND_UNDO_LABEL = "send figure to report";
-
-/** One picker label per report, index-aligned with `reports` and unique
- *  (a select can only hand back the label): the report's name, with its id
- *  appended when that name collides — with another report, with
- *  {@link NEW_REPORT}, or with another report's id-suffixed label (a second
- *  pass). A pathological set still colliding after that is numbered by
- *  position, which is unique by construction. */
-export function reportChoices(reports: readonly ReportEntry[]): string[] {
-  const colliding = (ls: string[]) =>
-    ls.map((l) => l === NEW_REPORT || ls.indexOf(l) !== ls.lastIndexOf(l));
-  let labels = reports.map((r) => r.name);
-  for (let pass = 0; pass < 2; pass++) {
-    const bad = colliding(labels);
-    labels = labels.map((l, i) => (bad[i] && l === reports[i].name ? `${l} (${reports[i].id})` : l));
-  }
-  return colliding(labels).some(Boolean) ? labels.map((l, i) => `${i + 1}. ${l}`) : labels;
-}
 
 /** The Send dialog's field list, shared by both send paths (the active-plot
  *  command and the Library editable-figure action below) so the target
@@ -245,17 +230,23 @@ export function addFigureToReport(
 // Guard the shared command so menu, palette, and context-menu callers agree.
 const sendingPlots = new WeakSet<StoreGet>();
 
-export async function runSendFigureToReportCommand(s: StoreGet): Promise<void> {
-  if (sendingPlots.has(s)) return;
+/** `requirement` (optional): a last check of the BUILT spec, returning why it must
+ *  not be sent (e.g. a fitted result plot whose fit the figure does not carry,
+ *  store/analysisResultActions) -- the figure is then refused, not sent. */
+export async function runSendFigureToReportCommand(s: StoreGet, requirement?: SendRequirement): Promise<boolean> {
+  if (sendingPlots.has(s)) return false;
   sendingPlots.add(s);
   try {
-    await sendActivePlot(s);
+    return await sendActivePlot(s, requirement); // true only when a figure block was added
   } finally {
     sendingPlots.delete(s);
   }
 }
 
-async function sendActivePlot(s: StoreGet): Promise<void> {
+/** `built`: the dataset the spec was built from (null spec: a stat figure). */
+export type SendRequirement = (spec: FigureSpec | null, built: Dataset) => string | null;
+
+async function sendActivePlot(s: StoreGet, requirement?: SendRequirement): Promise<boolean> {
   // Finding #3 (P3.6 review round 2): checked BEFORE any dialog opens, not
   // after the user has already answered target/caption/style/etc — asking
   // those questions only to then discover there is nothing to send wastes
@@ -267,11 +258,12 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
   if (!active) {
     s().setStatus("no dataset to send");
     toast("no dataset to send", "danger");
-    return;
+    return false;
   }
   const choice = await askSendToReport(s, s().plotTitle, `${stemFromName(active.name)} figures`);
-  if (!choice) return;
+  if (!choice) return false;
   const { targetId, caption, opts, newReportName } = choice;
+  let added = false;
   await exportActive(
     s,
     async (stem, ds, signal) => {
@@ -279,8 +271,12 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
       // Stat mode: the stat renderer's PNG as the block's image (lib/statFigureCommands.ts).
       const stat = activeStatExporter(s());
       if (stat) {
+        const refused = requirement?.(null, ds); // a stat figure carries no row-aligned overlay
+        if (refused) throw new Error(refused);
         const statBlock = await statReportBlock(stat, { style: opts.style, dpi: REPORT_FIGURE_DPI, signal }, stem, caption);
-        return addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
+        addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
+        added = true;
+        return;
       }
       // Title and axis labels come from the live view AFTER the dataset
       // resolved — the moment `buildStageFigureSpec` reads the focused
@@ -300,9 +296,13 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
         excludedChoiceMatters,
         s().excludedDisplay,
       );
-      if (!picked || !(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
+      if (!picked) return false;
+      const refused = requirement?.(picked.value, ds); // checked before the screen-only question
+      if (refused) throw new Error(refused);
+      if (!(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);
       addFigureToReport(s, targetId, block, stem, ds.id, newReportName, refs);
+      added = true;
       // Estimated by walking the spec, never by serializing it (see
       // estimateJsonBytes): a heads-up, not a refusal — the copy is the point.
       const notice = largeSpecNotice(estimateJsonBytes(block.spec));
@@ -310,6 +310,7 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
     },
     { verb: "send", past: "sent to report:" },
   );
+  return added;
 }
 
 /** Figures currently mid-send (finding #2, P3.6 review round 2), so a rapid

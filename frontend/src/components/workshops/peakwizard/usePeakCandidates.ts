@@ -31,7 +31,7 @@ import type { PeakRecipe } from "../../../lib/peakwizard";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { isInsideToolWindow } from "../../../lib/toolwindow";
-import type { Dataset, Peak } from "../../../lib/types";
+import type { Dataset, OverlayBinding, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { recipeFind } from "./recipeSteps";
@@ -60,6 +60,7 @@ export interface CandidateSegment {
   x: number[];
   gapCount: number;
   sourceCount: number;
+  binding: OverlayBinding;
 }
 
 interface Inputs {
@@ -150,6 +151,9 @@ export function usePeakCandidates(inp: Inputs) {
     const included = candidates.filter((c) => c.included);
     setPeakOverlay({
       datasetId: active.id,
+      // No segment: the markers were placed on the plot's X column (above), so
+      // bind them there; -1 is no curve, which placement puts on the plot's X.
+      binding: segment?.binding ?? { yKey: -1, xKey },
       y: peakOverlayArray(
         fullPlottedX(active.data, xKey),
         included.map((p) => ({
