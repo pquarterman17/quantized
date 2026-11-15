@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ANALYSIS_RESULT_VERSION, type AnalysisResultValue } from "../../../lib/analysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
@@ -9,7 +9,9 @@ import { nextAnalysisResultId } from "../../../store/idSeq";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { analysisBatchRuntime, useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
+import { INDEX_X, numericMetaFields, paramNamesOf, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { Button } from "../../primitives";
+import SummaryXPicker from "./SummaryXPicker";
 
 export interface AnalysisBatchOutcome {
   values: (string | number | null)[];
@@ -26,8 +28,12 @@ interface Props {
   resultParameters?: Record<string, AnalysisResultValue>;
   blockedReason?: string | null;
   /** When given, a finished run offers "Create summary worksheet", which hands
-   *  the run's rows (every input, in order) to this tool-owned builder. */
-  onSummarySheet?: (rows: readonly AnalysisBatchRow[]) => void;
+   *  the run's rows (every input, in order) and the chosen summary X (index,
+   *  metadata field, user parameter or number in the name) to this tool-owned
+   *  builder. */
+  onSummarySheet?: (rows: readonly AnalysisBatchRow[], x: SummaryXChoice) => void;
+  /** Extra controls under a finished run, given its rows (e.g. a results table for the graph). */
+  afterRun?: (rows: readonly AnalysisBatchRow[], x: SummaryXChoice) => ReactNode;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -51,7 +57,7 @@ const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + s
  * has a deterministic boundary, and one durable result even after a partial
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
-  toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet,
+  toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun,
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -59,6 +65,7 @@ export default function AnalysisBatchControls({
   const [expanded, setExpanded] = useState(false);
   const [running, setRunning] = useState(false);
   const [lastRows, setLastRows] = useState<RunRow[] | null>(null);
+  const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
   const cancelRef = useRef(false);
   const runningRef = useRef(false);
   const current = owner === toolId ? selection : null;
@@ -66,6 +73,12 @@ export default function AnalysisBatchControls({
     () => current ? resolveAnalysisSelection(current, datasets) : { items: [], issues: [] },
     [current, datasets],
   );
+  const ranInputs = useMemo(() => {
+    const ids = new Set((lastRows ?? []).map((r) => r.datasetId));
+    return datasets.filter((d) => ids.has(d.id));
+  }, [lastRows, datasets]);
+  const xFields = useMemo(() => numericMetaFields(ranInputs), [ranInputs]);
+  const xParams = useMemo(() => paramNamesOf(ranInputs), [ranInputs]);
   if (!current || current.items.length === 0) return null;
 
   const issuesById = new Map<string, string[]>();
@@ -217,12 +230,14 @@ export default function AnalysisBatchControls({
         <Button variant="primary" size="sm" disabled={blocked || running} onClick={() => void runBatch()}>
           {running ? "Running…" : `Run ${label} batch`}
         </Button>
-        {onSummarySheet && lastRows && !running && lastRows.some((row) => row.status === "completed") && (
-          <Button size="sm" onClick={() => onSummarySheet(lastRows)} title="A worksheet with one row per input and a column per parameter and statistic, ready to plot">
+        {onSummarySheet && lastRows && !running && lastRows.some((row) => row.status === "completed") && (<>
+          <SummaryXPicker choice={xChoice} onChange={setXChoice} metaFields={xFields} params={xParams} />
+          <Button size="sm" onClick={() => onSummarySheet(lastRows, xChoice)} title="A worksheet with one row per input and a column per parameter and statistic, ready to plot">
             Create summary worksheet
           </Button>
-        )}
+        </>)}
       </div>
+      {afterRun && lastRows && !running && lastRows.some((row) => row.status === "completed") && afterRun(lastRows, xChoice)}
     </div>}
   </section>;
 }

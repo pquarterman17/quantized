@@ -16,6 +16,7 @@
 // tooltip in the view and written to the CSV's `missing_errors` column.
 
 import type { PeakBatchFit, PeakBatchResult } from "../../../lib/api/peakBatch";
+import { inOrder, summaryXMeta, type SummaryXResult } from "../../../lib/batchSummaryX";
 import type { DataStruct } from "../../../lib/types";
 import { derivedErrorReason, type DerivedKey } from "./modelFitReasons";
 import { paramLabel } from "./peakModelParams";
@@ -274,16 +275,20 @@ const NUMERIC: [string, (r: BatchTableRow) => number | null][] = [
  *  `Objective` says which one each fit minimised); the text is
  *  `metadata.text_columns` (lib/columnmeta's read-only worksheet columns);
  *  provenance — the recipe and every source dataset — is `metadata.peakBatch`. */
-export function batchDataStruct(rows: readonly BatchTableRow[], prov: BatchProvenance): DataStruct {
+export function batchDataStruct(inputRows: readonly BatchTableRow[], prov: BatchProvenance, x?: SummaryXResult): DataStruct {
+  // `x` (one entry per input row, lib/batchSummaryX) puts a physical
+  // parameter on X instead of the row number; a blank where a dataset lacks it.
+  const rows = x ? inOrder(inputRows, x) : inputRows;
   const nan = (v: number | null) => (v === null ? Number.NaN : v);
   return {
-    time: rows.map((_, i) => i + 1),
+    time: x ? x.x : rows.map((_, i) => i + 1),
     values: rows.map((r) => NUMERIC.map(([, get]) => nan(get(r)))),
     labels: NUMERIC.map(([label]) => label),
     units: NUMERIC.map(() => ""),
     metadata: {
       source: "peak-batch-fit",
       x_column_name: "Row",
+      ...(x ? summaryXMeta(x) : {}),
       peakBatch: prov,
       text_columns: {
         Dataset: rows.map((r) => r.dataset),

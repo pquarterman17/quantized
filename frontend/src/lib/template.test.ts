@@ -110,6 +110,28 @@ describe("template persistence", () => {
   });
 });
 
+describe("summaryDataset X from a parameter", () => {
+  const rows = [
+    { file: "b_300K.dat", values: [3], input: { metadata: { Temperature: "300 K" }, labels: ["A"] } },
+    { file: "b_100K.dat", values: [1], input: { metadata: { Temperature: "100 K" }, labels: ["A"] } },
+    { file: "broken.dat", values: [Number.NaN], failed: "import failed" },
+  ];
+  it("uses the chosen field as X, blank (and recorded) for a file without it; index by default", () => {
+    const d = summaryDataset("t", ["slope"], rows, { source: { kind: "meta", path: ["Temperature"] }, sort: false });
+    expect(d.time.slice(0, 2)).toEqual([300, 100]);
+    expect(d.time[2]).toBeNaN();
+    expect(d.metadata.x_column_name).toBe("Temperature");
+    expect(d.metadata.summaryX).toMatchObject({ missing: ["broken.dat: no Temperature"] });
+    expect(summaryDataset("t", ["slope"], rows).time).toEqual([1, 2, 3]);
+  });
+  it("sorts only on request, rows and file names together", () => {
+    const d = summaryDataset("t", ["slope"], rows, { source: { kind: "meta", path: ["Temperature"] }, sort: true });
+    expect(d.time.slice(0, 2)).toEqual([100, 300]);
+    expect(d.values[0]).toEqual([1]);
+    expect(d.metadata.files).toEqual(["b_100K.dat", "b_300K.dat", "broken.dat"]);
+  });
+});
+
 describe("summaryDataset (#3)", () => {
   it("builds one row per file with NaN for failed values and flags failures", () => {
     const ds = summaryDataset("xrd flow", ["slope", "R2"], [

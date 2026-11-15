@@ -4,8 +4,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import { summaryX } from "../../../lib/batchSummaryX";
 import type { AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
-import { batchColumns, batchSummaryData, fitSummaryValues } from "./curveFitBatchSummary";
+import { batchColumns, batchSummaryData, batchTableInputs, fitSummaryValues, libraryOrder } from "./curveFitBatchSummary";
 
 describe("Curve Fit batch summary", () => {
   it("has a value and SE column per parameter after the statistics", () => {
@@ -30,5 +31,36 @@ describe("Curve Fit batch summary", () => {
     expect(d.values[1]!.every(Number.isNaN)).toBe(true);
     expect(d.metadata!.text_columns).toEqual({ Worksheet: ["s1.csv", "s2.csv"], Status: ["Completed", "Failed"], Warnings: ["", "no data"] });
     expect(d.metadata!.curveFitBatch).toMatchObject({ model: "Exponential Decay", sources: [{ id: "a", name: "s1.csv" }, { id: "b", name: "s2.csv" }] });
+  });
+
+  it("puts a parameter on X, sorted only on request, with the blank row reported", () => {
+    const columns = batchColumns(["τ"]);
+    const mk = (id: string, name: string): AnalysisBatchRow => ({ datasetId: id, name, rows: 5, status: "completed", values: [1, 1, 5, 1, 1, 0, id === "a" ? 1 : id === "b" ? 2 : 3, 0], warning: null });
+    const rows = [mk("a", "run a"), mk("b", "run b"), mk("c", "run c")];
+    const metas = [{ T: "300 K" }, { T: "100 K" }, {}];
+    const inputs = rows.map((r, i) => ({ name: r.name, metadata: metas[i] }));
+    const unsorted = batchSummaryData(rows, columns, "Exp", summaryX(inputs, { source: { kind: "meta", path: ["T"] }, sort: false }));
+    expect(unsorted.time.slice(0, 2)).toEqual([300, 100]);
+    expect(unsorted.time[2]).toBeNaN();
+    expect(unsorted.metadata!.x_column_name).toBe("T");
+    expect(unsorted.metadata!.x_column_unit).toBe("K");
+    expect(unsorted.metadata!.summaryX).toMatchObject({ missing: ["run c: no T"] });
+    const sorted = batchSummaryData(rows, columns, "Exp", summaryX(inputs, { source: { kind: "meta", path: ["T"] }, sort: true }));
+    expect(sorted.time.slice(0, 2)).toEqual([100, 300]);
+    // The rows travel with their X: run b's tau (2) is first, and the text columns follow.
+    expect(sorted.values[0]![6]).toBe(2);
+    expect((sorted.metadata!.text_columns as { Worksheet: string[] }).Worksheet).toEqual(["run b", "run a", "run c"]);
+  });
+
+  it("the graph table's inputs are read from the summary values, in the given order, failed inputs kept (L3)", () => {
+    const rows: AnalysisBatchRow[] = [
+      { datasetId: "b", name: "b", rows: 5, status: "completed", values: [1, 1, 5, 0.9, 1.5, 0.1, 7, 0.5, 8, 0.6], warning: null },
+      { datasetId: "a", name: "a", rows: 5, status: "failed", values: [], warning: "x" },
+    ];
+    expect(libraryOrder(rows, ["a", "b"]).map((r) => r.name)).toEqual(["a", "b"]);
+    expect(batchTableInputs(rows, 2)).toEqual([
+      { name: "b", params: [7, 8], errors: [0.5, 0.6], R2: 0.9, chiSqRed: 1.5 },
+      { name: "a", params: [undefined, undefined], errors: [undefined, undefined], R2: undefined, chiSqRed: undefined },
+    ]);
   });
 });

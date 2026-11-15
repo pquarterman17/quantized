@@ -34,6 +34,7 @@ import {
   submitPeakBatch,
   type PeakBatchItem,
 } from "../../../lib/api/peakBatch";
+import { summaryX, summaryXNote, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { trackJob, type TrackedJob } from "../../../store/pendingOpActions";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
@@ -88,8 +89,9 @@ export interface PeakBatchState {
   ran: BatchRun | null;
   run: () => Promise<void>;
   cancel: () => void;
-  /** Land the table in the library as a dataset; returns its id. */
-  addAsTable: () => string | null;
+  /** Land the table in the library as a dataset; returns its id. `x` puts a
+   *  physical parameter of each row's dataset on X (default: the row number). */
+  addAsTable: (x?: SummaryXChoice) => string | null;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -103,6 +105,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const errKeys = useApp((s) => s.errKeys);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const addDataset = useApp((s) => s.addDataset);
+  const setStatus = useApp((s) => s.setStatus);
 
   const [chosen, setRecipeName] = useState(initialRecipe);
   // The chosen recipe while it is still saved, else the first saved one (a
@@ -308,17 +311,25 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     void cancelBatchJob(jobRef.current).catch(() => undefined);
   };
 
-  const addAsTable = useCallback((): string | null => {
+  const addAsTable = useCallback((choice?: SummaryXChoice): string | null => {
     if (!results || !ran) return null;
     const rows = batchTableRows(results);
+    const x = choice
+      ? summaryX(rows.map((r) => {
+        const d = datasets.find((e) => e.id === r.datasetId);
+        return { name: r.dataset, metadata: d?.data.metadata, labels: d?.data.labels };
+      }), choice)
+      : undefined;
     const data = batchDataStruct(rows, {
       recipeName: ran.recipe.name, recipe: ran.recipe, sources: ran.sources, ranAt: ran.ranAt,
-    });
+    }, x);
+    const note = x ? summaryXNote(x) : "";
+    if (note) setStatus(`batch table: ${note}`);
     const id = nextDatasetId();
     const n = ran.sources.length;
     addDataset({ id, name: `Peak batch — ${ran.recipe.name} (${n} dataset${n === 1 ? "" : "s"})`, data });
     return id;
-  }, [results, ran, addDataset]);
+  }, [results, ran, addDataset, datasets, setStatus]);
 
   return {
     recipeName,

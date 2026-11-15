@@ -12,6 +12,7 @@ import { runTemplateOnDataset } from "./runTemplate";
 import { PipelineCancelledError } from "./executeSteps";
 import { listFitModels } from "../../../lib/api/curvefit";
 import { uploadFile } from "../../../lib/api";
+import { INDEX_X, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { saveBlob } from "../../../lib/download";
 import type { PipelineStep } from "../../../lib/pipeline";
 import {
@@ -22,6 +23,7 @@ import {
   saveTemplate,
   serializeTemplate,
   summaryDataset,
+  templateSummaryX,
   toTemplate,
   type AnalysisTemplate,
   type BatchRow,
@@ -59,7 +61,7 @@ export interface TemplatesState {
   remove: (name: string) => void;
   exportFile: (name: string) => void;
   importFile: (file: File) => Promise<string | null>;
-  runBatch: (name: string, files: File[]) => Promise<void>;
+  runBatch: (name: string, files: File[], xChoice?: SummaryXChoice) => Promise<void>;
 }
 
 /** The declared outputs for a step list: the LAST fit step's parameter names
@@ -179,7 +181,7 @@ export function useTemplates(): TemplatesState {
   }, []);
 
   const runBatch = useCallback(
-    async (name: string, files: File[]) => {
+    async (name: string, files: File[], xChoice: SummaryXChoice = INDEX_X) => {
       const t = loadTemplates().find((x) => x.name === name);
       if (!t || files.length === 0) return;
       setPipelineRunning(true);
@@ -230,15 +232,17 @@ export function useTemplates(): TemplatesState {
           addDataset({
             id: nextDatasetId(),
             name: `${t.name} summary (${rows.length} files)`,
-            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
+            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
           });
         });
         if (completed) {
+          const blank = templateSummaryX(rows, xChoice).missing;
           toast(
-            failures.length
+            (failures.length
               ? `batch done — ${failures.length}/${files.length} file(s) flagged`
-              : `batch done — ${files.length} file(s)`,
-            failures.length ? "danger" : undefined,
+              : `batch done — ${files.length} file(s)`)
+              + (blank.length ? `; X left blank for ${blank.length}: ${blank.join("; ")}` : ""),
+            failures.length || blank.length ? "danger" : undefined,
           );
         } else {
           // Completed files are real, useful work. Keep them and make their
@@ -247,10 +251,15 @@ export function useTemplates(): TemplatesState {
             addDataset({
               id: nextDatasetId(),
               name: `${t.name} summary (${rows.length}/${files.length}, cancelled)`,
-              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
+              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
             });
           }
-          toast(`batch cancelled — kept ${rows.length} completed file${rows.length === 1 ? "" : "s"}`, "info");
+          const blank = rows.length ? templateSummaryX(rows, xChoice).missing : [];
+          toast(
+            `batch cancelled — kept ${rows.length} completed file${rows.length === 1 ? "" : "s"}`
+              + (blank.length ? `; X left blank for ${blank.length}: ${blank.join("; ")}` : ""),
+            blank.length ? "danger" : "info",
+          );
         }
       } finally {
         setPipelineRunning(false);
