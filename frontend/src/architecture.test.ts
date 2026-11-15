@@ -3675,7 +3675,7 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/commands/commandDocs.ts",
     // Gap audit 5 #1: applying the default graph template (and the graph
     // format code it reaches). The eager store holds only its slot; the boot
-    // loads it when a default is set (store/prefs.ts warmDefaultGraphTemplate).
+    // loads it when a default is set (commands/plotCommands.ts warmDefaultGraphTemplate).
     "/lib/defaultGraphTemplate.ts",
     "/lib/graphFormat.ts",
   ];

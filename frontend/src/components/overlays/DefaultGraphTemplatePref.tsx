@@ -1,16 +1,26 @@
 // Preferences ▸ Plot row (gap audit 5 #1): the saved graph template every new
 // graph opens with (lib/defaultGraphTemplate.ts), or none. A default whose
 // template was deleted or renamed stays listed as "(missing)" -- it applies
-// nothing (fail closed) until another is picked.
+// nothing (fail closed) until another is picked. The list is re-read on every
+// render and whenever another window changes the stored templates.
 
-import { useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 
 import { loadDefaultGraphTemplateName, setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
 import { loadGraphTemplates } from "../../lib/figuredoc";
 import { Select } from "../primitives";
 
 export function DefaultGraphTemplatePref() {
-  const [names] = useState(() => loadGraphTemplates().map((t) => t.name));
+  const [, refresh] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    window.addEventListener("storage", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+  const names = loadGraphTemplates().map((t) => t.name);
   const [value, setValue] = useState(() => loadDefaultGraphTemplateName() ?? "");
   const options = [
     { value: "", label: "None (built-in look)" },

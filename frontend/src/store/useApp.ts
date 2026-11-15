@@ -353,7 +353,7 @@ export const useApp = create<AppState>((set, get) => ({
     const step = get().history.at(-1)?.seq;
     retargetPassiveRebind(get(), ds.id, ds.name, { protectEdits: !intoFocused });
     set((s) => ({ history: s.history.slice(0, s.history.findIndex((e) => e.seq === step) + 1 || s.history.length) }));
-    const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get() });
+    const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get(), win: get().focusedWindowId });
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,

@@ -13,7 +13,6 @@ import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedToge
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
-import { DEFAULT_GRAPH_TEMPLATE_KEY } from "../store/prefs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
@@ -79,13 +78,14 @@ function graphFormatCommand(
 
 /** Gap audit 5 #1: the boot installs the default graph template from the same
  *  chunk, loaded only when one is set (a failed load leaves new graphs plain). */
-export function warmDefaultGraphTemplate(): Promise<void> | null {
+export function warmDefaultGraphTemplate(): Promise<void> | undefined {
   try {
-    if (!localStorage.getItem(DEFAULT_GRAPH_TEMPLATE_KEY)) return null;
+    // The key is lib/defaultGraphTemplate.ts's DEFAULT_GRAPH_TEMPLATE_KEY.
+    if (localStorage.getItem("qz.defaultGraphTemplate")) return loadGraphFormat().then((m) => m.installDefaultGraphTemplate(), () => {});
   } catch {
-    return null; // storage unavailable: no default (fail closed)
+    /* storage unavailable: no default (fail closed) */
   }
-  return loadGraphFormat().then((m) => m.installDefaultGraphTemplate(), () => undefined);
+  return undefined;
 }
 
 /** Build the Plot- and Insert-group curated palette actions against the

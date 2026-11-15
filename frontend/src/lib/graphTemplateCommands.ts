@@ -10,7 +10,9 @@
 // preview applies `style`/`overrides`/`seriesStyles` and the Stage `format`.
 // Style only, never data: no channel binding, limit or title travels.
 
+import { askConfirm } from "../store/confirmDialog";
 import { askParams } from "../store/paramDialog";
+import { templateSeeds } from "../store/windowDefaults";
 import { loadDefaultGraphTemplateName, plottedChannels, setDefaultGraphTemplate } from "./defaultGraphTemplate";
 import type { StoreGet } from "./exportActive";
 import { buildExportStyles } from "./exportStyles";
@@ -140,6 +142,9 @@ async function saveFocusedAsTemplate(s: StoreGet, title: string, name: string, c
   ], { confirmLabel });
   const picked = params ? String(params.name).trim() : "";
   if (!picked) return null;
+  // Never replace a saved template silently (gap audit 5 review F9).
+  if (loadGraphTemplates().some((t) => t.name === picked)
+    && !(await askConfirm(`Replace graph template "${picked}"?`, "A saved graph template already has this name. Replacing it changes every graph that uses it as the default.", "Replace"))) return null;
   const state = s();
   saveGraphTemplate({
     name: picked,
@@ -161,6 +166,9 @@ export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
 export async function setStageGraphAsDefault(s: StoreGet): Promise<void> {
   const name = await saveFocusedAsTemplate(s, "Set as Default for New Graphs", loadDefaultGraphTemplateName() ?? "Default graph", "Set as default");
   if (!name) return;
+  // The source graph is the user's own style now, not a new graph: unmark it
+  // so it stays protected from a passive rebind (review F1).
+  templateSeeds.delete(s().focusedWindowId ?? "");
   setDefaultGraphTemplate(name);
   // Fail closed: the default never assigns Y3+ axes (lib/defaultGraphTemplate.ts) -- say so.
   const extra = s().yAxes.length ? "; its Y3+ axes are not applied to new graphs" : "";
