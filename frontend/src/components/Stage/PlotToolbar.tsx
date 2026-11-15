@@ -126,6 +126,7 @@ export default function PlotToolbar({
   // A horizontal bar graph turns the plot: pointer-driven tools are off (uplotOrient).
   const turned = useApp((s) => hasHorizontalBars(Object.values(s.seriesStyles)));
   const setPlotTool = useApp((s) => s.setPlotTool);
+  const setStatus = useApp((s) => s.setStatus);
   // S1 (a): ON whenever a multi-panel layout is engaged, not just `stackMode`.
   const stackOn = useApp(stackLayoutOn);
   const toggleStackLayout = useApp((s) => s.toggleStackLayout);
@@ -155,9 +156,9 @@ export default function PlotToolbar({
   useEffect(() => {
     if (stackOn && tool === "lasso") {
       setPlotTool("zoom");
-      useApp.getState().setStatus(LASSO_STACK_NOTE);
+      setStatus(LASSO_STACK_NOTE);
     }
-  }, [stackOn, tool, setPlotTool]);
+  }, [stackOn, tool, setPlotTool, setStatus]);
 
   const toggleGroupLabels = () => {
     const next = !showGroupLabels;
