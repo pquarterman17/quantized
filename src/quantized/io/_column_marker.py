@@ -39,8 +39,44 @@ _IGNORED_NOTE = (
 )
 
 
+#: The longest line written or read: under Excel's 32,767-character cell
+#: limit, so an ``.xlsx`` A1 never truncates it. A book whose roles do not fit
+#: gets no line (``io/origin_convert.py`` then notes they were not carried).
+MAX_LINE = 32_000
+#: The deepest JSON nesting a real payload has is 3 (``origin_column_formats``).
+_MAX_DEPTH = 6
+#: A marker found but not usable: ``apply_marker`` then adds its note.
+UNREADABLE: dict[str, Any] = {}
+
+
+def _too_deep(text: str) -> bool:
+    """Does ``text`` nest brackets deeper than ``_MAX_DEPTH`` (outside
+    strings)? Checked before ``json.loads``, which recurses per level."""
+    depth = 0
+    in_string = escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "[{":
+            depth += 1
+            if depth > _MAX_DEPTH:
+                return True
+        elif ch in "]}":
+            depth -= 1
+    return False
+
+
 def column_marker(ds: DataStruct) -> str | None:
-    """The line for ``ds``, or None when it carries nothing to keep."""
+    """The line for ``ds``; None when it carries nothing to keep, or when it
+    would exceed ``MAX_LINE``. ASCII-only (``ensure_ascii``), so no character
+    in a label or comment -- U+2028, U+2029, NEL -- can split the line."""
     meta = ds.metadata
     names = meta.get("origin_column_names")
     if not isinstance(names, list) or len(names) != ds.n_channels:
@@ -52,19 +88,28 @@ def column_marker(ds: DataStruct) -> str | None:
             payload[key] = {str(k): v for k, v in value.items()}
     if len(payload) == 2:
         return None
-    return MARKER + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    line = MARKER + json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    return line if len(line) <= MAX_LINE else None
 
 
 def find_marker(lines: Sequence[str]) -> dict[str, Any] | None:
-    """The parsed payload of the first marker line among ``lines``."""
+    """The payload of the first marker line among ``lines``: None when there
+    is none; ``UNREADABLE`` when the line is too long, too deeply nested, not
+    JSON or not an object. Never raises: a crafted file gives a note, not a
+    server error."""
+    prefix = MARKER.strip()
     for line in lines:
         text = line.lstrip("﻿").strip()
-        if text.startswith(MARKER.strip()):
-            try:
-                payload = json.loads(text[len(MARKER.strip()) :])
-            except ValueError:
-                return None
-            return payload if isinstance(payload, dict) else None
+        if not text.startswith(prefix):
+            continue
+        body = text[len(prefix) :]
+        if len(text) > MAX_LINE or _too_deep(body):
+            return UNREADABLE
+        try:
+            payload = json.loads(body)
+        except (ValueError, RecursionError):
+            return UNREADABLE
+        return payload if isinstance(payload, dict) else UNREADABLE
     return None
 
 

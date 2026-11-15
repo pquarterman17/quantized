@@ -75,7 +75,9 @@ def test_generated_script_runs_end_to_end(tmp_path: Path) -> None:
     assert fit_line.startswith("window: ")
     x, y = expected.time, expected.column(0)
     keep = (x >= 2) & (x <= 8)
-    # ... with the recorded user starts and bounds (M5), not automatic ones.
+    # ... with the recorded user starts, bounds and HELD σ (M5): the free fit
+    # gives σ ≈ 0.82, so a script that dropped the recorded holds prints
+    # another σ, R² and amplitude (re-review L7).
     ref = qz.fit_model(
         "Gaussian",
         x[keep],
@@ -83,9 +85,13 @@ def test_generated_script_runs_end_to_end(tmp_path: Path) -> None:
         p0=[30, 5.2, 1],
         lower=[0, None, 0.01],
         upper=[None, None, None],
-        fixed=[False, False, False],
+        fixed=[False, False, True],
     )
+    free = qz.fit_model("Gaussian", x[keep], y[keep])
+    assert abs(free["params"][2] - 1.0) > 0.1 and ref["params"][2] == 1.0
+    assert ", σ=1  R2=" in fit_line
     assert f"R2={ref['R2']:.6g}" in fit_line
+    assert f"R2={free['R2']:.6g}" not in fit_line
     assert abs(ref["params"][1] - 5.0) < 1e-6  # the peak centre, on the corrected data
     assert "note: step 4" not in run.stdout  # 61 points, as recorded
     assert "steps from 6 on were NOT reproduced" in run.stdout
@@ -102,6 +108,16 @@ def test_generated_script_refuses_the_wrong_number_of_inputs(tmp_path: Path) -> 
     )
     assert run.returncode == 2
     assert "give 1 input file(s)" in run.stderr
+
+
+@pytest.mark.parametrize("field", ["p0", "lower", "upper", "fixed"])
+def test_fit_model_refuses_lists_of_the_wrong_length(field: str) -> None:
+    """A step edited from Gaussian to Linear must not fit 3 parameters to a
+    2-parameter model (re-review M1)."""
+    x = np.linspace(0.0, 1.0, 11)
+    value = {"p0": [1.0, 0.0, 1.0], "lower": [0, 0, 0], "upper": [9, 9, 9], "fixed": [False] * 3}
+    with pytest.raises(ValueError, match=f"{field} has 3 entries but Linear has 2"):
+        qz.fit_model("Linear", x, 2 * x, **{field: value[field]})  # type: ignore[arg-type]
 
 
 def test_fit_model_refuses_a_held_start_outside_its_bounds() -> None:

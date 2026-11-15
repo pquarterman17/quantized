@@ -264,8 +264,11 @@ def import_grid(
     grid = [list(r) for r in grid]
     # A converted Origin book's column-roles line (io/_column_marker.py) sits
     # alone in A1; it is not part of the table, so it goes before the layout.
+    # Only a row holding NOTHING else is the marker row: a header cell in B1
+    # beside a look-alike A1 must never be dropped with it.
     first = grid[0][0] if grid and grid[0] else None
-    marker = find_marker([first]) if isinstance(first, str) else None
+    alone = bool(grid) and all(v is None or v == "" for v in grid[0][1:])
+    marker = find_marker([first]) if isinstance(first, str) and alone else None
     if marker is not None:
         grid = grid[1:]
     while grid and all(v is None for v in grid[-1]):

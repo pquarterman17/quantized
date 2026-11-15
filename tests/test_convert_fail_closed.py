@@ -9,6 +9,7 @@ committed byte builder, the reader is monkeypatched to return a book with it.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -314,7 +315,8 @@ def test_roles_that_cannot_be_carried_are_noted(
     report = qz.convert_origin_project(tmp_path / "l.opj", tmp_path / "o", "csv")
     assert report["books"][0]["notes"] == [
         "column designations, comments or date formats are not carried in the csv file "
-        "(they do not line up with its columns)"
+        "(they do not line up with its columns, or need a column-roles line longer than "
+        "a file cell holds)"
     ]
 
 
@@ -323,3 +325,47 @@ def test_route_and_convert_read_the_same_books(tmp_path: Path) -> None:
     src = loops_opj(tmp_path / "loops.opj")
     primary, books = read_origin_project_all(src)
     assert primary.metadata["origin_book"] == "Scan2" and len(books) == 3
+
+
+def test_a_project_level_cells_loss_skips_its_book_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reader files blanked cells only under the project (on the primary);
+    the converter must still skip the book they belong to (re-review L7)."""
+    books = qz.read_origin_books(loops_opj(tmp_path / "l.opj"))
+    details = [{"category": "cells", "dataset": "Loop1_B", "reason": "implausible cells blanked"}]
+    first = DataStruct(
+        time=books[0].time,
+        values=books[0].values,
+        labels=books[0].labels,
+        units=books[0].units,
+        metadata={**books[0].metadata, "origin_data_diagnostics": {"details": details}},
+    )
+    _patched(monkeypatch, [first, *books[1:]])
+    report = qz.convert_origin_project(tmp_path / "l.opj", tmp_path / "o", "csv")
+    by_key = {(b["book"], b["sheet"]): b for b in report["books"]}
+    assert by_key[("Loop1", 1)]["status"] == "skipped"
+    assert by_key[("Loop1", 1)]["problems"] == ["column B: implausible cells blanked"]
+    assert by_key[("Scan2", 1)]["status"] == "written"
+    assert report["omissions"] == [] and report["status"] == "partial"
+    assert "l.opj__Loop1.csv" not in report["outputs"]
+
+
+def test_dwk_leaves_out_an_x_only_book_as_the_app_does(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The route's Library drops a book with only an X column; so does the
+    .dwk, keeping the app's names and single-file branch (re-review L5)."""
+    good = qz.read_origin_books(loops_opj(tmp_path / "l.opj"))[0]
+    x_only = DataStruct(
+        time=np.array([1.0, 2.0]),
+        values=np.zeros((2, 0)),
+        metadata={"origin_book": "Book2"},
+    )
+    _patched(monkeypatch, [good, x_only])
+    report = qz.convert_origin_project(tmp_path / "l.opj", tmp_path / "o", "dwk")
+    assert [b["status"] for b in report["books"]] == ["written", "empty"]
+    doc = json.loads((tmp_path / "o" / "l.opj.dwk").read_text(encoding="utf-8"))
+    assert [d["name"] for d in doc["datasets"]] == ["l.opj"]  # the app's single-file name
+    csv = qz.convert_origin_project(tmp_path / "l.opj", tmp_path / "c", "csv")
+    assert [b["status"] for b in csv["books"]] == ["written", "written"]  # a table keeps it

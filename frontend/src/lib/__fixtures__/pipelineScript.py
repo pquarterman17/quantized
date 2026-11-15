@@ -48,7 +48,7 @@ def main(argv=None):
     x, y = np.asarray(data.time, dtype=float), np.asarray(data.column(0), dtype=float)
     keep = np.isfinite(x) & np.isfinite(y)
     keep &= (x >= 2) & (x <= 8)  # the recorded fit window
-    fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, False])
+    fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, True])
     fits.append(("4. Fit \"Gaussian\"\nwindow", fit))
     if int(keep.sum()) != 61:
         print(f"note: step 4 fit {int(keep.sum())} points; the app fit 61 (rows masked in the app are not recorded)")

@@ -253,6 +253,12 @@ def fit_model(
     def model_fcn(xx: NDArray[np.float64], pp: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.asarray(evaluate(model, xx, pp), dtype=float)
 
+    n_params = len(FIT_MODELS[model]["paramNames"])
+    for name, given in (("p0", p0), ("lower", lower), ("upper", upper), ("fixed", fixed)):
+        if given is not None and len(given) != n_params:
+            raise ValueError(
+                f"{name} has {len(given)} entries but {model} has {n_params} parameters"
+            )
     start = list(p0) if p0 is not None else auto_guess(model, xs, ys)
     lo = None if lower is None else [-math.inf if v is None else float(v) for v in lower]
     hi = None if upper is None else [math.inf if v is None else float(v) for v in upper]

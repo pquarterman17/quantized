@@ -75,7 +75,10 @@ same names. A matrix is written as its X, Y, Z columns; a text-only sheet
 designations, comments and date formats go on one extra line above the
 header, `# quantized-columns: {...}` (cell A1 in Excel); quantized reads it
 back on import, so a re-imported X,Y,X,Y sheet pairs each Y with its own X
-again. Other programs see a comment line. Where the line cannot be carried,
+again. Other programs see a comment line. The line is plain ASCII (any other
+character is escaped), is written only with the header rows, and is at most
+32,000 characters, so an Excel cell never cuts it; a crafted or damaged line is
+ignored on import with a note. Where the line cannot be carried,
 the report says so for that book.
 
 Each project gets a summary line, and the whole run a report,

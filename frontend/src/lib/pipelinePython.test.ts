@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { pipelineToPython, pipelineToScript, py } from "./pipeline";
+import { fitParamsForEdit, pipelineToPython, pipelineToScript, py } from "./pipeline";
 import { makeStep, type PipelineStep } from "./pipelineStep";
 
 const FIXTURE = join(__dirname, "__fixtures__", "pipelineScript.py");
@@ -29,7 +29,8 @@ const STEPS: PipelineStep[] = [
   makeStep("ui", "Y axis log", 'qz.setYScale("log")'),
   makeStep("fit", 'Fit "Gaussian"\nwindow', 'qz.fit("Gaussian")', {
     model: "Gaussian", yKey: 0, xKey: null, range: [2, 8], nPoints: 61, statsVersion: 2,
-    p0: [30, 5.2, 1], lower: [0, null, 0.01], upper: [null, null, null], fixed: [false, false, false],
+    // σ is HELD at 1 (the free fit gives ~0.82): the executed fixture prints it.
+    p0: [30, 5.2, 1], lower: [0, null, 0.01], upper: [null, null, null], fixed: [false, false, true],
   }),
   { ...makeStep("ui", "Grid", "qz.setShowGrid(true)"), enabled: false },
   makeStep("ui", "Delete 2 rows", 'qz.deleteRows("peak", [3, 4])'),
@@ -57,7 +58,7 @@ describe("pipelineToPython", () => {
     expect(s).toContain("data = qz.load(args.inputs[0])");
     expect(s).toContain('data = qz.apply_corrections(raw, {"yOff": -2, "yScale": 0.5})');
     expect(s).toContain(
-      'fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, False])',
+      'fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, True])',
     );
     expect(s).toContain("keep &= (x >= 2) & (x <= 8)");
     expect(s).toContain("qz.save_table(data, args.out)");
@@ -112,6 +113,14 @@ describe("pipelineToPython", () => {
     'qz.setChannelType(1, "categorical")',
     'qz.createDerivedWorksheet("d")',
     'qz.createSpectralWorksheet("d")',
+    // These only touch the view in name, but each can build a dataset or make
+    // another one active (re-review H1/L6), so the steps after it ran elsewhere.
+    'qz.applyFigure("fig-ds-1-0")',
+    'qz.openFigureDocInWindow("f")',
+    'qz.plotInNewWindow("d")',
+    'qz.facetByColumn("d", 2)',
+    'qz.breakAtGaps("d")',
+    'qz.setY2Keys([1])', // not (yet) audited as view-only
     "",
   ])("a ui step recorded as %j is NOT REPRODUCED and stops the replay", (code) => {
     const s = pipelineToPython([imported(), makeStep("ui", "edit", code), later()]);
@@ -129,8 +138,7 @@ describe("pipelineToPython", () => {
 
   it.each([
     'qz.setXScale("log")', 'qz.setYScale("linear")', 'qz.setPlotTitle("t")', "qz.setWaterfall(true)",
-    "qz.setShowGrid(false)", 'qz.applyFigure("f")', 'qz.openFigureDocInWindow("f")', 'qz.plotInNewWindow("d")',
-    "qz.setXKey(1)", "qz.setYKeys([0])", "qz.setGroupKey(null)", 'qz.facetByColumn("d", 2)', 'qz.breakAtGaps("d")',
+    "qz.setShowGrid(false)", "qz.setXKey(1)", "qz.setYKeys([0])", "qz.setGroupKey(null)",
   ])("a view-only ui step %j does not stop the replay", (code) => {
     const s = pipelineToPython([imported(), makeStep("ui", "view", code), later()]);
     expect(s).toContain("# display setting only");
@@ -141,6 +149,24 @@ describe("pipelineToPython", () => {
     const s = pipelineToPython([makeStep("import", "Import run.opju", "", { name: "run.opju" })]);
     expect(s).toContain("data = qz.load(args.inputs[0])");
     expect(s).not.toContain("read_origin_books");
+    // Choosing another book in the Library is not recorded: say so (L6).
+    expect(s).toContain("dataset switches in the app are not recorded");
+  });
+
+  it("says dataset switches are not recorded once a pipeline imports twice, never for one file", () => {
+    const two = pipelineToPython([imported(), makeStep("import", "Import b.csv", "", { name: "b.csv" })]);
+    expect(two).toContain("NOTE: switching datasets in the app is not recorded");
+    expect(pipelineToPython([imported(), later()])).not.toContain("switching datasets");
+  });
+
+  it("resets a fit step's starts, bounds and holds when its model is edited (M1)", () => {
+    const step = makeStep("fit", "Fit Gaussian", "", {
+      model: "Gaussian", yKey: 0, p0: [30, 5, 1], lower: [0, null, 0], upper: [null, null, null], fixed: [false, false, true],
+    });
+    expect(fitParamsForEdit(step, { ...step.params, model: "Linear" })).toEqual({ model: "Linear", yKey: 0, p0: null });
+    expect(fitParamsForEdit(step, { ...step.params })).toEqual(step.params); // same model: kept
+    const s = pipelineToPython([imported(), { ...step, params: fitParamsForEdit(step, { ...step.params, model: "Linear" }) }]);
+    expect(s).toContain('fit = qz.fit_model("Linear", x[keep], y[keep])\n');
   });
 
   it("warns, at run time too, when a fit step predates recorded starts (M5)", () => {

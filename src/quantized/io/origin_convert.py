@@ -198,12 +198,18 @@ def convert_origin_project(
         if fmt != "dwk" and not _roles_carried(ds):
             entry["notes"].append(
                 "column designations, comments or date formats are not carried in "
-                f"the {fmt} file (they do not line up with its columns)"
+                f"the {fmt} file (they do not line up with its columns, or need a "
+                "column-roles line longer than a file cell holds)"
             )
+        in_library = any(ds is b for b in listed)
         if problems and not allow_partial:
             entry["status"] = "skipped"
-        elif not _has_data(ds):
+        elif not _has_data(ds) or (fmt == "dwk" and not in_library):
             entry["status"] = "empty"
+            if _has_data(ds):  # an X column alone: the app's Library leaves it out
+                entry["notes"].append(
+                    "an X column only: left out of the .dwk, as the app's import leaves it out"
+                )
         else:
             entry["status"] = "partial" if problems else "written"
             keep.append((ds, base, sheet, entry))

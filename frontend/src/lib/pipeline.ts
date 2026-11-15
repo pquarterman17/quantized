@@ -53,6 +53,16 @@ export const STEP_FIELDS: Record<string, { key: string; label: string }[]> = {
   fit: [{ key: "model", label: "fit model" }],
 };
 
+/** A fit step's params after an edit: when the MODEL changed, the recorded
+ *  start values, bounds and held flags belonged to the old model's
+ *  parameters, so they are reset to "the model's own starts" (`p0: null`)
+ *  rather than applied to a model they do not describe. */
+export function fitParamsForEdit(step: PipelineStep, params: Record<string, unknown>): Record<string, unknown> {
+  if (step.kind !== "fit" || params.model === step.params.model) return params;
+  const { lower: _l, upper: _u, fixed: _f, ...rest } = params;
+  return { ...rest, p0: null };
+}
+
 /** Every step kind a persisted .dwk / template may carry ("transform", P2.5:
  *  join/stack/unstack/transpose/merge/split/dataset math). An unknown kind is
  *  dropped on load. */
@@ -101,7 +111,7 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 //   fit         -> qz.fit_model(model, x, y) on the recorded channels and range,
 //                  with the recorded starts, bounds and held parameters
 //   ui          -> a comment, but ONLY for the view-only actions in VIEW_ONLY
-//                  (axis scales, titles, figure styles, which channels plot):
+//                  (axis scales, title, grid, waterfall, which channels plot):
 //                  most "ui" recordings edit data (cell edits, sorts, row and
 //                  column moves, recodes, re-imports), and any code not on that
 //                  list is treated as one of them
@@ -140,10 +150,14 @@ export function py(value: unknown): string {
 
 const I = "    "; // one indent level, inside main()
 
-/** The recorded actions that only change what is SHOWN (store/plotViewSettings,
- *  viewAppliers, the figure appliers, plotInNewWindow). Allow-list, never a
- *  deny-list: a new recorder is data-changing until it is added here. */
-const VIEW_ONLY = /^qz\.(setXScale|setYScale|setPlotTitle|setWaterfall|setShowGrid|applyFigure|openFigureDocInWindow|plotInNewWindow|setXKey|setYKeys|setGroupKey|facetByColumn|breakAtGaps)\(/;
+/** The recorded actions that only change what is SHOWN: plot-view state in
+ *  store/plotViewSettings that neither edits cells nor changes which dataset
+ *  is active. Allow-list, never a deny-list: a new recorder is data-changing
+ *  until it is added here. Deliberately NOT here (each can build a dataset or
+ *  make another one active, so the steps after it ran on other data):
+ *  applyFigure (a cross-book figure builds and activates an overlay),
+ *  plotInNewWindow, facetByColumn, breakAtGaps, openFigureDocInWindow. */
+const VIEW_ONLY = /^qz\.(setXScale|setYScale|setPlotTitle|setWaterfall|setShowGrid|setXKey|setYKeys|setGroupKey)\(/;
 
 interface Emit {
   /** Code lines for main()'s body (already indented). */
@@ -281,6 +295,17 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     body.push(...out.lines);
   });
   const usesFits = body.some((l) => l.includes("fits.append"));
+  // Choosing a dataset in the Library is not recorded, so after a second
+  // import (or an Origin project's many books) the app may have run later
+  // steps on another dataset than the one this script holds.
+  const several = inputs.length > 1 || inputs.some((s) => /\.opju?$/i.test(s));
+  const caveat = several
+    ? [
+        comment("NOTE: switching datasets in the app is not recorded. Each step here runs on the data"),
+        comment("loaded or produced last; check that this is the dataset the app's steps ran on."),
+        `${I}print("note: dataset switches in the app are not recorded; this script runs each step on the data it loaded last")`,
+      ]
+    : [];
   const count = `${steps.length} step${steps.length === 1 ? "" : "s"}`;
   const recorded = inputs.map((s) => (s ? py(s) : "None")).join(", ");
   return [
@@ -315,6 +340,7 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     `${I}if len(args.inputs) != len(RECORDED_INPUTS):`,
     `${I}${I}parser.error(f"give {len(RECORDED_INPUTS)} input file(s)")`,
     `${I}data = None`,
+    ...caveat,
     ...(usesFits ? [`${I}fits = []`] : []),
     ...body,
     "",
