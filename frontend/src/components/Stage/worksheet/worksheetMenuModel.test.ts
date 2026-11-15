@@ -1,4 +1,4 @@
-// worksheetMenus — pins the GUI_INTERACTION #8 retrofit's output: the
+// worksheetMenuModel — pins the GUI_INTERACTION #8 retrofit's output: the
 // registry-composed columnMenuItems/rowMenuItems must still produce the
 // EXACT label/order/separator/disabled shape the original hand-built
 // version did (see the module's own header note).
@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
-import { columnMenuItems, rowMenuItems, type ColumnMenuContext, type RowMenuContext } from "./worksheetMenus";
+import { columnMenuItems, rowMenuItems, type ColumnMenuContext, type RowMenuContext } from "./worksheetMenuModel";
 
 function labelsOf(items: ContextMenuItem[]): string[] {
   return items.map((i) => ("separator" in i ? "—sep—" : "label" in i ? i.label : "?"));
@@ -33,7 +33,7 @@ function makeColCtx(over: Partial<ColumnMenuContext> = {}): ColumnMenuContext {
   };
 }
 
-describe("worksheetMenus — Set As (Origin Column > Set As)", () => {
+describe("worksheetMenuModel — Set As (Origin Column > Set As)", () => {
   const setAs = (items: ContextMenuItem[]) =>
     items.find((i): i is Extract<ContextMenuItem, { submenu: ContextMenuItem[] }> => "submenu" in i && i.label === "Set As");
 
@@ -78,7 +78,7 @@ describe("worksheetMenus — Set As (Origin Column > Set As)", () => {
   });
 });
 
-describe("worksheetMenus — columnMenuItems", () => {
+describe("worksheetMenuModel — columnMenuItems", () => {
   it("col = -1 (the x column): sort only, no set-X/plot-toggle block", () => {
     const items = columnMenuItems(-1, makeColCtx());
     expect(labelsOf(items)).toEqual([
@@ -185,7 +185,7 @@ function makeRowCtx(over: Partial<RowMenuContext> = {}): RowMenuContext {
   };
 }
 
-describe("worksheetMenus — rowMenuItems", () => {
+describe("worksheetMenuModel — rowMenuItems", () => {
   it("an unmasked row: 'Mask row', 'Unmask all rows' disabled (nothing masked)", () => {
     const items = rowMenuItems(0, makeRowCtx());
     expect(labelsOf(items)).toEqual(["Mask row", "Unmask all rows", "—sep—", "Copy row (TSV)"]);
