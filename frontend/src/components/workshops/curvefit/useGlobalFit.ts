@@ -55,7 +55,8 @@ export type GlobalModel = Pick<FitModel, "name" | "paramNames" | "p0" | "lb" | "
 export interface GlobalFitRun {
   fit: GlobalFitResult;
   members: GlobalMember[];
-  overlays: (number | null)[][];
+  /** Each member's fitted curve, bound to the Y/X it was fitted on. */
+  overlays: FitOverlay[];
 }
 
 export interface GlobalFitState {
@@ -164,7 +165,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
 
   useEffect(() => {
     if (!result || shownIndex == null) return;
-    const ov: FitOverlay = { datasetId: result.members[shownIndex]!.datasetId, y: result.overlays[shownIndex]! };
+    const ov = result.overlays[shownIndex]!;
     ownOverlay.current = ov;
     setFitOverlay(ov);
   }, [result, shownIndex, setFitOverlay]);
@@ -226,7 +227,11 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
         return;
       }
       const fit = await pollJob<GlobalFitResult>(job_id, onProgress);
-      const overlays = data.map(({ ds, d }, i) => memberOverlay(ds, d.pairs, fit.yFit[i] ?? []));
+      const overlays = data.map(({ ds, d }, i): FitOverlay => ({
+        datasetId: ds.id,
+        binding: { yKey: members[i]!.yKey, xKey: d.xKey },
+        y: memberOverlay(ds, d.pairs, fit.yFit[i] ?? []),
+      }));
       setShown(null);
       setResult({ fit, members, overlays });
     } catch (e) {

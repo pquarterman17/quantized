@@ -112,7 +112,7 @@ describe("CurveFitPanel — Global fit mode", () => {
     const stats = screen.getByRole("table", { name: "Global fit per series" });
     expect(within(stats).getAllByRole("row")).toHaveLength(3);
     expect(screen.getByRole("button", { name: "→ Report" })).toBeInTheDocument();
-    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [1, 3, 5] }));
+    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [1, 3, 5] }));
   });
 
   it("surfaces a refusal to fit a single series", async () => {

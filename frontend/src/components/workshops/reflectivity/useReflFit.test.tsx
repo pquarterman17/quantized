@@ -8,6 +8,7 @@ import FitResults from "./FitResults";
 import ReflFitView from "./ReflFitView";
 import { useReflFit } from "./useReflFit";
 import { useReflectivity } from "./useReflectivity";
+import { SINGLE_X } from "../../../test/overlayBinding";
 
 vi.mock("uplot", async () => ({ default: (await import("./reflFit.testkit")).UPlotStub }));
 vi.mock("../../../lib/api/reflectivity", () => ({
@@ -192,7 +193,7 @@ describe("useReflFit", () => {
 
     expect(result.current.fit.result?.n_evaluations).toBe(42);
     // returned q 0.01/0.03/0.05 are rows 0/2/4 of the dataset
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "xrr", y: [0.9, null, 0.4, null, 0.1, null] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "xrr", binding: SINGLE_X, y: [0.9, null, 0.4, null, 0.1, null] });
   });
 
   it("fits a PNR pair: two spin channels and msld parameters", async () => {
@@ -388,7 +389,7 @@ describe("useReflFit — result validity", () => {
     expect(useApp.getState().fitOverlay).toBeNull();
 
     // someone else's overlay on the same dataset survives our next failure
-    const theirs = { datasetId: "xrr", y: [1, 2, 3, 4, 5, 6] };
+    const theirs = { datasetId: "xrr", binding: SINGLE_X, y: [1, 2, 3, 4, 5, 6] };
     act(() => useApp.getState().setFitOverlay(theirs));
     await act(async () => {
       await result.current.fit.run();

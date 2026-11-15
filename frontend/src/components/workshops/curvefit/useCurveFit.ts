@@ -8,7 +8,7 @@ import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
-import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
+import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMode } from "../../../lib/types";
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
@@ -300,7 +300,7 @@ export function useCurveFit(): CurveFitState {
       const runYKeys = runSelection?.yKeys ?? state.yKeys;
       const localXy = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
       if (!localXy) return;
-      const fitXKey = ownXKey(ds, runXKey, localXy.yKey); // recorded X = the one the points came from
+      const fitXKey = localXy.xKey; // recorded X = the one the points came from (the Y's own X)
       const pairs = dropGapRows(localXy.x, localXy.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {
@@ -419,7 +419,7 @@ export function useCurveFit(): CurveFitState {
           const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
           const aligned = restoreGapRows(yFit, pairs);
           const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-          const overlay = { datasetId: ds.id, y };
+          const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: localXy.yKey, xKey: fitXKey }, y };
           rememberCurveFitOverlay(overlay);
           setFitOverlay(overlay);
           retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null, overlay);

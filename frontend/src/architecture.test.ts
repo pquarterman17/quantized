@@ -2367,6 +2367,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   qfitBusy: "analysis tool/gadget working scratch",
   qfitResult: "analysis tool/gadget working scratch",
   qfitResultModel: "analysis tool/gadget working scratch",
+  qfitResultCurve: "analysis tool/gadget working scratch",
   qfitError: "analysis tool/gadget working scratch",
   gadgetMode: "analysis tool/gadget working scratch",
   gadgetBusy: "analysis tool/gadget working scratch",
@@ -2801,6 +2802,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       module: "/store/workbookTransferRun.ts",
       loader: "/store/workbookTransfer.ts",
       call: 'import("./workbookTransferRun")',
+    },
+    {
+      // SLICE 28: the Duplicate body (`duplicateDataset` is already async: it
+      // awaits `resolveDataset` first). Its imports are all shared with eager
+      // modules, so nothing needs dragging out beside it.
+      module: "/store/duplicateDatasetRun.ts",
+      loader: "/store/datasetListEdits.ts",
+      call: 'import("./duplicateDatasetRun")',
     },
     {
       // SLICE 17: the Take Over Editing / Open as Copy bodies.

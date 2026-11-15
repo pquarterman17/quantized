@@ -8,7 +8,7 @@ import { restoreGapRows, type FinitePairs } from "./api/finitePairs";
 import { refreshFitAnalysisResults } from "./fitAnalysisResultLive";
 import { announceFitRecomputed } from "./fitRecomputeEvents";
 import { activeRowIndices, droppedRows, expandToFull } from "./rowstate";
-import type { CalcResult, Dataset, FitSpec } from "./types";
+import type { CalcResult, Dataset, FitSpec, OverlayBinding } from "./types";
 import type { AppState } from "../store/useApp";
 export { refreshFitAnalysisResults } from "./fitAnalysisResultLive";
 
@@ -40,6 +40,8 @@ export function recomputedFitPatch(
   previousSpec: FitSpec,
   updatedSpec: FitSpec,
   pairs: FinitePairs,
+  /** The Y and X the refit read (its FitSelection): the redrawn curve's binding. */
+  binding: OverlayBinding,
   yFit: unknown,
   sourceRows?: readonly number[],
 ): Partial<AppState> {
@@ -50,7 +52,7 @@ export function recomputedFitPatch(
     staleFits: state.staleFits.filter((id) => id !== dataset.id),
     datasets: state.datasets.map((item) => item.id === dataset.id && item.fitSpec === previousSpec ? updatedDataset : item),
     analysisResults: refreshFitAnalysisResults(state.analysisResults, updatedDataset, false),
-    ...(overlayVisible ? { fitOverlay: overlayY ? { datasetId: dataset.id, y: overlayY } : null } : {}),
+    ...(overlayVisible ? { fitOverlay: overlayY ? { datasetId: dataset.id, binding, y: overlayY } : null } : {}),
   };
 }
 
@@ -63,20 +65,31 @@ export function commitRecomputedFit(
   dataset: Dataset,
   spec: FitSpec,
   pairs: FinitePairs,
+  binding: OverlayBinding,
   result: CalcResult,
   sourceRows?: readonly number[],
   /** The 1-sigma errors the re-fit was weighted with (aligned to `pairs`). */
   dy?: readonly number[],
 ): void {
-  const updatedSpec = stampRecompute(spec, result);
+  const updatedSpec = stampRecompute(withReadProvenance(spec, binding), result);
   if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
     throw new Error("source or fit changed while recalculating");
   }
-  set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, result.yFit, sourceRows));
+  set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, binding, result.yFit, sourceRows));
   announceFitRecomputed({
     datasetId: dataset.id, previousSpec: spec, result, x: pairs.x, y: pairs.y, dy: dy ? [...dy] : null,
-    curve: fitOverlayValues(dataset, pairs, result.yFit, sourceRows),
+    curve: fitOverlayValues(dataset, pairs, result.yFit, sourceRows), binding,
   });
+}
+
+/** `spec` with the X its re-fit actually READ recorded (I3: a Y on a multi-X
+ *  sheet is re-read on its own X, which a stale spec may name wrongly) -- but
+ *  ONLY when the spec recorded both X and Y and the re-fit read that very Y.
+ *  Any other read came from a fallback to the live plot (no recorded Y, an
+ *  out-of-range Y) or a default (no recorded X), and a guess is never
+ *  promoted to provenance: the spec keeps its own, honest record. */
+export function withReadProvenance(spec: FitSpec, read: OverlayBinding): FitSpec {
+  return spec.xKey !== undefined && spec.yKey === read.yKey && spec.xKey !== read.xKey ? { ...spec, xKey: read.xKey } : spec;
 }
 
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */

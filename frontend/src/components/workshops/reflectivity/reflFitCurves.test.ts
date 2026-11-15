@@ -155,7 +155,7 @@ describe("stored residuals (P2.2)", () => {
 describe("the saved overlay", () => {
   it("aligns channel 1's stored model onto the dataset's rows", () => {
     const d = xrrDataset("xrr");
-    expect(savedOverlay(fittedRecord(d), [d])).toEqual({ datasetId: "xrr", y: [0.9, null, 0.4, null, 0.1, null] });
+    expect(savedOverlay(fittedRecord(d), [d])).toEqual({ datasetId: "xrr", binding: { yKey: 0, xKey: null }, y: [0.9, null, 0.4, null, 0.1, null] });
   });
 
   it("refuses once the data changed or the dataset is gone", () => {

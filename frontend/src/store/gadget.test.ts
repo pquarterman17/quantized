@@ -22,6 +22,7 @@ vi.mock("../lib/api/statsDescriptive", () => ({
 
 import { statsDescriptive } from "../lib/api/statsDescriptive";
 import { fftSpectral, peaksIntegrate } from "../lib/api";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const data = (): DataStruct => ({
   time: [0, 1, 2, 3, 4, 5],
@@ -180,6 +181,7 @@ describe("differentiate mode (#34)", () => {
     expect(useApp.getState().gadgetDerivResult?.dydx).toEqual([2, 2, 2]);
     expect(useApp.getState().derivOverlay).toEqual({
       datasetId: "a",
+      binding: { yKey: 0, xKey: null },
       y: [null, 2, 2, 2, null, null],
     });
     vi.useRealTimers();
@@ -275,7 +277,7 @@ describe("setQfitRoi(null) clears every region-mode's result (#34)", () => {
       },
       gadgetStatsResult: { N: 1 },
       gadgetDerivResult: { dydx: [1], extremumX: 1, extremumDydx: 1 },
-      derivOverlay: { datasetId: "a", y: [1, 2, 3, 4, 5, 6] },
+      derivOverlay: { datasetId: "a", binding: SINGLE_X, y: [1, 2, 3, 4, 5, 6] },
       gadgetFftPreview: { freq: [1], magnitude: [1], df: 1, nfft: 1, fs: 1, windowName: "hanning" },
     });
     useApp.getState().setQfitRoi([1, 3]);
