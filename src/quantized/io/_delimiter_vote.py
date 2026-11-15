@@ -49,8 +49,13 @@ def vote_lines(text: str) -> list[str]:
     out: list[str] = []
     for raw in lines[data_section_start(lines) :]:
         stripped = raw.strip()
-        if stripped and stripped[0] not in COMMENT_CHARS and not is_section_marker(stripped):
-            out.append(raw)
+        if not stripped or stripped[0] in COMMENT_CHARS:
+            continue
+        # A heading starts with "[", so only such a line pays for the regex:
+        # running it on every row of a million-row file cost ~15% of the import.
+        if stripped[0] == "[" and is_section_marker(stripped):
+            continue
+        out.append(raw)
     return out
 
 

@@ -81,6 +81,13 @@ export const WORKSPACE_VERSION = 4;
 // version"), which is the safe failure. Content is otherwise identical to v4. (Templates need no
 // bump: an older `parseTemplate` already rejects the whole file on an unknown step kind.)
 export const WORKSPACE_VERSION_TRANSFORM_STEPS = 5;
+// v6 (release prep after 0.34.0): written ONLY when the file uses a feature v0.34.0 would silently
+// drop on open + save (graph layers, Y3+ axes, colour gradients, linked Y axes, live multi-dataset
+// graphs, column formats, the new symbol/error-bar/axis styling -- `featuresV034WouldDrop` in
+// lib/workspaceSerialize.ts). v0.34.0 accepts only v1-v5, so it refuses such a file instead of
+// losing those features; a file without them stays v4/v5 and still opens in 0.34. Content is
+// otherwise identical to v4/v5.
+export const WORKSPACE_VERSION_NEW_FEATURES = 6;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
@@ -319,7 +326,7 @@ export function parseWorkspace(
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5) {
+  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5 && o.version !== 6) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {

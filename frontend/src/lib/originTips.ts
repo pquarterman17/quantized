@@ -46,7 +46,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "set-column-values",
     origin: "Set Column Values (a column formula)",
     quantized:
-      "Add a computed column with a formula; combine two datasets with Data ▸ Dataset math. Recalc mode controls when formulas re-run (Auto / Manual / None).",
+      "Right-click a worksheet column header ▸ Set Column Values… for the formula dialog (function and column browsers, a row range, a live preview); combine two datasets with Data ▸ Dataset math. Recalc mode controls when formulas re-run (Auto / Manual / None).",
     keywords: "formula set column values compute derived math recalculate",
   },
   {
@@ -103,6 +103,62 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     quantized:
       "Export Origin (.ogs) writes an Origin script + ASCII; on Windows, Send to Origin (COM) pushes straight into a running Origin.",
     keywords: "origin ogs export send com round trip",
+  },
+  {
+    id: "inset-layers",
+    origin: "Add an inset graph, picture or table to a graph (or Merge Graph layers)",
+    quantized:
+      "Insert ▸ Inset graph… / Image… / Table… places a layer on the focused plot: an inset of any datasets' curves on its own axes, a PNG/JPEG/SVG, or a table. Drag to move, use the corner grip to resize; the vector export draws the same layers.",
+    keywords: "inset layer merge graph picture image table add layer",
+  },
+  {
+    id: "layer-contents",
+    origin: "Layer Contents (add, remove, reorder plots in a layer)",
+    quantized:
+      "Plot ▸ Layer Contents… (also on the plot's right-click menu) lists the graph's curves to remove, reorder, re-bind or add from any dataset; Plot ▸ Add curve from… adds one curve. Dropping a dataset from the Library onto a graph adds its Y columns.",
+    keywords: "layer contents add plot remove curve reorder rebind dataset",
+  },
+  {
+    id: "copy-page",
+    origin: "Copy Page (paste a graph into Word / PowerPoint)",
+    quantized:
+      "Right-click the plot ▸ Copy figure. The message says what reached the clipboard: vector SVG + PNG where the browser allows it, otherwise a 300-DPI PNG. There is no EMF. On Windows, qz --desktop with QZ_WIN_CLIPBOARD=1 can write the clipboard natively (docs/desktop.md).",
+    keywords: "copy page clipboard word powerpoint paste emf vector copy graph",
+  },
+  {
+    id: "smoothing",
+    origin: "Smoothing and signal processing (median, LOWESS, FFT filter, deconvolution)",
+    quantized:
+      "Analyze ▸ Signal Processing… covers smoothing, median filter, despike, LOWESS, (de)convolution, Hilbert envelope, FFT and inverse FFT, without re-sorting rows. To bin or thin rows, use the Resample workshop's Reduce rows.",
+    keywords: "smooth smoothing median lowess loess despike fft filter ifft hilbert deconvolution convolution reduce bin",
+  },
+  {
+    id: "mask-points",
+    origin: "Mask data points (Regional Mask tool)",
+    quantized:
+      "The plot toolbar's Lasso Mask masks the points inside an outline (Shift unmasks); right-click a point for Mask / Unmask this point. Masked rows are left out of fits and exports.",
+    keywords: "mask unmask regional mask lasso exclude points data reader",
+  },
+  {
+    id: "function-plot",
+    origin: "Plot a function (Create 2D Function Plot) or a contour from XYZ",
+    quantized:
+      "Plot ▸ Function plot (y = f(x))… draws a live curve with parameters on the focused graph. Plot ▸ Contour from scattered XYZ… interpolates scattered points into a labelled map.",
+    keywords: "function plot 2d function graph contour xyz scattered triangulation",
+  },
+  {
+    id: "compare-datasets",
+    origin: "NLFit Compare Datasets (F-test)",
+    quantized:
+      "In Curve fit, open Global fit and press Compare datasets: an F-test of whether one shared value of the ticked parameters fits every series, or each needs its own.",
+    keywords: "compare datasets f-test global fit shared parameters nlfit",
+  },
+  {
+    id: "multiple-y",
+    origin: "Multiple Y axes (Y3, Y4, …)",
+    quantized:
+      "Assign a series to Y3 and up from the Inspector's Channels card or Plot Details, then set each axis from Plot ▸ Y Axis Settings… or by double-clicking it.",
+    keywords: "multiple y axes y3 y4 triple y axis offset right",
   },
   {
     id: "workspace",

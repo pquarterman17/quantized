@@ -46,7 +46,13 @@ import { stringifyWithCells } from "./dataStructJson";
 import type { WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
-import { WORKSPACE_FORMAT, WORKSPACE_VERSION, WORKSPACE_VERSION_TRANSFORM_STEPS, type WorkspaceState } from "./workspace";
+import {
+  WORKSPACE_FORMAT,
+  WORKSPACE_VERSION,
+  WORKSPACE_VERSION_NEW_FEATURES,
+  WORKSPACE_VERSION_TRANSFORM_STEPS,
+  type WorkspaceState,
+} from "./workspace";
 import type { PlotWindow } from "./plotview";
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
@@ -361,8 +367,73 @@ export function serializeWorkspace(
       ...(d.versionOf ? { versionOf: d.versionOf } : {}),
     })),
   };
+  // Forward compatibility: a file that uses a feature v0.34.0 would silently
+  // DROP on open + save is written as v6, which v0.34.0 refuses ("unsupported
+  // workspace version"). Every other file keeps v4/v5 and still opens there.
+  if (featuresV034WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_NEW_FEATURES;
   return stringifyWithCells((hole) => ({
     ...doc,
     datasets: doc.datasets.map((e) => ({ ...e, data: hole(e.data), raw: hole(e.raw) })),
   }), opts?.compact ? undefined : 2);
+}
+
+// ── Forward compatibility with v0.34.0 ───────────────────────────────────────
+// Measured, not assumed: a document using each feature below was opened and
+// re-saved by v0.34.0's own parseWorkspace/serializeWorkspace, and every one
+// of these fields was gone afterwards (no warning). The lists are exactly the
+// fields this tree added over v0.34.0's types. Keys are checked only in their
+// own context (a view, an axis format, a style), so an unrelated object that
+// happens to share a name can never bump an ordinary file.
+const NEW_STYLE_KEYS = ["markerFill", "markerEdge", "markerFillColor", "markerAlpha", "markerEvery", "rampRank", "errorBar", "sizeBy", "sizeRange", "dropLines", "connect"];
+const NEW_EXPORT_STYLE_KEYS = ["marker_fill", "marker_edge", "marker_face", "marker_alpha", "marker_every", "ramp_rank", "error_cap", "error_width", "error_color", "error_band", "size_by", "size_range", "drop_lines", "connect"];
+const NEW_AXIS_FMT_KEYS = ["prob", "custom", "cross", "reverse", "rotate", "offset", "grid", "top"];
+// Cell payloads: never walked (a million-row sheet must not cost a pass here).
+const SKIP_KEYS = new Set(["data", "raw", "dataSnapshot", "snapshot", "values", "time"]);
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const present = (v: unknown): boolean =>
+  v !== undefined && v !== null && v !== false && !(Array.isArray(v) && !v.length) && !(isObj(v) && !Object.keys(v).length);
+const hasAny = (o: Record<string, unknown>, keys: readonly string[]): boolean => keys.some((k) => present(o[k]));
+
+/** The features in a serialized `.dwk` document that v0.34.0 would lose on
+ *  open + save (empty for a file v0.34.0 reads in full). Exported for tests. */
+export function featuresV034WouldDrop(doc: unknown): string[] {
+  const found = new Set<string>();
+  const visit = (v: unknown, key: string): void => {
+    if (Array.isArray(v)) {
+      for (const x of v) visit(x, key);
+      return;
+    }
+    if (!isObj(v)) return;
+    if (key === "xFmt" || key === "yFmt" || key === "y2Fmt") {
+      if (hasAny(v, NEW_AXIS_FMT_KEYS) || (v.base !== undefined && v.base !== "e")) found.add("axis extras (log2, probability, custom ticks, crossing, grid, top axis, reverse, rotation, offset)");
+    }
+    if (key === "seriesStyles") {
+      for (const st of Object.values(v)) if (isObj(st) && hasAny(st, NEW_STYLE_KEYS)) found.add("series styling (symbol details, error-bar style, size by column, drop lines, spline)");
+    }
+    if ("seriesStyles" in v && "yFmt" in v) {
+      if (present(v.layers)) found.add("graph layers (inset graphs, images, tables)");
+      if (present(v.yAxes) || present(v.yAxisOf)) found.add("extra Y axes (Y3+)");
+      if (present(v.seriesRamp)) found.add("series colour gradient");
+    }
+    if (present(v.linkYGroup)) found.add("linked Y axes");
+    if (present(v.linkedCurves)) found.add("live multi-dataset graphs");
+    if (present(v.columnProps)) found.add("column comments and number formats");
+    for (const [k, x] of Object.entries(v)) if (!SKIP_KEYS.has(k)) visit(x, k);
+  };
+  visit(doc, "");
+  // Publication (export) styles live as ARRAYS under `seriesStyles` (figure
+  // configs, templates); checked here so the record walk above stays simple.
+  const walkExport = (v: unknown): void => {
+    if (Array.isArray(v)) v.forEach(walkExport);
+    else if (isObj(v)) {
+      for (const [k, x] of Object.entries(v)) {
+        if (SKIP_KEYS.has(k)) continue;
+        if (k === "seriesStyles" && Array.isArray(x) && x.some((st) => isObj(st) && hasAny(st, NEW_EXPORT_STYLE_KEYS))) found.add("series styling (symbol details, error-bar style, size by column, drop lines, spline)");
+        walkExport(x);
+      }
+    }
+  };
+  walkExport(doc);
+  return [...found].sort();
 }
