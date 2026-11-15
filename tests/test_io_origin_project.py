@@ -2645,20 +2645,22 @@ def test_designation_set_matches_frontend_fixture() -> None:
 
 
 def test_opju_designation_set_is_a_subset_of_the_shared_fixture() -> None:
-    """`windows_opju.py` decodes designations INDEPENDENTLY of `windows.py`
-    (different container, different marker bytes) and carries its own
-    `_DESIGNATION` map. The sibling test above pins only `windows.py`, so a
-    string added to the `.opju` decoder alone -- or a rename on one side
-    only -- would still reach the frontend unrecognised and re-open the
-    exact silent-parse-to-`undefined` hole this fixture exists to close.
-    Subset, not equality: the `.opju` map legitimately has no "disregard"
-    member (that designation has no distinct marker in the CPYUA framing)."""
-    from quantized.io.origin_project.windows_opju import _DESIGNATION as OPJU_DESIGNATION
+    """The `.opju` readers decode designations INDEPENDENTLY of `windows.py`
+    (different container): the record code table (`opju_column_fixed.
+    DESIGNATION_CODES`) and the marker sets (`opju_marker_designations`).
+    The sibling test above pins only `windows.py`, so a string added to the
+    `.opju` decoder alone -- or a rename on one side only -- would still reach
+    the frontend unrecognised and re-open the exact silent-parse-to-
+    `undefined` hole this fixture exists to close. Since decode-plan item 72
+    the `.opju` code table is the full nine-code set, so this is equality."""
+    from quantized.io.origin_project.opju_column_fixed import DESIGNATION_CODES
+    from quantized.io.origin_project.opju_marker_designations import MARKER_DESIGNATIONS
 
     fixture = json.loads(
         (Path(__file__).parent / "fixtures" / "wire" / "origin_designations.json").read_text()
     )
-    assert set(OPJU_DESIGNATION.values()) <= set(fixture)
+    assert set(DESIGNATION_CODES.values()) == set(fixture)
+    assert set().union(*MARKER_DESIGNATIONS.values()) <= set(fixture)
 
 
 @pytest.mark.realdata
