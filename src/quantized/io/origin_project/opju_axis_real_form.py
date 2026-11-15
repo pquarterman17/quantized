@@ -11,7 +11,7 @@ narrative (record grammar, value-token encodings) this implements:
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
 8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
                                   and is only a search-window hint; 8x =
-                                  81 or 80; <flag> = 00/40/80/88/c0, see
+                                  81 or 80; <flag>: an admitted flag, see
                                   ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
 8x <id> <plen> 00 <flag> 01 …     end separator
@@ -109,12 +109,15 @@ __all__: list[str] = []  # internal to the .opju figures subsystem; imported by 
 # records that only parse with a free 5th byte, it reads 00 (44), 40 (71),
 # 80 (82), c0 (21), 41 (6), 01 (7), 08 (6), 30 (3), 88 (3), 48 (1) -- bit
 # combinations (0x40|0x80 = c0, 0x08|0x80 = 88), the signature of flag bits.
-# Only the values Origin 2026b COM (``layer.x/y.from/to``, 23 files) CONFIRMS
-# are admitted: 00/40/80/88/c0 decode 60 records onto Origin's exact axis
-# values. 01/08/30/41/48 have no oracle coverage yet and stay unrecovered
-# (fail closed) until one does.
+# Only values Origin 2026b COM (``layer.x/y.from/to``) CONFIRMS are admitted:
+# 00/40/80/88/c0 first (60 records, 23 files, 2026-11-14), then 01/08/30/41/48
+# (2026-11-15, 103-file oracle: 7/6/3/6/1 records, all 23 exact to Origin's
+# axes, every other corpus record byte-identical, 0 new wrong or phantom).
+# Any other value stays unrecovered (fail closed) until an oracle covers it.
 _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
-_SEP_WIDE = re.compile(rb"[\x80\x81]..\x00[\x00\x40\x80\x88\xc0]\x01", re.DOTALL)
+_SEP_WIDE = re.compile(
+    rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0]\x01", re.DOTALL
+)
 # Specimen-form record markers (moved with _parse_specimen_record from
 # figures_opju, 2026-07-06).
 _Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])

@@ -101,7 +101,7 @@ export default function CurveFitPanel() {
     setParamRow,
     replaceParamRows,
     resetParamRows,
-    // JMP_GAP J7 residual — "By" grouping (display-only, unweighted; see
+    // JMP_GAP J7 residual — "By" grouping (display-only; see
     // useCurveFitByLevel's header doc).
     byOptions,
     byCol,
@@ -296,11 +296,6 @@ export default function CurveFitPanel() {
               if (active) updateAnalysisItem(active.id, { factorKeys: factor === null ? [] : [factor] });
             }}
           />
-          {byActive && weightMode !== "none" && (
-            <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-              By levels fit unweighted (weighting is not yet supported per level)
-            </div>
-          )}
         </div>
       )}
 

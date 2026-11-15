@@ -3704,6 +3704,16 @@
             ],
             "title": "Field"
           },
+          "field_errors": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Field Errors",
+            "type": "array"
+          },
           "field_unit": {
             "default": "Oe",
             "title": "Field Unit",
@@ -3867,6 +3877,41 @@
           "area"
         ],
         "title": "CurrentDensityRequest",
+        "type": "object"
+      },
+      "CustomTicksSpec": {
+        "description": "Explicit major ticks, optionally labelled (``calc.axis_scales``).",
+        "properties": {
+          "at": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "At",
+            "type": "array"
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          }
+        },
+        "required": [
+          "at"
+        ],
+        "title": "CustomTicksSpec",
         "type": "object"
       },
       "CutSegmentRequest": {
@@ -4138,6 +4183,16 @@
               "type": "number"
             },
             "title": "Field",
+            "type": "array"
+          },
+          "field_errors": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Field Errors",
             "type": "array"
           },
           "field_unit": {
@@ -15618,7 +15673,10 @@
           "base": {
             "anyOf": [
               {
-                "const": "e",
+                "enum": [
+                  "e",
+                  "2"
+                ],
                 "type": "string"
               },
               {
@@ -15651,6 +15709,27 @@
               }
             ],
             "title": "Breaks"
+          },
+          "cross": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CustomTicksSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "digits": {
             "default": 2,
@@ -15718,6 +15797,21 @@
               }
             ],
             "title": "Offset"
+          },
+          "prob": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fraction",
+                  "percent"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prob"
           },
           "reverse": {
             "anyOf": [
@@ -19770,6 +19864,94 @@
           }
         },
         "summary": "Compare",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/compare-datasets": {
+      "post": {
+        "description": "Extra-sum-of-squares F-test: do the ``constraints`` parameters share ONE\nvalue across all datasets (restricted fit) or does each dataset need its own\n(full fit)? Same request as ``/global``; the constraints are the hypothesis\nunder test and must each span every dataset.",
+        "operationId": "compare_datasets_route_api_fitting_compare_datasets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Compare Datasets Route Api Fitting Compare Datasets Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Datasets Route",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/compare-datasets/job": {
+      "post": {
+        "description": "Queue the dataset comparison on the poll-model job runner (two global\nfits); cancel stops it at the next model evaluation.",
+        "operationId": "compare_datasets_job_api_fitting_compare_datasets_job_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Compare Datasets Job Api Fitting Compare Datasets Job Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Datasets Job",
         "tags": [
           "fitting"
         ]

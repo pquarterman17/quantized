@@ -53,6 +53,12 @@ STEMS = [
 _PLOT_REF_RE = re.compile(r'\[(?P<book>[^\]]+)\](?:"[^"]*"|[^!"]*)!(?P<col>[A-Za-z]+)')
 
 
+def _base(book: str) -> str:
+    """A decoded ``Book@N`` (a curve re-bound to sheet N) as its workbook:
+    the oracle refs name the book, not the sheet."""
+    return book.partition("@")[0]
+
+
 def _oracle_pairs(plots_path: Path) -> set[tuple[str, str]]:
     data = json.loads(plots_path.read_text(encoding="utf-8"))
     out: set[tuple[str, str]] = set()
@@ -89,7 +95,9 @@ def _per_graph(
     named: dict[str, set[tuple[str, str]]] = {}
     for f in figs:
         if f["name"]:
-            named.setdefault(f["name"], set()).update((c["book"], c["y"]) for c in f["curves"])
+            named.setdefault(f["name"], set()).update(
+                (_base(c["book"]), c["y"]) for c in f["curves"]
+            )
     exact, incomplete, unmatched, wrong_total = [], [], [], 0
     for gname, pairs in sorted(oracle.items()):
         decoded = named.get(gname)
@@ -132,7 +140,7 @@ def main() -> int:
             continue
         oracle = _oracle_pairs(plots_path)
         figs = extract_figures_opju(src.read_bytes())
-        decoded = {(c["book"], c["y"]) for f in figs for c in f["curves"]}
+        decoded = {(_base(c["book"]), c["y"]) for f in figs for c in f["curves"]}
 
         wrong = decoded - oracle
         correct = decoded & oracle

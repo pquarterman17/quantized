@@ -29,6 +29,7 @@ from quantized.io.origin_project.graph_preview import (
 )
 from quantized.io.origin_project.integrity import apply_container_integrity
 from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
+from quantized.io.origin_project.opju_curve_sheets import unbound_rebinds
 from quantized.io.origin_project.opju_graph_pages import (
     GraphPageReport,
     unrecovered_graph_pages,
@@ -56,7 +57,9 @@ def origin_figures_and_fidelity(
             raw_figs = extract_figures(raw)
             preview_diagnostics: list[PreviewDiagnostic] = []
         else:
-            raw_figs = extract_figures_opju(raw)
+            # curves re-bound to a sheet the import did not produce are
+            # omitted + diagnosed, not left for the frontend to skip silently
+            raw_figs = unbound_rebinds(extract_figures_opju(raw), books)
             raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
             missed = unrecovered_graph_pages(raw, {str(f.get("name")) for f in raw_figs})
         figs, fidelity = assess_origin_figures(

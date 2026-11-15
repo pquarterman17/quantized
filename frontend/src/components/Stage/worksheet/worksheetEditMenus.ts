@@ -20,6 +20,9 @@ export interface ColumnEditContext {
   editHeader: (col: number) => void;
   setColumnValues: (col: number) => void;
   numberFormat: () => void;
+  /** User-parameter uses (lib/userParams.ts); absent = the entries are hidden. */
+  legendFromParams?: () => void;
+  orderByParam?: () => void;
   insertColumn: (col: number) => void;
   addColumn: () => void;
   deleteColumns: () => void;
@@ -54,6 +57,10 @@ export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMen
       submenu: FILL_KINDS.map(([kind, label]) => ({ label, run: () => ctx.fill(kind) })),
     },
     { label: n > 1 ? `Number format (${n} columns)…` : "Number format…", run: ctx.numberFormat },
+    ...(ctx.legendFromParams && col >= 0
+      ? [{ label: n > 1 ? `Legend labels from parameters (${n} columns)…` : "Legend label from parameters…", run: ctx.legendFromParams }]
+      : []),
+    ...(ctx.orderByParam && col >= 0 ? [{ label: "Order curves by parameter…", run: ctx.orderByParam }] : []),
     { separator: true },
     { label: "Insert column", title: "Insert a blank column to the left of this one", run: () => ctx.insertColumn(col) },
     { label: "Add new column", title: "Append a blank column after the last data column", run: ctx.addColumn },

@@ -121,6 +121,8 @@ export function magneticCurieWeissDataFit(body: {
   sample_mass_g?: number | null;
   molar_mass_g_mol?: number | null;
   response_errors?: number[][];
+  /** Applied-field 1-sigma columns (in `field_unit`), combined in quadrature. */
+  field_errors?: number[][];
 }): Promise<CurieWeissDataFitResult> {
   return postJSON("/api/magnetic/curie-weiss-data-fit", body);
 }

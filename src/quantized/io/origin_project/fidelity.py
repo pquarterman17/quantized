@@ -114,7 +114,9 @@ def _source_resolves(fig: dict[str, Any], sources: tuple[str, ...]) -> bool:
 
 
 def _filter_reason(fig: dict[str, Any], sources: tuple[str, ...]) -> str | None:
-    if fig.get("curves") or _source_resolves(fig, sources):
+    if fig.get("curves") or fig.get("curve_sheet_omitted") or _source_resolves(fig, sources):
+        # A layer whose curves were left out for their sheet is a real user
+        # graph: it stays, and its fidelity says why it has no curves.
         return None
     hint = str(fig.get("source_hint") or "").strip()
     return (
@@ -177,6 +179,10 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         # The per-curve detail is the figure's own `curve_sheet_notes`; the
         # frontend words it against the books that were actually imported.
         omissions.append("curve_sheet_mismatch")
+    if fig.get("curve_sheet_omitted"):
+        # `.opju`: curves left out, not drawn from the wrong sheet
+        # (`opju_curve_sheets`); the per-curve detail rides on the figure.
+        omissions.append("curve_sheet_unresolved")
     out: FigureFidelity = {
         # No current decoder proves every visual property, so "exact" is
         # deliberately reserved for a future preview/oracle comparison gate.

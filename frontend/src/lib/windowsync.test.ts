@@ -8,13 +8,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
-import { registerSyncPlot, windowSyncKey, windowXSyncHook } from "./windowsync";
+import { registerSyncPlot, windowSyncKey, windowXSyncHook, windowYSyncHook, windowYSyncKey } from "./windowsync";
 
 /** A fake uPlot carrying only what the hook touches. */
 function fakePlot(min: number | null = 0, max: number | null = 10) {
   return {
     scales: { x: { min, max } },
     setScale: vi.fn(),
+    valToPos: (v: number) => v,
   } as unknown as uPlot & { setScale: ReturnType<typeof vi.fn> };
 }
 
@@ -103,5 +104,78 @@ describe("windowXSyncHook + registerSyncPlot", () => {
     unA();
     // Group is now gone from the registry — the hook is a silent no-op.
     expect(() => windowXSyncHook("g1")(a, "x")).not.toThrow();
+  });
+});
+
+// Gap audit 4 G19: the Y link -- its own key namespace, the primary Y range
+// only, the same group guard.
+describe("windowYSyncHook", () => {
+  const yPlot = (min: number, max: number) =>
+    ({ scales: { x: { min: 0, max: 1 }, y: { min, max } }, setScale: vi.fn(), valToPos: (v: number) => v }) as unknown as uPlot & { setScale: ReturnType<typeof vi.fn> };
+
+  it("keys Y groups apart from X groups", () => {
+    expect(windowYSyncKey(1)).toBe("qz-win-linky-1");
+    expect(windowYSyncKey(1)).not.toBe(windowSyncKey(1));
+    expect(windowYSyncKey(null)).toBeUndefined();
+  });
+
+  it("propagates a y-range to the other members, never x or y2, and does not bounce", () => {
+    const a = yPlot(-2, 3);
+    const b = yPlot(0, 1);
+    const key = windowYSyncKey(2)!;
+    const un = [registerSyncPlot(key, a), registerSyncPlot(key, b)];
+    // b's own setScale would re-enter the hook: the group guard stops it.
+    b.setScale.mockImplementation(() => windowYSyncHook(key)(b, "y"));
+    windowYSyncHook(key)(a, "y");
+    expect(b.setScale).toHaveBeenCalledTimes(1);
+    expect(b.setScale).toHaveBeenCalledWith("y", { min: -2, max: 3 });
+    expect(a.setScale).not.toHaveBeenCalled();
+    windowYSyncHook(key)(a, "x");
+    windowYSyncHook(key)(a, "y2");
+    expect(b.setScale).toHaveBeenCalledTimes(1);
+    un.forEach((f) => f());
+  });
+});
+
+// Gap audit 4 G19 review: uPlot commits a setScale in a MICROTASK and fires
+// the hooks there -- after the group's `syncing` flag is reset -- and a
+// partner whose scale cannot place the range must keep its own (M4, L5).
+describe("window sync under uPlot's deferred commit", () => {
+  /** A fake whose setScale commits later, then fires its own hook, as uPlot does. */
+  function deferredPlot(hook: () => (u: uPlot, k: string) => void, min = 0, max = 10, place = (v: number) => v) {
+    const p = {
+      scales: { x: { min, max }, y: { min, max } },
+      valToPos: place,
+      setScale: vi.fn((k: "x" | "y", r: { min: number; max: number }) => {
+        queueMicrotask(() => {
+          p.scales[k] = r;
+          hook()(p as unknown as uPlot, k);
+        });
+      }),
+    };
+    return p;
+  }
+
+  it("a deferred echo of the pushed range does not bounce back", async () => {
+    const key = windowYSyncKey(4)!;
+    const hook = () => windowYSyncHook(key);
+    const a = deferredPlot(hook, -2, 3);
+    const b = deferredPlot(hook);
+    const un = [registerSyncPlot(key, a as unknown as uPlot), registerSyncPlot(key, b as unknown as uPlot)];
+    hook()(a as unknown as uPlot, "y");
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(b.setScale).toHaveBeenCalledTimes(1);
+    expect(a.setScale).not.toHaveBeenCalled();
+    un.forEach((f) => f());
+  });
+
+  it("a partner that cannot place the range (log, given min < 0) keeps its own", () => {
+    const key = windowYSyncKey(5)!;
+    const a = deferredPlot(() => windowYSyncHook(key), -1.1, 1.1);
+    const logB = deferredPlot(() => windowYSyncHook(key), 1, 10, (v) => (v > 0 ? Math.log10(v) : NaN));
+    const un = [registerSyncPlot(key, a as unknown as uPlot), registerSyncPlot(key, logB as unknown as uPlot)];
+    windowYSyncHook(key)(a as unknown as uPlot, "y");
+    expect(logB.setScale).not.toHaveBeenCalled();
+    un.forEach((f) => f());
   });
 });

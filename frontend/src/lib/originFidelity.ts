@@ -10,6 +10,7 @@ export interface OriginFidelityEntry {
 const LABELS: Record<string, string> = {
   advanced_axis_types: "advanced axis types",
   curve_sheet_mismatch: "curves to check: recorded on another sheet",
+  curve_sheet_unresolved: "curves left out: sheet not proven or not imported",
   exact_curve_bindings: "exact curve bindings",
   figure_decode_error: "graph decode failed",
   graph_content_unattributed: "graph content found but its window not identified",

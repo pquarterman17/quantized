@@ -244,6 +244,19 @@ describe("BackgroundPlotWindow", () => {
     expect(unlinked.cursor.sync).toBeUndefined();
     expect(unlinked.hooks?.setScale).toBeUndefined();
   });
+
+  it("a linkYGroup adds the y-range sync hook only: no cursor sync of its own (gap audit 4 G19)", async () => {
+    render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} linkYGroup={3} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { cursor: { sync?: unknown }; hooks?: { setScale?: unknown[] } };
+    expect(opts.cursor.sync).toBeUndefined();
+    expect(opts.hooks?.setScale).toHaveLength(1);
+
+    created.length = 0;
+    render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} linkGroup={1} linkYGroup={1} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect((created[0].opts as { hooks?: { setScale?: unknown[] } }).hooks?.setScale).toHaveLength(2);
+  });
 });
 
 // Item 15 — alternate render modes from the window's OWN view. Each proof

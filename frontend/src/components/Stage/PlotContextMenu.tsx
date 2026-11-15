@@ -49,6 +49,10 @@ interface Props {
   onClose: () => void;
 }
 
+/** "Link X / Y axis with…" (lib/windowLinkX.ts, loaded on demand). */
+const linkAxis = (name: "linkXAxisWith" | "linkYAxisWith") => () =>
+  void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m[name](), onLoadFailure);
+
 export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidden, actions, onClose }: Props) {
   const items = useMemo(() => {
     // Snapshot the store at open time — the menu is single-shot (every action
@@ -256,9 +260,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       pointUnder,
       layerContents: activeDs ? openLayerContents : undefined,
       colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
-      linkXAxis: st.plotWindows.filter((w) => w.kind === "plot").length > 1
-        ? () => void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure)
-        : undefined,
+      ...(st.plotWindows.filter((w) => w.kind === "plot").length > 1 ? { linkXAxis: linkAxis("linkXAxisWith"), linkYAxis: linkAxis("linkYAxisWith") } : {}),
       openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor
