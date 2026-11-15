@@ -202,9 +202,11 @@ export function useMagTools(): MagToolsState {
 
   const detection = useMemo<MagXDetection>(() => {
     if (!active) return { kind: "unknown", reason: "no dataset is selected" };
-    const axis = magXAxis(active.data, xKey);
+    // The Y's OWN X decides field vs temperature (T1,R1,H2,M2: M2 is vs H2).
+    const yKey = plottedYKey(active, xKey, yKeys, seriesOrder) ?? 0;
+    const axis = magXAxis(active.data, ownXKey(active, xKey, yKey));
     return detectMagXKind(axis.label, axis.unit);
-  }, [active, xKey]);
+  }, [active, xKey, yKeys, seriesOrder]);
   const src = active ? sourceUnits(active, xKey, yKeys, seriesOrder) : null;
 
   const bgPath: MagBgPath | null =
@@ -328,7 +330,7 @@ export function useMagTools(): MagToolsState {
               : { mag_bg_subtracted: true }),
           },
           ds.data,
-          request.xKey,
+          ownXKey(ds, request.xKey, yKey), // the X `time` was read from
         ),
       };
       const suffix = bgPath === "mh" ? "loop bg-sub" : "bg-sub";

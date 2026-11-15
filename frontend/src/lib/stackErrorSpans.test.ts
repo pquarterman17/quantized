@@ -22,11 +22,11 @@ const ds: Dataset = {
 };
 
 describe("stackErrorSpans", () => {
-  it("spans for a secondary-X curve are as long as the view and carry values in ITS block", () => {
+  it("spans for a lone secondary-X curve are as long as its one-block view (T1 is not seeded)", () => {
     const [spans] = stackErrorSpans(ds, null, [2]);
     const plus = spans.get(1)![0].plus as number[];
-    expect(plus).toHaveLength(6); // two blocks of 3 rows
-    expect(plus.slice(3)).toEqual([1, 2, 3]);
+    expect(plus).toHaveLength(3);
+    expect(plus).toEqual([1, 2, 3]);
   });
   it("without a per-series X the spans are over the source rows", () => {
     const one: Dataset = { ...ds, columnDesignations: undefined };

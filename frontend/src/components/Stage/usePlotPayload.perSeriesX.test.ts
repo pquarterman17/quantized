@@ -104,4 +104,38 @@ describe("per-series X on the live plot", () => {
     const sel = p.series.findIndex((x) => x.label === "R2 (selected)") + 1;
     expect(p.data[sel]).toEqual([null, null, null, null, null, 300]);
   });
+
+  // Overlays are built at the source's 3 rows for the PRIMARY Y; the plot has 2 blocks x 3 rows.
+  describe("overlays on a multi-X plot", () => {
+    const ov = (y: number[]) => ({ datasetId: "mx", y });
+    const col = (p: NonNullable<ReturnType<typeof usePlotPayload>["displayPayload"]>, label: string) =>
+      p.data[p.series.findIndex((x) => x.label === label) + 1];
+
+    it("a fit (with band), baseline and peak markers land in the secondary-X curve's block", async () => {
+      const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+        initialProps: params({
+          seriesOrder: [2, 0], // R2 (on T2, block 2) is the primary Y the overlays belong to
+          fitOverlay: { ...ov([1, 2, 3]), band: [{ label: "lo", y: [0, 1, 2] }, { label: "hi", y: [2, 3, 4] }] },
+          baselineOverlay: ov([7, 8, 9]),
+          peakOverlay: ov([5, 6, 4]),
+        }),
+      });
+      await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+      const p = result.current.displayPayload!;
+      expect(p.data[0]).toHaveLength(6);
+      expect(col(p, "fit")).toEqual([null, null, null, 1, 2, 3]);
+      expect(col(p, "lo")).toEqual([null, null, null, 0, 1, 2]);
+      expect(col(p, "hi")).toEqual([null, null, null, 2, 3, 4]);
+      expect(col(p, "baseline")).toEqual([null, null, null, 7, 8, 9]);
+      expect(col(p, "peaks")).toEqual([null, null, null, 5, 6, 4]);
+    });
+
+    it("an overlay for a curve on the shared X lands in block 1", async () => {
+      const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+        initialProps: params({ fitOverlay: ov([1, 2, 3]) }),
+      });
+      await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+      expect(col(result.current.displayPayload!, "fit")).toEqual([1, 2, 3, null, null, null]);
+    });
+  });
 });

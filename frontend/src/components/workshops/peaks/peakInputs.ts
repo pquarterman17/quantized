@@ -16,14 +16,14 @@ import type { PeakTable } from "../../../lib/peakTable";
 export interface PeakInputs {
   x: number[];
   y: number[];
-  /** The PLOTTED x channel's full column (`fullPlottedX(ds.data, xKey)` —
-   *  keyed by the requested `xKey`, NOT by `xKeyUsed` below), for aligning
-   *  marker overlays to the full-length plot x (which keeps excluded/
-   *  filtered rows as gaps). These two differ in exactly the fallback branch
-   *  `xKeyUsed` documents: when `selectedFitData` returns null and `x`/`y`
-   *  fall back to the time axis, `fullX` is still `xKey`'s column (or `time`
-   *  only if `xKey` itself was null/out of range) — it does not also fall
-   *  back. The overlay follows the plot, not the fit's axis. */
+  /** The full column of the X the fitted Y is plotted against --
+   *  `fullPlottedX(ds.data, xKeyUsed)`, i.e. the Y's OWN X (`ownXKey`, so R2 in
+   *  T1,R1,T2,R2 reads T2), for aligning marker overlays to the full-length
+   *  plot x (which keeps excluded/filtered rows as gaps). In the fallback
+   *  branch (`selectedFitData` returned null, `x`/`y` come from the time axis)
+   *  it is still the requested `xKey`'s column. The overlay follows the
+   *  curve's own block of a per-series-X plot (lib/overlayBlock.ts), which is
+   *  where `usePerSeriesX` scatters it. */
   fullX: number[];
   /** The x channel `x` was actually taken from — `null` means the time axis.
    *  NOT necessarily the `xKey` that was asked for: `selectedFitData` returns

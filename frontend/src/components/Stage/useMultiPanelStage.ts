@@ -34,8 +34,9 @@ import {
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns, stackErrorSpans } from "../../lib/stackErrorSpans";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
-import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import { perSeriesXData } from "../../lib/perSeriesX";
+import { shownCurves } from "../../lib/shownCurves";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
@@ -260,9 +261,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const plotted = useMemo(
     () =>
       !spatial && !facet && !breakMode && active
-        ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder).filter(
-            (c) => !hiddenChannels.includes(c),
-          )
+        ? shownCurves(active.data, { yKeys, xKey, seriesOrder, hiddenChannels }, active.channelRoles)
         : [],
     [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder, hiddenChannels],
   );

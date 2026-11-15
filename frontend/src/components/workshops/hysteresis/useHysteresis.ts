@@ -11,6 +11,7 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
 import { selectedFitData } from "../../../lib/fitselection";
 import { plottedYKey } from "../../../lib/fitselectionActions";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { detectMagXKind, magXAxis, stampXIdentity } from "../../../lib/magDataKind";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
@@ -179,12 +180,6 @@ export function useHysteresis(): HysteresisState {
         return;
       }
       const currentXKey = startXKey;
-      const axis = magXAxis(ds.data, currentXKey);
-      const kind = detectMagXKind(axis.label, axis.unit);
-      if (kind.kind !== "field") {
-        setError(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
-        return;
-      }
       const input = hysteresisInputs(
         ds,
         currentXKey,
@@ -196,6 +191,13 @@ export function useHysteresis(): HysteresisState {
         return;
       }
       const { h, m, yKey } = input;
+      const ownKey = ownXKey(ds, currentXKey, yKey); // `h` is the Y's OWN X
+      const axis = magXAxis(ds.data, ownKey);
+      const kind = detectMagXKind(axis.label, axis.unit);
+      if (kind.kind !== "field") {
+        setError(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
+        return;
+      }
       // Gaps out of the request, gaps back in on the SAME rows — so `time: h`
       // (the full original x) still lines up with `corrected`.
       const pairs = dropGapRows(h, m);
@@ -222,7 +224,7 @@ export function useHysteresis(): HysteresisState {
         metadata: stampXIdentity(
           { ...ds.data.metadata, hysteresis_bg_subtracted: true },
           ds.data,
-          currentXKey,
+          ownKey,
         ),
       };
       const stem = ds.name.replace(/\.[^.]+$/, "");

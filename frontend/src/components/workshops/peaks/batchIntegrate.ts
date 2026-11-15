@@ -18,10 +18,9 @@
 // field, every source and every skipped one — is `metadata.peakIntegrateBatch`,
 // the same shape of record the Peak Analyzer batch keeps in `peakBatch`.
 
+import { ownXChannels } from "../../../lib/ownXChannels";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { IntegrateBatchRequest, IntegrateBatchResponse } from "../../../lib/api/peaks";
-import { selectedFitData } from "../../../lib/fitselection";
-import { ownXKey } from "../../../lib/perSeriesX";
 import { parseQuantity } from "../../../lib/metadataCleanup";
 import { metaValue, pathLabel, type MetaPath } from "../../../lib/metadataKeys";
 import { analysisData } from "../../../lib/rowstate";
@@ -61,21 +60,12 @@ export interface IntegrateChannels {
   yIndex: number;
 }
 
-export function integrateChannels(
+export const integrateChannels: (
   active: Dataset | null | undefined,
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-): IntegrateChannels | null {
-  const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
-  const labels = active?.data.labels ?? [];
-  if (!sel || labels[sel.yKey] === undefined) return null;
-  // The Y's OWN X (R2 in T1,R1,T2,R2 integrates against T2, not the plot's T1).
-  const ownX = active ? ownXKey(active, xKey, sel.yKey) : xKey;
-  const xLabel = ownX === null ? null : (labels[ownX] ?? null);
-  if (ownX !== null && xLabel === null) return null;
-  return { xLabel, yLabel: labels[sel.yKey], xIndex: ownX, yIndex: sel.yKey };
-}
+) => IntegrateChannels | null = ownXChannels;
 
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {
   if (preferred !== null && labels[preferred] === label) return preferred;

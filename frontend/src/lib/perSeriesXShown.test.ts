@@ -21,11 +21,55 @@ describe("perSeriesXData with a shown set", () => {
     expect(perSeriesXData(t1r1t2r2(), null, [0])).toBeNull();
   });
 
-  it("R1 hidden: the view still has both blocks only when R2 is shown with a different X", () => {
-    // R2 alone binds T2; the shared X (T1) block stays first, R2's values sit in block 2.
+  it("R1 hidden: a single block T2, the shared X is not seeded, X title is T2", () => {
     const v = perSeriesXData(t1r1t2r2(), null, [2])!;
-    expect(v.blocks).toEqual([null, 1]);
-    expect(v.data.values.map((r) => r[2]).slice(4)).toEqual(R2);
+    expect(v.blocks).toEqual([1]);
+    expect(v.data.time).toEqual(T2);
+    expect(v.data.values.map((r) => r[2])).toEqual(R2);
+    expect(v.data.metadata.x_column_long).toBe("T2");
+  });
+
+  it("nothing shown: no view", () => {
+    expect(perSeriesXData(t1r1t2r2(), null, [])).toBeNull();
+  });
+
+  it("hide then unhide (either order) matches a fresh build; time-X and hidden never collide in the cache", () => {
+    const ds = t1r1t2r2();
+    const fresh = (shown: number[]) => perSeriesXData(t1r1t2r2(), null, shown);
+    // The SAME dataset object is queried repeatedly so its cache is exercised.
+    const a1 = perSeriesXData(ds, null, [0, 2]);
+    const a2 = perSeriesXData(ds, null, [2]); // R1 hidden
+    const a3 = perSeriesXData(ds, null, [0, 2]); // R1 shown again
+    expect(a3!.data.time).toEqual(fresh([0, 2])!.data.time);
+    expect(a3!.data.values).toEqual(fresh([0, 2])!.data.values);
+    expect(a3).toBe(a1);
+    expect(a2!.data.time).toEqual(T2);
+    // Reverse order on a fresh dataset: hidden-first, then unhidden.
+    const ds2 = t1r1t2r2();
+    const b1 = perSeriesXData(ds2, null, [2]);
+    const b2 = perSeriesXData(ds2, null, [0, 2]);
+    expect(b1!.data.time).toEqual(T2);
+    expect(b2!.data.time).toEqual([...T1, ...T2]);
+    expect(b2!.data.values).toEqual(fresh([0, 2])!.data.values);
+    // R2 hidden collapses to the plain plot (null), then back.
+    expect(perSeriesXData(ds2, null, [0])).toBeNull();
+    expect(perSeriesXData(ds2, null, [0, 2])!.data.time).toEqual([...T1, ...T2]);
+  });
+
+  it("hiding a curve whose X block stays in use returns the same view object", () => {
+    const ds: Dataset = {
+      id: "three",
+      name: "three",
+      data: {
+        time: T1,
+        values: T1.map((_, i) => [R1[i], R1[i] + 1, T2[i], R2[i]]),
+        labels: ["R1", "R1b", "T2", "R2"],
+        units: ["", "", "", ""],
+        metadata: {},
+      },
+      columnDesignations: { 2: "X" },
+    };
+    expect(perSeriesXData(ds, null, [0, 1, 3])).toBe(perSeriesXData(ds, null, [0, 3]));
   });
 });
 

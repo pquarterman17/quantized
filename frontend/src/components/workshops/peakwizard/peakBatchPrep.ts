@@ -24,11 +24,10 @@
 // `segmentYErr`, so the rules match: none designated, or a zero/invalid
 // sigma, fits that dataset unweighted.
 
+import { ownXChannels } from "../../../lib/ownXChannels";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { PeakBatchItem } from "../../../lib/api/peakBatch";
 import { errorRoleViewDefaults } from "../../../lib/errorbars";
-import { ownXKey } from "../../../lib/perSeriesX";
-import { selectedFitData } from "../../../lib/fitselection";
 import { cutRange, subtractBaseline, type PeakRecipe } from "../../../lib/peakwizard";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
@@ -111,20 +110,12 @@ export interface BatchChannels {
 }
 
 /** The wizard's X/Y on the active dataset, as names; null when it has none. */
-export function batchChannels(
+export const batchChannels: (
   active: Dataset | null | undefined,
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-): BatchChannels | null {
-  const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
-  const labels = active?.data.labels ?? [];
-  if (!sel || labels[sel.yKey] === undefined) return null;
-  const ownX = active ? ownXKey(active, xKey, sel.yKey) : xKey; // the Y's OWN X (R2 -> T2)
-  const xLabel = ownX === null ? null : (labels[ownX] ?? null);
-  if (ownX !== null && xLabel === null) return null;
-  return { xLabel, yLabel: labels[sel.yKey], xIndex: ownX, yIndex: sel.yKey };
-}
+) => BatchChannels | null = ownXChannels;
 
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {
   if (preferred !== null && labels[preferred] === label) return preferred;

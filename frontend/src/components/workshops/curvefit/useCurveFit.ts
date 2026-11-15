@@ -37,6 +37,7 @@ import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { exportCornerPlot } from "./curveFitCornerPlot";
 import { parseFitStarts } from "./fitStarts";
 import { weightingNow, weightingOf } from "./fitWeighting";
+import { byColumnOptions } from "./byColumnOptions";
 import { followRefits } from "../../../store/curveFitRefit";
 import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
 import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
@@ -213,12 +214,7 @@ export function useCurveFit(): CurveFitState {
     [active, selected],
   );
   const plottedYKeyNow = xy?.yKey ?? null;
-  const byColumns = useMemo<ByColumnOption[]>(() => {
-    if (!active) return [];
-    return active.data.labels
-      .map((lab, i) => ({ index: i, label: lab }))
-      .filter((c) => c.index !== xKey && c.index !== plottedYKeyNow);
-  }, [active, xKey, plottedYKeyNow]);
+  const byColumns = useMemo<ByColumnOption[]>(() => byColumnOptions(active, xKey, plottedYKeyNow), [active, xKey, plottedYKeyNow]);
 
   const model = models.find((m) => m.name === modelName);
   const shown = fitted?.datasetId === active?.id ? fitted : restoreFitted(datasets, active?.id ?? null);
