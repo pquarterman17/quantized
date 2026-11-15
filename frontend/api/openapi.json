@@ -8479,6 +8479,11 @@
             "title": "Ny",
             "type": "integer"
           },
+          "resample": {
+            "default": false,
+            "title": "Resample",
+            "type": "boolean"
+          },
           "smoothing": {
             "default": 0.0,
             "title": "Smoothing",

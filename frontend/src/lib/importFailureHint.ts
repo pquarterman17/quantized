@@ -18,6 +18,7 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
   ".otw", ".otwu", ".otm", ".otmu", ".otp", ".otpu", ".opx",
   // other binary containers with their own parsers
   ".xlsx", ".xls", ".h5", ".hdf5", ".nxs", ".nc", ".brml", ".raw", ".spc", ".opus",
+  ".mat", ".ibw", ".png", ".tif", ".tiff", ".jpg", ".jpeg",
 ]);
 
 /** The hint for a failed import of `name`: the wizard for a text-like file,

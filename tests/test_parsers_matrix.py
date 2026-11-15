@@ -97,6 +97,19 @@ _KNOWN_GAPS: dict[str, str] = {
     # unsupported"; FIXED 2026-07-25 — and the diagnosis was narrower than the
     # xfail said: block scanning already worked, the missing piece was the
     # ##PEAK ASSIGNMENTS= (XYMA) data class. Anchored in test_io_jcamp.py.)
+    # --- 3-D stacks (gap audit 5, lane D) -----------------------------------
+    # The .ibw and HDF5 importers refuse 3-D data by contract: which 2-D slice
+    # (or which AFM channel layer) to take is a user choice, never guessed.
+    # Importing layered AFM waves (Height/Amplitude/Phase as layers) and image
+    # stacks layer-by-layer is a named follow-up.
+    "asylum/afm/pycroscopy_IgorIBWReader_P0089OP0027.ibw": "3-D wave refused: layer choice",
+    "asylum/afm/afmreader_sample_0.ibw": "3-D wave refused: layer choice",
+    (
+        "asylum/afm/pycroscopy_20230110-152047_ScV6Sn6-2023-01-10-STM_NANOPROBE_"
+        "AtomManipulation--37_1-Aux2(V)_3_Forward_Down_Trace.ibw"
+    ): "3-D wave refused: layer choice",
+    "asylum/afm/pycroscopy_IgorIBWReader_ImageStack_BTFO_DSO.ibw": "3-D wave refused: layer choice",
+    "4dstem/test_data.h5": "only a 3-D dataset: slice choice",
 }
 
 
