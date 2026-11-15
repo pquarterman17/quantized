@@ -19,6 +19,7 @@ import { exportActive, type StoreGet } from "./exportActive";
 import type { FigureSpec } from "./api/figures";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import { overlayDropTracker } from "./overlayDropNotice";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import { defaultPageSetup } from "./pageGeometry";
@@ -149,13 +150,14 @@ export async function runExportFigureCommand(
   };
   // F4.2c (a): a figure with excluded rows asks "greyed or omitted?" first.
   await exportActive(s, async (stem, ds, signal) => {
+    const drops = overlayDropTracker(); // an overlay the figure leaves out is reported (lib/overlayDropNotice)
     const picked = await chooseExcludedRows(
-      (greyExcluded) => {
+      (greyExcluded) => drops.build((onDroppedOverlays) => {
         const o = { ...opts, greyExcluded };
-        const spec = buildSpec ? buildSpec(stem, ds, o) : buildStageFigureSpec(s, ds, stem, o);
+        const spec = buildSpec ? buildSpec(stem, ds, o) : buildStageFigureSpec(s, ds, stem, o, { onDroppedOverlays });
         // A typed Y2 label wins for this export, as X/Y do; blank derives.
         return y2l && spec.y2_keys?.length ? { ...spec, y2_label: y2l } : spec;
-      },
+      }),
       excludedChoiceMatters,
       s().excludedDisplay,
     );
@@ -163,9 +165,11 @@ export async function runExportFigureCommand(
     // A per-channel stack exports as its own panels (lib/stackPageExport.ts).
     const stackView = buildSpec ? null : stackExportView(s(), ds);
     const stacked = stackView && stackPageRequest(picked.value, stackView);
-    if (stacked) return exportFigurePage(stacked, signal);
+    const note = drops.note(picked.value);
+    if (stacked) { await exportFigurePage(stacked, signal); return note; }
     // A view the request still cannot carry (an inset) says so first (lib/screenOnlyExport.ts).
     if (!buildSpec && !(await confirmScreenOnlyExport(s(), picked.value, "Export"))) return false;
     await exportFigure(picked.value, signal);
+    return note;
   });
 }

@@ -1,6 +1,6 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import { liveFitPlotBinding } from "../../../lib/fitAnalysisResultLive";
-import { fitDrawBinding } from "../../../lib/fitDrawBinding";
+import { fitDrawBinding, fitDrawRefusal } from "../../../lib/fitDrawBinding";
 import { statisticalResultFigureDrafts, type StatisticalResultFigureDraft } from "../../../lib/statisticalResultFigures";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -24,15 +24,30 @@ function previewDataPath(data: DataStruct, channel: number): string | null {
 
 const previewPath = (dataset: Dataset, channel: number): string | null => previewDataPath(dataset.data, channel);
 
-function FigureCard({ result, index, onOpen, onBuild, onReport }: {
+type PlotBinding = NonNullable<AnalysisResult["plotBindings"]>[number];
+
+/** The cards to show: the saved bindings -- or, for a fit whose envelope has
+ *  none (a legacy fit that never recorded its X gets no saved binding), its
+ *  live binding, so Open still reaches the gate's open-without-the-fit path
+ *  (store/analysisResultPlotOpen) instead of the card never appearing. */
+function figureBindings(result: AnalysisResult, datasets: readonly Dataset[]): PlotBinding[] {
+  if (result.plotBindings?.length) return result.plotBindings;
+  const fitRef = result.settingsRef?.field === "fitSpec" ? result.settingsRef : null;
+  const dataset = fitRef && datasets.find((item) => item.id === fitRef.datasetId);
+  const live = dataset ? liveFitPlotBinding(result, dataset) : null;
+  return live ? [live] : [];
+}
+
+function FigureCard({ result, index, savedBinding, onOpen, onBuild, onReport, onRefit }: {
   result: AnalysisResult;
   index: number;
+  savedBinding: PlotBinding;
   onOpen: (index: number) => void;
   onBuild: (index: number) => void;
   onReport: (index: number) => void;
+  onRefit?: () => void;
 }) {
   const datasets = useApp((state) => state.datasets);
-  const savedBinding = result.plotBindings![index];
   const fitRef = result.settingsRef?.field === "fitSpec" ? result.settingsRef : null;
   const fitted = fitRef !== null;
   const datasetId = fitRef?.datasetId ?? savedBinding.datasetId;
@@ -64,7 +79,9 @@ function FigureCard({ result, index, onOpen, onBuild, onReport }: {
         <Button size="sm" disabled={fittedPlotUnavailable} onClick={() => onOpen(index)}>{sourceOnly ? "Open source plot" : fitted ? "Open fitted plot" : "Open plot"}</Button>
         <Button size="sm" disabled={unavailable} onClick={() => onBuild(index)}>{sourceOnly || fitted ? "Build source figure" : "Build figure"}</Button>
         <Button size="sm" disabled={fittedPlotUnavailable || fitRefused} onClick={() => onReport(index)}>{sourceOnly ? "Send source to report…" : fitted ? "Send fitted plot to report…" : "Send to report…"}</Button>
+        {fitRefused && onRefit && <Button size="sm" variant="primary" onClick={onRefit}>Re-fit…</Button>}
       </div>
+      {fitRefused && <p className="qz-analysis-missing" role="note">Open shows the data without the fit: {fitDrawRefusal(dataset!.fitSpec!)}.</p>}
     </div>
   </article>;
 }
@@ -96,17 +113,21 @@ function StatisticalFigureCard({ draft, disabled, disabledReason, onCreate }: {
   </article>;
 }
 
-export default function AnalysisResultFigures({ result, disabled = false, disabledReason, onOpen, onBuild, onReport, onCreateStatistical }: {
+export default function AnalysisResultFigures({ result, disabled = false, disabledReason, onOpen, onBuild, onReport, onRefit, onCreateStatistical }: {
   result: AnalysisResult;
   disabled?: boolean;
   disabledReason?: string;
   onOpen: (index: number) => void;
   onBuild: (index: number) => void;
   onReport: (index: number) => void;
+  /** Re-fit the saved fit (the toolbar's Edit): offered on a card whose fit the gate refuses. */
+  onRefit?: () => void;
   onCreateStatistical: (draft: StatisticalResultFigureDraft) => void;
 }) {
+  const datasets = useApp((state) => state.datasets);
   const drafts = statisticalResultFigureDrafts(result);
-  if (!result.plotBindings?.length && !drafts.length) return <p className="qz-analysis-empty">No figure-ready output was saved for this result.</p>;
+  const bindings = figureBindings(result, datasets);
+  if (!bindings.length && !drafts.length) return <p className="qz-analysis-empty">No figure-ready output was saved for this result.</p>;
   const sourceOnly = result.settingsRef?.field === "peakTable";
   const fitted = result.settingsRef?.field === "fitSpec";
   return <div className="qz-analysis-figures">
@@ -119,11 +140,11 @@ export default function AnalysisResultFigures({ result, disabled = false, disabl
       {disabledReason && <p className="qz-analysis-missing" role="note">{disabledReason}</p>}
       {drafts.map((draft) => <StatisticalFigureCard key={draft.key} draft={draft} disabled={disabled} disabledReason={disabledReason} onCreate={onCreateStatistical} />)}
     </>}
-    {!!result.plotBindings?.length && <><p className="qz-analysis-caption">{sourceOnly
+    {!!bindings.length && <><p className="qz-analysis-caption">{sourceOnly
       ? "These actions plot the recorded source curve only. The peak table and CSV preserve fitted values; a reusable fitted curve is not stored in this result."
       : fitted
         ? "Open plot and Send to report regenerate the fitted curve from the saved model and parameters. Build source figure starts an editable draft from the recorded source curve; editable figures do not yet store fit overlays."
       : `Figures use the result’s recorded ${result.outputs.length ? "output" : "source"} and channels. Build figure opens an editable draft; Send to report captures the configured plot.`}</p>
-    {result.plotBindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} onOpen={onOpen} onBuild={onBuild} onReport={onReport} />)}</>}
+    {bindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} savedBinding={binding} onOpen={onOpen} onBuild={onBuild} onReport={onReport} onRefit={onRefit} />)}</>}
   </div>;
 }
