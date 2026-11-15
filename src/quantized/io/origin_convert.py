@@ -43,7 +43,7 @@ read back (``io/datastruct_table.py``, ``io/_column_marker.py``). Pure ``io``.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +57,7 @@ from quantized.io.origin_project import drop_empty_library_books, read_origin_pr
 from quantized.io.origin_project.fidelity import with_data_diagnostics
 from quantized.io.origin_project.import_manifest import origin_figures_and_fidelity
 from quantized.io.workspace_dwk import OriginWorkspace, workspace_json
+from quantized.io.write_guard import WriteRefused, check_target
 
 __all__ = ["CONVERT_FORMATS", "convert_origin_project", "safe_name"]
 
@@ -138,6 +139,8 @@ def convert_origin_project(
     prefix: str | None = None,
     allow_partial: bool = False,
     imported_at: str | None = None,
+    overwrite: bool = False,
+    protected: Sequence[Path | str] = (),
 ) -> dict[str, Any]:
     """Convert one project; return its report entry (never raises for a bad
     project file -- the failure is the entry's ``status``/``error``).
@@ -148,6 +151,12 @@ def convert_origin_project(
     "written"|"partial"|"skipped"|"empty", "output", "problems", "notes"}]}``.
     ``omissions`` are the losses no book owns. ``imported_at`` stamps a
     ``.dwk``'s datasets (the CLI passes the current time).
+
+    **Never overwrites** (``io/write_guard.py``): a target that exists is not
+    written -- its books are ``skipped`` with "exists, not overwritten" --
+    unless ``overwrite``; and a target that is, resolves into or links to
+    ``path`` itself or any of ``protected`` (the CLI passes every input) is
+    refused even then.
     """
     if fmt not in CONVERT_FORMATS:
         raise ValueError(f"unknown format {fmt!r}; choose one of {', '.join(CONVERT_FORMATS)}")
@@ -226,8 +235,10 @@ def convert_origin_project(
         report["error"] = "no book could be written" + ("" if skipped else " (no worksheet data)")
         return report
     out_dir.mkdir(parents=True, exist_ok=True)
+    guard = {"overwrite": overwrite, "protected": [path, *protected]}
     try:
         _write(
+            guard,
             keep,
             out_dir,
             safe_name(prefix or path.name),
@@ -243,12 +254,22 @@ def convert_origin_project(
     except (OSError, ValueError) as exc:
         report["error"] = f"writing failed: {type(exc).__name__}: {exc}"
         return report
+    if not report["outputs"]:
+        report["error"] = "nothing written: every output was refused"
+        return report
     clean = all(b["status"] in ("written", "empty") and not b["problems"] for b in report["books"])
     report["status"] = "ok" if clean and not report["omissions"] else "partial"
     return report
 
 
+def _refused(entries: list[dict[str, Any]], exc: WriteRefused) -> None:
+    for entry in entries:
+        entry["status"] = "skipped"
+        entry["problems"].append(str(exc))
+
+
 def _write(  # noqa: PLR0913 - one call site, every argument is the project's
+    guard: dict[str, Any],
     keep: list[tuple[DataStruct, str, int, dict[str, Any]]],
     out_dir: Path,
     stem: str,
@@ -274,6 +295,11 @@ def _write(  # noqa: PLR0913 - one call site, every argument is the project's
             source_path=str(source.resolve()),
             imported_at=imported_at,
         )
+        try:
+            check_target(target, **guard)
+        except WriteRefused as exc:
+            _refused([entry for *_, entry in keep], exc)
+            return
         target.write_text(workspace_json(ws), encoding="utf-8")
         for *_, entry in keep:
             entry["output"] = target.name
@@ -286,7 +312,11 @@ def _write(  # noqa: PLR0913 - one call site, every argument is the project's
         for base, sheets in by_book.items():
             name = _unique(f"{stem}__{safe_name(base)}", taken)
             target = out_dir / f"{name}.xlsx"
-            write_table([(f"Sheet{sheet}", ds) for ds, sheet, _ in sheets], target)
+            try:
+                write_table([(f"Sheet{sheet}", ds) for ds, sheet, _ in sheets], target, **guard)
+            except WriteRefused as exc:
+                _refused([entry for *_, entry in sheets], exc)
+                continue
             for *_, entry in sheets:
                 entry["output"] = target.name
             report["outputs"].append(target.name)
@@ -295,6 +325,10 @@ def _write(  # noqa: PLR0913 - one call site, every argument is the project's
         suffix = "" if sheet == 1 else f"__sheet{sheet}"
         name = _unique(f"{stem}__{safe_name(base)}{suffix}", taken)
         target = out_dir / f"{name}.csv"
-        write_table([(f"Sheet{sheet}", ds)], target)
+        try:
+            write_table([(f"Sheet{sheet}", ds)], target, **guard)
+        except WriteRefused as exc:
+            _refused([entry], exc)
+            continue
         entry["output"] = target.name
         report["outputs"].append(target.name)

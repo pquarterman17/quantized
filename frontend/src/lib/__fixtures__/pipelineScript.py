@@ -71,7 +71,7 @@ def main(argv=None):
     if data is None:
         print("nothing to save: no step loaded data")
         return 1
-    qz.save_table(data, args.out)
+    qz.save_table(data, args.out, overwrite=True, protect=args.inputs)  # replaces --out, never an input
     print(f"saved {args.out}: the data after step 5; steps from 6 on were NOT reproduced")
     return 0
 

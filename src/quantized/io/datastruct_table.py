@@ -37,6 +37,7 @@ from quantized.csv_safe import with_excel_bom
 from quantized.datastruct import DataStruct, is_categorical, level_of
 from quantized.io._column_marker import column_marker
 from quantized.io.table_export import ExportColumn, ExportSheet, format_delimited, format_xlsx
+from quantized.io.write_guard import check_target
 from quantized.x_units import x_unit_of
 
 __all__ = ["TABLE_SUFFIXES", "has_x_column", "sheet_from_datastruct", "write_table"]
@@ -118,7 +119,12 @@ def sheet_from_datastruct(ds: DataStruct, name: str) -> ExportSheet:
 
 
 def write_table(
-    sheets: Sequence[tuple[str, DataStruct]], path: Path, *, header: bool = True
+    sheets: Sequence[tuple[str, DataStruct]],
+    path: Path,
+    *,
+    header: bool = True,
+    overwrite: bool = False,
+    protected: Sequence[Path | str] = (),
 ) -> Path:
     """Write ``(sheet name, DataStruct)`` pairs to ``path`` by its suffix.
 
@@ -126,12 +132,17 @@ def write_table(
     sheet, so more than one is a ``ValueError`` (write one file per sheet).
     ``header`` writes the Long Name and Units rows, which the importers read
     back. Returns ``path``.
+
+    Never overwrites: an existing ``path`` raises ``io.write_guard.WriteRefused``
+    unless ``overwrite``, and a ``path`` that is (or resolves into, or links
+    to) one of ``protected`` -- the caller's inputs -- is refused even then.
     """
     suffix = path.suffix.lower()
     if suffix not in TABLE_SUFFIXES:
         raise ValueError(f"unsupported table format {suffix or path.name!r} (csv, tsv or xlsx)")
     if not sheets:
         raise ValueError("nothing to write")
+    check_target(path, overwrite=overwrite, protected=protected)
     tables = [sheet_from_datastruct(ds, name) for name, ds in sheets]
     delimiter = TABLE_SUFFIXES[suffix]
     if delimiter is None:

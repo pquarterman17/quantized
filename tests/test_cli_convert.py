@@ -113,7 +113,8 @@ def test_cli_converts_a_glob_writes_the_report_and_exits_by_outcome(
     assert "skipped Book1 sheet 1: 1 column(s) not decoded: B" in printed
     assert "1 ok, 0 partial, 1 failed" in printed
 
-    ok = convert_command([str(tmp_path / "loops.opj"), "--to", "xlsx", "--out", str(out)])
+    xlsx = tmp_path / "xlsx"
+    ok = convert_command([str(tmp_path / "loops.opj"), "--to", "xlsx", "--out", str(xlsx)])
     assert ok == 0
 
 
@@ -123,9 +124,12 @@ def test_cli_dispatch_and_usage_errors(tmp_path: Path) -> None:
         qz_main(["convert", str(tmp_path / "loops.opj"), "--to", "dwk", "--out", str(tmp_path)])
     assert done.value.code == 0
     assert (tmp_path / "loops.opj.dwk").is_file()
-    out = ["--to", "csv", "--out", str(tmp_path)]
-    assert convert_command([str(tmp_path / "*.nothing"), *out]) == 2  # nothing matched at all
-    assert convert_command([str(tmp_path / "gone.opj"), *out]) == 1  # reported as failed
+    assert (
+        convert_command([str(tmp_path / "*.nothing"), "--to", "csv", "--out", str(tmp_path / "a")])
+        == 2
+    )
+    gone = [str(tmp_path / "gone.opj"), "--to", "csv", "--out", str(tmp_path / "b")]
+    assert convert_command(gone) == 1  # reported as failed
 
 
 def test_a_bracketed_file_name_is_taken_literally(tmp_path: Path) -> None:

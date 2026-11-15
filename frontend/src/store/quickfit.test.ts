@@ -149,9 +149,10 @@ describe("quick-fit gadget (#33)", () => {
     });
     // The step params now carry the SAME recipe as the fitSpec (#6) so a
     // template batch replays these channels, not time/values[0]. Quickfit has
-    // no weighting, so only model + channels are encoded (result snapshot never).
+    // no weighting, so only model + channels are encoded (result snapshot never),
+    // plus `p0: null`: the model's own starts (gap audit 4 lane E, M5).
     expect(useApp.getState().macroSteps.at(-1)).toEqual(
-      expect.objectContaining({ kind: "fit", params: { model: "Linear", xKey: null, yKey: 0 } }),
+      expect.objectContaining({ kind: "fit", params: { model: "Linear", p0: null, xKey: null, yKey: 0 } }),
     );
     expect(useApp.getState().analysisResults).toEqual([
       expect.objectContaining({ settingsRef: { datasetId: "a", field: "fitSpec" } }),

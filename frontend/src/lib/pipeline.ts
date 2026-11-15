@@ -354,7 +354,9 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     `${I}if data is None:`,
     `${I}${I}print("nothing to save: no step loaded data")`,
     `${I}${I}return 1`,
-    `${I}qz.save_table(data, args.out)`,
+    // The script's own output: replaced on a re-run (overwrite), but never
+    // one of the inputs it read (protect) — quantized.api.save_table refuses.
+    `${I}qz.save_table(data, args.out, overwrite=True, protect=args.inputs)  # replaces --out, never an input`,
     stoppedAt
       ? `${I}print(f"saved {args.out}: the data after step ${stoppedAt - 1}; steps from ${stoppedAt} on were NOT reproduced")`
       : `${I}print(f"saved {args.out}")`,

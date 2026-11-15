@@ -101,6 +101,13 @@ import does, including the file-length check that catches a truncated `.opj`.
 - `--allow-partial` writes all of it anyway, every problem still in the
   report.
 
+**It never overwrites.** An output file (or the report) that already exists
+is left alone, and its book is reported "exists, not overwritten", unless you
+pass `--overwrite`. Even then nothing is ever written to one of the input
+projects, into one, or through a symlink that points at one.
+`quantized.api.save_table` follows the same rule (`overwrite=False` by
+default; `protect=[...]` names files it must never replace).
+
 The exit status is 0 only when every input converted completely; otherwise 1.
 
 From Python, the same is `quantized.api.convert_origin_project(path, out_dir,

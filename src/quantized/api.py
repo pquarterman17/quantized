@@ -180,6 +180,8 @@ def convert_origin_project(
     prefix: str | None = None,
     allow_partial: bool = False,
     imported_at: str | None = None,
+    overwrite: bool = False,
+    protect: Sequence[str | Path] = (),
 ) -> dict[str, Any]:
     """Write every book of one Origin project to ``out_dir`` as ``fmt``
     (``"csv"``, ``"xlsx"`` or ``"dwk"``) and return its report.
@@ -192,6 +194,11 @@ def convert_origin_project(
     the report shape and the checks: ``quantized.io.origin_convert``.
     ``imported_at`` stamps a ``.dwk``'s datasets. ``qz convert`` runs this
     over many files.
+
+    Never overwrites: an output that exists is not written (its books are
+    skipped, "exists, not overwritten") unless ``overwrite=True``; an output
+    that is, resolves into or links to ``path`` or one of ``protect`` is
+    refused even then.
     """
     return _convert_origin_project(
         Path(path),
@@ -200,6 +207,8 @@ def convert_origin_project(
         prefix=prefix,
         allow_partial=allow_partial,
         imported_at=imported_at,
+        overwrite=overwrite,
+        protected=protect,
     )
 
 
@@ -209,6 +218,8 @@ def save_table(
     *,
     sheet_name: str = "Sheet1",
     header: bool = True,
+    overwrite: bool = False,
+    protect: Sequence[str | Path] = (),
 ) -> Path:
     """Write a DataStruct to ``.csv``, ``.tsv`` or ``.xlsx`` (by suffix).
 
@@ -216,9 +227,14 @@ def save_table(
     channel, then any Origin text columns; ``header`` writes the Long Name and
     Units rows :func:`load` reads back. For an ``.xlsx`` of several tabs pass
     ``[(tab name, DataStruct), ...]``. Returns the path written.
+
+    Never overwrites by default: an existing ``path`` raises ``ValueError``
+    (``WriteRefused``) unless ``overwrite=True``. A ``path`` that is, resolves
+    into, or links to one of ``protect`` (pass your input files) is refused
+    even then -- a raw source file is never rewritten.
     """
     sheets = [(sheet_name, data)] if isinstance(data, DataStruct) else list(data)
-    return write_table(sheets, Path(path), header=header)
+    return write_table(sheets, Path(path), header=header, overwrite=overwrite, protected=protect)
 
 
 def fit_model(

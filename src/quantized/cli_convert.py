@@ -10,6 +10,11 @@ recurses. Each input gets one summary line on stdout, and the whole run a
 JSON report, ``<out>/convert-report.json`` (``--report`` moves it), with
 every file's books, outputs and problems.
 
+Nothing is overwritten (``io/write_guard.py``): an output or report that
+already exists is refused -- the book is skipped with "exists, not
+overwritten" -- unless ``--overwrite`` is given; and even then no output or
+report is ever written to an input, into one, or through a symlink to one.
+
 Exit status: 0 when every file converted completely; 1 when any file failed
 or was only partly converted (a book skipped, a project-level omission);
 2 for a usage error, including no input matching.
@@ -27,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from quantized.io.origin_convert import CONVERT_FORMATS, convert_origin_project, safe_name
+from quantized.io.write_guard import WriteRefused, check_target
 
 __all__ = ["convert_command", "expand_inputs", "unique_prefixes"]
 
@@ -127,14 +133,24 @@ def convert_command(argv: list[str]) -> int:
     parser.add_argument(
         "--report", type=Path, default=None, help=f"report path (default <out>/{_REPORT_NAME})"
     )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace output files that already exist (never an input file)",
+    )
     args = parser.parse_args(argv)
     paths, unmatched = expand_inputs(args.inputs)
     if not paths:
         print("[qz] convert: no input file matches", " ".join(args.inputs), file=sys.stderr)
         return 2
     report_path = args.report or args.out / _REPORT_NAME
+    try:  # the report obeys the outputs' rule, checked before any work is done
+        check_target(report_path, overwrite=args.overwrite, protected=paths)
+    except WriteRefused as exc:
+        print(f"[qz] convert: report {exc} (pass --overwrite to replace it)", file=sys.stderr)
+        return 2
     args.out.mkdir(parents=True, exist_ok=True)
-    report_path.parent.mkdir(parents=True, exist_ok=True)  # before any work is done
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     imported_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     entries: list[dict[str, Any]] = []
     for pattern in unmatched:  # an input that names nothing is a failure, not a no-op
@@ -151,6 +167,8 @@ def convert_command(argv: list[str]) -> int:
                 prefix=prefix,
                 allow_partial=args.allow_partial,
                 imported_at=imported_at,
+                overwrite=args.overwrite,
+                protected=paths,
             )
         entries.append(entry)
         print(_line(entry), flush=True)

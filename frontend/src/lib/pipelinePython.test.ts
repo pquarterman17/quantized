@@ -61,7 +61,7 @@ describe("pipelineToPython", () => {
       'fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, True])',
     );
     expect(s).toContain("keep &= (x >= 2) & (x <= 8)");
-    expect(s).toContain("qz.save_table(data, args.out)");
+    expect(s).toContain("qz.save_table(data, args.out, overwrite=True, protect=args.inputs)");
   });
 
   it("keeps quotes and newlines inside their literals and comments", () => {
