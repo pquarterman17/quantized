@@ -4,7 +4,7 @@
 // importer changed. Only TYPE imports cross back into useApp (no runtime cycle).
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
-import { dedupeWindowTitle, defaultPlotView, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
+import { dedupeWindowTitle, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
 import { cascadeLayout, reboundWindowTitle, tileLayout } from "../lib/plotWindows";
 import { plotIntentStageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
@@ -12,7 +12,7 @@ import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { plotWindowDatasetId, syncPlotWindow } from "./windowDocuments";
-import { datasetViewDefaults, mainWindow as createMainWindow } from "./windowDefaults";
+import { datasetViewDefaults, mainWindow as createMainWindow, openNewGraph } from "./windowDefaults";
 import { windowHasUserEdits } from "./windowUserEdits";
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
@@ -153,7 +153,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   // before computing the incoming patch (unused on the no-op path below).
   const prevDs = s.datasets.find((d) => d.id === s.activeId);
   const memory = captureTechniqueView(prevDs, s, s.techniqueViewMemory);
-  const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory, { outgoing: s });
+  const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory, { outgoing: s, win: s.focusedWindowId });
   const nextView = { ...snapshotView(s), ...viewPatch };
   // Figures audit B1: a default title follows the new dataset (never a stale
   // "xyz_idx.csv" over decay2); a title the user typed is kept.
@@ -229,13 +229,11 @@ export function retargetPassiveRebind(
     return;
   }
   const title = titleBase !== undefined ? dedupeAgainstDisplayed(s, titleBase) : undefined;
-  // Seeded with the dataset's own defaults (error columns, technique axes):
-  // the caller's rebind is then a re-activation of the same id, which by
-  // design leaves the view alone. An import's dataset is not in the store
-  // yet; `addDataset` applies the same defaults itself.
-  const ds = s.datasets.find((d) => d.id === datasetId);
-  const seed = ds ? { ...defaultPlotView(), ...datasetViewDefaults(ds) } : undefined;
-  s.focusWindow(s.createWindow(datasetId, seed, title));
+  // A NEW graph (the default template, when set) under the dataset's own
+  // defaults (error columns, technique axes). The caller's rebind is then a
+  // re-activation of the same id, which by design leaves the view alone. An
+  // import's dataset is not in the store yet; `addDataset` binds it itself.
+  s.focusWindow(openNewGraph(s, datasetId, title));
   // Say why a window appeared (live check): the styled graph was kept.
   if (!focused.pinned) toast(`"${displayedWindowTitle(focused, s.datasets)}" keeps its styling — opened in a new window`, "info");
 }

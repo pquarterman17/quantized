@@ -21,7 +21,8 @@ import { isDefaultWindowTitle } from "../lib/plotWindows";
 import { defaultPlotView, snapshotView, type PlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
-import { datasetViewDefaults } from "./windowDefaults";
+import type { TemplateSeed } from "../lib/defaultGraphTemplate";
+import { datasetViewDefaults, templateSeeds } from "./windowDefaults";
 import { plotWindowDatasetId, plotWindowView } from "./windowDocuments";
 
 /** View fields that are not a user edit: `showGrid` is seeded from a
@@ -42,10 +43,11 @@ const sortedJson = (value: unknown): string =>
   );
 
 /** True when `view` differs, in any user-editable field, from the view a
- *  fresh bind to `dataset` produces. */
-export function viewHasUserEdits(view: PlotView, dataset: Dataset | undefined): boolean {
-  const fresh = { ...defaultPlotView(), ...datasetViewDefaults(dataset) };
-  return VIEW_KEYS.some((k) => !NOT_EDITS.has(k) && sortedJson(view[k]) !== sortedJson(fresh[k]));
+ *  fresh bind to `dataset` produces. A window the default graph template
+ *  opened (`seed`, gap audit 5 #1) also counts as fresh in that look. */
+export function viewHasUserEdits(view: PlotView, dataset: Dataset | undefined, seed?: TemplateSeed): boolean {
+  const plain = { ...defaultPlotView(), ...datasetViewDefaults(dataset) };
+  return [plain, seed?.apply(plain, dataset) ?? plain].every((f) => VIEW_KEYS.some((k) => !NOT_EDITS.has(k) && sortedJson(view[k]) !== sortedJson(f[k])));
 }
 
 /** The view a window shows right now: the live singleton fields for the
@@ -59,7 +61,7 @@ function currentView(s: AppState, win: PlotWindow): PlotView {
 export function windowHasUserEdits(s: AppState, win: PlotWindow): boolean {
   if (win.kind !== "plot") return false;
   const ds = s.datasets.find((d) => d.id === plotWindowDatasetId(win));
-  if (viewHasUserEdits(currentView(s, win), ds)) return true;
+  if (viewHasUserEdits(currentView(s, win), ds, templateSeeds.get(win.id))) return true;
   const doc = win.document;
   if (doc) {
     const breaks = doc.plot.axisBreaks;
