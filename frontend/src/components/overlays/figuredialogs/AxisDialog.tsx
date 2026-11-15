@@ -4,7 +4,9 @@
 // fonts and (Y / Y2) an axis break in one place -- for X, Y and the secondary
 // Y2 axis -- plus (gap-audit-2 #5) reverse, the axis' own grid, X label
 // rotation, an outward offset and a top X axis showing 1/T, d-spacing or a
-// linear map of X. Every field is
+// linear map of X -- and (gap audit 4 G17) log2 and probability scales,
+// custom tick positions and labels, and an axis crossing the other at a
+// value (Origin's "axis position at"). Every field is
 // an existing view field (axisDialogModel.ts), and the export carries the
 // same values (`axisFmtParam` -> `calc/axis_extras.py`), so screen and
 // export agree. Apply commits ONE undo step.
@@ -15,7 +17,7 @@ import type { AxisId } from "../../../store/figureDialogs";
 import { useApp } from "../../../store/useApp";
 import type { TickMode } from "../../../lib/types";
 import { commitAxisDraft, currentAxisDraft } from "../../../lib/figureDialogActions";
-import { axisDraftErrors, type AxisDraft } from "../../../lib/axisDialogModel";
+import { axisDraftErrors, otherAxisKind, type AxisDraft } from "../../../lib/axisDialogModel";
 
 const AXIS_NAMES: Record<AxisId, string> = { x: "X axis", y: "Y axis", y2: "Y2 (right) axis" };
 
@@ -23,7 +25,10 @@ const SCALES: { value: AxisDraft["scale"]; label: string }[] = [
   { value: "linear", label: "Linear" },
   { value: "log", label: "Log10" },
   { value: "ln", label: "Ln" },
+  { value: "log2", label: "Log2" },
   { value: "reciprocal", label: "Reciprocal (1/x)" },
+  { value: "probit", label: "Probability (0–1)" },
+  { value: "probitPct", label: "Probability (%)" },
 ];
 const MODES: { value: TickMode; label: string }[] = [
   { value: "auto", label: "Auto" },
@@ -71,7 +76,8 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
   const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0);
   const [current, setCurrent] = useState<AxisId>(axis);
   const [draft, setDraft] = useState<AxisDraft>(() => currentAxisDraft(axis));
-  const errors = axisDraftErrors(draft, current);
+  const other = useApp((s) => otherAxisKind(s, current));
+  const errors = axisDraftErrors(draft, current, other);
   const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const text = (k: Exclude<keyof AxisDraft, "reverse">, label: string, placeholder = "auto") => (
     <Row label={label}>
@@ -158,6 +164,8 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("increment", "Major increment")}
       {text("minor", "Minor ticks", "0")}
       {select("ticks", "Direction", TICKS)}
+      {text("tickAt", "Tick positions", "auto, e.g. 0, 0.5, 1")}
+      {draft.tickAt.trim() !== "" && text("tickLabels", "Tick labels", "numbers, e.g. low, mid, high")}
       <h3 style={{ margin: "4px 0" }}>Tick labels</h3>
       {select("mode", "Number format", MODES)}
       {text("digits", "Digits", "2")}
@@ -167,6 +175,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("titleSize", "Title size (px)")}
       <h3 style={{ margin: "4px 0" }}>Line &amp; grid</h3>
       {text("offset", "Offset (pt)", "0")}
+      {text("cross", current === "x" ? "Cross Y at" : "Cross X at", "frame")}
       {select("gridLines", "Grid lines", GRID_LINES)}
       {draft.gridLines !== "plot" && draft.gridLines !== "none" && (
         <>

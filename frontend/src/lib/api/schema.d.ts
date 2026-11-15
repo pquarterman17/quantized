@@ -7271,6 +7271,16 @@ export interface components {
             i: number;
         };
         /**
+         * CustomTicksSpec
+         * @description Explicit major ticks, optionally labelled (``calc.axis_scales``).
+         */
+        CustomTicksSpec: {
+            /** At */
+            at: number[];
+            /** Labels */
+            labels?: string[] | null;
+        };
+        /**
          * CutSegmentRequest
          * @description Arbitrary straight cut p0 -> p1 through the scattered 2-D cloud.
          */
@@ -11841,12 +11851,15 @@ export interface components {
          */
         TickFormatSpec: {
             /** Base */
-            base?: "e" | null;
+            base?: ("e" | "2") | null;
             /** Breaks */
             breaks?: [
                 number,
                 number
             ][] | null;
+            /** Cross */
+            cross?: number | null;
+            custom?: components["schemas"]["CustomTicksSpec"] | null;
             /**
              * Digits
              * @default 2
@@ -11865,6 +11878,8 @@ export interface components {
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
             /** Offset */
             offset?: number | null;
+            /** Prob */
+            prob?: ("fraction" | "percent") | null;
             /** Reverse */
             reverse?: boolean | null;
             /** Rotate */

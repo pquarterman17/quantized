@@ -256,9 +256,10 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       pointUnder,
       layerContents: activeDs ? openLayerContents : undefined,
       colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
-      linkXAxis: st.plotWindows.filter((w) => w.kind === "plot").length > 1
-        ? () => void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure)
-        : undefined,
+      ...(st.plotWindows.filter((w) => w.kind === "plot").length > 1 ? {
+        linkXAxis: () => void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure),
+        linkYAxis: () => void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m.linkYAxisWith(), onLoadFailure),
+      } : {}),
       openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor

@@ -14,6 +14,8 @@ those steps set:
 * ``offset`` -- the axis line, ticks and labels pushed outward by that many
   points. The frame line stays where it was, as on screen and in Origin.
 * ``top`` -- a second X axis along the top (``calc.axis_top``).
+* ``cross`` -- gap audit 4 G17: the axis drawn across the other axis at a
+  value (``calc.axis_cross``); it replaces ``offset``, as on screen.
 
 Pure: matplotlib objects in, nothing returned; an absent or malformed field
 leaves matplotlib's behaviour as it was.
@@ -28,6 +30,7 @@ from typing import Any
 from matplotlib.lines import Line2D
 from matplotlib.ticker import AutoMinorLocator
 
+from quantized.calc.axis_cross import apply_cross
 from quantized.calc.axis_top import apply_top_axis
 
 __all__ = ["DASHES", "apply_axis_style"]
@@ -112,9 +115,12 @@ def apply_axis_style(
     if which == "x" and rotate:
         # "xtick" anchors each label at its end, as the canvas draws one.
         ax.tick_params(axis="x", labelrotation=rotate, labelrotation_mode="xtick")
+    crossing = _number(fmt.get("cross"), -math.inf, math.inf) is not None
     offset = _number(fmt.get("offset"), 0, 72)
-    if offset and side in _OUTWARD_EDGE:
+    if offset and side in _OUTWARD_EDGE and not crossing:
         _apply_offset(ax, side, offset)
+    if crossing:
+        apply_cross(ax, which, fmt, side)
     if which == "x" and isinstance(fmt.get("top"), Mapping):
         size = _number(fmt.get("size"), 0, 72)
         apply_top_axis(ax, fmt["top"], label_size=size or None)

@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
-import { registerSyncPlot, windowSyncKey, windowXSyncHook } from "./windowsync";
+import { registerSyncPlot, windowSyncKey, windowXSyncHook, windowYSyncHook, windowYSyncKey } from "./windowsync";
 
 /** A fake uPlot carrying only what the hook touches. */
 function fakePlot(min: number | null = 0, max: number | null = 10) {
@@ -103,5 +103,35 @@ describe("windowXSyncHook + registerSyncPlot", () => {
     unA();
     // Group is now gone from the registry — the hook is a silent no-op.
     expect(() => windowXSyncHook("g1")(a, "x")).not.toThrow();
+  });
+});
+
+// Gap audit 4 G19: the Y link -- its own key namespace, the primary Y range
+// only, the same group guard.
+describe("windowYSyncHook", () => {
+  const yPlot = (min: number, max: number) =>
+    ({ scales: { x: { min: 0, max: 1 }, y: { min, max } }, setScale: vi.fn() }) as unknown as uPlot & { setScale: ReturnType<typeof vi.fn> };
+
+  it("keys Y groups apart from X groups", () => {
+    expect(windowYSyncKey(1)).toBe("qz-win-linky-1");
+    expect(windowYSyncKey(1)).not.toBe(windowSyncKey(1));
+    expect(windowYSyncKey(null)).toBeUndefined();
+  });
+
+  it("propagates a y-range to the other members, never x or y2, and does not bounce", () => {
+    const a = yPlot(-2, 3);
+    const b = yPlot(0, 1);
+    const key = windowYSyncKey(2)!;
+    const un = [registerSyncPlot(key, a), registerSyncPlot(key, b)];
+    // b's own setScale would re-enter the hook: the group guard stops it.
+    b.setScale.mockImplementation(() => windowYSyncHook(key)(b, "y"));
+    windowYSyncHook(key)(a, "y");
+    expect(b.setScale).toHaveBeenCalledTimes(1);
+    expect(b.setScale).toHaveBeenCalledWith("y", { min: -2, max: 3 });
+    expect(a.setScale).not.toHaveBeenCalled();
+    windowYSyncHook(key)(a, "x");
+    windowYSyncHook(key)(a, "y2");
+    expect(b.setScale).toHaveBeenCalledTimes(1);
+    un.forEach((f) => f());
   });
 });

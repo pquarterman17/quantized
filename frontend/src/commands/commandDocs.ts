@@ -220,6 +220,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Pick graph windows whose X axis follows this one: zoom or pan X in one and the others follow.",
     keywords: "link sync synchronize x axis zoom pan windows graphs compare",
   },
+  "link-y-axis": {
+    description: "Pick graph windows whose Y axis follows this one: zoom or pan Y in one and the others follow.",
+    keywords: "link sync synchronize y axis zoom pan windows graphs compare",
+  },
   "add-curve-from": {
     description: "Add a curve from another dataset to the current graph (opens Layer Contents); the graph stays linked to its sources.",
     keywords: "layer contents add plot curve overlay dataset book",

@@ -311,6 +311,14 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure),
     },
     {
+      // Gap audit 4 G19: the same, for the primary Y axis.
+      id: "link-y-axis",
+      group: "Plot",
+      section: "Layout",
+      label: "Link Y axis with…",
+      run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => m.linkYAxisWith(), onLoadFailure),
+    },
+    {
       id: "add-curve-from",
       group: "Plot",
       section: "Layout",

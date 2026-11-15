@@ -1,6 +1,7 @@
 // Mask points from the plot (origin gap audit 3 N2): which rows a 2-D box
-// drag of the Select Rows tool takes, and which single data point sits under
-// a right-click. Both feed the worksheet's own row exclusion (store/rowState),
+// drag of the Select Rows tool takes, which a free-form lasso of the Lasso
+// Mask tool encloses (gap audit 4 G19), and which single data point sits
+// under a right-click. Both feed the worksheet's own row exclusion (store/rowState),
 // so a masked point is drawn as the existing mask display (a gap, or a muted
 // hollow companion) and undo, fits and exports follow. Pure; loaded on demand.
 //
@@ -105,6 +106,64 @@ export function pickRows(
   if (!box) return { rows: rowsInRange(xs, pick.x0, pick.x1) };
   const full = [xs, ...plotted.map((c) => ds.data.values.map((r) => r[c]))];
   return { rows: rowsInBox(full, p.series.slice(0, plotted.length), plotted.length, pick) };
+}
+
+/** A lasso, in screen px; a point's screen px on its own Y axis (0 = y,
+ *  1 = y2), or null when it is not drawn. */
+export type Polygon = readonly (readonly [number, number])[];
+export type ToPx = (x: number, y: number, axis: 0 | 1) => readonly [number, number] | null;
+
+/** Is (`px`, `py`) inside `poly` (even-odd ray casting)? */
+export function insidePolygon(poly: Polygon, px: number, py: number): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Rows with a drawn point of ANY data series inside the lasso, tested in
+ *  screen space on THAT series' own axis -- so a Y2 curve is hit where it is
+ *  drawn, and every row is tested whatever order X runs in. */
+export function rowsInPolygon(cols: Cols, series: readonly PlotSeriesSpec[], nBase: number, poly: Polygon, toPx: ToPx): number[] {
+  const xs = cols[0] ?? [];
+  const ys = series.flatMap((s, i) => (isDataSeries(series, nBase, i) ? [{ col: cols[i + 1] ?? [], axis: ((s.axis ?? 0) === 1 ? 1 : 0) as 0 | 1 }] : []));
+  const rows: number[] = [];
+  for (let r = 0; r < xs.length; r++) {
+    const x = xs[r];
+    if (x == null || !Number.isFinite(x)) continue;
+    const hit = ys.some(({ col, axis }) => {
+      const y = col[r];
+      if (y == null || !Number.isFinite(y)) return false;
+      const p = toPx(x, y, axis);
+      return !!p && Number.isFinite(p[0]) && Number.isFinite(p[1]) && insidePolygon(poly, p[0], p[1]);
+    });
+    if (hit) rows.push(r);
+  }
+  return rows;
+}
+
+/** The DATASET rows a lasso encloses. A reduced payload is traced to its
+ *  rows first and the test runs on the dataset's own full rows (a point
+ *  decimation hid is not skipped); an untraceable one is refused. */
+export function lassoRows(
+  p: PlotPayload,
+  plotted: readonly number[],
+  ds: Dataset | null,
+  xKey: number | null,
+  poly: Polygon,
+  toPx: ToPx,
+): { rows: number[] } | { refused: string } {
+  if (poly.length < 3) return { rows: [] };
+  const cols = p.data as (number | null)[][];
+  const nBase = plotted.length || p.series.length;
+  if (!isReduced(p)) return { rows: waterfallSourceRows(p, rowsInPolygon(cols, p.series, nBase, poly, toPx)) };
+  const traced = tracedRows(p, plotted, ds, xKey);
+  if (typeof traced === "string" || !ds) return { refused: typeof traced === "string" ? traced : REFUSED };
+  const full = [fullX(ds, xKey), ...plotted.map((c) => ds.data.values.map((r) => r[c]))];
+  return { rows: rowsInPolygon(full, p.series.slice(0, plotted.length), plotted.length, poly, toPx) };
 }
 
 function rowsInRange(xs: readonly (number | null)[], x0: number, x1: number): number[] {

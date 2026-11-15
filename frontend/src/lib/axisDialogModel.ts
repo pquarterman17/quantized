@@ -15,18 +15,23 @@
 //   reverse          xReversed (X) / the AxisFormat's `reverse` (Y, Y2)
 //   grid*, rotate,   the same AxisFormat's gap-audit-2 #5 fields
 //   offset, top*     (lib/axisStyleExtras.ts, calc/axis_style.py)
+//   scale log2 /     gap audit 4 G17: log + fmt.base "2"; linear + fmt.prob
+//   probit*          ("fraction" / "percent") (lib/axisScales.ts)
+//   tickAt/Labels    the same AxisFormat's `custom` ticks
+//   cross            the same AxisFormat's `cross` (axis position at)
 
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
-import { inheritedAxisFormat, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
+import { inheritedAxisFormat, MAX_CUSTOM_TICKS, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
 import { topAxisProblem, topRangeProblem } from "./axisTop";
+import { drawableOn, inProbDomain } from "./axisScales";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
 
 /** "plot" = follow the plot-wide grid switch (no per-axis grid). */
 export type GridLines = "plot" | "none" | "major" | "minor" | "both";
 export type TopKind = "none" | TopAxis["kind"];
 
-export type AxisScaleChoice = AxisScale | "ln";
+export type AxisScaleChoice = AxisScale | "ln" | "log2" | "probit" | "probitPct";
 
 export interface AxisDraft {
   scale: AxisScaleChoice;
@@ -59,6 +64,11 @@ export interface AxisDraft {
   topShift: string;
   topWavelength: string;
   topTitle: string;
+  /** G17: custom major positions and labels, comma-separated (blank = auto). */
+  tickAt: string;
+  tickLabels: string;
+  /** G17: the value on the OTHER axis this axis crosses at (blank = frame). */
+  cross: string;
 }
 
 export type AxisView = Pick<
@@ -75,10 +85,23 @@ function parts(view: AxisView, axis: AxisId): { scale: AxisScale; lim: readonly 
   return { scale: view.y2Scale ?? view.yScale, lim: view.y2Lim, step: view.y2Step, fmt: view.y2Fmt ?? inheritedAxisFormat(view.yFmt) };
 }
 
+function scaleChoice(scale: AxisScale, fmt: AxisFormat): AxisScaleChoice {
+  if (scale === "log") return fmt.base === "e" ? "ln" : fmt.base === "2" ? "log2" : "log";
+  if (scale === "linear" && fmt.prob) return fmt.prob === "percent" ? "probitPct" : "probit";
+  return scale;
+}
+
+/** How the axis that `axis` would cross draws values (for the crossing's
+ *  check): its scale, or "prob:<unit>" for a probability axis. */
+export function otherAxisKind(view: AxisView, axis: AxisId): string {
+  const { scale, fmt } = parts(view, axis === "x" ? "y" : "x");
+  return scale === "linear" && fmt.prob ? `prob:${fmt.prob}` : scale;
+}
+
 export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
   const { scale, lim, step, fmt } = parts(view, axis);
   return {
-    scale: scale === "log" && fmt.base === "e" ? "ln" : scale,
+    scale: scaleChoice(scale, fmt),
     from: str(lim?.[0]),
     to: str(lim?.[1]),
     increment: str(step),
@@ -103,8 +126,14 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     topShift: str(fmt.top?.shift),
     topWavelength: str(fmt.top?.wavelength),
     topTitle: fmt.top?.title ?? "",
+    tickAt: fmt.custom?.at.join(", ") ?? "",
+    tickLabels: fmt.custom?.labels?.join(", ") ?? "",
+    cross: str(fmt.cross),
   };
 }
+
+/** A comma-separated list as entries (blank = none). */
+const listOf = (s: string): string[] => (s.trim() === "" ? [] : s.split(",").map((t) => t.trim()));
 
 const num = (s: string): number | null => {
   const t = s.trim();
@@ -113,8 +142,41 @@ const num = (s: string): number | null => {
   return Number.isFinite(v) ? v : null;
 };
 
-/** Validation messages for a draft (empty = valid). */
-export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
+/** The probability unit a scale choice stands for, if any. */
+const probOf = (c: AxisScaleChoice): "fraction" | "percent" | undefined => (c === "probit" ? "fraction" : c === "probitPct" ? "percent" : undefined);
+
+/** G17's checks: the probability domain, custom ticks, the crossing.
+ *  `other` is `otherAxisKind` of the axis being crossed. */
+function scaleExtraErrors(d: AxisDraft, axis: AxisId, other: string | undefined, lo: number | null, hi: number | null): string[] {
+  const out: string[] = [];
+  const prob = probOf(d.scale);
+  const span = prob === "percent" ? "0 and 100 %" : "0 and 1";
+  if (prob && ((lo !== null && !inProbDomain(lo, prob)) || (hi !== null && !inProbDomain(hi, prob)))) out.push(`A probability axis needs limits strictly between ${span}.`);
+  if (prob && axis !== "x" && (d.breakFrom.trim() !== "" || d.breakTo.trim() !== "")) out.push("A probability axis cannot have a break.");
+  const at = listOf(d.tickAt);
+  const labels = listOf(d.tickLabels);
+  const vals = at.map((t) => (t === "" ? NaN : Number(t)));
+  if (vals.some((v) => !Number.isFinite(v))) out.push("Tick positions must be numbers, separated by commas.");
+  else if (vals.length > MAX_CUSTOM_TICKS) out.push(`At most ${MAX_CUSTOM_TICKS} tick positions.`);
+  else if (prob && vals.some((v) => !inProbDomain(v, prob))) out.push(`Tick positions on a probability axis must be strictly between ${span}.`);
+  else if (["log", "ln", "log2", "reciprocal"].includes(d.scale) && vals.some((v) => v <= 0)) out.push("Tick positions on a log, ln, log2 or reciprocal axis must be positive.");
+  if (labels.length > 0 && at.length === 0) out.push("Tick labels need tick positions.");
+  if (labels.length > at.length && at.length > 0) out.push("There are more tick labels than tick positions.");
+  if (d.cross.trim() !== "") {
+    const c = num(d.cross);
+    const [scale, unit] = (other ?? "linear").split(":");
+    const otherFmt: AxisFormat = { mode: "auto", digits: 2, ...(unit === "fraction" || unit === "percent" ? { prob: unit } : {}) };
+    if (c === null) out.push("Cross at must be a number.");
+    else if (!drawableOn(c, scale === "prob" ? "linear" : scale, otherFmt)) out.push(`The ${axis === "x" ? "Y" : "X"} axis cannot show ${c} (its scale), so this axis cannot cross there.`);
+    if (num(d.offset)) out.push("An axis that crosses the other cannot also be offset.");
+    if (axis === "x" && num(d.rotate)) out.push("An X axis that crosses Y cannot have rotated labels.");
+  }
+  return out;
+}
+
+/** Validation messages for a draft (empty = valid). `other` is
+ *  `otherAxisKind` of the axis the crossing would sit on (absent = linear). */
+export function axisDraftErrors(d: AxisDraft, axis: AxisId, other?: string): string[] {
   const out: string[] = [];
   const bad = (s: string) => s.trim() !== "" && num(s) === null;
   for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits], ["Break from", d.breakFrom], ["Break to", d.breakTo], ["Rotation", d.rotate], ["Offset", d.offset], ["Top factor", d.topFactor], ["Top shift", d.topShift], ["Wavelength", d.topWavelength]] as const) {
@@ -123,9 +185,10 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
   const lo = num(d.from);
   const hi = num(d.to);
   if (lo !== null && hi !== null && lo === hi) out.push("From and To must differ.");
-  if ((d.scale === "log" || d.scale === "ln" || d.scale === "reciprocal") && ((lo !== null && lo <= 0) || (hi !== null && hi <= 0))) {
-    out.push("A log, ln or reciprocal axis needs positive limits.");
+  if ((d.scale === "log" || d.scale === "ln" || d.scale === "log2" || d.scale === "reciprocal") && ((lo !== null && lo <= 0) || (hi !== null && hi <= 0))) {
+    out.push("A log, ln, log2 or reciprocal axis needs positive limits.");
   }
+  out.push(...scaleExtraErrors(d, axis, other, lo, hi));
   if (axis === "y2" && (lo === null) !== (hi === null)) out.push("The Y2 axis takes both limits or neither.");
   const inc = num(d.increment);
   if (inc !== null && inc <= 0) out.push("Major increment must be positive.");
@@ -138,7 +201,7 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId): string[] {
   if (axis !== "x" && (d.breakFrom.trim() !== "" || d.breakTo.trim() !== "")) {
     if (bLo === null || bHi === null) out.push("An axis break needs both Break from and Break to.");
     else if (bLo >= bHi) out.push("Break from must be below Break to.");
-    if (d.scale !== "linear") out.push("An axis break needs a linear scale.");
+    if (d.scale !== "linear" && !probOf(d.scale)) out.push("An axis break needs a linear scale.");
   }
   const rot = num(d.rotate);
   if (rot !== null && Math.abs(rot) > 90) out.push("Rotation must be between -90 and 90 degrees.");
@@ -194,6 +257,10 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   // The dialog edits the FIRST break; any further ones a file or template
   // carried stay, as long as they still sit clear of it.
   const breaks = axis === "x" ? base.breaks : bLo !== null && bHi !== null ? normalizeBreaks([[bLo, bHi], ...(base.breaks ?? []).slice(1)]) : undefined;
+  const prob = probOf(d.scale);
+  const at = listOf(d.tickAt).map(Number);
+  const labels = listOf(d.tickLabels);
+  const cross = num(d.cross);
   const fmt: AxisFormat = {
     mode: d.mode,
     digits: num(d.digits) ?? base.digits,
@@ -201,7 +268,10 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     ...(minor ? { minor } : {}),
     ...(d.ticks !== "out" ? { ticks: d.ticks } : {}),
     ...(size !== null ? { size } : {}),
-    ...(d.scale === "ln" ? { base: "e" as const } : {}),
+    ...(d.scale === "ln" ? { base: "e" as const } : d.scale === "log2" ? { base: "2" as const } : {}),
+    ...(prob ? { prob } : {}),
+    ...(at.length ? { custom: { at, ...(labels.some((l) => l !== "") ? { labels } : {}) } } : {}),
+    ...(cross !== null ? { cross } : {}),
     ...(breaks ? { breaks } : {}),
     ...(axis !== "x" && d.reverse ? { reverse: true } : {}),
     ...(axis === "x" && num(d.rotate) ? { rotate: num(d.rotate) as number } : {}),
@@ -209,7 +279,7 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     ...(gridOf(d) ? { grid: gridOf(d) } : {}),
     ...(axis === "x" && topOf(d) ? { top: topOf(d) } : {}),
   };
-  const scale: AxisScale = d.scale === "ln" ? "log" : d.scale;
+  const scale: AxisScale = d.scale === "ln" || d.scale === "log2" ? "log" : prob ? "linear" : (d.scale as AxisScale);
   const lo = num(d.from);
   const hi = num(d.to);
   const step = num(d.increment);

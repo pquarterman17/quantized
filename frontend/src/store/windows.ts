@@ -328,6 +328,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // Item 13: a duplicate joins the source's link group (matching how it
         // inherits `bg` — "clone this window" includes its comparison links).
         linkGroup: src.linkGroup,
+        ...(src.linkYGroup != null ? { linkYGroup: src.linkYGroup } : {}),
         // A duplicate starts UNPINNED (item 14): pin is per-window protection
         // intent, not display config — inheriting it would silently grow an
         // all-pinned set where every Library click spawns a new window.

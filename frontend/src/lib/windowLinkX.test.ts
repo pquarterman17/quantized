@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useApp } from "../store/useApp";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Dataset } from "./types";
-import { linkXAxisWith, linkXGroups } from "./windowLinkX";
+import { linkXAxisWith, linkXGroups, linkYAxisWith } from "./windowLinkX";
 import { parseWorkspace } from "./workspace";
 import { serializeWorkspace } from "./workspaceSerialize";
 
@@ -63,5 +63,55 @@ describe("Link X axis with…", () => {
     expect(groups()).toEqual({ a: null, b: null, c: null });
     useApp.getState().undo();
     expect(groups()).toEqual({ a: 1, b: 1, c: null });
+  });
+});
+
+// Gap audit 4 G19: "Link Y axis with…" -- the same group model on its own
+// field (`linkYGroup`), the same refusals, independent of the X link.
+const winY = (id: string, linkYGroup: number | null = null, linkGroup: number | null = null): PlotWindow => ({ ...win(id, linkGroup), linkYGroup });
+const yGroups = () => Object.fromEntries(useApp.getState().plotWindows.map((w) => [w.id, w.linkYGroup ?? null]));
+
+describe("linkXGroups on the Y field", () => {
+  it("groups by linkYGroup only: an X link with the same number is not a Y link", () => {
+    expect([...linkXGroups([winY("a", null, 1), winY("b", null, 1), winY("c", 1)], "a", ["b"], "linkYGroup")!]).toEqual([["a", 2], ["b", 2]]);
+  });
+
+  it("refuses when every Y group is taken, exactly as X does", () => {
+    const busy = [winY("a"), winY("b"), winY("c", 1), winY("d", 1), winY("e", 2), winY("f", 2), winY("g", 3), winY("h", 3)];
+    expect(linkXGroups(busy, "a", ["b"], "linkYGroup")).toBeNull();
+  });
+});
+
+describe("Link Y axis with…", () => {
+  it("links Y as one undo step, leaves X alone, and round-trips a .dwk", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({ b: true, c: false });
+    await linkYAxisWith();
+    expect(vi.mocked(askParams).mock.calls.at(-1)![0]).toMatch(/^Link Y axis of/);
+    expect(yGroups()).toEqual({ a: 1, b: 1, c: null });
+    expect(groups()).toEqual({ a: null, b: null, c: null });
+    expect(useApp.getState().history).toHaveLength(1);
+    const loaded = parseWorkspace(serializeWorkspace(useApp.getState()));
+    useApp.getState().loadWorkspace(loaded);
+    const after = Object.fromEntries(useApp.getState().plotWindows.map((w) => [w.title, w.linkYGroup ?? null]));
+    expect(after).toMatchObject({ A: 1, B: 1, C: null });
+    useApp.getState().undo();
+  });
+
+  it("refuses without a focused graph or another graph window", async () => {
+    vi.mocked(askParams).mockClear();
+    useApp.setState({ plotWindows: [winY("a")] });
+    await linkYAxisWith();
+    expect(askParams).not.toHaveBeenCalled();
+    useApp.setState({ plotWindows: [winY("a"), winY("b")], focusedWindowId: null });
+    await linkYAxisWith();
+    expect(askParams).not.toHaveBeenCalled();
+    expect(yGroups()).toEqual({ a: null, b: null });
+  });
+
+  it("a hand-edited .dwk cannot smuggle in a Y group out of range", () => {
+    useApp.setState({ plotWindows: [winY("a", 9), winY("b", 2)] });
+    const loaded = parseWorkspace(serializeWorkspace(useApp.getState()));
+    useApp.getState().loadWorkspace(loaded);
+    expect(Object.fromEntries(useApp.getState().plotWindows.map((w) => [w.title, w.linkYGroup ?? null]))).toEqual({ A: null, B: 2 });
   });
 });

@@ -52,7 +52,7 @@ import { resolvePlotBg } from "../../lib/uplotOpts";
 import { waterfallStaggeredRows } from "../../lib/waterfallOffset";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
-import { windowSyncKey } from "../../lib/windowsync";
+import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { useApp } from "../../store/useApp";
 import PlotViewport from "../Stage/PlotViewport";
@@ -87,6 +87,8 @@ export interface BackgroundPlotWindowProps {
    *  window point-by-point); it stays non-interactive otherwise. XY-only —
    *  see the module doc. */
   linkGroup?: number | null;
+  /** Gap audit 4 G19: the window's Y link group. */
+  linkYGroup?: number | null;
   /** This window's own canonical `FigureDocument` (G4, Sol review round),
    *  undefined for a plain (non-editable-figure) window. Threaded into
    *  `usePlotPayload` as `documentErrors` in the plain-XY path ONLY (below)
@@ -104,6 +106,7 @@ export default function BackgroundPlotWindow({
   view,
   bg,
   linkGroup,
+  linkYGroup,
   document,
   windowId,
 }: BackgroundPlotWindowProps) {
@@ -159,7 +162,7 @@ export default function BackgroundPlotWindow({
       />
     );
   return (
-    <BackgroundXYWindow dataset={renderDataset} view={view} bg={bg} linkGroup={linkGroup} document={document} windowId={windowId} />
+    <BackgroundXYWindow dataset={renderDataset} view={view} bg={bg} linkGroup={linkGroup} linkYGroup={linkYGroup} document={document} windowId={windowId} />
   );
 }
 
@@ -185,6 +188,7 @@ function BackgroundXYWindow({
   view,
   bg,
   linkGroup,
+  linkYGroup,
   document,
   windowId,
 }: BackgroundPlotWindowProps & { dataset: Dataset }) {
@@ -306,6 +310,7 @@ function BackgroundXYWindow({
         anchorEdit={null}
         bg={bg}
         syncKey={windowSyncKey(linkGroup)}
+        ySyncKey={windowYSyncKey(linkYGroup)}
       />
       {/* Item 15: the magnifier inset is part of the view (`insetMode` ∈
           PlotView), so a background window carrying it keeps showing it —

@@ -28,6 +28,12 @@ export function windowSyncKey(linkGroup: number | null | undefined): string | un
   return linkGroup == null ? undefined : `qz-win-link-${linkGroup}`;
 }
 
+/** The Y-link registry key for Y link group `n` (gap audit 4 G19): its own
+ *  namespace, so an X group and a Y group with the same number stay apart. */
+export function windowYSyncKey(linkYGroup: number | null | undefined): string | undefined {
+  return linkYGroup == null ? undefined : `qz-win-linky-${linkYGroup}`;
+}
+
 interface SyncGroup {
   plots: Set<uPlot>;
   /** Re-entrancy guard for the whole group (see the module doc): true while
@@ -70,6 +76,27 @@ export function windowXSyncHook(key: string): (self: uPlot, scaleKey: string) =>
     try {
       for (const other of g.plots) {
         if (other !== u) other.setScale("x", { min, max });
+      }
+    } finally {
+      g.syncing = false;
+    }
+  };
+}
+
+/** The Y counterpart of `windowXSyncHook` (gap audit 4 G19): a zoom or pan
+ *  of the primary Y range follows across `key`'s group, with the same
+ *  group-level re-entrancy guard. Y2 stays per-window. */
+export function windowYSyncHook(key: string): (self: uPlot, scaleKey: string) => void {
+  return (u, scaleKey) => {
+    if (scaleKey !== "y") return;
+    const g = groups.get(key);
+    if (!g || g.syncing) return;
+    const { min, max } = u.scales.y;
+    if (min == null || max == null) return;
+    g.syncing = true;
+    try {
+      for (const other of g.plots) {
+        if (other !== u) other.setScale("y", { min, max });
       }
     } finally {
       g.syncing = false;
