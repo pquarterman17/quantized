@@ -13,6 +13,7 @@ the same parameters -- with σ held where the user held it.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -42,6 +43,7 @@ def test_run_pipeline_and_the_script_fit_the_same_parameters(tmp_path: Path) -> 
     run = subprocess.run(
         [sys.executable, str(script), "peak.csv", "--out", "o.csv"],
         cwd=tmp_path, capture_output=True, text=True, timeout=300, check=False,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},  # a Windows console
     )  # fmt: skip
     assert run.returncode == 0, run.stderr
     line = next(ln for ln in run.stdout.splitlines() if ln.startswith("2. Fit Gaussian: "))

@@ -12,6 +12,7 @@ Usage: python <this file> [INPUT ...] [--out OUT]
 """
 
 import argparse
+import sys
 
 import numpy as np
 
@@ -25,6 +26,8 @@ def main(argv=None):
     parser.add_argument("inputs", nargs="*", help="input file(s), in import order")
     parser.add_argument("--out", default="pipeline_output.csv", help="output table (.csv/.tsv/.xlsx)")
     args = parser.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):  # labels may hold μ etc.; a cp1252 console must not crash
+        sys.stdout.reconfigure(errors="backslashreplace")
     if not args.inputs and None not in RECORDED_INPUTS:
         args.inputs = list(RECORDED_INPUTS)
     if len(args.inputs) != len(RECORDED_INPUTS):

@@ -12,6 +12,8 @@ and that it did NOT run the steps it cannot reproduce.
 
 from __future__ import annotations
 
+import os
+import re
 import runpy
 import subprocess
 import sys
@@ -52,6 +54,8 @@ def test_generated_script_runs_end_to_end(tmp_path: Path) -> None:
     run = subprocess.run(
         [sys.executable, str(SCRIPT), "peak.csv", "--out", "result.csv"],
         cwd=tmp_path,
+        # A Windows console is cp1252: printed labels hold "\u03bc" (CI regression).
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
         capture_output=True,
         text=True,
         timeout=300,
@@ -69,7 +73,9 @@ def test_generated_script_runs_end_to_end(tmp_path: Path) -> None:
 
     # The fit ran on the recorded window, on the corrected data.
     # The label prints over two lines: its newline is data, not code.
-    lines = run.stdout.splitlines()
+    # The cp1252 console escapes non-Latin-1 labels (\\u03bc); read them back.
+    stdout = re.sub(r"\\u([0-9a-f]{4})", lambda m: chr(int(m.group(1), 16)), run.stdout)
+    lines = stdout.splitlines()
     assert '4. Fit "Gaussian"' in lines
     fit_line = lines[lines.index('4. Fit "Gaussian"') + 1]
     assert fit_line.startswith("window: ")
@@ -93,8 +99,8 @@ def test_generated_script_runs_end_to_end(tmp_path: Path) -> None:
     assert f"R2={ref['R2']:.6g}" in fit_line
     assert f"R2={free['R2']:.6g}" not in fit_line
     assert abs(ref["params"][1] - 5.0) < 1e-6  # the peak centre, on the corrected data
-    assert "note: step 4" not in run.stdout  # 61 points, as recorded
-    assert "steps from 6 on were NOT reproduced" in run.stdout
+    assert "note: step 4" not in stdout  # 61 points, as recorded
+    assert "steps from 6 on were NOT reproduced" in stdout
 
 
 def test_generated_script_refuses_the_wrong_number_of_inputs(tmp_path: Path) -> None:
