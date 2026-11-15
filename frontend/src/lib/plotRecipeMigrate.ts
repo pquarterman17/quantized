@@ -24,6 +24,7 @@
 
 import { sanitizeHalfLim } from "./axisLim";
 import { COLORMAP_NAMES } from "./mapView";
+import { sanitizeMap3d } from "./mapView3d";
 import type { ColormapName } from "./colormap";
 import type { NormalizedFrameRect } from "./originPanels";
 import { sanitizePageSetup } from "./pagesetup";
@@ -227,11 +228,13 @@ export function sanitizePanelWindow(v: unknown): RecipePanelWindow | undefined {
 export function sanitizeMapView(v: unknown): RecipeMapView | null {
   if (typeof v !== "object" || v === null) return null;
   const { colormap, logZ, colorLimits } = v as Raw;
+  const view3d = sanitizeMap3d((v as Raw).view3d);
   if (typeof colormap !== "string" || !COLORMAP_NAMES.includes(colormap) || typeof logZ !== "boolean") return null;
   return {
     colormap: colormap as ColormapName,
     logZ,
     colorLimits: ascendingOrHalfOpen(sanitizeHalfLim(colorLimits)),
+    ...(view3d ? { view3d } : {}),
   };
 }
 

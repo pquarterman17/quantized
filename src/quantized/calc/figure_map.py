@@ -27,6 +27,18 @@ from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_map3d import (
+    MAX_SCATTER_POINTS,
+    check_angles,
+    check_curve_inputs,
+    check_extent,
+    check_grid_3d,
+    decimate,
+    draw_curves,
+    parse_curves,
+    set_log_zticks,
+    step_rows,
+)
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -35,8 +47,10 @@ __all__ = ["MAP_KINDS", "log_decade_ticks", "render_map_figure"]
 _FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 MAP_KINDS = ("contourf", "contour", "heatmap", "surface", "scatter3d", "waterfall")
 _3D_KINDS = ("surface", "scatter3d", "waterfall")
-_CONTOUR_SOURCES = ("grid", "points")
-_POINTS_KINDS = ("contour", "contourf")  # tricontour has no heatmap/3-D analogue here
+_CONTOUR_SOURCES = ("grid", "points", "curves")
+# Scattered-source kinds: the two tri-contours, and a 3-D scatter of the raw
+# points themselves (never a regridded surface sampled as points).
+_POINTS_KINDS = ("contour", "contourf", "scatter3d")
 
 
 def _contour_levels(
@@ -93,6 +107,8 @@ def render_map_figure(
     labels: Sequence[Mapping[str, Any]] | None = None,
     colorbar_log10: bool = False,
     note: str = "",
+    max_lines: int = 0,
+    curves: Sequence[Mapping[str, Any]] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -155,6 +171,7 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
+    curve_list: list[Any] = []
     clim = _z_limits(z_limits)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
@@ -176,9 +193,19 @@ def render_map_figure(
             )
         finite = np.isfinite(xr) & np.isfinite(yr) & np.isfinite(zr)
         x, y, z = xr[finite], yr[finite], zr[finite]
-        if x.size < 3:
+        if kind == "scatter3d":
+            if x.size < 3:
+                raise ValueError(f"a 3-D scatter needs at least 3 finite points; found {x.size}")
+            check_angles(view_elev, view_azim)
+            check_extent(x, y, z)
+        elif x.size < 3:
             raise ValueError("need at least 3 finite points to triangulate a scattered contour")
         z_min, z_max = float(np.min(z)), float(np.max(z))
+    elif contour_source == "curves":
+        check_curve_inputs(kind, view_elev, view_azim)
+        curve_list = parse_curves(curves)
+        x = y = z = np.empty(0)
+        z_min = z_max = float("nan")
     else:
         if z_grid is None:
             raise ValueError("z_grid is required when contour_source='grid'")
@@ -190,10 +217,22 @@ def render_map_figure(
         if x.size < 2 or y.size < 2:
             raise ValueError(f"a map needs at least a 2x2 grid, got ({y.size}, {x.size})")
 
+        if kind in _3D_KINDS:
+            check_grid_3d(kind, x, y, z, view_elev, view_azim)
         if np.any(np.isfinite(z)):
             z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
         else:
             z_min = z_max = float("nan")  # all-gaps map; contour kinds raise below
+        if kind == "scatter3d":
+            # A grid scatter is its finite cells as points: one path (and one cap).
+            xg, yg = np.meshgrid(x, y)
+            fin = np.isfinite(z)
+            x, y, z = xg[fin], yg[fin], z[fin]
+            contour_source = "points"
+    if kind == "scatter3d" and x.size > MAX_SCATTER_POINTS:
+        keep = decimate(x.size)
+        note = f"{note} Plotting {keep.size:,} of {x.size:,} points, evenly sampled.".strip()
+        x, y, z = x[keep], y[keep], z[keep]
 
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
     rc: dict[str, Any] = {
@@ -225,6 +264,7 @@ def render_map_figure(
         mappable = _draw(
             ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
             label_contours, view_elev, view_azim, contour_source=contour_source,
+            max_lines=max_lines, curve_list=curve_list,
         )
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
@@ -243,6 +283,8 @@ def render_map_figure(
             ax.set_ylabel(y_label)
         if kind in _3D_KINDS and z_label:
             ax.set_zlabel(z_label)
+        if colorbar_log10 and kind in _3D_KINDS:
+            set_log_zticks(ax, log_decade_ticks)
         if colorbar and mappable is not None:
             cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
             if colorbar_log10:
@@ -321,8 +363,18 @@ def _draw(
     view_azim: float,
     *,
     contour_source: str = "grid",
+    max_lines: int = 0,
+    curve_list: list[Any] | None = None,
 ) -> Any:
     """Draw the requested mark; return the colorbar mappable (or None)."""
+    if contour_source == "curves":
+        ax.view_init(elev=view_elev, azim=view_azim)
+        draw_curves(ax, curve_list or [], cmap)
+        return None
+    if contour_source == "points" and kind == "scatter3d":
+        # The measured points themselves, coloured by z -- no grid, no resampling.
+        ax.view_init(elev=view_elev, azim=view_azim)
+        return ax.scatter(x, y, z, c=z, cmap=cmap, s=6, depthshade=True)
     if contour_source == "points":
         # x/y/z are flat, equal-length scattered arrays here (not a grid) --
         # Delaunay-triangulate the cloud and contour straight off the
@@ -372,7 +424,8 @@ def _draw(
         return sc
     # waterfall: one profile line per y-row, stacked in depth
     line_cmap = matplotlib.colormaps[cmap]
-    for j in range(y.size):
+    rows = step_rows(z, max_lines)  # rows with data only, evenly stepped
+    for j in rows:
         row = z[j]
         finite = np.isfinite(row)
         if not finite.any():

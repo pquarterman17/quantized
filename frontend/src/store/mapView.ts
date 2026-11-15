@@ -54,6 +54,7 @@ import {
   type MapViewMap,
   type MapViewState,
 } from "../lib/mapView";
+import { sameMap3d, type Map3dView } from "../lib/mapView3d";
 import type { HalfLim } from "../lib/axisLim";
 import type { ColormapName } from "../lib/colormap";
 import type { CutSpace } from "../lib/mapcuts";
@@ -77,6 +78,9 @@ export interface MapViewSlice {
   /** Explicit [lo, hi] (a null side = auto for that side); null restores
    *  auto (the payload's own z extent). */
   setMapColorLimits: (datasetId: string | null, colorLimits: HalfLim | null) => void;
+
+  /** The static 3-D view (lib/mapView3d.ts); undefined returns to the 2-D map. */
+  setMapView3d: (datasetId: string | null, view3d: Map3dView | undefined) => void;
 
   /** Record a committed H/V/segment slice at its linked position. Returns the
    *  new id, or null when there is no dataset to record it against. The caller
@@ -212,6 +216,11 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
     setMapColorLimits: (datasetId, colorLimits) => {
       if (!datasetId || sameColorLimits(at(datasetId).colorLimits, colorLimits)) return;
       edit(datasetId, "change map colour limits", (v) => ({ ...v, colorLimits }));
+    },
+
+    setMapView3d: (datasetId, view3d) => {
+      if (!datasetId || sameMap3d(at(datasetId).view3d, view3d)) return;
+      edit(datasetId, "change map 3-D view", ({ view3d: _old, ...v }) => ({ ...v, ...(view3d ? { view3d } : {}) }));
     },
 
     addMapSlice: (datasetId, def) => {

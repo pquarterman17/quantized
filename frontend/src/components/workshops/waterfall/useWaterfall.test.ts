@@ -40,6 +40,17 @@ describe("useWaterfall", () => {
     expect(result.current.channel).toBe("R");
   });
 
+  it("exposes the axis labels with units for a 3-D figure of the stack", () => {
+    const { result } = renderHook(() => useWaterfall());
+    expect(result.current.zLabel).toBe("R (cts)");
+    expect(result.current.xLabel).toBe("x");
+    act(() => {
+      const d = useApp.getState().datasets;
+      useApp.setState({ datasets: d.map((x) => ({ ...x, data: { ...x.data, metadata: { x_column_name: "H", x_column_unit: "T" } } })) });
+    });
+    expect(result.current.xLabel).toBe("H (T)");
+  });
+
   it("excludes a dataset when unticked", () => {
     const { result } = renderHook(() => useWaterfall());
     act(() => result.current.setIncluded("d3", false));

@@ -7,11 +7,17 @@
 // toggle); this component only lays them out. No behaviour change from
 // the block it replaces.
 
-import type { Ref } from "react";
+import { useState, type Ref } from "react";
 
 import type { ColormapName } from "../../lib/colormap";
+import { lazyRegion } from "../../lib/lazyRegion";
 import type { CutMode, CutSpace } from "../../lib/mapcuts";
+import { mapViewFor } from "../../lib/mapView";
+import { useApp } from "../../store/useApp";
 import MapToolbarColorLimits from "./MapToolbarColorLimits";
+
+// The static 3-D view panel is a lazy chunk, fetched on first open.
+const Map3dPanel = lazyRegion(() => import("./Map3dPanel"), "3-D view");
 
 /** Box-ROI arm/disarm state (RSM_CUTS_PLAN item 6). Defined here (not in
  *  useMapRoi.ts) so this toolbar's extraction commit — step 1, "PAY
@@ -139,9 +145,11 @@ export default function MapToolbar(props: MapToolbarProps) {
     onExport,
     dockRef,
   } = props;
+  const [show3d, setShow3d] = useState(false);
+  const on3d = useApp((s) => !!mapViewFor(s.mapViews, datasetId).view3d);
 
   return (
-    <div ref={dockRef} className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px" }}>
+    <div ref={dockRef} className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px", zIndex: 3 }}>
       {qAvailable && (
         <>
           <button
@@ -190,6 +198,16 @@ export default function MapToolbar(props: MapToolbarProps) {
         ∿
       </button>
       <MapToolbarColorLimits datasetId={datasetId} painted={painted} />
+      <button
+        aria-label="3-D view"
+        aria-expanded={show3d}
+        className={`qzk-tool-btn${on3d || show3d ? " active" : ""}`}
+        title="3-D view — Surface, 3-D scatter or 3-D waterfall as a static server-rendered figure (elevation, azimuth, z label)"
+        onClick={() => setShow3d((v) => !v)}
+      >
+        3D
+      </button>
+      {show3d && <Map3dPanel datasetId={datasetId} onClose={() => setShow3d(false)} />}
       {cutSpace != null && (
         <>
           <span className="qzk-tool-sep" />
