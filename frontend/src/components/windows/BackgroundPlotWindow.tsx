@@ -27,8 +27,9 @@
 // through the one shared `lib/facet.durableComposition` — precedence and all
 // — and mounted through the one shared `multiPanelShowing` predicate the
 // focused `PlotStage` asks (BUG-012 review F5).
-// Cross-window link groups (item 13) stay XY-only: the `linkGroup` prop is
-// threaded into the XY path's viewport ONLY, never into the alternate mode
+// Cross-window link groups (item 13; the Y link, gap audit 4 G19) stay
+// XY-only: the `linkGroup` (X range + cursor) and `linkYGroup` (primary Y
+// range) props are threaded into the XY path's viewport ONLY, never into the alternate mode
 // cores (a stack window's panels sync among THEMSELVES via a per-window key
 // — see `BackgroundAltModes.tsx`).
 //
@@ -38,7 +39,7 @@
 // together — the item-4 row-state proof, extended per-mode by the item-15
 // tests.
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
 import type { ErrorBinding } from "../../lib/errorRoles";
@@ -52,7 +53,7 @@ import { resolvePlotBg } from "../../lib/uplotOpts";
 import { waterfallStaggeredRows } from "../../lib/waterfallOffset";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
-import { windowSyncKey } from "../../lib/windowsync";
+import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { useApp } from "../../store/useApp";
 import PlotViewport from "../Stage/PlotViewport";
@@ -87,6 +88,8 @@ export interface BackgroundPlotWindowProps {
    *  window point-by-point); it stays non-interactive otherwise. XY-only —
    *  see the module doc. */
   linkGroup?: number | null;
+  /** Gap audit 4 G19: the window's Y link group. */
+  linkYGroup?: number | null;
   /** This window's own canonical `FigureDocument` (G4, Sol review round),
    *  undefined for a plain (non-editable-figure) window. Threaded into
    *  `usePlotPayload` as `documentErrors` in the plain-XY path ONLY (below)
@@ -104,6 +107,7 @@ export default function BackgroundPlotWindow({
   view,
   bg,
   linkGroup,
+  linkYGroup,
   document,
   windowId,
 }: BackgroundPlotWindowProps) {
@@ -159,7 +163,7 @@ export default function BackgroundPlotWindow({
       />
     );
   return (
-    <BackgroundXYWindow dataset={renderDataset} view={view} bg={bg} linkGroup={linkGroup} document={document} windowId={windowId} />
+    <BackgroundXYWindow dataset={renderDataset} view={view} bg={bg} linkGroup={linkGroup} linkYGroup={linkYGroup} document={document} windowId={windowId} />
   );
 }
 
@@ -185,11 +189,18 @@ function BackgroundXYWindow({
   view,
   bg,
   linkGroup,
+  linkYGroup,
   document,
   windowId,
 }: BackgroundPlotWindowProps & { dataset: Dataset }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  // Linked windows always include an unfocused one, drawn here: it starts the
+  // guard that unlinks a window whose scale kind changes (lib/windowLinkX.ts).
+  // Kept in this lazy chunk rather than the eager PlotViewport.
+  useEffect(() => {
+    if (linkGroup != null || linkYGroup != null) void import("../../lib/windowLinkX").then((m) => m.ensureLinkGuard(), () => undefined);
+  }, [linkGroup, linkYGroup]);
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const excludedDisplay = useApp((s) => s.excludedDisplay);
@@ -306,6 +317,7 @@ function BackgroundXYWindow({
         anchorEdit={null}
         bg={bg}
         syncKey={windowSyncKey(linkGroup)}
+        ySyncKey={windowYSyncKey(linkYGroup)}
       />
       {/* Item 15: the magnifier inset is part of the view (`insetMode` ∈
           PlotView), so a background window carrying it keeps showing it —

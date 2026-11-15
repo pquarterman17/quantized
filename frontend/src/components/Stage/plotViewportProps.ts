@@ -12,6 +12,8 @@ import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../.
 export interface PlotViewportProps
   extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit" | "xLim" | "yLim"> {
   displayPayload: PlotPayload | null;
+  /** Gap audit 4 G19: the Y link group's registry key (`windowYSyncKey`). */
+  ySyncKey?: string;
   /** Committed X/Y limits; a null side is auto for that side (`useResolvedLims`). */
   xLim?: HalfLim | null;
   yLim?: HalfLim | null;

@@ -90,7 +90,7 @@ export function loadToolPlugins(): Promise<void> {
 }
 
 /** The tools whose plugin is in `lib/uplotToolPlugins.ts`. */
-const PLUGIN_TOOLS: ReadonlySet<string> = new Set(["pan", "cursor", "measure", "stats", "integ", "fwhm"]);
+const PLUGIN_TOOLS: ReadonlySet<string> = new Set(["pan", "cursor", "measure", "stats", "lasso", "integ", "fwhm"]);
 
 /** Whether a plot with this tool (and an integral / FWHM result to draw, or
  *  not) needs the tool-dock plugins. */

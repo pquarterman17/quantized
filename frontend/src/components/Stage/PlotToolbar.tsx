@@ -83,6 +83,8 @@ interface BtnSpec {
   onClick: () => void;
 }
 
+const LASSO_STACK_NOTE = "Lasso Mask works on a single graph only";
+
 function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
   const reason = disabled && disabledReason ? disabledReason : undefined;
   const reasonId = useId();
@@ -124,6 +126,7 @@ export default function PlotToolbar({
   // A horizontal bar graph turns the plot: pointer-driven tools are off (uplotOrient).
   const turned = useApp((s) => hasHorizontalBars(Object.values(s.seriesStyles)));
   const setPlotTool = useApp((s) => s.setPlotTool);
+  const setStatus = useApp((s) => s.setStatus);
   // S1 (a): ON whenever a multi-panel layout is engaged, not just `stackMode`.
   const stackOn = useApp(stackLayoutOn);
   const toggleStackLayout = useApp((s) => s.toggleStackLayout);
@@ -149,6 +152,13 @@ export default function PlotToolbar({
   useEffect(() => {
     loadToolPlugins().catch(() => undefined);
   }, []);
+  // Lasso Mask draws on one graph only: a multi-panel layout drops it, and says why.
+  useEffect(() => {
+    if (stackOn && tool === "lasso") {
+      setPlotTool("zoom");
+      setStatus(LASSO_STACK_NOTE);
+    }
+  }, [stackOn, tool, setPlotTool, setStatus]);
 
   const toggleGroupLabels = () => {
     const next = !showGroupLabels;
@@ -167,6 +177,7 @@ export default function PlotToolbar({
     active: tool === t.id,
     onClick: () => setPlotTool(t.id),
     ...(turned && !TURNED_TOOLS.includes(t.id) ? { disabled: true, disabledReason: TURNED_TOOL_NOTE } : {}),
+    ...(stackOn && t.id === "lasso" ? { disabled: true, disabledReason: LASSO_STACK_NOTE } : {}),
   });
 
   // View/Export buttons each have bespoke active/disabled logic, so this only

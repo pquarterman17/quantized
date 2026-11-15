@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -258,6 +258,13 @@ class TopAxisSpec(BaseModel):
     title: str | None = Field(default=None, max_length=200)
 
 
+class CustomTicksSpec(BaseModel):
+    """Explicit major ticks, optionally labelled (``calc.axis_scales``)."""
+
+    at: list[float] = Field(min_length=1, max_length=50)
+    labels: list[Annotated[str, Field(max_length=100)]] | None = Field(default=None, max_length=50)
+
+
 class TickFormatSpec(BaseModel):
     """Wire model for the screen's `AxisFormat` (MAIN #24,
     `frontend/src/lib/types.ts`): the tick-label number format for one axis.
@@ -271,7 +278,7 @@ class TickFormatSpec(BaseModel):
     minor: int | None = Field(default=None, ge=0, le=20)
     ticks: Literal["in", "out", "both"] | None = None
     size: float | None = Field(default=None, gt=0, le=72)
-    base: Literal["e"] | None = None
+    base: Literal["e", "2"] | None = None
     # Y-axis breaks (``calc.axis_breaks``): elided ``[lo, hi]`` stretches of a
     # linear Y / Y2 axis. Validated there; an invalid entry is dropped.
     breaks: list[tuple[float, float]] | None = Field(default=None, max_length=4)
@@ -281,6 +288,11 @@ class TickFormatSpec(BaseModel):
     offset: float | None = Field(default=None, ge=0, le=72)
     grid: AxisGridSpec | None = None
     top: TopAxisSpec | None = None
+    # Gap audit 4 G17: probability scale, custom ticks, axis crossing
+    # (``calc.axis_scales``, ``calc.axis_cross``).
+    prob: Literal["fraction", "percent"] | None = None
+    custom: CustomTicksSpec | None = None
+    cross: float | None = None
 
 
 @dataclass(frozen=True)

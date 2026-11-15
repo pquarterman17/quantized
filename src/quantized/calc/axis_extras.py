@@ -18,6 +18,8 @@ published figure reads like the canvas:
   e labelled ``e^n``.
 * ``breaks`` -- ``[lo, hi]`` stretches elided from a linear Y axis
   (``calc.axis_breaks``); ignored on X, whose breaks are paneled.
+* ``base: "2"``, ``prob`` and ``custom`` -- gap audit 4 G17's log2 and
+  probability scales and custom majors (``calc.axis_scales``).
 
 Pure (matplotlib objects in, nothing returned); every field is optional and
 validated, so an absent or malformed one leaves matplotlib's own behaviour.
@@ -31,7 +33,8 @@ from typing import Any
 
 from matplotlib.ticker import AutoMinorLocator, Formatter, FuncFormatter, LogLocator, NullFormatter
 
-from quantized.calc.axis_breaks import apply_y_breaks
+from quantized.calc.axis_breaks import apply_y_breaks, normalize_breaks
+from quantized.calc.axis_scales import apply_custom_ticks, apply_scale_extras
 
 __all__ = ["apply_axis_extras", "divide_offset_text"]
 
@@ -82,6 +85,8 @@ def _positive(v: Any) -> float | None:
 
 
 def _apply_one(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any]) -> None:
+    # G17 first: a probability axis is drawn as "probit" from here on.
+    scale = apply_scale_extras(ax, which, axis, scale, fmt)
     if fmt.get("base") == "e" and scale == "log":
         axis.set_major_locator(LogLocator(base=math.e))
         axis.set_major_formatter(FuncFormatter(_ln_label))
@@ -105,8 +110,11 @@ def _apply_one(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any
         ax.tick_params(axis=which, labelsize=size)
         axis.get_offset_text().set_fontsize(size)
     # Last: the break keeps the formatter and typed increment set above.
-    if which == "y" and scale == "linear" and fmt.get("breaks"):
+    broken = which == "y" and scale == "linear" and bool(fmt.get("breaks"))
+    if broken:
         apply_y_breaks(ax, fmt.get("breaks"), minor)
+    breaks = normalize_breaks(fmt.get("breaks")) if broken else []
+    apply_custom_ticks(axis, fmt, scale, lambda v: any(lo < v < hi for lo, hi in breaks))
 
 
 def apply_axis_extras(

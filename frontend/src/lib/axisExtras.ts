@@ -19,6 +19,7 @@ import { divideFont, divideLabelSpot, reserveDivideBand, type AxisSide } from ".
 import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisExtrasContext } from "./axisBreakExtras";
 import type { AxisBreak } from "./axisBreaks";
 import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
+import { applyScaleExtras, applyTickExtras, drawCross, type CrossLook } from "./axisScaleExtras";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 type TickValues = NonNullable<uPlot.Axis["values"]>;
@@ -54,13 +55,15 @@ function divided(values: TickValues | undefined, d: number): TickValues {
 interface Extra {
   idx: number;
   fmt: AxisFormat;
-  scale: AxisScale;
+  scale: string;
   /** The breaks this axis draws (null on x, off a linear scale, inherited). */
   breaks: readonly AxisBreak[] | null;
   /** Draw the break's diagonal marks (false on an inner x-break panel). */
   marks: boolean;
   /** Gap #5's axis look (offset, minor grid), or null (lib/axisStyleExtras.ts). */
   look: AxisLook | null;
+  /** G17: the axis drawn across the other axis, or null (lib/axisScaleExtras.ts). */
+  cross: CrossLook | null;
 }
 
 /** Apply each axis' extras to `axes` (index-aligned with `fmts`/`scales`)
@@ -78,7 +81,9 @@ export function applyAxisExtras(
   axes.forEach((axis, idx) => {
     const fmt = fmts[idx];
     if (!fmt || !hasAxisExtras(fmt)) return;
-    const scale = scales[idx] ?? "linear";
+    const own = lookFormat(fmt, idx, ctx);
+    // G17: log2 and probability scales (a probit axis draws as "probit").
+    const scale = applyScaleExtras(axis, idx, own, scales[idx] ?? "linear", ctx);
     if (fmt.base === "e" && scale === "log") {
       axis.splits = (_u, _i, min, max) => lnSplits(min, max);
       axis.values = lnValues;
@@ -92,8 +97,11 @@ export function applyAxisExtras(
       axis.font = axis.font.replace(/[\d.]+px/, `${Math.round((fmt.size * 96) / 72)}px`);
     }
     if (fmt.ticks === "in") axis.ticks = { ...axis.ticks, show: false };
-    const look = applyAxisLook(axis, idx, lookFormat(fmt, idx, ctx), scale, ink, ctx);
-    extras.push({ idx, fmt, scale, breaks, marks: ctx?.breakMarks !== false, look });
+    // After divide-by: custom labels replace the divided numbers, and a
+    // crossing axis draws whatever labels the axis ends up with.
+    const cross = applyTickExtras(axis, own, scale, (v) => !!breaks && insideBreak(v, breaks));
+    const look = applyAxisLook(axis, idx, cross ? { ...own, offset: undefined } : own, scale, ink, ctx);
+    extras.push({ idx, fmt, scale, breaks, marks: ctx?.breakMarks !== false, look, cross });
   });
   // Gap #5: a top X axis showing a transform of X (pushed last, so x/y/y2
   // keep their indices).
@@ -126,7 +134,8 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
         ctx.strokeStyle = ink;
         ctx.fillStyle = ink;
         ctx.lineWidth = pr;
-        for (const { idx, fmt, scale, breaks, marks, look } of extras) {
+        for (const { idx, fmt, scale, breaks, marks, look, cross } of extras) {
+          if (cross) drawCross(u, idx, cross, ink);
           const axis = u.axes[idx] as uPlot.Axis & { _splits?: number[] };
           const key = axis.scale ?? (idx === 0 ? "x" : "y");
           // uPlot's Side enum as plain numbers: 0 top, 1 right, 2 bottom, 3 left.
@@ -150,7 +159,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
             ctx.stroke();
           };
           const majors = (axis._splits ?? []).filter((v) => Number.isFinite(v));
-          const wantIn = fmt.ticks === "in" || fmt.ticks === "both";
+          const wantIn = !cross && (fmt.ticks === "in" || fmt.ticks === "both");
           const wantOut = fmt.ticks !== "in";
           if (wantIn) for (const v of majors) tick(v, 6, inward);
           if (off && look) {
@@ -160,7 +169,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
             if (wantOut) for (const v of majors) tick(v, 10, -inward);
             ctx.strokeStyle = ink;
           }
-          if (fmt.minor && fmt.minor > 0 && scale === "linear" && majors.length > 1) {
+          if (!cross && fmt.minor && fmt.minor > 0 && scale === "linear" && majors.length > 1) {
             const step = (majors[1] - majors[0]) / (fmt.minor + 1);
             const lo = majors[0] - step * fmt.minor;
             for (let v = lo; v <= majors[majors.length - 1] + step * fmt.minor; v += step) {

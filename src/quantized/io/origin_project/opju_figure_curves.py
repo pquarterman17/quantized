@@ -98,6 +98,7 @@ with no id table at all (synthetic fixtures; degraded files): see
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import NamedTuple
 
 from quantized.io.origin_project.curve_style_color import (
@@ -106,6 +107,7 @@ from quantized.io.origin_project.curve_style_color import (
     style_fields,
 )
 from quantized.io.origin_project.opju_codec import curve_plot_style
+from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
@@ -138,12 +140,15 @@ class ColumnIdTable(NamedTuple):
     ``book_pages``: page names that own >= 1 column record (i.e. workbook /
     report-table pages — used by ``figures_opju`` to tell a graph page from
     a book page when attaching window names to figures).
+    ``x_ids``: every X-designated column id, in scan order (the per-sheet
+    X of a re-bound curve with no stored partner: ``opju_curve_sheets``).
     """
 
     ids: dict[int, tuple[str, str]]
     x_partner: dict[int, int]
     book_x: dict[str, str]
     book_pages: frozenset[str]
+    x_ids: tuple[int, ...] = ()
 
 
 def opju_pages(b: bytes) -> list[tuple[int, str]]:
@@ -217,6 +222,7 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     poisoned: set[int] = set()
     x_partner: dict[int, int] = {}
     book_x: dict[str, str] = {}
+    x_ids: list[int] = []
     book_pages: set[str] = set()
     bounds = [*pages, (len(b), "")]
     for (start, book), (end, _next) in zip(bounds, bounds[1:], strict=False):
@@ -234,16 +240,23 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
                 book_pages.add(book)
                 if partner is not None:
                     x_partner[cid] = partner
-                if desig == "X" and book not in book_x:
-                    book_x[book] = name
+                if desig == "X":
+                    x_ids.append(cid)
+                    book_x.setdefault(book, name)
     for cid in poisoned:
         ids.pop(cid, None)
         x_partner.pop(cid, None)
-    return ColumnIdTable(ids, x_partner, book_x, frozenset(book_pages))
+    kept_x = tuple(dict.fromkeys(c for c in x_ids if c in ids))
+    return ColumnIdTable(ids, x_partner, book_x, frozenset(book_pages), kept_x)
 
 
 def extract_curves_by_id(
-    b: bytes, start: int, end: int, table: ColumnIdTable
+    b: bytes,
+    start: int,
+    end: int,
+    table: ColumnIdTable,
+    off_sheet: Mapping[int, str] | None = None,
+    omitted: list[tuple[int, dict[str, str]]] | None = None,
 ) -> list[dict[str, str | float]]:
     """Every curve binding in ``b[start:end)`` via the unified id token.
 
@@ -258,10 +271,24 @@ def extract_curves_by_id(
     (``curve_style_color.py`` -- oracle-verified on the ``Hc2 data``/
     ``RockingCurve``/``UnpolPlots`` ``curve_style.json`` oracle; auto/
     undecodable fields stay absent, never defaulted).
+
+    ``off_sheet`` (``opju_curve_sheets.off_sheet_ids``) names the sheet of
+    every column id not on its book's first sheet. A curve on sheet N binds
+    to the importer's pseudo-book ``Book@N`` (``opju_curve_sheets.curve_sheet``
+    decides; ``x`` keeps its column NAME, which the frontend looks up in that
+    pseudo-book). A curve whose sheet is not proven is left out -- after
+    colour resolution, so the kept curves keep their plot-order colours --
+    and appended to ``omitted`` as ``(plot index, {book, x, y, recorded,
+    reason})``; the index is the curve's position in plot order, the order
+    ``legend_labels`` follows. Dedup is per ``(book, y, sheet)``, so a layer
+    plotting ``B`` of two sheets keeps both.
     """
+    off = off_sheet or {}
     out: list[dict[str, str | float]] = []
     records: list[bytes | None] = []
-    seen: set[tuple[str, str]] = set()
+    notes: list[dict[str, str]] = []  # per curve: its sheet note (reason "" = kept)
+    seen: set[tuple[str, str, str]] = set()
+    sheet_x: dict[str, str] | None = None  # built on first need
     for m in _CURVE_TOKEN.finditer(b, start, end):
         width = m.group(1)[0]
         if m.end() + width > len(b):
@@ -274,17 +301,25 @@ def extract_curves_by_id(
         if info is None:
             continue
         book, y_col = info
-        key = (book, y_col)
-        if key in seen:
-            continue
-        seen.add(key)
         partner = table.x_partner.get(cid)
         partner_info = table.ids.get(partner) if partner is not None else None
         if partner_info is not None and partner_info[0] == book:
             x_col = partner_info[1]
         else:
+            partner = None  # no same-book partner: the book's X name stands in
             x_col = table.book_x.get(book, "A")
-        curve: dict[str, str | float] = {"book": book, "x": x_col, "y": y_col}
+        sheet, reason = curve_sheet(cid, book, partner, off)
+        if partner is None and not reason and sheet != book:
+            # re-bound with no stored partner: sheet N's own first X column
+            if sheet_x is None:
+                sheet_x = sheet_x_names(table.ids, table.x_ids, off)
+            x_col = sheet_x.get(sheet, x_col)
+            reason = "" if sheet in sheet_x else "x_sheet_unproven"
+        key = (book, y_col, sheet)
+        if key in seen:
+            continue
+        seen.add(key)
+        curve: dict[str, str | float] = {"book": sheet or book, "x": x_col, "y": y_col}
         # the token IS the sparse form of the .opj curve-anchor record; the
         # id chunk's 0x80 tag sits 3 bytes into the regex match
         record = opju_style_record(b, m.start() + 3)
@@ -296,7 +331,14 @@ def extract_curves_by_id(
             curve["style"] = style
         out.append(curve)
         records.append(record)
+        notes.append({"book": book, "x": x_col, "y": y_col, "recorded": sheet, "reason": reason})
     # auto/increment placeholders resolve by group role + plot order
     # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
     apply_increment_colors(out, records)
-    return out
+    kept: list[dict[str, str | float]] = []
+    for i, (curve, note) in enumerate(zip(out, notes, strict=True)):
+        if not note["reason"]:
+            kept.append(curve)
+        elif omitted is not None:  # unique: `seen` already deduped the key
+            omitted.append((i, note))
+    return kept

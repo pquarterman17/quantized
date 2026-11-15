@@ -3879,6 +3879,41 @@
         "title": "CurrentDensityRequest",
         "type": "object"
       },
+      "CustomTicksSpec": {
+        "description": "Explicit major ticks, optionally labelled (``calc.axis_scales``).",
+        "properties": {
+          "at": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "At",
+            "type": "array"
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          }
+        },
+        "required": [
+          "at"
+        ],
+        "title": "CustomTicksSpec",
+        "type": "object"
+      },
       "CutSegmentRequest": {
         "description": "Arbitrary straight cut p0 -> p1 through the scattered 2-D cloud.",
         "properties": {
@@ -15638,7 +15673,10 @@
           "base": {
             "anyOf": [
               {
-                "const": "e",
+                "enum": [
+                  "e",
+                  "2"
+                ],
                 "type": "string"
               },
               {
@@ -15671,6 +15709,27 @@
               }
             ],
             "title": "Breaks"
+          },
+          "cross": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CustomTicksSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "digits": {
             "default": 2,
@@ -15738,6 +15797,21 @@
               }
             ],
             "title": "Offset"
+          },
+          "prob": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fraction",
+                  "percent"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prob"
           },
           "reverse": {
             "anyOf": [
