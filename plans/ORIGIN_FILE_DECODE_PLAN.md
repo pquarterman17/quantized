@@ -1072,10 +1072,20 @@ work.
           model (a bar pairs a Y-error column with its preceding Y) cannot
           attach them; they stay curves. Needs the bar's decorated dataset
           (`x_dataset` / the curve token) instead of the designation
-    - [ ] 798 bar tokens now designated Y-error pair with a different Y
-          than the one Origin decorates, and 196 have their Y undrawn --
-          both were hidden behind "no designation" on main; measure
-          against the curve token's own Y before attaching any
+    - [ ] Bars DRAWN on a Y Origin decorates with another error column:
+          the frontend pairs a Y-error column with the nearest preceding Y
+          (`lib/errorbars.ts` `originErrKeys`), not with the Y Origin's
+          error-bar plot decorates. Drawn bars vs COM `plot_type` 231 on
+          the 36 error-bar files: main 79 right / 51 wrong, after #73
+          719 right / 32 wrong -- the same 32 instances as main (0 new, 19
+          fixed), e.g. `PerceivedRiskandPrediction` Graph122 `drfambpre_C`
+          (Origin decorates it, we draw `_F`). Fix: pair by the column
+          record's associated column id (offset 35) and draw a bar only
+          where it agrees; the decoded error-bar token's X is never the
+          decorated Y (2,736 of 2,736), so the token alone cannot pair it
+    - [ ] 798 bar tokens designated Y-error pair (by designation) with a
+          different Y than Origin decorates and 196 have their Y undrawn;
+          none of them is drawn on a wrong Y (counted above)
     - [ ] Absent, fail closed: 2,354 long names, 379 units, 39 X long
           names on COM-covered columns (sheets whose records do not cover
           every decoded column, or a contradicted positional reading)
@@ -1245,7 +1255,9 @@ the shipped contract)
   curves main omitted as `y_is_sheet_x`, all equal to Origin's plot list
   (one layer keeps an unrelated `plot_row_range` omission); no curve lost
   or rebound elsewhere. Error bars attached to Origin's Y (`verify_errbar`,
-  36 files): 109 -> 745, none lost. Residue booked as #74.
+  36 files): 109 -> 745, none lost. Bars the frontend DRAWS vs Origin's
+  error-bar plots: 79 -> 719 on Origin's Y, wrong Y 51 -> 32 (the same
+  32 as main, 0 new). Residue booked as #74.
 - ~~**#72 `windows_opju` reads designations from the marker**~~
   (2026-11-15, on `9fcfafbf`). The marker bytes (record offsets 37-38) do
   not name the designation: `30 61` is Y-error OR X-error, `20 61` label OR
