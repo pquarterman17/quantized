@@ -76,7 +76,7 @@ export function peakInputs(
     y: pairs.y,
     fullX,
     xKeyUsed: null,
-    yKeyUsed: d.values[0]?.length ? 0 : null,
+    yKeyUsed: null, // no Y is shown: the markers belong to no curve (peakBinding -> -1)
     gapCount: pairs.n - pairs.keep.length,
     sourceCount: pairs.n,
   };

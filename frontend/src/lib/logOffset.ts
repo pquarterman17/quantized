@@ -33,6 +33,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type { PlotPayload } from "./plotdata";
 import type { OverlayBinding, SeriesStyle } from "./types";
+import { firstVisiblePlottedChannel } from "./quickfit";
 import { waterfallApplies } from "./waterfallOffset";
 
 /** The largest offset honoured, either way (the backend's `MAX_DECADES`). */
@@ -60,6 +61,23 @@ export function overlayDecades(
 ): number {
   if (binding) return binding.yKey < 0 ? 0 : decadesOf(binding.yKey);
   return fallbackChannel === null ? 0 : decadesOf(fallbackChannel);
+}
+
+/** `overlayDecades` read from the series styles, keyed by CHANNEL -- the one
+ *  source both the canvas and the export use, independent of which channels a
+ *  request happens to list. The fallback (unbound overlay) is the first
+ *  visible plotted channel, `plotted[0]` when all are hidden. */
+export function overlayDecadesFromStyles(
+  binding: OverlayBinding | null | undefined,
+  seriesStyles: Readonly<Record<number, SeriesStyle | undefined>>,
+  plotted: readonly number[],
+  hidden: readonly number[],
+): number {
+  return overlayDecades(
+    binding,
+    (ch) => logOffsetDecades(seriesStyles[ch]?.logOffset),
+    firstVisiblePlottedChannel(plotted, (c) => hidden.includes(c)),
+  );
 }
 
 /** The legend suffix for an offset series ("" for none). Mirrors the

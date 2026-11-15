@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../lib/types";
+import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import { analysisResultReset } from "./windowFocus";
 import { useApp } from "./useApp";
 
@@ -36,5 +37,20 @@ describe("quick-fit result resets", () => {
     expect(s.qfitResult).toBeNull();
     expect(s.qfitResultModel).toBeNull();
     expect(s.qfitResultCurve).toBeNull();
+  });
+});
+
+describe("QFIT_RESULT_RESET is the one list", () => {
+  it("covers every qfitResult* field of the store", () => {
+    const fields = Object.keys(useApp.getInitialState()).filter((k) => k.startsWith("qfitResult")).sort();
+    expect(fields).toEqual(Object.keys(QFIT_RESULT_RESET).sort());
+  });
+
+  it("every one of those fields is cleared by a focus-change reset and by a dataset clone", async () => {
+    const keys = Object.keys(QFIT_RESULT_RESET);
+    const reset = analysisResultReset();
+    for (const k of keys) expect(reset).toHaveProperty(k, null);
+    await useApp.getState().duplicateDataset("d1");
+    for (const k of keys) expect((useApp.getState() as unknown as Record<string, unknown>)[k]).toBeNull();
   });
 });

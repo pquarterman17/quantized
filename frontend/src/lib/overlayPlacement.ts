@@ -45,13 +45,11 @@ export interface OverlayLayout {
   /** The plot's X: where a channel that is not a curve is drawn (every block
    *  copies it, against the shared X). */
   xKey: number | null;
-  /** More than one X is in play: the view has several blocks, or a curve of the
-   *  sheet owns an X other than the plot's. False = a one-X sheet. */
-  multi: boolean;
   /** The channels this view draws (`shownCurves`: plotted minus hidden). A bound
-   *  Y outside it is not drawn, so neither is its overlay. */
+   *  Y outside it is not drawn, so neither is its overlay. NOT part of `key`:
+   *  the cache also records whether THIS overlay's bound Y is in it. */
   shown: readonly number[];
-  /** Identity of the above, for the placement cache. */
+  /** Identity of the layout without `shown`, for the placement cache. */
   key: string;
 }
 
@@ -68,9 +66,7 @@ const code = (x: number | null | undefined) => (x === undefined ? "u" : x === nu
 
 /** The layout of `ds`'s view under plot X `xKey`, with `shown` the drawn
  *  channels: `blocks` is perSeriesXData's, or null when it built no view --
- *  then the view is the plot's X alone (`multi` is still true when some curve
- *  of the sheet owns ANOTHER X: a multi-X sheet whose other curves are hidden).
- *  The one place that decides whether a sheet is multi-X. */
+ *  then the view is the plot's X alone. */
 export function overlayLayout(
   ds: Pick<Dataset, "id" | "data" | "columnDesignations">,
   xKey: number | null,
@@ -78,24 +74,26 @@ export function overlayLayout(
   shown: readonly number[],
 ): OverlayLayout {
   const own = curveX(ds, xKey);
-  const multi = !!blocks || own.some((x) => x !== undefined && x !== xKey);
   const b = blocks ?? [xKey];
   const n = ds.data.time.length;
-  const key = `${ds.id}|${n}|${code(xKey)}|${b.map(code).join(",")}|${own.map(code).join(",")}|${shown.join(",")}`;
-  return { datasetId: ds.id, n, blocks: b, own, xKey, multi, shown, key };
+  const key = `${ds.id}|${n}|${code(xKey)}|${b.map(code).join(",")}|${own.map(code).join(",")}`;
+  return { datasetId: ds.id, n, blocks: b, own, xKey, shown, key };
 }
 
-const cache = new WeakMap<object, { key: string; out: object | null }>();
+const cache = new WeakMap<object, { key: string; drawn: boolean; out: object | null }>();
 
 /** `o` placed into its bound block of `layout` (see the module header), or
  *  null when it is not drawn here. */
 export function placeOverlay<T extends Placeable>(o: T | null | undefined, layout: OverlayLayout): T | null {
   if (!o) return null;
   if (o.datasetId !== layout.datasetId) return null; // another dataset's: never drawn here anyway
+  // Whether the bound Y is drawn is the only part of `shown` this overlay reads,
+  // so toggling an unrelated curve hits the cache and returns the same object.
+  const drawn = !o.binding || o.binding.yKey < 0 || layout.shown.includes(o.binding.yKey);
   const hit = cache.get(o);
-  if (hit && hit.key === layout.key) return hit.out as T | null;
-  const out = place(o, layout);
-  cache.set(o, { key: layout.key, out });
+  if (hit && hit.key === layout.key && hit.drawn === drawn) return hit.out as T | null;
+  const out = drawn ? place(o, layout) : null;
+  cache.set(o, { key: layout.key, drawn, out });
   return out;
 }
 
@@ -107,7 +105,6 @@ function place<T extends Placeable>(o: T, layout: OverlayLayout): T | null {
   // whose block IS its X -- never guessed into a block of a wider view, and
   // never onto another X's rows when the other curves are hidden.
   if (!b || b.yKey < 0) return blocks.length === 1 && blocks[0] === (b ? b.xKey : layout.xKey) ? o : null;
-  if (!layout.shown.includes(b.yKey)) return null; // that Y is hidden / not plotted
   const own = layout.own[b.yKey];
   if ((own === undefined ? layout.xKey : own) !== b.xKey) return null; // that Y is not drawn on that X
   const block = blocks.indexOf(b.xKey);

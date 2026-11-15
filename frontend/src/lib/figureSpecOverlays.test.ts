@@ -123,9 +123,25 @@ describe("withAnalysisOverlays", () => {
   });
 
   it("scales the overlay by its parent's decade offset, as the canvas does", () => {
-    const out = withAnalysisOverlays(flat({ log_offsets: [2] }), DS, { ...VIEW, peakOverlay: null }, 1);
+    const view = { ...VIEW, peakOverlay: null, seriesStyles: { 0: { logOffset: 2 } } };
+    const out = withAnalysisOverlays(flat({ log_offsets: [2] }), DS, view, 1);
     expect(col(out, 1)).toEqual([110.00000000000001, 490.00000000000006, 210, 90]);
     expect(out.log_offsets).toEqual([2, 0]);
+  });
+
+  it("takes the offset by the bound CHANNEL even when the request's y_keys do not list it", () => {
+    // Fit bound to channel 0 (3 decades); the request lists only channel 1.
+    const two: Dataset = {
+      ...DS,
+      data: { ...DS.data, values: [[1, 7], [5, 7], [2, 7], [1, 7]], labels: ["A", "B"], units: ["", ""] },
+    };
+    const view: OverlayView = {
+      ...VIEW, peakOverlay: null, seriesStyles: { 0: { logOffset: 3 }, 1: { logOffset: 1 } },
+    };
+    const out = withAnalysisOverlays(
+      { ...flat({ log_offsets: [1] }), dataset: two.data, y_keys: [1] }, two, view, 1,
+    );
+    expect(col(out, 2)).toEqual([1.1, 4.9, 2.1, 0.9].map((v) => v * 1000));
   });
 
   it("prunes the overlay to the rows a hide-mode export keeps", () => {
