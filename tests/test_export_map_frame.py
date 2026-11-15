@@ -87,3 +87,14 @@ def test_no_marks_is_the_plain_map(monkeypatch: pytest.MonkeyPatch) -> None:
     ax = _axes(monkeypatch, BODY)
     assert not ax.lines
     assert not ax.texts
+
+
+def test_map_figure_note_is_drawn_and_optional() -> None:
+    from quantized.calc.figure_map import render_map_figure
+
+    z = [[0.0, 1.0], [2.0, 3.0]]
+    plain = render_map_figure([0, 1], [0, 1], z, kind="heatmap", fmt="svg")
+    noted = render_map_figure(
+        [0, 1], [0, 1], z, kind="heatmap", fmt="svg", note="Interpolated onto a regular grid"
+    )
+    assert b"Interpolated" not in plain and len(noted) != len(plain)

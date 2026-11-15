@@ -3,6 +3,8 @@
 // A's x-grid and the result is written to the library. Thin — logic in the hook.
 // The "Average N" tab (gap audit 2 #9) is AverageCurvesSection.
 
+import { lazy, Suspense } from "react";
+
 import ToolWindow from "../../overlays/ToolWindow";
 import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button, Select } from "../../primitives";
@@ -13,11 +15,20 @@ import AverageCurvesSection from "./AverageCurvesSection";
 import { OPERATIONS, useDatasetMath } from "./useDatasetMath";
 
 const INTERP = ["pchip", "linear", "spline"];
+const FunctionPlotPanel = lazy(() => import("../functionplot/FunctionPlotPanel"));
 
 export default function DatasetMathPanel() {
   const setOpen = useApp((s) => s.setDatasetMathOpen);
   const mode = useApp((s) => s.datasetMathMode);
   const enough = useApp((s) => s.datasets.length >= 2);
+  // Plot > Function plot opens this window in its own mode (its own window).
+  if (mode === "function") {
+    return (
+      <Suspense fallback={null}>
+        <FunctionPlotPanel />
+      </Suspense>
+    );
+  }
 
   return (
     <ToolWindow id="datasetmath" title="Dataset Math" width={320} onClose={() => setOpen(false)}>

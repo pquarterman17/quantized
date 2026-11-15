@@ -26,8 +26,8 @@ def test_origin_window_and_template_files_explain_the_way_forward(
         import_auto(path)
     msg = str(info.value)
     assert "no parser registered" not in msg
-    assert "Origin window/template files can't be opened directly" in msg
-    assert ".opj" in msg and "Origin Viewer" in msg
+    assert "can't decode Origin window files yet" in msg
+    assert ".opj/.opju" in msg and "export" in msg
 
 
 def test_origin_package_is_named_as_such(tmp_path: Path) -> None:

@@ -43,7 +43,7 @@ describe("plot-type gallery model (#8)", () => {
   });
 
   it("offers contour only for map-shaped (XYZ) data, and says why not", () => {
-    expect(plotTypeUnavailable("contour", sweep)).toMatch(/X, Y and Z/);
+    expect(plotTypeUnavailable("contour", sweep)).toMatch(/X, Y, Z on a grid/);
     expect(plotTypeUnavailable("contour", xyz)).toBeNull();
     expect(plotTypeUnavailable("line", null)).toMatch(/Select a dataset/);
   });

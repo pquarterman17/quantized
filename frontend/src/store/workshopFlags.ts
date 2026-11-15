@@ -103,7 +103,7 @@ export interface WorkshopFlagsSlice {
   rsmOpen: boolean; digitizerOpen: boolean;
   datasetMathOpen: boolean; tabulateOpen: boolean;
   /** Dataset Math's tab: combine two, or average N (gap audit 2 #9). */
-  datasetMathMode: "combine" | "average";
+  datasetMathMode: "combine" | "average" | "function";
   distributionOpen: boolean;
   signalProcessingOpen: boolean;
   dataFilterOpen: boolean;
@@ -153,7 +153,7 @@ export interface WorkshopFlagsSlice {
   setMagToolsOpen: (open: boolean) => void;
   setRsmOpen: (open: boolean) => void;
   setDigitizerOpen: (open: boolean) => void;
-  setDatasetMathOpen: (open: boolean, mode?: "combine" | "average") => void;
+  setDatasetMathOpen: (open: boolean, mode?: "combine" | "average" | "function") => void;
   setTabulateOpen: (open: boolean) => void;
   setDistributionOpen: (open: boolean) => void;
   setSignalProcessingOpen: (open: boolean) => void;

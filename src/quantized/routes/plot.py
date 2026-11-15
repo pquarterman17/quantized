@@ -207,4 +207,6 @@ def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
             "min": to_jsonable(m.z_min),
             "max": to_jsonable(m.z_max),
         },
+        "interpolated": bool(m.metadata.get("interpolated", False)),
+        "n_points": int(m.metadata.get("n_points", 0)),
     }

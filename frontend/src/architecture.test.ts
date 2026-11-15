@@ -2333,7 +2333,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   magToolsOpen: "workshop/dialog visibility; UI state",
   rsmOpen: "workshop/dialog visibility; UI state",
   datasetMathOpen: "workshop/dialog visibility; UI state",
-  datasetMathMode: "Dataset Math's tab (combine / average); UI state",
+  datasetMathMode: "Dataset Math's tab (combine / average / function plot); UI state",
   distributionOpen: "workshop/dialog visibility; UI state",
   signalProcessingOpen: "workshop/dialog visibility; UI state",
   dataFilterOpen: "workshop/dialog visibility; UI state",
