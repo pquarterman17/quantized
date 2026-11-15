@@ -168,8 +168,11 @@ def _planted_points(
 ) -> list[tuple[Any, Any]]:
     ys = _family_values(ycol, set())
     xs = _family_values(xcol, set()) if xcol else list(range(len(ys)))
-    return [(x, y) for i, (x, y) in enumerate(zip(xs, ys, strict=False))
-            if i not in masked and _finite([y])]
+    return [
+        (x, y)
+        for i, (x, y) in enumerate(zip(xs, ys, strict=False))
+        if i not in masked and _finite([y])
+    ]
 
 
 def _stat_curves(spec: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
@@ -262,12 +265,16 @@ def score_specimen(
                 continue
             want_x = cols.get(cv["x"] or "")
             planted = _planted_points(cols[cv["y"]], want_x, masked)
-            got = pts[on]
-            if len(got) == len(planted) and not _close([p[0] for p in got], [p[0] for p in planted]):
+            got_x, planted_x = [p[0] for p in pts[on]], [p[0] for p in planted]
+            if len(got_x) == len(planted_x) and not _close(got_x, planted_x):
                 bad.append(f"{on}: not drawn against X column {want_x['long'] if want_x else '?'}")
         # Error bars Origin added for the Y-/X-error columns (231/233).
-        o_err = {t for lay in c["oracle"]["graph"]["layers"] for t in
-                 (p["plot_type"] for p in lay["plots"]) if t in _ERROR_TYPES}
+        o_err = {
+            t
+            for lay in c["oracle"]["graph"]["layers"]
+            for t in (p["plot_type"] for p in lay["plots"])
+            if t in _ERROR_TYPES
+        }
         spans = [s for s in spec.get("error_spans") or [] if s]
         q_err = {231 for s in spans if s.get("y")} | {233 for s in spans if s.get("x")}
         if o_err != q_err:
