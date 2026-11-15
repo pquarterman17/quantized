@@ -15,11 +15,21 @@ Origin's own answers as `oracle.json` for the import and from-scratch scorers
 | `origin_oracle.py` | Reads the built graph back from Origin (plot type, `%Z`, refs, axes, styles). |
 | `qz_oracle.c` | Origin C `DataPlot::GetPlotType()`, the only plot-type readback found. |
 | `origin_build.py` | Builds every (family × type) specimen: `.opju`, PNG, `oracle.json`, `manifest.json`. |
+| `scratch_recipes.py` | Plan item 3: the clicks that build each type from scratch in quantized, or what is missing. |
+| `scratch_data.py` | The graphed sheet as the CSV a user imports; channel map; the worksheet edits to replay. |
+| `scratch_run.py` | Imports, runs the vitest recipe harness (`frontend/src/test/plotCorpus/`) against a live backend, renders each request, scores, writes the review page. |
+| `scratch_score.py` / `scratch_review.py` | Score a built figure against `oracle.json`; the per-type table and side-by-side HTML. |
 
 ```bash
 uv run python tools/plot_corpus/generate.py --out <gen>
 # under the shared COM lock (see CLAUDE.md "Origin COM oracle runs"):
 uv run --with pywin32 python tools/plot_corpus/origin_build.py --corpus <gen> --out <corpus>
+```
+
+Check 2 (no Origin needed):
+
+```bash
+uv run python tools/plot_corpus/scratch_run.py --corpus <corpus> --gen <gen> --out <review>
 ```
 
 Output stays out of the repo. Specimens join the private `test-data` corpus
