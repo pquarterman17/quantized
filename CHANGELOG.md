@@ -50,6 +50,204 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 - Background (unfocused) graph windows now draw their own legend and
   shapes, so tiled windows stay visually consistent regardless of which one
   has focus.
+- Live multi-dataset graphs (#661): **Plot selected together** now makes a
+  graph that stays linked to its source sheets (a cell edit, a row mask or a
+  re-import reaches it) instead of a frozen "overlay (N)" copy, and **Add
+  curve from…** adds a curve from any dataset to an existing graph. Each Y
+  is drawn against its own X column (Origin's nearest-preceding-X rule) on
+  screen and in export, and the Y-axis title joins the visible curves'
+  quantities ("R1, R2 (ohm) / V (V)").
+- Axis dialog: the top X axis can be any expression of the bottom axis
+  (`1240/x`, `sqrt(x)`), labelled only over its finite, monotonic stretch
+  (#662). Log2 and probability (fraction or percent) scales, custom tick
+  positions with optional labels, and an axis crossing the other at a value
+  (#685). Screen and export share one contract.
+- Library: tick saved editable figures and export them as one multi-page
+  PDF, in tick order (#662).
+- Worksheet: Find/Replace (Ctrl+F / Ctrl+H) over text or whole cells, in the
+  sheet or a selection, replace-all as one undo step (#662).
+- Layer Contents (#665): one dialog lists a graph's curves to remove,
+  reorder, re-bind to another dataset/X/Y, or add from any dataset. Dropping
+  a Library dataset or book onto a graph adds its Y columns. **Link X axis
+  with…** shares zoom and pan between named graph windows; **Link Y axis
+  with…** does the same for the primary Y range (#685).
+- Masking: Select Rows draws a 2-D box, a right-click on a data point offers
+  Mask / Unmask this point (#665), and the Lasso Mask tool masks (Shift:
+  unmasks) the points inside a free-form outline (#685). All use the
+  worksheet's row exclusion, so fits and exports follow.
+- Data-driven marks (#667): marker size from a column (with a size key),
+  drop lines to the X or Y axis, a natural cubic spline connector (strictly
+  ascending X only; loops stay straight with a notice), and SD/SEM of
+  replicate columns as a computed error source.
+- Graph layers (#668): **Insert ▸ Inset graph / Image / Table** places
+  Origin-style layers on a plot: an inset graph of any datasets' curves on
+  its own axes, a PNG/JPEG/SVG image, or a table typed or filled from
+  worksheet rows. Drag to move, corner grip to resize; the vector export
+  draws the same layers. A graph template does not carry layers: like
+  curves, they count as the graph's data.
+- Peak models (#673): split (asymmetric) Gaussian, Lorentzian and
+  pseudo-Voigt, Pearson VII, Fano/BWF and Doniach–Šunjić shapes, and peak
+  ties by offset, ratio or area ratio (for XPS doublets), with the
+  coefficient fixed or fitted and its error propagated.
+- Signal ops (#674): median filter, despike, LOWESS, convolution and
+  deconvolution, Hilbert envelope, inverse FFT, and Reduce XY (bin, merge
+  duplicates, every Nth point), in the Signal Processing and Resample
+  workshops. Rows are never re-sorted; operations that need uniform or
+  monotonic X refuse other data. Also at `POST /api/transform/sigop`.
+- Set Column Values (#675): a full dialog with a target picker, function /
+  column / operator browsers, a From/To row range and a live preview. New
+  worksheet functions `erf`, `erfc`, `gamma`, `lgamma`, `round(v, n)`,
+  `floor`/`ceil` with digits, seeded `rnd`/`normal`, `interp(v, X, Y)` and
+  `nan`, checked against numpy/scipy. **Fill column with** row numbers, a
+  linear sequence or random values, and **Set row count**.
+- Import legacy Excel `.xls` workbooks (#677). This adds `xlrd`
+  (BSD-licensed) as a core dependency.
+- Map tab: a contour/map of scattered XYZ points, interpolated and labelled
+  as interpolated; collinear or too few points are refused (#677).
+- Function Plot workshop: draw y = f(x; params) as a live curve on the
+  focused graph (#677).
+- Plot styling (#678): a colour gradient across a graph's curves (viridis,
+  plasma, magma, cividis, cool-warm, turbo; even, reversed or ordered by the
+  number in each legend label), symbol details (edge and face colour,
+  transparency, draw every Nth marker) and a shaded Y error band.
+- Worksheet user-parameter rows (#683): named per-column parameters
+  (Temperature, Sample) under the header, usable in legends (`{Name}`) and to
+  order curves.
+- Fitting (#683): By-level fits honour the panel's weighting per level, and
+  Global fit gains **Compare datasets**, an extra-sum-of-squares F-test of
+  shared versus separate parameters.
+- Curie–Weiss and demagnetization correction propagate a symmetric,
+  same-unit applied-field error column in quadrature with the moment error
+  instead of refusing the run (#683).
+- **Copy figure** (#686) reports which formats actually reached the
+  clipboard ("as vector (SVG) + PNG" or "as a 300-DPI PNG (not vector)").
+  An opt-in native Windows clipboard path for `qz --desktop` puts the
+  figure on the clipboard as SVG, PNG and a bitmap together, like Origin's
+  *Copy Page* (see Known limitations and `docs/desktop.md`).
+- `qz convert FILES... --to {csv,xlsx,dwk} --out DIR` (#687) converts Origin
+  `.opj`/`.opju` projects without Origin: every book and sheet, a summary
+  line per file and `convert-report.json`. A book with undecoded columns or
+  an unrecovered X is reported and not written unless `--allow-partial`.
+- Public Python API (#687): `quantized.api` gains `read_origin_books`,
+  `convert_origin_project`, `save_table` and `fit_model`.
+- Multiple Y axes (#692): assign a series to Y3, Y4, … (up to Y8) from the
+  Inspector's Channels card or Plot Details. Each extra axis sits outward on
+  the right with its own range, scale, tick step, number format, label and
+  colour (**Plot ▸ Y Axis Settings…** or double-click the axis), on screen and
+  in export.
+
+### Changed
+
+- Analysis tools compute on each Y's own X (#666): baseline, magnetometry,
+  batch integrate, the peak tools and Curve Fit used the plot's shared X, so
+  on a sheet laid out `T1,R1,T2,R2` R2 was analysed against T1. Curve Fit
+  records the X it used.
+- Fit, baseline, peak and derivative overlays are drawn only on the X and Y
+  they were computed on (#679, #689). Hiding a curve hides its overlays, and
+  a fit whose recorded X no longer matches the plot is not drawn. Export and
+  Copy figure say when they leave out an overlay the canvas draws; a legacy
+  fit with no recorded X opens without the fit, with a **Re-fit** button.
+- **Export script** writes a runnable Python script on `quantized.api`
+  (`.py`) instead of `macro.qzm` (#687). Imports, corrections, reset and fits
+  become API calls; steps with no API equivalent are kept as comments that
+  say so.
+- `qz convert` and `quantized.api.save_table` never overwrite an existing
+  file unless asked (`--overwrite` / `overwrite=True`), and never write over
+  one of their own inputs (#687).
+- **Send to Origin** asks before sending to the Origin session you already
+  have open, and sends nothing on cancel (#688).
+- A successful import closes the Import Wizard; the worksheet shows text
+  columns in the file's column order; the worksheet toolbar folds its
+  less-used buttons into a "…" menu; column insert/delete/move are recorded
+  in the macro (#670).
+- Workspaces that use a feature v0.34.0 cannot keep are saved as `.dwk`
+  version 6 (see Upgrade notes); every other workspace is still saved as
+  version 4 (5 with transform steps).
+- Install hints in error messages now name the real PyPI package,
+  `quantized-lab` (for example `pip install quantized-lab[desktop]`). The
+  bare `quantized` on PyPI is an unrelated project.
+
+### Fixed
+
+- Origin `.opju` graph pages are recovered with their per-layer axis ranges,
+  checked against Origin itself (#676, #681, #682).
+- Origin `.opju` curves bind to the sheet they plot (#684) and to their own
+  X column (#690); NLFit report graphs embedded in a workbook no longer
+  attach phantom curves to it (#690).
+- Origin project import no longer drops valid column headers and reports
+  columns it could not read (#664).
+- "Import as sheets of one workbook…" no longer offers to create a folder
+  for the files (#670).
+
+### Upgrade notes (from 0.34)
+
+- **Hiding a curve now hides its fit, baseline and peak overlays** (#679).
+  A 0.34 project saved as a "fit line only" plot (data curve hidden) opens
+  with the fit hidden too. To show only the fit, make the curve transparent
+  or remove its line and markers instead of hiding it.
+- **Each Y now uses its own X for analyses** (#666). On a sheet with more
+  than one X column, re-running an analysis saved in a 0.34 project can give
+  different numbers from the ones it recorded, because 0.34 used the plot's
+  shared X.
+- **Export script now writes a `.py` file**, not `macro.qzm` (#687). 0.34
+  never read `.qzm` back, so no file stops loading, but scripts you kept are
+  a different format now. A fit step recorded before its start values and
+  bounds were saved exports with a printed warning and uses automatic
+  starts.
+- **`qz convert` refuses to overwrite** existing files; pass `--overwrite`
+  to replace earlier outputs. It never writes over an input.
+- **The native Windows vector clipboard is opt-in**: set `QZ_WIN_CLIPBOARD=1`
+  and run `qz --desktop` with the `desktop` extra. Otherwise Copy figure
+  works as before.
+- **Opening new files in 0.34.0**: a workspace that uses graph layers, Y3+
+  axes, a colour gradient (on a graph or in a saved Graph Builder spec),
+  linked Y axes, live multi-dataset graphs, column comments or number
+  formats, the new axis options (log2, probability, custom ticks, crossing,
+  grid styling, top axis, reverse, rotation, offset) or the new publication
+  (export) series styles is saved as `.dwk` version 6. v0.34.0 refuses it
+  ("unsupported workspace version: 6") instead of opening it without those
+  features and losing them on save. A workspace without them stays version 4
+  and opens in 0.34.0. The new per-series styling on a graph (hollow
+  symbols, symbol details, error-bar style, size by column, drop lines,
+  spline) does not bump the version: 0.34.0 keeps it, though it does not
+  draw it. A copied workbook follows the same rule (transfer version 2,
+  which 0.34.0 refuses to paste).
+- Graph templates kept in the app and exported Plot Recipe files have no
+  such gate: 0.34.0 reads the fields it knows and applies them without the
+  rest. Graph templates live in the browser profile, so after going back to
+  0.34.0 on the same machine, the first template 0.34.0 saves rewrites the
+  list without the newer fields (gradient, Y3+ axes, new styles) of
+  templates made in this version. (Recipes saved inside a `.dwk` are part of
+  the version-6 rule above.)
+- `qz convert` writes `.dwk` version 3, which this version migrates on open.
+
+### Known limitations
+
+- The native Windows "Copy figure" is opt-in and works only in the
+  pywebview window (`pip install quantized-lab[desktop]`, `QZ_WIN_CLIPBOARD=1`,
+  `qz --desktop`). The Tauri desktop installer does not include it. Elsewhere
+  Copy figure uses the browser clipboard: SVG where the browser allows it,
+  otherwise a 300-DPI PNG.
+- No EMF on the clipboard: no permissively licensed EMF writer exists, so
+  Office 2016 and earlier paste the PNG.
+- Extra Y axes: at most Y3–Y8. Group, encoding, facet, axis-break and
+  multi-panel views draw Y3+ series on Y1 with a note, on screen and in
+  export; Figure Page panels drop Y3+ axes with a note; insets skip the extra
+  series; a series assigned to a missing axis falls back to Y1.
+- Writing matrix books as true Origin matrices stays opt-in, as in 0.34.0.
+- The exported Python script does not reproduce every step: formula
+  columns, transforms, paste and append, background subtraction, data edits,
+  weighted fits and fits on a row selection are written as comments, and the
+  script stops at the first such data step. Error-column bindings are not
+  recorded.
+- 0.34.0 opens a version-4 or version-5 file that uses the new worksheet
+  functions (`erf`, `gamma`, `interp`, …) or the new signal operations, but
+  cannot compute them: 0.34.0's formula engine reports `unknown function
+  "erf"` for such a computed column, and a recorded signal-operation step
+  fails when run (`"sigop" is not a single-output transform`). The formula and the
+  step are kept, so the file works again in this version.
+- `.xls` import reads legacy (BIFF) workbooks. A `.xlsx`, TSV or HTML file
+  renamed to `.xls` is detected by its content instead.
 
 ## [0.34.0] - 2026-11-14
 

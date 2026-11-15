@@ -58,7 +58,7 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
             status_code=422,
             detail=(
                 "bumps is not installed - the optional fit engine needs "
-                "'pip install quantized[bumps]'"
+                "'pip install quantized-lab[bumps]'"
             ),
         )
     try:

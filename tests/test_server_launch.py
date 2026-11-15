@@ -335,7 +335,7 @@ def test_run_desktop_hints_when_pywebview_missing(
     # network or starting a server.
     monkeypatch.setitem(sys.modules, "webview", None)
     server_launch._run_desktop("127.0.0.1", 8000)
-    assert "quantized[desktop]" in capsys.readouterr().out
+    assert "quantized-lab[desktop]" in capsys.readouterr().out
 
 
 def test_run_desktop_refuses_foreign_app_on_port(
@@ -426,7 +426,7 @@ def test_run_desktop_bridge_import_failure_prints_hint_and_starts_nothing(
     monkeypatch.setattr(server_launch, "_bind", bind)
     server_launch._run_desktop("127.0.0.1", 8000)
     out = capsys.readouterr().out
-    assert "quantized[desktop]" in out and "desktop_bridge" in out
+    assert "quantized-lab[desktop]" in out and "desktop_bridge" in out
     bind.assert_not_called()  # failed before binding / starting the server
     webview.create_window.assert_not_called()
 
