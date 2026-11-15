@@ -191,22 +191,22 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
     state.setStatus("can't open fitted plot: the saved fit is missing");
     return null;
   }
-  if (fitDataset && fitSpec) {
-    if (!fitSpec.params?.length) {
-      state.setStatus("can't open fitted plot: the saved fit has no parameter values");
-      return null;
-    }
-    // The curve is the model at the X the fit READ (`fitSpec.xKey`: the curve's
-    // own X on a T1,R1,T2,R2 sheet), which is not necessarily the plot X the
-    // result opens on (`prepared.xChannel`) -- the overlay binds to the fit's.
-    // `null` is the time axis. A legacy fit records neither, and is not guessed.
-    if (fitSpec.xKey === undefined || fitSpec.yKey === undefined) {
-      state.setStatus("can't open fitted plot: the legacy fit does not record its exact X/Y channels; use Edit / Re-fit first");
-      return null;
-    }
-    const savedX = fitSpec.xKey;
-    fitBinding = { yKey: fitSpec.yKey, xKey: savedX };
-    const xs = fullPlottedX(fitDataset.data, savedX);
+  if (fitDataset && fitSpec && !fitSpec.params?.length) {
+    state.setStatus("can't open fitted plot: the saved fit has no parameter values");
+    return null;
+  }
+  // The plot opens on the RESOLVED X/Y (`prepared`: a one-channel sheet's
+  // missing yKey is channel 0, a stale xKey is time), but the fit is evaluated
+  // and drawn only where it was computed: the resolved X must be exactly the X
+  // the fit recorded (`null` = time) and the Y the recorded Y (when recorded).
+  // Anything else would draw the model against an X it never read.
+  const savedX = prepared.xChannel;
+  const savedY = prepared.channels[0];
+  const refit = !!fitSpec && (fitSpec.xKey === undefined || fitSpec.xKey !== savedX ||
+    (fitSpec.yKey !== undefined && fitSpec.yKey !== savedY));
+  if (fitDataset && fitSpec && !refit) {
+    fitBinding = { yKey: savedY as number, xKey: fitSpec.xKey as number | null }; // recorded === resolved (refit is false)
+    const xs = fullPlottedX(fitDataset.data, fitSpec.xKey as number | null);
     const finite = xs.flatMap((value, index) => Number.isFinite(value) ? [{ value, index }] : []);
     if (!finite.length) {
       state.setStatus("can't open fitted plot: the saved X channel has no finite values");
@@ -215,12 +215,12 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
     try {
       const evaluated = await fitBands({
         model: fitSpec.model,
-        params: fitSpec.params,
+        params: fitSpec.params ?? [], // non-empty: checked above
         covar: null,
         x: finite.map((entry) => entry.value),
         // Only yFit is read (covar null -> no bands), so the counts are nominal.
         n_points: fitSpec.nPoints ?? finite.length,
-        n_free: fitSpec.nFree ?? fitSpec.params.length,
+        n_free: fitSpec.nFree ?? (fitSpec.params?.length ?? 0),
       });
       if (!Array.isArray(evaluated.yFit) || evaluated.yFit.length !== finite.length ||
           !evaluated.yFit.every((value) => value === null || (typeof value === "number" && Number.isFinite(value)))) {
@@ -248,6 +248,9 @@ export async function prepareAnalysisResultPlot(id: string, bindingIndex: number
     stageTab: "plot",
     fitOverlay: fitY && fitBinding ? { datasetId: prepared.dataset.id, binding: fitBinding, y: fitY } : null,
   });
+  if (refit) {
+    useApp.getState().setStatus("opened the plot without the fit: it does not match the saved X/Y channels; use Edit / Re-fit first");
+  }
   return prepared;
 }
 

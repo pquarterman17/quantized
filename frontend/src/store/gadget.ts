@@ -43,6 +43,7 @@ import type { CalcResult, DataStruct, FitOverlay, OverlayBinding } from "../lib/
 import { toast } from "./toasts";
 import { nextDatasetId } from "./idSeq";
 import type { GadgetRunCtx, GadgetRunner } from "./gadgetRun";
+import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import type { AppState } from "./useApp";
 
 /** The ROI-gadget / quick-fit state + actions composed into `useApp`. */
@@ -119,9 +120,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
   let qfitSeq = 0;
   // Drop the current fit result — and the overlay only if this gadget drew it.
   const dropQfitResult = (s: AppState): Partial<AppState> => ({
-    qfitResult: null,
-    qfitResultModel: null,
-    qfitResultCurve: null,
+    ...QFIT_RESULT_RESET,
     fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
   });
 
@@ -154,9 +153,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     qfitRoiFor: null,
     qfitModel: "Linear",
     qfitBusy: false,
-    qfitResult: null,
-    qfitResultModel: null,
-    qfitResultCurve: null,
+    ...QFIT_RESULT_RESET,
     qfitError: null,
     gadgetMode: "fit",
     gadgetBusy: false,

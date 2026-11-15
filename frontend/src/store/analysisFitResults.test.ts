@@ -177,12 +177,28 @@ describe("open fitted plot on a T1,R1,T2,R2 sheet", () => {
     expect(placeOverlay(overlay, layout)?.y).toEqual([81, 21, 61, 41]);
   });
 
-  it("does not guess the Y of a legacy fit that records no channel (a one-column sheet would resolve to 0)", async () => {
+  it("opens a legacy one-channel fit with no yKey, resolved to channel 0 as before", async () => {
     const { yKey: _y, ...legacy } = spec;
     const ds: Dataset = { ...source, fitSpec: legacy as FitSpec };
     useApp.setState({ datasets: [ds], analysisResults: [fitAnalysisResult(ds, legacy as FitSpec)] });
-    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).toBeNull();
-    expect(useApp.getState().status).toContain("exact X/Y");
+    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).not.toBeNull();
+    expect(useApp.getState().yKeys).toEqual([0]);
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
+  });
+
+  it("a stale out-of-range xKey opens on time but draws no fit and asks to re-fit", async () => {
+    const five: Dataset = {
+      ...source,
+      data: { time: [0, 1, 2], values: [[1, 0, 0, 0, 0], [3, 0, 0, 0, 0], [5, 0, 0, 0, 0]],
+        labels: ["Y", "a", "b", "c", "d"], units: ["", "", "", "", ""], metadata: {} },
+      fitSpec: { ...spec, xKey: 7, yKey: 0 },
+    };
+    useApp.setState({ datasets: [five], analysisResults: [fitAnalysisResult(five, five.fitSpec!)] });
+    mocks.fitBands.mockClear();
+    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).not.toBeNull();
+    expect(useApp.getState().xKey).toBeNull();
+    expect(mocks.fitBands).not.toHaveBeenCalled();
     expect(useApp.getState().fitOverlay).toBeNull();
+    expect(useApp.getState().status).toContain("Re-fit");
   });
 });

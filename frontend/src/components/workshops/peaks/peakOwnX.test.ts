@@ -7,6 +7,7 @@ import { R2, T2, t1r1t2r2 } from "../../../test/ownXFixture";
 import { batchChannels } from "../peakwizard/peakBatchPrep";
 import { integrateChannels, seriesFor } from "./batchIntegrate";
 import type { Dataset } from "../../../lib/types";
+import { overlayLayout, placeOverlay } from "../../../lib/overlayPlacement";
 import { peakBinding, peakInputs } from "./peakInputs";
 
 describe("secondary-X Y in the peak tools", () => {
@@ -38,7 +39,22 @@ describe("secondary-X Y in the peak tools", () => {
     expect(pi.x).toEqual([1, 2, 3]);
     expect(pi.fullX).toEqual([1, 2, 3]);
     expect(pi.xKeyUsed).toBeNull();
-    expect(peakBinding(pi)).toEqual({ yKey: 0, xKey: null });
+    // The fit really consumed channel 0 -- that is the recorded provenance
+    // (publishFitResult) -- but no Y is shown, so the MARKERS bind to no curve.
+    expect(pi.yKeyUsed).toBe(0);
+    expect(peakBinding(pi)).toEqual({ yKey: -1, xKey: null });
+  });
+
+  it("fallback markers draw on a view on time and not on a view on another X", () => {
+    const ds: Dataset = {
+      id: "fb",
+      name: "fb.csv",
+      data: { time: [1, 2, 3], values: [[10], [20], [30]], labels: ["A"], units: [""], metadata: {} },
+    };
+    const o = { datasetId: "fb", binding: peakBinding(peakInputs(ds, 0, null, null)), y: [null, 20, null] };
+    const view = (xKey: number | null, shown: number[]) => overlayLayout(ds, xKey, undefined, shown);
+    expect(placeOverlay(o, view(null, []))).toBe(o);
+    expect(placeOverlay(o, view(0, []))).toBeNull();
   });
 
   it("peakBinding: no value channel is 'no curve' (-1), never channel 0", () => {

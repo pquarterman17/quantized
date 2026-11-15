@@ -56,6 +56,7 @@ import type { Dataset, FolderNode } from "../lib/types";
 import { refreshFitRefsLater } from "./computedColumns";
 import { deleteFolderWithTrash } from "./folderDelete";
 import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
+import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import { removeDatasetsWithTrash } from "./removeDatasets";
 import { openTransformPreview, seedIds } from "./transformPreviewDialog";
 import type { AppState } from "./useApp";
@@ -205,9 +206,7 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
           integral: null,
           fwhmResult: null,
           qfitRoi: null,
-          qfitResult: null,
-          qfitResultModel: null,
-          qfitResultCurve: null,
+          ...QFIT_RESULT_RESET,
           qfitBusy: false,
           qfitError: null,
           gadgetBusy: false,

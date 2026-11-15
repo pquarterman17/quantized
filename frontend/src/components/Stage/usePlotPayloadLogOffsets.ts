@@ -8,7 +8,7 @@
 // its producer bound it to (`OverlayBinding.yKey`, lib/overlayPlacement.ts) --
 // never by a guess from the live plot. Only an unbound overlay (an object from
 // before bindings) falls back to the FIRST VISIBLE plotted channel. The rule is
-// `lib/logOffset.overlayDecades`, shared with the export.
+// `lib/logOffset.overlayDecadesFromStyles`, shared with the export.
 // `applyLogOffsets` (lib/logOffset.ts) only scales the BASE series it's
 // handed -- an overlay is appended by `composeDisplayPayload` AFTER that, so
 // without this it would stay at the unscaled magnitude while the offset
@@ -33,12 +33,11 @@ import {
   logOffsetDecades,
   logOffsetsApply,
   logOffsetSuffix,
-  overlayDecades,
+  overlayDecadesFromStyles,
   scaleErrorColumns,
   scaleErrorSpans,
 } from "../../lib/logOffset";
 import type { PlotPayload } from "../../lib/plotdata";
-import { firstVisiblePlottedChannel } from "../../lib/quickfit";
 import type { BaselineOverlay, Dataset, FitOverlay, OverlayBinding, PeakOverlay, SeriesStyle } from "../../lib/types";
 
 export interface LogOffsetScalingParams {
@@ -90,13 +89,11 @@ export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScaling
     [p.plotted, p.seriesStyles],
   );
 
-  // The unbound fallback's channel; each overlay's factor is a primitive, so
-  // a colour-only style edit re-scales nothing.
-  const fallback = offsetsApply ? firstVisiblePlottedChannel(p.plotted, (c) => p.hiddenChannels.includes(c)) : null;
+  // Each overlay's factor is a primitive (read by bound channel, with a lazy
+  // first-visible fallback only for an unbound overlay), so a colour-only style
+  // edit re-scales nothing.
   const factorOf = (o: { binding?: OverlayBinding | null } | null): number =>
-    !offsetsApply || !o
-      ? 1
-      : 10 ** overlayDecades(o.binding, (ch) => logOffsetDecades(p.seriesStyles[ch]?.logOffset), fallback);
+    !offsetsApply || !o ? 1 : 10 ** overlayDecadesFromStyles(o.binding, p.seriesStyles, p.plotted, p.hiddenChannels);
   const fitF = factorOf(p.fitOverlay), baseF = factorOf(p.baselineOverlay);
   const peakF = factorOf(p.peakOverlay), derivF = factorOf(p.derivOverlay);
 

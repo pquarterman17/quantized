@@ -14,6 +14,7 @@ import { emptyGraphReason } from "./linkedCurvesLite";
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { figureDocumentToPlotView } from "./figureDocument";
 import { withAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
@@ -142,6 +143,20 @@ export function buildStageFigureSpec(
         defaultLineWidth,
       })
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
+  // The offset-bearing view fields come from the SAME source as the base
+  // series' `log_offsets` (the document's view on that route, else the live
+  // store), so an overlay is offset by the styles of the curve it rides.
+  const src = canRouteThroughDocument ? figureDocumentToPlotView(document) : st;
+  const overlayView = {
+    ...st,
+    seriesStyles: src.seriesStyles,
+    hiddenChannels: src.hiddenChannels,
+    waterfall: src.waterfall,
+    facetKey: src.facetKey,
+    stackMode: src.stackMode,
+    polarMode: src.polarMode,
+    statMode: src.statMode,
+  };
   // An automatic tick increment marks the ticks the canvas drew (lib/liveTickSteps.ts).
   const spec = withLiveTickSteps(built, ds.id);
   // The fit / baseline / peak overlays the canvas splices on after `count`
@@ -150,7 +165,7 @@ export function buildStageFigureSpec(
   const overlaid = withLiveLegendCorner( // an "auto" legend where the screen put it
     document?.data.mode === "frozen"
       ? spec
-      : withAnalysisOverlays(spec, ds, st, count, {
+      : withAnalysisOverlays(spec, ds, overlayView, count, {
           screen: st.excludedDisplay === "grey",
           wire: Boolean(o.greyExcluded),
         }),

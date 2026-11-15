@@ -39,13 +39,14 @@ import { traceSeriesStyles } from "./exportDefaultTrace";
 import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { canvasLineWidth } from "./plotTemplates";
 import type { ExportSeriesStyle } from "./publicationStyles";
-import { overlayDecades } from "./logOffset";
+import { logOffsetsApply, overlayDecadesFromStyles } from "./logOffset";
+import { overlayModesMatchTheCanvas } from "./seriesStyleCycle";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
-import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
+import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay, SeriesStyle } from "./types";
 
 /** The live view fields the overlays are read from (all on the app store). */
 export interface OverlayView {
@@ -60,6 +61,18 @@ export interface OverlayView {
   yKeys: number[] | null;
   seriesOrder: number[] | null;
   hiddenChannels: readonly number[];
+  /** Per-channel styles: the decade offsets an overlay inherits. REQUIRED and
+   *  taken from the SAME source as the base series' `log_offsets` (the focused
+   *  document's view when the export routes through one, else the live store),
+   *  so a fit is never offset by a different style map than its curve. */
+  seriesStyles: Record<number, SeriesStyle>;
+  /** With the mode flags below, the inputs of the offsets' shared predicate
+   *  (`logOffsetsApply` + `overlayModesMatchTheCanvas`), from that same source. */
+  waterfall: number;
+  facetKey: number | null;
+  stackMode: boolean;
+  polarMode: boolean;
+  statMode: boolean;
 }
 
 /** The rows the overlays align to: `ds` itself, or on a per-series-X sheet the
@@ -131,12 +144,15 @@ export function withAnalysisOverlays(
   ];
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
   // (0 = not a band edge); an odd value is a lower edge.
-  // The bound Y's offset (lib/logOffset.overlayDecades, as the canvas): the wire
-  // keeps channel indices, so a channel's offset is its y_keys slot's.
-  const decadesOf = (ch: number): number => spec.log_offsets?.[keys.indexOf(ch)] ?? 0;
-  const firstShown = keys.find((k) => !view.hiddenChannels.includes(k as number)) as number | undefined;
+  // The bound Y's offset: the canvas' rule (lib/logOffset.overlayDecadesFromStyles),
+  // read from the series styles by CHANNEL, so it does not depend on which
+  // channels this request lists. Whether offsets apply at all is the predicate
+  // `logOffsetWire` uses, NOT the presence of `spec.log_offsets` (which is
+  // omitted when no LISTED channel is offset while a bound one is).
+  const offsetsApply =
+    logOffsetsApply(view.waterfall, null) && overlayModesMatchTheCanvas({ ...view, groupKey: null });
   const factorFor = (o: { binding?: OverlayBinding | null }): number =>
-    10 ** overlayDecades(o.binding, decadesOf, firstShown ?? null);
+    offsetsApply ? 10 ** overlayDecadesFromStyles(o.binding, view.seriesStyles, keys as number[], view.hiddenChannels) : 1;
   const present = candidates.flatMap(([label, o, points]) => {
     if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];

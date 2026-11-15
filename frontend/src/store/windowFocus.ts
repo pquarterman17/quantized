@@ -8,6 +8,7 @@ import { dedupeWindowTitle, defaultPlotView, displayedWindowTitle, hydrateView, 
 import { cascadeLayout, reboundWindowTitle, tileLayout } from "../lib/plotWindows";
 import { plotIntentStageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
+import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { plotWindowDatasetId, syncPlotWindow } from "./windowDocuments";
@@ -106,9 +107,7 @@ export function analysisResultReset(): Partial<AppState> {
     integral: null,
     fwhmResult: null,
     qfitRoi: null,
-    qfitResult: null,
-    qfitResultModel: null,
-    qfitResultCurve: null,
+    ...QFIT_RESULT_RESET,
     qfitBusy: false,
     qfitError: null,
     gadgetBusy: false,

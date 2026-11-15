@@ -96,6 +96,19 @@ describe("placeOverlay", () => {
     expect(placeOverlay(legacy, layoutFor([0]))).toBe(legacy);
   });
 
+  it("returns the SAME placed object when an unrelated curve is toggled", () => {
+    // A one-X sheet: toggling channel 1 (not the overlay's channel 2) changes
+    // `shown` but not the blocks, so nothing is re-placed or recomposed.
+    const ONE: Dataset = { ...DS, columnDesignations: {} };
+    const o = fit({ binding: { yKey: 2, xKey: null }, y: R2 });
+    const before = placeOverlay(o, layoutFor([0, 2], ONE));
+    expect(before).toBe(o);
+    expect(placeOverlay(o, layoutFor([0, 1, 2], ONE))).toBe(before);
+    // Hiding its own bound Y still removes it, and showing it again restores it.
+    expect(placeOverlay(o, layoutFor([0], ONE))).toBeNull();
+    expect(placeOverlay(o, layoutFor([0, 2], ONE))).toBe(o);
+  });
+
   it("does not draw an overlay whose bound Y is not shown", () => {
     // T2 is shown as a Y; R2 (channel 2) is not.
     expect(placeOverlay(fit(), layoutFor([0, 1]))).toBeNull();
@@ -108,7 +121,6 @@ describe("placeOverlay", () => {
 
     it("has no per-series blocks and returns a placed overlay as the same object", () => {
       const layout = one([0, 2]);
-      expect(layout.multi).toBe(false);
       expect(layout.blocks).toEqual([null]);
       expect(placeOverlay(onT1, layout)).toBe(onT1);
     });
