@@ -50,20 +50,20 @@ describe("buildOpts — multi-series y-axis title", () => {
     expect(buildOpts(p, base).axes?.[1]?.label).toBe("Moment (emu)");
   });
 
-  it("titles a shared unit alone when the quantities differ, and ignores legend renames", () => {
+  it("names every quantity on a shared unit, and ignores legend renames", () => {
     const p = payload([
       { label: "a.dat", unit: "emu" },
       { label: "b.dat", unit: "emu" },
     ]);
-    expect(buildOpts(p, { ...base, seriesLabels: ["Loop 1", "Loop 2"] }).axes?.[1]?.label).toBe("(emu)");
+    expect(buildOpts(p, { ...base, seriesLabels: ["Loop 1", "Loop 2"] }).axes?.[1]?.label).toBe("a.dat, b.dat (emu)");
   });
 
-  it("leaves the axis blank when the units differ, and a user title still wins", () => {
+  it("builds a joint title when the units differ (gap-2 #11), and a user title still wins", () => {
     const p = payload([
       { label: "M", unit: "emu" },
       { label: "T", unit: "K" },
     ]);
-    expect(buildOpts(p, base).axes?.[1]?.label).toBeUndefined();
+    expect(buildOpts(p, base).axes?.[1]?.label).toBe("M (emu) / T (K)");
     expect(buildOpts(p, { ...base, yAxisLabel: "Signal" }).axes?.[1]?.label).toBe("Signal");
   });
 
@@ -73,6 +73,18 @@ describe("buildOpts — multi-series y-axis title", () => {
       { label: "T1", unit: "K", axis: 1 },
       { label: "T2", unit: "K", axis: 1 },
     ]);
-    expect(buildOpts(p, base).axes?.[2]?.label).toBe("(K)");
+    expect(buildOpts(p, base).axes?.[2]?.label).toBe("T1, T2 (K)");
+  });
+
+  it("counts only VISIBLE curves: a hidden channel, a companion or an overlay never names the axis (gap-2 #11)", () => {
+    const p = payload([
+      { label: "R1", unit: "ohm" },
+      { label: "V", unit: "V" },
+      { label: "fit", unit: "", overlay: true },
+      { label: "R1 (selected)", unit: "ohm", kind: "points", selected: true },
+      { label: "R1 (excluded)", unit: "ohm", kind: "points", muted: true },
+    ]);
+    expect(buildOpts(p, { ...base, hidden: [false, true, false, false, false] }).axes?.[1]?.label).toBe("R1 (ohm)");
+    expect(buildOpts(p, base).axes?.[1]?.label).toBe("R1 (ohm) / V (V)");
   });
 });

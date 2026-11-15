@@ -3,7 +3,7 @@
 // command registry lives in appCommands.ts, the global keymap in
 // useGlobalShortcuts.ts, and the overlay/workshop mounts in AppOverlays.tsx.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import AppOverlays from "./AppOverlays";
 import Library from "./components/Library/Library";
@@ -15,10 +15,11 @@ import { LibraryWorkspace, QuickFigureBuilderWorkspace } from "./components/Shel
 import Stage from "./components/Stage/Stage";
 import CommandPalette from "./components/overlays/CommandPaletteGate";
 import type { Action } from "./store/commands";
-import { buildAppActions } from "./appCommands";
+import { buildCoreActions } from "./appCommandsCore";
 import { appRootFocusProps } from "./lib/appRoot";
 import { health } from "./lib/api";
 import { lazyRegion } from "./lib/lazyRegion";
+import { onDemand } from "./lib/onDemand";
 import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { hasDesktopShell } from "./lib/desktopBridge";
 import {
@@ -28,6 +29,7 @@ import {
 } from "./lib/libraryViewPrefs";
 import { BACKEND_UNREACHABLE, recordBackendHealth } from "./store/backendHealth";
 import { useProjectLock } from "./store/projectLock";
+import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
@@ -45,6 +47,9 @@ const Inspector = lazyRegion(
   "Inspector",
   <aside className="qzk-inspector" />,
 );
+
+// The full curated list (adds the Analyze group); loaded once, right after mount.
+const fullCommands = onDemand(() => import("./appCommands"));
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
@@ -211,8 +216,15 @@ export default function App() {
   // tools — extracted to useGlobalShortcuts (MAIN_PLAN #1).
   useGlobalShortcuts();
 
-  // Curated palette actions — store setters are stable, so build once.
-  const actions = useMemo<Action[]>(() => buildAppActions(useApp.getState), []);
+  // Curated palette actions — store setters are stable, so build once. The
+  // Analyze group (the bulk of the command copy) joins right after mount.
+  const [actions, setActions] = useState<Action[]>(() => buildCoreActions(useApp.getState));
+  useEffect(() => {
+    fullCommands.core().then(
+      (m) => setActions(m.buildAppActions(useApp.getState)),
+      (e: unknown) => toast(`Could not load the Analyze commands: ${e instanceof Error ? e.message : "error"}`, "danger"),
+    );
+  }, []);
 
   const mainCls = `qzk-main${leftCollapsed ? " lc" : ""}${rightCollapsed ? " rc" : ""}`;
 

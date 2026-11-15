@@ -23,11 +23,13 @@
 // the column menu's X/Y-axis actions stay linked to it (WorksheetToolbar's
 // "Linked to plot" badge makes that explicit) — never silent, never assumed.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
-import { isRederived } from "../../../lib/rederived";
+import { editRefusalNotice, isRederived } from "../../../lib/rederived";
+import { rangeCols, rangeRows } from "../../../lib/gridCursor";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { BookSource, Dataset } from "../../../lib/types";
@@ -41,6 +43,8 @@ import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
+
+const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {
@@ -112,6 +116,15 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     onEditHeader: editHeader,
   });
   const closeHeaderEdit = useCallback(() => setHeaderEdit(null), []);
+  // N4: Ctrl+F / Ctrl+H. `tick` re-pulls focus into an already-open bar.
+  const [find, setFind] = useState<{ replace: boolean; tick: number } | null>(null);
+  const closeFind = useCallback(() => setFind(null), []);
+  const findSelection = useMemo(() => {
+    if (cursor.range) return { rows: new Set(rangeRows(cursor.range, view.order)), cols: new Set(rangeCols(cursor.range)) };
+    return view.selected.size || view.selectedCols.size
+      ? { rows: view.selected.size ? view.selected : new Set(view.order), cols: view.selectedCols.size ? view.selectedCols : new Set([-1, ...view.data.labels.keys()]) }
+      : null;
+  }, [cursor.range, view.order, view.selected, view.selectedCols, view.data.labels]);
   // Two scroll requests share the grid's one `reveal`: an outside "show this
   // row" (useRowReveal) and the cursor's own moves. The newer one wins.
   const [rowRevealFirst, setRowRevealFirst] = useState(false);
@@ -152,6 +165,11 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   // number. The cell cursor (./useGridCursor.ts) takes the keys first; what it
   // leaves acts on the row × column selection.
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "f" || e.key === "h")) {
+      e.preventDefault();
+      setFind((f) => ({ replace: e.key === "h" || (f?.replace ?? false), tick: (f?.tick ?? 0) + 1 }));
+      return;
+    }
     if (cursor.onKeyDown(e)) {
       e.preventDefault();
       return;
@@ -233,6 +251,18 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         canExtract={view.canExtract}
         onExtract={view.extractSubset}
       />
+      {find && (
+        <FindReplaceBar
+          ds={ds}
+          order={view.order}
+          writableCols={view.baseCount}
+          selection={findSelection}
+          replace={find.replace}
+          focusTick={find.tick}
+          onGoTo={cursor.goTo}
+          onClose={closeFind}
+        />
+      )}
       <DerivedWorksheetBanner ds={ds} />
       {ds.pending && !failedReason && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
@@ -300,7 +330,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         modelingTypeOf={(col) => channelModelingType(ds, col)}
         channelTypes={ds.channelTypes}
         onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
-        readOnly={isRederived(ds)}
+        readOnly={isRederived(ds) && editRefusalNotice(ds)}
         reveal={(rowRevealFirst ? reveal.target : cursor.reveal) ?? reveal.target}
         cursor={cursor.grid}
         columnProps={ds.columnProps}

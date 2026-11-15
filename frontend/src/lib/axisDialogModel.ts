@@ -54,6 +54,8 @@ export interface AxisDraft {
   /** X only: the top axis. */
   topKind: TopKind;
   topFactor: string;
+  /** `expr` kind: f(x) of the bottom axis. */
+  topExpr: string;
   topShift: string;
   topWavelength: string;
   topTitle: string;
@@ -97,6 +99,7 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     offset: str(fmt.offset),
     topKind: axis === "x" ? fmt.top?.kind ?? "none" : "none",
     topFactor: str(fmt.top?.factor),
+    topExpr: fmt.top?.expr ?? "",
     topShift: str(fmt.top?.shift),
     topWavelength: str(fmt.top?.wavelength),
     topTitle: fmt.top?.title ?? "",
@@ -172,7 +175,8 @@ function topOf(d: AxisDraft): TopAxis | undefined {
   const title = d.topTitle.trim();
   return {
     kind: d.topKind,
-    ...(d.topKind !== "dspacing" && factor !== null ? { factor } : {}),
+    ...(d.topKind === "expr" ? { expr: d.topExpr.trim() } : {}),
+    ...(d.topKind !== "dspacing" && d.topKind !== "expr" && factor !== null ? { factor } : {}),
     ...(d.topKind === "linear" && shift !== null ? { shift } : {}),
     ...(d.topKind === "dspacing" && wavelength !== null ? { wavelength } : {}),
     ...(title ? { title } : {}),

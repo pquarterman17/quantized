@@ -1,6 +1,6 @@
 // Menu-spec builder for the plot right-click menu (the canvas parity of the
 // MATLAB axes/line uicontextmenus). Pure over an explicit context object — the
-// same testable pattern as worksheet/worksheetMenus.ts — so the entry list for
+// same testable pattern as worksheet/worksheetMenuModel.ts — so the entry list for
 // a given cursor position + store state is unit-tested without rendering a
 // canvas. All entries call back into EXISTING store actions supplied on `ctx`;
 // PlotContextMenu.tsx builds `ctx` from the hit-test + the live store and hands

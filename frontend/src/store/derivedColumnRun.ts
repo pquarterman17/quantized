@@ -18,6 +18,7 @@ import { inferErrorBindings } from "../lib/errorRoles";
 import { baseColumns, referencedColumns } from "../lib/formula";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
+import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { formulaLetter, linkSheets, withRecomputedFormulas } from "./computedColumns";
 import type { HistoryBatchToken } from "./history";
@@ -94,6 +95,8 @@ export async function addDerivedColumn(
 ): Promise<DerivedColumnResult> {
   const get = useApp.getState;
   const out = await withResolved(get, id, "adding a column", (ds): DerivedColumnResult => {
+    // A live graph's sheet is rebuilt from its sources: the column would be lost.
+    if (ds.linkedCurves) return { ok: false, error: LINKED_GRAPH_EDIT_NOTICE };
     const a = analyse(ds, req);
     if (!a.ok) return a;
     const { columns, step } = a;

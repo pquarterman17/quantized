@@ -32,6 +32,7 @@
 // cache of the SOURCE's data" is a documented, deliberate exception for that
 // cross-dataset case — see its module doc — and never reaches this slice.)
 
+import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
 import { onDemand } from "../lib/onDemand";
 import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
@@ -141,6 +142,13 @@ export function rowsChangedGuard(
  *  honest path to an independently correctable dataset. */
 function refuseDerived(get: SliceGet, id: string): boolean {
   const ds = get().datasets.find((d) => d.id === id);
+  // A LIVE graph's sheet is a cache re-assembled from its source workbooks: a
+  // correction (or a reset) written to it is reverted by the next rebuild
+  // while reporting success, so it is refused up front (review finding 3).
+  if (ds?.linkedCurves) {
+    get().setStatus(LINKED_GRAPH_EDIT_NOTICE);
+    return true;
+  }
   if (!ds?.derivedFrom) return false;
   get().setStatus(
     `"${ds.name}" is a derived worksheet — its corrections re-run from its source. ` +

@@ -22,7 +22,7 @@ import { channelLetter } from "../lib/formula";
 import { baseColumns } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
-import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { editRefusalNotice, isRederived } from "../lib/rederived";
 import type { ColumnProps, NumberFormat } from "../lib/columnProps";
 import type { Dataset } from "../lib/types";
 import {
@@ -48,7 +48,7 @@ function editable(id: string): Dataset | null {
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds) return null;
   if (isRederived(ds)) {
-    get().setStatus(REDERIVED_EDIT_NOTICE);
+    get().setStatus(editRefusalNotice(ds));
     return null;
   }
   return ds;

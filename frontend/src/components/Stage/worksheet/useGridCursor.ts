@@ -34,7 +34,7 @@ import {
   type CellRange,
   type GridBounds,
 } from "../../../lib/gridCursor";
-import { isRederived } from "../../../lib/rederived";
+import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { growAndSetCell, liveShape, pasteGrowing } from "../../../store/worksheetGrow";
@@ -63,6 +63,8 @@ export interface GridCursor {
   clear: () => void;
   /** Scroll request for the focused cell, or null. */
   reveal: GridReveal | null;
+  /** Put the cursor on the cell at original row `row`, column `col` (Find). */
+  goTo: (row: number, col: number) => void;
 }
 
 const PAGE = 20;
@@ -139,7 +141,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     if (!range) return;
     const { pos, col } = range.focus;
     if (readOnly || col >= baseCount) {
-      setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set Column Values… to edit the formula" : "this worksheet is rebuilt from its source and can't be edited here");
+      setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set Column Values… to edit the formula" : ds.linkedCurves ? editRefusalNotice(ds) : "this worksheet is rebuilt from its source and can't be edited here");
       return;
     }
     cellEdit.startEdit(rowAt(pos), col, valueAt(rowAt(pos), col), typed);
@@ -277,5 +279,10 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     },
   };
 
-  return { range, grid, blockOps, onKeyDown, clear: () => setRange(null), reveal };
+  const goTo = (row: number, col: number) => {
+    const pos = order.indexOf(row);
+    if (pos >= 0) place({ anchor: { pos, col }, focus: { pos, col } });
+  };
+
+  return { range, grid, blockOps, onKeyDown, clear: () => setRange(null), reveal, goTo };
 }

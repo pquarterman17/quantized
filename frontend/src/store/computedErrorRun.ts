@@ -20,6 +20,7 @@ import { baseColumns, channelLetter, referencedColumns } from "../lib/formula";
 import { errKeysFromBindings, inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { lit } from "../lib/macro";
 import { channelIndexOf } from "../lib/formulaRename";
+import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { uniqueTemplateName } from "../lib/uniqueName";
 import { withRecomputedFormulas } from "./computedColumns";
@@ -79,6 +80,8 @@ export async function addComputedError(
   const bad = checkParam(source, param);
   if (bad) return { ok: false, error: bad };
   const out = await withResolved(get, id, "adding an error column", (ds): ComputedErrorResult => {
+    // A live graph's sheet is rebuilt from its sources: the column would be lost.
+    if (ds.linkedCurves) return { ok: false, error: LINKED_GRAPH_EDIT_NOTICE };
     const label = ds.data.labels[target];
     if (label === undefined || target < 0) return { ok: false, error: "pick the series the error describes" };
     const letter = channelLetter(target);

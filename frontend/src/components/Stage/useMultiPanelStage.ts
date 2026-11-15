@@ -32,9 +32,10 @@ import {
   type Composition,
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns, buildErrorSpans } from "../../lib/errorbars";
+import { buildErrorColumns, stackErrorSpans } from "../../lib/stackErrorSpans";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { perSeriesXData } from "../../lib/perSeriesX";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
@@ -255,8 +256,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     [breakMode, breakPanels, yLim, yScale, breakHidden],
   );
 
-  // Channels actually drawn (y selection minus the x-axis channel), in order
-  // — the plain per-channel stack mode only.
+  // Channels actually drawn (y selection minus the x-axis channel), in order (plain stack only).
   const plotted = useMemo(
     () =>
       !spatial && !facet && !breakMode && active
@@ -271,8 +271,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // instance, so its own column index is always 1 — see `buildErrorColumns`'s
   // 1-based keying). Mirrors `usePlotPayload.errorBars`, scoped per panel.
   const errorBarsList = useMemo(
-    () => (active ? (payload?.channels ?? []).map((ch) => buildErrorColumns(active.data, [ch], errKeys)) : []),
-    [active, payload, errKeys],
+    () => (active ? (payload?.channels ?? []).map((ch) => buildErrorColumns(perSeriesXData(active, xKey)?.data ?? active.data, [ch], errKeys)) : []),
+    [active, payload, errKeys, xKey],
   );
   // BUG-014 round 4: the channel-keyed renames the facet leg already
   // projects (`facetGridRender`), projected for the two OTHER legs.
@@ -313,7 +313,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       })
         ? defaultDecimateWidthHint()
         : null;
-    void fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey, decimateWidth).then(
+    const v = perSeriesXData(active, xKey); /* gap-2 #2: each Y on its own X */ void fetchPlot(v?.data ?? active.data, yScale === "log", xScale === "log", plotted, y2Keys, v ? null : xKey, decimateWidth).then(
       (p) => {
         if (!cancelled) setPayload({ payload: p, channels: plotted });
       },
@@ -609,7 +609,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       // screen and export disagree.
       seriesLabels: labelList,
       seriesStyles: styleList,
-      errorBars: errorBarsList, errorSpans: active?.errorRoles?.length ? payload.channels.map((ch) => buildErrorSpans(active.data, [ch], active.errorRoles!)) : [], // spans as the flat plot
+      errorBars: errorBarsList, errorSpans: active ? stackErrorSpans(active, xKey, payload.channels) : [], // spans as the flat plot, over the per-series-X view
       syncKey,
       // Propagate an x-zoom on one panel to all the others.
       onSetScale: xZoomSyncHook(() => plotsRef.current),
@@ -642,7 +642,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     encodedFacets,
     facetGrid,
     facetXLim,
-    payload, active, // active: the stack panels' error spans
+    payload, active, xKey, // active: the stack panels' error spans
     yScale,
     xScale,
     xLim,

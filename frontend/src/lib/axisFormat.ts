@@ -60,7 +60,9 @@ export interface AxisGrid {
 /** `reciprocal`: factor / x (1/T, 1000/T); `dspacing`: Bragg d = λ / (2 sin θ)
  *  for x = 2θ in degrees and λ = `wavelength` (Å); `linear`: factor·x + shift. */
 export interface TopAxis {
-  kind: "reciprocal" | "dspacing" | "linear";
+  kind: "reciprocal" | "dspacing" | "linear" | "expr";
+  /** `expr`: any expression f(x) of the bottom axis (1240/x, sqrt(x)). */
+  expr?: string;
   factor?: number;
   shift?: number;
   wavelength?: number;
@@ -110,8 +112,9 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
       ...(typeof g.color === "string" && /^#[0-9a-f]{6}$/i.test(g.color) ? { color: g.color } : {}),
       ...(g.dash === "dash" || g.dash === "dot" ? { dash: g.dash } : {}),
     } } : {}),
-    ...(t && (t.kind === "reciprocal" || t.kind === "dspacing" || t.kind === "linear") ? { top: {
+    ...(t && (t.kind === "reciprocal" || t.kind === "dspacing" || t.kind === "linear" || t.kind === "expr") ? { top: {
       kind: t.kind,
+      ...(t.kind === "expr" && typeof t.expr === "string" && t.expr.trim() ? { expr: t.expr.slice(0, 200) } : {}),
       ...(fin(t.factor) && t.factor !== 0 ? { factor: t.factor } : {}),
       ...(fin(t.shift) ? { shift: t.shift } : {}),
       ...(pos(t.wavelength, 100) ? { wavelength: t.wavelength } : {}),

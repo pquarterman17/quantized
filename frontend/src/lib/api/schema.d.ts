@@ -11801,13 +11801,15 @@ export interface components {
          * @description A top X axis showing a transform of X (``calc.axis_top``).
          */
         TopAxisSpec: {
+            /** Expr */
+            expr?: string | null;
             /** Factor */
             factor?: number | null;
             /**
              * Kind
              * @enum {string}
              */
-            kind: "reciprocal" | "dspacing" | "linear";
+            kind: "reciprocal" | "dspacing" | "linear" | "expr";
             /** Shift */
             shift?: number | null;
             /** Title */

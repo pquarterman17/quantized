@@ -1,6 +1,6 @@
 // The worksheet's right-click menus — column header, row number and text
 // column — moved out of WorksheetPane under the component ceiling. The item
-// lists are the pure builders in ./worksheetMenus.ts (plot, sort, Set As) and
+// lists are the pure builders in ./worksheetMenuModel.ts (plot, sort, Set As) and
 // ./worksheetEditMenus.ts (Origin's column and row structure commands); this
 // component only wires them to the dataset and opens the ContextMenu.
 //
@@ -22,7 +22,7 @@ import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 import type { WorksheetView } from "./useWorksheetView";
 import { numberFormatDialog, setColumnValuesDialog, sortWorksheetDialog } from "./worksheetDialogs";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
-import { columnMenuItems, rowMenuItems } from "./worksheetMenus";
+import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 
 export type WorksheetMenu =
   | { kind: "col" | "row"; target: number; x: number; y: number }

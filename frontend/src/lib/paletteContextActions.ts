@@ -14,7 +14,7 @@
 //  - Folder actions: the store has no "active folder" concept today, so
 //    there is no target to build.
 //  - Worksheet column/row actions: their `ColumnMenuContext`/`RowMenuContext`
-//    only exist inside a MOUNTED `WorksheetPane` (see worksheetMenus.ts),
+//    only exist inside a MOUNTED `WorksheetPane` (see worksheetMenuModel.ts),
 //    not at the store level — nothing to read from `useApp.getState()` here.
 // Both are future work for whenever those selections gain a store-level home.
 

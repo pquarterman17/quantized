@@ -239,19 +239,32 @@ class _Labelled(Protocol):
     def unit(self) -> str: ...
 
 
-def shared_axis_title(series: Sequence[_Labelled]) -> str:
-    """The auto title of a Y axis that carries several series.
+_MAX_TITLE_NAMES = 3
 
-    "quantity (unit)" when every series shares both, "(unit)" when only the
-    unit is common, else blank (the legend names them). Reads the DATA's
-    label/unit, never a legend rename. The screen leg is
+
+def shared_axis_title(series: Sequence[_Labelled]) -> str:
+    """The auto title of a Y axis that carries several series: a JOINT title.
+
+    Series are grouped by unit in first-appearance order; each group names
+    its distinct quantities ("R1, R2 (ohm)"; past three, "a, b, c, … (emu)")
+    and groups are joined with " / " ("Resistance (ohm) / Voltage (V)"), so
+    a mixed-unit axis is no longer blank (origin gap audit 2 #11). Every
+    series sharing one quantity and unit keeps "Moment (emu)". Reads the
+    DATA's label/unit, never a legend rename. The screen leg is
     ``frontend/src/lib/sharedAxisTitle.ts``; both read the cases in
     ``tests/fixtures/wire/shared_axis_title.json``.
     """
-    if not series:
-        return ""
-    unit = series[0].unit or ""
-    if any((s.unit or "") != unit for s in series):
-        return ""
-    label = series[0].label if all(s.label == series[0].label for s in series) else ""
-    return f"{label} ({display_unit(unit)})".strip() if unit else label
+    groups: dict[str, list[str]] = {}
+    for s in series:
+        names = groups.setdefault(s.unit or "", [])
+        if s.label not in names:
+            names.append(s.label)
+    parts: list[str] = []
+    for unit, names in groups.items():
+        shown = [n for n in names if n]
+        more = ", …" if len(shown) > _MAX_TITLE_NAMES else ""
+        quantity = ", ".join(shown[:_MAX_TITLE_NAMES]) + more
+        part = f"{quantity} ({display_unit(unit)})".strip() if unit else quantity
+        if part:
+            parts.append(part)
+    return " / ".join(parts)

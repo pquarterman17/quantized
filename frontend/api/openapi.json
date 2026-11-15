@@ -15633,6 +15633,18 @@
       "TopAxisSpec": {
         "description": "A top X axis showing a transform of X (``calc.axis_top``).",
         "properties": {
+          "expr": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expr"
+          },
           "factor": {
             "anyOf": [
               {
@@ -15648,7 +15660,8 @@
             "enum": [
               "reciprocal",
               "dspacing",
-              "linear"
+              "linear",
+              "expr"
             ],
             "title": "Kind",
             "type": "string"
