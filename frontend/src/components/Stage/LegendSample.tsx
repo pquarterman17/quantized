@@ -14,12 +14,17 @@ const DASH: Record<string, string | undefined> = {
   dotted: "1.5 3",
 };
 
-function marker(shape: MarkerShape, color: string, radius: number, filled = false, interior?: SeriesStyle["markerFill"]) {
+const css = (c?: string) => c && (c.startsWith("--") ? `var(${c})` : c);
+
+function marker(shape: MarkerShape, color: string, radius: number, filled = false, style?: SeriesStyle) {
+  const interior = style?.markerFill;
+  // Gap audit 4 G10: edge / fill colour and fill opacity, as `lib/symbolDetails.ts` draws them.
+  const detailed = style?.markerEdge || style?.markerFillColor || style?.markerAlpha != null;
   // Gap audit 2 #6: the canvas' open / solid interior (`markers.seriesPoints`).
-  const face = interior === "hollow" ? "none" : color;
+  const face = interior === "hollow" ? "none" : css(style?.markerFillColor) ?? color;
   const cx = 12;
   const cy = 6;
-  const common = { stroke: color, strokeWidth: 1.5 };
+  const common = { stroke: css(style?.markerEdge) ?? color, strokeWidth: 1.5, fillOpacity: style?.markerAlpha };
   switch (shape) {
     case "square":
       return <rect x={cx - radius} y={cy - radius} width={radius * 2} height={radius * 2} fill={face} {...common} />;
@@ -39,7 +44,7 @@ function marker(shape: MarkerShape, color: string, radius: number, filled = fals
     }
     default:
       // Match uPlot's built-in circle: series-colour stroke with white fill.
-      return <circle cx={cx} cy={cy} r={radius} fill={filled || interior === "solid" ? color : interior === "hollow" ? "none" : "#fff"} {...common} />;
+      return <circle cx={cx} cy={cy} r={radius} fill={filled ? color : interior === "solid" || detailed ? face : interior === "hollow" ? "none" : "#fff"} {...common} />;
   }
 }
 
@@ -94,7 +99,7 @@ export default function LegendSample({ color, style, defaultTrace = "Line", fill
           strokeDasharray={style?.line ? DASH[style.line] : undefined}
         />
       )}
-      {showMarker && marker(shape, color, radius, filled, style?.markerFill)}
+      {showMarker && marker(shape, color, radius, filled, style)}
     </svg>
   );
 }

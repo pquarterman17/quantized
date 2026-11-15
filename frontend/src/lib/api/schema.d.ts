@@ -1649,6 +1649,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/compare-datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Datasets Route
+         * @description Extra-sum-of-squares F-test: do the ``constraints`` parameters share ONE
+         *     value across all datasets (restricted fit) or does each dataset need its own
+         *     (full fit)? Same request as ``/global``; the constraints are the hypothesis
+         *     under test and must each span every dataset.
+         */
+        post: operations["compare_datasets_route_api_fitting_compare_datasets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/compare-datasets/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Datasets Job
+         * @description Queue the dataset comparison on the poll-model job runner (two global
+         *     fits); cancel stops it at the next model evaluation.
+         */
+        post: operations["compare_datasets_job_api_fitting_compare_datasets_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/diagnostics": {
         parameters: {
             query?: never;
@@ -5626,6 +5670,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transform/sigop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sigop
+         * @description Median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT / Reduce XY.
+         */
+        post: operations["sigop_api_transform_sigop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vacuum/gas-flow": {
         parameters: {
             query?: never;
@@ -7198,6 +7262,8 @@ export interface components {
         CurieWeissDataFitRequest: {
             /** Field */
             field?: number[] | null;
+            /** Field Errors */
+            field_errors?: number[][];
             /**
              * Field Unit
              * @default Oe
@@ -7249,6 +7315,16 @@ export interface components {
             area: number;
             /** I */
             i: number;
+        };
+        /**
+         * CustomTicksSpec
+         * @description Explicit major ticks, optionally labelled (``calc.axis_scales``).
+         */
+        CustomTicksSpec: {
+            /** At */
+            at: number[];
+            /** Labels */
+            labels?: string[] | null;
         };
         /**
          * CutSegmentRequest
@@ -7373,6 +7449,8 @@ export interface components {
         DemagCorrectRequest: {
             /** Field */
             field: number[];
+            /** Field Errors */
+            field_errors?: number[][];
             /** Field Unit */
             field_unit: string;
             /** Magnetization */
@@ -8908,6 +8986,11 @@ export interface components {
             levels?: number | number[];
             /** Lines */
             lines?: number[][] | null;
+            /**
+             * Note
+             * @default
+             */
+            note?: string;
             /**
              * Style
              * @default default
@@ -10831,6 +10914,38 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** SigopRequest */
+        SigopRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+            /** Channels */
+            channels?: number[];
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Method */
+            method: string;
+        };
+        /** SigopResponse */
+        SigopResponse: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Flagged */
+            flagged: {
+                [key: string]: number[];
+            };
+            /** Rows In */
+            rows_in: number;
+            /** Rows Out */
+            rows_out: number;
+            /** Warnings */
+            warnings: string[];
+        };
         /** SimsBackground */
         SimsBackground: {
             /** Hi */
@@ -11784,12 +11899,15 @@ export interface components {
          */
         TickFormatSpec: {
             /** Base */
-            base?: "e" | null;
+            base?: ("e" | "2") | null;
             /** Breaks */
             breaks?: [
                 number,
                 number
             ][] | null;
+            /** Cross */
+            cross?: number | null;
+            custom?: components["schemas"]["CustomTicksSpec"] | null;
             /**
              * Digits
              * @default 2
@@ -11808,6 +11926,8 @@ export interface components {
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
             /** Offset */
             offset?: number | null;
+            /** Prob */
+            prob?: ("fraction" | "percent") | null;
             /** Reverse */
             reverse?: boolean | null;
             /** Rotate */
@@ -14724,6 +14844,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_datasets_route_api_fitting_compare_datasets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_datasets_job_api_fitting_compare_datasets_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
             };
         };
         responses: {
@@ -21288,6 +21478,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResampleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sigop_api_transform_sigop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SigopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigopResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitAnalysisResult } from "../lib/fitAnalysisResult";
+import { overlayLayout, placeOverlay } from "../lib/overlayPlacement";
+import { perSeriesXData } from "../lib/perSeriesX";
+import { shownCurves } from "../lib/shownCurves";
 import type { Dataset, FitSpec } from "../lib/types";
+import { T2, t1r1t2r2 } from "../test/ownXFixture";
 
 const mocks = vi.hoisted(() => ({
   fitModel: vi.fn(), fitBands: vi.fn(), listFitModels: vi.fn(), saveBlob: vi.fn(),
@@ -25,6 +29,7 @@ import {
   resolveAnalysisResultPlot,
 } from "./analysisResultActions";
 import { useApp } from "./useApp";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const spec: FitSpec = {
   model: "Linear", xKey: null, yKey: 0, params: [2, 1], errors: [0.1, 0.2],
@@ -55,7 +60,7 @@ describe("curve-fit analysis result actions", () => {
       model: "Linear", params: [2, 1], x: [0, 1, 2], n_points: 3,
     }));
     expect(mocks.fitModel).not.toHaveBeenCalled();
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", y: [1, 3, 5] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
   });
 
   it("derives plot channels from the live fit after an earlier column is removed", async () => {
@@ -97,13 +102,13 @@ describe("curve-fit analysis result actions", () => {
   });
 
   it("recalculates only this saved fit, clears staleness, and is undoable", async () => {
-    useApp.setState({ fitOverlay: { datasetId: "source", y: [9, 9, 9] } });
+    useApp.setState({ fitOverlay: { datasetId: "source", binding: SINGLE_X, y: [9, 9, 9] } });
     expect(await recalculateFitAnalysisResult("analysis-fit-source")).toBe(true);
     expect(mocks.fitModel).toHaveBeenCalledTimes(1);
     expect(useApp.getState().staleFits).toEqual([]);
     expect(useApp.getState().datasets[0].fitSpec).toMatchObject({ R2: 1, RMSE: 0, recomputedAt: expect.any(String) });
     expect(useApp.getState().analysisResults).toHaveLength(1);
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", y: [1, 3, 5] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
     expect(useApp.getState().history).toHaveLength(1);
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].fitSpec?.recomputedAt).toBeUndefined();
@@ -111,7 +116,7 @@ describe("curve-fit analysis result actions", () => {
   });
 
   it("keeps a visible fit overlay through an unrelated result rename undo", () => {
-    const overlay = { datasetId: "source", y: [1, 3, 5] };
+    const overlay = { datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] };
     useApp.setState({ fitOverlay: overlay });
     renameAnalysisResult("analysis-fit-source", "Renamed fit");
     useApp.getState().undo();
@@ -144,5 +149,56 @@ describe("curve-fit analysis result actions", () => {
     expect(mocks.saveBlob).toHaveBeenCalledWith(expect.any(Blob), "Linear fit · Line-parameters.csv");
     const blob = mocks.saveBlob.mock.calls[0][0] as Blob;
     expect(await blob.text()).toContain("slope,2,0.1,false");
+  });
+});
+
+describe("open fitted plot on a T1,R1,T2,R2 sheet", () => {
+  it("evaluates the model at the fit's own X (T2) and draws it in T2's block with those values", async () => {
+    const own = t1r1t2r2(); // R2 (channel 2) is fitted against T2 (channel 1)
+    const ownSpec: FitSpec = { ...spec, xKey: 1, yKey: 2, nPoints: 4 };
+    const ds: Dataset = { ...own, fitSpec: ownSpec };
+    mocks.fitBands.mockImplementation(async ({ x }: { x: number[] }) => ({
+      yFit: x.map((v) => 2 * v + 1), ciLo: [], ciHi: [], piLo: [], piHi: [], level: 0.95,
+    }));
+    useApp.setState({
+      datasets: [ds], activeId: "own", analysisResults: [fitAnalysisResult(ds, ownSpec)],
+      staleFits: [], xKey: null, yKeys: [0], fitOverlay: null,
+    });
+    expect(await prepareAnalysisResultPlot("analysis-fit-own", 0)).not.toBeNull();
+    // The model was evaluated on T2's values, not on T1's.
+    expect(mocks.fitBands).toHaveBeenCalledWith(expect.objectContaining({ x: T2 }));
+    const overlay = useApp.getState().fitOverlay!;
+    expect(overlay.binding).toEqual({ yKey: 2, xKey: 1 });
+    expect(overlay.y).toEqual([81, 21, 61, 41]);
+    // The canvas draws it, in the rows of the X it was computed on.
+    const s = useApp.getState();
+    const shown = shownCurves(ds.data, s, ds.channelRoles);
+    const layout = overlayLayout(ds, s.xKey, perSeriesXData(ds, s.xKey, shown)?.blocks, shown);
+    expect(placeOverlay(overlay, layout)?.y).toEqual([81, 21, 61, 41]);
+  });
+
+  it("opens a legacy one-channel fit with no yKey, resolved to channel 0 as before", async () => {
+    const { yKey: _y, ...legacy } = spec;
+    const ds: Dataset = { ...source, fitSpec: legacy as FitSpec };
+    useApp.setState({ datasets: [ds], analysisResults: [fitAnalysisResult(ds, legacy as FitSpec)] });
+    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).not.toBeNull();
+    expect(useApp.getState().yKeys).toEqual([0]);
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
+  });
+
+  it("a stale out-of-range xKey opens on time but draws no fit and asks to re-fit", async () => {
+    const five: Dataset = {
+      ...source,
+      data: { time: [0, 1, 2], values: [[1, 0, 0, 0, 0], [3, 0, 0, 0, 0], [5, 0, 0, 0, 0]],
+        labels: ["Y", "a", "b", "c", "d"], units: ["", "", "", "", ""], metadata: {} },
+      fitSpec: { ...spec, xKey: 7, yKey: 0 },
+    };
+    useApp.setState({ datasets: [five], analysisResults: [fitAnalysisResult(five, five.fitSpec!)] });
+    mocks.fitBands.mockClear();
+    expect(await prepareAnalysisResultPlot("analysis-fit-source", 0)).not.toBeNull();
+    expect(useApp.getState().xKey).toBeNull();
+    expect(mocks.fitBands).not.toHaveBeenCalled();
+    expect(useApp.getState().fitOverlay).toBeNull();
+    expect(useApp.getState().status).toContain("Re-fit");
   });
 });

@@ -267,9 +267,9 @@ export default function PipelinePanel() {
           onClick={() => {
             saveBlob(
               new Blob([pipelineToScript(p.steps)], { type: "text/plain" }),
-              "pipeline.qzm",
+              "pipeline.py",
             );
-            setStatus(`saved pipeline.qzm — ${p.steps.length} steps`);
+            setStatus(`saved pipeline.py (Python script) — ${p.steps.length} steps`);
           }}
         >
           Export script

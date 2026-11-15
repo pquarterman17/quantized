@@ -102,6 +102,9 @@ class MapFigureRequest(BaseModel):
     height_in: float | None = None
     view_elev: float = 30.0
     view_azim: float = -60.0
+    # A footnote under the map (e.g. "Interpolated onto a regular grid"), so the
+    # figure says what the screen badge says.
+    note: str = ""
     filename: str = "map"
 
 
@@ -130,7 +133,8 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
         width_in=req.width_in, height_in=req.height_in,
         view_elev=req.view_elev, view_azim=req.view_azim, z_limits=req.z_limits,
-        equal_aspect=req.equal_aspect, lines=req.lines, colorbar_log10=req.colorbar_log10,
+        equal_aspect=req.equal_aspect, note=req.note, lines=req.lines,
+        colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
     )
     return Response(

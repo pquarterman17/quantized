@@ -14,6 +14,7 @@
 import { AGGREGATE_NAMES } from "./formulaAggregates";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { ROW_FUNCS } from "./formulaRefs";
+import { MATH_FUNCS, SPECIAL_NAMES } from "./formulaMath";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
 
@@ -278,7 +279,8 @@ export function parseExpr(src: string): Node {
       expect(")");
       return { k: "fitval", model, arg };
     }
-    if (!Object.hasOwn(FUNCS, fn) && !Object.hasOwn(ROW_FUNCS, fn)) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
+    const known = Object.hasOwn(FUNCS, fn) || Object.hasOwn(ROW_FUNCS, fn) || Object.hasOwn(MATH_FUNCS, fn) || SPECIAL_NAMES.has(fn);
+    if (!known) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
     return { k: "call", fn, args: args() };
   }
 
@@ -401,5 +403,6 @@ export function columnsRead(n: Node, out: Set<string> = new Set()): Set<string> 
 export function isConstant(n: Node): boolean {
   if (n.k === "var" || n.k === "row" || n.k === "lag" || n.k === "diff" || n.k === "agg" || n.k === "fit" || n.k === "fitval") return false;
   if (n.k === "cumsum" || n.k === "index" || n.k === "sheet" || n.k === "textcmp") return false;
+  if (n.k === "call" && (n.fn === "rnd" || n.fn === "normal")) return false; // a draw per row, not a number
   return children(n).every(isConstant);
 }

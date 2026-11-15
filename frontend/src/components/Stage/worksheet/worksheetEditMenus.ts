@@ -1,11 +1,12 @@
 // The worksheet's STRUCTURE menu entries — Origin's column and row commands
 // (Insert / Add New Column / Delete / Move, edit the header rows, Set Column
-// Values on a formula column, the display format, Sort Worksheet; Insert /
-// Delete / Move rows). Pure builders over an explicit context, like
+// Values, the display format, Sort Worksheet, Fill Column With and Set Row
+// Count; Insert / Delete / Move rows). Pure builders over an explicit context, like
 // ./worksheetMenuModel.ts; WorksheetMenus.tsx appends them to those menus and
 // supplies the callbacks (store/worksheetColumns.ts, store/moveRows.ts, and
 // the dialogs in ./worksheetDialogs.ts).
 
+import type { FillSpec } from "../../../lib/fillSeries";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
 import type { RowMove } from "../../../store/moveRows";
 
@@ -19,12 +20,25 @@ export interface ColumnEditContext {
   editHeader: (col: number) => void;
   setColumnValues: (col: number) => void;
   numberFormat: () => void;
+  /** User-parameter uses (lib/userParams.ts); absent = the entries are hidden. */
+  legendFromParams?: () => void;
+  orderByParam?: () => void;
   insertColumn: (col: number) => void;
   addColumn: () => void;
   deleteColumns: () => void;
   moveColumn: (col: number, where: ColumnMove) => void;
   sortWorksheet: () => void;
+  /** Fill Column With (G12) the target columns. */
+  fill: (kind: FillSpec["kind"]) => void;
+  setRowCount: () => void;
 }
+
+const FILL_KINDS: [FillSpec["kind"], string][] = [
+  ["rownum", "Row numbers"],
+  ["linear", "Linear sequence…"],
+  ["uniform", "Uniform random numbers…"],
+  ["normal", "Normal random numbers…"],
+];
 
 /** The structure section of a column header's menu (`col` -1 = X). */
 export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMenuItem[] {
@@ -35,8 +49,18 @@ export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMen
   return [
     { separator: true },
     { label: "Edit Long Name / Units / Comments…", shortcutLabel: "⇧F2", run: () => ctx.editHeader(col) },
-    ...(computed ? [{ label: "Set Column Values… (edit formula)", run: () => ctx.setColumnValues(col) }] : []),
+    { label: computed ? "Set Column Values… (edit formula)" : "Set Column Values…", run: () => ctx.setColumnValues(col) },
+    {
+      label: "Fill column with",
+      disabled: computed,
+      title: computed ? "a computed column is its formula's — use Set Column Values" : undefined,
+      submenu: FILL_KINDS.map(([kind, label]) => ({ label, run: () => ctx.fill(kind) })),
+    },
     { label: n > 1 ? `Number format (${n} columns)…` : "Number format…", run: ctx.numberFormat },
+    ...(ctx.legendFromParams && col >= 0
+      ? [{ label: n > 1 ? `Legend labels from parameters (${n} columns)…` : "Legend label from parameters…", run: ctx.legendFromParams }]
+      : []),
+    ...(ctx.orderByParam && col >= 0 ? [{ label: "Order curves by parameter…", run: ctx.orderByParam }] : []),
     { separator: true },
     { label: "Insert column", title: "Insert a blank column to the left of this one", run: () => ctx.insertColumn(col) },
     { label: "Add new column", title: "Append a blank column after the last data column", run: ctx.addColumn },
@@ -62,6 +86,7 @@ export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMen
     },
     { separator: true },
     { label: "Sort worksheet…", title: "Sort every row by one or more columns (one undo step)", run: ctx.sortWorksheet },
+    { label: "Set row count…", title: "Add blank rows at the end, or cut the rows past a count", run: ctx.setRowCount },
   ];
 }
 
@@ -71,6 +96,7 @@ export interface RowEditContext {
   insertRows: () => void;
   deleteRows: () => void;
   moveRows: (where: RowMove) => void;
+  setRowCount: () => void;
 }
 
 /** The structure section of a row number's menu. */
@@ -91,5 +117,6 @@ export function rowEditItems(ctx: RowEditContext): ContextMenuItem[] {
         ] as const
       ).map(([where, label]) => ({ label, run: () => ctx.moveRows(where) })),
     },
+    { label: "Set row count…", run: ctx.setRowCount },
   ];
 }

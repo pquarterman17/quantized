@@ -4,8 +4,9 @@
 // compared point-by-point. This is the MultiPanelStage sync idiom
 // (`opts.cursor = { ...opts.cursor, sync: { key } }` plus a `setScale` hook
 // that pushes an x-range onto the sibling instances), lifted across window
-// boundaries. Y-scales deliberately stay per-window — only cursor + x-range
-// sync, exactly what the multipanel idiom gives its panels.
+// boundaries. The Y range has its own, separate link groups (gap audit 4
+// G19, `PlotWindow.linkYGroup`, `windowYSyncKey` / `windowYSyncHook`): the
+// primary Y range only, no cursor sync of its own. Y2 stays per-window.
 //
 // Cursor sync rides uPlot's own built-in sync registry (keyed by the string
 // from `windowSyncKey` — uPlot subscribes an instance on create and
@@ -28,12 +29,22 @@ export function windowSyncKey(linkGroup: number | null | undefined): string | un
   return linkGroup == null ? undefined : `qz-win-link-${linkGroup}`;
 }
 
+/** The Y-link registry key for Y link group `n` (gap audit 4 G19): its own
+ *  namespace, so an X group and a Y group with the same number stay apart. */
+export function windowYSyncKey(linkYGroup: number | null | undefined): string | undefined {
+  return linkYGroup == null ? undefined : `qz-win-linky-${linkYGroup}`;
+}
+
 interface SyncGroup {
   plots: Set<uPlot>;
   /** Re-entrancy guard for the whole group (see the module doc): true while
    *  one member is mid-propagation, so the `setScale` calls it makes on its
    *  siblings never re-propagate. */
   syncing: boolean;
+  /** The last range pushed across the group. uPlot fires `setScale` hooks
+   *  from a deferred commit -- after `syncing` is reset -- so a partner's
+   *  echo of that same range is recognised here and not re-pushed. */
+  last?: string;
 }
 
 const groups = new Map<string, SyncGroup>();
@@ -48,6 +59,7 @@ export function registerSyncPlot(key: string, u: uPlot): () => void {
     groups.set(key, g);
   }
   g.plots.add(u);
+  g.last = undefined;
   return () => {
     g.plots.delete(u);
     if (g.plots.size === 0) groups.delete(key);
@@ -60,16 +72,32 @@ export function registerSyncPlot(key: string, u: uPlot): () => void {
  *  null-range guard), with the group-level re-entrancy guard described in
  *  the module doc. */
 export function windowXSyncHook(key: string): (self: uPlot, scaleKey: string) => void {
+  return scaleSyncHook(key, "x");
+}
+
+/** The Y counterpart (gap audit 4 G19): a zoom or pan of the primary Y range
+ *  follows across `key`'s group, with the same guard. Y2 stays per-window. */
+export function windowYSyncHook(key: string): (self: uPlot, scaleKey: string) => void {
+  return scaleSyncHook(key, "y");
+}
+
+function scaleSyncHook(key: string, scale: "x" | "y"): (self: uPlot, scaleKey: string) => void {
   return (u, scaleKey) => {
-    if (scaleKey !== "x") return;
+    if (scaleKey !== scale) return;
     const g = groups.get(key);
     if (!g || g.syncing) return;
-    const { min, max } = u.scales.x;
+    const { min, max } = u.scales[scale];
     if (min == null || max == null) return;
+    const sig = `${min}:${max}`;
+    if (g.last === sig) return;
+    g.last = sig;
     g.syncing = true;
     try {
       for (const other of g.plots) {
-        if (other !== u) other.setScale("x", { min, max });
+        // A partner whose scale cannot place this range (a log axis given a
+        // negative min) keeps its own rather than going blank.
+        if (other === u || !Number.isFinite(other.valToPos(min, scale)) || !Number.isFinite(other.valToPos(max, scale))) continue;
+        other.setScale(scale, { min, max });
       }
     } finally {
       g.syncing = false;

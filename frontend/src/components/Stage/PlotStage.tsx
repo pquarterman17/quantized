@@ -15,9 +15,11 @@ import type { RegionStats } from "../../lib/regionStats";
 import type { Dataset } from "../../lib/types";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
+import { useFocusedRampedStyles } from "./useSeriesRamp";
+import { useStageOverlays } from "./useStageOverlays";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
-import { windowSyncKey } from "../../lib/windowsync";
+import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { lazyRegion } from "../../lib/lazyRegion";
@@ -76,7 +78,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const annotations = useApp((s) => s.annotations);
   const shapes = useApp((s) => s.shapes);
   const regionShades = useApp((s) => s.regionShades);
-  const seriesStyles = useApp((s) => s.seriesStyles);
+  const seriesStyles = useFocusedRampedStyles(active, focusedDocument); // + the graph's colour gradient (gap audit 4 G1)
   const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
   const waterfallDx = useApp((s) => s.waterfallDx); // Origin's waterfall X step
@@ -108,6 +110,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const winLinkGroup = useApp(
     (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
   );
+  const winLinkYGroup = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkYGroup ?? null);
   const focusedBindings = focusedDocument?.bindings;
   const tool = useApp((s) => s.plotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
@@ -139,10 +142,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
-  const fitOverlay = useApp((s) => s.fitOverlay);
-  const peakOverlay = useApp((s) => s.peakOverlay);
-  const baselineOverlay = useApp((s) => s.baselineOverlay);
-  const derivOverlay = useApp((s) => s.derivOverlay);
+  const [fitOverlay, peakOverlay, baselineOverlay, derivOverlay] = useStageOverlays();
   // Peak-workshop click-on-plot editing — Peak Analyzer or the simpler Peaks
   // panel owns this legacy-named bridge while its edit mode is live.
   const peakWizardEdit = useApp((s) => s.peakWizardEdit);
@@ -228,7 +228,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
 
   // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
   // this file is on the 400-line component ceiling. Ten names: + onLimCrossed.)
-  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLimCrossed } =
+  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLasso, onLimCrossed } =
     usePlotStageActions(plotRef, displayPayload, active, onRowsSelected, plotted);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
@@ -282,7 +282,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         insetTop={60}
         frameVars // publish the plot-frame rect for the frame-anchored legend (decode #52)
         bg={winBg}
-        syncKey={windowSyncKey(winLinkGroup)}
+        syncKey={windowSyncKey(winLinkGroup)} ySyncKey={windowYSyncKey(winLinkYGroup)}
         yScale={yScale}
         xScale={xScale}
         xLim={xLim} yLim={yLim} onLimCrossed={onLimCrossed}
@@ -331,7 +331,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         tool={tool}
         onReadout={setReadout}
         onRegionSelect={onRegionSelect}
-        onRangeSelect={onRangeSelect}
+        onRangeSelect={onRangeSelect} onLasso={onLasso}
         onMeasure={setMeasurement}
         onStats={setStatsSel}
         integral={integral}

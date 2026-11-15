@@ -33,10 +33,12 @@ shape, solved 2026-07-04 against the 4-file ground-truth oracle — see
 03 00 00 1f                       layer anchor
 [optional flag token]             1-2 bytes, skipped (see below)
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
-81 <id> <plen> 00 00 01 …         separator (layer geometry; plen VARIES
-                                  and is only a search-window hint)
+8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
+                                  and is only a search-window hint; 8x =
+                                  81 or 80; <flag>: an admitted flag, see
+                                  ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
-81 <id> <plen> 00 00 01 …         end separator
+8x <id> <plen> 00 <flag> 01 …     end separator
 ```
 
 Real-form value tokens add two encodings to the specimen set:
@@ -89,8 +91,11 @@ This module fills ``source_hint`` from the ``<BKNAME>...</BKNAME>`` OriginStorag
 XML tag when one appears near the graph (an unambiguous, low-false-positive
 signal, unlike blind name-scanning) and ``n_curves`` from the legend text's
 ``\\l(n)`` indices, mirroring ``figures.py`` exactly. The per-layer graph
-*window name* (Origin's "Graph1" etc.) is not recoverable with the current
-understanding, so ``name`` is always ``""``.
+*window name* (Origin's "Graph1" etc.) comes from the enclosing page header
+for graph pages (``""`` for embedded graphs and legacy streams). ``layer`` is
+the anchor's 1-based ORDINAL within its graph page, counted over every anchor
+whether or not its record decodes: an undecodable layer leaves a gap in the
+numbering (fail closed) rather than renumbering the layers after it.
 
 **Curve-to-dataset binding — REWORKED 2026-07-05 (the Hc2 per-graph pass;
 supersedes item 35's counting decoders).** The curve token's value is the
@@ -127,7 +132,11 @@ from typing import Any
 
 from quantized.io.origin_project.annotation_marks import _AUTO_TITLE
 from quantized.io.origin_project.annotation_marks import _clean_annotations as _drop_internal_noise
-from quantized.io.origin_project.figure_geometry import opju_layer_frame, opju_page_size
+from quantized.io.origin_project.figure_geometry import (
+    opju_anchor_has_length_prefix,
+    opju_layer_frame,
+    opju_page_size,
+)
 from quantized.io.origin_project.figure_layers import _log_heuristic
 from quantized.io.origin_project.figure_text import _LEGEND_RE, _texts_in
 from quantized.io.origin_project.opju_axis_real_form import (
@@ -139,6 +148,7 @@ from quantized.io.origin_project.opju_axis_specimen_form import (
     _parse_specimen_record,
     parse_hybrid_record,
 )
+from quantized.io.origin_project.opju_curve_sheets import off_sheet_ids, without_captions
 from quantized.io.origin_project.opju_curves import (
     allocated_columns_from_bytes,
     book_columns_from_bytes,
@@ -296,21 +306,61 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         book_columns = book_columns_from_bytes(b)
         books_meta = book_metadata_from_bytes(b, book_columns)
         book_counts_all = allocated_columns_from_bytes(b)
+    off_sheet = {} if legacy else off_sheet_ids(b, table.ids)  # opju_curve_sheets
     page_starts = [off for off, _name in pages]
-    page_layers: dict[int, int] = {}  # page index -> layers emitted so far
+    page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
     anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
-    for idx, anchor in enumerate(anchors):
+
+    def _is_graph_page(pi: int) -> bool:
+        # owns no column records; needs the id table to tell book pages apart
+        return not legacy and pi >= 0 and pages[pi][1] not in table.book_pages
+
+    # On a GRAPH page whose anchors carry the record-length varint, a bare
+    # 4-byte match without it is a coincidence inside another block (an id
+    # table ``03 00 00 1f 03 00 00 20 ...``, a style block), not a layer. It is
+    # removed BEFORE the loop: left in the anchor list it would still be the
+    # ``next_anchor`` that ends the previous REAL layer's window and truncate
+    # that layer's curves, frame, text and axis record. A graph page with no
+    # such anchor (legacy/synthetic streams) keeps every match.
+    anchor_pages = [bisect_right(page_starts, a) - 1 for a in anchors]
+    prefixed = [opju_anchor_has_length_prefix(b, a) for a in anchors]
+    prefixed_pages = {
+        pi
+        for pi, ok in zip(anchor_pages, prefixed, strict=True)
+        if ok and _is_graph_page(pi)
+    }
+    kept = [
+        (a, pi)
+        for a, pi, ok in zip(anchors, anchor_pages, prefixed, strict=True)
+        if ok or pi not in prefixed_pages
+    ]
+    # Dropped anchors still mark where the layer's TEXT ends: what follows one
+    # is a different block (measured: Figure 6 Graph3 layer 9 -- an id table,
+    # then a 640 KB embedded CorelDRAW zip), whose bytes the flat scrape reads
+    # as junk "annotations". Curves/frame/axis scan the full window to the next
+    # real anchor; the text scan stops here, exactly where it did before.
+    dropped = sorted(set(anchors) - {a for a, _ in kept})
+    for idx, (anchor, page_idx) in enumerate(kept):
         p = anchor + len(_ANCHOR)
-        next_anchor = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
+        next_anchor = kept[idx + 1][0] if idx + 1 < len(kept) else len(b)
         # Scope the window by the containing page span (see opju_figure_curves):
         # an anchor's curves/axis record never extend past its own page.
-        page_idx = bisect_right(page_starts, anchor) - 1
         if page_idx >= 0:
             page_end = page_starts[page_idx + 1] if page_idx + 1 < len(pages) else len(b)
             page_name = pages[page_idx][1]
         else:
             page_end, page_name = len(b), None
         window_end = min(next_anchor, page_end)
+        # A GRAPH page (owns no column records; needs the id table) numbers its
+        # layers by the anchor's ORDINAL within the page -- counted BEFORE any
+        # decode attempt, so an undecodable record leaves a GAP in the layer
+        # numbers instead of shifting every later layer onto the wrong index
+        # (fail closed; Origin's layer N is the Nth anchor, decoded or not).
+        # Anchors inside a workbook/report page are embedded (fit-report)
+        # graphs: unnamed, layer 1.
+        is_graph_page = _is_graph_page(page_idx)
+        if is_graph_page:
+            page_layers[page_idx] = page_layers.get(page_idx, 0) + 1
         # Layer frame quad (12 00 20 22 marker; figure_geometry) -- with
         # the page size this places every panel of a multi-panel page.
         frame = opju_layer_frame(b, anchor, window_end)
@@ -353,6 +403,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             # a real Y reading with a stale/heuristic one.
             y_log = real_y_log
         text_end = min(window_end, anchor + _TEXT_WINDOW)
+        k = bisect_right(dropped, anchor)
+        if k < len(dropped):
+            text_end = min(text_end, dropped[k])
         window = b[anchor:text_end]
         texts = _texts_in(window)
         titles = _clean_annotations(
@@ -362,24 +415,22 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         routed = routed_figure_text(
             b, anchor, text_end, (x_from, x_to, y_from, y_to), x_log, y_log
         )
-        # A page that owns no column records is a GRAPH page: its figures get
-        # the page's own window name ("Graph1", ...) and a real 1-based layer
-        # index within the page. Anchors inside a workbook/report page are
-        # embedded (fit-report) graphs -- unnamed, layer 1, as before. Name
-        # attachment needs the id table (it is what tells book pages apart),
-        # so legacy streams keep the historical ""/1.
-        if not legacy and page_name is not None and page_name not in table.book_pages:
-            layer = page_layers.get(page_idx, 0) + 1
-            page_layers[page_idx] = layer
+        # Graph-page figures get the page's own window name ("Graph1", ...)
+        # and the 1-based anchor ordinal counted above. Name attachment needs
+        # the id table (it is what tells book pages apart), so legacy streams
+        # keep the historical ""/1.
+        if is_graph_page:
+            layer = page_layers[page_idx]
             name = page_name
         else:
             name, layer = "", 1
+        omitted: list[tuple[int, dict[str, str]]] = []  # (plot index, note): sheet unproven
         if legacy:
             curves = extract_curves(
                 b, anchor, window_end, book_columns, books_meta, book_counts_all
             )
         else:
-            curves = extract_curves_by_id(b, anchor, window_end, table)
+            curves = extract_curves_by_id(b, anchor, window_end, table, off_sheet, omitted)
         figures.append(
             {
                 "name": name,
@@ -403,7 +454,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "x_title": routed.x_title if routed else "",
                 "y_title": routed.y_title if routed else "",
                 "y2_title": routed.y2_title if routed else "",
-                "legend_labels": routed.legend_labels if routed else [],
+                "legend_labels": without_captions(  # one caption per KEPT curve
+                    routed.legend_labels if routed else [], {i for i, _ in omitted}
+                ),
                 # Legend TITLE (Legend object's own header line, "" = none).
                 "legend_title": routed.legend_title if routed else "",
                 # Legend box top-left in data coords, or None (never guessed).
@@ -421,6 +474,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_step": y_step,
                 "_page_idx": page_idx,
                 "curves": curves,
+                **({"curve_sheet_omitted": [n for _, n in omitted]} if omitted else {}),
             }
         )
     # Resolve each page's size from its own frames (figure_geometry), then

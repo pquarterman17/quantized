@@ -34,6 +34,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.calc.axis_cross import apply_cross
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_facets_grid import _grid_setup, _new_grid_figure
 from quantized.calc.figure_greyscale import greyscale_facet_panels
@@ -42,6 +43,7 @@ from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale
+from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats
 from quantized.heavy_import import heavy_imports
 
@@ -118,6 +120,7 @@ def draw_facet_grid(
                 x, np.asarray(s.get("y", []), dtype=float),
                 label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
             )
+            apply_symbol_details(line, s.get("style"))  # gap audit 4 G10
             artists.append(line)
         panel_artists.append(artists)
         ax.set_title(safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size)
@@ -134,6 +137,9 @@ def draw_facet_grid(
         # _apply_overrides sequence. x_lim ONLY (no y_lim -- see
         # render_facets_figure's own `overrides` doc).
         apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim",))
+        # Gap audit 4 G17: an axis crossing, as each facet panel draws it on screen.
+        apply_cross(ax, "x", x_fmt, "bottom")
+        apply_cross(ax, "y", y_fmt, "left")
         if len(series) > 1 or panel.get("key"):
             ax.legend(fontsize=max(6.0, st.legend_font_size - 2), frameon=st.legend_box)
     for j in range(n, len(axes)):

@@ -8,7 +8,7 @@ import { dataXUnit } from "../../../lib/signalRecipe";
 import type { Dataset } from "../../../lib/types";
 
 export interface SpectralUiSettings {
-  outputType: "magnitude" | "psd" | "phase";
+  outputType: "magnitude" | "psd" | "phase" | "magnitude+phase";
   sided: "one" | "two";
   window: SpectralAnalysisRecipe["window"];
   detrend: SpectralAnalysisRecipe["detrend"];

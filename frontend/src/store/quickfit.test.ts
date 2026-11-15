@@ -14,6 +14,7 @@ vi.mock("../lib/api", async (importOriginal) => ({
 }));
 
 import { fitModel } from "../lib/api";
+import { SINGLE_X } from "../test/overlayBinding";
 
 const data = (): DataStruct => ({
   time: [0, 1, 2, 3, 4, 5],
@@ -82,6 +83,7 @@ describe("quick-fit gadget (#33)", () => {
 
     expect(useApp.getState().fitOverlay).toEqual({
       datasetId: "a",
+      binding: { yKey: 0, xKey: null },
       y: [null, 2, 4, 6, null, null],
     });
     expect(useApp.getState().qfitResult).toEqual(
@@ -147,9 +149,10 @@ describe("quick-fit gadget (#33)", () => {
     });
     // The step params now carry the SAME recipe as the fitSpec (#6) so a
     // template batch replays these channels, not time/values[0]. Quickfit has
-    // no weighting, so only model + channels are encoded (result snapshot never).
+    // no weighting, so only model + channels are encoded (result snapshot never),
+    // plus `p0: null`: the model's own starts (gap audit 4 lane E, M5).
     expect(useApp.getState().macroSteps.at(-1)).toEqual(
-      expect.objectContaining({ kind: "fit", params: { model: "Linear", xKey: null, yKey: 0 } }),
+      expect.objectContaining({ kind: "fit", params: { model: "Linear", p0: null, xKey: null, yKey: 0 } }),
     );
     expect(useApp.getState().analysisResults).toEqual([
       expect.objectContaining({ settingsRef: { datasetId: "a", field: "fitSpec" } }),
@@ -178,10 +181,10 @@ describe("quick-fit gadget (#33)", () => {
   });
 
   it("clearing before any result exists never clobbers an unrelated fit overlay", () => {
-    useApp.setState({ fitOverlay: { datasetId: "a", y: [1, 2, 3, 4, 5, 6] } });
+    useApp.setState({ fitOverlay: { datasetId: "a", binding: SINGLE_X, y: [1, 2, 3, 4, 5, 6] } });
     useApp.getState().setQfitRoi([1, 3]); // armed, but no result has landed yet
     useApp.getState().clearQfit();
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "a", y: [1, 2, 3, 4, 5, 6] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "a", binding: SINGLE_X, y: [1, 2, 3, 4, 5, 6] });
   });
 
   it("cancels a pending debounced fit when the roi is cleared first", async () => {

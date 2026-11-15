@@ -106,7 +106,7 @@ cd frontend && npm install && npm run build && cd ..
 uv run qz                 # serve on :8000 and open a browser tab
 uv run qz --port 9000     # different port
 uv run qz --no-browser    # headless (don't open a tab; never auto-exits)
-uv run qz --desktop       # native window (needs: pip install quantized-lab[desktop])
+uv run qz --desktop       # native window (needs: pip install quantized-lab[desktop]; see docs/desktop.md)
 uv run qz --dev           # contributor mode: Vite HMR + reloading backend
 uv run diraculator        # the materials calculators, standalone
 ```

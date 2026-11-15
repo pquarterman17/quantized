@@ -137,8 +137,11 @@ export interface PlotMenuContext {
   pointUnder?: { row: number; excluded: boolean; toggle: () => void; refused?: string };
   /** Gap audit 3 N1: open Layer Contents for this graph. */
   layerContents?: () => void;
+  colorGradient?: () => void; // gap audit 4 G1
   /** Gap audit 3 N3: link this graph's X axis with other graph windows. */
   linkXAxis?: () => void;
+  /** Gap audit 4 G19: "Link Y axis with…" (present with another graph window). */
+  linkYAxis?: () => void;
 }
 
 /** Palette swatches: the 8 re-themeable `--series-N` tokens + black/white/grey. */
@@ -336,7 +339,9 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   });
   items.push({ label: ctx.showGrid ? "Hide grid" : "Show grid", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
   if (ctx.layerContents) items.push({ label: "Layer Contents…", run: ctx.layerContents });
+  if (ctx.colorGradient) items.push({ label: "Colour gradient…", run: ctx.colorGradient });
   if (ctx.linkXAxis) items.push({ label: "Link X axis with…", run: ctx.linkXAxis });
+  if (ctx.linkYAxis) items.push({ label: "Link Y axis with…", run: ctx.linkYAxis });
   items.push({
     label: "Tools",
     submenu: [

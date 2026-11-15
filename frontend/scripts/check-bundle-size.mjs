@@ -1918,6 +1918,17 @@ import { fileURLToPath } from "node:url";
  * 4,809 B of the reduction are locked in. Once the wave has merged, lower the
  * pin to `measured + 1,024`; do not spend the banked bytes on anything else.
  *
+ * 2026-11-15 (bundle diet slice 28, `plans/BUNDLE_HEADROOM.md`) - pin NOT
+ * moved (816,042). The overlay-binding branch added ~1.4 kB of eager code
+ * (`lib/overlayPlacement.ts` is read by the canvas render path, so it cannot
+ * be deferred) and measured 816,658 B, 616 B over. The Duplicate body
+ * (`store/duplicateDatasetRun.ts`, behind `import()` in
+ * `store/datasetListEdits.ts`; `duplicateDataset` already awaits
+ * `resolveDataset`, so the gesture was async) left the startup chunk:
+ *   overlay-binding head before the move      816,658
+ *   + the Duplicate body behind import()      815,502   (-1,156)
+ * 540 B of headroom remain against the unchanged pin.
+ *
  */
 const EAGER_JS_BUDGET = 816_042;
 

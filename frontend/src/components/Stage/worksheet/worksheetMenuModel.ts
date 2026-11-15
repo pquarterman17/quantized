@@ -33,7 +33,8 @@ export interface ColumnMenuContext {
    *  the cycle ascending → descending → off. Rows and data are unchanged. */
   viewSortMark: (col: number) => string;
   toggleViewSort: (col: number) => void;
-  onNewColumn: () => void;
+  /** Absent: no "New column from formula…" (a sheet that can't take one). */
+  onNewColumn?: () => void;
   showStats: boolean;
   onToggleStats: () => void;
   /** Selection→plot (item 7): apply the designation-aware mapping over the
@@ -165,7 +166,8 @@ const worksheetOpenInGraphBuilderAction: ContextAction<WorksheetColumnTarget> = 
 const worksheetNewColumnAction: ContextAction<WorksheetColumnTarget> = {
   id: "worksheet.newColumn",
   label: "New column from formula…",
-  run: (t) => t.ctx.onNewColumn(),
+  hidden: (t) => !t.ctx.onNewColumn,
+  run: (t) => t.ctx.onNewColumn?.(),
 };
 
 const worksheetStatsToggleAction: ContextAction<WorksheetColumnTarget> = {

@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib>=3.11.0",
     "periodictable>=1.7",
     "platformdirs>=4.10.0",
+    "xlrd>=2.0.2",
 ]
 
 [project.urls]
@@ -52,8 +53,11 @@ origin-com = [
 # dev/daily use; the Tauri shell (src-tauri/) stays the packaged path (W8).
 # BSD-3 licensed. server_launch.py guards the import — without this extra,
 # `qz --desktop` prints an install hint and every other mode works normally.
+# pywin32 (PSF-2.0, Windows only) backs the native vector "Copy figure"
+# clipboard (desktop_bridge_clipboard.py), still opt-in via QZ_WIN_CLIPBOARD=1.
 desktop = [
     "pywebview>=5.1",
+    "pywin32; sys_platform == 'win32'",
 ]
 # Advanced statistics: GLM, survival analysis, Cox PH (gap #30). BSD-3 / MIT
 # licensed. Optional so core install stays lean — calc/stats_glm.py and
@@ -165,7 +169,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "xlrd.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "win32clipboard", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

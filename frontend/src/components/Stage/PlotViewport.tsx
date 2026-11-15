@@ -26,14 +26,14 @@ import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { LivePaintRef } from "../../lib/uplotLivePaint";
 import { buildOpts, xIsAscending } from "../../lib/uplotOpts";
 import { useStableByEquality } from "../../lib/useStableByEquality";
-import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
+import { registerSyncPlot, windowXSyncHook, windowYSyncHook } from "../../lib/windowsync";
 // loadPlotPerfPrefs is a plain localStorage read (like uplotOpts.ts's cssVar()
 // DOM read) — not a Zustand store subscription, so it doesn't break this
 // file's "driven entirely by props, NO store reads" contract (same reasoning
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
-import { plotDecorNeeds, useLazyPlotParts } from "./useLazyPlotParts";
+import { plotDecorNeeds, startupOverlayCount, useLazyPlotParts } from "./useLazyPlotParts";
 import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
@@ -48,7 +48,7 @@ export type { PlotViewportProps };
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, insetTop, frameVars, onLimCrossed, ...args } =
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, ySyncKey, insetTop, frameVars, onLimCrossed, ...args } =
     props;
   const hostRef = useRef<HTMLDivElement>(null);
   const lims = useResolvedLims(displayPayload, args, onLimCrossed); // half-open -> concrete pairs
@@ -190,6 +190,8 @@ export default function PlotViewport(props: PlotViewportProps) {
         setScale: [...(opts.hooks?.setScale ?? []), windowXSyncHook(syncKey)],
       };
     }
+    // Gap audit 4 G19: the Y link group, the same idiom on the primary Y.
+    if (ySyncKey) opts.hooks = { ...opts.hooks, setScale: [...(opts.hooks?.setScale ?? []), windowYSyncHook(ySyncKey)] };
     // View-window min/max decimation (P0.4): patched post-buildOpts, same
     // idiom as frameVars/syncKey above, so it applies to every PlotViewport
     // caller (main stage, background/panel/snapshot windows) with no per-
@@ -241,6 +243,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     const plot = new uPlot(opts, plotData, host);
     plotRef.current = plot;
     const unregister = syncKey ? registerSyncPlot(syncKey, plot) : null;
+    const unregisterY = ySyncKey ? registerSyncPlot(ySyncKey, plot) : null;
 
     let lastWidth = w;
     let lastHeight = h;
@@ -260,6 +263,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     return () => {
       ro.disconnect();
       unregister?.();
+      unregisterY?.();
       plotRef.current?.destroy();
       plotRef.current = null;
     };
@@ -345,6 +349,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.gadgetMode,
     args.bg,
     syncKey,
+    ySyncKey,
   ]);
 
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
@@ -352,7 +357,7 @@ export default function PlotViewport(props: PlotViewportProps) {
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
   const decor = plotDecorNeeds(
     [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
-    displayPayload, args.annotations, (args.refLines?.length ?? 0) + (args.regionShades?.length ?? 0), args.seriesStyles,
+    displayPayload, args.annotations, startupOverlayCount({ r: args.refLines, s: args.regionShades, errorBars, errorSpans, colorByColumns }), args.seriesStyles,
   );
   useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 

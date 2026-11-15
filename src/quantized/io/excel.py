@@ -20,6 +20,7 @@ import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
+from quantized.io._column_marker import apply_marker, find_marker
 from quantized.io._delimited_layout import (
     _is_data_cell,
     _looks_like_units_row,
@@ -30,7 +31,7 @@ from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
-__all__ = ["import_excel", "read_sheet", "sheet_titles"]
+__all__ = ["import_excel", "import_grid", "read_sheet", "sheet_titles"]
 
 # Hostile-input bounds (security audit 2026-10-01). openpyxl pads every row
 # out to the sheet's widest column and yields every empty row before the last
@@ -244,7 +245,32 @@ def import_excel(
     """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
     path = Path(filepath)
     sheet_name, grid = read_sheet(path, sheet)
+    return import_grid(
+        path, sheet_name, grid, time_column=time_column, data_columns=data_columns
+    )
 
+
+def import_grid(
+    path: Path,
+    sheet_name: str,
+    grid: list[list[Any]],
+    *,
+    time_column: int | str = 0,
+    data_columns: Sequence[int | str] | None = None,
+    parser_name: str = "import_excel",
+) -> DataStruct:
+    """A sheet's cell grid (None = blank; numbers, bools, str, date/datetime)
+    as a DataStruct. Shared by the ``.xlsx`` and legacy ``.xls`` readers."""
+    grid = [list(r) for r in grid]
+    # A converted Origin book's column-roles line (io/_column_marker.py) sits
+    # alone in A1; it is not part of the table, so it goes before the layout.
+    # Only a row holding NOTHING else is the marker row: a header cell in B1
+    # beside a look-alike A1 must never be dropped with it.
+    first = grid[0][0] if grid and grid[0] else None
+    alone = bool(grid) and all(v is None or v == "" for v in grid[0][1:])
+    marker = find_marker([first]) if isinstance(first, str) and alone else None
+    if marker is not None:
+        grid = grid[1:]
     while grid and all(v is None for v in grid[-1]):
         grid.pop()
     if not grid:
@@ -353,7 +379,7 @@ def import_excel(
 
     metadata: dict[str, Any] = {
         "source": str(path),
-        "parser_name": "import_excel",
+        "parser_name": parser_name,
         "x_column_name": x_name,
         "x_column_unit": x_unit,
         "sheet_name": sheet_name,
@@ -378,6 +404,8 @@ def import_excel(
     if comments_row >= 0:  # kept, as CSV import keeps it: one searchable comment line
         cells = [_text_cell(v) for v in grid[comments_row][:n_cols]]
         metadata["comments"] = ["\t".join(cells).rstrip("\t")]
+    if marker is not None:
+        apply_marker(metadata, labels, marker)
     return DataStruct.create(
         time_vec, data[:, data_idx], labels=labels, units=units, metadata=metadata
     )

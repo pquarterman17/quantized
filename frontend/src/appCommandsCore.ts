@@ -2,7 +2,10 @@
 // The Analyze group is large (descriptions and search keywords for every
 // analysis tool) and only used once a menu or the palette opens, so App loads
 // it right after mount (appCommands.ts, the full list) instead of shipping it
-// in the entry chunk.
+// in the entry chunk. The same full list carries the core commands'
+// descriptions and keywords (commands/commandDocs.ts), so this list has none:
+// only the menus' tooltips, the palette and Help read them, and none of those
+// renders before the full list lands.
 
 import { buildDataCommands } from "./commands/dataCommands";
 import { buildFileCommands } from "./commands/fileCommands";

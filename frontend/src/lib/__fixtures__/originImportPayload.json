@@ -1,0 +1,256 @@
+{
+ "time": [
+  1.0,
+  2.0,
+  3.0,
+  4.0,
+  5.0
+ ],
+ "values": [
+  [
+   0.0,
+   0.0
+  ],
+  [
+   10.0,
+   0.5
+  ],
+  [
+   20.0,
+   1.0
+  ],
+  [
+   30.0,
+   1.5
+  ],
+  [
+   40.0,
+   2.0
+  ]
+ ],
+ "labels": [
+  "Moment",
+  "Error"
+ ],
+ "units": [
+  "emu",
+  "emu"
+ ],
+ "metadata": {
+  "source_format": "origin_opj",
+  "origin_book": "Scan2",
+  "origin_book_long": "Scan2",
+  "x_column_name": "A",
+  "x_column_long": "Field",
+  "x_unit": "Oe",
+  "x_column_unit": "Oe",
+  "x_column_recovered": true,
+  "origin_column_names": [
+   "B",
+   "C"
+  ],
+  "column_designations": {
+   "A": "X",
+   "B": "Y",
+   "C": "Y-error"
+  },
+  "column_comments": {},
+  "origin_text_columns": {},
+  "origin_report_sheets": {},
+  "origin_project_dates": {
+   "created": "2020-06-14T10:58:49",
+   "modified": "2020-06-14T10:58:49"
+  }
+ },
+ "books": [
+  {
+   "lazy": true,
+   "id": "Loop1",
+   "labels": [
+    "Moment",
+    "Error"
+   ],
+   "units": [
+    "emu",
+    "emu"
+   ],
+   "metadata": {
+    "source_format": "origin_opj",
+    "origin_book": "Loop1",
+    "origin_book_long": "30 nm µ",
+    "x_column_name": "A",
+    "x_column_long": "Field",
+    "x_unit": "Oe",
+    "x_column_unit": "Oe",
+    "x_column_recovered": true,
+    "origin_column_names": [
+     "B",
+     "C"
+    ],
+    "column_designations": {
+     "A": "X",
+     "B": "Y",
+     "C": "Y-error"
+    },
+    "column_comments": {},
+    "origin_text_columns": {},
+    "origin_report_sheets": {},
+    "origin_project_dates": {
+     "created": "2020-06-14T10:58:49",
+     "modified": "2020-06-14T10:58:49"
+    },
+    "origin_folder_path": []
+   },
+   "rows": 4,
+   "cols": 2,
+   "preview": {
+    "time": [
+     1.0,
+     2.0,
+     3.0,
+     4.0
+    ],
+    "values": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      10.0,
+      0.5
+     ],
+     [
+      20.0,
+      1.0
+     ],
+     [
+      30.0,
+      1.5
+     ]
+    ]
+   },
+   "preview_sampled": false
+  },
+  {
+   "lazy": true,
+   "id": "Loop1@2",
+   "labels": [
+    "Moment",
+    "Error"
+   ],
+   "units": [
+    "emu",
+    "emu"
+   ],
+   "metadata": {
+    "source_format": "origin_opj",
+    "origin_book": "Loop1@2",
+    "origin_book_long": "30 nm µ (sheet 2)",
+    "x_column_name": "A",
+    "x_column_long": "Field",
+    "x_unit": "Oe",
+    "x_column_unit": "Oe",
+    "x_column_recovered": true,
+    "origin_column_names": [
+     "B",
+     "C"
+    ],
+    "column_designations": {
+     "A": "X",
+     "B": "Y",
+     "C": "Y-error"
+    },
+    "column_comments": {},
+    "origin_text_columns": {},
+    "origin_report_sheets": {},
+    "origin_folder_path": []
+   },
+   "rows": 3,
+   "cols": 2,
+   "preview": {
+    "time": [
+     1.0,
+     2.0,
+     3.0
+    ],
+    "values": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      10.0,
+      0.5
+     ],
+     [
+      20.0,
+      1.0
+     ]
+    ]
+   },
+   "preview_sampled": false
+  },
+  {
+   "lazy": false,
+   "primary": true,
+   "id": "Scan2",
+   "labels": [
+    "Moment",
+    "Error"
+   ],
+   "units": [
+    "emu",
+    "emu"
+   ],
+   "metadata": {
+    "source_format": "origin_opj",
+    "origin_book": "Scan2",
+    "origin_book_long": "Scan2",
+    "x_column_name": "A",
+    "x_column_long": "Field",
+    "x_unit": "Oe",
+    "x_column_unit": "Oe",
+    "x_column_recovered": true,
+    "origin_column_names": [
+     "B",
+     "C"
+    ],
+    "column_designations": {
+     "A": "X",
+     "B": "Y",
+     "C": "Y-error"
+    },
+    "column_comments": {},
+    "origin_text_columns": {},
+    "origin_report_sheets": {},
+    "origin_folder_path": []
+   },
+   "rows": 5,
+   "cols": 2
+  }
+ ],
+ "book_source": {
+  "kind": "path",
+  "path": "/fixture/loops.opj"
+ },
+ "origin_fidelity": {
+  "version": 1,
+  "container": "opj",
+  "status": "unresolved",
+  "graph_records_total": 0,
+  "graph_records_actionable": 0,
+  "graph_records_filtered": 0,
+  "omissions": [
+   "no_graph_records"
+  ],
+  "filtered_figures": [],
+  "preview_diagnostics": [],
+  "container_integrity": {
+   "checked": true,
+   "complete": true,
+   "file_bytes": 10179,
+   "declared_bytes": 10179,
+   "detail": "file length matches its header"
+  }
+ }
+}

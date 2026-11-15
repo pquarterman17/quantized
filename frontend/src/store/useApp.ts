@@ -119,6 +119,7 @@ export type PlotTool =
   | "cursor"
   | "region"
   | "select"
+  | "lasso"
   | "measure"
   | "stats"
   | "integ"

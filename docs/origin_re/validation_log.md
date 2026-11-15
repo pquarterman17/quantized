@@ -736,6 +736,33 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   metadata); only an Origin book's channel labelled `x_column_name` with
   values equal to `time` is dropped now.
 
+## 2026-11-15 (`.opju` axis spans: elided-zero slot, specimen step tag)
+
+- **Items 64-65** (`docs/origin_project_format.md` §6.2, "The axis record is
+  run-length compressed"). Scored over every `.opju` in `test-data` against
+  `ground_truth_public/axis_ranges.json` (103 files): 1,777 match / 7 wrong /
+  0 phantom before, 1,784 / 0 / 0 after. Corpus-wide 20 decoded records
+  change and none drop or appear: 9 from the zero-slot rule (5 Figure 6
+  Graph3 layers, BD_SC_all, BD_TC_all, RSOS_SC_all, RSOS_TC_all) and 11 from
+  the specimen step-tag check (Battery Aging Graph2/Graph3, both Hc2 data
+  copies' Graph33, airfoil Graph1, OriginLab-agent `demo`, `demo_v1_1/2/3`,
+  `v2_demo`, Fiber_CSV Graph1).
+- **Every changed record was checked against Origin 2026b COM.** 8 against
+  the committed oracle (the 7 pinned layers, plus demo.opju matched by value
+  because its graph decodes unnamed); 10 more files by a fresh
+  `run_axis_oracle.py` run (`Origin.Application`, one instance at a time;
+  unnamed embedded layers matched by value), where every decoded named layer
+  now matches (4 were wrong before, 0 after); the 2 Hc2 copies by name (below).
+  Every new value equals Origin's `layer.x/y.from/to`; Origin stores
+  `from < to` on all of them, so no axis is reversed.
+- **`doc -e P` under-lists Hc2 data.** On both Hc2 data copies the page list
+  holds 629 names, one of them a run of `"` characters glued to `sparkline`,
+  and lacks Graph3, Graph12 and Graph33 (and 28 more decoded graph pages),
+  although `win -a GraphN` activates each of them. Graph33 was therefore read
+  by name (Origin: x (-7, 7), y (-9, 9), the new decode). The two Hc2 files
+  stay out of `axis_ranges.json`: enumerated this way, every unlisted page
+  would score as a phantom.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

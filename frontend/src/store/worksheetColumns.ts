@@ -20,6 +20,7 @@ import { remapDatasetChannels, type ColumnShift } from "../lib/channelRemap";
 import { patchColumnProps } from "../lib/columnProps";
 import { channelLetter } from "../lib/formula";
 import { baseColumns } from "../lib/formulaInputs";
+import { lit } from "../lib/macro";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { editRefusalNotice, isRederived } from "../lib/rederived";
 import type { ColumnProps, NumberFormat } from "../lib/columnProps";
@@ -122,6 +123,7 @@ export function insertColumn(id: string, at: number): number | null {
   const edit = insertColumnEdit(baseCountOf(ds), pos);
   commitSteps(id, "insert column", [(d) => [withColumnEdit(d, edit, name), edit.shift]]);
   get().setStatus(`inserted column "${name}" — Undo removes it`);
+  get().recordMacro(`Insert column "${name}" in ${ds.name}`, `qz.insertColumn(${lit(ds.name)}, ${pos})`);
   return pos;
 }
 
@@ -145,6 +147,10 @@ export function deleteColumns(id: string, cols: readonly number[]): void {
   );
   const skippedX = cols.includes(-1) ? " (the X column stays)" : "";
   get().setStatus(`deleted ${names.join(", ")}${skippedX} — Undo restores ${targets.length === 1 ? "it" : "them"}`);
+  get().recordMacro(
+    `Delete ${targets.length} column(s) from ${ds.name}`,
+    `qz.deleteColumns(${lit(ds.name)}, ${lit(targets)})`,
+  );
 }
 
 /** Move base column `from` to index `to` (Origin's Move Left/Right/First/Last). */
@@ -166,6 +172,7 @@ export function moveColumn(id: string, from: number, to: number): void {
   const edit = moveColumnEdit(n, from, dest);
   commitSteps(id, "move column", [(d) => [withColumnEdit(d, edit), edit.shift]]);
   get().setStatus(`moved "${columnName(ds, from)}" to position ${dest + 1}`);
+  get().recordMacro(`Move column "${columnName(ds, from)}" in ${ds.name}`, `qz.moveColumn(${lit(ds.name)}, ${from}, ${dest})`);
 }
 
 export interface HeaderPatch {
@@ -221,14 +228,15 @@ export function setColumnHeader(id: string, col: number, patch: HeaderPatch): vo
 }
 
 /** Set Column Values on an existing computed column: its new name and
- *  formula (`updateFormula`'s checks and recalculation), with a status line. */
-export function editColumnFormula(id: string, col: number, name: string, expr: string): void {
+ *  formula (`updateFormula`'s checks and recalculation), with a status line.
+ *  False when refused — the status then says why. */
+export function editColumnFormula(id: string, col: number, name: string, expr: string): boolean {
   const ds = get().datasets.find((d) => d.id === id);
-  if (!ds) return;
-  const index = col - baseCountOf(ds);
-  const current = ds.formulas?.[index];
-  if (!current) return;
-  if (get().updateFormula(id, index, { name, expr })) get().setStatus(`updated the formula of "${name.trim() || current.name}"`);
+  const current = ds?.formulas?.[col - (ds ? baseCountOf(ds) : 0)];
+  if (!ds || !current) return false;
+  if (!get().updateFormula(id, col - baseCountOf(ds), { name, expr })) return false;
+  get().setStatus(`updated the formula of "${name.trim() || current.name}"`);
+  return true;
 }
 
 /** Set (or, with `null`, reset to Auto) the display format of `cols`. */

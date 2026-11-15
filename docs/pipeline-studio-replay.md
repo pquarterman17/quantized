@@ -11,13 +11,44 @@ script text. The structured `kind` and `params` fields are authoritative.
 | `expression` | Replayable | Adds a calculated column. With propagated uncertainty it adds both the value and sigma columns. |
 | `correction` | Replayable | Applies the recorded correction settings. Referenced background worksheets must already be loaded. |
 | `reset` | Replayable | Removes corrections from the current pipeline dataset. |
-| `fit` | Replayable with fallbacks | Missing recorded X, Y, or uncertainty columns use the executor's documented current-selection, worksheet-X, or unweighted fallback. |
+| `fit` | Replayable with fallbacks | Replays the recorded start values, bounds and held parameters, as the interactive fit sent them (the exported script does the same). Missing recorded X, Y, or uncertainty columns use the executor's documented current-selection, worksheet-X, or unweighted fallback. Changing a fit step's model resets its starts, bounds and holds to the new model's defaults. |
 | `transform` | Replayable | May create one or more datasets and move later steps onto a new output. Recorded output ids are remapped during each run. |
 | `import` | Input marker | Documents the recorded input; Pipeline Studio runs against the currently active worksheet. |
 | `ui` | Display/script only | Preserved for exported scripts but skipped during interactive replay. |
 
 Unknown or malformed kinds are removed by the established workspace/template
 sanitizers before they reach the Studio.
+
+## Exported Python script
+
+**Export script** (Pipeline panel) and **Download .py** (Macro recorder card)
+write a runnable Python script built on the public, in-process
+`quantized.api` (`frontend/src/lib/pipeline.ts`, `pipelineToPython`). Run it with
+`python pipeline.py [INPUT ...] [--out result.csv]`; it needs only the
+`quantized` package, no running app or server, and it never changes the
+project open in the app (`quantized.client` cannot read or write an open
+project's workbooks either: it drives a server statelessly, one request at a
+time). INPUT defaults to the file names recorded at import.
+
+| Step kind | In the script |
+| --- | --- |
+| `import` | `qz.load(path)`; for an Origin project that is its primary book, the one the app makes active after the import. Pasted or appended data: not reproduced. |
+| `correction` | `qz.apply_corrections(raw, params)`, from the uncorrected base as the app does. Not reproduced when it subtracts a background worksheet. Error-column bindings are not recorded; the comment says to pass `error_bindings`. |
+| `reset` | Back to the uncorrected base. |
+| `fit` | `qz.fit_model(model, x, y, p0=..., lower=..., upper=..., fixed=...)` on the recorded channels and fit window, with the start values, bounds and held parameters the user set. A step recorded before those were saved prints a warning at run time. Prints a note when the point count differs from the app's (masked rows are not recorded). Not reproduced for an explicit row selection or a weighted fit. |
+| `ui` | A comment ONLY for plot-view settings that neither edit data nor change the active dataset: X/Y scale, plot title, grid, waterfall, X channel, Y channels, grouping. Every other `ui` recording is not reproduced: cell edits, row or column inserts, deletes and moves, sorts, recodes, re-imports, channel roles and types, derived worksheets, and also applying an Origin figure (a cross-book figure builds and activates an overlay dataset), facets, breaking at gaps and opening a plot or figure in a new window (each can make another dataset active). |
+| `expression`, `transform` | Not reproduced: no `quantized.api` equivalent. |
+
+A step that is not reproduced becomes a comment saying why, never stand-in
+code, followed by the app's own recorded line (`# app: ...`, values included).
+A step with no known kind is not reproduced either. Choosing a dataset in the
+Library is not recorded at all, so a script with more than one import, or an
+Origin project import, says that it runs every step on the data it loaded last.
+`fit_model` refuses start values, bounds or held flags whose length does not
+match the model. Because the data then differs from the app's, every later step that
+changes data is listed as a comment too, and the script saves the data as of
+the last step it did reproduce and prints which step it stopped at.
+`tests/test_pipeline_script.py` executes the generator's committed output.
 
 ## Preflight guarantees
 

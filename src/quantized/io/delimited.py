@@ -19,6 +19,7 @@ from quantized.datastruct import DataStruct
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
+from quantized.io._column_marker import MARKER, apply_marker, find_marker
 from quantized.io._data_section import _split_lines as _split_lines  # re-export
 from quantized.io._delimited_fast import (
     LazyTokenRows,
@@ -468,6 +469,12 @@ def import_csv(
         )
     if notes:
         metadata["notes"] = notes
+    marker = find_marker(comment_lines)  # a converted Origin book's column roles
+    if marker is not None:
+        metadata["comments"] = [c for c in comment_lines if not c.startswith(MARKER.strip())]
+        if not metadata["comments"]:
+            del metadata["comments"]
+        apply_marker(metadata, labels, marker)
     values_matrix = np.hstack([matrix[:, data_idx], cat_matrix])
     return DataStruct.create(
         time_vec,

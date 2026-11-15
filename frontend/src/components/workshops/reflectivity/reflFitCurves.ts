@@ -211,5 +211,6 @@ export function savedOverlay(record: ReflFitRecord, datasets: readonly Dataset[]
   // The same digest the "data changed" flag compares (reflFitRestore.ts).
   const same = ch.digest ? channelDigest(sent.channel) === ch.digest : sent.channel.q.length === curve.total;
   if (!same) return `the data of "${(ds as Dataset).name}" changed since this fit — re-run it to overlay`;
-  return { datasetId: ch.datasetId, y: alignToRows(curve, { q: sent.channel.q, rows: sent.rows }, data.time.length) };
+  // Q is the time column (buildChannel); R the channel's resolved rCol.
+  return { datasetId: ch.datasetId, binding: { yKey: b.rCol, xKey: null }, y: alignToRows(curve, { q: sent.channel.q, rows: sent.rows }, data.time.length) };
 }

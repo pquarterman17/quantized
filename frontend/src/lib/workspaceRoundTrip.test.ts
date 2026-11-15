@@ -65,7 +65,7 @@ function everyFieldChanged(): PlotView {
     annotations: [{ id: "a", groupId: "g", x: 1, y: 2, text: "hi", axis: 1, size: 12, anchor: "data", frame: { fill: "#fff", pad: 2 } }],
     regionShades: [{ id: "s", x1: 0, y1: 0, x2: 1, y2: 1, fill: "#ff0000", axis: 1 }],
     shapes: [{ id: "sh", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "data", stroke: "#000", fill: "#111", opacity: 0.5, width: 2, dash: true }],
-    seriesStyles: { 1: { color: "#123456", width: 3 } }, seriesLabels: { 1: "lab" }, errKeys: { 1: 2 },
+    seriesStyles: { 1: { color: "#123456", width: 3 } }, seriesRamp: { map: "plasma", reverse: true, order: "value" }, seriesLabels: { 1: "lab" }, errKeys: { 1: 2 },
     seriesOrder: [1], hiddenChannels: [2],
     waterfall: 0.3, waterfallDx: 0.1, panelFit: "window",
     pageSetup: { width: 5, height: 4, unit: "cm", margins: { left: 1, right: 1, top: 1, bottom: 1 }, aspectDerived: true },

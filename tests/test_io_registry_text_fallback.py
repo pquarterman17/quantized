@@ -65,10 +65,10 @@ def test_binary_dat_is_still_refused(tmp_path: Path) -> None:
         import_auto(path)
 
 
-def test_legacy_xls_is_refused_with_a_reason(tmp_path: Path) -> None:
+def test_damaged_xls_is_refused_cleanly(tmp_path: Path) -> None:
     path = tmp_path / "old.xls"
     path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64)
-    with pytest.raises(ValueError, match=r"re-save it as \.xlsx"):
+    with pytest.raises(ValueError, match=r"not a readable \.xls"):
         import_auto(path)
 
 

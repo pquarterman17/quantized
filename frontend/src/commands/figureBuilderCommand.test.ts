@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withCommandDocs } from "./commandDocs";
 import { buildFileCommands } from "./fileCommands";
 import { fuzzy } from "../lib/fuzzy";
 import { defaultPlotView } from "../lib/plotview";
@@ -53,7 +54,7 @@ describe("Publication Preview command", () => {
       beginFigurePublicationEdit,
       setStatus,
     });
-    const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder");
+    const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === "figure-builder");
 
     expect(command).toMatchObject({
       label: "Publication preview…",
@@ -81,7 +82,7 @@ describe("Publication Preview command", () => {
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
     const setStatus = vi.fn();
     useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
-    const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder");
+    const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === "figure-builder");
 
     command?.run();
     expect(beginFigurePublicationEdit).toHaveBeenCalled();
@@ -138,7 +139,7 @@ describe("Publication Preview command", () => {
   it("identifies the multi-panel surface as a temporary export composition", () => {
     const setFigurePageOpen = vi.fn();
     useApp.setState({ setFigurePageOpen });
-    const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-page");
+    const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === "figure-page");
 
     expect(command).toMatchObject({
       label: "Multi-panel export…",
@@ -157,7 +158,7 @@ describe("Publication Preview command", () => {
     ["figure-builder", "figure builder"],
     ["figure-page", "figure page"],
   ])("%s stays findable by its legacy name %j", (id, legacyQuery) => {
-    const command = buildFileCommands(useApp.getState).find((item) => item.id === id);
+    const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === id);
     expect(command).toBeDefined();
     // Same OR the palette applies: fuzzy label match, else fuzzy keywords match.
     const found =

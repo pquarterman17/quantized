@@ -60,7 +60,7 @@ MAX_TEXT = 30  # highest TextN index probed per layer (auto-named annotations)
 
 
 def main() -> None:
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
 
     def lt(c: str) -> bool:

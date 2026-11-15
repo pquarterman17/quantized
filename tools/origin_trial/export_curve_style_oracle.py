@@ -57,7 +57,7 @@ _SENTINEL = -987654.0
 
 
 def main() -> None:
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
 
     def lt(c: str) -> bool:

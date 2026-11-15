@@ -178,8 +178,15 @@ def _finite_extreme(grid: NDArray[np.float64], reducer: Any) -> float:
     return float(reducer(grid))
 
 
+_UNSET: Any = object()  # "grid not computed by the caller"
+
+
 def _resolve_auto_method(
-    method: str, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64]
+    method: str,
+    x: NDArray[np.float64],
+    y: NDArray[np.float64],
+    z: NDArray[np.float64],
+    grid: Any = _UNSET,
 ) -> str:
     """Resolve ``MapState.method``'s ``"auto"`` sentinel to a concrete method.
 
@@ -190,20 +197,54 @@ def _resolve_auto_method(
     measurements behind it) OR ``_grid_detect.detect_regular_grid`` finds it
     sits on a regular grid (so ``interp2d``'s ``_query_grid_linear`` fast path
     applies); otherwise ``"natural"``. Filters to finite ``(x, y, z)`` first,
-    matching what ``regrid2d`` actually hands the interpolator (and what
-    ``detect_regular_grid`` requires — see its docstring) -- a dataset with a
-    few NaN dead-pixel rows shouldn't tip the size threshold, and a NaN would
-    otherwise reach the grid detector's cluster math directly.
+    matching what ``regrid2d`` actually hands the interpolator -- a dataset
+    with a few NaN dead-pixel rows shouldn't tip the size threshold. ``grid``
+    is the caller's already-computed ``detect_regular_grid`` result on the
+    finite points (``build_map`` runs it once), or None.
     """
     if method != "auto":
         return method
     finite = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
-    xf, yf = x[finite], y[finite]
-    if xf.size >= _AUTO_LINEAR_MIN_POINTS:
+    if int(finite.sum()) >= _AUTO_LINEAR_MIN_POINTS:
         return "linear"
-    if detect_regular_grid(xf, yf) is not None:
-        return "linear"
-    return "natural"
+    if grid is _UNSET:
+        grid = detect_regular_grid(x[finite], y[finite])
+    return "linear" if grid is not None else "natural"
+
+
+# Below this many points the exact distinct-position count is cheap; above it
+# the (always cheap) shape test alone decides.
+_DISTINCT_CHECK_MAX = 20000
+
+
+def _require_2d_support(xf: NDArray[np.float64], yf: NDArray[np.float64]) -> None:
+    """Fail closed when the finite points cannot span a surface: fewer than 3
+    distinct (x, y) positions, or all on one line (a triangulation of them is
+    empty and the map would silently come back blank). Each axis is scaled to
+    its own range first, so a map of Hz against T, or metres against degrees,
+    is judged by its shape and not by its units."""
+    if xf.size >= 3 and xf.size <= _DISTINCT_CHECK_MAX:
+        n = np.unique(np.column_stack([xf, yf]), axis=0).shape[0]
+    else:
+        n = xf.size
+    if n < 3:
+        raise ValueError(
+            f"cannot build a 2-D map: only {n} distinct finite (x, y) "
+            "positions (need at least 3 that do not lie on one line)"
+        )
+    span_x = float(np.ptp(xf))
+    span_y = float(np.ptp(yf))
+    collinear = span_x <= 0 or span_y <= 0  # constant axis: regrid2d names it
+    if not collinear:
+        pts = np.column_stack([(xf - xf.mean()) / span_x, (yf - yf.mean()) / span_y])
+        step = max(1, pts.shape[0] // 50000)
+        sv = np.linalg.svd(pts[::step], compute_uv=False)
+        collinear = bool(sv[0] <= 0 or sv[-1] <= 1e-9 * sv[0])
+    if collinear and span_x > 0 and span_y > 0:
+        raise ValueError(
+            "cannot build a 2-D map: the (x, y) positions are collinear "
+            "(all on one line), so there is no surface to interpolate"
+        )
 
 
 def build_map(
@@ -233,7 +274,12 @@ def build_map(
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
     zv = np.asarray(z, dtype=float).ravel()
-    method = _resolve_auto_method(state.method, xv, yv, zv)
+    ok = np.isfinite(xv) & np.isfinite(yv) & np.isfinite(zv)
+    grid = detect_regular_grid(xv[ok], yv[ok])
+    if grid is None:  # a detected regular grid is never degenerate
+        _require_2d_support(xv[ok], yv[ok])
+    scattered = grid is None
+    method = _resolve_auto_method(state.method, xv, yv, zv, grid)
     xq, yq, zq = regrid2d(
         xv,
         yv,
@@ -259,7 +305,13 @@ def build_map(
         y_unit=y_unit,
         z_label=z_label,
         z_unit=z_unit,
-        metadata=dict(metadata) if metadata is not None else {},
+        metadata={
+            **(dict(metadata) if metadata is not None else {}),
+            # Points that are not on a regular grid are INTERPOLATED onto the
+            # display grid; the UI says so, so it is not read as raw data.
+            "interpolated": scattered,
+            "n_points": int(ok.sum()),
+        },
     )
 
 

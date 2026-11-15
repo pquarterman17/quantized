@@ -6,14 +6,15 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { globalFitJob, type GlobalFitResult } from "../../../lib/api/globalFit";
+import { compareDatasetsJob, globalFitJob, type DatasetCompareResult, type GlobalFitResult } from "../../../lib/api/globalFit";
 import { reportEmit } from "../../../lib/api/report";
 import { JobCancelledError, pollJob } from "../../../lib/jobs";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useGlobalFit, type GlobalModel } from "./useGlobalFit";
+import { SINGLE_X } from "../../../test/overlayBinding";
 
-vi.mock("../../../lib/api/globalFit", () => ({ globalFitJob: vi.fn() }));
+vi.mock("../../../lib/api/globalFit", () => ({ globalFitJob: vi.fn(), compareDatasetsJob: vi.fn() }));
 vi.mock("../../../lib/api/report", () => ({ reportEmit: vi.fn() }));
 vi.mock("../../../lib/jobs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../lib/jobs")>();
@@ -85,6 +86,7 @@ const FIT_CHANNELS: GlobalFitResult = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(globalFitJob).mockResolvedValue({ job_id: "j1" });
+  vi.mocked(compareDatasetsJob).mockResolvedValue({ job_id: "c1" });
   vi.mocked(pollJob).mockResolvedValue(FIT_CHANNELS);
   useApp.setState({
     datasets: [D1, D2, D3],
@@ -123,7 +125,7 @@ describe("useGlobalFit — channels of the active dataset", () => {
     });
     // The first member of the active dataset is shown, aligned to its rows.
     expect(result.current.shownIndex).toBe(0);
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [1, 3, 5, 7] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 1, xKey: 0 }, y: [1, 3, 5, 7] });
     // Showing channel B puts ITS curve on the plot, the gap row left empty.
     act(() => result.current.show(1));
     await waitFor(() => expect(useApp.getState().fitOverlay?.y[2]).toBe(7));
@@ -175,7 +177,7 @@ describe("useGlobalFit — channels of the active dataset", () => {
     unmount();
     expect(useApp.getState().fitOverlay).toBeNull();
 
-    const other = { datasetId: "d1", y: [9, 9, 9, 9] };
+    const other = { datasetId: "d1", binding: SINGLE_X, y: [9, 9, 9, 9] };
     const second = renderHook(() => useGlobalFit(MODEL));
     await act(() => second.result.current.run());
     await waitFor(() => expect(useApp.getState().fitOverlay?.y).toEqual([1, 3, 5, 7]));
@@ -238,11 +240,11 @@ describe("useGlobalFit — datasets matched by column label", () => {
     ]);
     expect(useApp.getState().fitOverlay?.datasetId).toBe("d1");
     act(() => useApp.setState({ activeId: "d2" }));
-    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d2", y: [4, 6, 8] }));
+    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d2", binding: { yKey: 2, xKey: 1 }, y: [4, 6, 8] }));
     // A shown member stops owning the overlay once its dataset leaves the plot.
     act(() => result.current.show(1));
     act(() => useApp.setState({ activeId: "d1" }));
-    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [1, 3, 5, 7] }));
+    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 1, xKey: 0 }, y: [1, 3, 5, 7] }));
   });
 
   it("Show on another dataset's member makes that dataset active", async () => {
@@ -258,5 +260,56 @@ describe("useGlobalFit — datasets matched by column label", () => {
     // Activating collapses the Library selection; the fitted pick survives it.
     expect(useApp.getState().selectedIds).toEqual(["d2"]);
     expect(result.current.picked).toEqual(["d1:1", "d2:2"]);
+  });
+});
+
+describe("useGlobalFit — compare datasets (extra-sum-of-squares F-test)", () => {
+  const VERDICT: DatasetCompareResult = {
+    test: { F: 12.5, dfNum: 2, dfDen: 10, p: 0.002 },
+    shared: { rss: 30, n: 14, nParams: 2, df: 12, aic: 1, aicc: 2, bic: 3 },
+    separate: { rss: 10, n: 14, nParams: 4, df: 10, aic: 0, aicc: 1, bic: 2 },
+    sharedParams: ["m", "b"],
+    conclusion: "separate",
+    paramNames: ["m", "b"],
+  };
+
+  it("tests ALL parameters as shared when none is ticked, via the compare job (not the global fit)", async () => {
+    vi.mocked(pollJob).mockResolvedValue(VERDICT);
+    const { result } = renderHook(() => useGlobalFit(MODEL));
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.comparison).toEqual(VERDICT));
+    expect(globalFitJob).not.toHaveBeenCalled();
+    expect(vi.mocked(compareDatasetsJob).mock.calls[0]![0].constraints).toEqual([
+      { param_name: "m", datasets: [0, 1] },
+      { param_name: "b", datasets: [0, 1] },
+    ]);
+    expect(result.current.result).toBeNull(); // a comparison never replaces the global fit result
+  });
+
+  it("tests only the ticked parameters, and a failed comparison clears the stale verdict", async () => {
+    vi.mocked(pollJob).mockResolvedValueOnce(VERDICT);
+    const { result } = renderHook(() => useGlobalFit(MODEL));
+    act(() => result.current.setShared(0, true));
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.comparison).not.toBeNull());
+    expect(vi.mocked(compareDatasetsJob).mock.calls[0]![0].constraints).toEqual([{ param_name: "m", datasets: [0, 1] }]);
+    vi.mocked(pollJob).mockRejectedValueOnce(new Error("unconverged"));
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.error).toMatch(/unconverged/));
+    expect(result.current.comparison).toBeNull();
+  });
+
+  it("drops the verdict when the ticks, picks or table change after it was computed", async () => {
+    vi.mocked(pollJob).mockResolvedValue(VERDICT);
+    const { result } = renderHook(() => useGlobalFit(MODEL));
+    act(() => result.current.setShared(0, true));
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.comparison).not.toBeNull());
+    act(() => result.current.setShared(0, false));
+    await waitFor(() => expect(result.current.comparison).toBeNull());
+    await act(() => result.current.run("compare"));
+    await waitFor(() => expect(result.current.comparison).not.toBeNull());
+    act(() => result.current.setRow(0, { min: "0" }));
+    await waitFor(() => expect(result.current.comparison).toBeNull());
   });
 });

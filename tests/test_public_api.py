@@ -14,8 +14,8 @@ import quantized.api as qz
 # The frozen public surface. Changing it is a deliberate act: update this set
 # in the same commit as the api.py change (that is the point of the guard).
 _EXPECTED = {
-    "DataStruct", "load",
-    "curve_fit", "fit_single_peak", "fit_multi_peak", "find_peaks_robust",
+    "DataStruct", "load", "read_origin_books", "convert_origin_project", "save_table",
+    "curve_fit", "fit_model", "fit_single_peak", "fit_multi_peak", "find_peaks_robust",
     "integrate_peaks", "batch_integrate_peaks",
     "estimate_background", "fit_region_background", "baseline_als",
     "baseline_modpoly", "baseline_rolling_ball",

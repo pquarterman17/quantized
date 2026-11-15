@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from quantized.app import app
 from quantized.datastruct import DataStruct
-from quantized.routes import _originfigures as originfigures_mod
+from quantized.io.origin_project import import_manifest as originfigures_mod
 from quantized.routes import _plainimport as plainimport_mod
 from quantized.routes import parsers as parsers_mod
 

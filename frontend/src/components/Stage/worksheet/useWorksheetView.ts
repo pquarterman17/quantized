@@ -49,7 +49,6 @@ import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp";
-import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
 import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
@@ -125,7 +124,6 @@ export interface WorksheetView {
   addColumn: (errors: boolean) => void;
   /** #6: an add is in flight — the toolbar disables submit / ignores Enter. */
   addColumnPending: boolean;
-  promptColumn: () => Promise<void>;
   err: string | null;
 
   onEditCell: (row: number, col: number, value: number) => void;
@@ -457,23 +455,6 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     return r.ok;
   }
 
-  async function promptColumn() {
-    const p = await askParams("New computed column", [
-      { key: "name", label: "Column name", type: "text", default: "" },
-      {
-        key: "expr",
-        label: "Formula (e.g. if(A > 0, A, mean(A)))",
-        type: "text",
-        default: "",
-      },
-      { key: "errors", label: "± errors (bound σ column)", type: "boolean", default: false },
-    ], { confirmLabel: "Add column" });
-    const expr = p ? String(p.expr).trim() : "";
-    if (!p || !expr) return;
-    setErr(null);
-    await commitColumn(String(p.name), expr, p.errors === true);
-  }
-
   function addColumn(propagate: boolean) {
     if (addPendingRef.current) return; // #6: ignore a repeat Enter/click while one is in flight
     addPendingRef.current = true;
@@ -586,7 +567,6 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     setColName,
     addColumn,
     addColumnPending,
-    promptColumn,
     err,
     onEditCell: (row, col, value) => setCellValue(ds.id, row, col, value),
     onRemoveFormula: (index) => removeFormula(ds.id, index),

@@ -15,10 +15,11 @@ import {
 } from "./copyFigureCommand";
 import { COPY_SVG_MAX_POINTS } from "./copySvgBudget";
 import { createFigureDocument } from "./figureDocument";
-import { copyOfficeGraphicAsync } from "./officeClipboard";
+import { copyOfficeGraphicFormats } from "./officeClipboard";
 import { defaultPlotView } from "./plotview";
 import type { DataStruct, Dataset } from "./types";
 import { usePendingOps } from "../store/pendingOps";
+import { useToasts } from "../store/toasts";
 
 vi.mock("./api/figures", () => ({
   renderFigureBlob: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock("./clipboard", () => ({
   copySvgAsync: vi.fn(async () => true),
 }));
 vi.mock("./officeClipboard", () => ({
-  copyOfficeGraphicAsync: vi.fn(async () => true),
+  copyOfficeGraphicFormats: vi.fn(async (): Promise<string[] | null> => ["image/png", "text/html"]),
 }));
 
 const data: DataStruct = {
@@ -109,7 +110,7 @@ beforeEach(() => {
   vi.mocked(clipboardImageSupported).mockReturnValue(true);
   vi.mocked(clipboardSvgSupported).mockReturnValue(true);
   vi.mocked(copySvgAsync).mockResolvedValue(true);
-  vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(true);
+  vi.mocked(copyOfficeGraphicFormats).mockResolvedValue(["image/png", "text/html"]);
   vi.mocked(renderFigureBlob).mockResolvedValue(new Blob(["x"], { type: "image/png" }));
 });
 
@@ -127,7 +128,7 @@ describe("runCopyFigureCommand", () => {
     expect(svgSpec.fmt).toBe("svg");
     expect(svgSpec.svg_text_as_paths).toBe(true);
     expect(spec.svg_text_as_paths).toBeUndefined();
-    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].pngDpi).toBe(300);
+    expect(vi.mocked(copyOfficeGraphicFormats).mock.calls[0][0].pngDpi).toBe(300);
   });
 
   it("skips the SVG render when the browser does not advertise raw SVG", async () => {
@@ -135,7 +136,7 @@ describe("runCopyFigureCommand", () => {
     await runCopyFigureCommand(fakeGet());
     expect(renderFigureBlob).toHaveBeenCalledTimes(1);
     expect(vi.mocked(renderFigureBlob).mock.calls[0][0].fmt).toBe("png");
-    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].svg).toBeNull();
+    expect(vi.mocked(copyOfficeGraphicFormats).mock.calls[0][0].svg).toBeNull();
   });
 
   it("skips the SVG render for a figure over the point budget", async () => {
@@ -151,7 +152,7 @@ describe("runCopyFigureCommand", () => {
     };
     await runCopyFigureCommand(fakeGet({ datasets: [dense], resolveDataset: async () => dense }));
     expect(renderFigureBlob).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].svg).toBeNull();
+    expect(vi.mocked(copyOfficeGraphicFormats).mock.calls[0][0].svg).toBeNull();
   });
 
   it("carries the on-screen view into the spec, not raw defaults", async () => {
@@ -167,7 +168,7 @@ describe("runCopyFigureCommand", () => {
     // Awaiting the render before touching the clipboard can drop the transient
     // user activation, so the command must pass a promise, not a resolved Blob.
     await runCopyFigureCommand(fakeGet());
-    const source = vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0];
+    const source = vi.mocked(copyOfficeGraphicFormats).mock.calls[0][0];
     expect(typeof source.png.then).toBe("function");
     expect(typeof source.svg?.then).toBe("function");
   });
@@ -182,7 +183,7 @@ describe("runCopyFigureCommand", () => {
   });
 
   it("reports a copy failure using copy wording, not export wording", async () => {
-    vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(false);
+    vi.mocked(copyOfficeGraphicFormats).mockResolvedValue(null);
     await runCopyFigureCommand(fakeGet());
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.startsWith("copy failed"))).toBe(true);
@@ -206,7 +207,7 @@ describe("runCopyFigureCommand", () => {
   });
 
   it("surfaces a render failure instead of silently copying nothing", async () => {
-    vi.mocked(copyOfficeGraphicAsync).mockRejectedValue(new Error("boom"));
+    vi.mocked(copyOfficeGraphicFormats).mockRejectedValue(new Error("boom"));
     await runCopyFigureCommand(fakeGet());
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.includes("boom"))).toBe(true);
@@ -349,12 +350,12 @@ describe("runCopyFigureCommand — safe cancel (P3.4)", () => {
         );
       });
     });
-    // copyOfficeGraphicAsync's own documented fallback
-    // (lib/officeClipboard.ts): failed pending renders resolve to `false`
+    // copyOfficeGraphicFormats's own documented fallback
+    // (lib/officeClipboard.ts): failed pending renders resolve to `null`
     // rather than escaping.
-    vi.mocked(copyOfficeGraphicAsync).mockImplementation(async (source) => {
+    vi.mocked(copyOfficeGraphicFormats).mockImplementation(async (source) => {
       await Promise.allSettled([source.png, source.svg]);
-      return false;
+      return null;
     });
 
     const p = runCopyFigureCommand(fakeGet());
@@ -373,5 +374,33 @@ describe("runCopyFigureCommand — safe cancel (P3.4)", () => {
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.startsWith("copied"))).toBe(false);
     expect(messages.some((m) => m.startsWith("copy failed"))).toBe(false);
+  });
+});
+
+// gap-4 G14: tell the user which format the copy actually wrote — never
+// "vector" when only pixels went — and route through the native Windows
+// clipboard when the desktop shell offers it.
+function lastToast(): { msg: string; kind: string } | undefined {
+  return useToasts.getState().toasts.at(-1);
+}
+
+describe("Copy figure — the success message names the format that landed (G14)", () => {
+  beforeEach(() => useToasts.setState({ toasts: [] }));
+
+  it("says vector only when the SVG representation landed", async () => {
+    vi.mocked(copyOfficeGraphicFormats).mockResolvedValue(["image/png", "text/html", "image/svg+xml"]);
+    await runCopyFigureCommand(fakeGet());
+    expect(lastToast()).toMatchObject({ msg: "copied scan as vector (SVG) + PNG", kind: "ok" });
+  });
+
+  it("says PNG, not vector, when the browser took only the raster", async () => {
+    vi.mocked(copyOfficeGraphicFormats).mockResolvedValue(["image/png", "text/html"]);
+    await runCopyFigureCommand(fakeGet());
+    expect(lastToast()?.msg).toBe("copied scan as a 300-DPI PNG (not vector)");
+  });
+
+  it("the SVG-only command says so", async () => {
+    await runCopyFigureSvgCommand(fakeGet());
+    expect(lastToast()?.msg).toBe("copied scan as vector (SVG only)");
   });
 });

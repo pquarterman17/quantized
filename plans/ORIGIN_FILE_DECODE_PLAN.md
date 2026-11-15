@@ -14,7 +14,16 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-08-21 (real-data + live-Origin verification campaign. The
+**Updated:** 2026-11-15 (item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
+3,508 curves re-bound to `Book@N` plus 531 previously deduped away, 875
+omitted and diagnosed; 495 of 498 COM-checked re-bound curves draw
+Origin's exact data. Items 67-70 booked. Earlier: items 64-65 fixed: the axis record is run-length
+compressed, which decides the elided-zero slot and the specimen step tag;
+1,777 → 1,784 per-layer axis matches, 7 → 0 wrong, 0 phantom. Earlier the
+same day: `.opju` graph-page recovery against a live Origin oracle, PR #676:
+984 → 1,777, phantom layers 185 → 0; items 64-66 and an owner gate booked.
+See Completed.)
+Previously 2026-08-21 (real-data + live-Origin verification campaign. The
 "25 pre-existing renderer failures" every sweep since 2026-07-25 carried
 were PHANTOM: commit `5cdc7303` (2026-07-19, composition-union refactor)
 removed the raw `spatialPanels` store field, and the harness's structural
@@ -330,6 +339,18 @@ export lever. A `.opju` writer (27) is low-value while `.opj` opens everywhere.
 Gaps: no oracle comparison against Origin's own ground-truth dumps (28), no
 corpus-wide sweep/malformed-input/perf suite (29), no round-trip tests (30),
 no documented real-Origin validation procedure for the trial window (31).
+
+### Owner gates
+
+- **"Send to Origin" attaches to your open Origin session** (2026-11-15).
+  `io/origin_com.py` dispatches `Origin.ApplicationSI`, which is
+  single-instance: it sends data into the Origin you already have open,
+  rather than starting a new instance. That is probably the feature's intent,
+  but nothing asks first. Measured: an `ApplicationSI` `Exit()` closes that
+  shared window. Decide whether the feature should confirm before sending, or
+  avoid calling `Exit()` on an attached instance. The oracle and specimen
+  tools were switched to `Origin.Application` in #676, so they always start
+  their own instance.
 
 ---
 
@@ -919,6 +940,61 @@ work.
 
 ### Tier 2 — Medium Impact
 
+(items 64-65 shipped 2026-11-15 — see Completed)
+
+67. **`.opju` curves whose sheet is still unknown** — after the 2026-11-15
+    re-binding (see Completed), 770 corpus curves stay omitted as
+    `sheet_unknown` (the id and `Book_Col@N` dataset counts of their name
+    differ: deleted sheets, e.g. Figure4 `@6`-`@10` after `@2`;
+    cleaned_data 11 datasets vs 10 ids; Hc2 data 88), plus 49 as
+    `x_sheet_unproven`. COM evidence on 71 of them: 23 plot sheet 1, 41
+    another sheet, 7 are not plotted at all, so no single default is safe.
+    - [ ] Find a second sheet signal that survives deleted sheets (the
+          worksheet window's own column list, or the sheet id the data
+          header carries) and re-check it against the 71 COM cases
+    - [ ] Surface `curve_sheet_omitted` per curve in the Library/Recover UI
+          (today only the fidelity code `curve_sheet_unresolved` shows)
+    - [ ] Import the missing pseudo-books behind `book_not_imported`
+          (Absorption-D3 `Cu5Cys4wat@2`/`@3`, which Origin plots) and the
+          `column_not_imported` columns (49 curves)
+
+68. **Origin plots the curve decoder misses entirely** — 89 plotted datasets
+    across the 140 COM-checked layers have no decoded curve at all (none
+    wrong; evidence `%Z` dumps of 2026-11-15, `sheetverify/cmp.txt`):
+    - [ ] pedotpss_IV Graph7 etc.: `Book1` columns before `AC` (the
+          decoder recovers only the later ones)
+    - [ ] un-prefixed function datasets `F13`-`F15`
+    - [ ] datasets Origin names with an explicit `@1` suffix
+    - [ ] `mid1_*@5` and `Book1B_D@10`
+
+69. **Rise-time file book mis-binding** — `Figure 3 and 4 amplitude - rise
+    time data.opju`: the decoder binds `Residual39_B` (and siblings
+    `Residual38/41/43/58/60/63_B`) where Origin plots `Book40_B@3`
+    (`Book39/42/44_B@3`, `Book3_B@11`, …), and keeps `Residual65_B`
+    (Graph66) and `Residual64_B` (Graph67#5) that Origin does not plot.
+    The `Residual*` pages are embedded fit-report books; their ids alias
+    the fitted source column. Wrong bindings on SHEET 1, so the sheet
+    re-binding does not touch them.
+    - [ ] Decode which book a report-page id resolves to, or fail closed
+          on `Residual*` bindings until it is decoded
+
+70. **Plot-level X and cell residues found by the data check** — the
+    2026-11-15 value comparison against Origin found three re-bound
+    curves (of 498) and 33 sheet-1 control curves (of 129) whose drawn
+    data differs, none caused by the sheet:
+    - [ ] The curve token stores its own X: Graph73's tokens carry the X
+          id (`3d 09` = 2365 = `A@5`) right before the `21 61` marker,
+          Graph72's carry a different shape and Origin plots them against
+          Row Numbers. The decoder uses the Y column's designated X
+          instead, so SOP_meas Graph72 `D@5`, Figure4 Graph1 (Origin X
+          `Book1_B`), ResonatorData RawAndFit#2 (Origin X `S2136_K`/`_L`)
+          draw against the wrong X; SOP_meas Graph16/Graph41#6
+          `SOPvsHPPC5_AH`… have no X name Origin will report at all
+    - [ ] PerceivedRisk Fig3 `Book1D_F@27`/`_H@27` row 1: Origin holds a
+          missing value, the Text&Numeric decode yields 0.0 (the stored
+          run is 73 repeated zeros from row 1; begin row is 1, no column
+          formula). Find what marks the cell missing
+
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
 
@@ -1061,6 +1137,99 @@ the shipped contract)
 
 ## Completed
 
+- ~~**66. Admit the remaining separator flag values `01/08/30/41/48`**~~
+  (2026-11-15). Scored per value against the Origin 2026b COM axis oracle
+  (`axis_ranges.json`, 103 files), over all 359 corpus `.opju` files:
+  01 ×7, 08 ×6, 30 ×3, 41 ×6, 48 ×1 records, all 23 in oracle files, all 23
+  exact to Origin's x/y from/to (and linear, as Origin's `x/y.type`). No
+  other record changed (axes, scales or curve bindings), none was lost, and
+  no wrong or phantom appeared. Score 1,777 / 7 / 0 → 1,800 / 7 / 0 (match /
+  wrong / phantom; the 7 are #64-65). Admitting ANY 5th byte recovers the
+  same 23 and nothing more; other values stay unadmitted (fail closed).
+  Anchored per value by a realdata test in
+  `test_io_origin_opju_page_attribution`.
+  Landed after the sheet re-binding (#684): the 23 new layers' curves were
+  checked against Origin's `%Z` per layer (COM, 2026-11-15): 367 curves
+  match exactly, sheet included (SOP_meas Graph73 binds
+  `SOPvsHPPCA123@5`, as Origin plots it), 0 wrong; 26 Origin plots are not
+  decoded (item 68). Before #684 the same flags drew Graph73 from sheet 1.
+
+- ~~**`.opju` curves bind the sheet they plot**~~ (2026-11-15) — a curve
+  token's column id resolves to `(book page, column)` with no sheet, so
+  every curve bound sheet 1 while the importer exposes sheet N as the
+  pseudo-book `Book@N`: curves Origin plots from sheet N drew sheet-1 data
+  (SOP_meas `old`#5: 13 curves). `opju_curve_sheets.py` (ported from
+  `6692ee54`, minus #66's separator flags) infers the sheet from the
+  `Book_Col@N` dataset storage headers (file order = column-id order, so the
+  k-th smallest id of a name is its k-th dataset) and now RE-BINDS: a sheet-N
+  curve binds `Book@N`, its X by name from the same sheet (its stored X
+  partner must align to that sheet, else `x_sheet_unproven`; with no stored
+  partner, sheet N's own first X-designated column). Unknown sheets
+  stay omitted (`sheet_unknown`), and at import time `unbound_rebinds` omits
+  a re-bound curve whose `Book@N` or columns the importer did not produce
+  (`book_not_imported`, `column_not_imported`, `y_is_sheet_x`) instead of
+  letting the frontend skip it silently. Omitted captions leave the legend
+  and the remaining `%(n)` references are renumbered; an all-omitted layer
+  stays, with fidelity `curve_sheet_unresolved`.
+  **Verified against Origin 2026b COM:** sheet names 533/533 (`%Z`, 140
+  layers, 9 files); then the DATA of every decoded curve in those layers,
+  resolved the way the frontend binds it (book by `origin_book`, columns by
+  name) and compared with Origin's own plotted Y and X datasets (`%(i,@D)`,
+  `%(iX,@D)`; `sum()` count/min/max, first values, and a paired (x, y)
+  row fingerprint): 495 of 498 drawn re-bound curves identical across 7
+  files (PerceivedRisk Fig3 54 + Fig4 64, SOP_meas 139, Absorption-D3 94,
+  Discretewithsum 82, pedotpss 38, ResonatorData 24) — by X class: stored
+  same-sheet X partner 431/432, no stored partner (sheet N's own X) 64/66;
+  the 1 curve whose partner's sheet is unknown matched too but is omitted.
+  The 3 differences are not sheet errors (item 70: Graph72 plots against
+  Row Numbers, a sheet-1-shaped X override; `Book1D_F/H@27` row 1 is
+  missing in Origin, 0.0 decoded). Sheet-1 control: 96 of 129 identical, the
+  other 33 the same X mechanism on sheet 1 (item 70). Corpus diff vs main
+  over all 359 `.opju`: 3,508 curves re-bound to `Book@N`, 531 sheet-N curves
+  that main's `(book, y)` dedup had dropped now drawn, 875 omitted (770
+  sheet unknown, 49 X sheet unproven, 49 column not imported, 8 book not
+  imported, 2 Y is the sheet's X), 2,754 unchanged, 0 vanished; 81 kept
+  sheet-1 curves change colour/symbol size because main deduped them onto
+  an off-sheet token's style and they now carry their own token's; 32
+  legends lose exactly the omitted captions (4 of them also renumber a
+  `%(n)`); no axis, layer or other field changes; axis oracle tests
+  unchanged. Open: items 67-70.
+
+- ~~**#64 Swapped Y endpoints + #65 Battery Aging slot shift**~~ (2026-11-15)
+  — one root: the axis record is a byte-level run-length stream (`0x80|k` =
+  `k+3` zeros, `0xc0|k` = `k+3` repeats, then a literal count), so a 0.0
+  endpoint has no token of its own. #64: its zeros ride in the step token's
+  run, so a run 8 longer than the step needs means `to` is the zero (Figure 6
+  Graph3 Y `85 02 54 c0 | 8b 02 34 40` = (-80, 0), not (0, -80)); new
+  `opju_axis_zero_slot.py`, fail-closed on any other surplus. #65: the
+  specimen parser's `83 02` step tag is also how any 2-byte value encodes
+  (`83 02 48 40` = 48), so it stopped at `to` and read one slot early; the
+  step token must now end at the next field, else the real form decodes the
+  record. Oracle 103 files: 1,777 / 7 / 0 → 1,784 / 0 / 0; corpus-wide 20
+  records change, 0 drop, and all 20 equal Origin's COM values (13 the
+  committed-oracle test does not score were checked over COM here). `KNOWN_DEFECTS` is empty. Evidence:
+  `docs/origin_project_format.md` §6.2, `docs/origin_re/validation_log.md`.
+- ~~**`.opju` graph-page recovery, verified against Origin**~~ (2026-11-15,
+  #676). Origin 2026b's own per-page, per-layer axis state, read over COM
+  (`test-data/origin/ground_truth_public/axis_ranges.json`, 103 files,
+  3,760 layers), went from 984 match / 63 wrong / 185 phantom to
+  1,777 / 7 / 0. The 7 are identical on main (items 64-65). Page enumeration
+  matches Origin's graph-page lists exactly. The changes:
+  - the window type is a LEB128 varint, so windows past the 127th were never
+    enumerated;
+  - the page-name run escape `c0 <ch>` stands for `<ch>`×3, plus a 23-24
+    character long form;
+  - the separator's 5th byte is a flag field;
+  - layers are numbered by anchor ordinal, counting only anchors with a
+    length prefix;
+  - the first-X length-headed value and the Y-span start are decoded
+    correctly.
+  Every changed record without an oracle was oracled before landing.
+  Student-edition COM loaded `.opju` projects of 200-434 graph pages fine, so the
+  52-page limit noted in #39 applies to `.opj` (PNR.opj) and is unmeasured
+  for `.opju` saves. **Safety:** every oracle and specimen tool now
+  dispatches `Origin.Application`, because `ApplicationSI` attaches to and
+  closes the owner's open Origin (owner gate above).
 - ~~**`.opj` reader: review round**~~ (2026-11-13) — eleven fail-closed
   gaps from an independent review of the header-driven reader. `@N` is a
   sheet ID: sheets are bound by column object id (`opj_sheets.py`;

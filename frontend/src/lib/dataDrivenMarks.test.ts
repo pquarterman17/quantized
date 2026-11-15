@@ -4,7 +4,7 @@
 // (`size_by` / `size_range` / `drop_lines` / `connect`).
 
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { buildColorByColumns, colorScaleLegendEntries, type ColorScatterSpec } from "./colorscatter";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
@@ -17,6 +17,11 @@ import { buildOpts } from "./uplotOpts";
 import { dropLinesPlugin } from "./uplotDropLines";
 import { colorScatterPlugin } from "./uplotOverlays";
 import type { DataStruct } from "./types";
+
+import { regionDecorSettled } from "./regionDecorLoader";
+
+// The colour-mapped scatter draws from the startup chunk (lib/uplotScatterDraw.ts).
+beforeAll(() => regionDecorSettled);
 
 const ds: DataStruct = {
   time: [0, 1, 2, 3],

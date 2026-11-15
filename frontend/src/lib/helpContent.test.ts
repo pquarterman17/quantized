@@ -12,7 +12,7 @@ const COMMANDS = buildAppActions(useApp.getState);
 const ITEMS = COMMANDS.map(actionToHelpItem);
 
 describe("shared command help metadata", () => {
-  it("documents every curated command at its command definition", () => {
+  it("documents every curated command (core copy in commands/commandDocs.ts)", () => {
     expect(COMMANDS.length).toBeGreaterThan(80);
     expect(
       COMMANDS.filter((action) => !action.description).map(

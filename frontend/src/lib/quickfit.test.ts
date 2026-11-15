@@ -23,13 +23,13 @@ const mk = (over: Partial<Dataset> = {}): Dataset => ({ id: "d", name: "d", data
 
 describe("selectRoiRows", () => {
   it("selects rows whose x falls in [lo,hi], endpoints in either order", () => {
-    expect(selectRoiRows(mk(), [1, 3], 0)).toEqual({
+    expect(selectRoiRows(mk(), [1, 3], 0, null)).toEqual({
       x: [1, 2, 3],
       y: [20, 30, 40],
       rows: [1, 2, 3],
     });
     // reversed endpoints — same result
-    expect(selectRoiRows(mk(), [3, 1], 0)).toEqual({
+    expect(selectRoiRows(mk(), [3, 1], 0, null)).toEqual({
       x: [1, 2, 3],
       y: [20, 30, 40],
       rows: [1, 2, 3],
@@ -37,26 +37,26 @@ describe("selectRoiRows", () => {
   });
 
   it("reads the requested channel, not always channel 0", () => {
-    const sel = selectRoiRows(mk(), [0, 1], 1);
+    const sel = selectRoiRows(mk(), [0, 1], 1, null);
     expect(sel).toEqual({ x: [0, 1], y: [100, 200], rows: [0, 1] });
   });
 
   it("returns empty for a null dataset, roi, or channel", () => {
-    expect(selectRoiRows(null, [0, 1], 0)).toEqual({ x: [], y: [], rows: [] });
-    expect(selectRoiRows(mk(), null, 0)).toEqual({ x: [], y: [], rows: [] });
-    expect(selectRoiRows(mk(), [0, 1], null)).toEqual({ x: [], y: [], rows: [] });
+    expect(selectRoiRows(null, [0, 1], 0, null)).toEqual({ x: [], y: [], rows: [] });
+    expect(selectRoiRows(mk(), null, 0, null)).toEqual({ x: [], y: [], rows: [] });
+    expect(selectRoiRows(mk(), [0, 1], null, null)).toEqual({ x: [], y: [], rows: [] });
   });
 
   it("excludes manually-excluded rows (#50) from the selection", () => {
     // row 2 (x=2) excluded — the ROI [0,3] would otherwise include it
-    const sel = selectRoiRows(mk({ excludedRows: [2] }), [0, 3], 0);
+    const sel = selectRoiRows(mk({ excludedRows: [2] }), [0, 3], 0, null);
     expect(sel.rows).toEqual([0, 1, 3]);
     expect(sel.x).toEqual([0, 1, 3]);
   });
 
   it("excludes filter-failed rows (#53) from the selection", () => {
     // keep channel-0 value >= 30 -> rows 0,1 fail the filter regardless of ROI
-    const sel = selectRoiRows(mk({ filter: [{ col: 0, kind: "range", min: 30 }] }), [0, 5], 0);
+    const sel = selectRoiRows(mk({ filter: [{ col: 0, kind: "range", min: 30 }] }), [0, 5], 0, null);
     expect(sel.rows).toEqual([2, 3, 4, 5]);
   });
 
@@ -66,12 +66,12 @@ describe("selectRoiRows", () => {
       time: [0, 1, 2],
       values: [[10, 0], [Number.NaN, 0], [30, 0]],
     };
-    const sel = selectRoiRows(mk({ data: gapped }), [0, 2], 0);
+    const sel = selectRoiRows(mk({ data: gapped }), [0, 2], 0, null);
     expect(sel).toEqual({ x: [0, 2], y: [10, 30], rows: [0, 2] });
   });
 
   it("returns empty when nothing falls in range", () => {
-    expect(selectRoiRows(mk(), [100, 200], 0)).toEqual({ x: [], y: [], rows: [] });
+    expect(selectRoiRows(mk(), [100, 200], 0, null)).toEqual({ x: [], y: [], rows: [] });
   });
 });
 

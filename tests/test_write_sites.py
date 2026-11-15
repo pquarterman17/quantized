@@ -118,6 +118,21 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "`<project>.qzlock`-shaped lock record), never the project or any "
         "dataset source."
     ),
+    "cli_convert.py": (
+        "`qz convert`'s run report: written only after io/write_guard.check_target "
+        "refused an existing report (unless --overwrite) and any path that is, "
+        "resolves into or links to an input project."
+    ),
+    "io/datastruct_table.py": (
+        "write_table (qz convert, api.save_table): io/write_guard.check_target runs "
+        "first -- an existing path is refused unless overwrite=True, and a path that "
+        "is, resolves into or links to a protected input is refused even then."
+    ),
+    "io/origin_convert.py": (
+        "the `qz convert --to dwk` workspace: io/write_guard.check_target runs first "
+        "(existing file refused unless overwrite; the source project and every "
+        "other input, or a symlink to one, refused always)."
+    ),
     "io/hdf5.py": (
         "write_hdf5: writes only to the explicit `output_path` argument its "
         "caller supplies. The only in-repo caller, routes/export.py, always "

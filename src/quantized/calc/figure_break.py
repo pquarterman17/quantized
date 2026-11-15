@@ -42,6 +42,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.axis_breaks import apply_y_breaks
+from quantized.calc.axis_cross import apply_cross
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_layout import apply_figure_layout
@@ -54,6 +55,7 @@ from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 
 __all__ = ["render_breaks_impl"]
@@ -204,7 +206,10 @@ def render_breaks_impl(
         for si, (label, yv) in enumerate(cut):
             spec = series_styles[si] if series_styles and si < len(series_styles) else None
             kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-            artists.extend(ax.plot(x[shown], yv, label=label, **kw))
+            drawn = ax.plot(x[shown], yv, label=label, **kw)
+            for line in drawn:
+                apply_symbol_details(line, spec)  # gap audit 4 G10, as on the flat plot
+            artists.extend(drawn)
         tag_series_slots(artists)  # the legend's waterfall row order
         panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))
         apply_error_bars(ax, x[shown], cut, panel_spans, artists, series_styles)
@@ -235,6 +240,12 @@ def render_breaks_impl(
     if ov.get("y_lim") is not None:  # shared y: set once, after the autoscale
         apply_axis_shape_overrides(axes[0], st, {"y_lim": ov["y_lim"]}, lim_keys=("y_lim",))
     clear_seam_labels(fig, axes)
+    # Gap audit 4 G17: an axis crossing on every panel, as the screen draws
+    # it -- the Y crossing clamped into each panel's own X slice, labelled on
+    # panel 0 only (the shared Y's labels are panel 0's).
+    for i, ax in enumerate(axes):
+        apply_cross(ax, "x", x_fmt, "bottom")
+        apply_cross(ax, "y", panel_y_fmt, "left", labels=i == 0)
 
     # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
     # short strokes angled across each seam, on both the outgoing panel's

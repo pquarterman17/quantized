@@ -25,6 +25,7 @@ import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
 import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
 import type { GraphLayer } from "./graphLayers";
 import { isString, keyedRecord } from "./sanitizeRecord";
+import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
@@ -184,6 +185,8 @@ export interface PlotView {
    *  `annotations`/`refLines`. */
   shapes: Shape[];
   seriesStyles: Record<number, SeriesStyle>;
+  /** Colour gradient across the curves (origin gap audit 4 G1, lib/seriesRamp.ts); null = palette. */
+  seriesRamp: SeriesRamp | null;
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
   seriesOrder: number[] | null;
@@ -247,7 +250,7 @@ export function defaultPlotView(): PlotView {
     annotations: [],
     regionShades: [],
     shapes: [],
-    seriesStyles: {},
+    seriesStyles: {}, seriesRamp: null,
     seriesLabels: {},
     errKeys: {},
     seriesOrder: null,
@@ -366,6 +369,10 @@ export interface PlotWindow {
    *  default). Like `bg`, a per-window display choice on the record itself,
    *  not part of the swapped `PlotView`. Wired in `lib/windowsync.ts`. */
   linkGroup: number | null;
+  /** Gap audit 4 G19: the Y-axis link group, the same model as `linkGroup`
+   *  (1..MAX_LINK_GROUP, plot windows only) but syncing the primary Y range
+   *  only (`lib/windowsync.windowYSyncHook`). Absent / null = unlinked. */
+  linkYGroup?: number | null;
   /** kind:"snapshot" only (item 11): the frozen composed display bundle this
    *  window renders VERBATIM — no fetch, no rowstate, no live dataset binding
    *  (a snapshot window's `datasetId` is always null; frozen means frozen).
@@ -462,8 +469,9 @@ export function sanitizePlotView(v: unknown): PlotView {
     shapes: uniqueIds(sanitizeShapes(o.shapes)),
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
-        ? (o.seriesStyles as Record<number, SeriesStyle>)
+        ? (o.seriesStyles as Record<number, SeriesStyle>) // symbol values: `graphLayersSanitize.withValidLayers` (.dwk)
         : {},
+    seriesRamp: sanitizeSeriesRamp(o.seriesRamp), // additive: an older .dwk has none -> null
     // Values VALIDATED, not cast — see `lib/sanitizeRecord.ts` (BUG-014 r4).
     seriesLabels: keyedRecord<string, number>(o.seriesLabels, isString),
     errKeys:
