@@ -31,6 +31,7 @@ const HELPERS = new Set([
   "components/Stage/stackPanelRender.ts", // called by useMultiPanelStage
   "components/Stage/breakPanelRender.ts", // strips the marks
   "components/workshops/reflview/ReflPanel.tsx", // own series, no marks
+  "components/Stage/InsetLayerPlot.tsx", // a graph layer: its own curves and styles, no marks
   "components/workshops/SmallUPlot.tsx",
   "components/workshops/waterfall/WaterfallView.tsx",
   "lib/uplotOpts.ts", // buildOpts itself

@@ -8,9 +8,9 @@ import {
   datasetFormat,
   matchesQuery,
   parseQuery,
-  sanitizeSmartFolders,
   smartFolderMembers,
 } from "./smartfolders";
+import { sanitizeSmartFolders } from "./smartFoldersSanitize";
 import type { Dataset } from "./types";
 
 const ds = (

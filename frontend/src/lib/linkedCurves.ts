@@ -224,4 +224,5 @@ export function curvesForDatasets(datasets: readonly Dataset[], primaryOf: (ds: 
   });
 }
 
-export { emptyGraphReason, NO_CURVES_REASON, sanitizeLinkedCurves, UNRESOLVED_SOURCE } from "./linkedCurvesLite";
+export { emptyGraphReason, NO_CURVES_REASON, UNRESOLVED_SOURCE } from "./linkedCurvesLite";
+export { sanitizeLinkedCurves } from "./linkedCurvesSanitize";

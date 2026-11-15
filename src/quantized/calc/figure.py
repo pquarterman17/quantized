@@ -26,6 +26,7 @@ from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
 from quantized.calc.figure_inset import apply_inset
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_layers import apply_layers
 from quantized.calc.figure_layout import apply_figure_layout
 from quantized.calc.figure_legend_order import (
     draw_legend,
@@ -245,6 +246,7 @@ def draw_series_axes(
     if ov.get("inset"):
         warn_marks_not_drawn(series_styles, "the inset", ("size_by", "drop_lines"))
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
+    apply_layers(ax, ov)  # inset graphs of other data, images, tables (calc.figure_layers)
     return artists
 
 

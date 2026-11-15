@@ -15,7 +15,7 @@
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { figureLayerFamily } from "../../lib/originFigures";
 import { useApp } from "../../store/useApp";
-import { focusedWindowGuardsAgainst } from "../../store/windowUserEdits";
+import { focusedWindowGuardsAgainst } from "../../store/windowOpenGuard";
 
 /** Figures audit B1: how a Library OPEN applies an Origin graph. Applying
  *  replaces the target window's whole view, so when the focused window

@@ -23,6 +23,7 @@ import type { FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
 import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
 import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
+import type { GraphLayer } from "./graphLayers";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
@@ -143,6 +144,9 @@ export interface PlotView {
   /** The inset's source region + placement (null = never drawn: the screen
    *  seeds a central third, and the export the same). */
   inset: InsetView | null;
+  /** Origin-style layers over the plot: inset graphs of any data, images,
+   *  tables (`lib/graphLayers.ts`; [] = none). */
+  layers: GraphLayer[];
   polarMode: boolean;
   statMode: boolean;
   /** P2.6 — Stat Stage options that persist with the plot (screen and export both honour
@@ -219,7 +223,7 @@ export function defaultPlotView(): PlotView {
     plotTemplate: "screen",
     showAxisBox: true, xReversed: false,
     stackMode: false,
-    insetMode: false, inset: null,
+    insetMode: false, inset: null, layers: [],
     polarMode: false,
     statMode: false,
     statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
@@ -429,7 +433,8 @@ export function sanitizePlotView(v: unknown): PlotView {
     // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).
     legendFrameXY: legendXYOrNull(o.legendFrameXY),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
-    inset: sanitizeInset(o.inset),
+    // Graph layers: every reader validates each in full (lib/graphLayers.sanitizeLayers).
+    inset: sanitizeInset(o.inset), layers: Array.isArray(o.layers) ? o.layers : [],
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),

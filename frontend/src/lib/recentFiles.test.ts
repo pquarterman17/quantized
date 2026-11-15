@@ -4,11 +4,11 @@ import {
   addRecentEntry,
   clearRecentMeta,
   loadRecent,
-  relativeTime,
   removeRecentEntry,
   saveRecent,
   type RecentFile,
 } from "./recentFiles";
+import { relativeTime } from "./recentLabels";
 
 const mk = (name: string, at = "2026-06-28T00:00:00Z"): RecentFile => ({ name, size: 1, at });
 

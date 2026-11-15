@@ -1,0 +1,794 @@
+{
+ "about": "Graph layers (origin gap audit 3 #15): layer + dataset inputs and the export wire the screen resolves them to (frontend lib/graphLayersWire.ts, checked by graphLayersWire.fixture.test.ts); tests/test_calc_figure_layers.py renders each wire and checks the export draws exactly those values. Curve colours are the fixed test palette #1f77b4, #d62728.",
+ "cases": [
+  {
+   "name": "an inset of two other datasets, auto linear X and a log Y",
+   "datasets": [
+    {
+     "id": "loop",
+     "name": "M(H) 300 K",
+     "data": {
+      "time": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ],
+      "values": [
+       [
+        100,
+        1.2
+       ],
+       [
+        0,
+        0.3
+       ],
+       [
+        -100,
+        -1.2
+       ],
+       [
+        0,
+        -0.3
+       ],
+       [
+        100,
+        1.2
+       ]
+      ],
+      "labels": [
+       "H",
+       "M"
+      ],
+      "units": [
+       "Oe",
+       "emu"
+      ],
+      "metadata": {}
+     },
+     "excludedRows": [
+      3
+     ]
+    },
+    {
+     "id": "dmdh",
+     "name": "dM/dH",
+     "data": {
+      "time": [
+       -50,
+       -25,
+       0,
+       25,
+       50
+      ],
+      "values": [
+       [
+        0.002
+       ],
+       [
+        0.02
+       ],
+       [
+        0.4
+       ],
+       [
+        0.02
+       ],
+       [
+        0.002
+       ]
+      ],
+      "labels": [
+       "dMdH"
+      ],
+      "units": [
+       ""
+      ],
+      "metadata": {}
+     }
+    }
+   ],
+   "layers": [
+    {
+     "id": "L1",
+     "kind": "inset",
+     "at": [
+      0.55,
+      0.08,
+      0.38,
+      0.36
+     ],
+     "mark": "linesymbol",
+     "curves": [
+      {
+       "datasetId": "dmdh",
+       "xKey": null,
+       "yKey": 0,
+       "label": ""
+      },
+      {
+       "datasetId": "loop",
+       "xKey": 0,
+       "yKey": 1,
+       "label": ""
+      }
+     ],
+     "x": {
+      "lim": null,
+      "scale": "linear",
+      "label": "H (Oe)",
+      "step": null
+     },
+     "y": {
+      "lim": null,
+      "scale": "log",
+      "label": "dM/dH",
+      "step": null
+     }
+    }
+   ],
+   "wire": [
+    {
+     "kind": "inset",
+     "at": [
+      0.55,
+      0.08,
+      0.38,
+      0.36
+     ],
+     "x": {
+      "lim": [
+       -110,
+       110
+      ],
+      "scale": "linear",
+      "label": "H (Oe)",
+      "ticks": [
+       -100,
+       -50,
+       0,
+       50,
+       100
+      ],
+      "tick_labels": [
+       "-100",
+       "-50",
+       "0",
+       "50",
+       "100"
+      ]
+     },
+     "y": {
+      "lim": [
+       0.00145252104405,
+       1.65229964125
+      ],
+      "scale": "log",
+      "label": "dM/dH",
+      "ticks": [
+       0.01,
+       0.1,
+       1
+      ],
+      "tick_labels": [
+       "0.01",
+       "0.1",
+       "1"
+      ]
+     },
+     "mark": "linesymbol",
+     "curves": [
+      {
+       "x": [
+        -50,
+        -25,
+        0,
+        25,
+        50
+       ],
+       "y": [
+        0.002,
+        0.02,
+        0.4,
+        0.02,
+        0.002
+       ],
+       "color": "#1f77b4"
+      },
+      {
+       "x": [
+        100,
+        0,
+        -100,
+        100
+       ],
+       "y": [
+        1.2,
+        0.3,
+        null,
+        1.2
+       ],
+       "color": "#d62728"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "typed limits and a tick step",
+   "datasets": [
+    {
+     "id": "dmdh",
+     "name": "dM/dH",
+     "data": {
+      "time": [
+       -50,
+       -25,
+       0,
+       25,
+       50
+      ],
+      "values": [
+       [
+        0.002
+       ],
+       [
+        0.02
+       ],
+       [
+        0.4
+       ],
+       [
+        0.02
+       ],
+       [
+        0.002
+       ]
+      ],
+      "labels": [
+       "dMdH"
+      ],
+      "units": [
+       ""
+      ],
+      "metadata": {}
+     }
+    }
+   ],
+   "layers": [
+    {
+     "id": "L1",
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "mark": "line",
+     "curves": [
+      {
+       "datasetId": "dmdh",
+       "xKey": null,
+       "yKey": 0,
+       "label": ""
+      }
+     ],
+     "x": {
+      "lim": [
+       -40,
+       40
+      ],
+      "scale": "linear",
+      "label": "",
+      "step": 20
+     },
+     "y": {
+      "lim": [
+       0,
+       0.5
+      ],
+      "scale": "linear",
+      "label": "",
+      "step": 0.25
+     }
+    }
+   ],
+   "wire": [
+    {
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "x": {
+      "lim": [
+       -40,
+       40
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       -40,
+       -20,
+       0,
+       20,
+       40
+      ],
+      "tick_labels": [
+       "-40",
+       "-20",
+       "0",
+       "20",
+       "40"
+      ]
+     },
+     "y": {
+      "lim": [
+       0,
+       0.5
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       0,
+       0.25,
+       0.5
+      ],
+      "tick_labels": [
+       "0.00",
+       "0.25",
+       "0.50"
+      ]
+     },
+     "mark": "line",
+     "curves": [
+      {
+       "x": [
+        -50,
+        -25,
+        0,
+        25,
+        50
+       ],
+       "y": [
+        0.002,
+        0.02,
+        0.4,
+        0.02,
+        0.002
+       ],
+       "color": "#1f77b4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "missing sources: the notice, no curve",
+   "datasets": [],
+   "layers": [
+    {
+     "id": "L1",
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "mark": "line",
+     "curves": [
+      {
+       "datasetId": "deleted",
+       "xKey": null,
+       "yKey": 0,
+       "label": ""
+      }
+     ],
+     "x": {
+      "lim": null,
+      "scale": "linear",
+      "label": "",
+      "step": null
+     },
+     "y": {
+      "lim": null,
+      "scale": "linear",
+      "label": "",
+      "step": null
+     }
+    }
+   ],
+   "wire": [
+    {
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "x": {
+      "lim": [
+       0,
+       1
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       0,
+       0.2,
+       0.4,
+       0.6,
+       0.8,
+       1
+      ],
+      "tick_labels": [
+       "0.0",
+       "0.2",
+       "0.4",
+       "0.6",
+       "0.8",
+       "1.0"
+      ]
+     },
+     "y": {
+      "lim": [
+       0,
+       1
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       0,
+       0.2,
+       0.4,
+       0.6,
+       0.8,
+       1
+      ],
+      "tick_labels": [
+       "0.0",
+       "0.2",
+       "0.4",
+       "0.6",
+       "0.8",
+       "1.0"
+      ]
+     },
+     "mark": "line",
+     "curves": [],
+     "notice": "No curves: their sources are missing"
+    }
+   ]
+  },
+  {
+   "name": "a table and an image, as placed",
+   "datasets": [],
+   "layers": [
+    {
+     "id": "T",
+     "kind": "table",
+     "at": [
+      0.05,
+      0.6,
+      0.3,
+      0.25
+     ],
+     "rows": [
+      [
+       "T (K)",
+       "Hc (Oe)"
+      ],
+      [
+       "10",
+       "120"
+      ],
+      [
+       "300",
+       "15"
+      ]
+     ],
+     "header": true
+    },
+    {
+     "id": "I",
+     "kind": "image",
+     "at": [
+      0.05,
+      0.05,
+      0.2,
+      0.2
+     ],
+     "name": "dot.png",
+     "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAOnRFWHRTb2Z0d2FyZQBNYXRwbG90bGliIHZlcnNpb24zLjExLjIsIGh0dHBzOi8vbWF0cGxvdGxpYi5vcmcvgI3uAAAAAAlwSFlzAAAPYQAAD2EBqD+naQAAABFJREFUeJxj+M/A8J+B4f9/AA/5A/1o/366AAAAAElFTkSuQmCC"
+    }
+   ],
+   "wire": [
+    {
+     "kind": "table",
+     "at": [
+      0.05,
+      0.6,
+      0.3,
+      0.25
+     ],
+     "rows": [
+      [
+       "T (K)",
+       "Hc (Oe)"
+      ],
+      [
+       "10",
+       "120"
+      ],
+      [
+       "300",
+       "15"
+      ]
+     ],
+     "header": true
+    },
+    {
+     "kind": "image",
+     "at": [
+      0.05,
+      0.05,
+      0.2,
+      0.2
+     ],
+     "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAOnRFWHRTb2Z0d2FyZQBNYXRwbG90bGliIHZlcnNpb24zLjExLjIsIGh0dHBzOi8vbWF0cGxvdGxpYi5vcmcvgI3uAAAAAAlwSFlzAAAPYQAAD2EBqD+naQAAABFJREFUeJxj+M/A8J+B4f9/AA/5A/1o/366AAAAAElFTkSuQmCC"
+    }
+   ]
+  },
+  {
+   "name": "a multi-X book: R2 draws against its own X (T2, descending), never T1",
+   "datasets": [
+    {
+     "id": "book",
+     "name": "R(T) two runs",
+     "data": {
+      "time": [
+       1,
+       2,
+       3
+      ],
+      "values": [
+       [
+        10,
+        300,
+        5
+       ],
+       [
+        20,
+        200,
+        6
+       ],
+       [
+        30,
+        100,
+        7
+       ]
+      ],
+      "labels": [
+       "R1",
+       "T2",
+       "R2"
+      ],
+      "units": [
+       "",
+       "K",
+       ""
+      ],
+      "metadata": {}
+     },
+     "columnDesignations": {
+      "0": "Y",
+      "1": "X",
+      "2": "Y"
+     }
+    }
+   ],
+   "layers": [
+    {
+     "id": "L1",
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "mark": "line",
+     "curves": [
+      {
+       "datasetId": "book",
+       "xKey": null,
+       "yKey": 2,
+       "label": ""
+      }
+     ],
+     "x": {
+      "lim": null,
+      "scale": "linear",
+      "label": "",
+      "step": null
+     },
+     "y": {
+      "lim": null,
+      "scale": "linear",
+      "label": "",
+      "step": null
+     }
+    }
+   ],
+   "wire": [
+    {
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "x": {
+      "lim": [
+       90,
+       310
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       100,
+       150,
+       200,
+       250,
+       300
+      ],
+      "tick_labels": [
+       "100",
+       "150",
+       "200",
+       "250",
+       "300"
+      ]
+     },
+     "y": {
+      "lim": [
+       4.9,
+       7.1
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       5,
+       5.5,
+       6,
+       6.5,
+       7
+      ],
+      "tick_labels": [
+       "5.0",
+       "5.5",
+       "6.0",
+       "6.5",
+       "7.0"
+      ]
+     },
+     "mark": "line",
+     "curves": [
+      {
+       "x": [
+        300,
+        200,
+        100
+       ],
+       "y": [
+        5,
+        6,
+        7
+       ],
+       "color": "#1f77b4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "an inset with no curve bound yet: an empty frame, no UI hint",
+   "datasets": [],
+   "layers": [
+    {
+     "id": "L1",
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "mark": "line",
+     "curves": [],
+     "x": {
+      "lim": null,
+      "scale": "linear",
+      "label": "",
+      "step": null
+     },
+     "y": {
+      "lim": null,
+      "scale": "linear",
+      "label": "",
+      "step": null
+     }
+    }
+   ],
+   "wire": [
+    {
+     "kind": "inset",
+     "at": [
+      0.1,
+      0.1,
+      0.3,
+      0.3
+     ],
+     "x": {
+      "lim": [
+       0,
+       1
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       0,
+       0.2,
+       0.4,
+       0.6,
+       0.8,
+       1
+      ],
+      "tick_labels": [
+       "0.0",
+       "0.2",
+       "0.4",
+       "0.6",
+       "0.8",
+       "1.0"
+      ]
+     },
+     "y": {
+      "lim": [
+       0,
+       1
+      ],
+      "scale": "linear",
+      "label": "",
+      "ticks": [
+       0,
+       0.2,
+       0.4,
+       0.6,
+       0.8,
+       1
+      ],
+      "tick_labels": [
+       "0.0",
+       "0.2",
+       "0.4",
+       "0.6",
+       "0.8",
+       "1.0"
+      ]
+     },
+     "mark": "line",
+     "curves": [],
+     "notice": ""
+    }
+   ]
+  }
+ ]
+}

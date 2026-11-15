@@ -22,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
+from quantized.auth import TOKEN_HEADER
 from quantized.routes._columns import (
     COLUMNS_MEDIA_TYPE,
     decode_columns,
@@ -150,8 +151,10 @@ def test_wants_columns_parses_the_accept_header() -> None:
 def _live_fixture() -> dict[str, Any]:
     # Loopback host: `write_fixture()` also runs outside pytest, where conftest's
     # `testserver` Host allowance is absent (security.host_allowed).
+    # The API token is sent explicitly: conftest injects it only into TestClients
+    # built under pytest, and the documented regen command runs outside pytest.
     client = TestClient(app, base_url="http://127.0.0.1")
-    headers = {"content-type": "application/json"}
+    headers = {"content-type": "application/json", TOKEN_HEADER: app.state.api_token}
     as_json = client.post("/api/plot/series", content=FIXTURE_BODY_TEXT, headers=headers)
     as_columns = client.post(
         "/api/plot/series",

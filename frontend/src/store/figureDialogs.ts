@@ -17,6 +17,8 @@ export type FigureDialog =
   | { kind: "plotDetails"; channel: number }
   /** Gap audit 3 N1: the focused graph's curves — add, remove, reorder, re-bind. */
   | { kind: "layerContents" }
+  /** Gap audit 3 #15: one graph layer's properties (inset graph / image / table). */
+  | { kind: "graphLayer"; id: string; draft?: import("../lib/graphLayers").GraphLayer }
   | null;
 
 export const useFigureDialog = create<{ open: FigureDialog }>(() => ({ open: null }));
