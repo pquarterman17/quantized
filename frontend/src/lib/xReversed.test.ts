@@ -6,7 +6,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
-  class RecordingPath {
+  // Extends the real Path2D (installed by test/setup): the canvas backend rejects a clip() of anything else.
+  class RecordingPath extends (globalThis as unknown as { Path2D: new () => object }).Path2D {
     xs: number[] = [];
     moveTo(x: number) { this.xs.push(x); }
     lineTo(x: number) { this.xs.push(x); }
