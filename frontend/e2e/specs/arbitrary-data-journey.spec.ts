@@ -212,17 +212,17 @@ test("importing an arbitrary CSV confirms the guessed roles and reaches a clean,
   await expect(channelCheckboxes.nth(0)).toBeChecked();
   await expect(channelCheckboxes.nth(1)).toBeChecked();
 
-  // The Import wizard is done (Import already landed the dataset) — close it
-  // through its own real close button before moving on. Not optional
-  // tidiness: every floating ToolWindow in this app opens at the SAME
-  // default screen position (the exact fact group-facet-journey.spec.ts's
-  // header documents for Graph Builder vs. Publication Preview), and left
-  // open here it sits UNDER where the command palette's filtered list
-  // renders — reproduced directly: a real click on the palette's
-  // "Publication preview…" row timed out with Playwright's own diagnostic
-  // "<div title=\"header line\"> … subtree intercepts pointer events",
-  // `title="header line"` being the wizard's raw-lines strip (PreviewTable.tsx).
-  await wizard.getByTitle("Close", { exact: true }).click();
+  // A successful Import closes the wizard by itself (ImportWizardPanel.tsx;
+  // a failed import keeps it open with the error shown). Asserting it is gone
+  // checks that behaviour AND keeps the next step honest: every floating
+  // ToolWindow in this app opens at the SAME default screen position (the
+  // exact fact group-facet-journey.spec.ts's header documents for Graph
+  // Builder vs. Publication Preview), and a wizard left open sits UNDER where
+  // the command palette's filtered list renders. Reproduced directly: a real
+  // click on the palette's "Publication preview…" row timed out with
+  // Playwright's own diagnostic "<div title=\"header line\"> … subtree
+  // intercepts pointer events", `title="header line"` being the wizard's
+  // raw-lines strip (PreviewTable.tsx).
   await expect(wizard).toBeHidden();
 
   // ── A successful publication-preview render (real UI, real backend): the
