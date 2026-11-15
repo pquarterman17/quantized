@@ -124,6 +124,9 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 - Items 5-8 are per plot-type family and parallelizable. Each one runs its
   import fixes (this session, COM) and books its creation gaps (cloud).
 - Item 9 (round trip quantized → Origin) is a later batch and reuses item 1.
+- Items 10-19 are creation gaps for the cloud sessions, independent of each
+  other; #10 and #14 share the missing bar-creation UI. Re-run
+  `tools/plot_corpus/scratch_run.py` to verify each.
 
 ### Resolved decisions (owner, 2026-11-15)
 
@@ -147,13 +150,6 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 ---
 
 ## Tier 1 — High Impact
-
-3. **Check 2 — quantized-from-scratch scorer**
-   - [ ] Per (type × family) recipe building the same figure through
-         quantized's own figure model.
-   - [ ] Score it against the same `oracle.json`.
-   - [ ] Put quantized's export PNG next to Origin's for review.
-   - [ ] Unbuildable types → book as cloud items here.
 
 4. **First scorecard** — every 2D type × family, both checks, with a review
    page of side-by-side PNGs for the owner
@@ -230,6 +226,56 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them
 
+### Creation gaps found by check 2 (cloud items, owner decision 2026-11-15)
+
+Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
+231 ok specimens (scorecard in `<review>/scorecard.md`, side-by-side
+`<review>/index.html`); "N/M" = specimens of that type affected.
+
+10. **Horizontal bar** — no way to create one (11/11 `bar` specimens
+    unbuildable). `SeriesStyle.bars = "horizontal"` already renders on the
+    canvas (`lib/uplotOrient.ts`) and in export (`calc/figure_orient.py`),
+    but only an Origin import sets it: no gallery tile, Series card control
+    or Stat Stage orientation.
+11. **Horizontal stacked bar** — 11/11 `stacked_bar` unbuildable: the Stat
+    Stage bar is vertical only and `bars: "horizontal"` has no stacking.
+12. **Floating column** — 9/9 `floating_column` unbuildable: no bar that
+    spans two Y columns (low to high); every bar starts at zero.
+13. **Stacked area** — 8/8 `stacked_area` unbuildable: `fill` is
+    under-zero or between two curves, never cumulative on the previous
+    series.
+14. **Column / stacked column per X row** — 8/11 `column` and 8/11
+    `stacked_column` built the wrong figure. With a numeric X the gallery's
+    Column routes to the Stat Stage, which has no category column and
+    falls back to ONE bar per Y column (its mean ± SE, "n=50"); Origin
+    draws one bar per row at its X value, one series per Y column.
+    `duplicates` (1 Y) gives one bar for 20 rows. Only text-category X
+    (`text_categories`) and one-row data match. The XY-stage bar renderer
+    (`SeriesStyle.bars`) would draw Origin's figure but has no creation UI
+    (shared with #10). The bars also take no Series card colour (11/11
+    styles wrong on both types).
+15. **Histogram of several columns** — 8/11 `histogram`: the gallery's
+    Histogram bins only the first plotted column; Origin bins every
+    selected Y column in one graph. `single_point` (1 row) exports nothing
+    (the stage needs >= 2 values); Origin draws a one-bin histogram.
+16. **Double-Y axis assignment** — 6/8 `double_y` put the wrong curve on the
+    right axis: `plotTypePatch("doubleY")` moves the LAST plotted column to
+    Y2, Origin's `DOUBLEY` template puts the SECOND Y column on the right
+    and keeps the rest on the left (measured: layer 2 holds only `y2` of
+    `y1,y2,y3`). Both agree only with exactly two Y columns.
+17. **Ternary from an A,B,C sheet** — 1/1 `ternary` wrong axis order: the
+    gallery Ternary tile refuses the sheet ("Needs three composition
+    columns") because the first CSV column imports as the X axis, leaving
+    two channels; Plot > Ternary diagram... builds it, but its default picks
+    (`auxColumns.defaultPicks`) take channels first and the X column last,
+    so the axes come out B, C, A instead of A, B, C.
+18. **Bubble axis padding** — 5/7 `bubble`: X runs exactly to the data
+    ([0, 10]) so edge bubbles are cut in half; Origin pads the axis to the
+    largest bubble ([-0.68, 10.46]).
+19. **Polar line width** — the polar export always draws
+    `POLAR_LINE_PX` (`lib/polarFigureSpec.ts`), so a Series card width
+    (2 pt in the corpus) never reaches a polar figure.
+
 ## Tier 3 — Nice-to-Have
 
 9. **Round trip quantized → Origin** — export each passing figure (`.opj`
@@ -289,3 +335,37 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
     recipe or scope matter, not a refusal: heatmap from an XYZ sheet made no
     graph (heatmap is built from the matrix family); the waterfall template
     is 3D; vector XYXY (218) made no graph from the probe selection.
+- ~~**#3 Check 2 — quantized-from-scratch scorer**~~ (2026-11-15). Built in
+  `tools/plot_corpus/scratch_*.py` plus the vitest recipe harness
+  `frontend/src/test/plotCorpus/`; `tests/test_plot_corpus_scratch.py` and
+  `recipeHarness.test.tsx` run without Origin or the corpus.
+  - **Route.** Each family's graphed sheet is written as the CSV a user
+    opens and imported through the app's own `/api/parsers/upload` (a
+    matrix as long-form X,Y,Z; dates as ISO dates). The recipe table
+    (`scratch_recipes.py`) names the user's clicks; the harness replays them
+    on the real store (worksheet Set As, masked rows excluded, log axes,
+    `applyPlotType`, Series card modes/styles, Stat Stage picker, Map contour
+    toggle, Plot > Ternary diagram...) and builds the request with the app's
+    own export entry for what is on screen: `buildStageFigureSpec`, the
+    mounted `<StatStage>`'s registered exporter, `fetchMap` +
+    `mapFigureBody`, `buildTernaryRequest`. The app's `/api/...` calls go to
+    a live in-process backend, so nothing on the path is mocked. Each request
+    is posted to its export route at PNG; `/figure-hitmap` gives an XY
+    figure's drawn axis limits.
+  - **Scoring** vs `oracle.json`: type, curves (Y columns), binding (each
+    curve's drawn X points against Origin's X column, error-bar companions,
+    Y2 membership, ternary axis order), values, axes (scale, range within
+    5 % of span) and styles. `match` = built and the first four ok.
+  - **First run (231 ok specimens): 191 built, 158 match, 40 unbuildable.**
+    Matching every specimen: line, scatter, line+symbol, area, step, y-error,
+    waterfall offset, polar, box, violin, strip, bubble, colour-mapped,
+    contour (XYZ and matrix), heatmap. Unbuildable: horizontal bar, stacked
+    bar, floating column, stacked area (#10-#13). Built but wrong: column and
+    stacked column (#14), histogram (#15), double-Y (#16), ternary (#17).
+    Axis ranges differ on 7/18 XY specimens per type (Origin pads to a tick,
+    matplotlib to round numbers; area bases at 0 in Origin) and bubble
+    padding (#18); styles reach the request everywhere except stat bars
+    (#14) and polar width (#19).
+  - Review page with Origin's PNG beside quantized's for every specimen:
+    `scratch_run.py --out <review>` writes `index.html`, `scorecard.md`,
+    `scorecard.json` (run output stays out of the repo).
