@@ -38,16 +38,10 @@ const panel = (xs: number[], xRange: [number, number]): BreakPanel => ({
 
 describe("break panels and the data-driven marks", () => {
   it("plainStyle strips the marks and keeps the rest", () => {
-    expect(plainStyle({ connect: "spline", dropLines: "x", sizeBy: 1, color: "#f00" })).toEqual({
-      connect: undefined, dropLines: undefined, sizeBy: undefined, color: "#f00",
-    });
+    expect(plainStyle({ connect: "spline", dropLines: "x", sizeBy: 1, color: "#f00" })).toEqual({ color: "#f00" });
     const plain = { color: "#f00" };
     expect(plainStyle(plain)).toBe(plain);
     expect(plainStyle(undefined)).toBeUndefined();
-    // The magnifier inset keeps the spline (the export's inset copies it) and drops the rest.
-    expect(plainStyle({ connect: "spline", dropLines: "x", sizeBy: 1 }, ["dropLines", "sizeBy"])).toMatchObject({
-      connect: "spline", dropLines: undefined, sizeBy: undefined,
-    });
   });
 
   it("a break panel draws a spline / size-by series as an ordinary visible line, with no mark plugin", async () => {

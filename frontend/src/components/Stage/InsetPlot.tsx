@@ -30,7 +30,6 @@ import type { InsetView, PlotView } from "../../lib/plotview";
 import { buildOpts, resolvePlotBg } from "../../lib/uplotOpts";
 import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { SeriesStyle } from "../../lib/types";
-import { plainStyle } from "./breakPanelRender";
 import { useApp } from "../../store/useApp";
 import { patchBackgroundView } from "../../store/windowViewEdit";
 
@@ -144,7 +143,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, windo
       hidden,
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
-      seriesStyles: styleList?.map((s) => plainStyle(s, ["dropLines", "sizeBy"])), // the export's inset omits them (and warns)
+      seriesStyles: styleList?.map((s) => s && { ...s, dropLines: undefined, sizeBy: undefined }), // the export's inset omits them (and warns)
       seriesCycle,
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,

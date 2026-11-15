@@ -60,17 +60,13 @@ import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
 
-/** A style without the given marks (default: all three): a view that cannot draw them shows an
- *  ordinary line instead, and the export of that view warns the same (`calc.figure_marks`). */
-export function plainStyle(
-  s: SeriesStyle | undefined,
-  keys: readonly ("connect" | "dropLines" | "sizeBy")[] = ["connect", "dropLines", "sizeBy"],
-): SeriesStyle | undefined {
-  const o = s && { ...s };
-  const hit = keys.filter((k) => o?.[k] != null);
-  hit.forEach((k) => delete o![k]);
-  return hit.length ? o : s;
-}
+/** A style without the three marks: a break panel cannot draw them (the export warns the same). */
+export const plainStyle = (s: SeriesStyle | undefined): SeriesStyle | undefined => {
+  if (!s || (s.connect == null && s.dropLines == null && s.sizeBy == null)) return s;
+  const { connect: _c, dropLines: _d, sizeBy: _s, ...rest } = s;
+  void _c; void _d; void _s;
+  return rest;
+};
 
 /** Everything a break panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed panel box), `xLim` (the

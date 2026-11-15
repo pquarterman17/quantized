@@ -23,7 +23,6 @@ import type { ErrorSpan } from "../../lib/errorbars";
 import type { PlotPayload } from "../../lib/plotdata";
 import { panelHeights, type xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
-import { plainStyle } from "./breakPanelRender";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
@@ -126,7 +125,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
       ...args.cell,
       width: args.box.w,
       height: 0,
-      seriesStyles: [plainStyle(args.seriesStyles[i], ["sizeBy"])], // no size-by in a stacked cell (the page export warns)
+      seriesStyles: [args.seriesStyles[i] && { ...args.seriesStyles[i], sizeBy: undefined }], // no size-by in a stacked cell (the page export warns)
       seriesLabels: [args.seriesLabels[i]],
       // Item A: same class of fix as the spatial multi-panel path — an
       // Origin "Y-error" column is already dropped from `plotted`, so its
