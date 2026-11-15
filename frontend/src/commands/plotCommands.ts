@@ -65,14 +65,27 @@ export function sendEditableFigureToReport(s: StoreGet, figureId: string): Promi
 /** The Stage graph-template / Copy-Paste Format commands (figures-audit B2):
  *  the bodies load on demand, the same `runLazy` + `.then(act,
  *  onLoadFailure)` shape as `openPageSetup` above. */
+const loadGraphFormat = () => import("../lib/graphTemplateCommands");
 function graphFormatCommand(
   s: StoreGet,
   pick: (m: typeof import("../lib/graphTemplateCommands")) => (s: StoreGet) => void | Promise<void>,
 ): void {
-  void runLazy("Loading graph templates…", () => import("../lib/graphTemplateCommands")).then(
+  void runLazy("Loading graph templates…", loadGraphFormat).then(
     (m) => pick(m)(s),
     onLoadFailure,
   );
+}
+
+/** Gap audit 5 #1: the boot installs the default graph template from the same
+ *  chunk, loaded only when one is set (a failed load leaves new graphs plain). */
+export function warmDefaultGraphTemplate(): Promise<void> | undefined {
+  try {
+    // The key is lib/defaultGraphTemplate.ts's DEFAULT_GRAPH_TEMPLATE_KEY.
+    if (localStorage.getItem("qz.defaultGraphTemplate")) return loadGraphFormat().then((m) => m.installDefaultGraphTemplate(), () => {});
+  } catch {
+    /* storage unavailable: no default (fail closed) */
+  }
+  return undefined;
 }
 
 /** Build the Plot- and Insert-group curated palette actions against the
@@ -367,6 +380,13 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Display",
       label: "Apply Graph Template…",
       run: () => graphFormatCommand(s, (m) => m.applyStageGraphTemplate),
+    },
+    {
+      id: "graph-template-default", // gap audit 5 #1: the look every new graph opens with
+      group: "Plot",
+      section: "Display",
+      label: "Set as Default for New Graphs…",
+      run: () => graphFormatCommand(s, (m) => m.setStageGraphAsDefault),
     },
     {
       id: "copy-format",

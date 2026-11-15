@@ -130,10 +130,20 @@ def test_record_metadata_labels_every_column() -> None:
     assert got == {"A": ("X", "time", "s"), "B": ("Y", "volts", "V"), "C": ("X-error", "dx", "")}
     # a column the records do not cover: the whole sheet stays unlabelled
     assert record_column_metadata(b, pages, table, {}, {"Num": ["A", "D"]}) == {}
-    # a disregard column: unknown to quantized -> unlabelled, never guessed
+    # a disregard column (code 1, COM-proven: decode-plan item 72) is labelled
     b2 = _MAGIC + _book("Num", [(1, "A", 3, 0, "x"), (2, "B", 1, 1, "y")])
     p2 = opju_pages(b2)
-    assert record_column_metadata(b2, p2, column_id_table(b2, p2), {}, {"Num": ["A", "B"]}) == {}
+    got2 = record_column_metadata(b2, p2, column_id_table(b2, p2), {}, {"Num": ["A", "B"]})
+    assert {c: m.designation for c, m in got2["Num"].columns.items()} == {
+        "A": "X",
+        "B": "disregard",
+    }
+    # an unknown code (9): the sheet stays unlabelled, never guessed
+    b3 = bytearray(b2)
+    b3[b3.index(b"\x01B")] = 9  # B's code literal (offset 17), just before its name
+    p3 = opju_pages(bytes(b3))
+    t3 = column_id_table(bytes(b3), p3)
+    assert record_column_metadata(bytes(b3), p3, t3, {}, {"Num": ["A", "B"]}) == {}
 
 
 def test_step_connect_withholds_the_line_style() -> None:

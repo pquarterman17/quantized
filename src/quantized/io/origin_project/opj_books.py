@@ -302,7 +302,9 @@ def _build_book(
         # Origin short names of the value columns, in channel order — lets a
         # figure's curve->column binding (opju_curves) map onto `.values`.
         "origin_column_names": value_cols,
-        "column_designations": {c: m.designation for c, m in col_meta.items()},
+        # an unproven designation (`.opju` `30 61` / `20 61` with no record:
+        # windows_opju) is "" and left out, never guessed
+        "column_designations": {c: m.designation for c, m in col_meta.items() if m.designation},
         "column_comments": {
             c: clean_richtext(m.comment) for c, m in col_meta.items() if m.comment
         },

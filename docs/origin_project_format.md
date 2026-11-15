@@ -1310,15 +1310,21 @@ comments**):
 marker-byte + display-code convention (§4.1 offsets `0x25`/`0x26`) inside
 CPYUA's framing:
 
-| marker | designation |
+| marker | designation (record offset 17 decides) |
 |--------|-------------|
 | `21 51` | X |
-| `21 61` | Y |
-| `30 61` | Y-error |
+| `21 61` | Y (or group / subject) |
+| `30 61` | Y-error **or X-error** |
+| `20 61` | label **or Z** |
+| `21 41` | disregard |
 
-(`disregard`/`X-error` counterparts unconfirmed — no oracle column
-exercised them — so only these three are wired; anything else falls back
-to plain `Y`, matching `.opj`'s own default.)
+The marker does not name the designation; the record's offset-17 code does
+(`opju_marker_designations.py`, decode-plan item 72, 2026-11-15). A marker
+whose record does not prove its code reads by the marker only when that is
+unambiguous (X, Y, disregard); an unproven `30 61` / `20 61` keeps counting
+its column but carries no designation. The marker bytes also occur in label
+text (`20 61` = " a", `30 61` = "0a"); because columns are bound by run
+POSITION, such a stray marker shifts a book's labels (decode-plan item 73).
 
 **These markers exist only for Text & Numeric columns (2026-11-15).** The
 column record is the `.opj` column property block in CPYUA's sparse grammar;
@@ -1333,11 +1339,16 @@ column (every book filled over COM / LabTalk) therefore writes `01 50` /
 `01 60` / `10 60` and no `09` byte. Designation codes, from a COM matched
 pair (same book, format 1 vs 9) and `wks.col.type` of `designations.opju` /
 Altaxo `WksDifferentDiagramAssoc.opju`: **0 Y, 1 disregard, 2 Y-error, 3 X,
-4 label, 5 Z, 6 X-error** (7, 8 = LabTalk types 8, 9). Note this
-contradicts the `21 41` = label / `20 61` + code 4 = Z / code 5 = X-error
-reading below: `21 41` is disregard, code 4 label, 5 Z, and a real X-error
-column (code 6) carries `30 61` (booked as decode-plan item 72). Readers:
-`opju_column_fixed.py`, `opju_record_meta.py`.
+4 label, 5 Z, 6 X-error, 7 group, 8 subject** (LabTalk `wks.col.type` 1-9
+in the order 1 2 3 4 5 6 7 8 9 -> codes 0 1 2 3 4 5 6 7 8; COM specimen books
+with all nine, saved Numeric / Text&Numeric / mixed, 42 of 42 columns,
+2026-11-15). The `21 41` = label / `20 61` + code 4 = Z / code 5 = X-error
+reading the marker scan used until then was wrong: `21 41` is disregard,
+code 4 label, 5 Z, and a real X-error column (code 6) carries `30 61`
+(fixed, decode-plan item 72). Note a column whose LabTalk `format` is set to
+9 by COM in Origin 2026b stores offset 30 = 14 with no `0x01` bit in 38 --
+no T&N marker; the real corpus's T&N columns store 9. Readers:
+`opju_column_fixed.py`, `opju_record_meta.py`, `opju_marker_designations.py`.
 
 **2. A fixed-shape run of default column-format doubles follows every
 marker**, then an OPTIONAL length-prefixed embedded blob

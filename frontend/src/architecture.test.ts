@@ -3673,6 +3673,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // SLICE 28 (2026-11-15): the core commands' descriptions and keywords.
     // Only the full list (appCommands.ts, loaded after mount) merges them in.
     "/commands/commandDocs.ts",
+    // Gap audit 5 #1: applying the default graph template (and the graph
+    // format code it reaches). The eager store holds only its slot; the boot
+    // loads it when a default is set (commands/plotCommands.ts warmDefaultGraphTemplate).
+    "/lib/defaultGraphTemplate.ts",
+    "/lib/graphFormat.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
