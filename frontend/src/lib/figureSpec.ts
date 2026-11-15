@@ -63,6 +63,7 @@ import { withCanvasLineWidth } from "./exportLineWidth";
 import { canvasLineWidth } from "./plotTemplates";
 import { logOffsetWire } from "./logOffsetWire";
 import { waterfallWire } from "./waterfallWire";
+import { rampView } from "./seriesRampImpl";
 import { axisFmtParam } from "./types";
 
 /** The render-time choices a caller supplies. Everything else about the spec
@@ -214,7 +215,7 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
-  [st, data, extras] = perSeriesXSpec(st, data, channelRoles, extras); // gap-2 #2: each Y on its own X, as on screen
+  [st, data, extras] = perSeriesXSpec(rampView(st, data, channelRoles, extras), data, channelRoles, extras); // gap-2 #2 each Y on its own X; gap-4 G1 the colour gradient first, on the source channels as on screen
   const ps = st.pageSetup; // #54 Stage 3: the window page (figsize + margins as `page_pad`, audit B3); absent = preset + tight_layout
   const pageSize = ps ? pageSizeInches(ps) : null;
   const overrides = ps

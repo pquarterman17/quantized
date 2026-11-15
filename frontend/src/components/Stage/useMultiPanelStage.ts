@@ -355,7 +355,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
 
   // The on-demand axis extras (breaks, divide-by, minor ticks ...) and the
   // startup chunks reach every panel too: rebuild once they land.
-  const lazyEpoch = useLazyPlotEpoch([xFmt, yFmt], tool, plotDecorNeeds(Object.values(seriesLabels), payload?.payload, null, refLines.length, styleList.length ? styleList : Object.values(seriesStyles)));
+  const lazyEpoch = useLazyPlotEpoch([xFmt, yFmt], tool, plotDecorNeeds(Object.values(seriesLabels), payload?.payload, null, refLines.length + (active?.errorRoles?.length ?? 0) + Object.keys(errKeys).length, styleList.length ? styleList : Object.values(seriesStyles)));
   useEffect(() => {
     const host = hostRef.current;
     const destroyAll = () => {

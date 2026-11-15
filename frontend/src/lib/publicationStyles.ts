@@ -49,6 +49,14 @@ export interface ExportSeriesStyle {
   error_cap?: number;
   error_width?: number;
   error_color?: string;
+  /** Gap audit 4 G8: the Y error as a band (`calc.figure_errorbars`). */
+  error_band?: boolean;
+  /** Gap audit 4 G10 symbol details (`calc.figure_symbols`): edge and fill
+   *  colours (hex), the fill's opacity 0..1, a symbol every Nth point. */
+  marker_edge?: string;
+  marker_face?: string;
+  marker_alpha?: number;
+  marker_every?: number;
   /** `vs` and `color_by` remain dataset channel indices on the wire. */
   fill?: "under" | { vs: number };
   color_by?: number;
@@ -192,7 +200,10 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     if (typeof raw.colormap === "string") style.colormap = raw.colormap;
     // N5/N6 marks pass through as stored: the backend validates each one (`calc.figure_marks`,
     // `calc.plotting.resolve_style_channels`), and an invalid one draws nothing, never a 500.
-    for (const k of ["size_by", "size_range", "drop_lines", "connect"] as const) if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
+    // So do gap audit 4's error band and symbol details (`calc.figure_errorbars`, `calc.figure_symbols`).
+    for (const k of ["size_by", "size_range", "drop_lines", "connect", "error_band", "marker_edge", "marker_face", "marker_alpha", "marker_every"] as const) {
+      if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
+    }
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
     // `legend` is NOT restored -- see its own doc on ExportSeriesStyle above:
     // a rename persists in `view.seriesLabels` and is re-laid on every export.

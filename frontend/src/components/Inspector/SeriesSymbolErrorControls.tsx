@@ -1,5 +1,5 @@
-// Open/solid symbol interior and error-bar styling (gap audit 2 #6) for one
-// series — shared by the Inspector's Series style card and the Plot Details
+// Open/solid symbol interior and error-bar styling (gap audit 2 #6), symbol
+// details and the error band (gap audit 4 G10, G8) for one series — shared by the Inspector's Series style card and the Plot Details
 // dialog, so both edit the same two `SeriesStyle` fields the same way. The
 // canvas reads them in `markers.seriesPoints` / `uplotErrorRange.
 // styleErrorDraw`; the export in `calc/figure.py` / `calc/figure_errorbars.py`.
@@ -26,6 +26,24 @@ interface Props {
 }
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
+const swatch = { width: 24, height: 22, padding: 0, border: "1px solid var(--border)" } as const;
+type ErrMode = "bars" | "band";
+const ERR_OPTS: { value: ErrMode; label: string; ariaLabel: string }[] = [
+  { value: "bars", label: "Bars", ariaLabel: "Draw the error as bars" },
+  { value: "band", label: "Band", ariaLabel: "Draw the Y error as a shaded band" },
+];
+const hexOf = (c: string | undefined) => (c && !c.startsWith("--") ? c : "#8b5cf6");
+
+/** A colour well plus its "series colour" reset (G10 edge / fill). */
+function ColorWell({ label, value, onChange }: { label: string; value?: string; onChange: (c: string | undefined) => void }) {
+  return (
+    <>
+      <span className="qzk-ds-meta">{label}</span>
+      <input type="color" aria-label={`Symbol ${label} color`} title={`Symbol ${label} color (default: the series color)`} value={hexOf(value)} onChange={(e) => onChange(e.target.value)} style={swatch} />
+      {value && <button type="button" className="qz-btn qz-ghost qz-sm" onClick={() => onChange(undefined)} aria-label={`Symbol ${label}: series color`}>×</button>}
+    </>
+  );
+}
 
 export default function SeriesSymbolErrorControls({ channel, style, setSeriesStyle, markers, errors }: Props) {
   const eb: ErrorBarStyle = style.errorBar ?? {};
@@ -53,9 +71,41 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
           />
         </div>
       )}
+      {markers && (
+        <div style={row}>
+          <span className="qzk-field-lbl" style={{ margin: 0 }}>Symbol</span>
+          <ColorWell label="edge" value={style.markerEdge} onChange={(c) => setSeriesStyle(channel, { markerEdge: c }, c && `marker-edge:${channel}`)} />
+          <ColorWell label="fill" value={style.markerFillColor} onChange={(c) => setSeriesStyle(channel, { markerFillColor: c }, c && `marker-face:${channel}`)} />
+          <NumberField
+            value={style.markerAlpha != null ? String(Math.round(style.markerAlpha * 100)) : ""} width={44} placeholder="100" unit="%"
+            aria-label="Symbol fill opacity" title="Symbol fill opacity (the edge stays opaque)"
+            onChange={(v) => {
+              const n = Number(v);
+              if (v.trim() === "") setSeriesStyle(channel, { markerAlpha: undefined });
+              else if (Number.isFinite(n) && n >= 0 && n <= 100) setSeriesStyle(channel, { markerAlpha: n / 100 });
+            }}
+          />
+          <span className="qzk-ds-meta">every</span>
+          <NumberField
+            value={style.markerEvery != null ? String(style.markerEvery) : ""} width={44} placeholder="1" unit="pts"
+            aria-label="Symbol every N points" title="Draw a symbol on every Nth point (1 = every point)"
+            onChange={(v) => {
+              const n = Number(v);
+              if (v.trim() === "" || n === 1) setSeriesStyle(channel, { markerEvery: undefined });
+              else if (Number.isInteger(n) && n > 1 && n <= 100000) setSeriesStyle(channel, { markerEvery: n });
+            }}
+          />
+        </div>
+      )}
       {errors && (
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Error bars</span>
+          <SegmentedControl<ErrMode>
+            options={ERR_OPTS}
+            aria-label="Error drawing"
+            value={eb.band ? "band" : "bars"}
+            onChange={(v) => setEb({ band: v === "band" ? true : undefined })}
+          />
           <span className="qzk-ds-meta">cap</span>
           <NumberField
             value={eb.cap != null ? String(eb.cap) : ""} width={44} placeholder="2" unit="pt"

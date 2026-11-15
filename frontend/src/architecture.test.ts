@@ -868,7 +868,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/lib/uplotOpts.ts": 1262,
   // 1175 -> 1164 (2026-11-13, figures integration): the region-shade chunk
   // loader moved to lib/regionDecorLoader.ts.
-  "/lib/uplotOverlays.ts": 1164,
+  // 1164 -> 1076 (2026-11-15, origin gap audit 4 lane A): the error-bar drawing
+  // moved to the startup chunk (lib/uplotErrorDraw.ts) for the eager budget.
+  "/lib/uplotOverlays.ts": 1076,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
   // ReflectivityFftResult) — a self-contained leaf block nothing else in this
@@ -2056,6 +2058,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   shapes: "Shape[] pinned at data/page coordinates, not a column index",
   waterfall: "numeric offset step, not a column index",
   waterfallDx: "numeric X offset step (a fraction of the x-span), not a column index",
+  seriesRamp: "a colormap name + reverse/order flags (gap audit 4 G1), not a column index",
   panelFit: "layout-fit mode enum, not channel-indexed",
   pageSetup: "page geometry model, not channel-indexed",
 };

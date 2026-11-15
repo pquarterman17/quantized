@@ -59,6 +59,7 @@ import PlotViewport from "../Stage/PlotViewport";
 import { multiPanelShowing } from "../Stage/useEffectiveComposition";
 import { usePlotPayload } from "../Stage/usePlotPayload";
 import { useWindowSeriesCycle } from "../Stage/useStageSeriesCycle";
+import { useRampedStyles } from "../Stage/useSeriesRamp";
 import { figureRowsForSourceRows, resolveStatisticalFigureLink } from "../../lib/statisticalFigureLink";
 import {
   BackgroundPolarWindow,
@@ -204,6 +205,7 @@ function BackgroundXYWindow({
     ? { datasetId: statisticalLink.figureDatasetId, rows: figureRowsForSourceRows(statisticalLink, selection.rows) }
     : selection, [selection, statisticalLink]);
 
+  const rampedStyles = useRampedStyles(view, dataset, document);
   const { displayPayload, plotted, styleList, labelList, legendLabels, errorBars, errorSpans, colorByColumns, hidden } =
     usePlotPayload({
       active: dataset,
@@ -214,7 +216,7 @@ function BackgroundXYWindow({
       groupKey: view.groupKey,
       y2Keys: view.y2Keys,
       seriesOrder: view.seriesOrder,
-      seriesStyles: view.seriesStyles,
+      seriesStyles: rampedStyles, // + the window's colour gradient (gap audit 4 G1)
       seriesLabels: view.seriesLabels,
       errKeys: view.errKeys,
       documentErrors,

@@ -199,7 +199,9 @@ def apply_greyscale(
             continue
         k = keys[i]
         spec["color"] = ramp[k]
-        spec.pop("error_color", None)  # error bars follow the grey line
+        # error bars and symbol edge / fill follow the grey line
+        for key in ("error_color", "marker_edge", "marker_face"):
+            spec.pop(key, None)
         if not spec.get("line"):
             spec["line"] = LINE_CYCLE[k % len(LINE_CYCLE)]
         if spec.get("marker") and not spec.get("marker_shape"):

@@ -23,7 +23,6 @@ import type { Annotation, RefLine } from "./types";
 import type { RegionShade } from "./types";
 // Shade drawing + the off-scale marker are a lazy chunk (lib/regionDecorLoader.ts).
 import { regionDecor } from "./regionDecorLoader";
-import { beginErrorDraw, styleErrorDraw } from "./uplotErrorRange";
 const MOVE = "mousemove", UP = "mouseup";
 export { pickRefLine, type RefLineHit } from "./refLineHit";
 
@@ -991,37 +990,10 @@ export function errorBarsPlugin(
 ): uPlot.Plugin {
   return {
     hooks: {
-      draw: (u: uPlot) => {
-        const { ctx } = u;
-        const xs = u.data[0];
-        beginErrorDraw(ctx, u.bbox);
-        for (const [col, errs] of errorsByCol) {
-          const ys = u.data[col];
-          if (!ys || u.series[col]?.show === false) continue;
-          const cap = styleErrorDraw(u, col, color, capHalfWidth); // gap audit 2 #6
-          const scaleKey = u.series[col]?.scale ?? "y";
-          for (let i = 0; i < xs.length; i++) {
-            const x = xs[i];
-            const y = ys[i];
-            const e = errs[i];
-            if (x == null || y == null || e == null) continue;
-            const px = u.valToPos(x, "x", true);
-            const pHi = u.valToPos(y + e, scaleKey, true);
-            const pLo = u.valToPos(y - e, scaleKey, true);
-            ctx.beginPath();
-            ctx.moveTo(px, pLo);
-            ctx.lineTo(px, pHi);
-            if (cap > 0) {
-              ctx.moveTo(px - cap, pHi);
-              ctx.lineTo(px + cap, pHi);
-              ctx.moveTo(px - cap, pLo);
-              ctx.lineTo(px + cap, pLo);
-            }
-            ctx.stroke();
-          }
-        }
-        ctx.restore();
-      },
+      // The drawing is the startup chunk's (lib/uplotErrorDraw.ts); gap audit 4 G8's
+      // band column is shaded under the lines (drawAxes), not barred.
+      drawAxes: (u: uPlot) => regionDecor()?.drawErrorBands(u, errorsByCol, color),
+      draw: (u: uPlot) => regionDecor()?.drawErrorBars(u, errorsByCol, color, capHalfWidth),
     },
   };
 }
@@ -1095,56 +1067,9 @@ export function errorSpansPlugin(
 ): uPlot.Plugin {
   return {
     hooks: {
-      draw: (u: uPlot) => {
-        const { ctx } = u;
-        const xs = u.data[0];
-        beginErrorDraw(ctx, u.bbox);
-        for (const [col, spans] of spansByCol) {
-          const ys = u.data[col];
-          if (!ys || u.series[col]?.show === false) continue;
-          const cap = styleErrorDraw(u, col, color, capHalfWidth); // gap audit 2 #6
-          const scaleKey = u.series[col]?.scale ?? "y";
-          for (const span of spans) {
-            for (let i = 0; i < xs.length; i++) {
-              const x = xs[i];
-              const y = ys[i];
-              const up = span.plus[i];
-              const dn = span.minus[i];
-              if (x == null || y == null || (up == null && dn == null)) continue;
-              ctx.beginPath();
-              if (span.axis === "y") {
-                const py = u.valToPos(y, scaleKey, true);
-                const pHi = up == null ? py : u.valToPos(y + up, scaleKey, true);
-                const pLo = dn == null ? py : u.valToPos(y - dn, scaleKey, true);
-                const px = u.valToPos(x, "x", true);
-                ctx.moveTo(px, pLo);
-                ctx.lineTo(px, pHi);
-                if (cap > 0) {
-                  ctx.moveTo(px - cap, pHi);
-                  ctx.lineTo(px + cap, pHi);
-                  ctx.moveTo(px - cap, pLo);
-                  ctx.lineTo(px + cap, pLo);
-                }
-              } else {
-                const px = u.valToPos(x, "x", true);
-                const pR = up == null ? px : u.valToPos(x + up, "x", true);
-                const pL = dn == null ? px : u.valToPos(x - dn, "x", true);
-                const py = u.valToPos(y, scaleKey, true);
-                ctx.moveTo(pL, py);
-                ctx.lineTo(pR, py);
-                if (cap > 0) {
-                  ctx.moveTo(pR, py - cap);
-                  ctx.lineTo(pR, py + cap);
-                  ctx.moveTo(pL, py - cap);
-                  ctx.lineTo(pL, py + cap);
-                }
-              }
-              ctx.stroke();
-            }
-          }
-        }
-        ctx.restore();
-      },
+      // As errorBarsPlugin: lib/uplotErrorDraw.ts draws; a band's X spans stay bars.
+      drawAxes: (u: uPlot) => regionDecor()?.drawErrorBands(u, spansByCol, color),
+      draw: (u: uPlot) => regionDecor()?.drawErrorSpans(u, spansByCol, color, capHalfWidth),
     },
   };
 }

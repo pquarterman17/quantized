@@ -170,7 +170,10 @@ export function buildSeriesDefs(
       // `markers.seriesPoints` owns that decision now, and its doc records why
       // the two branches must NOT be merged (the export emits a marker only for
       // an explicit `marker`).
-      const points = seriesPoints(style, trace, stroke);
+      // Gap audit 4 G10's symbol details ride the marks chunk (lib/symbolDetails.ts): a
+      // series that sets one is hidden above until it lands. Colours contrast-checked like the stroke.
+      const points = marks()?.symbolPoints(seriesPoints(style, trace, stroke), style, stroke,
+        (c) => resolveDrawColor(seriesColor(i, { color: c }), isDarkBg, inkColor)) ?? seriesPoints(style, trace, stroke);
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).

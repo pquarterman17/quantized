@@ -331,6 +331,14 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: openLayerContents,
     },
     {
+      // Origin gap audit 4 G1: Origin's colour-list / colormap increment.
+      id: "color-gradient", group: "Plot", section: "Layout",
+      label: "Colour gradient…",
+      description: "Spread a colormap (viridis, cool-warm, ...) across the graph's curves.",
+      keywords: "color colour gradient colormap ramp increment palette temperature curves",
+      run: () => openFigureDialog({ kind: "colorGradient" }),
+    },
+    {
       // Gap audit 3 N3: the named way to set the windows' x link group.
       id: "link-x-axis",
       group: "Plot",

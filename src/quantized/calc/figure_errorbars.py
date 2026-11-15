@@ -19,7 +19,13 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["apply_error_bars", "error_bar_style"]
+from quantized.heavy_import import heavy_imports
+
+__all__ = ["apply_error_bars", "band_quads", "error_bar_style"]
+
+# Gap audit 4 G8: the band's translucency -- the canvas' FILL_ALPHA_PCT (25 %,
+# `lib/uplotFill.ts`), the same as a fill under a curve (`calc.figure._FILL_ALPHA`).
+_BAND_ALPHA = 0.25
 
 # The defaults every bound bar used before per-series styling (gap audit 2
 # #6), and still uses when a series sets none: the canvas' 1 px bar and
@@ -82,6 +88,51 @@ def _pair(span: Mapping[str, Any], n: int) -> NDArray[np.float64] | None:
     return np.vstack([np.nan_to_num(minus), np.nan_to_num(plus)])
 
 
+def band_quads(
+    xv: NDArray[np.float64], yv: NDArray[np.float64], yerr: NDArray[np.float64]
+) -> list[tuple[float, float, float, float, float, float]]:
+    """The Y error band of one series (gap audit 4 G8) as one quad per drawn
+    segment, ``(xl, hi_l, xr, hi_r, lo_r, lo_l)`` with the lower-X end first --
+    the canvas' ``uplotErrorBand.bandQuads``. Rows i and i+1 form a segment
+    when both have finite x and y: ROW ORDER, never sorted, so a descending
+    sweep or a hysteresis loop is shaded along the curve as acquired. ``yerr``
+    is the (2, N) ``[minus, plus]`` array from :func:`_pair` (a missing side
+    is 0)."""
+    out: list[tuple[float, float, float, float, float, float]] = []
+    ok = np.isfinite(xv) & np.isfinite(yv)
+    for i in range(len(yv) - 1):
+        a, b = i, i + 1
+        if not (ok[a] and ok[b]):
+            continue
+        if xv[b] < xv[a]:
+            a, b = b, a
+        out.append((
+            float(xv[a]), float(yv[a] + yerr[1][a]), float(xv[b]), float(yv[b] + yerr[1][b]),
+            float(yv[b] - yerr[0][b]), float(yv[a] - yerr[0][a]),
+        ))
+    return out
+
+
+def _draw_band(ax: Any, quads: Sequence[tuple[float, ...]], color: Any) -> None:
+    """All quads in ONE path, each wound the same way, filled once: where the
+    branches of a loop overlap the shade is their union (nonzero rule), not a
+    doubled alpha -- as on the canvas. Behind the line, like the bars."""
+    if not quads:
+        return
+    with heavy_imports("matplotlib.patches", "matplotlib.path"):
+        from matplotlib.patches import PathPatch
+        from matplotlib.path import Path
+    verts: list[tuple[float, float]] = []
+    quad_codes = [int(Path.MOVETO)] + [int(Path.LINETO)] * 3 + [int(Path.CLOSEPOLY)]
+    for xl, hl, xr, hr, lr, ll in quads:
+        verts += [(xl, hl), (xr, hr), (xr, lr), (xl, ll), (xl, hl)]
+    codes = quad_codes * len(quads)
+    ax.add_patch(PathPatch(
+        Path(verts, codes), facecolor=color, edgecolor="none", linewidth=0,
+        alpha=_BAND_ALPHA, zorder=1,
+    ))
+
+
 def apply_error_bars(
     ax: Any,
     xv: NDArray[np.float64],
@@ -120,6 +171,11 @@ def apply_error_bars(
                 color = artist.get_color() if artist is not None else None
             except AttributeError:
                 color = None  # a colour-mapped scatter has no single colour
+        if yerr is not None and isinstance(style, Mapping) and style.get("error_band") is True:
+            _draw_band(ax, band_quads(np.asarray(xv, dtype=float), yv, yerr), color or "0.5")
+            yerr = None  # gap audit 4 G8: shaded, not barred; X bars stay bars
+            if xerr is None:
+                continue
         container = ax.errorbar(
             xv,
             yv,

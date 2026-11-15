@@ -10,6 +10,7 @@ import { useEscapeSurface } from "../../../lib/escapeStack";
 import { useFigureDialog } from "../../../store/figureDialogs";
 import { useDialogFocus } from "../useDialogFocus";
 import AxisDialog from "./AxisDialog";
+import ColorGradientDialog from "./ColorGradientDialog";
 import GraphLayerDialog from "./GraphLayerDialog";
 import LayerContentsDialog from "./LayerContentsDialog";
 import PlotDetailsDialog from "./PlotDetailsDialog";
@@ -23,7 +24,7 @@ export default function FigureDialogs() {
   useEscapeSurface("modal", () => { close(); return true; }, open !== null);
   useDialogFocus(dialogRef, open !== null);
   if (!open) return null;
-  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot Details" : open.kind === "layerContents" ? "Layer Contents" : open.kind === "graphLayer" ? "Layer properties" : "Plot type";
+  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot Details" : open.kind === "layerContents" ? "Layer Contents" : open.kind === "graphLayer" ? "Layer properties" : open.kind === "colorGradient" ? "Colour gradient" : "Plot type";
   return (
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div
@@ -39,6 +40,7 @@ export default function FigureDialogs() {
         {open.kind === "axis" ? <AxisDialog key={open.axis} axis={open.axis} onClose={close} />
           : open.kind === "plotDetails" ? <PlotDetailsDialog key={open.channel} channel={open.channel} onClose={close} />
           : open.kind === "layerContents" ? <LayerContentsDialog onClose={close} />
+          : open.kind === "colorGradient" ? <ColorGradientDialog onClose={close} />
           : open.kind === "graphLayer" ? <GraphLayerDialog key={open.id} id={open.id} draft={open.draft} onClose={close} />
           : <PlotTypeGallery onClose={close} />}
       </div>

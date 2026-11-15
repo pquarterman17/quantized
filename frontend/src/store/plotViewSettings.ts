@@ -51,6 +51,7 @@ import type { HalfLim } from "../lib/axisLim";
 import { lit } from "../lib/macro";
 import type { PageSetup } from "../lib/pagesetup";
 import { nextPanelFit, type PanelFit } from "../lib/panelFit";
+import type { SeriesRamp } from "../lib/seriesRamp";
 import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
 import type { HistoryBatchToken } from "./history";
@@ -139,6 +140,10 @@ export interface PlotViewSettingsSlice {
    *  on every valid keystroke and closes the run with `endHistoryRun`. A
    *  non-finite step is refused. */
   setWaterfallDx: (dx: number) => void;
+  /** Colour gradient across the curves (origin gap audit 4 G1, lib/seriesRamp.ts).
+   *  A PlotView field declared here like `waterfallDx`; one undo step per set. */
+  seriesRamp: SeriesRamp | null;
+  setSeriesRamp: (ramp: SeriesRamp | null) => void;
 }
 
 /** Is a multi-panel layout engaged — the per-channel stack, a facet binding, a
@@ -319,6 +324,11 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
       if (!Number.isFinite(waterfallDx)) return;
       get().recordHistoryCoalesced("change waterfall X offset", "waterfall-dx");
       set({ waterfallDx });
+    },
+    seriesRamp: null,
+    setSeriesRamp: (seriesRamp) => {
+      get().recordHistory("colour gradient");
+      set({ seriesRamp });
     },
   };
 }

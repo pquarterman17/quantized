@@ -15,6 +15,7 @@ import type { RegionStats } from "../../lib/regionStats";
 import type { Dataset } from "../../lib/types";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
+import { useFocusedRampedStyles } from "./useSeriesRamp";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
@@ -76,8 +77,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const annotations = useApp((s) => s.annotations);
   const shapes = useApp((s) => s.shapes);
   const regionShades = useApp((s) => s.regionShades);
-  const seriesStyles = useApp((s) => s.seriesStyles);
-  const seriesLabels = useApp((s) => s.seriesLabels);
+  const seriesStyles = useFocusedRampedStyles(active, focusedDocument), seriesLabels = useApp((s) => s.seriesLabels); // + colour gradient (gap-4 G1)
   const waterfall = useApp((s) => s.waterfall);
   const waterfallDx = useApp((s) => s.waterfallDx); // Origin's waterfall X step
   const excludedDisplay = useApp((s) => s.excludedDisplay);
