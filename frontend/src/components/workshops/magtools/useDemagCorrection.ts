@@ -4,6 +4,7 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { restoreSubstituted, substituteGaps } from "../../../lib/api/finiteSubstitute";
 import { demagCorrectField } from "../../../lib/api/magnetometry";
 import { detectMagXKind, stampXIdentity } from "../../../lib/magDataKind";
+import { ownXKey } from "../../../lib/perSeriesX";
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
@@ -178,7 +179,7 @@ export function useDemagCorrection() {
           },
         },
         ds.data,
-        request.xKey,
+        ownXKey(ds, request.xKey, yKey), // the X `time` was read from
         response.field_unit,
       );
       // The output has a new channel schema. Keep file- and row-level

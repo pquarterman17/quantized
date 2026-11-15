@@ -13,14 +13,20 @@
 // lib/perSeriesX.ts render: one block of rows per distinct (source, X), in
 // first-curve order; a curve's column holds values only inside its own block
 // (NaN elsewhere); never a sorted X union, so a hysteresis loop keeps its row
-// order. A source's dropped rows (exclusion + filter) are NaN in its curves,
-// so a mask reaches the graph. A curve whose source is gone (deleted) or
+// order. A MASK lives on the source point, never on a graph row (gap audit
+// 3 N2 review): the graph's `excludedRows` is only the projection of its
+// sources' dropped rows (`linkedGraphMask`), so a source row insert, delete or
+// sort -- which already carries the source's own marks -- carries the graph's
+// too, and a deleted masked row takes its mask with it. A mask set on the
+// graph is routed to its sources (store/linkedCurvesSync.ts). A curve whose source is gone (deleted) or
 // whose Y column no longer exists keeps its column, empty -- the graph never
 // rebinds it to another dataset or column (fail closed).
 //
 // Pure; loaded only by the lazy graph actions and the sync watcher.
 
 import { effectiveDesignations } from "./columnmeta";
+import { errorRoleViewDefaults } from "./errorbars";
+import { hasFiniteValue } from "./ownXSeries";
 import { curveX } from "./perSeriesX";
 import { droppedRows } from "./rowstate";
 import { sharedAxisTitle } from "./sharedAxisTitle";
@@ -77,12 +83,11 @@ export function assembleLinkedCurves(
   const blank = new Array<number>(curves.length).fill(NaN);
   for (const b of blocks) {
     const src = b.ds.data;
-    const skip = droppedRows(b.ds);
     for (let r = 0; r < src.time.length; r++) {
       const srcRow = src.values[r];
       const row = blank.slice();
       time[b.start + r] = b.xKey === null ? src.time[r] : (srcRow?.[b.xKey] ?? NaN);
-      if (!skip.has(r)) for (const { col, yKey } of b.cols) row[col] = srcRow?.[yKey] ?? NaN;
+      for (const { col, yKey } of b.cols) row[col] = srcRow?.[yKey] ?? NaN;
       values[b.start + r] = row;
     }
   }
@@ -112,6 +117,37 @@ export function assembleLinkedCurves(
       ...(declared !== undefined ? { error_roles: declared } : {}),
     },
   };
+}
+
+/** The source point each graph row draws, in the assembly's block layout:
+ *  one block of rows per distinct (source, X), in first-curve order. */
+export function linkedRowSources(curves: readonly LinkedCurve[], datasets: readonly Dataset[]): { id: string; row: number }[] {
+  const byId = new Map(datasets.map((d) => [d.id, d]));
+  const seen = new Set<string>();
+  const out: { id: string; row: number }[] = [];
+  for (const c of curves) {
+    const ds = byId.get(c.datasetId);
+    const width = ds?.data.labels.length ?? 0;
+    if (!ds || c.yKey < 0 || c.yKey >= width || (c.xKey !== null && (c.xKey < 0 || c.xKey >= width))) continue;
+    const key = `${c.datasetId}#${c.xKey}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    for (let r = 0; r < ds.data.time.length; r++) out.push({ id: ds.id, row: r });
+  }
+  return out;
+}
+
+/** The graph's masked rows: those whose source point is dropped there
+ *  (excluded or filtered out). Undefined when none. */
+export function linkedGraphMask(curves: readonly LinkedCurve[], datasets: readonly Dataset[]): number[] | undefined {
+  const byId = new Map(datasets.map((d) => [d.id, d]));
+  const dropped = new Map<string, Set<number>>();
+  const rows = linkedRowSources(curves, datasets).flatMap((p, r) => {
+    let set = dropped.get(p.id);
+    if (!set) dropped.set(p.id, (set = droppedRows(byId.get(p.id))));
+    return set.has(p.row) ? [r] : [];
+  });
+  return rows.length ? rows : undefined;
 }
 
 /** Does `fromId` draw (directly, or through other graphs) from `targetId`?
@@ -166,7 +202,12 @@ export function curvesForDatasets(datasets: readonly Dataset[], primaryOf: (ds: 
     // Any designation means the user (or the Origin book) laid the sheet out:
     // every curve channel (a Y, or an undesignated one -- never an X, error or
     // label column) is drawn against its own X.
-    const ys = des.some((d) => d === "X" || d === "Y") ? own.flatMap((x, c) => (x === undefined ? [] : [c])) : [];
+    // Not an error column (a role, a designation or an `error_channels` hint:
+    // it draws as a bar on its target) and not a spare column with no value.
+    const errorCols = new Set(errorRoleViewDefaults(ds).hiddenChannels);
+    const ys = des.some((d) => d === "X" || d === "Y")
+      ? own.flatMap((x, c) => (x === undefined || errorCols.has(c) || !hasFiniteValue(ds.data.values, c) ? [] : [c]))
+      : [];
     if (ys.length > 0) {
       return ys.map((c) => ({
         datasetId: ds.id,

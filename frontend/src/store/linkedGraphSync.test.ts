@@ -6,7 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { assembleLinkedCurves } from "../lib/linkedCurves";
+import { assembleLinkedCurves, linkedGraphMask } from "../lib/linkedCurves";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Dataset, LinkedCurve } from "../lib/types";
 import { flushLinkedCurves, noteAssembled, relinkedDatasets, watchLinkedCurves } from "./linkedCurvesSync";
@@ -33,13 +33,14 @@ describe("finding 5: the watcher notices a channelTypes change", () => {
   it("a type override that changes which filter rows apply rebuilds the graph", () => {
     const src: Dataset = { ...plain("s", "S", [1, 2, 3]), filter: [{ col: 0, kind: "range", min: 2, max: 10 } as never] };
     const curves: LinkedCurve[] = [{ datasetId: "s", xKey: null, yKey: 0, label: "S" }];
-    const g: Dataset = { id: "g", name: "g", data: assembleLinkedCurves(curves, [src]), linkedCurves: curves };
-    noteAssembled(g, [src, g]);
+    const g = noteAssembled({ id: "g", name: "g", data: assembleLinkedCurves(curves, [src]), linkedCurves: curves }, [src]);
     expect(relinkedDatasets([src, g])).toBeNull();
     const src2 = { ...src, channelTypes: { 0: "nominal" as const } };
     const next = relinkedDatasets([src2, g]);
     expect(next).not.toBeNull();
-    expect(next!.find((d) => d.id === "g")!.data.values.map((r) => r[0])).toEqual(assembleLinkedCurves(curves, [src2]).values.map((r) => r[0]));
+    // The filter's dropped rows are the graph's mask (keyed to the source points).
+    expect(next!.find((d) => d.id === "g")!.excludedRows).toEqual(linkedGraphMask(curves, [src2]));
+    expect(linkedGraphMask(curves, [src2])).not.toEqual(linkedGraphMask(curves, [src]));
   });
 });
 

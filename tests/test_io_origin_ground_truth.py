@@ -245,6 +245,13 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
         if not sheets or name not in ours:
             continue  # Origin may show books whose data lives outside plain datasets
         ds = ours[name]
+        if ds.metadata.get("origin_values_unresolved"):
+            # A report/fit table whose cells are cell:// references Origin
+            # evaluates on load: the file holds the references, not the values
+            # the oracle shows. The reader says so (flag, 0 x 0 values, the
+            # references under origin_report_sheets) instead of faking columns.
+            assert ds.values.shape == (0, 0) and ds.metadata["origin_report_sheets"]
+            continue
         candidates = [np.asarray(ds.time, dtype=float)] + [
             np.asarray(ds.values[:, j], dtype=float) for j in range(ds.values.shape[1])
         ]
@@ -335,7 +342,14 @@ def test_realdata_opju_wide_book_column_names() -> None:
         gts = gt_names(str(b.metadata.get("origin_book", "")))
         if not gts:
             continue
-        for lab in [*b.labels, b.metadata.get("x_column_long", "")]:
+        # An unrecovered X is replaced by a synthetic row index labelled
+        # "Row" (fail closed, ``x_column_recovered`` False): a name the reader
+        # made up is not a recovered name, so it is not judged against Origin's.
+        x_long = (
+            [] if b.metadata.get("x_column_recovered") is False
+            else [b.metadata.get("x_column_long", "")]
+        )
+        for lab in [*b.labels, *x_long]:
             lab = str(lab)
             if not lab or (len(lab) == 1 and lab in generic):
                 continue

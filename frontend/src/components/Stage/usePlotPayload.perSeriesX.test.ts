@@ -84,6 +84,17 @@ describe("per-series X on the live plot", () => {
     expect(pairs(r2)).toEqual([[5, 100], [9, 300]]);
   });
 
+  it("R2 hidden: the X is T1 alone -- no T2 block, no widened title", async () => {
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: params({ hiddenChannels: [1, 2] }),
+    });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+    const p = result.current.displayPayload!;
+    expect(p.data[0]).toEqual([1, 2, 3]);
+    expect(p.xLabel).toBe("T1");
+    expect(p.blockRows).toBeUndefined();
+  });
+
   it("a selection is echoed in every block", async () => {
     const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
       initialProps: params({ selection: { datasetId: "mx", rows: [2] } }),
@@ -92,5 +103,23 @@ describe("per-series X on the live plot", () => {
     const p = result.current.displayPayload!;
     const sel = p.series.findIndex((x) => x.label === "R2 (selected)") + 1;
     expect(p.data[sel]).toEqual([null, null, null, null, null, 300]);
+  });
+
+  // Overlays are built at the source's 3 rows for ONE Y; the plot has 2 blocks x 3 rows.
+  // Until overlays carry an explicit (yKey, xKey) binding they are dropped, never misdrawn.
+  it("a fit overlay is NOT drawn on a multi-X view (no series at wrong coordinates)", async () => {
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: params({
+        seriesOrder: [2, 0],
+        fitOverlay: { datasetId: "mx", y: [1, 2, 3], band: [{ label: "lo", y: [0, 1, 2] }] },
+      }),
+    });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+    const p = result.current.displayPayload!;
+    expect(p.data[0]).toHaveLength(6);
+    const labels = p.series.map((x) => x.label);
+    expect(labels).toEqual(expect.arrayContaining(["R1", "R2"]));
+    expect(labels).not.toContain("fit");
+    expect(labels).not.toContain("lo");
   });
 });

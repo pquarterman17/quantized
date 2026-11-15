@@ -49,17 +49,31 @@ export function ownXKey(ds: Pick<Dataset, "data" | "columnDesignations">, xKey: 
 
 const cache = new WeakMap<DataStruct, Map<string, { data: DataStruct; blocks: (number | null)[] }>>();
 
-/** The X blocks (shared X first) and the concatenated DataStruct, or null
- *  when every curve shares the plot's X (the source plots unchanged). */
+/** The X blocks (shared X first when a shown curve uses it) and the
+ *  concatenated DataStruct, or null when every SHOWN curve shares the plot's X
+ *  (the source plots unchanged). `shown` = the channels actually drawn (hidden
+ *  ones excluded); only they decide the blocks, so a hidden R2 neither widens
+ *  the X data nor puts "T1 / T2" in the X title, and the shared X is a block
+ *  only when a shown curve or a shown non-curve channel sits on it. A hidden curve's values still go in its
+ *  own block, so hiding one whose X stays in use yields the SAME view object.
+ *  Omit `shown` to treat every curve as shown. */
 export function perSeriesXData(
   ds: Pick<Dataset, "data" | "columnDesignations">,
   xKey: number | null,
+  shown?: readonly number[] | null,
 ): { data: DataStruct; blocks: (number | null)[] } | null {
   const own = curveX(ds, xKey);
-  const blocks: (number | null)[] = [xKey];
-  for (const x of own) if (x !== undefined && !blocks.includes(x)) blocks.push(x);
-  if (blocks.length < 2) return null;
-  const key = `${xKey}|${own.join(",")}`;
+  const used = own.filter((x, c) => x !== undefined && (!shown || shown.includes(c)));
+  // Shown NON-curve channels (an explicit X-as-Y column, a Z column) are copied
+  // into every block on the assumption the shared block exists, so one of them
+  // seeds it too.
+  const shownNonCurve = !!shown && own.some((x, c) => x === undefined && shown.includes(c));
+  const blocks: (number | null)[] = used.includes(xKey) || shownNonCurve ? [xKey] : [];
+  for (const x of used) if (x !== undefined && !blocks.includes(x)) blocks.push(x);
+  if (blocks.length === 0 || (blocks.length === 1 && blocks[0] === xKey)) return null;
+  // undefined (not a curve) and null (the time X) must not collide in the key.
+  const code = (x: number | null | undefined) => (x === undefined ? "u" : x === null ? "t" : String(x));
+  const key = `${code(xKey)}|${own.map(code).join(",")}|${blocks.map(code).join(",")}`;
   const hit = cache.get(ds.data)?.get(key);
   if (hit) return hit;
   const src = ds.data;
@@ -96,9 +110,20 @@ export function perSeriesXData(
 
 /** `ds` as the one-X plot must see it under `xKey` (see the module doc), or
  *  null when no per-series X applies. The view's X is always `.time`. */
-export function perSeriesXDataset(ds: Dataset, xKey: number | null): { dataset: Dataset; blockRows: number } | null {
-  const v = perSeriesXData(ds, xKey);
-  if (!v) return null;
+export function perSeriesXDataset(
+  ds: Dataset,
+  xKey: number | null,
+  shown?: readonly number[] | null,
+): { dataset: Dataset; blockRows: number; blocks: (number | null)[] } | null {
+  const v = perSeriesXData(ds, xKey, shown);
+  return v ? { ...viewDataset(ds, v), blocks: v.blocks } : null;
+}
+
+/** The Dataset form of a built view (`perSeriesXData`'s result). */
+export function viewDataset(
+  ds: Dataset,
+  v: { data: DataStruct; blocks: (number | null)[] },
+): { dataset: Dataset; blockRows: number } {
   const n = ds.data.time.length;
   const dropped = [...droppedRows(ds)].sort((a, b) => a - b);
   const excludedRows = v.blocks.flatMap((_, b) => dropped.map((r) => b * n + r));

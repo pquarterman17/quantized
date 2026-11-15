@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { remapDatasetChannels } from "./channelRemap";
-import { assembleLinkedCurves, sanitizeLinkedCurves } from "./linkedCurves";
+import { assembleLinkedCurves, linkedGraphMask, sanitizeLinkedCurves } from "./linkedCurves";
 import type { Dataset } from "./types";
 
 const ds = (id: string, time: number[], cols: number[][], labels: string[], meta = {}): Dataset => ({
@@ -36,10 +36,13 @@ describe("assembleLinkedCurves", () => {
     expect([out.metadata.x_column_long, out.metadata.x_column_unit]).toEqual(["H (emu) / T (K)", ""]);
   });
 
-  it("a source's excluded rows are gaps in its curve", () => {
+  it("a source's excluded rows are the graph's mask on the same points (gap audit 3 N2)", () => {
     const masked = { ...scan, excludedRows: [0] };
-    const out = assembleLinkedCurves([{ datasetId: "scan", xKey: null, yKey: 0, label: "scan" }], [masked]);
-    expect(out.values.map((r) => r[0])).toEqual([NaN, 8]);
+    const curves = [{ datasetId: "scan", xKey: null, yKey: 0, label: "scan" }];
+    const out = assembleLinkedCurves(curves, [masked]);
+    expect(out.values.map((r) => r[0])).toEqual([7, 8]);
+    expect(linkedGraphMask(curves, [masked])).toEqual([0]);
+    expect(linkedGraphMask(curves, [scan])).toBeUndefined();
     expect(out.metadata.x_column_long).toBe("T");
   });
 

@@ -11,6 +11,7 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
 import { selectedFitData } from "../../../lib/fitselection";
 import { plottedYKey } from "../../../lib/fitselectionActions";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { detectMagXKind, magXAxis, stampXIdentity } from "../../../lib/magDataKind";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
@@ -72,10 +73,12 @@ export function useHysteresis(): HysteresisState {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [bgBusy, setBgBusy] = useState(false);
+  const plottedY = active ? plottedYKey(active, xKey, yKeys, seriesOrder) : null;
   const units = active
     ? {
-        h: magXAxis(active.data, xKey).unit,
-        m: active.data.units[plottedYKey(active, xKey, yKeys, seriesOrder) ?? 0] ?? "",
+        // H is the plotted Y's OWN X (R2 in T1,R1,T2,R2 reads T2), as in the analysis.
+        h: magXAxis(active.data, plottedY === null ? xKey : ownXKey(active, xKey, plottedY)).unit,
+        m: active.data.units[plottedY ?? 0] ?? "",
       }
     : { h: "", m: "" };
 
@@ -93,13 +96,14 @@ export function useHysteresis(): HysteresisState {
         // preview — resolve the active dataset's full data first.
         const ds = await useApp.getState().resolveDataset(activeId);
         if (cancelled || !ds) return;
-        const axis = magXAxis(ds.data, xKey);
+        const input = hysteresisInputs(ds, xKey, yKeys, seriesOrder, selected ?? undefined);
+        if (!input) throw new Error("No response column is available to analyze.");
+        // `h` is read against the Y's OWN X, so that is the axis to validate.
+        const axis = magXAxis(ds.data, ownXKey(ds, xKey, input.yKey));
         const kind = detectMagXKind(axis.label, axis.unit);
         if (kind.kind !== "field") {
           throw new Error(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
         }
-        const input = hysteresisInputs(ds, xKey, yKeys, seriesOrder, selected ?? undefined);
-        if (!input) throw new Error("No response column is available to analyze.");
         const { h, m } = input;
         // A measured loop's gaps are NaN, `JSON.stringify` writes them as
         // `null`, and `list[float]` rejects each one — so this effect, which
@@ -179,12 +183,6 @@ export function useHysteresis(): HysteresisState {
         return;
       }
       const currentXKey = startXKey;
-      const axis = magXAxis(ds.data, currentXKey);
-      const kind = detectMagXKind(axis.label, axis.unit);
-      if (kind.kind !== "field") {
-        setError(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
-        return;
-      }
       const input = hysteresisInputs(
         ds,
         currentXKey,
@@ -196,6 +194,13 @@ export function useHysteresis(): HysteresisState {
         return;
       }
       const { h, m, yKey } = input;
+      const ownKey = ownXKey(ds, currentXKey, yKey); // `h` is the Y's OWN X
+      const axis = magXAxis(ds.data, ownKey);
+      const kind = detectMagXKind(axis.label, axis.unit);
+      if (kind.kind !== "field") {
+        setError(`The selected X axis is not a declared magnetic field (${kind.reason}).`);
+        return;
+      }
       // Gaps out of the request, gaps back in on the SAME rows — so `time: h`
       // (the full original x) still lines up with `corrected`.
       const pairs = dropGapRows(h, m);
@@ -222,7 +227,7 @@ export function useHysteresis(): HysteresisState {
         metadata: stampXIdentity(
           { ...ds.data.metadata, hysteresis_bg_subtracted: true },
           ds.data,
-          currentXKey,
+          ownKey,
         ),
       };
       const stem = ds.name.replace(/\.[^.]+$/, "");
