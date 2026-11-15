@@ -78,9 +78,13 @@ export function peakInputs(
       ...(sel.sourceRows ? { sourceRows: pairs.keep.map((index) => sel.sourceRows![index]) } : {}),
     };
   }
-  // Fallback: the first VALUE channel (a curve, not an X / error / label
-  // column -- curveX's rule -- and no channel role), read from the column list,
-  // not from a row (every row may be filtered out). None -> no Y is recorded.
+  // Fallback: the first VALUE channel (a curve by its column ROLE -- curveX's
+  // rule: not an X-designated / error / label column -- with no channel role)
+  // against its own X, read from the column list, not from a row (every row
+  // may be filtered out). None -> no Y is recorded. Deliberately NOT relative
+  // to the plot's X: a one-column sheet plotted against that column still
+  // finds its peaks against time, as it always has (usePeaks.test "stamps the
+  // x axis the fit RAN on"), and records exactly that.
   const own = curveX(ds, null);
   const ch = own.findIndex((x, c) => x !== undefined && !ds.channelRoles?.[c]);
   if (ch < 0) {

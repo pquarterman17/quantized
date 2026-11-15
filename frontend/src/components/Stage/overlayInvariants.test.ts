@@ -344,6 +344,8 @@ describe("I4 -- plot-open and fit-draw are separate, and every consumer honours 
     saveFit({ ...base, xKey: 1, yKey: 2 });
     mocks.ask.mockResolvedValueOnce(null);
     expect(await sendAnalysisResultPlotToReport("analysis-fit-own", 0)).toBe(false);
+    expect(mocks.ask).toHaveBeenCalledTimes(1); // the dialog really opened, and was cancelled
+    expect(useApp.getState().fitOverlay?.binding).toEqual(ON_R2);
     expect(useApp.getState().reports).toEqual([]);
   });
 

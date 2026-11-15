@@ -22,12 +22,16 @@ import { fitBands } from "../lib/api/fitStats";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/figureSpecOverlays";
 import { fitDrawBinding } from "../lib/fitDrawBinding";
 import { fullPlottedX } from "../lib/fitselectionActions";
-import type { Dataset, FitSpec } from "../lib/types";
+import type { Dataset, FitOverlay, FitSpec } from "../lib/types";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { useApp } from "./useApp";
 
-/** The status suffix for a refused fit. */
-export const REFIT_GUIDANCE = "does not match the plot's X/Y channels; use Edit / Re-fit first";
+/** Why a fit is refused, as a status suffix (I4). */
+function refusal(spec: FitSpec): string {
+  return spec.xKey === undefined
+    ? "the saved fit never recorded its X; use Edit / Re-fit first"
+    : "the saved fit does not match the plot's X/Y channels; use Edit / Re-fit first";
+}
 
 /** `spec`'s model evaluated at every finite row of X `xKey`, or an error message. */
 async function evaluateFit(ds: Dataset, spec: FitSpec, params: number[], xKey: number | null): Promise<(number | null)[] | string> {
@@ -61,7 +65,7 @@ export async function openResultPlot(
   id: string,
   bindingIndex: number,
   purpose: "open" | "report",
-): Promise<(PreparedAnalysisResultPlot & { fitDrawn: boolean }) | null> {
+): Promise<(PreparedAnalysisResultPlot & { fit: FitOverlay | null }) | null> {
   const prepared = await resolveAnalysisResultPlot(id, bindingIndex);
   if (!prepared) return null;
   const state = useApp.getState();
@@ -74,8 +78,8 @@ export async function openResultPlot(
   const params = fitSpec?.params;
   if (fitSpec && !params?.length) return fail("the saved fit has no parameter values");
   const binding = fitDataset && fitSpec ? fitDrawBinding(fitDataset, prepared, fitSpec) : null;
-  const refused = !!fitSpec && !binding;
-  if (refused && purpose === "report") return fail(`the saved fit ${REFIT_GUIDANCE}`); // nothing changed
+  const refused = fitSpec && !binding ? refusal(fitSpec) : null;
+  if (refused && purpose === "report") return fail(refused); // refused by the gate: nothing changed
   let fitY: (number | null)[] | null = null;
   if (fitDataset && fitSpec && params && binding) {
     const evaluated = await evaluateFit(fitDataset, fitSpec, params, binding.xKey);
@@ -105,8 +109,8 @@ export async function openResultPlot(
       ? { hiddenChannels: s.hiddenChannels.filter((c) => c !== drawn.binding.yKey) } : {}),
   }));
   // Last, so nothing the open itself reports overwrites it.
-  if (refused) useApp.getState().setStatus(`opened the plot without the fit: it ${REFIT_GUIDANCE}`);
-  return { ...prepared, fitDrawn: drawn !== null };
+  if (refused) useApp.getState().setStatus(`opened the plot without the fit: ${refused}`);
+  return { ...prepared, fit: drawn }; // the overlay object drawn (null: none)
 }
 
 /** Does a built figure carry the fit? Only a request shape overlays can ride

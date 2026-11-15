@@ -20,7 +20,6 @@ import { weightRequestFields } from "../lib/fitweights";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import type { FigureSpec } from "../lib/api/figures";
-import { overlayModesMatchTheCanvas } from "../lib/seriesStyleCycle";
 import { openResultPlot, specCarriesFit } from "./analysisResultPlotOpen";
 import type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
@@ -186,23 +185,26 @@ export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Pro
 
 /** Use the same gate as Open plot, then hand the live store to the existing
  * report command. A fitted plot is never sent without its fit: a fit the gate
- * refuses stops the send before anything changes, and a drawn fit the built
- * figure does not carry (a grouped/faceted/stat view) fails the send. */
-const CANNOT_CARRY_FIT = "this view's figure cannot carry the fit (a polar, stacked, grouped, faceted, encoded or stat view); show it as a plain plot first";
-
+ * refuses stops the send before anything changes; a polar / stat / faceted
+ * view is refused before the dialog (the plot it opened stays open); and the
+ * built figure must carry THIS fit -- the overlay object the gate drew, on the
+ * dataset it opened -- or the send fails. */
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
   const opened = await openResultPlot(id, bindingIndex, "report");
   if (!opened) return false;
-  // Known from the view before the dialog asks anything: a mode whose figure
-  // cannot carry an overlay. (An encoding is caught on the built spec below.)
-  if (opened.fitDrawn && !overlayModesMatchTheCanvas(useApp.getState())) {
-    useApp.getState().setStatus(`can't send fitted plot: ${CANNOT_CARRY_FIT}`);
+  const { fit, dataset } = opened;
+  const st = useApp.getState();
+  if (fit && (st.polarMode || st.statMode || st.facetKey !== null)) { // these figures never carry an overlay
+    st.setStatus("can't send fitted plot: a polar, stat or faceted view's figure cannot carry the fit; show it as a plain plot first");
     return false;
   }
-  const require = opened.fitDrawn
-    ? (spec: FigureSpec | null) => specCarriesFit(spec, opened.dataset)
-      ? null
-      : CANNOT_CARRY_FIT
+  const require = fit
+    ? (spec: FigureSpec | null) => {
+        const now = useApp.getState();
+        if (now.activeId !== dataset.id || now.fitOverlay !== fit) return "the plot changed while sending; send it again";
+        return specCarriesFit(spec, dataset) ? null
+          : "the figure does not carry the fit (its curve is not drawn there, or the view splits or encodes series)";
+      }
     : undefined;
   try {
     // True only when a figure block was really added (not cancelled, refused or a duplicate click).

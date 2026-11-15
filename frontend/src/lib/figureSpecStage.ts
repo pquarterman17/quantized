@@ -112,12 +112,10 @@ export function buildStageFigureSpec(
   // (On the document route `windowsForSave` has folded the live view into it.)
   const view = canRouteThroughDocument ? figureDocumentToPlotView(document) : liveFigureView(st, ds);
   // `count`: the canvas' plotted channels (`usePlotPayload.fetchChannels`) — past
-  // the palette's eight the cycle engages on its own, as on screen. Counted on
-  // `view`, as the overlays' palette slots are (lib/figureSpecOverlays) -- but a
-  // FROZEN document's view indexes its own snapshot, not `ds`, so that (overlay-
-  // free) route keeps counting the live view against `ds`.
-  const counted = document?.data.mode === "frozen" ? st : view;
-  const count = effectiveChannels(ds.data, counted.yKeys, counted.xKey, ds.channelRoles, counted.seriesOrder).length;
+  // the palette's eight the cycle engages on its own, as on screen. Like every
+  // other input of this cycle decision it is asked of the LIVE view (above);
+  // the overlays' palette slots are a separate decision, made from `view`.
+  const count = effectiveChannels(ds.data, st.yKeys, st.xKey, ds.channelRoles, st.seriesOrder).length;
   const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document, count);
   // BUG-013 review round: the y-span the FOCUSED canvas actually measured its
   // waterfall stagger from — the one thing about this export that cannot be
