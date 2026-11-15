@@ -53,7 +53,8 @@ def _natural_spline(
     x: NDArray[np.float64], y: NDArray[np.float64]
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Natural cubic spline through ``(x, y)`` at SUBSTEPS points per segment."""
-    from scipy.interpolate import CubicSpline
+    with heavy_imports("scipy.interpolate"):
+        from scipy.interpolate import CubicSpline
 
     xd = np.concatenate(
         [np.linspace(x[i], x[i + 1], SUBSTEPS, endpoint=False) for i in range(len(x) - 1)]
