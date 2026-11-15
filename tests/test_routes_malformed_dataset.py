@@ -53,6 +53,16 @@ GOOD_DATASET = {
     "metadata": {},
 }
 
+# /api/fitting/compare-datasets F-tests shared-vs-separate fits, so its good
+# half needs more points per series than the separate model's parameters.
+COMPARE_GOOD = {
+    "time": [0.0, 1.0, 2.0, 3.0, 4.0],
+    "values": [[1.0], [3.1], [4.9], [7.2], [8.8]],
+    "labels": ["a"],
+    "units": [""],
+    "metadata": {},
+}
+
 # /api/plot/map regrids scattered (x, y, z) channels — its good half needs a
 # non-degenerate 2-D point cloud (a 2x2 grid on the unit square), not the
 # generic two-column dataset.
@@ -105,6 +115,12 @@ def _global_fit_body(ds: dict[str, Any]) -> dict[str, Any]:
     reaches the series' x field exactly as a malformed dataset would."""
     vals = ds["values"]
     return {"model": "Linear", "datasets": [{"x": ds["time"], "y": [r[0] for r in vals]}] * 2}
+
+
+def _compare_body(ds: dict[str, Any]) -> dict[str, Any]:
+    """/api/fitting/compare-datasets takes the global-fit body; the constraint
+    (slope shared by both series) is the hypothesis under test."""
+    return {**_global_fit_body(ds), "constraints": [{"param_name": "m", "datasets": [0, 1]}]}
 
 
 # (route, body-builder, good-payload) triples. The builder plants the given
@@ -218,6 +234,8 @@ CASES = [
     ),
     ("/api/fitting/global", _global_fit_body, GOOD_DATASET),
     ("/api/fitting/global/job", _global_fit_body, GOOD_DATASET),
+    ("/api/fitting/compare-datasets", _compare_body, COMPARE_GOOD),
+    ("/api/fitting/compare-datasets/job", _compare_body, COMPARE_GOOD),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.
