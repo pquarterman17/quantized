@@ -203,12 +203,15 @@ describe("a freeze wider than the pane pins only what fits", () => {
     expect(count()).toBe(1);
   });
 
-  it("frozen offsets follow the X column's width when it changes (no stale memo)", () => {
-    const { container, rerender } = renderGrid(4, { frozenCols: 1 });
+  it("frozen offsets follow the X column's width when only a date X changes it (no stale memo)", () => {
+    // Same column count, hidden set, frozen count and colWidths: the X width changes through the data alone.
+    const stable = {}; // a stable object, as the pane's state is
+    const { container, rerender } = renderGrid(4, { frozenCols: 1, colWidths: stable });
     const left = () => headers(container).find((h) => Number(h.dataset.col) === 0)!.style.left;
     expect(left()).toBe(`${DEFAULT_GUTTER_WIDTH + DEFAULT_COL_WIDTH}px`);
-    rerender(<GridViewport {...gridProps(4, { frozenCols: 1, colWidths: { [-1]: 200 } })} />);
-    expect(left()).toBe(`${DEFAULT_GUTTER_WIDTH + 200}px`);
+    const dated = { ...wide(4), metadata: { time_is_datetime: true } };
+    rerender(<GridViewport {...gridProps(4, { frozenCols: 1, data: dated, colWidths: stable })} />);
+    expect(left()).toBe(`${DEFAULT_GUTTER_WIDTH + 168}px`); // a date X is 168 px wide
   });
 });
 

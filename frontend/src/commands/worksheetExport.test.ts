@@ -53,6 +53,17 @@ describe("runExportWorksheet", () => {
     ]);
   });
 
+  it("says hidden columns are written too (hiding is view-only), and says nothing when none are hidden", async () => {
+    useApp.setState({ datasets: [sheet("a", { hiddenCols: [0] })], activeId: "a", selectedIds: [] });
+    vi.mocked(askParams).mockResolvedValue(answer("CSV (comma-separated)"));
+    await runExportWorksheet(useApp.getState);
+    expect(vi.mocked(exportWorksheetTable).mock.calls[0][0].sheets[0].columns.map((c) => c.name)).toContain("R"); // the hidden column is exported
+    expect(useApp.getState().status).toBe('exported "a" as CSV (includes 1 hidden columns)');
+    useApp.setState({ datasets: [sheet("a")], status: "" });
+    await runExportWorksheet(useApp.getState);
+    expect(useApp.getState().status).toBe('exported "a" as CSV');
+  });
+
   it("puts several selected sheets into ONE Excel workbook, leaving masked rows out when asked", async () => {
     useApp.setState({ datasets: [sheet("a", { excludedRows: [1] }), sheet("b")], activeId: "a", selectedIds: ["a", "b"] });
     vi.mocked(askParams).mockResolvedValue(answer("Excel workbook (.xlsx)", { skipMasked: true }));

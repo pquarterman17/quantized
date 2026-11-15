@@ -4,12 +4,14 @@
 // cursor steps over hidden columns, and a hidden column is still in the data and
 // still plottable.
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { hideColumns } from "../../../store/worksheetColumnView";
+import { useGridCursor } from "./useGridCursor";
+import { useWorksheetView } from "./useWorksheetView";
 import WorksheetPane from "./WorksheetPane";
 
 const sheet = (): Dataset => ({
@@ -201,5 +203,17 @@ describe("hidden columns never join a selection, a Find or a cursor range", () =
       fireEvent.click(screen.getByRole("button", { name: /Copy/ }));
     });
     expect(st().status).toMatch(/includes 1 hidden columns/);
+  });
+});
+
+describe("goTo never places the cursor on a hidden column", () => {
+  it("is a no-op for a hidden cell and works for a shown one", () => {
+    const d = { ...sheet(), hiddenCols: [1] };
+    useApp.setState({ datasets: [d] });
+    const { result } = renderHook(() => useGridCursor(d, useWorksheetView(d), { onColumnMenu: () => {}, onEditHeader: () => {} }));
+    act(() => result.current.goTo(1, 1)); // a cell of the hidden column
+    expect(result.current.range).toBeNull();
+    act(() => result.current.goTo(1, 2));
+    expect(result.current.range?.focus).toEqual({ pos: 1, col: 2 });
   });
 });
