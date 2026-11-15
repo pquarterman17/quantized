@@ -22,6 +22,7 @@ import { useState } from "react";
 import { restoreSubstituted, substituteGaps } from "../../../lib/api/finiteSubstitute";
 import { normalizeMagMoment } from "../../../lib/api/magnetometry";
 import { stampXIdentity } from "../../../lib/magDataKind";
+import { ownXKey } from "../../../lib/perSeriesX";
 import {
   convertQuantityUnit,
   emptySampleProfile,
@@ -251,7 +252,7 @@ export function useMagNormalization(): MagNormalizationState {
         metadata.magnetometry_normalization = normalizationProvenance({
           profile, summary: plan, record: res, toField: res.x_unit,
           source: {
-            datasetId: ds.id, datasetName: ds.name, xKey: request.xKey, yKey,
+            datasetId: ds.id, datasetName: ds.name, xKey: ownXKey(ds, request.xKey, yKey), yKey,
             channel: ds.data.labels[yKey] ?? "", xUnit: fromX,
           },
         });
@@ -271,7 +272,7 @@ export function useMagNormalization(): MagNormalizationState {
         values: restoreSubstituted(res.y, ys.finite).map((v) => [v]),
         labels: [ds.data.labels[yKey] ?? "Moment"],
         units: [res.y_unit],
-        metadata: stampXIdentity(metadata, ds.data, request.xKey, res.x_unit),
+        metadata: stampXIdentity(metadata, ds.data, ownXKey(ds, request.xKey, yKey), res.x_unit),
       };
       const outId = nextDatasetId();
       addDataset({ id: outId, name: `${ds.name.replace(/\.[^.]+$/, "")} (${res.y_unit})`, data });

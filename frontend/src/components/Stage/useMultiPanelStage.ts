@@ -34,8 +34,9 @@ import {
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns, stackErrorSpans } from "../../lib/stackErrorSpans";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
-import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import { perSeriesXData } from "../../lib/perSeriesX";
+import { shownCurves } from "../../lib/shownCurves";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
@@ -260,9 +261,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const plotted = useMemo(
     () =>
       !spatial && !facet && !breakMode && active
-        ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder).filter(
-            (c) => !hiddenChannels.includes(c),
-          )
+        ? shownCurves(active.data, { yKeys, xKey, seriesOrder, hiddenChannels }, active.channelRoles)
         : [],
     [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder, hiddenChannels],
   );
@@ -271,7 +270,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // instance, so its own column index is always 1 — see `buildErrorColumns`'s
   // 1-based keying). Mirrors `usePlotPayload.errorBars`, scoped per panel.
   const errorBarsList = useMemo(
-    () => (active ? (payload?.channels ?? []).map((ch) => buildErrorColumns(perSeriesXData(active, xKey)?.data ?? active.data, [ch], errKeys)) : []),
+    () => (active ? (payload?.channels ?? []).map((ch) => buildErrorColumns(perSeriesXData(active, xKey, payload?.channels)?.data ?? active.data, [ch], errKeys)) : []),
     [active, payload, errKeys, xKey],
   );
   // BUG-014 round 4: the channel-keyed renames the facet leg already
@@ -313,7 +312,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       })
         ? defaultDecimateWidthHint()
         : null;
-    const v = perSeriesXData(active, xKey); /* gap-2 #2: each Y on its own X */ void fetchPlot(v?.data ?? active.data, yScale === "log", xScale === "log", plotted, y2Keys, v ? null : xKey, decimateWidth).then(
+    const v = perSeriesXData(active, xKey, plotted); /* gap-2 #2: each Y on its own X */ void fetchPlot(v?.data ?? active.data, yScale === "log", xScale === "log", plotted, y2Keys, v ? null : xKey, decimateWidth).then(
       (p) => {
         if (!cancelled) setPayload({ payload: p, channels: plotted });
       },

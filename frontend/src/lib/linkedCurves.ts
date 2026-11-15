@@ -25,6 +25,8 @@
 // Pure; loaded only by the lazy graph actions and the sync watcher.
 
 import { effectiveDesignations } from "./columnmeta";
+import { errorRoleViewDefaults } from "./errorbars";
+import { hasFiniteValue } from "./ownXSeries";
 import { curveX } from "./perSeriesX";
 import { droppedRows } from "./rowstate";
 import { sharedAxisTitle } from "./sharedAxisTitle";
@@ -200,7 +202,12 @@ export function curvesForDatasets(datasets: readonly Dataset[], primaryOf: (ds: 
     // Any designation means the user (or the Origin book) laid the sheet out:
     // every curve channel (a Y, or an undesignated one -- never an X, error or
     // label column) is drawn against its own X.
-    const ys = des.some((d) => d === "X" || d === "Y") ? own.flatMap((x, c) => (x === undefined ? [] : [c])) : [];
+    // Not an error column (a role, a designation or an `error_channels` hint:
+    // it draws as a bar on its target) and not a spare column with no value.
+    const errorCols = new Set(errorRoleViewDefaults(ds).hiddenChannels);
+    const ys = des.some((d) => d === "X" || d === "Y")
+      ? own.flatMap((x, c) => (x === undefined || errorCols.has(c) || !hasFiniteValue(ds.data.values, c) ? [] : [c]))
+      : [];
     if (ys.length > 0) {
       return ys.map((c) => ({
         datasetId: ds.id,
