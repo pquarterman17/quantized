@@ -41,7 +41,7 @@
 // worksheet row — see LibraryTree.tsx's dispatcher and this row's own
 // onRowClick (records L0.6's remembered workbook child on open).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import DatasetRowPreview from "./DatasetRowPreview";
 import { DatasetRowControls, DatasetRowName, DatasetRowTags, OriginSheetChip } from "./DatasetRowParts";
@@ -50,6 +50,7 @@ import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import Sparkline from "./Sparkline";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
+import { RENAME_ACTIVE_EVENT } from "../../lib/renameActive";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
@@ -127,6 +128,14 @@ export default function DatasetRow({
   const [rename, setRename] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // F2 (useGlobalShortcuts) renames the active dataset: only its row answers.
+  useEffect(() => {
+    if (!active) return;
+    const onF2 = () => setRename(d.name);
+    window.addEventListener(RENAME_ACTIVE_EVENT, onF2);
+    return () => window.removeEventListener(RENAME_ACTIVE_EVENT, onF2);
+  }, [active, d.name]);
 
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);

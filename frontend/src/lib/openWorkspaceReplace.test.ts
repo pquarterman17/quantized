@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LoadedWorkspace } from "./workspace";
+import { defaultSaveName, resetBrowserFile } from "./browserFileHandle";
 import { replaceWorkspace, replaceWorkspaceSafely } from "./openWorkspaceReplace";
 import { toast, useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
@@ -129,6 +130,13 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(useProjectLock.getState().path).toBe("/p/demo.dwk");
     expect(useProjectLock.getState().status).toBe("held-by-me");
+  });
+
+  it("a browser-picker open adopts the file's name for the next download and drops a kept Save handle (audit-6 lane O)", () => {
+    resetBrowserFile();
+    replaceWorkspace(() => useApp.getState(), { ...emptyWorkspace(), fileName: "run9.dwk" });
+    expect(defaultSaveName()).toBe("run9.dwk");
+    resetBrowserFile();
   });
 
   it("does nothing to the lock store for a browser-picker open (no native identity)", async () => {

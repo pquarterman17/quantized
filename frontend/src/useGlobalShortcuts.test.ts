@@ -211,12 +211,15 @@ describe("useGlobalShortcuts — Ctrl/Cmd+S (P1.2 box 1)", () => {
     expect(e).toBe(false); // fireEvent returns false when preventDefault() ran
   });
 
-  it("does not fire on Ctrl+Shift+S — that combo is reserved", () => {
+  it("Ctrl+Shift+S is Save As: always prompts, never the quick save", () => {
     const saveWorkspace = vi.fn();
-    useApp.setState({ saveWorkspace });
+    const saveWorkspaceToFile = vi.fn();
+    useApp.setState({ saveWorkspace, saveWorkspaceToFile });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "s", ctrlKey: true, shiftKey: true });
+    const e = fireEvent.keyDown(window, { key: "S", ctrlKey: true, shiftKey: true, cancelable: true });
+    expect(saveWorkspaceToFile).toHaveBeenCalledOnce();
     expect(saveWorkspace).not.toHaveBeenCalled();
+    expect(e).toBe(false);
   });
 
   it("works with the Meta key too (macOS ⌘S)", () => {

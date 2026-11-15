@@ -181,6 +181,8 @@ export interface WorkspaceState {
 /** A parsed workspace — every field populated (folder tree defaults to empty,
  *  active/selection defaulted from the datasets). Assignable to WorkspaceState. */
 export interface LoadedWorkspace {
+  /** Browser Open only: the picked file's name, so a later download is named after it. */
+  fileName?: string;
   datasets: Dataset[];
   folders: FolderNode[];
   /** Always populated — derived (v1-v3) or sanitized+reconciled (v4). See

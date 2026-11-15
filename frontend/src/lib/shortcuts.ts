@@ -33,7 +33,11 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "⌘ K", desc: "Open the command palette" },
       { keys: "⌘ O", desc: "Import data files" },
-      { keys: "⌘ S", desc: "Save workspace (to its known project file once one exists)" },
+      { keys: "⌘ S", desc: "Save workspace (in place once a file is chosen: its project file, or in Chromium the file you picked)" },
+      { keys: "⌘ ⇧ S", desc: "Save workspace as… (always asks where)" },
+      { keys: "⌘ N", desc: "New workbook (desktop window only: browsers reserve ⌘N, so use the palette there)" },
+      { keys: "⌘ J", desc: "Copy the figure to the clipboard" },
+      { keys: "F2", desc: "Rename the active dataset" },
       { keys: "⌘ Z", desc: "Undo the last change" },
       { keys: "⌘ ⇧ Z", desc: "Redo" },
       { keys: "⌘ V", desc: "Paste data from the clipboard" },
@@ -54,6 +58,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ Click", desc: "Add / remove from the selection" },
       { keys: "⇧ Click", desc: "Select a range from the anchor" },
       { keys: "Double-click", desc: "Rename a dataset" },
+      { keys: "⌘ Q", desc: "Worksheet: Set Column Values for the focused column (⌘Q quits some browsers: use the column menu there)" },
       { keys: "Right-click", desc: "Row menu (plot · duplicate · merge · remove…)" },
     ],
   },
@@ -61,6 +66,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "Plot",
     items: [
       { keys: "A", desc: "Autoscale / reset the view" },
+      { keys: "⌘ R", desc: "Autoscale / reset the view (Origin's rescale; never reloads the page)" },
       { keys: "Alt ←", desc: "Back to the previous zoom / pan view" },
       { keys: "Alt →", desc: "Forward to the next zoom / pan view" },
       { keys: "Z", desc: "Box-zoom tool" },

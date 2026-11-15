@@ -58,6 +58,24 @@ describe("worksheet cell cursor", () => {
     expect(st().history).toEqual([]);
   });
 
+  it("Ctrl+Q opens Set Column Values for the focused column (Origin habit)", async () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, 0));
+    grid().focus();
+    key("q", { ctrlKey: true });
+    expect(await screen.findByRole("dialog", { name: /Set Column Values/ })).toBeInTheDocument();
+  });
+
+  it("Ctrl+Q does nothing while a cell is being edited", async () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, 0));
+    grid().focus();
+    key("F2");
+    key("q", { ctrlKey: true });
+    await new Promise((r) => setTimeout(r, 60)); // the dialog is a lazy chunk: give it time to (wrongly) appear
+    expect(screen.queryByRole("dialog", { name: /Set Column Values/ })).toBeNull();
+  });
+
   it("keys on a focused toolbar button stay the button's: no cursor move, no cell edit", () => {
     render(<WorksheetPane datasetId="w" />);
     fireEvent.mouseDown(cellAt(0, 0));

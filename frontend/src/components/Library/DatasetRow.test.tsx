@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../overlays/ConfirmDialog";
+import { RENAME_ACTIVE_EVENT } from "../../lib/renameActive";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import DatasetRow from "./DatasetRow";
@@ -631,6 +632,20 @@ describe("DatasetRow derived marking for a reflectivity fit curve (P2.2 slice 3)
     expect(screen.getByTitle(/Derived worksheet — source: sample\.dat/)).toBeInTheDocument();
     expect(screen.getByTitle(/pipeline: reflectivity fit #3/)).toBeInTheDocument();
     expect(curve.derivedFrom).toBeUndefined();
+  });
+
+  it("F2 (RENAME_ACTIVE_EVENT) starts the inline rename on the ACTIVE dataset's row only", () => {
+    useApp.setState({ datasets: [plain, sheet1], activeId: "plain" });
+    render(
+      <>
+        <DatasetRow dataset={plain} {...baseProps} active />
+        <DatasetRow dataset={sheet1} {...baseProps} />
+      </>,
+    );
+    expect(screen.queryByLabelText(/^Rename "/)).toBeNull();
+    act(() => void window.dispatchEvent(new Event(RENAME_ACTIVE_EVENT)));
+    expect(screen.getByLabelText('Rename "sample.dat"')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Rename "XRD:Book4"')).toBeNull();
   });
 
   it("shows no mark (and does not throw) for a malformed provenance record", () => {

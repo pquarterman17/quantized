@@ -81,7 +81,7 @@ export function openWorkspaceCommand(
       const file = files[0];
       if (!file) return;
       void withOp(label, () => parseWorkspaceFile(file, currentViewport()))
-        .then(dispatch)
+        .then((ws) => dispatch({ ...ws, fileName: file.name }))
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
         );

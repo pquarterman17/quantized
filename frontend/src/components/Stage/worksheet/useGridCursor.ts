@@ -48,6 +48,8 @@ export interface GridCursorHooks {
   onColumnMenu: (col: number, x: number, y: number) => void;
   /** Shift+F2: edit `col`'s Long Name / Units / Comments. */
   onEditHeader: (col: number) => void;
+  /** Ctrl+Q (Origin's Set Column Values): open it for the focused column (-1 = the row-number column, i.e. a new column). */
+  onSetColumnValues?: (col: number) => void;
 }
 
 export interface GridCursor {
@@ -244,6 +246,8 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       hooks.onEditHeader(range.focus.col);
     } else if (k === "F2") {
       startEdit();
+    } else if (accel && !e.shiftKey && k.toLowerCase() === "q" && hooks.onSetColumnValues) {
+      hooks.onSetColumnValues(range.focus.col);
     } else if (k === "ContextMenu" || (k === "F10" && e.shiftKey)) {
       const box = document.getElementById(cellId(range.focus.pos, range.focus.col))?.getBoundingClientRect();
       hooks.onColumnMenu(range.focus.col, box ? box.left : 0, box ? box.bottom : 0);

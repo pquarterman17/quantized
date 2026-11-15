@@ -12,6 +12,7 @@ import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
+import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
 import { useApp } from "./store/useApp";
@@ -23,6 +24,9 @@ import { useApp } from "./store/useApp";
 function inToolWindow(t: EventTarget | null): boolean {
   return t instanceof Element && t.closest("[data-tool-window]") !== null;
 }
+
+/** Origin habits (Ctrl+R / N / J, F2): the bodies are a lazy chunk (lib/originKeys.ts). */
+const originKey = (k: string) => void runLazy("Loading…", () => import("./lib/originKeys")).then((m) => m.originKey(k), onLoadFailure);
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
@@ -98,6 +102,11 @@ export function useGlobalShortcuts(): void {
             if (!s.xLim && !s.yLim && !s.y2Lim) return; // nothing to reset
             e.preventDefault();
             s.recordView({ xLim: s.xLim, yLim: s.yLim, y2Lim: s.y2Lim }, { xLim: null, yLim: null, y2Lim: null });
+            return;
+          case "F2": // rename the active dataset (Origin habit); Library rows listen
+            if (e.shiftKey) return; // Shift+F2 is the worksheet header editor
+            e.preventDefault();
+            originKey("f2");
             return;
           case "f":
           case "F": // curve-fit workshop
@@ -183,15 +192,26 @@ export function useGlobalShortcuts(): void {
           s.setPrefsOpen(true);
           break;
         case "s":
-          // P1.2 box 1: Ctrl/Cmd+S — write to the known project path with no
-          // dialog; falls back to Save As (prompts / downloads) when there is
-          // no known project yet. ⇧ is reserved (a future explicit Save As
-          // shortcut), so this branch only claims the plain combo.
-          if (!e.shiftKey) {
-            e.preventDefault();
-            void s.saveWorkspace();
-          }
+          // P1.2 box 1: Ctrl/Cmd+S — write to the known project path (desktop) or
+          // the Save As file handle (Chromium) with no dialog; Save As / a download
+          // otherwise. ⇧ = Save As, always prompting (Origin's Ctrl+Shift+S).
+          e.preventDefault();
+          void (e.shiftKey ? s.saveWorkspaceToFile() : s.saveWorkspace());
           break;
+        // Origin habits (audit-6 lane O). Typing in a field keeps the native keys.
+        // Ctrl+R is claimed even there, because the browser would reload the tab and
+        // lose the session; Ctrl+Shift+R (hard reload) is left alone. Ctrl+N / Ctrl+Q
+        // are reserved by browsers (documented in the shortcut sheet): they work only
+        // in the desktop window / an installed app. Ctrl+Q lives in the worksheet.
+        case "r":
+        case "n":
+        case "j": {
+          const typing = isEditingTarget(e.target);
+          if (e.shiftKey || (typing && e.key !== "r")) break;
+          e.preventDefault();
+          if (!typing) originKey(e.key.toLowerCase());
+          break;
+        }
       }
     };
     // R15: through the modal gate. While a dialog is open only `?` and

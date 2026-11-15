@@ -119,6 +119,8 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
     onEditHeader: editHeader,
+    // A live graph's sheet has no formula column (see WorksheetMenus): Ctrl+Q is inert there.
+    onSetColumnValues: (col) => !ds.linkedCurves && setScv(col < 0 ? { kind: "new" } : { kind: "column", col }),
   });
   const closeHeaderEdit = useCallback(() => setHeaderEdit(null), []);
   // N4: Ctrl+F / Ctrl+H. `tick` re-pulls focus into an already-open bar.

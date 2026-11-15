@@ -158,6 +158,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "save-workspace",
       group: "File",
       label: "Save workspace (.dwk)…",
+      shortcut: "⌘⇧S",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
       // like every other one in this list. Always prompts (native Save As
