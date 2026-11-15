@@ -14,6 +14,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { useApp } from "../store/useApp";
 import type { SeriesStyle } from "./types";
 
 type Marks = typeof import("./marksImpl");
@@ -48,7 +49,7 @@ export function loadMarks(): Promise<void> {
       try { mod = await import("./marksImpl"); } catch { /* retried once, then plain */ }
     }
     failed = !mod;
-    if (failed) void import("../store/useApp").then((m) => m.useApp.getState().setStatus("Spline, drop lines and size-by could not load; those series are drawn plain."));
+    if (failed) useApp.getState().setStatus("Spline, drop lines and size-by could not load; those series are drawn plain.");
     ver++;
     subs.forEach((f) => f());
   })());

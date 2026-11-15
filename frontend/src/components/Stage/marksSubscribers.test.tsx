@@ -22,7 +22,7 @@ const walk = (d: string): string[] =>
 /** Files that call buildOpts, and why each is covered. */
 const COVERED: Record<string, RegExp> = {
   "components/Stage/PlotViewport.tsx": /useLazyPlotParts/, // plotDecorNeeds(...) carries `marks`
-  "components/Stage/useMultiPanelStage.ts": /plotDecorNeeds/, // the stage's lazy epoch rebuilds every panel
+  "components/Stage/useMultiPanelStage.ts": /plotDecorNeeds\([^\n]*Object\.values\(seriesStyles\)/, // the lazy epoch rebuilds every panel (stack mode has no flat payload: its styles come from the store)
   "components/Stage/InsetPlot.tsx": /useMarksVersion/,
 };
 /** Pure render helpers: only ever called from a covered file above, or without store styles. */
@@ -66,9 +66,9 @@ describe("useLazyPlotParts loads the marks chunk and asks for a rebuild", () => 
     const needs = plotDecorNeeds([], null, null, 0, [{ connect: "spline" }]);
     expect(needs.marks).toBe(true);
     expect(plotDecorNeeds([], null, null, 0, [{ color: "#f00" }]).marks).toBeUndefined();
-    const onReady = vi.fn();
-    renderHook(() => useLazyPlotParts([], "zoom", onReady, needs));
-    await vi.waitFor(() => expect(onReady).toHaveBeenCalled());
+    let ready = 0;
+    renderHook(() => useLazyPlotParts([], "zoom", () => { ready++; }, needs));
+    await vi.waitFor(() => expect(ready).toBeGreaterThan(0));
     expect(marks()).not.toBeNull();
   });
 });

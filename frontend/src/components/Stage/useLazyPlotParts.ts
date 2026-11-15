@@ -77,12 +77,11 @@ export function useLazyPlotParts(
   const needEscapes = decor.texts.some(awaitsOriginEscapes);
   const needDecor = decor.overlays && !regionDecorReady();
   const needTurn = !!decor.turned && !orientTurnReady();
-  const needMarks = !!decor.marks && marksPending();
   // The canvas title drawing (lib/richLabelsLoader.ts): any plot with a label
   // rebuilds once it lands, so rich / moved / draggable titles appear.
   const needTitles = !richLabelsReady() && decor.texts.some((t) => !!t?.trim());
   useEffect(() => {
-    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn && !needMarks) return;
+    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn) return;
     let live = true;
     // A failed chunk load leaves that part undrawn (the plot itself is
     // complete without it); the next need retries. The startup chunks never
@@ -95,7 +94,6 @@ export function useLazyPlotParts(
       needDecor ? regionDecorSettled : null,
       needTitles ? richLabelsSettled : null,
       needTurn ? orientTurnSettled : null,
-      needMarks ? loadMarks() : null,
     ]).then(
       () => {
         if (live) onReady();
@@ -106,7 +104,20 @@ export function useLazyPlotParts(
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
-  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn, needMarks]);
+  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn]);
+  // The marks chunk (lib/marksLoader.ts) is its OWN effect, keyed on whether a series asks for a mark
+  // (stable) rather than on "still pending": the arrival flips pending in the same commit and must not
+  // cancel the rebuild it is about to ask for.
+  const wantsMarks = !!decor.marks;
+  useEffect(() => {
+    if (!wantsMarks || !marksPending()) return;
+    let live = true;
+    void loadMarks().then(() => live && onReady());
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render.
+  }, [wantsMarks]);
 }
 
 /** `useLazyPlotParts` for a renderer that rebuilds on a counter (the
