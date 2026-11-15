@@ -188,6 +188,40 @@ def write_fixture() -> None:
     FIXTURE.write_text(json.dumps(build_fixture(), indent=1) + "\n", encoding="utf-8")
 
 
+#: numpy/scipy may round the last bit differently per platform libm (measured:
+#: ``np.interp`` on macOS gives 0.3333333333333335 where Linux gives ...333), so
+#: floats are compared to a few ulp; structure, strings and non-finite markers
+#: must match exactly.
+REL_TOL = 1e-14
+
+
+def _mismatches(a: Any, b: Any, path: str = "$") -> list[str]:
+    if isinstance(a, dict) and isinstance(b, dict):
+        if a.keys() != b.keys():
+            return [f"{path}: keys {sorted(a)} != {sorted(b)}"]
+        return [m for k in a for m in _mismatches(a[k], b[k], f"{path}.{k}")]
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return [f"{path}: length {len(a)} != {len(b)}"]
+        return [
+            m
+            for i, (x, y) in enumerate(zip(a, b, strict=True))
+            for m in _mismatches(x, y, f"{path}[{i}]")
+        ]
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+        ok = math.isclose(float(a), float(b), rel_tol=REL_TOL, abs_tol=0.0)
+        return [] if ok else [f"{path}: {a!r} != {b!r}"]
+    return [] if a == b else [f"{path}: {a!r} != {b!r}"]
+
+
 def test_formula_math_fixture_is_numpy_and_scipy() -> None:
     committed = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert committed == json.loads(json.dumps(build_fixture()))
+    assert _mismatches(committed, json.loads(json.dumps(build_fixture()))) == []
+
+
+def test_fixture_comparison_still_catches_real_differences() -> None:
+    base = {"a": [1.0, "nan", 2.0]}
+    assert _mismatches(base, {"a": [1.0 + 1e-16, "nan", 2.0]}) == []
+    assert _mismatches(base, {"a": [1.0 + 1e-12, "nan", 2.0]}) != []
+    assert _mismatches(base, {"a": [1.0, 0.0, 2.0]}) != []
+    assert _mismatches(base, {"a": [1.0, "nan"]}) != []
