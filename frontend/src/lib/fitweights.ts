@@ -9,7 +9,7 @@
 // filter pruned, the #50/#53 chokepoint) — never `ds.data` directly.
 
 import { analysisData } from "./rowstate";
-import type { Dataset, FitWeighting } from "./types";
+import type { Dataset, DataStruct, FitWeighting } from "./types";
 
 /** The `/fit` request field for a weighting's error scaling: present only
  *  when scaling is OFF (the route's default is on), so every replay of a
@@ -61,6 +61,18 @@ export function dyForFit(
   if (weight.mode === "none") return { dy: null };
   const data = analysisData(dataset);
   if (!data) return { dy: null };
+  return dyForData(data, yKey, weight, keep);
+}
+
+/** `dyForFit`'s rules over a bare DataStruct (a By level's sliced rows, where
+ *  the sigma / weight column rides along as a sibling channel). */
+export function dyForData(
+  data: DataStruct,
+  yKey: number,
+  weight: FitWeighting,
+  keep?: readonly number[],
+): DyResolution {
+  if (weight.mode === "none") return { dy: null };
 
   if (weight.mode === "poisson") {
     // Counting statistics: sigma = sqrt(N), floored at 1 so a zero/near-zero

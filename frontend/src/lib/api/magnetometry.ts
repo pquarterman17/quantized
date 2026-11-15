@@ -84,7 +84,8 @@ export function normalizeMagMoment(body: {
 
 /** Convert applied field to internal field for a named sample geometry.
  * Magnetization must already be volume-normalized.  Returned error arrays
- * contain only the propagated contribution from their matching M uncertainty. */
+ * are the internal-field uncertainty: sqrt(sigma_H^2 + (N sigma_M)^2) per M
+ * column, or sigma_H alone when only applied-field uncertainty was sent. */
 export function demagCorrectField(body: {
   field: number[];
   magnetization: number[];
@@ -92,6 +93,8 @@ export function demagCorrectField(body: {
   field_unit: string;
   magnetization_unit: string;
   magnetization_errors?: number[][];
+  /** Applied-field 1-sigma columns (in `field_unit`), combined in quadrature. */
+  field_errors?: number[][];
 }): Promise<{
   field: (number | null)[];
   field_errors: (number | null)[][];

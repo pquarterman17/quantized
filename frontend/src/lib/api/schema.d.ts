@@ -1649,6 +1649,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/compare-datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Datasets Route
+         * @description Extra-sum-of-squares F-test: do the ``constraints`` parameters share ONE
+         *     value across all datasets (restricted fit) or does each dataset need its own
+         *     (full fit)? Same request as ``/global``; the constraints are the hypothesis
+         *     under test and must each span every dataset.
+         */
+        post: operations["compare_datasets_route_api_fitting_compare_datasets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/compare-datasets/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Datasets Job
+         * @description Queue the dataset comparison on the poll-model job runner (two global
+         *     fits); cancel stops it at the next model evaluation.
+         */
+        post: operations["compare_datasets_job_api_fitting_compare_datasets_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/diagnostics": {
         parameters: {
             query?: never;
@@ -7218,6 +7262,8 @@ export interface components {
         CurieWeissDataFitRequest: {
             /** Field */
             field?: number[] | null;
+            /** Field Errors */
+            field_errors?: number[][];
             /**
              * Field Unit
              * @default Oe
@@ -7393,6 +7439,8 @@ export interface components {
         DemagCorrectRequest: {
             /** Field */
             field: number[];
+            /** Field Errors */
+            field_errors?: number[][];
             /** Field Unit */
             field_unit: string;
             /** Magnetization */
@@ -14781,6 +14829,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_datasets_route_api_fitting_compare_datasets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_datasets_job_api_fitting_compare_datasets_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
             };
         };
         responses: {

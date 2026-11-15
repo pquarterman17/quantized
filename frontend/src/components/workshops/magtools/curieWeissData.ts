@@ -26,10 +26,12 @@ export interface FieldColumn {
   unit: string;
 }
 
-export function fieldColumns(data: DataStruct, excludedChannel: number): FieldColumn[] {
+/** `errorChannels`: columns bound as error bars are never the applied field, even when
+ *  their label and unit look like one (a field-uncertainty column in Oe). */
+export function fieldColumns(data: DataStruct, excludedChannel: number, errorChannels: readonly number[] = []): FieldColumn[] {
   const fields: FieldColumn[] = [];
   for (let index = 0; index < data.labels.length; index++) {
-    if (index === excludedChannel) continue;
+    if (index === excludedChannel || errorChannels.includes(index)) continue;
     const label = data.labels[index] ?? "";
     const unit = data.units[index] ?? "";
     if (FIELD_UNITS.has(unit) && detectMagXKind(label, unit).kind === "field") {
@@ -90,7 +92,7 @@ export function curieWeissProblem(
     if (basis === "total_moment" && !(Number.isFinite(sampleMassG) && sampleMassG > 0)) {
       return "Enter a positive sample mass for total moment.";
     }
-    const fields = fieldColumns(dataset.data, yKey);
+    const fields = fieldColumns(dataset.data, yKey, (dataset.errorRoles ?? []).map((r) => r.channel));
     if (fields.length === 0) return "No supported applied-field channel was found in this dataset.";
     const selected = fieldKey == null && fields.length === 1
       ? fields[0]
