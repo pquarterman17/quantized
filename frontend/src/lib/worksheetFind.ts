@@ -31,6 +31,9 @@ export interface FindCell {
 export interface FindScope {
   rows?: ReadonlySet<number> | null;
   cols?: ReadonlySet<number> | null;
+  /** Columns the grid hides: never searched, so Find cannot land on (and
+   *  Replace all cannot rewrite) a cell the user cannot see. */
+  skip?: ReadonlySet<number> | null;
 }
 
 const cellText = (v: number | undefined): string => (v === undefined || Number.isNaN(v) ? "" : String(v));
@@ -55,6 +58,7 @@ export function findCells(data: DataStruct, opts: FindOptions, order: readonly n
     const width = data.values[row]?.length ?? data.labels.length;
     for (let col = 0; col < width; col++) {
       if (scope.cols && !scope.cols.has(col)) continue;
+      if (scope.skip?.has(col)) continue;
       if (isCategoricalChannel(data, col)) continue;
       if (matches(data.values[row]?.[col])) out.push({ row, col });
     }

@@ -1085,7 +1085,7 @@ body {
 .qzk-col-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; touch-action: none; }
 .qzk-col-resize::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px; background: transparent; }
 .qzk-col-resize:hover::after, .qzk-col-resize:active::after { background: var(--accent); }
-.qzk-col-hidden { position: absolute; top: 2px; left: 2px; z-index: 6; padding: 0 4px; font: inherit; font-size: 10px; line-height: 14px; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 7px; cursor: default; }
+.qzk-col-hidden { position: absolute; top: 0; bottom: 0; right: 7px; z-index: 6; width: 4px; padding: 0; background: var(--accent); border: 0; opacity: 0.8; cursor: default; }
 
 /* sheet tab strip (components/Stage/worksheet/SheetTabs) — Origin's own
    bottom worksheet-tab convention for a multi-sheet workbook; hidden entirely

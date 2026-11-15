@@ -50,3 +50,53 @@ export function hiddenRuns(colCount: number, hidden: ReadonlySet<number>): Map<n
   }
   return runs;
 }
+
+/** How many of the leading `frozenCols` (left to right) can stay pinned: the
+ *  pinned width (`fixedBase` = gutter + X, plus each pinned column) must leave
+ *  at least `minScroll` px of the viewport for the columns that scroll, or the
+ *  rest of the sheet could never be reached. An unmeasured viewport (<= 0)
+ *  pins them all. */
+export function pinnableCount(
+  frozenCols: readonly number[],
+  widthOf: (col: number) => number,
+  fixedBase: number,
+  viewport: number,
+  minScroll: number,
+): number {
+  if (viewport <= 0) return frozenCols.length;
+  let used = fixedBase;
+  for (let i = 0; i < frozenCols.length; i++) {
+    used += widthOf(frozenCols[i]);
+    if (used > viewport - minScroll) return i;
+  }
+  return frozenCols.length;
+}
+
+export interface ColumnAria {
+  /** 1-based `aria-colindex` of each value column (gutter = 1, X = 2). */
+  value: number[];
+  /** The same for each read-only text column, by short name. */
+  text: Record<string, number>;
+  /** `aria-colcount`: every column, hidden ones included. */
+  count: number;
+}
+
+/** True ARIA column positions while some column is hidden: a hidden column
+ *  leaves a gap, and a text column sits at its file-order spot after its anchor
+ *  channel (`anchors[i]` = -1: before every channel) — see textColumnAnchors. */
+export function ariaPositions(colCount: number, anchors: readonly number[], names: readonly string[]): ColumnAria {
+  const value: number[] = [];
+  const text: Record<string, number> = {};
+  let pos = 3;
+  const place = (at: number) => {
+    anchors.forEach((a, i) => {
+      if (a === at || (at === colCount - 1 && a >= colCount)) text[names[i]] = pos++;
+    });
+  };
+  place(-1);
+  for (let c = 0; c < colCount; c++) {
+    value.push(pos++);
+    place(c);
+  }
+  return { value, text, count: pos - 1 };
+}

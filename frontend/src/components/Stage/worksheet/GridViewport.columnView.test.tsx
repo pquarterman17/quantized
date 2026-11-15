@@ -26,34 +26,36 @@ function wide(nCols: number, nRows = 3): DataStruct {
   };
 }
 
-function renderGrid(nCols: number, extra: Partial<React.ComponentProps<typeof GridViewport>> = {}) {
+function gridProps(nCols: number, extra: Partial<React.ComponentProps<typeof GridViewport>> = {}): React.ComponentProps<typeof GridViewport> {
   const data = wide(nCols);
-  const utils = render(
-    <GridViewport
-      data={data}
-      xName="x"
-      xUnit=""
-      order={data.time.map((_, i) => i)}
-      masked={new Set()}
-      filteredOut={new Set()}
-      selected={new Set()}
-      channelRoles={{}}
-      sortMark={() => ""}
-      selectedCols={new Set()}
-      onToggleColSelect={noop}
-      onSelectColRange={noop}
-      onToggleSelect={noop}
-      onSelectRange={noop}
-      onEditCell={noop}
-      baseCount={nCols}
-      onRemoveFormula={noop}
-      showStats={false}
-      colStats={null}
-      statsErr={false}
-      textCols={[]}
-      {...extra}
-    />,
-  );
+  return {
+    data,
+    xName: "x",
+    xUnit: "",
+    order: data.time.map((_, i) => i),
+    masked: new Set(),
+    filteredOut: new Set(),
+    selected: new Set(),
+    channelRoles: {},
+    sortMark: () => "",
+    selectedCols: new Set(),
+    onToggleColSelect: noop,
+    onSelectColRange: noop,
+    onToggleSelect: noop,
+    onSelectRange: noop,
+    onEditCell: noop,
+    baseCount: nCols,
+    onRemoveFormula: noop,
+    showStats: false,
+    colStats: null,
+    statsErr: false,
+    textCols: [],
+    ...extra,
+  };
+}
+
+function renderGrid(nCols: number, extra: Partial<React.ComponentProps<typeof GridViewport>> = {}) {
+  const utils = render(<GridViewport {...gridProps(nCols, extra)} />);
   const scrollEl = utils.container.querySelector(".qzk-grid") as HTMLElement;
   return { ...utils, scrollEl };
 }
@@ -175,6 +177,75 @@ describe("windowing cost follows the viewport, not the hidden or frozen count (n
     expect(after).not.toContain(10);
     expect(after).not.toContain(11);
     expect(after).toContain(13); // scrolled past the hidden gap with no empty hole
+  });
+});
+
+describe("a freeze wider than the pane pins only what fits", () => {
+  it("leaves room to scroll: later frozen columns scroll like any other, and every column stays reachable", () => {
+    const { container, scrollEl } = renderGrid(40, { frozenCols: 30 });
+    measureAs(scrollEl, 600, 400);
+    const pinned = headers(container).filter((h) => h.style.position === "sticky" && Number(h.dataset.col) >= 0);
+    // gutter 44 + X 120 + k * 120 must leave one 120 px column: k = 2.
+    expect(pinned.map((h) => Number(h.dataset.col))).toEqual([0, 1]);
+    scrollEl.scrollLeft = 20 * DEFAULT_COL_WIDTH;
+    fireEvent.scroll(scrollEl);
+    const now = cols(container);
+    expect(now.slice(0, 3)).toEqual([-1, 0, 1]);
+    expect(now.some((c) => c >= 20 && c < 30)).toBe(true); // "frozen" columns beyond the fit are reachable by scrolling
+  });
+
+  it("re-fits when the pane narrows or the X column widens (a date X)", () => {
+    const { container, scrollEl } = renderGrid(10, { frozenCols: 6 });
+    measureAs(scrollEl, 1100, 400);
+    const count = () => headers(container).filter((h) => h.style.position === "sticky" && Number(h.dataset.col) >= 0).length;
+    expect(count()).toBe(6);
+    measureAs(scrollEl, 500, 400);
+    expect(count()).toBe(1);
+  });
+
+  it("frozen offsets follow the X column's width when it changes (no stale memo)", () => {
+    const { container, rerender } = renderGrid(4, { frozenCols: 1 });
+    const left = () => headers(container).find((h) => Number(h.dataset.col) === 0)!.style.left;
+    expect(left()).toBe(`${DEFAULT_GUTTER_WIDTH + DEFAULT_COL_WIDTH}px`);
+    rerender(<GridViewport {...gridProps(4, { frozenCols: 1, colWidths: { [-1]: 200 } })} />);
+    expect(left()).toBe(`${DEFAULT_GUTTER_WIDTH + 200}px`);
+  });
+});
+
+describe("text columns follow their anchor's displayed position", () => {
+  const withText = (extra: Partial<React.ComponentProps<typeof GridViewport>>) => {
+    const textCols = [{ shortName: "T", longName: "Tag", rows: ["a", "b", "c"] }];
+    // File order: x, C0, C1, Tag, C2, C3 — the text column follows channel 1.
+    const data = { ...wide(4), metadata: { all_column_names: ["x", "C0", "C1", "Tag", "C2", "C3"] } };
+    return renderGrid(4, { textCols, data, ...extra });
+  };
+  const order = (c: HTMLElement) => Array.from(c.querySelectorAll('[role="columnheader"]')).map((h) => (h as HTMLElement).dataset.col ?? "text");
+
+  it("a text column after a hidden column stays beside the shown column before it, not far right", () => {
+    const { container } = withText({ hiddenCols: new Set([1]) });
+    expect(order(container).slice(2)).toEqual(["0", "text", "2", "3"]);
+  });
+
+  it("a text column after a frozen column is drawn right after the pinned run", () => {
+    const { container } = withText({ frozenCols: 2 });
+    expect(order(container).slice(2)).toEqual(["0", "1", "text", "2", "3"]);
+  });
+
+  it("text columns carry aria-colindex too, and aria-colcount counts them", () => {
+    const { container } = withText({ hiddenCols: new Set([2]) });
+    const text = Array.from(container.querySelectorAll<HTMLElement>('[role="columnheader"]:not([data-col])')).find((h) => h.textContent?.startsWith("Tag"))!;
+    expect(text.getAttribute("aria-colindex")).toBe("5"); // gutter 1, X 2, C0 3, C1 4, T 5, C2 6 (hidden), C3 7 = the count
+    expect(container.querySelector(".qzk-grid")?.getAttribute("aria-colcount")).toBe("7");
+  });
+});
+
+describe("the hidden-columns marker sits clear of the header text", () => {
+  it("is a thin right-edge stripe, never a pill at the left where clicks select the column", () => {
+    const css = readFileSync("src/styles/shell.css", "utf8");
+    const rule = css.split("\n").find((l) => l.startsWith(".qzk-col-hidden {"))!;
+    expect(rule).toMatch(/right:\s*7px/);
+    expect(rule).toMatch(/width:\s*4px/);
+    expect(rule).not.toMatch(/left:/);
   });
 });
 

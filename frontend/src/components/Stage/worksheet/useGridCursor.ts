@@ -104,7 +104,8 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     setRange((r) => {
       if (!r) return r;
       const b = { rows: rowCount, cols: colCount, hidden };
-      const [a, f] = [clampCell(r.anchor, b), clampCell(r.focus, b)];
+      const f = clampCell(r.focus, b);
+      const a = clampCell(r.anchor, b, f.col >= r.anchor.col ? 1 : -1); // toward the focus: no column joins the range
       const same = a.pos === r.anchor.pos && a.col === r.anchor.col && f.pos === r.focus.pos && f.col === r.focus.col;
       return same ? r : { anchor: a, focus: f };
     });
@@ -188,10 +189,12 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     void navigator.clipboard
       ?.readText()
       .then((text) => {
-        setStatus(pasteGrowing(ds.id, text, top, left, order, entryRow));
-        // Select what was pasted, as a spreadsheet does.
         const g = parseClipboardGrid(text);
         const w = g.reduce((m, r) => Math.max(m, r.length), 0);
+        // Paste writes contiguous columns (as Excel does); copy/fill/clear skip hidden ones — say so.
+        const intoHidden = Array.from({ length: w }, (_, i) => left + i).filter((c) => hidden.has(c)).length;
+        setStatus(pasteGrowing(ds.id, text, top, left, order, entryRow) + (intoHidden ? ` — ${intoHidden} of the pasted columns are hidden` : ""));
+        // Select what was pasted, as a spreadsheet does.
         if (g.length && w) setRange({ anchor: { pos: top, col: left }, focus: clampCell({ pos: top + g.length - 1, col: left + w - 1 }, bounds()) });
       })
       .catch(() => setStatus("clipboard read unavailable"));
@@ -284,7 +287,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
 
   const goTo = (row: number, col: number) => {
     const pos = order.indexOf(row);
-    if (pos >= 0) place({ anchor: { pos, col }, focus: { pos, col } });
+    if (pos >= 0 && !hidden.has(col)) place({ anchor: { pos, col }, focus: { pos, col } });
   };
 
   return { range, grid, blockOps, onKeyDown, clear: () => setRange(null), reveal, goTo };

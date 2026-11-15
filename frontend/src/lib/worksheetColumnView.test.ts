@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { remapDatasetChannels } from "./channelRemap";
 import { cellAt, clampCell, jumpCursor, moveCursor, rangeCols } from "./gridCursor";
-import { hiddenRuns, shownColumns, splitColumns } from "./worksheetColumnView";
+import { ariaPositions, hiddenRuns, pinnableCount, shownColumns, splitColumns } from "./worksheetColumnView";
 import { sanitizeFrozenCols, sanitizeHiddenCols } from "./worksheetColumnViewSanitize";
 
 describe("splits", () => {
@@ -91,5 +91,32 @@ describe("keyboard cursor skips hidden columns", () => {
     const r = { anchor: { pos: 0, col: 0 }, focus: { pos: 2, col: 4 } };
     expect(rangeCols(r, b.hidden)).toEqual([0, 3, 4]);
     expect(rangeCols(r)).toEqual([0, 1, 2, 3, 4]);
+  });
+});
+
+describe("pinnableCount", () => {
+  const w = () => 120;
+  it("pins only the prefix that leaves a scrolling column", () => {
+    expect(pinnableCount([0, 1, 2, 3], w, 164, 600, 120)).toBe(2);
+    expect(pinnableCount([0, 1], w, 164, 900, 120)).toBe(2);
+    expect(pinnableCount([0, 1, 2], w, 164, 100, 120)).toBe(0);
+    expect(pinnableCount([0, 1, 2], w, 164, 0, 120)).toBe(3); // unmeasured: pin them all
+  });
+});
+
+describe("ariaPositions", () => {
+  it("numbers by true position, text columns included", () => {
+    const p = ariaPositions(3, [-1, 1], ["T0", "T1"]);
+    expect(p.text).toEqual({ T0: 3, T1: 6 });
+    expect(p.value).toEqual([4, 5, 7]);
+    expect(p.count).toBe(7);
+  });
+});
+
+describe("a range's anchor moves toward its focus when its column is hidden", () => {
+  const b = { rows: 5, cols: 8, hidden: new Set([3]) };
+  it("clampCell can prefer the right side", () => {
+    expect(clampCell({ pos: 0, col: 3 }, b).col).toBe(2);
+    expect(clampCell({ pos: 0, col: 3 }, b, 1).col).toBe(4);
   });
 });

@@ -40,7 +40,9 @@ import { userParamRows, userParamValue } from "../../../lib/userParams";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import { Select } from "../../primitives";
+import HiddenColumnsMarker from "./HiddenColumnsMarker";
 import type { TextColumnLayout } from "./textColumns";
+import type { ColumnAria } from "../../../lib/worksheetColumnView";
 
 /** Compact modeling-type tags — same table as ChannelsCard's, kept in sync
  *  by hand (P1.6b: the worksheet header is the SECOND surface for this, not
@@ -104,8 +106,8 @@ export interface GridHeaderProps {
    *  marker on that header; clicking it shows the run. */
   hiddenRuns?: Map<number, number[]>;
   onShowCols?: (cols: number[]) => void;
-  /** `aria-colindex` by true column position — see GridRow. */
-  colIndexed?: boolean;
+  /** True column numbers (`aria-colindex`) — see GridRow. */
+  colPos?: ColumnAria;
 }
 
 const NO_FROZEN: number[] = [];
@@ -179,7 +181,7 @@ export default function GridHeader({
   frozenLeft = () => 0,
   hiddenRuns,
   onShowCols,
-  colIndexed = false,
+  colPos,
 }: GridHeaderProps) {
   const colMeta = columnMetaList(data);
   // User parameter rows (Temperature, Sample, ...): one "name: value" line per
@@ -224,25 +226,9 @@ export default function GridHeader({
     />
   );
 
-  // "N hidden" marker on the header just before a run of hidden columns.
-  const hiddenMarker = (col: number) => {
-    const run = hiddenRuns?.get(col);
-    if (!run?.length) return null;
-    const names = run.map((c) => data.labels[c] ?? String(c)).join(", ");
-    return (
-      <button
-        className="qzk-col-hidden"
-        aria-label={`${run.length} hidden column${run.length === 1 ? "" : "s"} after ${col < 0 ? xName : data.labels[col]}: ${names}. Show`}
-        title={`Hidden: ${names} — click to show`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onShowCols?.(run);
-        }}
-      >
-        ⋮{run.length}
-      </button>
-    );
-  };
+  const hiddenMarker = (col: number) => (
+    <HiddenColumnsMarker run={hiddenRuns?.get(col)} after={col < 0 ? xName : data.labels[col]} labels={data.labels} onShow={onShowCols} />
+  );
   // One text-column header cell — rendered at up to three different spots
   // (before every channel, right after a given one, or trailing) depending
   // on `textLayout`, so it's a shared renderer rather than three copies.
@@ -250,6 +236,7 @@ export default function GridHeader({
     <div
       key={`text-${t.shortName}`}
       role="columnheader"
+      aria-colindex={colPos?.text[t.shortName]}
       className="qzk-grid-headcell"
       style={{ width: colWidth, flexShrink: 0 }}
       title={`${t.longName ? `${t.longName} (${t.shortName})` : t.shortName}${t.unit ? ` [${t.unit}]` : ""} — read-only text column (Origin)`}
@@ -292,7 +279,7 @@ export default function GridHeader({
           onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
           onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(c, e))}
           data-col={c}
-          aria-colindex={colIndexed ? c + 3 : undefined}
+          aria-colindex={colPos?.value[c]}
           title={headerTitle(c, computed, channelRoles[c], meta)}
         >
           {data.labels[c]}
@@ -359,7 +346,7 @@ export default function GridHeader({
         role="columnheader"
         className="qzk-grid-headcell qzk-grid-rownum"
         style={{ position: "sticky", left: 0, zIndex: 4, width: gutterWidth, flexShrink: 0 }}
-        aria-colindex={colIndexed ? 1 : undefined}
+        aria-colindex={colPos ? 1 : undefined}
       >
         #
       </div>
@@ -371,7 +358,7 @@ export default function GridHeader({
         onContextMenu={onHeaderContext ? (e) => onHeaderContext(-1, e) : undefined}
         onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(-1, e))}
         data-col={-1}
-        aria-colindex={colIndexed ? 2 : undefined}
+        aria-colindex={colPos ? 2 : undefined}
       >
         {xName}
         <span className="role">
@@ -390,6 +377,7 @@ export default function GridHeader({
       </div>
       {textLayout.before.map(textHeaderCell)}
       {frozenCols.map((c) => valueHeader(c, frozenLeft(c)))}
+      {frozenCols.length > 0 && textLayout.after(frozenCols[frozenCols.length - 1]).map(textHeaderCell)}
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
       {visibleCols.map((c) => valueHeader(c))}
       {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}

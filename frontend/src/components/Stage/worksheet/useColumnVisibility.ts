@@ -40,3 +40,10 @@ export function useColumnVisibility(ds: Dataset, selectedCols: ReadonlySet<numbe
   };
   return { hiddenSet, frozen, controls };
 }
+
+/** The column selection minus hidden columns — the ONE place the filter lives,
+ *  so a shift-range across a hidden column, or an undo that re-hides a selected
+ *  one, never carries it into delete / plot / block ops the user cannot see. */
+export function useShownSelection(picked: Set<number>, hidden: readonly number[] | undefined): Set<number> {
+  return useMemo(() => (hidden?.length ? new Set([...picked].filter((c) => !hidden.includes(c))) : picked), [picked, hidden]);
+}

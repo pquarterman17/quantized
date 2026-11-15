@@ -27,21 +27,25 @@ export interface GridBounds {
 }
 
 /** The nearest shown column to `col` (preferring the left), -1 (X) at worst. */
-function shownNear(col: number, b: GridBounds): number {
+function shownNear(col: number, b: GridBounds, prefer: -1 | 1 = -1): number {
   if (!b.hidden?.has(col)) return col;
   for (let d = 1; d <= b.cols; d++) {
-    if (col - d < 0 || !b.hidden.has(col - d)) return col - d;
-    if (col + d < b.cols && !b.hidden.has(col + d)) return col + d;
+    const left = col - d < 0 || !b.hidden.has(col - d) ? col - d : null;
+    const right = col + d < b.cols && !b.hidden.has(col + d) ? col + d : null;
+    const pick = prefer < 0 ? (left ?? right) : (right ?? left);
+    if (pick !== null) return pick;
   }
   return -1;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
-/** `p` clamped into the grid (an empty grid clamps every row to 0). */
-export function clampCell(p: CellPos, b: GridBounds): CellPos {
+/** `p` clamped into the grid (an empty grid clamps every row to 0). A cell on a
+ *  hidden column moves to the nearest shown one, on the `prefer` side first: a
+ *  range's anchor passes the side of its focus, so the range never grows. */
+export function clampCell(p: CellPos, b: GridBounds, prefer: -1 | 1 = -1): CellPos {
   const col = clamp(p.col, -1, Math.max(-1, b.cols - 1));
-  return { pos: clamp(p.pos, 0, Math.max(0, b.rows - 1)), col: shownNear(col, b) };
+  return { pos: clamp(p.pos, 0, Math.max(0, b.rows - 1)), col: shownNear(col, b, prefer) };
 }
 
 /** A one-cell range at `p`. */

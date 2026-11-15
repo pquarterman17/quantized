@@ -19,14 +19,15 @@ import {
   DEFAULT_COL_WIDTH,
   DEFAULT_FALLBACK_COLS,
 } from "../../../lib/gridwindow";
-import { splitColumns } from "../../../lib/worksheetColumnView";
+import type { TextColumn } from "../../../lib/originTextColumns";
+import { ariaPositions, hiddenRuns, pinnableCount, splitColumns } from "../../../lib/worksheetColumnView";
 
 export interface ColumnAxisInput {
   colCount: number;
   hidden: ReadonlySet<number>;
   frozen: number;
-  /** Per-column width (-1 = X). */
-  widthOf: (col: number) => number;
+  /** The X column's width (it differs for a date X). */
+  xWidth: number;
   colWidths: Record<number, number>;
   scrollLeft: number;
   viewportWidth: number;
@@ -51,8 +52,17 @@ export interface ColumnAxis {
 }
 
 export function useGridColumnAxis(a: ColumnAxisInput): ColumnAxis {
-  const { colCount, hidden, frozen, widthOf, colWidths, scrollLeft, viewportWidth, gutterWidth } = a;
-  const { frozenCols, scrollCols } = useMemo(() => splitColumns(colCount, hidden, frozen), [colCount, hidden, frozen]);
+  const { colCount, hidden, frozen, xWidth, colWidths, scrollLeft, viewportWidth, gutterWidth } = a;
+  // Only the frozen prefix that FITS stays pinned (room left for at least one
+  // scrolling column); the rest scroll like any other column, so the sheet is
+  // always reachable however many columns were frozen or however narrow the pane.
+  const { frozenCols, scrollCols } = useMemo(() => {
+    const split = splitColumns(colCount, hidden, frozen);
+    const n = pinnableCount(split.frozenCols, (c) => colWidths[c] ?? DEFAULT_COL_WIDTH, gutterWidth + xWidth, viewportWidth, DEFAULT_COL_WIDTH);
+    return n === split.frozenCols.length
+      ? split
+      : { frozenCols: split.frozenCols.slice(0, n), scrollCols: [...split.frozenCols.slice(n), ...split.scrollCols] };
+  }, [colCount, hidden, frozen, colWidths, xWidth, gutterWidth, viewportWidth]);
   const hasCustomCols = useMemo(() => Object.keys(colWidths).some((k) => Number(k) >= 0), [colWidths]);
   // Built ONLY when some value column was resized (the uniform fast path needs
   // no array) and only over the scrolling columns.
@@ -62,15 +72,13 @@ export function useGridColumnAxis(a: ColumnAxisInput): ColumnAxis {
   );
   const lefts = useMemo(() => {
     const m = new Map<number, number>();
-    let x = gutterWidth + widthOf(-1);
+    let x = gutterWidth + xWidth;
     for (const c of frozenCols) {
       m.set(c, x);
-      x += widthOf(c);
+      x += colWidths[c] ?? DEFAULT_COL_WIDTH;
     }
     return { m, end: x };
-    // widthOf is a fresh closure each render; colWidths is its real input.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frozenCols, colWidths, gutterWidth]);
+  }, [frozenCols, colWidths, gutterWidth, xWidth]);
   const fixedWidth = lefts.end;
   const available = Math.max(0, viewportWidth - fixedWidth);
   const win = colOffsets
@@ -97,4 +105,16 @@ export function useGridColumnAxis(a: ColumnAxisInput): ColumnAxis {
     },
     fixedWidth,
   };
+}
+
+/** What the header and screen readers need to know about hidden columns: where
+ *  each hidden run sits, and (only while something is hidden) every column's
+ *  true ARIA position, text columns included. */
+export function useColumnMarks(colCount: number, hidden: ReadonlySet<number>, textCols: readonly TextColumn[], textAnchors: readonly number[]) {
+  const runs = useMemo(() => hiddenRuns(colCount, hidden), [colCount, hidden]);
+  const colPos = useMemo(
+    () => (hidden.size > 0 ? ariaPositions(colCount, textAnchors, textCols.map((t) => t.shortName)) : undefined),
+    [hidden, colCount, textAnchors, textCols],
+  );
+  return { runs, colPos };
 }

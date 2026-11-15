@@ -266,6 +266,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
           replace={find.replace}
           focusTick={find.tick}
           onGoTo={cursor.goTo}
+          hidden={colVis.hiddenSet}
           onClose={closeFind}
         />
       )}

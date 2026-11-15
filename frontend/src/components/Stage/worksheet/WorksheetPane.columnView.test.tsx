@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { hideColumns } from "../../../store/worksheetColumnView";
 import WorksheetPane from "./WorksheetPane";
 
 const sheet = (): Dataset => ({
@@ -40,6 +41,7 @@ beforeEach(() => {
 
 describe("Columns menu", () => {
   it("hides the right-clicked column in one undo step, keeping its data and plot membership", () => {
+    useApp.setState({ yKeys: [0, 1, 2] });
     render(<WorksheetPane datasetId="w" />);
     fireEvent.contextMenu(header(1));
     fireEvent.click(screen.getByRole("menuitem", { name: "Hide column" }));
@@ -49,7 +51,7 @@ describe("Columns menu", () => {
     expect(ds().data.values[0]).toEqual([10, 20, 30, 40]);
     expect(st().history).toHaveLength(1);
     // Still a plot channel: the view's plotted set was not touched.
-    expect(st().yKeys == null || st().yKeys!.includes(1)).toBe(true);
+    expect(st().yKeys).toEqual([0, 1, 2]);
     // The toolbar now says so.
     expect(screen.getByRole("button", { name: /Columns · 1 hidden/ })).toBeTruthy();
     act(() => st().undo());
@@ -139,5 +141,65 @@ describe("keyboard navigation skips hidden columns", () => {
       key("c", { ctrlKey: true });
     });
     expect(clip).toBe("1\t10\t40"); // X, Temp, Error — Field and Moment stay out
+  });
+});
+
+describe("hidden columns never join a selection, a Find or a cursor range", () => {
+  it("a shift-range across a hidden column leaves it out, so Delete cannot remove it", () => {
+    useApp.setState({ datasets: [{ ...sheet(), hiddenCols: [1] }] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.click(header(0));
+    fireEvent.click(header(2), { shiftKey: true });
+    fireEvent.contextMenu(header(2));
+    expect(screen.getByRole("menuitem", { name: "Hide 2 columns" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete 2 columns/ }));
+    expect(ds().data.labels).toEqual(["Field", "Error"]); // Temp and Moment went; hidden Field stayed
+  });
+
+  it("Find skips hidden columns, says how many matches they hold, and Replace all leaves them alone", async () => {
+    useApp.setState({ datasets: [{ ...sheet(), hiddenCols: [1] }] });
+    const { container } = render(<WorksheetPane datasetId="w" />);
+    fireEvent.keyDown(container.querySelector(".qzk-sheet")!, { key: "h", ctrlKey: true });
+    const bar = await screen.findByRole("search", { name: "Find and replace" });
+    fireEvent.click(within(bar).getByLabelText("Match whole cell"));
+    fireEvent.change(within(bar).getByLabelText("Find"), { target: { value: "21" } }); // only in hidden Field
+    expect(within(bar).getByText("0 matches (1 more in hidden columns)")).toBeTruthy();
+    fireEvent.change(within(bar).getByLabelText("Replace with"), { target: { value: "0" } });
+    expect((within(bar).getByRole("button", { name: "Replace all" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(ds().data.values[1][1]).toBe(21);
+    // Visible matches still step the cursor onto a drawn cell.
+    fireEvent.change(within(bar).getByLabelText("Find"), { target: { value: "31" } });
+    expect(grid().getAttribute("aria-activedescendant")).toBe(cellAt(1, 2).id);
+  });
+
+  it("a cursor range whose anchor column gets hidden keeps only the columns it had", async () => {
+    let clip = "";
+    Object.assign(navigator, { clipboard: { readText: () => Promise.resolve(clip), writeText: (t: string) => ((clip = t), Promise.resolve()) } });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, 1));
+    grid().focus();
+    key("ArrowRight", { shiftKey: true }); // range Field..Moment
+    act(() => hideColumns("w", [1]));
+    await act(async () => {
+      key("c", { ctrlKey: true });
+    });
+    expect(clip).toBe("30"); // Moment only; Temp (left of the old anchor) did not join
+  });
+
+  it("pasting into hidden columns says so; Copy rows says it includes them", async () => {
+    let clip = "9\t8";
+    Object.assign(navigator, { clipboard: { readText: () => Promise.resolve(clip), writeText: (t: string) => ((clip = t), Promise.resolve()) } });
+    useApp.setState({ datasets: [{ ...sheet(), hiddenCols: [1] }] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, 0));
+    grid().focus();
+    await act(async () => {
+      key("v", { ctrlKey: true });
+    });
+    expect(st().status).toMatch(/1 of the pasted columns are hidden/);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Copy/ }));
+    });
+    expect(st().status).toMatch(/includes 1 hidden columns/);
   });
 });

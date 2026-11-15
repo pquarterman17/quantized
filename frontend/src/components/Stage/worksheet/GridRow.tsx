@@ -25,6 +25,7 @@ import { Fragment, useState } from "react";
 
 import { labelForCode } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/originTextColumns";
+import type { ColumnAria } from "../../../lib/worksheetColumnView";
 import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { fmtCell, type CellFormatter } from "./cellFormat";
 import type { TextColumnLayout } from "./textColumns";
@@ -100,9 +101,9 @@ export interface GridRowProps {
    *  `left` (lib/worksheetColumnView.ts): drawn before the windowed run. */
   frozenCols?: number[];
   frozenLeft?: (col: number) => number;
-  /** Number the cells by their TRUE column (`aria-colindex`) — set while some
-   *  column is hidden, so a screen reader still says which column a cell is. */
-  colIndexed?: boolean;
+  /** True column numbers (`aria-colindex`), set while some column is hidden so
+   *  a screen reader still says which column a cell is. */
+  colPos?: ColumnAria;
 }
 
 export interface GridRowCursor {
@@ -143,7 +144,7 @@ export default function GridRow({
   entry = false,
   frozenCols = NO_FROZEN,
   frozenLeft = () => 0,
-  colIndexed = false,
+  colPos,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -245,7 +246,7 @@ export default function GridRow({
         key={col}
         role="gridcell"
         id={cursor?.cellId(cursor.pos, col)}
-        aria-colindex={colIndexed ? col + 3 : undefined}
+        aria-colindex={colPos ? (col < 0 ? 2 : colPos.value[col]) : undefined}
         aria-selected={cursor ? mark !== null : undefined}
         className={clsx("qzk-grid-cell", mark === "cursor" && "qzk-cell-cursor", mark && "qzk-cell-range")}
         onMouseDown={cursor && ((e) => cursor.onCellDown(cursor.pos, col, e))}
@@ -304,6 +305,7 @@ export default function GridRow({
     <div
       key={`text-${t.shortName}`}
       role="gridcell"
+      aria-colindex={colPos?.text[t.shortName]}
       className="qzk-grid-cell"
       style={{ width: colWidth, flexShrink: 0, textAlign: "left", color: "var(--text-dim)" }}
       title="read-only text column"
@@ -335,7 +337,7 @@ export default function GridRow({
           flexShrink: 0,
           ...(isSelected ? { color: "var(--accent)", fontWeight: 600 } : {}),
         }}
-        aria-colindex={colIndexed ? 1 : undefined}
+        aria-colindex={colPos ? 1 : undefined}
         title={rowTitle}
         onClick={(e) => onRowNumClick(r, e)}
       >
@@ -344,6 +346,7 @@ export default function GridRow({
       {cell(-1, time[r], gutterWidth)}
       {textLayout.before.map(textCell)}
       {frozenCols.map((c) => cell(c, values[r]?.[c], frozenLeft(c)))}
+      {frozenCols.length > 0 && textLayout.after(frozenCols[frozenCols.length - 1]).map(textCell)}
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
       {visibleCols.map((c) => (
         <Fragment key={c}>

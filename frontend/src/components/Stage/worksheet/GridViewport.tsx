@@ -41,9 +41,8 @@ import GridRow, { type GridRowCursor } from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit, type CellEditApi } from "./useCellEdit";
 import { useLineSelect } from "./useLineSelect";
-import { hiddenRuns } from "../../../lib/worksheetColumnView";
 import { useColResize } from "./useColResize";
-import { useGridColumnAxis } from "./useGridColumnAxis";
+import { useColumnMarks, useGridColumnAxis } from "./useGridColumnAxis";
 import { useTextColumnLayout } from "./useTextColumnLayout";
 
 const NO_COLS: ReadonlySet<number> = new Set();
@@ -236,14 +235,13 @@ export default function GridViewport({
     colCount,
     hidden: hiddenCols,
     frozen: frozenCols,
-    widthOf,
+    xWidth: widthOf(-1),
     colWidths,
     scrollLeft: scroll.left,
     viewportWidth: metrics.width,
     gutterWidth,
   });
   const { visibleCols, leadingSpacer: leadingColSpacer, trailingSpacer: trailingColSpacer, frozenCols: pinnedCols } = axis;
-  const runs = useMemo(() => hiddenRuns(colCount, hiddenCols), [colCount, hiddenCols]);
 
   const rowCount = order.length + (cursor?.entryRow ? 1 : 0);
   const rowWindow = computeAxisWindow(scroll.top, metrics.height, rowCount, {
@@ -255,7 +253,8 @@ export default function GridViewport({
   const visibleRows = order.slice(rowWindow.start, Math.min(rowWindow.end, order.length));
   const leadingRowSpacer = rowWindow.offset;
   const trailingRowSpacer = (rowCount - rowWindow.end) * metrics.rowHeight;
-  const { anchors: textAnchors, layout: textLayout } = useTextColumnLayout(data, textCols, visibleCols);
+  const { anchors: textAnchors, layout: textLayout } = useTextColumnLayout(data, textCols, visibleCols, hiddenCols, pinnedCols);
+  const { runs, colPos } = useColumnMarks(colCount, hiddenCols, textCols, textAnchors);
 
   // Reveal (store/worksheetReveal.ts): scroll once per request key. Reads the
   // live element — rows sit under the sticky header, and the gutter
@@ -321,7 +320,7 @@ export default function GridViewport({
       entry={entry}
       frozenCols={pinnedCols}
       frozenLeft={axis.frozenLeft}
-      colIndexed={hiddenCols.size > 0}
+      colPos={colPos}
     />
   );
 
@@ -334,7 +333,7 @@ export default function GridViewport({
       id={cursor?.gridId}
       aria-label={cursor?.label}
       aria-multiselectable={cursor ? true : undefined}
-      aria-colcount={hiddenCols.size > 0 ? colCount + 2 : undefined}
+      aria-colcount={colPos?.count}
       aria-activedescendant={cursor?.activeCellId}
       tabIndex={cursor ? 0 : undefined}
     >
@@ -370,7 +369,7 @@ export default function GridViewport({
         frozenLeft={axis.frozenLeft}
         hiddenRuns={runs}
         onShowCols={onShowCols}
-        colIndexed={hiddenCols.size > 0}
+        colPos={colPos}
       />
       {leadingRowSpacer > 0 && <div style={{ height: leadingRowSpacer }} aria-hidden="true" />}
       {visibleRows.map((r, i) => rowAt(rowWindow.start + i, r, false))}

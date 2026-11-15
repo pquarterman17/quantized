@@ -124,6 +124,7 @@ export default function GridStatsFooter({
               {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
             </div>
           ))}
+          {frozenCols.length > 0 && textLayout.after(frozenCols[frozenCols.length - 1]).map(textCell)}
           {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
           {visibleCols.map((c) => (
             <Fragment key={c}>
