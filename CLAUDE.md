@@ -315,6 +315,23 @@ Practical conventions discovered while porting — follow them to stay green.
   alphanumeric-only class skips about half of all names (measured 2026-09-30:
   1,828 leaked directories, ~20 GB, found only by the wider class).
 
+### Origin COM oracle runs: dispatch `Origin.Application`, never `ApplicationSI`
+- `Origin.ApplicationSI` is single-instance. Even through `DispatchEx` it
+  **attaches to an Origin the owner already has open** (measured 2026-11-15:
+  no new process, and it sees that instance's LabTalk variables). The run then
+  loads a corpus project into the owner's window, and its `Exit()` closes it,
+  unsaved work included. PID-tracking kill logic cannot prevent this, because
+  no kill is involved.
+- Oracle and specimen tools (`tools/origin_compare/`, `tools/origin_trial/`)
+  therefore dispatch `Origin.Application`, which always starts its own
+  process. The live "Send to Origin" product path (`io/origin_com.py`) keeps
+  `ApplicationSI` on purpose, because sending into the user's open session is
+  that feature.
+- Run one oracle instance at a time. `run_axis_oracle.py` kills only the exact
+  PID its own export recorded. Oracle data lives in
+  `../test-data/origin/ground_truth_public/` (Origin 2026b Student, which
+  loaded 400+ page `.opju` files fine).
+
 ### Origin graph-recovery safety (2026-07-13 incident)
 - Treat Origin graph recovery as one scientific pipeline: **file bytes ->
   per-curve `(book, X, Y)` binding -> dataset construction -> acquisition

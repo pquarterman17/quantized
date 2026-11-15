@@ -14,7 +14,10 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-08-21 (real-data + live-Origin verification campaign. The
+**Updated:** 2026-11-15 (`.opju` graph-page recovery against a live Origin
+oracle, PR #676: 984 → 1,777 per-layer axis matches, phantom layers
+185 → 0; items 64-66 and an owner gate booked. See Completed.)
+Previously 2026-08-21 (real-data + live-Origin verification campaign. The
 "25 pre-existing renderer failures" every sweep since 2026-07-25 carried
 were PHANTOM: commit `5cdc7303` (2026-07-19, composition-union refactor)
 removed the raw `spatialPanels` store field, and the harness's structural
@@ -330,6 +333,18 @@ export lever. A `.opju` writer (27) is low-value while `.opj` opens everywhere.
 Gaps: no oracle comparison against Origin's own ground-truth dumps (28), no
 corpus-wide sweep/malformed-input/perf suite (29), no round-trip tests (30),
 no documented real-Origin validation procedure for the trial window (31).
+
+### Owner gates
+
+- **"Send to Origin" attaches to your open Origin session** (2026-11-15).
+  `io/origin_com.py` dispatches `Origin.ApplicationSI`, which is
+  single-instance: it sends data into the Origin you already have open,
+  rather than starting a new instance. That is probably the feature's intent,
+  but nothing asks first. Measured: an `ApplicationSI` `Exit()` closes that
+  shared window. Decide whether the feature should confirm before sending, or
+  avoid calling `Exit()` on an attached instance. The oracle and specimen
+  tools were switched to `Origin.Application` in #676, so they always start
+  their own instance.
 
 ---
 
@@ -919,6 +934,15 @@ work.
 
 ### Tier 2 — Medium Impact
 
+64. **Swapped Y endpoints** — Figure 6 Currents vary parameters
+    Graph3 (layers 1, 2, 3, 7, 9) decodes Y (0, -80) where Origin says
+    (-80, 0). It is identical on main, and pinned in `KNOWN_DEFECTS`
+    (`tests/test_io_origin_opju_page_attribution.py`). Possibly an elided-0
+    `y_from` against a stored negative `y_to`. Diagnose with the axis oracle.
+65. **Battery Aging slot shift** — `OriginLab_Battery_Aging_Project`
+    Graph2 Y and Graph3 X each read one value slot early (pinned). This is
+    pre-existing and still undiagnosed.
+
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
 
@@ -947,6 +971,11 @@ item 40 CLOSED same day, see Completed)
     specimen where visibility and book membership decouple.
 
 ### Tier 3 — Nice-to-Have
+
+66. **Admit the remaining separator flag values** `01/08/30/41/48` (#676
+    admits only the Origin-confirmed `00/40/80/88/c0`). The axis oracle now
+    covers files carrying them. Each value needs oracle-matching records
+    across the corpus, and none may change an existing match.
 
 47. **Recover Origin drawn graphic objects + richer annotation types on
     import** (LOW PRIORITY, booked 2026-07-12 from the owner's shapes/
@@ -1061,6 +1090,27 @@ the shipped contract)
 
 ## Completed
 
+- ~~**`.opju` graph-page recovery, verified against Origin**~~ (2026-11-15,
+  #676). Origin 2026b's own per-page, per-layer axis state, read over COM
+  (`test-data/origin/ground_truth_public/axis_ranges.json`, 103 files,
+  3,760 layers), went from 984 match / 63 wrong / 185 phantom to
+  1,777 / 7 / 0. The 7 are identical on main (items 64-65). Page enumeration
+  matches Origin's graph-page lists exactly. The changes:
+  - the window type is a LEB128 varint, so windows past the 127th were never
+    enumerated;
+  - the page-name run escape `c0 <ch>` stands for `<ch>`×3, plus a 23-24
+    character long form;
+  - the separator's 5th byte is a flag field;
+  - layers are numbered by anchor ordinal, counting only anchors with a
+    length prefix;
+  - the first-X length-headed value and the Y-span start are decoded
+    correctly.
+  Every changed record without an oracle was oracled before landing.
+  Student-edition COM loaded `.opju` projects of 200-434 graph pages fine, so the
+  52-page limit noted in #39 applies to `.opj` (PNR.opj) and is unmeasured
+  for `.opju` saves. **Safety:** every oracle and specimen tool now
+  dispatches `Origin.Application`, because `ApplicationSI` attaches to and
+  closes the owner's open Origin (owner gate above).
 - ~~**`.opj` reader: review round**~~ (2026-11-13) — eleven fail-closed
   gaps from an independent review of the header-driven reader. `@N` is a
   sheet ID: sheets are bound by column object id (`opj_sheets.py`;

@@ -9,10 +9,12 @@ narrative (record grammar, value-token encodings) this implements:
 03 00 00 1f                       layer anchor
 [optional flag token]             1-2 bytes, skipped (see below)
 [X from] [X to] [X step]          value tokens; ``from`` elided when 0.0
-81 <id> <plen> 00 00 01 …         separator (layer geometry; plen VARIES
-                                  and is only a search-window hint)
+8x <id> <plen> 00 <flag> 01 …     separator (layer geometry; plen VARIES
+                                  and is only a search-window hint; 8x =
+                                  81 or 80; <flag> = 00/40/80/88/c0, see
+                                  ``opju_axis_real_form._SEP_WIDE``)
 [Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
-81 <id> <plen> 00 00 01 …         end separator
+8x <id> <plen> 00 <flag> 01 …     end separator
 ```
 
 Value tokens: **tagged compact** (``8T nn <nn bytes>``, tag ``0x81..0x8f``,
@@ -22,9 +24,12 @@ escape — ``c2`` = a run of exactly 5 repeated bytes, ``c3`` = exactly 6; the
 byte after the repeated byte is a context/tag byte, skipped, not a count),
 and **bare compact** (1-3 significant bytes, no tag, right after a flag
 token). The optional X flag token (``89 01``/``89 18``/``97 03``/``91 09`` =
-2 bytes; a bare ``91`` before a run-first RLE value = 1 byte; absent when
-the record opens with a tagged value) is skipped via a deterministic length
-rule; its semantics stay undecoded.
+2 bytes; a single ``81..9f`` byte before a run-first RLE value, ``89 c3 ff 02
+ef 3f`` = 0.9999999999999999 -- Origin 1.0; absent when the record opens with
+a tagged value) is skipped via a deterministic length rule; its semantics stay
+undecoded. A LENGTH-HEADED first value (``96 03 <3 bytes>`` / ``97 02 <2
+bytes>``, ``tag low nibble + nn == 9``; see ``_real_x_lead``) is one compact
+value, never re-split: ``96 03 80 56 40`` is 90, not ``80`` + ``56 40``.
 
 **Y-axis scale flag — solved 2026-07-04** (the rf_* 4-file by-construction
 oracle: ``rf_linlin``/``rf_logx``/``rf_logy``/``rf_loglog.opju``, the SAME
@@ -80,10 +85,16 @@ from __future__ import annotations
 
 import re
 import struct
+from collections.abc import Iterator
+
+from quantized.io.origin_project.opju_axis_scale_flags import (
+    _real_x_log_flag,
+    _real_y_log_flag,
+)
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
 
-# `8x <id> <plen> 00 00 01` separates the X span from the layer-geometry
+# `8x <id> <plen> 00 <flag> 01` separates the X span from the layer-geometry
 # payload and the geometry from the Y span. Two lead bytes exist: `81`
 # (the original form, every record validated through 2026-07-04) and `80`
 # (found 2026-07-05 on Hc2's Graph8/Graph12-family records, always paired
@@ -91,8 +102,18 @@ __all__: list[str] = []  # internal to the .opju figures subsystem; imported by 
 # `_real_tagged_trailer`). The strict `81` form is always tried first and
 # the wide form only as a retry, so previously-decoding records parse
 # byte-identically (see `_parse_real_record`).
+#
+# The 5th separator byte is a FLAG field, not a constant ``00``. Surveyed over
+# every layer anchor in the 359-file ``.opju`` corpus (2026-11-14): of the 244
+# records that only parse with a free 5th byte, it reads 00 (44), 40 (71),
+# 80 (82), c0 (21), 41 (6), 01 (7), 08 (6), 30 (3), 88 (3), 48 (1) -- bit
+# combinations (0x40|0x80 = c0, 0x08|0x80 = 88), the signature of flag bits.
+# Only the values Origin 2026b COM (``layer.x/y.from/to``, 23 files) CONFIRMS
+# are admitted: 00/40/80/88/c0 decode 60 records onto Origin's exact axis
+# values. 01/08/30/41/48 have no oracle coverage yet and stay unrecovered
+# (fail closed) until one does.
 _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
-_SEP_WIDE = re.compile(rb"[\x80\x81]..\x00\x00\x01", re.DOTALL)
+_SEP_WIDE = re.compile(rb"[\x80\x81]..\x00[\x00\x40\x80\x88\xc0]\x01", re.DOTALL)
 # Specimen-form record markers (moved with _parse_specimen_record from
 # figures_opju, 2026-07-06).
 _Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])
@@ -104,13 +125,6 @@ _TAG_SEARCH_SPAN = 2_000  # max bytes allowed between an anchor and its separato
 # the Graph3 6-curve family, oracle-verified), which the old 6-byte scan
 # missed by exactly one.
 _Y_START_SCAN = 7
-
-# Y-scale flag: the fixed layer-style marker that follows the end separator's
-# geometry payload, and the 2-byte flag immediately before it (see module docstring).
-_Y_STYLE_MARKER = bytes([0x00, 0x10, 0x10, 0x00])
-_Y_LIN_FLAG = bytes([0x01, 0x00])
-_Y_LOG_FLAG = bytes([0x08, 0x01])
-_Y_FLAG_SEARCH_SPAN = 150  # observed within ~10-20 bytes in every instance seen
 
 
 def _plausible(v: float) -> bool:
@@ -204,6 +218,23 @@ def _real_tagged_trailer(b: bytes, p: int, end: int) -> tuple[float, int] | None
     return (v, 2 + nn) if v is not None else None
 
 
+def _real_tagged_lead(b: bytes, p: int, end: int) -> tuple[float, int] | None:
+    """``8T nn <nn-1 value bytes> <lead>`` + ``c2``/``c3``: a tagged compact whose
+    literal run also carries the LEAD byte of the next (RLE) token, so the
+    ``nn`` bytes cannot all be one value (``85 03 e8 3f`` + ``cd c2 cc 03 f0 3f``
+    is 0.75 then 1.05, not a 3-byte value ``e8 3f cd``). Consumes the tag, ``nn``
+    and ``nn - 1`` value bytes; the lead is left for `_real_rle`'s lead form."""
+    if p + 2 > end:
+        return None
+    tag, nn = b[p], b[p + 1]
+    if not (0x81 <= tag <= 0x8F) or not (2 <= nn <= 8) or p + 2 + nn >= end:
+        return None
+    if b[p + 2 + nn] not in (0xC2, 0xC3):
+        return None
+    v = _decode_compact(b[p + 2 : p + 1 + nn])
+    return (v, 1 + nn) if v is not None else None
+
+
 def _real_candidates(
     b: bytes, p: int, end: int, bare: bool, last: bool = False
 ) -> list[tuple[float, int]]:
@@ -211,6 +242,8 @@ def _real_candidates(
     t = _real_tagged(b, p, end)
     if t is not None:
         out.append(t)
+    elif (tl := _real_tagged_lead(b, p, end)) is not None:
+        out.append(tl)
     r = _real_rle(b, p, end)
     if r is not None:
         out.append(r)
@@ -270,15 +303,18 @@ def real_form_bare_pair(b: bytes, start: int, end: int) -> tuple[float, float] |
 
 
 def _real_span_pair(
-    b: bytes, start: int, end: int, bare: bool
+    b: bytes, start: int, end: int, bare: bool, lead: float | None = None
 ) -> tuple[float, float, float | None] | None:
     """``[from, to, step]`` (n=3) else ``[to, step]`` with from elided (n=2),
     exact-fill; accepted only when the fill set at that arity is unique on
     the ``(from, to)`` pair (the historical acceptance rule — §13.2 #8 added
     the STEP as a third returned value: the tick increment, ``None`` when
-    the accepted fills disagree on it)."""
+    the accepted fills disagree on it). ``lead``: a first token already read
+    (`_real_x_lead`); ``start`` is then past it, only the rest is enumerated."""
     for n in (3, 2):
-        fills = _real_fills(b, start, end, n, bare)
+        fills = _real_fills(b, start, end, n - (lead is not None), bare)
+        if lead is not None:
+            fills = [(lead, *f) for f in fills]
         pairs = {(f[0], f[1]) if n == 3 else (0.0, f[0]) for f in fills}
         if len(pairs) == 1:
             fr, to = pairs.pop()
@@ -289,60 +325,29 @@ def _real_span_pair(
     return None
 
 
+def _real_x_lead(b: bytes, p: int, end: int) -> tuple[float, int] | None:
+    """``9T nn <nn bytes>``, ``T + nn == 9`` (corpus: ``96 03``, ``97 02``): the
+    X span's first value, ``nn`` bytes of compact payload, delimited by its own
+    header instead of left to the span fill (which would split ``80 56 40`` as
+    ``80`` + ``56 40``)."""
+    if p + 2 > end:
+        return None
+    tag, nn = b[p], b[p + 1]
+    if not (0x90 <= tag <= 0x9F) or (tag & 0x0F) + nn != 9 or not 1 <= nn <= 3:
+        return None
+    v = _decode_compact(b[p + 2 : p + 2 + nn]) if p + 2 + nn < end else None
+    return (v, 2 + nn) if v is not None else None
+
+
 def _real_x_flag_len(b: bytes, p: int, end: int) -> int:
     """Deterministic length of the optional X flag token (see module docstring):
-    0 when the record opens with a tagged value, 1 for a bare ``91`` before a
-    run-first RLE value, else 2 (every other observed flag is 2 bytes)."""
+    0 when the record opens with a tagged value, 1 for a single ``81..9f`` byte
+    before a run-first RLE value, else 2 (every other observed flag is 2 bytes)."""
     if _real_tagged(b, p, end) is not None:
         return 0
-    if p + 1 < end and b[p] == 0x91 and b[p + 1] in (0xC2, 0xC3):
+    if p + 1 < end and 0x81 <= b[p] <= 0x9F and b[p + 1] in (0xC2, 0xC3):
         return 1
     return 2
-
-
-def _real_x_log_flag(b: bytes, y_lo: int, y_start: int) -> bool | None:
-    """Exact X-axis lin/log flag: the geometry payload's trailing field,
-    read backward from the Y-span start over 0-2 ``00`` pad bytes --
-    ``01`` = linear, ``08 01`` = log10 (the same byte values as the Y flag;
-    see the module docstring for the rf_*-diff derivation and the corpus
-    proof). Any other tail returns ``None`` (decade heuristic; e.g. the six
-    Hc2 records whose field reads ``02``) -- never guessed."""
-    q = y_start
-    while q > y_lo and b[q - 1] == 0x00:
-        q -= 1
-    if q - y_lo >= 2 and b[q - 2 : q] == b"\x08\x01":
-        return True
-    if q - y_lo >= 1 and b[q - 1] == 0x01 and (q - y_lo < 2 or b[q - 2] != 0x08):
-        return False
-    return None
-
-
-def _real_y_log_flag(b: bytes, sep_start: int, window_end: int) -> bool | None:
-    """Exact Y-axis lin/log flag for the real-corpus form.
-
-    Pinned from a 4-file by-construction oracle (``rf_linlin``/``rf_logx``/
-    ``rf_logy``/``rf_loglog.opju`` -- the same single-curve graph with
-    identical custom ranges, differing only in ``layer.x.type``/
-    ``layer.y.type``): the two bytes right before the fixed ``00 10 10 00``
-    layer-style marker that follows the end separator are ``01 00`` for a
-    linear Y axis and ``08 01`` for log10, regardless of X's own type or
-    encoding (which shifts the marker's absolute position but never its
-    value or the flag's relationship to it). Validated exact against all 14
-    real-corpus anchors (RockingCurve's 3 log-Y layers read ``08 01``; XAS
-    3 + UnpolPlots 4 + "Fixed Lambdas SI" 4, all linear-Y, read ``01 00``).
-    Any other value, or no marker found within the search span, returns
-    ``None`` so the decade heuristic takes over -- never guessed.
-    """
-    start = sep_start + 6  # past the separator's own `81 <id> <plen> 00 00 01`
-    mpos = b.find(_Y_STYLE_MARKER, start, min(window_end, start + _Y_FLAG_SEARCH_SPAN))
-    if mpos < start + 2:
-        return None
-    flag = b[mpos - 2 : mpos]
-    if flag == _Y_LIN_FLAG:
-        return False
-    if flag == _Y_LOG_FLAG:
-        return True
-    return None
 
 
 def _parse_real_record(
@@ -359,29 +364,79 @@ def _parse_real_record(
     with the wide ``[80|81]`` lead that Hc2's Graph8/Graph12-family records
     need -- a record only ever reaches the wide pass after failing the
     strict one, so the retry can add parses but never change one."""
-    for sep_re in (_SEP_STRICT, _SEP_WIDE):
-        got = _parse_real_record_sep(b, p, window_end, sep_re)
+    for sep_re, every in ((_SEP_STRICT, False), (_SEP_WIDE, True)):
+        got = _parse_real_record_sep(b, p, window_end, sep_re, every=every)
         if got is not None:
             return got
     return None
 
 
+def _sep_hits(
+    sep_re: re.Pattern[bytes], b: bytes, lo: int, hi: int, *, every: bool
+) -> Iterator[re.Match[bytes]]:
+    """Separator candidates in ``[lo, hi)``, in order: only the FIRST when not
+    ``every`` (the strict pass, byte-identical to its historical single
+    ``search``), else every start position (overlapping hits included -- a
+    coincidental hit inside a value token must not hide the real separator
+    that begins a few bytes later)."""
+    pos = lo
+    while pos < hi and (m := sep_re.search(b, pos, hi)) is not None:
+        yield m
+        if not every:
+            return
+        pos = m.start() + 1
+
+
 def _parse_real_record_sep(
-    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes]
+    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes], *, every: bool = False
 ) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
-    """One separator-form attempt of `_parse_real_record` (see above)."""
-    m1 = sep_re.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
-    if m1 is None:
-        return None
-    x_start = p + _real_x_flag_len(b, p, m1.start())
-    if x_start >= m1.start():
-        return None
-    xpair = _real_span_pair(b, x_start, m1.start(), bare=True)
-    if xpair is None:
-        return None
-    plen = b[m1.start() + 2]
-    y_lo = m1.start() + 6
-    m2 = sep_re.search(b, y_lo + plen, min(window_end, y_lo + plen + _TAG_SEARCH_SPAN))
+    """One separator-form attempt of `_parse_real_record` (see above).
+
+    With ``every`` (the wide retry only) each separator candidate is tried in
+    order and the first whose record parses FULLY wins: the X span must
+    exact-fill up to the first separator and the Y span must exact-fill up to
+    the second (the same authentication the strict pass applies). The wide
+    pattern admits more byte shapes, so a first hit can be a coincidental
+    ``8x ?? ?? 00 40 01`` inside a value token; taking it unconditionally would
+    discard the record the real separator makes decodable."""
+    hi1 = min(window_end, p + _TAG_SEARCH_SPAN)
+    for m1 in _sep_hits(sep_re, b, p, hi1, every=every):
+        lead = _real_x_lead(b, p, m1.start())
+        x_start = p + (lead[1] if lead else _real_x_flag_len(b, p, m1.start()))
+        if x_start >= m1.start():
+            continue
+        xpair = _real_span_pair(b, x_start, m1.start(), bare=True, lead=lead[0] if lead else None)
+        if xpair is None:
+            continue
+        plen = b[m1.start() + 2]
+        y_lo = m1.start() + 6
+        hi2 = min(window_end, y_lo + plen + _TAG_SEARCH_SPAN)
+        # No second separator at all -> the end is bounded by the nominal
+        # geometry length (+200); a PRESENT but non-parsing one is not skipped
+        # over in the strict pass.
+        seen_m2 = False
+        # lazy: the wide pass stops at the first second separator that parses
+        for m2 in _sep_hits(sep_re, b, y_lo + plen, hi2, every=every):
+            seen_m2 = True
+            got = _real_y_record(b, window_end, y_lo, plen, xpair, m2)
+            if got is not None:
+                return got
+        if not seen_m2:
+            got = _real_y_record(b, window_end, y_lo, plen, xpair, None)
+            if got is not None:
+                return got
+    return None
+
+
+def _real_y_record(
+    b: bytes,
+    window_end: int,
+    y_lo: int,
+    plen: int,
+    xpair: tuple[float, float, float | None],
+    m2: re.Match[bytes] | None,
+) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
+    """Y half of `_parse_real_record_sep` for one (X span, second separator)."""
     y_hi = m2.start() if m2 else min(window_end, y_lo + plen + 200)
     y_scan_hi = min(y_lo + plen + _Y_START_SCAN, y_hi)
     # plen is a hint only: Y can start inside or a few bytes past the nominal
@@ -394,8 +449,15 @@ def _parse_real_record_sep(
     # true span begins at the first non-``00`` after the flag, and letting a
     # bare literal absorb the pads decodes a wrong-but-plausible value
     # (measured: Fixed Lambdas Graph5 layer 2's y_from, -0.0488.. for -0.05).
+    # The payload OPENS with its own value token (the layer-geometry double,
+    # ``82 03 fc 8c 40`` / ``c3 66 02 7b 40``): the Y span cannot start at or
+    # inside it, or an elided ``y_from`` reads that double as ``y_from``.
+    # Depends on ``y_hi`` (a token needing more bytes than ``y_hi - y_lo`` is
+    # rejected), so it is not hoisted out of the second-separator loop; measured
+    # at ~1 call per corpus record, i.e. nothing to save.
+    geo_end = min((n for _, n in _real_candidates(b, y_lo, y_hi, bare=False)), default=0)
     for bare in (False, True):
-        for y_start in range(y_lo, y_scan_hi):
+        for y_start in range(y_lo + geo_end, y_scan_hi):
             if bare and (
                 (y_start < y_hi and b[y_start] == 0x00)
                 or _real_x_log_flag(b, y_lo, y_start) is None
