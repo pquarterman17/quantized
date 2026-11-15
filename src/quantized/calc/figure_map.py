@@ -63,6 +63,30 @@ def _contour_levels(
     return np.asarray(np.linspace(z_min, z_max, n), dtype=float)
 
 
+def _check_3d(
+    kind: str, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64],
+    elev: float, azim: float,
+) -> None:
+    """Fail closed on a 3-D request that cannot make a meaningful figure: a
+    non-finite or out-of-range view angle, too few finite cells for the mark,
+    or a waterfall of fewer than two curves (a profile line needs two points)."""
+    if not (math.isfinite(elev) and -90.0 <= elev <= 90.0):
+        raise ValueError("view_elev must be a finite number from -90 to 90 degrees")
+    if not (math.isfinite(azim) and -360.0 <= azim <= 360.0):
+        raise ValueError("view_azim must be a finite number from -360 to 360 degrees")
+    n_finite = int(np.isfinite(z).sum())
+    if kind == "waterfall":
+        curves = int((np.isfinite(z).sum(axis=1) >= 2).sum())
+        if curves < 2:
+            raise ValueError(
+                f"a 3-D waterfall needs at least 2 curves with 2 or more points; found {curves}"
+            )
+    elif kind == "surface" and n_finite < 4:
+        raise ValueError(f"a 3-D surface needs at least 4 finite grid cells; found {n_finite}")
+    elif n_finite < 3:
+        raise ValueError(f"a 3-D scatter needs at least 3 finite points; found {n_finite}")
+
+
 def render_map_figure(
     x_axis: ArrayLike,
     y_axis: ArrayLike,
@@ -190,6 +214,8 @@ def render_map_figure(
         if x.size < 2 or y.size < 2:
             raise ValueError(f"a map needs at least a 2x2 grid, got ({y.size}, {x.size})")
 
+        if kind in _3D_KINDS:
+            _check_3d(kind, x, y, z, view_elev, view_azim)
         if np.any(np.isfinite(z)):
             z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
         else:

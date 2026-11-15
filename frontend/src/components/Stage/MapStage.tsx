@@ -7,6 +7,7 @@
 import { useRef, useState } from "react";
 
 import { COLORMAPS } from "../../lib/colormap";
+import { lazyRegion } from "../../lib/lazyRegion";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
 import { hasQSpace, rsmAxisKeys } from "../../lib/mapdataFetch";
@@ -30,6 +31,7 @@ import { useMapRuler } from "./useMapRuler";
 import { useMapSectorWedge } from "./useMapSectorWedge";
 import MapInterpolatedBadge from "./MapInterpolatedBadge";
 import MapStageNotice from "./MapStageNotice";
+const Map3dPreview = lazyRegion(() => import("./Map3dPreview"), "3-D view");
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -72,7 +74,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const dsId = active?.id ?? null;
   const mapView = useApp((s) => mapViewFor(s.mapViews, dsId));
   const setMapColormap = useApp((s) => s.setMapColormap);
-  const setMapLogZ = useApp((s) => s.setMapLogZ);
+  const setMapLogZ = useApp((s) => s.setMapLogZ), setMapView3d = useApp((s) => s.setMapView3d);
   const addMapSlice = useApp((s) => s.addMapSlice);
   const removeMapSlice = useApp((s) => s.removeMapSlice);
   const addMapAnnotation = useApp((s) => s.addMapAnnotation);
@@ -88,8 +90,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const contourOn = useApp((s) => s.contourOn);
   const contourLevelCount = useApp((s) => s.contourLevelCount);
   const contourScale = useApp((s) => s.contourScale);
-  const setContourOn = useApp((s) => s.setContourOn);
-  const setStatus = useApp((s) => s.setStatus);
+  const setContourOn = useApp((s) => s.setContourOn), setStatus = useApp((s) => s.setStatus);
   // x/y/z channel picks over every file column (useMapColumnPicks.ts, #13).
   const { mapActive, keys, setKeys } = useMapColumnPicks(active);
   const labels = mapActive?.data.labels ?? [];
@@ -210,10 +211,9 @@ export default function MapStage({ dataset }: MapStageProps) {
       loading: !payloadFresh,
       view: {
         cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
-        marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace },
+        marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace }, view3d: mapView.view3d,
       },
-      stem: active?.name.replace(/\.[^.]+$/, "") ?? "map",
-      setStatus,
+      stem: active?.name.replace(/\.[^.]+$/, "") ?? "map", setStatus, setView3d: (v) => setMapView3d(dsId, v),
     });
 
   // Box ROI, cut ruler, the sector wedge, and the H/V/seg cut tool are
@@ -383,6 +383,9 @@ export default function MapStage({ dataset }: MapStageProps) {
         <MapStageNotice passThrough lines={["These columns can't be mapped:", mapError, "Choose other x, y and z columns in the toolbar."]} />
       )}
 
+      {mapView.view3d && payload && (
+        <Map3dPreview payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} />
+      )}
       {payload?.interpolated && <MapInterpolatedBadge nPoints={payload.interpolated.nPoints} />}
 
       {readout && (

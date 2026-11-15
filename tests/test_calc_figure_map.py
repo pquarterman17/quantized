@@ -273,3 +273,41 @@ def test_log_colour_bar_exports_values_not_exponents() -> None:
     for label in ("1e-4", "0.01", "100"):
         assert f">{label}<" in svg or f"<!-- {label} -->" in svg
     assert "<!-- \N{MINUS SIGN}4 -->" not in svg
+
+
+# ── static 3-D fail-closed (gap-5 lane F) ───────────────────────────────────
+
+
+@pytest.mark.parametrize("kind", ["surface", "scatter3d", "waterfall"])
+@pytest.mark.parametrize(
+    ("elev", "azim"), [(91.0, 0.0), (-91.0, 0.0), (30.0, 400.0), (float("nan"), 0.0)]
+)
+def test_3d_rejects_out_of_range_view_angles(kind: str, elev: float, azim: float) -> None:
+    x, y, z = _demo_grid()
+    with pytest.raises(ValueError, match="view_(elev|azim)"):
+        render_map_figure(x, y, z, kind=kind, fmt="png", view_elev=elev, view_azim=azim)
+
+
+def test_3d_view_angles_change_the_picture() -> None:
+    x, y, z = _demo_grid()
+    a = render_map_figure(x, y, z, kind="surface", fmt="png", view_elev=20.0, view_azim=-60.0)
+    b = render_map_figure(x, y, z, kind="surface", fmt="png", view_elev=60.0, view_azim=30.0)
+    assert a != b
+
+
+def test_3d_waterfall_needs_two_curves() -> None:
+    x = np.linspace(0.0, 1.0, 5)
+    y = np.array([0.0, 1.0])
+    z = np.array([[1.0, 2.0, 3.0, 2.0, 1.0], [np.nan, np.nan, np.nan, np.nan, 4.0]])
+    with pytest.raises(ValueError, match="at least 2 curves"):
+        render_map_figure(x, y, z, kind="waterfall", fmt="png")
+
+
+def test_3d_too_few_finite_cells_is_refused() -> None:
+    x = np.array([0.0, 1.0])
+    y = np.array([0.0, 1.0])
+    z = np.array([[1.0, np.nan], [np.nan, np.nan]])
+    with pytest.raises(ValueError, match="at least 4 finite"):
+        render_map_figure(x, y, z, kind="surface", fmt="png")
+    with pytest.raises(ValueError, match="at least 3 finite"):
+        render_map_figure(x, y, z, kind="scatter3d", fmt="png")

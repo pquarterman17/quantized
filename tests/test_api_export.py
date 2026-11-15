@@ -2551,3 +2551,12 @@ def test_named_download_header_is_injection_safe_and_plain_for_ascii() -> None:
     cd = _attachment_named('..\\..//évil"\r\nX: y', ".zip")["Content-Disposition"]
     assert "\r" not in cd and "\n" not in cd and cd.count('"') == 2
     assert "%2F" not in cd and "%5C" not in cd  # no path separators survive
+
+
+def test_map_figure_3d_bad_angle_is_422_with_a_reason() -> None:
+    resp = client.post(
+        "/api/export/map-figure",
+        json={**_demo_map(), "kind": "surface", "fmt": "png", "view_elev": 120.0},
+    )
+    assert resp.status_code == 422
+    assert "view_elev" in resp.text
