@@ -5,6 +5,8 @@
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import FitConvergenceWarning from "./FitConvergenceWarning";
+import { globalFitTable } from "../../../lib/fitTableLayer";
+import FitTableControls from "./FitTableControls";
 import { resultRows } from "./globalFitData";
 import type { GlobalFitState } from "./useGlobalFit";
 
@@ -72,6 +74,17 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
       <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         reduced χ² {fmt(fit.chiSqRed)} · {fit.nFree} free parameters · {fit.nTotal} points
       </div>
+      <FitTableControls
+        sourceKey={`global:${members.map((m) => `${m.datasetId}:${m.yKey}`).join(",")}`}
+        stats={["r2", "chiSqRed", "chiSq", "n"]}
+        build={(want) => globalFitTable({
+          paramNames: fit.paramNames,
+          sharedIdx: fit.shared.filter((g) => g.datasets.length === members.length).map((g) => g.paramIdx),
+          chiSqRed: fit.chiSqRed,
+          nTotal: fit.nTotal,
+          members: members.map((m, i) => ({ label: m.label, params: fit.params[i] ?? [], errors: fit.errors[i] ?? [], R2: fit.R2[i], chiSq: fit.chiSq?.[i] })),
+        }, want)}
+      />
       <div style={{ marginTop: 8 }}>
         <Button size="sm" disabled={s.reporting} onClick={() => void s.toReport()}>
           {s.reporting ? "Reporting…" : "→ Report"}

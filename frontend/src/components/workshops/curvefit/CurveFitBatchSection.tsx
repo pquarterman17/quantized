@@ -12,8 +12,11 @@ import { useApp } from "../../../store/useApp";
 import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
 import { nextDatasetId } from "../../../store/idSeq";
 import AnalysisBatchControls, { type AnalysisBatchOutcome, type AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
+import { summaryX, summaryXNote, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { batchColumns, batchSummaryData, fitSummaryValues } from "./curveFitBatchSummary";
+import { batchFitTable } from "../../../lib/fitTableLayer";
+import FitTableControls from "./FitTableControls";
 import { parseFitStarts } from "./fitStarts";
 
 interface Props {
@@ -118,7 +121,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
   }, [manualKey, model, modelName, paramRows, weightMode, scaleErrors, names.length]);
 
-  const summarySheet = (ranRows: readonly AnalysisBatchRow[]) => {
+  const summarySheet = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice) => {
     const run = ran.current ?? { model: modelName, columns };
     // In Library order, not run order: the batch starts with the active
     // worksheet, so selecting b1, b2, b3 with b3 active ran (and listed) b3
@@ -127,8 +130,12 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     const rows = [...ranRows].sort((a, b) => (position.get(a.datasetId) ?? Infinity) - (position.get(b.datasetId) ?? Infinity));
     const name = `Curve Fit summary — ${run.model} (${rows.length} worksheet${rows.length === 1 ? "" : "s"})`;
     // Not activated: the batch selection and the plot stay as they are.
-    addWorksheetQuietly({ id: nextDatasetId(), name, data: batchSummaryData(rows, run.columns, run.model) }, "add curve fit summary worksheet");
-    setStatus(`added the worksheet "${name}" to the Library (Undo removes)`);
+    // X per input: its position, or a parameter read off ITS OWN worksheet
+    // (blank, and reported, where it has none).
+    const byId = new Map(datasets.map((d) => [d.id, d]));
+    const x = summaryX(rows.map((r) => ({ name: r.name, metadata: byId.get(r.datasetId)?.data.metadata, labels: byId.get(r.datasetId)?.data.labels })), xChoice);
+    addWorksheetQuietly({ id: nextDatasetId(), name, data: batchSummaryData(rows, run.columns, run.model, x) }, "add curve fit summary worksheet");
+    setStatus(`added the worksheet "${name}" to the Library (Undo removes)${summaryXNote(x) ? ` — ${summaryXNote(x)}` : ""}`);
   };
 
   return <AnalysisBatchControls
@@ -137,5 +144,20 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     summaryColumns={columns}
     runItem={runItem}
     onSummarySheet={summarySheet}
+    afterRun={(ranRows) => <FitTableControls
+      sourceKey={`batch:${ranRows.map((r) => r.datasetId).join(",")}`}
+      stats={["r2", "chiSqRed"]}
+      build={(want) => batchFitTable(
+        ran.current ? ran.current.columns.slice(6).filter((_, k) => k % 2 === 0) : names,
+        ranRows.filter((r) => r.status === "completed").map((r) => ({
+          name: r.name,
+          // The summary's values: Levels, Completed, N, R², reduced χ², RMSE, then value/SE per parameter.
+          params: r.values.filter((_, k) => k >= 6 && k % 2 === 0),
+          errors: r.values.filter((_, k) => k >= 6 && k % 2 === 1),
+          R2: r.values[3], chiSqRed: r.values[4],
+        })),
+        want,
+      )}
+    />}
   />;
 }

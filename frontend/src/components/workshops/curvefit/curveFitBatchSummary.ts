@@ -8,8 +8,12 @@
 // stay numbers (missing = NaN in the worksheet); Worksheet, Status and
 // Warnings become read-only text columns (`metadata.text_columns`, the
 // convention lib/columnmeta's worksheet reads). X is the input's position
-// (1, 2, …), the "sample" axis.
+// (1, 2, …) unless the caller passes a `SummaryXResult` (lib/batchSummaryX:
+// a metadata field, a user parameter or a number in the name), so a
+// parameter plots against temperature or field; blank where an input has no
+// value for it, never a guess.
 
+import { inOrder, summaryXMeta, type SummaryXResult } from "../../../lib/batchSummaryX";
 import type { CalcResult, DataStruct } from "../../../lib/types";
 import type { AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
 
@@ -30,16 +34,20 @@ export function fitSummaryValues(r: CalcResult, nParams: number): (number | null
 }
 
 /** The summary worksheet for a finished batch (every input, failed ones as NaN rows). */
-export function batchSummaryData(rows: readonly AnalysisBatchRow[], columns: readonly string[], model: string): DataStruct {
+export function batchSummaryData(
+  inputRows: readonly AnalysisBatchRow[], columns: readonly string[], model: string, x?: SummaryXResult,
+): DataStruct {
+  const rows = x ? inOrder(inputRows, x) : inputRows;
   const n = (v: string | number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : Number.NaN);
   return {
-    time: rows.map((_, i) => i + 1),
+    time: x ? x.x : rows.map((_, i) => i + 1),
     values: rows.map((r) => columns.map((_, k) => n(r.values[k]))),
     labels: [...columns],
     units: columns.map(() => ""),
     metadata: {
       source: "curve-fit-batch",
       x_column_name: "Input",
+      ...(x ? summaryXMeta(x) : {}),
       curveFitBatch: { model, sources: rows.map((r) => ({ id: r.datasetId, name: r.name })), createdAt: new Date().toISOString() },
       text_columns: {
         Worksheet: rows.map((r) => r.name),

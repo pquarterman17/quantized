@@ -5,6 +5,7 @@
 // bulk primitives (selectIds / applyCorrectionsToMany / removeDatasets) plus
 // the shared template-run core; no new state lives here.
 
+import { xChoiceFromParams, xParamFields } from "../../lib/batchSummaryX";
 import { exportConsolidated } from "../../lib/api";
 import { subtreeDatasets } from "../../lib/foldertree";
 import {
@@ -167,10 +168,12 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
       options: templates.map((t) => t.name),
       hint: `runs on ${members.length} dataset(s)`,
     },
+    ...xParamFields(),
   ], { confirmLabel: "Run template" });
   if (!picked) return; // cancelled
   const t = templates.find((x) => x.name === String(picked.template));
   if (!t) return;
+  const xChoice = xChoiceFromParams(picked);
 
   const s = useApp.getState();
   s.setPipelineRunning(true); // suppress self-recording, like the file batch
@@ -186,22 +189,22 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
         // One bad dataset yields a flagged row, never a dead run (#3 parity).
         rows.push({
           file: d.name,
+          input: { metadata: d.data.metadata ?? {}, labels: d.data.labels },
           values: extractOutputs(t.outputs, undefined),
           failed: e instanceof Error ? e.message : "error",
         });
         failures++;
       }
     }
-    useApp.getState().addDataset({
-      id: nextDatasetId(),
-      name: `${t.name} — ${folder.name} (${rows.length})`,
-      data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
-    });
+    const data = summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice);
+    useApp.getState().addDataset({ id: nextDatasetId(), name: `${t.name} — ${folder.name} (${rows.length})`, data });
+    const blank = (data.metadata["summaryX"] as { missing?: string[] } | undefined)?.missing ?? [];
     toast(
-      failures
+      (failures
         ? `folder run done — ${failures}/${rows.length} dataset(s) flagged`
-        : `folder run done — ${rows.length} dataset(s)`,
-      failures ? "danger" : undefined,
+        : `folder run done — ${rows.length} dataset(s)`)
+        + (blank.length ? `; X left blank for ${blank.length}: ${blank.join("; ")}` : ""),
+      failures || blank.length ? "danger" : undefined,
     );
   } finally {
     useApp.getState().setPipelineRunning(false);

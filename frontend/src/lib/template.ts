@@ -13,6 +13,7 @@
 // Absent on every template saved before them, which load unchanged; `version`
 // stays 1 because no existing field changed meaning.
 
+import { inOrder, summaryX, summaryXMeta, type SummaryXChoice, type SummaryXResult } from "./batchSummaryX";
 import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
 import { canonicalJson } from "./canonicalJson";
 import { sanitizeExpectations, type RecipeExpectations } from "./recipeExpect";
@@ -231,25 +232,40 @@ export function extractOutputs(outputs: readonly string[], fit: CalcResult | und
 /** One processed file's extracted outputs (NaN for a failed/missing value). */
 export interface BatchRow {
   file: string;
+  /** The processed dataset's metadata and column names, so the summary's X
+   *  can come from a parameter (lib/batchSummaryX); absent when the file
+   *  never loaded (its X is then blank, never guessed). */
+  input?: { metadata: Record<string, unknown>; labels: string[] };
   values: number[]; // aligned with the template's outputs
   failed?: string; // failure note — the row stays, flagged, never crashes the batch
 }
 
-/** Assemble the one-row-per-file summary worksheet: x = file index (1-based),
- *  channels = the declared outputs; file names + failures in metadata. Lands
- *  in the library as a normal DataStruct (plottable/exportable). */
+/** The summary X of `rows` per `choice` (lib/batchSummaryX). */
+export function templateSummaryX(rows: readonly BatchRow[], choice: SummaryXChoice): SummaryXResult {
+  return summaryX(rows.map((r) => ({ name: r.file, metadata: r.input?.metadata, labels: r.input?.labels })), choice);
+}
+
+/** Assemble the one-row-per-file summary worksheet: x = file index (1-based)
+ *  or, given `choice`, a metadata field / user parameter / number in the file
+ *  name (blank where a file has none), channels = the declared outputs; file
+ *  names + failures in metadata. Lands in the library as a normal DataStruct
+ *  (plottable/exportable). */
 export function summaryDataset(
   templateName: string,
   outputs: readonly string[],
-  rows: readonly BatchRow[],
+  inputRows: readonly BatchRow[],
+  choice?: SummaryXChoice,
 ): DataStruct {
+  const x = choice ? templateSummaryX(inputRows, choice) : null;
+  const rows = x ? inOrder(inputRows, x) : inputRows;
   return {
-    time: rows.map((_, i) => i + 1),
+    time: x ? x.x : rows.map((_, i) => i + 1),
     values: rows.map((r) => outputs.map((_, c) => r.values[c] ?? Number.NaN)),
     labels: [...outputs],
     units: outputs.map(() => ""),
     metadata: {
       x_column_name: "file #",
+      ...(x ? summaryXMeta(x) : {}),
       source: `template batch: ${templateName}`,
       files: rows.map((r) => r.file),
       failures: rows.flatMap((r, i) => (r.failed ? [`${i + 1}: ${r.file} — ${r.failed}`] : [])),

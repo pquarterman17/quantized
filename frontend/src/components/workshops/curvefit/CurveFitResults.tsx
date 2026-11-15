@@ -12,7 +12,9 @@ import { stemFromName } from "../../../lib/exportActive";
 import { fmtNum as fmt } from "../../../lib/format";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CalcResult, Dataset } from "../../../lib/types";
+import { singleFitTable } from "../../../lib/fitTableLayer";
 import FindXYSection from "./FindXYSection";
+import FitTableControls from "./FitTableControls";
 import type { FittedData } from "../../../store/curveFitSession";
 
 const FitBandsSection = lazyRegion(() => import("./FitBandsSection"), "Bands");
@@ -115,6 +117,7 @@ export default function CurveFitResults(p: Props) {
           <FitReportSection result={result} fitData={fitData} paramNames={names} fileStem={`${stemFromName(active.name)}-${modelName}`} />
           <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} />
           <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
+          <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want)} />
           <FitDiagnosticsSection result={result} fitData={fitData} />
         </>
       )}
