@@ -32,9 +32,10 @@
 //    an entry in DATASET below: datasets are checked on `doc.datasets[i]`.
 
 import type { AxisFormat } from "./axisFormat";
+import type { MapViewState } from "./mapView";
 import type { PlotView, PlotWindow } from "./plotview";
 import type { DisplayBlock } from "./plotspec2";
-import type { RecipeVisual } from "./plotRecipeSchema";
+import type { RecipeMapView, RecipeVisual } from "./plotRecipeSchema";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import type { Dataset } from "./types";
@@ -96,6 +97,21 @@ export const RECIPE_VISUAL: Classify<RecipeVisual> = {
   yAxes: G, yAxisOf: G,
 };
 
+// The per-dataset map view (`.dwk` `mapViews[datasetId]`). 0.34's
+// sanitizeMapView keeps only the five fields it knows, so the static 3-D view is
+// dropped on a 0.34 open + save (measured with the `git archive v0.34.0` procedure).
+export const MAP_VIEW: Classify<MapViewState> = {
+  colormap: V, logZ: V, colorLimits: V, slices: V, annotations: V,
+  view3d: G,
+};
+
+// A plot recipe's captured map view (`plotRecipes[].map`): 0.34's sanitizeMapView
+// keeps colormap/logZ/colorLimits only (measured the same way).
+export const RECIPE_MAP_VIEW: Classify<RecipeMapView> = {
+  colormap: V, logZ: V, colorLimits: V,
+  view3d: G,
+};
+
 export const DATASET: Classify<Dataset> = {
   id: V, name: V, data: V, raw: V, corrections: V, bgRef: V, fitSpec: V, peakTable: V, reflFits: V, notes: V,
   tags: V, group: V, folderId: V, order: V, formulas: V, formulaErrors: V, derivedFrom: V, analysisRecipe: V,
@@ -113,6 +129,8 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   ExportSeriesStyle: EXPORT_SERIES_STYLE,
   DisplayBlock: DISPLAY_BLOCK,
   RecipeVisual: RECIPE_VISUAL,
+  MapViewState: MAP_VIEW,
+  RecipeMapView: RECIPE_MAP_VIEW,
   Dataset: DATASET,
 };
 
@@ -144,6 +162,8 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
   for (const s of Array.isArray(doc.savedPlotSpecs) ? doc.savedPlotSpecs : []) {
     if (isObj(s) && isObj(s.spec)) checkType(s.spec.display, "DisplayBlock", found);
   }
+  if (isObj(doc.mapViews)) for (const m of Object.values(doc.mapViews)) checkType(m, "MapViewState", found);
+  for (const r of Array.isArray(doc.plotRecipes) ? doc.plotRecipes : []) if (isObj(r)) checkType(r.map, "RecipeMapView", found);
   // Views, recipe visuals, axis formats and export style arrays live in many
   // containers (windows, figure documents, recipes, pages): found by shape.
   const visit = (v: unknown, key: string): void => {

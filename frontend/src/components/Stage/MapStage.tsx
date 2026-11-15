@@ -75,8 +75,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const mapView = useApp((s) => mapViewFor(s.mapViews, dsId));
   const setMapColormap = useApp((s) => s.setMapColormap);
   const setMapLogZ = useApp((s) => s.setMapLogZ), setMapView3d = useApp((s) => s.setMapView3d);
-  const addMapSlice = useApp((s) => s.addMapSlice);
-  const removeMapSlice = useApp((s) => s.removeMapSlice);
+  const addMapSlice = useApp((s) => s.addMapSlice), removeMapSlice = useApp((s) => s.removeMapSlice);
   const addMapAnnotation = useApp((s) => s.addMapAnnotation);
   const removeMapAnnotation = useApp((s) => s.removeMapAnnotation);
   const cmap = mapView.colormap;
