@@ -8,7 +8,7 @@ import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import { useBumpsFit } from "./useBumpsFit";
+import { resetBumpsFitSession, useBumpsFit } from "./useBumpsFit";
 
 vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn() }));
 vi.mock("../../../lib/fitbumps", () => ({ fitBumps: vi.fn() }));
@@ -27,6 +27,7 @@ const GAPPED: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetBumpsFitSession();
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
   useApp.setState({
@@ -111,5 +112,45 @@ describe("useBumpsFit DREAM job in the shared StatusBar ops", () => {
       await p;
     });
     expect(usePendingOps.getState().ops).toEqual([]);
+  });
+});
+
+describe("useBumpsFit survives the Curve Fit window closing (soak issue 6)", () => {
+  it("a reopened panel re-attaches to the running DREAM job and gets its posterior table", async () => {
+    vi.mocked(fitBumps).mockResolvedValue({ job_id: "dream-7" });
+    let finish!: (v: unknown) => void;
+    vi.mocked(jobs.pollJob).mockImplementation((_id, cb) => {
+      cb?.(0.26, "sampling");
+      return new Promise((r) => {
+        finish = r;
+      });
+    });
+    const first = renderHook(() => useBumpsFit());
+    act(() => first.result.current.setEngine("dream"));
+    let p!: Promise<void>;
+    act(() => {
+      p = first.result.current.run("Linear");
+    });
+    await waitFor(() => expect(first.result.current.progress).toBe(0.26));
+    first.unmount(); // close the Curve Fit window mid-job
+
+    const reopened = renderHook(() => useBumpsFit());
+    expect(reopened.result.current.engine).toBe("dream");
+    expect(reopened.result.current.busy).toBe(true);
+    expect(reopened.result.current.progress).toBe(0.26);
+    // A second concurrent job cannot be started while the first is live.
+    await act(async () => reopened.result.current.run("Linear"));
+    expect(fitBumps).toHaveBeenCalledTimes(1);
+    // Cancel still reaches the job the closed panel started.
+    await act(async () => reopened.result.current.cancel());
+    expect(jobs.cancelJob).toHaveBeenCalledWith("dream-7");
+
+    const posterior = { engine: "dream", popt: [2], uncertainties: [0.2], chisq: 1, uncertainty_kind: "posterior", paramNames: ["m"] };
+    finish(posterior);
+    await act(async () => {
+      await p;
+    });
+    expect(reopened.result.current.result).toEqual(posterior);
+    expect(reopened.result.current.busy).toBe(false);
   });
 });

@@ -6,7 +6,7 @@
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { dedupeWindowTitle, defaultPlotView, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
 import { cascadeLayout, reboundWindowTitle, tileLayout } from "../lib/plotWindows";
-import { plotIntentStageTab } from "../lib/stagetab";
+import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
 import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import { toast } from "./toasts";
@@ -61,9 +61,10 @@ export function arrangedWindowsPatch(s: AppState, kind: "tile" | "cascade"): Par
 /** Shared "make `id` the live focus" tail for closeWindow/focusWindow/
  *  minimizeWindow/restoreWindow: hydrate `view` onto the singleton fields
  *  and clear transient tool state (item 4), over the caller's `extra`. */
-export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string | null, view: PlotView): Partial<AppState> {
+export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string | null, view: PlotView, s: AppState): Partial<AppState> {
   return {
     ...extra,
+    ...stageTabHandoff(s, id, datasetId),
     focusedWindowId: id,
     activeId: datasetId,
     selectedIds: datasetId ? [datasetId] : [],
@@ -74,6 +75,24 @@ export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: s
     ...focusTransientReset(),
   };
 }
+/** The Plot / Map / Worksheet tab each plot window was last shown on, by id.
+ *  `stageTab` is one global field; this remembers it per window so a focus
+ *  switch brings a window back as it was left (soak test: a 2-D map window
+ *  came back as a 1-D scatter after a visit to another window). Transient UI,
+ *  like `stageTab` itself: never saved or undone. */
+const windowStageTabs = new Map<string, StageTab>();
+
+/** The `stageTab` patch for a focus handoff from `s.focusedWindowId` to `id`.
+ *  The Technique/Analysis views are not per window and stay put. A window seen
+ *  before gets its own tab back; one never seen gets its dataset's default
+ *  (`nextStageTab`: Map for a 2-D map, else Plot, Worksheet kept). */
+function stageTabHandoff(s: AppState, id: string, datasetId: string | null): Partial<AppState> {
+  if (s.stageTab === "technique" || s.stageTab === "analysis") return {};
+  if (s.focusedWindowId) windowStageTabs.set(s.focusedWindowId, s.stageTab);
+  const ds = s.datasets.find((d) => d.id === datasetId);
+  return { stageTab: windowStageTabs.get(id) ?? (ds ? nextStageTab(ds, s.stageTab) : s.stageTab) };
+}
+
 /** A brand-new sole main window — the ≥1-window invariant's default: one
  *  MAXIMIZED window bound to `datasetId`, with a fresh view (MULTI_PLOT_PLAN
  *  decision #6 — pixel-identical to today's single-plot Stage). Used at store
@@ -221,7 +240,11 @@ export function retargetPassiveRebind(
     (w) => w.kind === "plot" && w.id !== focused.id && !protect(w) && w.winState !== "minimized",
   );
   if (candidates.length > 0) {
+    // The window is about to be REBOUND, so its remembered stage tab (which
+    // was for its old data) does not apply: the caller's tab rule decides.
+    const tab = s.stageTab;
     s.focusWindow(candidates.reduce((a, b) => (b.z > a.z ? b : a)).id);
+    s.setStageTab(tab);
     return;
   }
   const title = titleBase !== undefined ? dedupeAgainstDisplayed(s, titleBase) : undefined;

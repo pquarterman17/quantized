@@ -38,6 +38,46 @@ export const AUTOSAVE_BUDGET_BYTES = 64 * 1024 * 1024;
 let backend: AutosaveBackend = defaultBackend();
 let health: AutosaveHealth = { savedAt: null, error: null, count: 0 };
 
+/** The on-hide stash (soak test: edits inside the debounce were lost on a tab
+ *  close). IndexedDB is async end to end, and a closing page does not live to
+ *  finish it, so a page being left writes ONE generation here synchronously
+ *  instead; a restore weighs it with the rest (newest wins) and the next real
+ *  save removes it. Needs the codec already loaded — it is, from the startup
+ *  restore — and a workspace small enough for localStorage, else it declines. */
+export const STASH_KEY = "qz.autosave.stash";
+let codecNow: Awaited<ReturnType<typeof workspaceCodec>> | null = null;
+
+const SERIALIZE = { fitModelLibrary: false, compact: true } as const;
+
+/** Synchronously stash `ws`; false when it could not (the caller saves async). */
+export function stashAutosave(ws: WorkspaceState, now = Date.now()): boolean {
+  try {
+    if (!codecNow || ws.datasets.length === 0) return false;
+    localStorage.setItem(STASH_KEY, JSON.stringify({ at: now, text: codecNow.serializeWorkspace(ws, SERIALIZE) }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A real save (or clear) supersedes the stash. Never fails the save. */
+function dropStash(): void {
+  try {
+    localStorage.removeItem(STASH_KEY);
+  } catch {
+    /* storage blocked: there is no stash either */
+  }
+}
+
+function stashed(): Generation[] {
+  try {
+    const g = JSON.parse(localStorage.getItem(STASH_KEY) ?? "null") as Generation | null;
+    return typeof g?.text === "string" && typeof g.at === "number" ? [g] : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Swap the backing store. Tests use `memoryBackend()`; production never calls
  *  this. Resets health so one test cannot inherit another's state. */
 export function setAutosaveBackend(next: AutosaveBackend): void {
@@ -70,12 +110,13 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
   try {
     if (ws.datasets.length === 0) {
       await backend.clear();
+      dropStash();
       health = { savedAt: health.savedAt, error: null, count: 0 };
       return true;
     }
     // Inside the try: a codec chunk that will not load is reported like any
     // other failed save (persistent health warning), and the next save retries.
-    const { serializeWorkspace } = await workspaceCodec();
+    const { serializeWorkspace } = (codecNow = await workspaceCodec());
     const existing = await backend.read();
     // Three bounds, applied in sequence, each preserving the newest
     // generation on its own axis (count / age / size) — see
@@ -83,10 +124,11 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
     const kept = capBySize(
       // P2.7: the fit-model CARRY only, not the library — a restore happens
       // on this machine, whose library is newer (lib/fitModelsProject.ts).
-      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, { fitModelLibrary: false, compact: true }) }), now),
+      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, SERIALIZE) }), now),
       AUTOSAVE_BUDGET_BYTES,
     );
     await backend.write(kept);
+    dropStash();
     health = { savedAt: now, error: null, count: kept.length };
     return true;
   } catch (e: unknown) {
@@ -117,10 +159,10 @@ export async function loadAutosaveGeneration(): Promise<
   // good autosave. The caller (useWorkspaceAutosave) reports the rejection.
   const [codec, read] = await Promise.allSettled([workspaceCodec(), (async () => backend.read())()]);
   if (codec.status === "rejected") throw codec.reason;
-  const { parseWorkspace, autosaveRestoreFitModels } = codec.value;
+  const { parseWorkspace, autosaveRestoreFitModels } = (codecNow = codec.value);
   try {
     if (read.status === "rejected") return null;
-    const generations = await withLegacyGeneration(read.value, parseWorkspace);
+    const generations = [...(await withLegacyGeneration(read.value, parseWorkspace)), ...stashed()];
     const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
     health = { ...health, count: generations.length };
     // P2.7: an autosave embeds the fit-model CARRY only (above), so a

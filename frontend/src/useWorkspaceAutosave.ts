@@ -74,11 +74,12 @@
 //    `autosavePausedReported`'s own doc.
 
 import { useEffect } from "react";
-import { autosaveHealth, loadAutosaveGeneration, saveAutosave } from "./lib/autosave";
+import { autosaveHealth, loadAutosaveGeneration, saveAutosave, stashAutosave } from "./lib/autosave";
 import { hasDesktopShell } from "./lib/desktopBridge";
 import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryChoice";
 import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
+import type { WorkspaceState } from "./lib/workspace";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
 import { BROWSER_AUTOSAVE_LOCK_PATH } from "./store/projectLockPaths";
@@ -275,14 +276,7 @@ export async function flushAutosaveNow(): Promise<void> {
     return;
   }
   resetAutosavePausedReporting(); // silent — the save below reports the real "resumed" outcome
-  const s = useApp.getState();
-  // `windowsForSave()` freezes the FOCUSED window's live view into its
-  // record first (the plan's "save is one of the three sanctioned snapshot
-  // points") — never persist `s.plotWindows` raw. Item 5's
-  // `captureTechniqueView` does the same freshening for the technique
-  // memory map (workspaceIO.ts's explicit Save uses the identical call).
-  const techniqueViewMemory = captureTechniqueView(s.datasets.find((d) => d.id === s.activeId), s, s.techniqueViewMemory);
-  const ok = await saveAutosave({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+  const ok = await saveAutosave(workspaceForSave());
   // #32: report through the store so the warning PERSISTS until the next
   // SUCCESS, instead of a status line that scrolls away.
   reportAutosaveHealth(autosaveHealth());
@@ -296,6 +290,17 @@ export async function flushAutosaveNow(): Promise<void> {
     const reason = autosaveHealth().error;
     useApp.getState().setStatus(reason ? `autosave failed: ${reason}` : "autosave failed (storage full or unavailable)");
   }
+}
+
+/** What an autosave writes. `windowsForSave()` freezes the FOCUSED window's
+ *  live view into its record first (the plan's "save is one of the three
+ *  sanctioned snapshot points") — never persist `s.plotWindows` raw. Item 5's
+ *  `captureTechniqueView` does the same freshening for the technique memory
+ *  map (workspaceIO.ts's explicit Save uses the identical call). */
+function workspaceForSave(): WorkspaceState {
+  const s = useApp.getState();
+  const techniqueViewMemory = captureTechniqueView(s.datasets.find((d) => d.id === s.activeId), s, s.techniqueViewMemory);
+  return { ...s, plotWindows: s.windowsForSave(), techniqueViewMemory };
 }
 
 function lastKnownProject(): LastProjectRef | null {
@@ -392,12 +397,31 @@ export function useWorkspaceAutosave(): void {
       // store/project.ts's header on why ordering there is safe).
       useApp.getState().markProjectDirty();
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        void flushAutosaveNow();
-      }, 800);
+      timer = setTimeout(flushPending, 800);
     });
+    // Soak test: an edit made inside the debounce window was lost when the
+    // tab closed or reloaded. Leaving the page (pagehide, or hidden — the last
+    // event a mobile/bfcache page reliably gets) writes the pending save now,
+    // SYNCHRONOUSLY (`stashAutosave`): the async IndexedDB save does not
+    // outlive a closing page. Only if the stash declines (codec not loaded,
+    // too big for localStorage, gate closed) does the async save start. Once
+    // the timer is cleared, a second hide event (both fire on a close) or the
+    // timer itself finds nothing pending — one write.
+    function flushPending(hiding?: boolean): void {
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = undefined;
+      if (!(hiding === true && !autosaveGateBlocked() && stashAutosave(workspaceForSave()))) void flushAutosaveNow();
+    }
+    const onHide = (e: Event) => {
+      if (e.type === "pagehide" || document.visibilityState === "hidden") flushPending(true);
+    };
+    const off = new AbortController(), opts = { signal: off.signal };
+    window.addEventListener("pagehide", onHide, opts);
+    document.addEventListener("visibilitychange", onHide, opts);
     return () => {
       clearTimeout(timer);
+      off.abort();
       unsub();
     };
   }, []);

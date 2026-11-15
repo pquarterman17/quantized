@@ -10,7 +10,8 @@
 // any field to AppState.
 
 import type { BreakComposition, SpatialComposition } from "../lib/composition";
-import { hydrateView, navigationView, snapshotView, type PlotView } from "../lib/plotview";
+import { hydrateView, NAV_VIEW_KEYS, navigationView, snapshotView, type NavigationView, type PlotView, type PlotWindow } from "../lib/plotview";
+import { plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { focusTransientReset } from "./windows";
 import type { LibrarySelection } from "./libraryPanel";
 import type { AppState } from "./useApp";
@@ -166,16 +167,20 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   // the live store on every undo/redo (harmless today, a silent clobber the
   // day AppState gains a real `view` field).
   const { view, carriedComposition, ...fields } = snap;
+  // Then put the LIVE zoom/pan back. `hydrateView` restores every PlotView
+  // field including the navigation ones, so without this an ordinary
+  // Ctrl+Z ("undo add shape") also silently discarded a zoom performed
+  // afterwards — and left the separate viewHistory/viewFuture stack
+  // pointing at bounds that are no longer live. Navigation is undone with
+  // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
+  // PER WINDOW (soak test): the live singleton fields hold the FOCUSED
+  // window's zoom only. An undo whose snapshot focused another window used
+  // to paint this window's zoom onto that one and drop this one's (it was
+  // never written back to its record). Each window keeps its own.
   return {
     ...fields,
     ...hydrateView(view),
-    // Then put the LIVE zoom/pan back. `hydrateView` restores every PlotView
-    // field including the navigation ones, so without this an ordinary
-    // Ctrl+Z ("undo add shape") also silently discarded a zoom performed
-    // afterwards — and left the separate viewHistory/viewFuture stack
-    // pointing at bounds that are no longer live. Navigation is undone with
-    // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
-    ...navigationView(s),
+    ...liveNavigation(s, snap.focusedWindowId),
     expandedFolders: restoredExpandedFolders(s, snap),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
     // L0.25 on undo/redo (hardening review fix — undo was a SEVENTH
@@ -203,7 +208,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       return hasId(pools[sel.kind], sel.id) ? sel : null;
     })(),
     plotWindows: snap.plotWindows.map((w) =>
-      w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
+      withLiveNavigation(s, w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w),
     ),
     ...focusTransientReset(),
     // Preserve scratch across unrelated edits, but clear it when restored
@@ -217,6 +222,22 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     openReportId: hasId(snap.reports, s.openReportId) ? s.openReportId : null,
     openAnalysisResultId: hasId(snap.analysisResults, s.openAnalysisResultId) ? s.openAnalysisResultId : null,
   };
+}
+
+/** Live PLOT window `id`'s current zoom/pan (undefined when there is none):
+ *  the focused window's from the live singleton fields (its record is stale
+ *  while it is focused), any other window's from its own record. */
+function liveNavigation(s: AppState, id: string | null): NavigationView | undefined {
+  const w = s.plotWindows.find((l) => l.id === id && l.kind === "plot");
+  return w && navigationView(w.id === s.focusedWindowId ? s : plotWindowView(w));
+}
+
+/** Restored window `w` with its stored zoom/pan replaced by the live one
+ *  (unchanged when there is none, or it is the same). */
+function withLiveNavigation(s: AppState, w: PlotWindow): PlotWindow {
+  const nav = liveNavigation(s, w.id);
+  const stored = plotWindowView(w);
+  return !nav || NAV_VIEW_KEYS.every((k) => stored[k] === nav[k]) ? w : syncPlotWindow(w, { ...stored, ...nav });
 }
 
 /** Does the drawn fit curve still describe its worksheet after this restore?

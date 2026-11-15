@@ -267,6 +267,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),
+          s,
         );
       })),
     // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
@@ -297,7 +298,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           if (w.id === id) return { ...w, z: raised };
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target));
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), s);
       }),
     duplicateWindow: (id) => {
       const s = get();
@@ -412,6 +413,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),
+          s,
         );
       })),
     // Restore + focus a minimized window in one step — clicking a strip entry
@@ -440,7 +442,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           if (w.id === s.focusedWindowId) return syncPlotWindow(w, snapshotView(s));
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target));
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), s);
       })),
     // Origin habit: double-clicking a window's title BAR (not its editable
     // title text — that renames, see `renameWindow`) toggles normal<->

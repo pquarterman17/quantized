@@ -4,14 +4,22 @@
 // job lifecycle (submit -> GET-poll progress -> result / cancel) via
 // lib/jobs. The MATLAB-parity engine stays the workshop's default Fit path;
 // this hook only runs when a bumps engine is selected.
+//
+// Soak-test fix: the session (engine, DREAM settings, busy/progress, job id,
+// result) lives in a MODULE-level store, not component state. Closing the
+// Curve Fit window only hides it (store/curveFitSession.ts), so a DREAM job
+// still running when the panel unmounts must be there to re-attach to when it
+// reopens: the run loop keeps writing here after unmount, the reopened panel
+// shows the engine, progress and Cancel, then the posterior table — and a
+// second concurrent job cannot be started while the first is live.
 
-import { useRef, useState } from "react";
+import { create } from "zustand";
 
 import { fitBumps, type BumpsEngine, type BumpsFitResult } from "../../../lib/fitbumps";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { cancelJob, isJobSubmit, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useApp } from "../../../store/useApp";
 import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
@@ -43,110 +51,123 @@ export interface BumpsFitState {
   cancel: () => Promise<void>;
 }
 
-export function useBumpsFit(): BumpsFitState {
-  const active = useActiveDataset();
-  const [engine, setEngineState] = useState<EngineChoice>("parity");
-  const [result, setResult] = useState<BumpsFitResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [dream, setDreamState] = useState<DreamSettings>(DREAM_DEFAULTS);
-  const jobRef = useRef<string | null>(null);
+interface BumpsSession {
+  engine: EngineChoice;
+  dream: DreamSettings;
+  result: BumpsFitResult | null;
+  busy: boolean;
+  progress: number | null;
+  error: string | null;
+  /** The live DREAM job, while one is being polled. */
+  jobId: string | null;
+}
 
-  function setEngine(e: EngineChoice): void {
-    setEngineState(e);
-    setResult(null);
-    setError(null);
+const INITIAL: BumpsSession = {
+  engine: "parity",
+  dream: DREAM_DEFAULTS,
+  result: null,
+  busy: false,
+  progress: null,
+  error: null,
+  jobId: null,
+};
+
+const useBumpsSession = create<BumpsSession>(() => INITIAL);
+
+/** Back to a fresh session (tests; the app never calls it). */
+export function resetBumpsFitSession(): void {
+  useBumpsSession.setState(INITIAL, true);
+}
+
+const patch = (p: Partial<BumpsSession>): void => useBumpsSession.setState(p);
+
+function setEngine(engine: EngineChoice): void {
+  // A run in flight keeps its engine: switching mid-run would orphan the job.
+  if (useBumpsSession.getState().busy) return;
+  patch({ engine, result: null, error: null });
+}
+
+function setDream(p: Partial<DreamSettings>): void {
+  patch({ dream: { ...useBumpsSession.getState().dream, ...p } });
+}
+
+async function cancel(): Promise<void> {
+  const id = useBumpsSession.getState().jobId;
+  if (!id) return;
+  try {
+    await cancelJob(id);
+  } catch {
+    /* job already terminal — the poll loop settles it */
   }
+}
 
-  function setDream(patch: Partial<DreamSettings>): void {
-    setDreamState((d) => ({ ...d, ...patch }));
-  }
-
-  async function run(modelName: string): Promise<void> {
-    if (!active || engine === "parity" || busy) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
-    // P3.4: the run is one op in the shared StatusBar location (percent +
-    // Cancel once the DREAM job exists), not only this panel's own bar.
-    const op = trackJob(engine === "dream" ? "Bumps DREAM fit" : `Bumps ${engine} fit`);
-    try {
-      // Resolve past a lazy preview, then fit the analysis view (excluded/
-      // filtered rows dropped) — same contract as the parity fit path.
-      const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
-      const state = useApp.getState();
-      const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
-      const pairs = dropGapRows(d.x, d.y);
-      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
-      if (!pairs.complete) {
-        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
-      }
-      const resp = await fitBumps({
-        model: modelName,
-        x: pairs.x,
-        y: pairs.y,
-        engine,
-        ...(engine === "dream" ? dream : {}),
+async function run(modelName: string): Promise<void> {
+  const { engine, busy, dream } = useBumpsSession.getState();
+  const activeId = useApp.getState().activeId;
+  if (!activeId || engine === "parity" || busy) return;
+  patch({ busy: true, error: null, result: null });
+  // P3.4: the run is one op in the shared StatusBar location (percent +
+  // Cancel once the DREAM job exists), not only this panel's own bar.
+  const op = trackJob(engine === "dream" ? "Bumps DREAM fit" : `Bumps ${engine} fit`);
+  try {
+    // Resolve past a lazy preview, then fit the analysis view (excluded/
+    // filtered rows dropped) — same contract as the parity fit path.
+    const ds = await useApp.getState().resolveDataset(activeId);
+    if (!ds) return;
+    const state = useApp.getState();
+    const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
+    if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
+    const pairs = dropGapRows(d.x, d.y);
+    if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+    if (!pairs.complete) {
+      toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
+    }
+    const resp = await fitBumps({
+      model: modelName,
+      x: pairs.x,
+      y: pairs.y,
+      engine,
+      ...(engine === "dream" ? dream : {}),
+    });
+    let fit: BumpsFitResult;
+    if (isJobSubmit(resp)) {
+      patch({ jobId: resp.job_id, progress: 0 });
+      op.cancellable(() => void cancel());
+      fit = await pollJob<BumpsFitResult>(resp.job_id, (f) => {
+        patch({ progress: f });
+        op.progress(f);
       });
-      let fit: BumpsFitResult;
-      if (isJobSubmit(resp)) {
-        jobRef.current = resp.job_id;
-        setProgress(0);
-        op.cancellable(() => void cancel());
-        fit = await pollJob<BumpsFitResult>(resp.job_id, (f) => {
-          setProgress(f);
-          op.progress(f);
-        });
-      } else {
-        fit = resp;
-      }
-      setResult(fit);
-      // Overlay the fitted curve, expanded back to full row count so it stays
-      // in register with the full-length plot x (same as the parity path).
-      if (Array.isArray(fit.yFit)) {
-        const n = ds.data.time.length;
-        const kept = activeRowIndices(n, droppedRows(ds));
-        const aligned = restoreGapRows(fit.yFit, pairs);
-        const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-        useApp.getState().setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y });
-      }
-    } catch (e) {
-      if (!(e instanceof JobCancelledError)) {
-        setError(e instanceof Error ? e.message : "bumps fit failed");
-      }
-      // a deliberate cancel is not an error — just return to idle
-    } finally {
-      op.end();
-      jobRef.current = null;
-      setBusy(false);
-      setProgress(null);
+    } else {
+      fit = resp;
     }
-  }
-
-  async function cancel(): Promise<void> {
-    const id = jobRef.current;
-    if (!id) return;
-    try {
-      await cancelJob(id);
-    } catch {
-      /* job already terminal — the poll loop settles it */
+    patch({ result: fit });
+    // Overlay the fitted curve, expanded back to full row count so it stays
+    // in register with the full-length plot x (same as the parity path).
+    if (Array.isArray(fit.yFit)) {
+      const n = ds.data.time.length;
+      const kept = activeRowIndices(n, droppedRows(ds));
+      const aligned = restoreGapRows(fit.yFit, pairs);
+      const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
+      useApp.getState().setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y });
     }
+  } catch (e) {
+    if (!(e instanceof JobCancelledError)) {
+      patch({ error: e instanceof Error ? e.message : "bumps fit failed" });
+    }
+    // a deliberate cancel is not an error — just return to idle
+  } finally {
+    op.end();
+    patch({ jobId: null, busy: false, progress: null });
   }
+}
 
-  return {
-    hasDataset: active != null,
-    engine,
-    setEngine,
-    dream,
-    setDream,
-    result,
-    busy,
-    progress,
-    error,
-    run,
-    cancel,
-  };
+export function useBumpsFit(): BumpsFitState {
+  const hasDataset = useApp((s) => s.datasets.some((d) => d.id === s.activeId));
+  const engine = useBumpsSession((s) => s.engine);
+  const dream = useBumpsSession((s) => s.dream);
+  const result = useBumpsSession((s) => s.result);
+  const busy = useBumpsSession((s) => s.busy);
+  const progress = useBumpsSession((s) => s.progress);
+  const error = useBumpsSession((s) => s.error);
+  return { hasDataset, engine, setEngine, dream, setDream, result, busy, progress, error, run, cancel };
 }

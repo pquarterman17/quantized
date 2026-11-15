@@ -22,8 +22,17 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
 ]);
 
 /** The hint for a failed import of `name`: the wizard for a text-like file,
- *  nothing for a binary container (its error already says what to do). */
-export function importFailureHint(name: string): string {
+ *  nothing for a binary container (its error already says what to do).
+ *  Soak-test fix: a failure that never reached a parser is not the file's
+ *  fault, so `message` (the error text) is checked first — a server that is
+ *  down (`fetch` rejected) or a stale token (a relaunched `qz` mints a new
+ *  one, so every call is 401) gets its real cause and remedy, never the
+ *  wizard, which would fail the same way. */
+export function importFailureHint(name: string, message = ""): string {
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return " — the qz server is not responding (if you relaunched qz, reload this page)";
+  }
+  if (/invalid API token/i.test(message)) return " — qz was relaunched; reload this page";
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
   return BINARY_EXTS.has(ext) ? "" : " — try the Import wizard (⌘K → Import wizard…)";
@@ -35,6 +44,6 @@ export function importFailureHint(name: string): string {
  *  a text-like file only (`importFailureHint`). */
 export function importSummary(added: number, total: number, lastError: string, lastFailed: string): string {
   return lastError
-    ? `imported ${added}/${total} — failed ${lastError}${importFailureHint(lastFailed)}`
+    ? `imported ${added}/${total} — failed ${lastError}${importFailureHint(lastFailed, lastError)}`
     : `imported ${added} file${plural(added)}`;
 }

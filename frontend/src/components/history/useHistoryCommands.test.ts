@@ -136,6 +136,17 @@ describe("useHistoryCommands — keyboard shortcuts", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 
+  it("Ctrl+Y triggers redo too (Windows convention)", () => {
+    renderHook(() => useHistoryCommands());
+    act(() => {
+      useApp.getState().addDataset({ id: "d1", name: "a", data: raw });
+    });
+    act(() => press("z", { ctrl: true })); // undo
+    expect(useApp.getState().datasets).toHaveLength(0);
+    act(() => press("y", { ctrl: true })); // redo
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
   it("never intercepts Ctrl+Z while focus is in an input/textarea/contentEditable — native text undo keeps working", () => {
     renderHook(() => useHistoryCommands());
     act(() => {

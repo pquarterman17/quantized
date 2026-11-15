@@ -1151,6 +1151,13 @@ body {
 .qzk-win-collapse { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 10px; line-height: 1; }
 .qzk-win-collapse:hover { background: var(--surface-3); color: var(--text); }
 .qzk-win-body { overflow-y: auto; padding: var(--pad-lg); display: flex; flex-direction: column; gap: var(--pad); flex: 1; min-height: 0; }
+/* The body SCROLLS, so its children must never shrink to fit it. An
+   `overflow: hidden` child (qzk-ds-meta: every workshop status/error line) has
+   an automatic minimum height of 0, so once a panel overflowed, its error line
+   was squeezed to 0 px and a failed fit was silent (soak test; the earlier
+   "Batch collapsed to 2 px" was the same root). :where() keeps this at zero
+   specificity, so a child that opts into shrinking (`flex: 1`) still can. */
+:where(.qzk-win-body) > * { flex-shrink: 0; }
 .qzk-win-section { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); border-bottom: 1px solid var(--border-soft); padding-bottom: 3px; margin-top: 4px; }
 .qzk-win-resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 0 50%, var(--border-strong) 50% 60%, transparent 60% 70%, var(--border-strong) 70% 80%, transparent 80% 100%); }
 
