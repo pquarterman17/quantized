@@ -170,10 +170,11 @@ def test_realdata_rise_time_report_pages_are_not_books(corpus_dir: Path) -> None
     # Origin plots Book56_B@3, C, D, E and B@5 here. B@5 is placed by the
     # second sheet signal (opju_sheet_signals); D and B@3 are written with
     # 2-byte id chunks (opju_curve_token), all three COM-identical; C's id
-    # has no column record and E's token stores another X.
+    # has no column record. E is a Y-error-bar plot (COM GetPlotType 231;
+    # C is the 233 X-error bar), not a curve (opju_plot_gates).
     got = [(c["book"], c["y"]) for c in g66["curves"]]
     assert got == [("Book56", "D"), ("Book56@3", "B"), ("Book56@5", "B")]
-    assert _omitted(g66) == [("Book56", "E", "x_token_differs")]
+    assert _omitted(g66) == [("Book56", "E", "error_bar_plot")]
 
 
 @pytest.mark.realdata

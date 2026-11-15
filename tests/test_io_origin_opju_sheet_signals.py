@@ -299,15 +299,17 @@ def test_realdata_pedotpss_graph7_binds_every_plotted_column(corpus_dir: Path) -
 @pytest.mark.realdata
 def test_realdata_perceived_risk_graph50_binds_sheet_18(corpus_dir: Path) -> None:
     """``Book1D`` has more ``D`` datasets than ``D`` ids, so the rank
-    alignment proves no ``D``; its stored X partner (``A@18``) does. Origin
-    plots Book1D_D@18 (n 301, 1.04696788288531..1.8825768813079) against
-    Book1D_A@18 (n 301, 0..30)."""
+    alignment proves no ``D``; its stored X partner (``A@18``) does.
+    Book1D_D@18 (n 301, 1.04696788288531..1.8825768813079) is in Graph50 as
+    a Y-error-bar plot (COM ``GetPlotType`` 231, 2026-11-15) on
+    ``Book1D_C@18``: left out as a curve, on its proven sheet."""
     import numpy as np
 
     figs, books = _import(corpus_dir, _RISK)
     (f,) = [f for f in figs if (f["name"], f["layer"]) == ("Graph50", 1)]
-    (c,) = [c for c in f["curves"] if c["y"] == "D"]  # type: ignore[union-attr]
-    assert (c["book"], c["x"]) == ("Book1D@18", "A")
+    notes = f["curve_sheet_omitted"]
+    (n,) = [n for n in notes if n["y"] == "D"]  # type: ignore[union-attr,index]
+    assert (n["recorded"], n["reason"]) == ("Book1D@18", "error_bar_plot")  # type: ignore[index]
     ds = books["Book1D@18"]
     names = list(ds.metadata["origin_column_names"])  # type: ignore[attr-defined]
     y = np.asarray(ds.values, dtype=float)[:, names.index("D")]  # type: ignore[attr-defined]
