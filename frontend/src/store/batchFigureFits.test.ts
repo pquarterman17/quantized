@@ -2,7 +2,7 @@
 // fit (store/batchFigureFits.ts), and fail closed per dataset.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { overlaysMatchData } from "../lib/figureOverlays";
+import { overlayRowsKey } from "../lib/figureOverlays";
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView } from "../lib/plotview";
 import type { Dataset, FitSpec } from "../lib/types";
@@ -48,7 +48,7 @@ describe("batchSavedFitOverlays", () => {
     expect([...out.keys()]).toEqual(["a"]); // b has no saved fit
     const a = out.get("a")!;
     expect(a.fit).toEqual({ binding: { yKey: 1, xKey: 0 }, y: [3, 5, 7] });
-    expect(overlaysMatchData(a, datasets[0].data)).toBe(true);
+    expect(a.rows).toBe(overlayRowsKey(datasets[0]));
     expect(mocks.fitBands).toHaveBeenCalledWith(expect.objectContaining({ model: "linear", params: [1, 2], x: [10, 20, 30], covar: null }));
   });
 

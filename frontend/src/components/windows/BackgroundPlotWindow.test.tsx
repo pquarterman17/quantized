@@ -14,6 +14,7 @@ import { render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFigureDocument, figureDocumentToPlotView } from "../../lib/figureDocument";
+import { captureFit } from "../../lib/figureOverlays";
 import { defaultPlotView, type PlotView } from "../../lib/plotview";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -163,6 +164,24 @@ describe("BackgroundPlotWindow", () => {
     const data = created[0].data as unknown[][];
     // Only x + the one data channel — no extra "fit" series column appended.
     expect(data).toHaveLength(2);
+  });
+
+  it("draws its FIGURE's saved fit (lane C, review #6) -- as its page panel and exports do -- unless stale", async () => {
+    const view = { ...defaultPlotView(), yKeys: [0] };
+    const fit = { datasetId: "d1", binding: SINGLE_X, y: [11, 21, 31, 41] };
+    const document = createFigureDocument({ id: "f", name: "F", datasetId: "d1", view, overlays: captureFit(fit, DATASET) });
+    useApp.setState({ staleFits: [] });
+    const { unmount } = render(<BackgroundPlotWindow dataset={DATASET} view={view} document={document} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0].data as unknown[][]).toHaveLength(3); // x + the channel + the saved fit
+    expect((created[0].data as unknown[][])[2]).toEqual([11, 21, 31, 41]);
+    unmount();
+    created.length = 0;
+    useApp.setState({ staleFits: ["d1"] });
+    render(<BackgroundPlotWindow dataset={DATASET} view={view} document={document} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0].data as unknown[][]).toHaveLength(2);
+    useApp.setState({ staleFits: [] });
   });
 
   it("reflects the window's OWN view (e.g. yScale) rather than the live singleton", async () => {

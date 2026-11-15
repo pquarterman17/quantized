@@ -222,12 +222,13 @@ export default function AnalysisResultPanel() {
     if (busy) return;
     setBusy("figure");
     try {
-      const prepared = await loadActions().then(async (m) => {
+      const built = await loadActions().then(async (m) => {
         const plot = await m.resolveAnalysisResultPlot(result.id, index, true);
-        if (plot) await m.drawResultFitForFigure(result.id, plot); // the figure keeps the fit (gap audit 5 lane C)
-        return plot;
+        // A fit result's figure keeps its fitted curve (gap audit 5 lane C).
+        return plot && { plot, overlays: await m.resultFitFigureOverlays(result.id, plot) };
       }, () => { onLoadFailure(); return null; });
-      if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels, prepared.xChannel))) close();
+      const prepared = built?.plot;
+      if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels, prepared.xChannel), built.overlays)) close();
     } finally { setBusy(null); }
   };
   const sendReport = async (index: number) => {

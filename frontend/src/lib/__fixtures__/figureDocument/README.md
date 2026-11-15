@@ -14,8 +14,8 @@ a migration-compatibility question for a human, the same discipline as
 notes. See `figureDocumentMigration.test.ts` for the load-path assertions.
 
 `v2-overlays.json` (gap audit 5, lane C) is a schema-exact v2 document with
-the optional `overlays` section: a fit with a two-edge band and peak markers,
-row-aligned to the 3-row loop `figureDocumentMigration.test.ts` defines. Its
-`rows` value is `lib/dataFingerprint.ts`'s hash of that loop; a hash change
-would orphan every saved fit, so the test fails rather than the fixture being
-regenerated.
+the optional `overlays` section: a fit with a two-edge band, row-aligned to the
+3-row loop `figureDocumentMigration.test.ts` defines. Its `rows` value is
+`lib/figureOverlays.ts`'s `overlayRowsKey` of that loop (the data hash, then
+the row-state hash); a change to either would orphan every saved fit, so the
+test fails rather than the fixture being regenerated.

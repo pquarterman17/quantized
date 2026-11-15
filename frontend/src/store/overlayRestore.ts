@@ -6,14 +6,16 @@
 // (store/windowOverlays) -- the fit, its band, the baseline and the peaks
 // exactly as drawn. A project saved BEFORE that has only the dataset's saved
 // `fitSpec`; this module redraws THAT fit for the focused window by
-// EVALUATING its saved model at its saved parameters (lib/savedFitCurve, the
-// evaluation Open plot uses) -- never by fitting again.
+// EVALUATING its saved model at its saved parameters over the rows it was
+// fitted on (lib/savedFitCurve, the evaluation Open plot uses) -- never by
+// fitting again.
 //
 // Fail closed, and say why (status line):
 //   * a fit marked stale on load (its data changed after the save,
 //     `staleFits`): no curve -- the Library's "out of date" mark stands;
 //   * a fit that never recorded its X/Y, or whose X/Y is not a curve on the
-//     plot (lib/fitDrawBinding): no curve;
+//     window's own plot (lib/fitDrawBinding, then the window's view through
+//     lib/overlayPlacement): no curve;
 //   * the model cannot be evaluated (unknown model, backend error): no curve;
 //   * anything changed while evaluating (focus, data, fit, an overlay drawn
 //     meanwhile): nothing is written.
@@ -21,8 +23,10 @@
 // (store/windowOverlays.restoreOverlays seeds a lane-C figure first, then calls this.)
 
 import { fitDrawBinding, fitDrawRefusal } from "../lib/fitDrawBinding";
+import { snapshotView } from "../lib/plotview";
 import { evaluateSavedFit } from "../lib/savedFitCurve";
 import { useApp } from "./useApp";
+import { fitPlaced } from "./windowOverlays";
 
 /** Redraw the focused window's dataset's saved fit from its parameters, when
  *  nothing restored a curve for it. Resolves to what it did, for tests. */
@@ -43,6 +47,14 @@ export async function restoreSavedFitOverlay(): Promise<"drawn" | "refused" | "n
   if (spec.yKey === undefined) return say(fitDrawRefusal(spec));
   const binding = fitDrawBinding(dataset, { channels: [spec.yKey], xChannel: spec.xKey }, spec);
   if (!binding) return say(fitDrawRefusal(spec));
+  // Review #7: the window's OWN view must draw the fitted curve on its X
+  // (placement, lib/overlayPlacement) -- else it would be drawn nowhere and
+  // only reported "left out" by every export of the figure.
+  const probe = { datasetId: dataset.id, binding, y: dataset.data.time.map(() => null) };
+  const view = snapshotView(s);
+  if (!fitPlaced(dataset, view, probe)) {
+    return say("the fitted curve is not on this plot (another X, or the fitted Y is hidden or not plotted)");
+  }
   const y = await evaluateSavedFit(dataset, spec, spec.params, binding.xKey);
   const now = useApp.getState();
   const current = now.datasets.find((d) => d.id === dataset.id);

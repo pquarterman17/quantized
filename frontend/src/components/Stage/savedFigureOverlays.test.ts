@@ -130,6 +130,18 @@ describe("a saved figure keeps its fit (gap audit 5 lane C)", () => {
     expect(useApp.getState().status).toMatch(/"Window 1": saved fit left out/);
   });
 
+  it("review #5: fails closed when rows were excluded since the save, or the fit is marked stale", () => {
+    const saved = saveAndForget();
+    const dropped: string[][] = [];
+    const excluded = { ...SHEET, excludedRows: [1] };
+    expect(wire(buildFigureSpecFromDocument(saved, excluded, "x", { onDroppedOverlays: (l) => dropped.push(l) }), "fit")).toEqual([]);
+    useApp.setState({ staleFits: ["own"] });
+    expect(wire(buildFigureSpecFromDocument(saved, SHEET, "x", { onDroppedOverlays: (l) => dropped.push(l) }), "fit")).toEqual([]);
+    expect(dropped).toEqual([["fit"], ["fit"]]);
+    useApp.setState({ staleFits: [] });
+    expect(wire(buildFigureSpecFromDocument(saved, SHEET, "x"), "fit")).toEqual(FIT_PAIRS);
+  });
+
   it("fails closed when its bound curve is hidden on the saved figure", () => {
     const saved = saveAndForget();
     const hidden = createFigureDocument({

@@ -6,6 +6,7 @@
 
 import type { AppState } from "./useApp";
 import type { QuickFigureMapping } from "../lib/quickFigureMapping";
+import type { FigureOverlays } from "../lib/figureOverlays";
 
 type SliceSet = (partial: Partial<AppState>) => void;
 
@@ -14,7 +15,11 @@ export interface QuickFigureBuilderSlice {
   /** Optional caller-provided starting assignments. This is transient draft
    * state, not a saved template or a mutation of the worksheet. */
   quickFigureBuilderSeed: QuickFigureMapping | null;
-  openQuickFigureBuilder: (datasetId: string, seed?: QuickFigureMapping) => boolean;
+  /** Gap audit 5 lane C: a saved result's fit curve the created figure keeps
+   *  (Analysis Results' Build source figure), row-aligned to this worksheet.
+   *  Handed to the new figure only -- the canvas' fit slot is never touched. */
+  quickFigureBuilderOverlays: FigureOverlays | null;
+  openQuickFigureBuilder: (datasetId: string, seed?: QuickFigureMapping, overlays?: FigureOverlays) => boolean;
   closeQuickFigureBuilder: () => void;
 }
 
@@ -22,13 +27,15 @@ export function createQuickFigureBuilderSlice(set: SliceSet, get: () => AppState
   return {
     quickFigureBuilderDatasetId: null,
     quickFigureBuilderSeed: null,
-    openQuickFigureBuilder: (datasetId, seed) => {
+    quickFigureBuilderOverlays: null,
+    openQuickFigureBuilder: (datasetId, seed, overlays) => {
       if (!get().datasets.some((dataset) => dataset.id === datasetId)) {
         set({ status: "Quick Figure Builder unavailable: worksheet not found" });
         return false;
       }
       set({
         quickFigureBuilderDatasetId: datasetId,
+        quickFigureBuilderOverlays: overlays ?? null,
         quickFigureBuilderSeed: seed ? {
           ...seed,
           yKeys: [...seed.yKeys],
@@ -39,6 +46,6 @@ export function createQuickFigureBuilderSlice(set: SliceSet, get: () => AppState
       });
       return true;
     },
-    closeQuickFigureBuilder: () => set({ quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null }),
+    closeQuickFigureBuilder: () => set({ quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null, quickFigureBuilderOverlays: null }),
   };
 }

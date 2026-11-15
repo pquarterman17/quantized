@@ -65,8 +65,21 @@ export default function CurveFitResults(p: Props) {
       ]
     : [];
 
+  // Review #8: a saved fit drawn after a reopen (its curve restored from the
+  // figure or its saved parameters) has no in-memory result here -- Remove fit
+  // must still be reachable without fitting again.
+  const saved = !result && active?.fitSpec?.params?.length ? active.fitSpec : null;
+
   return (
     <>
+      {saved && (
+        <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span>Saved {saved.model} fit. Press Fit to see its statistics again.</span>
+          <Button size="sm" variant="ghost" title="Delete this saved fit, its curve and its Library result (Undo restores)" onClick={p.onRemoveFit}>
+            Remove fit
+          </Button>
+        </div>
+      )}
       {done && p.stale && (
         <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, color: "var(--warning)" }}>
           The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.

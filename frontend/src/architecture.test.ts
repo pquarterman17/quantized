@@ -2161,6 +2161,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   graphBuilderSeed: "seeded spec from another workflow; consumed on use, not persistent",
   quickFigureBuilderDatasetId: "Quick Figure Builder source target; transient UI state cleared on cancel",
   quickFigureBuilderSeed: "Quick Figure Builder caller-provided draft assignments; transient UI state cleared on cancel",
+  quickFigureBuilderOverlays: "Quick Figure Builder caller-provided saved-fit curve for the created figure; transient UI state cleared on cancel",
 
   recipeSourcesComplete: "workspace recipe-source fidelity (P3.5); DERIVED at project load, never user-edited — there is nothing to undo TO, and restoring a stale `true` over a genuine `false` would re-certify sources the load actually lost",
 

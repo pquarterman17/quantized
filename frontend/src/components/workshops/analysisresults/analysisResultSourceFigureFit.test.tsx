@@ -48,8 +48,10 @@ describe("Build source figure keeps the fit", () => {
     expect(screen.queryByText(/do not yet store fit overlays/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Build source figure" }));
     await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("source"));
-    // The result's fit is drawn (regenerated from the saved model), as Open plot does.
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: { yKey: 0, xKey: null }, y: [1, 3, 5] });
+    // Review #2: handed to the builder for the new figure only -- the canvas'
+    // shared fit slot is never touched.
+    expect(useApp.getState().quickFigureBuilderOverlays?.fit?.y).toEqual([1, 3, 5]);
+    expect(useApp.getState().fitOverlay).toBeNull();
 
     const s = useApp.getState();
     expect(s.createQuickFigureFromMapping("source", s.quickFigureBuilderSeed!, "line")).toBe(true);
@@ -63,7 +65,7 @@ describe("Build source figure keeps the fit", () => {
     openResult({ ...fitted, fitSpec: { model: "Linear", params: [1, 2] } });
     fireEvent.click(screen.getByRole("button", { name: "Build source figure" }));
     await waitFor(() => expect(useApp.getState().quickFigureBuilderDatasetId).toBe("source"));
-    expect(useApp.getState().fitOverlay).toBeNull();
+    expect(useApp.getState().quickFigureBuilderOverlays).toBeNull();
     expect(useApp.getState().status).toMatch(/the figure is built without the fit: the saved fit never recorded its X/);
     expect(mocks.fitBands).not.toHaveBeenCalled();
   });
@@ -71,11 +73,24 @@ describe("Build source figure keeps the fit", () => {
   it("the fit never rides onto a different worksheet than the one it was evaluated on", async () => {
     openResult(fitted);
     fireEvent.click(screen.getByRole("button", { name: "Build source figure" }));
-    await waitFor(() => expect(useApp.getState().fitOverlay).not.toBeNull());
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderOverlays).not.toBeNull());
     const other: Dataset = { ...fitted, id: "other", name: "Other", fitSpec: undefined };
     useApp.setState((s) => ({ datasets: [...s.datasets, other] }));
     const s = useApp.getState();
     expect(s.createQuickFigureFromMapping("other", s.quickFigureBuilderSeed!, "line")).toBe(true);
     expect(useApp.getState().editableFigures.at(-1)!.overlays).toBeUndefined();
+  });
+
+  it("review #2: the focused window's own fit survives Build source figure, and Cancel changes nothing", async () => {
+    const other: Dataset = { ...fitted, id: "b", name: "B", fitSpec: undefined };
+    const own = { datasetId: "b", binding: { yKey: 0, xKey: null }, y: [1.5, 2.5, 3.5] };
+    openResult(fitted);
+    useApp.setState((s) => ({ datasets: [...s.datasets, other], fitOverlay: own }));
+    fireEvent.click(screen.getByRole("button", { name: "Build source figure" }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderOverlays).not.toBeNull());
+    expect(useApp.getState().fitOverlay).toBe(own);
+    useApp.getState().closeQuickFigureBuilder(); // Cancel
+    expect(useApp.getState().quickFigureBuilderOverlays).toBeNull();
+    expect(useApp.getState().fitOverlay).toBe(own);
   });
 });

@@ -60,7 +60,7 @@ function panelFigure(flat: FigureSpec, i: number, ch: number, top: boolean, view
   const {
     y2_keys, y2_label, y2_scale, y2_fmt, y2_step, y_axes, group_col, encoding, waterfall_offsets,
     waterfall_x_offsets, log_offsets, axis_label_styles, axis_label_offsets, series_styles, error_spans,
-    y_label, overrides, ...kept
+    y_label, overrides, analysis_overlays, ...kept
   } = flat;
   /* eslint-enable @typescript-eslint/no-unused-vars */
   const keys = [ch];

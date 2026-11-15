@@ -164,11 +164,10 @@ export function syncPlotWindow(
 }
 
 /** The focused window committed: its live view (`syncPlotWindow`) and the
- *  analysis overlays its canvas draws (store/windowOverlays), into its document. */
+ *  fit its canvas draws (store/windowOverlays), into its document. */
 export function commitFocusedWindow(w: PlotWindow, s: AppState): PlotWindow {
   const synced = syncPlotWindow(w, snapshotView(s));
-  const fold = overlaysNow()?.foldLiveOverlays;
-  return fold && synced.kind === "plot" && synced.document ? { ...synced, document: fold(synced.document, s) } : synced;
+  return overlaysNow()?.commit(synced, s) ?? synced;
 }
 
 /** Replace a plot window's canonical document and regenerate every legacy

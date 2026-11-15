@@ -12,13 +12,18 @@
 //   * the recipe's figure is on another X, or does not plot the fitted Y, or
 //     the fitted Y is no longer a curve on that X (lib/fitDrawBinding);
 //   * the model evaluation fails.
-// Placement on the rendered figure stays lib/overlayPlacement's (I1).
+// Placement on the rendered figure stays lib/overlayPlacement's (I1). The
+// evaluations run a few at a time (review #13), not one request per dataset
+// in sequence.
 
-import { captureFigureOverlays, type FigureOverlays } from "../lib/figureOverlays";
+import { captureFit, type FigureOverlays } from "../lib/figureOverlays";
 import { fitDrawBinding } from "../lib/fitDrawBinding";
 import { evaluateSavedFit } from "../lib/savedFitCurve";
-import type { Dataset } from "../lib/types";
+import type { Dataset, OverlayBinding } from "../lib/types";
 import type { BatchFigureRow } from "./batchFigureBuild";
+
+/** Model evaluations in flight at once. */
+const CONCURRENCY = 6;
 
 /** The saved-fit overlays for the included rows, keyed by dataset id. */
 export async function batchSavedFitOverlays(
@@ -27,9 +32,8 @@ export async function batchSavedFitOverlays(
   state: { datasets: readonly Dataset[]; staleFits: readonly string[] },
   signal?: AbortSignal,
 ): Promise<Map<string, FigureOverlays>> {
-  const out = new Map<string, FigureOverlays>();
+  const jobs: { dataset: Dataset; binding: OverlayBinding }[] = [];
   for (const row of rows) {
-    if (signal?.aborted) break;
     if (!includedDatasetIds.has(row.datasetId) || !row.resolved) continue;
     const dataset = state.datasets.find((candidate) => candidate.id === row.datasetId);
     const spec = dataset?.fitSpec;
@@ -38,15 +42,21 @@ export async function batchSavedFitOverlays(
     const { mapping } = row.resolved;
     if (!mapping.yAuto && !mapping.yKeys.includes(spec.yKey)) continue;
     const binding = fitDrawBinding(dataset, { channels: [spec.yKey], xChannel: mapping.xKey }, spec);
-    if (!binding) continue;
-    const y = await evaluateSavedFit(dataset, spec, spec.params, binding.xKey);
-    if (typeof y === "string") continue;
-    const overlays = captureFigureOverlays(
-      { fitOverlay: { datasetId: dataset.id, binding, y }, baselineOverlay: null, peakOverlay: null },
-      dataset.id,
-      dataset.data,
-    );
-    if (overlays) out.set(dataset.id, overlays);
+    if (binding) jobs.push({ dataset, binding });
   }
-  return out;
+  const out = new Map<string, FigureOverlays>();
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < jobs.length && !signal?.aborted) {
+      const { dataset, binding } = jobs[next++];
+      const spec = dataset.fitSpec!;
+      const y = await evaluateSavedFit(dataset, spec, spec.params!, binding.xKey);
+      if (typeof y === "string") continue;
+      const overlays = captureFit({ datasetId: dataset.id, binding, y }, dataset);
+      if (overlays) out.set(dataset.id, overlays);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
+  // Keyed in row order regardless of which evaluation finished first.
+  return new Map(jobs.flatMap(({ dataset }) => (out.has(dataset.id) ? [[dataset.id, out.get(dataset.id)!]] : [])));
 }

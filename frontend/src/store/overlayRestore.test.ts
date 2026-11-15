@@ -5,7 +5,7 @@
 // fails closed with a reason (store/overlayRestore.ts).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { captureFigureOverlays } from "../lib/figureOverlays";
+import { captureFit } from "../lib/figureOverlays";
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, FitSpec } from "../lib/types";
@@ -28,7 +28,7 @@ const DECAY: Dataset = {
 };
 const CURVE = [10.5, 5.2, 2.8, 1.5];
 
-function window(dataset: Dataset, overlays?: ReturnType<typeof captureFigureOverlays>): PlotWindow {
+function window(dataset: Dataset, overlays?: ReturnType<typeof captureFit>): PlotWindow {
   const document = createFigureDocument({ id: "fig", name: "W", datasetId: dataset.id, view: { ...defaultPlotView(), yKeys: [0] }, overlays });
   return {
     id: "pw1", kind: "plot", title: "W", datasetId: dataset.id, geometry: { x: 0, y: 0, w: 400, h: 300 },
@@ -54,7 +54,7 @@ describe("reopening a project redraws its fit", () => {
 
   it("a figure that kept its own fit (and band) gets exactly that back, and nothing is evaluated", async () => {
     const band = [{ label: "95% CI low", y: [10, 5, 2.5, 1.2], legend: "95% confidence band" }, { label: "95% CI high", y: [11, 5.4, 3.1, 1.8], legend: "" }];
-    const saved = captureFigureOverlays({ fitOverlay: { datasetId: "decay", binding: { yKey: 0, xKey: null }, y: CURVE, band }, baselineOverlay: null, peakOverlay: null }, "decay", DECAY.data);
+    const saved = captureFit({ datasetId: "decay", binding: { yKey: 0, xKey: null }, y: CURVE, band }, DECAY);
     useApp.getState().loadWorkspace({ datasets: [DECAY], plotWindows: [window(DECAY, saved)], focusedWindowId: "pw1" });
     await vi.waitFor(() => expect(useApp.getState().fitOverlay?.band).toEqual(band));
     expect(await restoreSavedFitOverlay()).toBe("none");
@@ -90,6 +90,22 @@ describe("fails closed, and says why", () => {
     expect(await restoreSavedFitOverlay()).toBe("refused");
     expect(useApp.getState().fitOverlay).toBeNull();
     expect(mocks.fitBands).not.toHaveBeenCalled();
+  });
+
+  it("review #7: the window's own view must draw the fitted curve (hidden Y): no curve, and why", async () => {
+    load(DECAY);
+    useApp.setState({ hiddenChannels: [0] });
+    expect(await restoreSavedFitOverlay()).toBe("refused");
+    expect(useApp.getState().status).toMatch(/the fitted curve is not on this plot/);
+    expect(mocks.fitBands).not.toHaveBeenCalled();
+  });
+
+  it("review #4: a range-limited fit is redrawn over its own window only", async () => {
+    load({ ...DECAY, fitSpec: { ...SPEC, range: [1, 2] } });
+    mocks.fitBands.mockImplementationOnce(async ({ x }: { x: number[] }) => ({ yFit: x.map(() => 7) }));
+    expect(await restoreSavedFitOverlay()).toBe("drawn");
+    expect(mocks.fitBands).toHaveBeenCalledWith(expect.objectContaining({ x: [1, 2] }));
+    expect(useApp.getState().fitOverlay?.y).toEqual([null, 7, 7, null]);
   });
 
   it("never overwrites a curve drawn while the model was evaluating", async () => {

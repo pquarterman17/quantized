@@ -38,8 +38,8 @@ import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 import { overlaysNow } from "./windowOverlaysLazy";
 
-/** A window taking focus: its document's saved overlays back on the canvas (lane C). */
-const seedOf = (w: PlotWindow, s: AppState) => overlaysNow()?.windowOverlaySeed(w, s);
+/** A window taking focus: the fit slot becomes its own saved fit (lane C, store/windowOverlays). */
+const seedOf = (w: PlotWindow, s: AppState) => overlaysNow()?.handoff(w, s);
 
 // Moved-out helpers + the slice contract (store-size ratchet), re-exported so no importer changed.
 export { analysisResultReset, datasetViewDefaults, focusedRebindPatch, focusTransientReset, focusWindowShowing, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";

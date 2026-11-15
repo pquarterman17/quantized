@@ -45,6 +45,7 @@ import type uPlot from "uplot";
 import type { ErrorBinding } from "../../lib/errorRoles";
 import { durableComposition } from "../../lib/facet";
 import type { FigureDocument } from "../../lib/figureDocument";
+import { fitFromDocument } from "../../lib/figureOverlays";
 import { frozenFigureDataset } from "../../lib/frozenFigureDataset";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
@@ -217,6 +218,11 @@ function BackgroundXYWindow({
     ? { datasetId: statisticalLink.figureDatasetId, rows: figureRowsForSourceRows(statisticalLink, selection.rows) }
     : selection, [selection, statisticalLink]);
 
+  const staleFits = useApp((s) => s.staleFits);
+  const savedFit = useMemo(
+    () => (document?.data.mode === "live" && !staleFits.includes(dataset.id) ? fitFromDocument(document.overlays, dataset) : null),
+    [document, dataset, staleFits],
+  );
   const rampedStyles = useRampedStyles(view, dataset, document);
   const { displayPayload: basePayload, plotted, styleList, labelList, legendLabels, errorBars, errorSpans, colorByColumns, hidden } =
     usePlotPayload({
@@ -238,8 +244,10 @@ function BackgroundXYWindow({
       waterfallDx: view.waterfallDx,
       excludedDisplay,
       // Tool overlays are focused-window-only (decision #2) — a background
-      // window never shows a fit/baseline/peak/derivative curve.
-      fitOverlay: null,
+      // window never shows a baseline/peak/derivative preview. Its FIGURE's
+      // saved fit (gap audit 5 lane C) is figure content: drawn here as its
+      // Figure Page panel and exports draw it (review #6).
+      fitOverlay: savedFit,
       baselineOverlay: null,
       peakOverlay: null,
       derivOverlay: null,

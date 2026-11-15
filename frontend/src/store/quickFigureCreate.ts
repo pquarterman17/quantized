@@ -34,7 +34,6 @@ import { nextFigureId } from "./figureLifecycle";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
-import { overlaysNow } from "./windowOverlaysLazy";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -86,7 +85,12 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
       const boundId = overlay?.id ?? dataset.id;
       const name = dedupeWindowTitle(pieces.name, state.editableFigures.map((f) => f.name));
       const windowId = state.createWindow(boundId, pieces.view, name); // the gesture's one recordHistory
-      const created = createFigureDocument({
+      // A saved result's fit (Build source figure) rides along only onto the very
+      // worksheet it was evaluated on -- never onto a per-series-X overlay copy.
+      const overlays = state.quickFigureBuilderDatasetId === datasetId && boundId === datasetId
+        ? state.quickFigureBuilderOverlays ?? undefined
+        : undefined;
+      const document = createFigureDocument({
         id,
         name,
         datasetId: boundId,
@@ -97,11 +101,8 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
         // Grouping role must ride the explicit argument to reach the legend.
         groupKey: pieces.view.groupKey,
         errors: pieces.errors,
+        overlays,
       });
-      // Gap audit 5 lane C: the new figure keeps the overlays drawn for its
-      // dataset (Build source figure draws a result's fit first) -- never a
-      // per-series-X copy's: that is another dataset, with none drawn.
-      const document = overlaysNow()?.foldLiveOverlays(created, state) ?? created;
       set((current) => ({
         ...(overlay ? { datasets: [...current.datasets, overlay] } : {}),
         editableFigures: [...current.editableFigures, document],

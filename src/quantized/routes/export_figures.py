@@ -26,7 +26,7 @@ from functools import partial
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import Field, field_validator
+from pydantic import Field, StrictBool, field_validator, model_validator
 
 from quantized.calc.axis_dates import x_is_datetime
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
@@ -86,6 +86,7 @@ from quantized.routes.export_figures_schema import (
     FigureFacet,
     TickFormatSpec,
     _ResolvedFigure,
+    check_overlay_flags,
     reject_document_only_style_keys,
 )
 
@@ -239,7 +240,9 @@ class FigureRequest(
         default=None, description=WATERFALL_X_OFFSETS_DOC
     )
     log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
-    analysis_overlays: list[bool] | None = Field(default=None, description=ANALYSIS_OVERLAYS_DOC)
+    analysis_overlays: list[StrictBool] | None = Field(
+        default=None, description=ANALYSIS_OVERLAYS_DOC
+    )
     svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
@@ -251,6 +254,14 @@ class FigureRequest(
     # live with the list itself, in `export_figures_schema`. Declared on this
     # model, so the page route inherits it through `PagePanelSpec.figure`.
     _no_document_keys = field_validator("series_styles")(reject_document_only_style_keys)
+
+    @model_validator(mode="after")
+    def _overlay_flags_align(self) -> FigureRequest:
+        """Review #10: one ``analysis_overlays`` flag per ``y_keys`` entry, or a
+        422 -- an appender that forgot to pad would otherwise mislabel the
+        auto title silently."""
+        check_overlay_flags(self)
+        return self
 
 
 def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _ResolvedFigure:

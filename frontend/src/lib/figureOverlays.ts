@@ -1,35 +1,40 @@
-// A figure document's ANALYSIS OVERLAYS (gap audit 5, lane C): the fit curve
-// (with its Curve Fit band), the estimated baseline and the peak markers a
-// graph draws, kept ON the figure the way Origin keeps a fit curve as a plot in
-// its graph -- so a saved figure, a Figure Page panel, a batch-built figure and
-// a Library multi-figure PDF carry the fit instead of the bare data.
+// A figure document's saved FIT CURVE (gap audit 5, lane C): the fit (with
+// its Curve Fit band) a graph draws, kept ON the figure the way Origin keeps a
+// fit curve as a plot in its graph -- so a saved figure, a Figure Page panel,
+// a batch-built figure and a Library multi-figure PDF carry the fit instead of
+// the bare data.
 //
-// The live canvas draws the store's transient singletons (`fitOverlay`,
-// `baselineOverlay`, `peakOverlay`, each tagged with its dataset). A plot
-// window's document captures the ones drawn for its dataset whenever its view
-// is committed (store/windowOverlays.ts), and seeds them back when the window
-// is focused or a saved figure is opened, so the canvas and every document
-// render agree (lib/figureDocumentOverlaySpec.ts appends them to the export).
+// Only the fit: the estimated baseline and the peak markers are tool PREVIEWS
+// (their panels clear them on close, and a dataset/view change clears them
+// too), so they are not figure content.
 //
-// FAIL CLOSED. Each curve is row-aligned to the data it was computed on and
+// The live canvas draws the store's transient `fitOverlay` singleton. A plot
+// window's document captures the fit IT drew whenever its view is committed,
+// and the fit is put back when the window takes focus (store/windowOverlays.ts),
+// so the canvas and every document render agree (lib/figureDocumentOverlaySpec).
+//
+// FAIL CLOSED. The curve is row-aligned to the data it was computed on and
 // records its own `OverlayBinding` (the Y and the X it was read against, #679).
-// `rows` is that data's content hash (lib/dataFingerprint): when the bound
-// data no longer hashes the same (rows edited, inserted, sorted, re-imported),
-// the overlays are not drawn anywhere -- never re-aligned, never guessed onto
-// other rows -- and the export reports them as left out. Placement on a
-// per-series-X view and the "bound curve not shown" refusal are
-// lib/overlayPlacement's, unchanged.
+// `rows` is `overlayRowsKey` of that dataset: the numbers (lib/dataFingerprint)
+// AND the row state the curve depends on -- the excluded / filtered-out rows
+// and the column designations, roles and types. When the bound dataset no
+// longer matches (cells edited, rows excluded or re-included, a column
+// re-designated, a re-import), the curve is not drawn anywhere -- never
+// re-aligned, never guessed onto other rows -- and the export reports it as
+// left out. Placement on a per-series-X view and the "bound curve not shown"
+// refusal are lib/overlayPlacement's, unchanged.
 //
-// Pure, and LAZY: the store reaches it through store/windowOverlaysLazy.ts
-// (capture / seed), the export path through lib/figureDocumentOverlaySpec.
+// Pure, and LAZY: the store reaches it through store/windowOverlaysLazy.ts,
+// the export path through lib/figureDocumentOverlaySpec.
 
 import { dataFingerprint } from "./dataFingerprint";
 import type { FitBandEdges } from "./fitBandOverlay";
-import type { BaselineOverlay, FitOverlay, OverlayBinding, PeakOverlay } from "./fitTypes";
-import type { DataStruct } from "./types";
+import type { FitOverlay, OverlayBinding } from "./fitTypes";
+import { droppedRows } from "./rowstate";
+import type { Dataset } from "./types";
 
-/** One saved overlay curve: the store's overlay less its dataset tag (the
- *  document's own binding names the dataset). `band` is the fit's only. */
+/** The saved curve: the store's overlay less its dataset tag (the document's
+ *  own binding names the dataset). */
 export interface FigureOverlayCurve {
   binding: OverlayBinding;
   y: (number | null)[];
@@ -37,81 +42,45 @@ export interface FigureOverlayCurve {
 }
 
 export interface FigureOverlays {
-  /** `dataFingerprint` of the rows every curve below aligns to. */
+  /** `overlayRowsKey` of the dataset the curve aligns to. */
   rows: string;
   fit?: FigureOverlayCurve;
-  baseline?: FigureOverlayCurve;
-  peaks?: FigureOverlayCurve;
 }
 
-/** The store's overlay singletons (the slice of AppState read and written). */
-export interface LiveOverlays {
-  fitOverlay: FitOverlay | null;
-  baselineOverlay: BaselineOverlay | null;
-  peakOverlay: PeakOverlay | null;
+/** The numbers and the row state a fit curve was drawn over (module header). */
+export function overlayRowsKey(ds: Pick<Dataset, "data" | "excludedRows" | "filter" | "columnDesignations" | "channelRoles" | "channelTypes">): string {
+  const state = JSON.stringify([
+    [...droppedRows(ds as Dataset)].sort((a, b) => a - b),
+    ds.columnDesignations ?? null,
+    ds.channelRoles ?? null,
+    ds.channelTypes ?? null,
+  ]);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < state.length; i++) h = Math.imul(h ^ state.charCodeAt(i), 0x01000193);
+  return `${dataFingerprint(ds.data)}.${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
-
-const KINDS = [
-  ["fit", "fitOverlay"],
-  ["baseline", "baselineOverlay"],
-  ["peaks", "peakOverlay"],
-] as const;
 
 function curveFits(curve: { y: readonly unknown[]; band?: FitBandEdges }, n: number): boolean {
   return curve.y.length === n && (curve.band ?? []).every((edge) => edge.y.length === n);
 }
 
-/** The overlays the canvas draws for `datasetId` over `data`, as a document
- *  section; undefined when it draws none. Row-misaligned objects are skipped. */
-export function captureFigureOverlays(
-  live: LiveOverlays,
-  datasetId: string | null,
-  data: DataStruct | undefined,
-): FigureOverlays | undefined {
-  if (!datasetId || !data) return undefined;
-  const n = data.time.length;
-  const out: FigureOverlays = { rows: dataFingerprint(data) };
-  let any = false;
-  for (const [kind, field] of KINDS) {
-    const overlay = live[field];
-    if (!overlay || overlay.datasetId !== datasetId || !overlay.binding || !curveFits(overlay, n)) continue;
-    const band = kind === "fit" ? (overlay as FitOverlay).band : undefined;
-    out[kind] = structuredClone({ binding: overlay.binding, y: overlay.y, ...(band?.length ? { band } : {}) });
-    any = true;
-  }
-  return any ? out : undefined;
+/** `fit` as a document section for dataset `ds`, or undefined when it is not
+ *  `ds`'s, has no binding, or does not align to `ds`'s rows. A copy. */
+export function captureFit(fit: FitOverlay | null, ds: Dataset | undefined): FigureOverlays | undefined {
+  if (!fit || !ds || fit.datasetId !== ds.id || !fit.binding || !curveFits(fit, ds.data.time.length)) return undefined;
+  const curve = structuredClone({ binding: fit.binding, y: fit.y, ...(fit.band?.length ? { band: fit.band } : {}) });
+  return { rows: overlayRowsKey(ds), fit: curve };
 }
 
-/** Do `overlays` still align to `data`? (The FAIL CLOSED gate, module header.) */
-export function overlaysMatchData(overlays: FigureOverlays, data: DataStruct): boolean {
-  return overlays.rows === dataFingerprint(data);
-}
-
-/** The store overlays a document's saved section stands for, tagged with
- *  `datasetId`: only the kinds it holds, and none when its rows are stale or
- *  the section is malformed. A document carries its section as loaded (the
- *  eager load path only shape-checks it, lib/figureDocument), so it is
- *  validated HERE, where it is drawn. */
-export function liveOverlaysFromDocument(
-  section: FigureOverlays | undefined,
-  datasetId: string | null,
-  data: DataStruct | undefined,
-): Partial<LiveOverlays> {
+/** The store overlay a document's saved section stands for, tagged with `ds`,
+ *  or null when it holds no (valid) fit or `ds` no longer matches its rows. A
+ *  document carries its section as loaded (the eager load path only
+ *  shape-checks it, lib/figureDocument), so it is validated HERE. */
+export function fitFromDocument(section: unknown, ds: Dataset | undefined): FitOverlay | null {
   const overlays = sanitizeFigureOverlays(section);
-  if (!overlays || !datasetId || !data || !overlaysMatchData(overlays, data)) return {};
-  if (overlayKinds(overlays).some((kind) => overlays[kind]!.y.length !== data.time.length)) return {};
-  const out: Partial<LiveOverlays> = {};
-  for (const [kind, field] of KINDS) {
-    const curve = overlays[kind];
-    if (!curve) continue;
-    (out as Record<string, unknown>)[field] = { datasetId, ...structuredClone(curve) };
-  }
-  return out;
-}
-
-/** The labels of the kinds a section holds, as the export names them. */
-export function overlayKinds(overlays: FigureOverlays | undefined): ("fit" | "baseline" | "peaks")[] {
-  return overlays ? KINDS.flatMap(([kind]) => (overlays[kind] ? [kind] : [])) : [];
+  if (!overlays?.fit || !ds || ds.pending || overlays.rows !== overlayRowsKey(ds)) return null;
+  if (!curveFits(overlays.fit, ds.data.time.length)) return null;
+  return { datasetId: ds.id, ...structuredClone(overlays.fit) };
 }
 
 // ---- untrusted input (.dwk / clipboard / recipe) -----------------------------
@@ -126,15 +95,15 @@ function cells(value: unknown): (number | null)[] | null {
     : null;
 }
 
-function sanitizeCurve(value: unknown, withBand: boolean): FigureOverlayCurve | null {
+function sanitizeCurve(value: unknown): FigureOverlayCurve | null {
   if (!isObject(value) || !isObject(value.binding)) return null;
   const { yKey, xKey } = value.binding;
-  if (!Number.isInteger(yKey) || (yKey as number) < -1) return null;
+  if (!Number.isInteger(yKey) || (yKey as number) < 0) return null;
   if (xKey !== null && (!Number.isInteger(xKey) || (xKey as number) < 0)) return null;
   const y = cells(value.y);
   if (!y) return null;
   const curve: FigureOverlayCurve = { binding: { yKey: yKey as number, xKey: xKey as number | null }, y };
-  if (withBand && Array.isArray(value.band)) {
+  if (Array.isArray(value.band)) {
     const band: FitBandEdges = [];
     for (const edge of value.band) {
       const ey = isObject(edge) ? cells(edge.y) : null;
@@ -146,18 +115,10 @@ function sanitizeCurve(value: unknown, withBand: boolean): FigureOverlayCurve | 
   return curve;
 }
 
-/** Validate a persisted section. A malformed curve drops the whole section
- *  (never part of a fit); the figure itself always loads. */
+/** Validate a persisted section; undefined when it is malformed or holds no
+ *  fit (never part of a fit). Unknown kinds are ignored. */
 export function sanitizeFigureOverlays(value: unknown): FigureOverlays | undefined {
   if (!isObject(value) || typeof value.rows !== "string" || !value.rows) return undefined;
-  const out: FigureOverlays = { rows: value.rows };
-  let n: number | null = null;
-  for (const [kind] of KINDS) {
-    if (value[kind] === undefined) continue;
-    const curve = sanitizeCurve(value[kind], kind === "fit");
-    if (!curve || (n !== null && curve.y.length !== n)) return undefined;
-    n = curve.y.length;
-    out[kind] = curve;
-  }
-  return n === null ? undefined : out;
+  const fit = sanitizeCurve(value.fit);
+  return fit ? { rows: value.rows, fit } : undefined;
 }

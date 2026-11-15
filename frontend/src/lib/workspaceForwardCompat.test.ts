@@ -25,7 +25,7 @@ import {
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type LoadedWorkspace,
 } from "./workspace";
-import { CLASSIFICATIONS, GATED_VALUES, SERIES_STYLE } from "./workspaceForwardCompat";
+import { CLASSIFICATIONS, GATED_VALUES, REPORT_FIGURE_SPEC, SERIES_STYLE } from "./workspaceForwardCompat";
 
 const VIEWPORT = { width: 1600, height: 900 };
 const load = (): LoadedWorkspace => parseWorkspace(JSON.stringify(dwk034), VIEWPORT);
@@ -190,11 +190,55 @@ describe("forward compatibility with v0.34.0", () => {
   });
 });
 
+// Gap audit 5 lane C / review #3: a saved fit curve is DERIVED, not gated.
+const SAVED_FIT = { rows: "abc.00000000", fit: { binding: { yKey: 0, xKey: null }, y: [1, 2, 3] } };
+function withSavedFits(ws: LoadedWorkspace): void {
+  const doc = plotWindow(ws).document!;
+  plotWindow(ws).document = { ...doc, overlays: SAVED_FIT };
+  ws.editableFigures![0] = { ...ws.editableFigures![0], overlays: SAVED_FIT };
+}
+
+describe("derived and report-spec fields (measured against v0.34.0)", () => {
+  it("FigureDocument.overlays is derived: classified, written, and the file stays v4", () => {
+    expect(CLASSIFICATIONS.FigureDocument.overlays).toBe("derived");
+    const ws = load();
+    withSavedFits(ws);
+    const text = serializeWorkspace(ws);
+    const saved = JSON.parse(text) as { plotWindows: { document: { overlays?: unknown } }[]; editableFigures: { overlays?: unknown }[] };
+    expect(saved.plotWindows[0].document.overlays).toEqual(SAVED_FIT); // really written
+    expect(saved.editableFigures[0].overlays).toEqual(SAVED_FIT);
+    expect(featuresV034WouldDrop(saved)).toEqual([]);
+    expect(version(text)).toBe(4);
+    const why = [...paths(saved)].filter((p) => !paths(dwk034).has(p)).map(classify);
+    expect(why).toContain("FigureDocument.overlays=derived");
+    const newPaths = [...paths(saved)].filter((p) => !paths(dwk034).has(p) && !(p in KNOWN_034_PATHS));
+    expect(newPaths.filter((p) => { const w = classify(p); return w === null || w.startsWith("UNCLASSIFIED"); })).toEqual([]);
+  });
+
+  it("a report figure block's analysis_overlays is kept by 0.34 (opaque spec): still v4", () => {
+    expect(REPORT_FIGURE_SPEC.analysis_overlays).toBe("kept-by-034");
+    const ws = load();
+    ws.reports = [{
+      id: "rep-1", name: "R", datasetId: null,
+      report: {
+        title: "R", source_refs: [], created: "2026-11-15T00:00:00+00:00",
+        sections: [{ title: "F", blocks: [{ type: "figure", name: "f", spec: { fmt: "svg", y_keys: [0, 1], analysis_overlays: [false, true] } }] }],
+      },
+    }] as never;
+    const text = serializeWorkspace(ws);
+    expect(text).toContain('"analysis_overlays"');
+    expect(featuresV034WouldDrop(JSON.parse(text))).toEqual([]);
+    expect(version(text)).toBe(4);
+  });
+});
+
 // ── Kitchen sink: every key path HEAD writes that v0.34.0 never wrote ──────────
 /** Typed containers by path: a new key directly under one is the type's field. */
 const CONTAINERS: readonly [RegExp, string][] = [
   [/^\$\.datasets\[\]$/, "Dataset"],
   [/^\$\.plotWindows\[\]$/, "PlotWindow"],
+  [/^\$\.plotWindows\[\]\.document$/, "FigureDocument"],
+  [/^\$\.editableFigures\[\]$/, "FigureDocument"],
   [/\.view$/, "PlotView"],
   [/\.(xFmt|yFmt|y2Fmt)$/, "AxisFormat"],
   [/\.seriesStyles\[\]$/, "ExportSeriesStyle"],

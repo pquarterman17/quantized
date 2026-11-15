@@ -26,7 +26,7 @@
     "filename": null
   },
   "overlays": {
-    "rows": "2e5d5110f8f878b1",
+    "rows": "2e5d5110f8f878b1.c0a4ad40",
     "fit": {
       "binding": { "yKey": 0, "xKey": null },
       "y": [-2.05, 0, 2.05],
@@ -34,7 +34,6 @@
         { "label": "95% CI low", "y": [-2.2, -0.1, 1.9], "legend": "95% confidence band" },
         { "label": "95% CI high", "y": [-1.9, 0.1, 2.2], "legend": "" }
       ]
-    },
-    "peaks": { "binding": { "yKey": -1, "xKey": null }, "y": [null, 0.05, null] }
+    }
   }
 }

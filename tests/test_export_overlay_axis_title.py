@@ -87,3 +87,23 @@ def test_solo_axis_label_skips_marked_overlays() -> None:
     # A short flag list marks only what it covers; an explicit title still wins.
     assert solo_axis_label(None, names[:2], series[:2], 0, [False, True]) == "signal (V)"
     assert solo_axis_label("Custom", names, series, 0, [False, True, True, True]) == "Custom"
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [[False], [False, True, True, True, True], [], [0, 1], None],
+    ids=["short", "long", "empty", "ints", "no-y_keys"],
+)
+def test_misaligned_overlay_flags_are_a_422(flags: Any) -> None:
+    """Review #10: one flag per ``y_keys`` entry, strictly booleans, or a 422
+    -- on the figure route and inside a figure-page panel; never a 500."""
+    body = json.loads(json.dumps(CASES[0]["request"]))
+    if flags is None:
+        body.pop("y_keys")
+        body["analysis_overlays"] = [False]
+    else:
+        body["analysis_overlays"] = flags
+    assert client.post("/api/export/figure", json=body).status_code == 422
+    panel = {"figure": body, "row": 0, "col": 0}
+    page = {"rows": 1, "cols": 1, "fmt": "svg", "panels": [panel]}
+    assert client.post("/api/export/figure-page", json=page).status_code == 422

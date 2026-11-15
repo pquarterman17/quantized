@@ -17,6 +17,21 @@
 // and re-saved by v0.34.0's own parseWorkspace/serializeWorkspace (the
 // `git archive v0.34.0` procedure in `__fixtures__/workspace/README.md`).
 // "kept-by-034" means 0.34 keeps the value but does not draw it.
+// "derived" means 0.34 DROPS the value, but this build regenerates what matters
+// of it from data 0.34 keeps, so it does not force v6 (refusing a whole project
+// over a cache would be worse than redrawing it). The one derived field is
+// `FigureDocument.overlays` (gap audit 5 lane C): a figure's saved fit curve.
+// 0.34 drops it on open + save but keeps the dataset's `fitSpec`, and on open
+// this build redraws the focused window's fit from those saved parameters
+// (store/overlayRestore.ts, gap audit 6 lane K). What a 0.34 round trip costs:
+// the Curve Fit band, and the curve in windows other than the focused one,
+// until the user re-fits. Measured with the procedure below.
+//
+// Report figure blocks store their export request (`ReportFigureBlock.spec`)
+// opaquely, in 0.34 too: its `analysis_overlays` flags are kept by 0.34
+// (measured), whose backend ignores them (FigureRequest drops unknown keys), so
+// a 0.34 render of such a block titles its Y axis the old way. REPORT_FIGURE_SPEC
+// records that class.
 //
 // EXTENDING (a branch that adds a persisted field):
 // 1. tsc names the map to edit; classify the field. "v034" only for fields that
@@ -32,6 +47,8 @@
 //    an entry in DATASET below: datasets are checked on `doc.datasets[i]`.
 
 import type { AxisFormat } from "./axisFormat";
+import type { FigureSpec } from "./api/figures";
+import type { FigureDocument } from "./figureDocument";
 import type { PlotView, PlotWindow } from "./plotview";
 import type { DisplayBlock } from "./plotspec2";
 import type { RecipeVisual } from "./plotRecipeSchema";
@@ -39,12 +56,13 @@ import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import type { Dataset } from "./types";
 
-export type V034Class = "v034" | "gated" | "kept-by-034";
+export type V034Class = "v034" | "gated" | "kept-by-034" | "derived";
 type Classify<T> = Record<keyof T, V034Class>;
 
 const V = "v034" as const;
 const G = "gated" as const;
 const K = "kept-by-034" as const;
+const D = "derived" as const;
 
 export const PLOT_VIEW: Classify<PlotView> = {
   yScale: V, xScale: V, showGrid: V, showLegend: V, legendPos: V, legendXY: V, legendSize: V, legendFrameXY: V,
@@ -86,6 +104,15 @@ export const EXPORT_SERIES_STYLE: Classify<ExportSeriesStyle> = {
   marker_alpha: G, marker_every: G, ramp_rank: G, size_by: G, size_range: G, drop_lines: G, connect: G,
 };
 
+// The canonical figure document: a window's `document`, an editable figure.
+export const FIGURE_DOCUMENT: Classify<FigureDocument> = {
+  schema: V, version: V, id: V, name: V, bindings: V, data: V, plot: V, output: V, publication: V,
+  overlays: D,
+};
+
+/** Export-request keys a report figure block's opaque `spec` gained since 0.34. */
+export const REPORT_FIGURE_SPEC: Partial<Record<keyof FigureSpec, V034Class>> = { analysis_overlays: K };
+
 export const DISPLAY_BLOCK: Classify<DisplayBlock> = { series: V, order: V, labels: V, ramp: G };
 
 export const RECIPE_VISUAL: Classify<RecipeVisual> = {
@@ -114,6 +141,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   DisplayBlock: DISPLAY_BLOCK,
   RecipeVisual: RECIPE_VISUAL,
   Dataset: DATASET,
+  FigureDocument: FIGURE_DOCUMENT,
 };
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
@@ -140,7 +168,11 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
   // Typed containers, by path. Dataset cells (`data`/`raw`) are never walked.
   const datasets = Array.isArray(doc.datasets) ? doc.datasets : [];
   for (const d of datasets) checkType(d, "Dataset", found);
-  for (const w of Array.isArray(doc.plotWindows) ? doc.plotWindows : []) checkType(w, "PlotWindow", found);
+  for (const w of Array.isArray(doc.plotWindows) ? doc.plotWindows : []) {
+    checkType(w, "PlotWindow", found);
+    if (isObj(w)) checkType(w.document, "FigureDocument", found);
+  }
+  for (const f of Array.isArray(doc.editableFigures) ? doc.editableFigures : []) checkType(f, "FigureDocument", found);
   for (const s of Array.isArray(doc.savedPlotSpecs) ? doc.savedPlotSpecs : []) {
     if (isObj(s) && isObj(s.spec)) checkType(s.spec.display, "DisplayBlock", found);
   }

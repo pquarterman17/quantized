@@ -20,6 +20,7 @@
 import type { FigureSpec } from "../lib/api/figures";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/overlaySpecShape";
 import { fitDrawBinding, fitDrawRefusal } from "../lib/fitDrawBinding";
+import { captureFit, type FigureOverlays } from "../lib/figureOverlays";
 import { evaluateSavedFit } from "../lib/savedFitCurve";
 import type { Dataset, FitOverlay, OverlayBinding } from "../lib/types";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
@@ -61,17 +62,17 @@ export async function resultFitCurve(id: string, prepared: PreparedAnalysisResul
   return { kind: "drawn", binding, y: evaluated };
 }
 
-/** Build source figure: draw the result's fit (through the SAME gate), so the
- *  editable figure the Quick Figure Builder then creates keeps it -- a new
- *  figure folds in the overlays drawn for its dataset (store/quickFigureCreate).
- *  A refusal builds the figure without it and says why. */
-export async function drawResultFitForFigure(id: string, prepared: PreparedAnalysisResultPlot): Promise<void> {
+/** Build source figure: the result's fit (through the SAME gate) as the new
+ *  figure's own overlays, handed to the Quick Figure Builder -- never written
+ *  to the canvas' shared fit slot, so cancelling changes nothing. A refusal
+ *  builds the figure without it and says why. Undefined for a non-fit result. */
+export async function resultFitFigureOverlays(id: string, prepared: PreparedAnalysisResultPlot): Promise<FigureOverlays | undefined> {
   const curve = await resultFitCurve(id, prepared);
   if (curve.kind === "drawn") {
-    useApp.setState({ fitOverlay: { datasetId: prepared.dataset.id, binding: curve.binding, y: curve.y } });
-  } else if (curve.kind !== "none") {
-    useApp.getState().setStatus(`the figure is built without the fit: ${curve.why}`);
+    return captureFit({ datasetId: prepared.dataset.id, binding: curve.binding, y: curve.y }, prepared.dataset);
   }
+  if (curve.kind !== "none") useApp.getState().setStatus(`the figure is built without the fit: ${curve.why}`);
+  return undefined;
 }
 
 /** THE gate every consumer of a prepared result plot goes through (module header). */

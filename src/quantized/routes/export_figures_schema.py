@@ -190,9 +190,22 @@ ANALYSIS_OVERLAYS_DOC = (
     "(`frontend/src/lib/figureSpecOverlays.ts`). It is drawn and named in the "
     "legend like any series, but never feeds an automatic Y / Y2 title: the "
     "canvas titles its axes from the plotted channels alone, so a fitted "
-    "'signal' exported as 'signal, fit, 95% CI low'. Absent or short = no "
-    "overlays. See `routes.export_figures_labels.solo_axis_label`."
+    "'signal' exported as 'signal, fit, 95% CI low'. Absent = no "
+    "overlays; otherwise exactly one flag per `y_keys` entry (422 if not). "
+    "See `routes.export_figures_labels.solo_axis_label`."
 )
+
+
+def check_overlay_flags(req: Any) -> Any:
+    """``ValueError`` (pydantic -> 422) unless ``req.analysis_overlays`` is
+    absent or holds exactly one flag per ``req.y_keys`` entry."""
+    flags = req.analysis_overlays
+    if flags is not None and (req.y_keys is None or len(flags) != len(req.y_keys)):
+        raise ValueError(
+            f"analysis_overlays has {len(flags)} flags for "
+            f"{'no' if req.y_keys is None else len(req.y_keys)} y_keys; send one per y_keys entry"
+        )
+    return req
 
 
 class FigureFacetSeries(BaseModel):

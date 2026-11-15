@@ -1,22 +1,29 @@
 // The eager handle on store/windowOverlays.ts (gap audit 5 lane C), which
-// keeps a plot window's analysis overlays in its document. That module, the
-// overlay section's validation and the data hash (lib/figureOverlays,
-// lib/dataFingerprint) are a lazy chunk, fetched once at startup: the focus /
-// commit paths in the eager store call it synchronously through `overlaysNow`,
-// and simply skip folding and seeding until it has arrived (the first moments
-// after launch, before any overlay exists) -- a skipped fold leaves a document
-// exactly as it was, so nothing is ever lost by it. Hydration awaits it.
+// keeps a plot window's fit curve in its document. That module, the section's
+// validation and the data hash are a lazy chunk, fetched at startup: the eager
+// focus / commit paths call it synchronously through `overlaysNow` and simply
+// skip it until it has arrived. A skipped handoff leaves the module without a
+// record of that focus, and its fold then never removes a section -- so nothing
+// is lost by it. A failed fetch is retried on the next `overlaysNow` miss.
 
 type WindowOverlays = typeof import("./windowOverlays");
 
 let mod: WindowOverlays | null = null;
 let inflight: Promise<WindowOverlays> | undefined;
 
-/** The module, fetched once. */
-export const loadWindowOverlays = (): Promise<WindowOverlays> =>
-  (inflight ??= import("./windowOverlays").then((m) => (mod = m)));
+/** The module, fetched once (again after a failure). */
+export function loadWindowOverlays(): Promise<WindowOverlays> {
+  inflight ??= import("./windowOverlays").then((m) => (mod = m), (e: unknown) => {
+    inflight = undefined;
+    throw e;
+  });
+  return inflight;
+}
 
-/** The module when it has loaded, else null (callers then skip overlays). */
-export const overlaysNow = (): WindowOverlays | null => mod;
+/** The module when it has loaded, else null (and a fetch is started). */
+export function overlaysNow(): WindowOverlays | null {
+  if (!mod) loadWindowOverlays().catch(() => undefined);
+  return mod;
+}
 
-loadWindowOverlays().catch(() => (inflight = undefined)); // retried by the next load
+overlaysNow();
