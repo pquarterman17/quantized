@@ -17,7 +17,9 @@ Usage (Windows, Origin installed)::
     uv run --with pywin32 python -I tools/origin_compare/run_axis_oracle.py \
         <list.json> <outdir> [timeout_s]
 
-``<outdir>/status.json`` maps each path to its ``NNN.json`` (or TIMEOUT).
+``<outdir>/status.json`` maps each path to its ``NNN.json`` (or TIMEOUT). A rerun
+into the same ``<outdir>`` extends it (an entry is replaced only when its file
+runs again); an unreadable ``.pid`` sidecar counts as "no exact PID".
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # ``-I`` omits the script dir
 
-from origin_proc import origin_pids, pid_file  # noqa: E402
+from origin_proc import origin_pids, pid_file, read_pids  # noqa: E402
 
 ROOT = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (HERE.parents[2] / "test-data"))
 
@@ -43,14 +45,24 @@ def _write_status(outdir: Path, status: dict[str, dict[str, object]]) -> None:
     os.replace(tmp, outdir / "status.json")
 
 
+def _load_status(outdir: Path) -> dict[str, dict[str, object]]:
+    """The existing ``status.json`` (so a rerun extends it), else empty."""
+    try:
+        loaded = json.loads((outdir / "status.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")  # corpus paths are not all ASCII
     files: list[str] = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     outdir = Path(sys.argv[2])
     timeout = int(sys.argv[3]) if len(sys.argv) > 3 else 150
     outdir.mkdir(parents=True, exist_ok=True)
-    status: dict[str, dict[str, object]] = {}
-    _write_status(outdir, status)
+    # Extend an existing status.json rather than wiping it: nothing is written
+    # until the first file finishes, so an aborted start keeps the prior record.
+    status = _load_status(outdir)
     for i, rel in enumerate(files):
         dst = outdir / f"{i:03d}.json"
         sidecar = pid_file(dst)  # written by export_axis_ranges
@@ -60,10 +72,8 @@ def main() -> None:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
             status[rel] = {"out": dst.name, "rc": r.returncode, "err": r.stderr[-400:]}
         except subprocess.TimeoutExpired:
-            ours: list[int] = []
-            if sidecar.exists():
-                ours = json.loads(sidecar.read_text(encoding="utf-8"))
-            target = [p for p in ours if p in origin_pids()]
+            # An empty/partial/unreadable sidecar reads as [] -> "no exact PID".
+            target = [p for p in read_pids(sidecar) if p in origin_pids()]
             if len(target) == 1:
                 kill = ["taskkill", "/F", "/PID", str(target[0])]
                 subprocess.run(kill, capture_output=True, check=False)

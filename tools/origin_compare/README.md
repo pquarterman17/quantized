@@ -63,17 +63,20 @@ _exports/PNR/
 Every risky COM call is guarded by a background watchdog thread reading a
 heartbeat the main thread updates. If the main thread goes quiet longer
 than the current timeout (900s while `app.Load()` is running for a large
-project, 90s per graph afterward), the watchdog force-kills `Origin64.exe`
-and hard-exits the whole process (`os._exit`) — deliberately, rather than
-trying to recover in-process, because **a dead/killed COM server faults
+project, 90s per graph afterward), the watchdog force-kills the ONE Origin PID
+this run started (recorded in `<out>/origin.pid`; never by image name) and
+hard-exits the whole process (`os._exit`) — deliberately, rather than trying
+to recover in-process, because **a dead/killed COM server faults
 every subsequent call in the same process** (this repo's oracle scripts
 have hit that before). The fix is always to re-invoke the script: a fresh
-process gets a fresh `EnsureDispatch`, and the manifest means it resumes
+process gets a fresh `DispatchEx`, and the manifest means it resumes
 instead of restarting from graph 1.
 
-At startup the script also checks for (and kills) any orphaned
-`Origin*.exe` left behind by a previous watchdog-killed run, and reports
-if it had to.
+At startup the script kills only the instance a previous watchdog-killed run
+recorded in `origin.pid` (if that PID is still an Origin process) and reports
+if it did. Any other running Origin is the owner's and is left alone. The
+script uses `DispatchEx` (a new instance) so it never attaches to or exits an
+Origin the owner has open.
 
 `manifest.json` identifies "is this checkpoint for the current project?" by
 the project **file name**, not its absolute path — the output dir is
