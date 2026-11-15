@@ -90,7 +90,7 @@ export async function exportActive(
     stem: string,
     ds: ReturnType<StoreGet>["datasets"][number],
     signal: AbortSignal,
-  ) => Promise<void | false>,
+  ) => Promise<void | false | string>,
   labels: ExportActiveLabels = {},
 ): Promise<void> {
   const verb = labels.verb ?? "export";
@@ -126,10 +126,14 @@ export async function exportActive(
     const stem = stemFromName(ds.name);
     // `false`: the user dismissed a question `fn` asked (F4.2c's excluded-
     // rows choice) — the same outcome as Cancel, reported the same way.
-    if ((await fn(stem, ds, controller.signal)) === false) {
+    // A string is a note appended to the success message (gap-4 G14: which
+    // clipboard format a copy actually wrote).
+    const outcome = await fn(stem, ds, controller.signal);
+    if (outcome === false) {
       cancelled(s, verb);
       return;
     }
+    const done = typeof outcome === "string" && outcome ? `${past} ${stem} ${outcome}` : `${past} ${stem}`;
     // Race guard: `fn` resolving successfully right as Cancel lands.
     if (controller.signal.aborted) {
       // For a download (postDownload's throwIfAborted + synchronous
@@ -145,7 +149,7 @@ export async function exportActive(
       // is the same: its `fn` writes the store synchronously, so once it
       // resolved the figure IS in the report (and Undo, not Cancel, removes it).
       if (verb === "copy" || verb === "send") {
-        const msg = `${past} ${stem} — cancel arrived too late to stop it`;
+        const msg = `${done} — cancel arrived too late to stop it`;
         s().setStatus(msg);
         toast(msg, "ok");
         return;
@@ -153,7 +157,7 @@ export async function exportActive(
       cancelled(s, verb);
       return;
     }
-    toast(`${past} ${stem}`, "ok");
+    toast(done, "ok");
   } catch (e: unknown) {
     if (controller.signal.aborted) {
       cancelled(s, verb);

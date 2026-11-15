@@ -124,9 +124,22 @@ export async function copyOfficeGraphicAsync(
   source: OfficeGraphicCopy,
   signal?: AbortSignal,
 ): Promise<boolean> {
+  return (await copyOfficeGraphicFormats(source, signal)) !== null;
+}
+
+/** The MIME types an Office copy actually put on the clipboard. */
+export type OfficeCopyFormat = "image/png" | "text/html" | typeof SVG_MIME;
+
+/** `copyOfficeGraphicAsync`, reporting WHICH representations landed (gap-4
+ *  G14) so the caller can tell the user — a retry without the SVG must not be
+ *  reported as a vector copy. `null` exactly where that function says `false`. */
+export async function copyOfficeGraphicFormats(
+  source: OfficeGraphicCopy,
+  signal?: AbortSignal,
+): Promise<OfficeCopyFormat[] | null> {
   if (!clipboardImageSupported()) {
     await Promise.allSettled([source.png, source.svg]);
-    return false;
+    return null;
   }
   const alt = source.alt ?? "Quantized figure";
   // Handlers attached at once: an engine may resolve write() without reading
@@ -152,19 +165,19 @@ export async function copyOfficeGraphicAsync(
   if (svg && clipboardSvgSupported()) values[SVG_MIME] = settled(svg, "SVG");
   for (const value of Object.values(values)) value.catch(() => {});
 
-  if (await tryWrite(values)) return true;
+  if (await tryWrite(values)) return Object.keys(values) as OfficeCopyFormat[];
 
   // Retry from what resolved (see header): never after a cancel, never
   // without a PNG, and never re-offering the SVG that may be what failed.
   const pngBlob = await png;
-  if (!pngBlob || signal?.aborted) return false;
+  if (!pngBlob || signal?.aborted) return null;
   try {
     const html = await officeHtml(pngBlob, source.pngDpi, alt);
-    if (signal?.aborted) return false;
-    if (await tryWrite({ "image/png": pngBlob, "text/html": html })) return true;
+    if (signal?.aborted) return null;
+    if (await tryWrite({ "image/png": pngBlob, "text/html": html })) return ["image/png", "text/html"];
   } catch {
     /* HTML encoding failed — the PNG alone below still copies the figure */
   }
-  if (signal?.aborted) return false;
-  return copyImage(pngBlob);
+  if (signal?.aborted) return null;
+  return (await copyImage(pngBlob)) ? ["image/png"] : null;
 }

@@ -144,6 +144,7 @@ from typing import Any
 
 from quantized import desktop_project_lock as lockmod
 from quantized import desktop_project_lock_write as lockwrite
+from quantized.desktop_bridge_clipboard import DesktopClipboardBridge
 from quantized.desktop_bridge_dialogs import DesktopDialogBridge
 from quantized.desktop_bridge_pack import DesktopPackBridge
 from quantized.desktop_consent import consented_write_path, is_declared_source
@@ -169,7 +170,7 @@ __all__ = ["DesktopApi"]
 _MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES = 2
 
 
-class DesktopApi(DesktopDialogBridge, DesktopPackBridge):
+class DesktopApi(DesktopDialogBridge, DesktopPackBridge, DesktopClipboardBridge):
     """The object pywebview exposes at ``window.pywebview.api``.
 
     Every method is callable from the page, so each one is written as if the
@@ -180,7 +181,8 @@ class DesktopApi(DesktopDialogBridge, DesktopPackBridge):
     P1.7 PR 4 adds :class:`~quantized.desktop_bridge_pack.DesktopPackBridge`
     to the base list, the same mixin shape as ``DesktopDialogBridge`` — see
     that module's own doc for the "Pack Project" js_api methods and the
-    full consent ruling behind them.
+    full consent ruling behind them. ``DesktopClipboardBridge`` (gap-4 G14)
+    adds the OS-gated native "Copy figure" clipboard write.
     """
 
     def __init__(self) -> None:

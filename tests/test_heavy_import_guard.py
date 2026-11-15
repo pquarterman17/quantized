@@ -80,6 +80,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
 OPTIONAL_TOPS: dict[str, str] = {
     "webview": "desktop",
     "win32com": "origin-com",
+    "win32clipboard": "origin-com",  # desktop_bridge_clipboard (pywin32)
     "docx": "office",
     "pptx": "office",
     "PIL": "office",  # python-pptx's own dependency (io.report_office's bad-image catch)
