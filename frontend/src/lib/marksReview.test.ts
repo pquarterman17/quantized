@@ -14,6 +14,11 @@ import { colorScatterPlugin } from "./uplotOverlays";
 import { dropLinePlugins } from "./uplotDropLines";
 import { SPLINE_PATHS } from "./uplotSpline";
 
+import { regionDecorSettled } from "./regionDecorLoader";
+
+// The colour-mapped scatter draws from the startup chunk (lib/uplotScatterDraw.ts).
+beforeAll(() => regionDecorSettled);
+
 const ramp = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 describe("spline on a long series", () => {

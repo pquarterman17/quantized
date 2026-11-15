@@ -162,3 +162,4 @@ export async function applyStageGraphTemplate(s: StoreGet): Promise<void> {
     s().setStatus(`graph template "${template.name}" applied`);
   }
 }
+export { contourFromScattered } from "./scatteredContour";

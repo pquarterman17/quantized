@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib>=3.11.0",
     "periodictable>=1.7",
     "platformdirs>=4.10.0",
+    "xlrd>=2.0.2",
 ]
 
 [project.urls]
@@ -165,7 +166,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "xlrd.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -18,10 +18,13 @@ locates the count by scanning for ``0A <2*nwin> [00] <entries>`` validated by a
 clean entry run, matches either SEP, and enumerates windows by the ``0A``-framed
 page header ``0A [00] 80 <type> <namelen+2> 00 00 <name> <hi>`` — the leading
 ``0A`` separates a true page header from a dataset-curve record (a graph's
-``FitLine``), ``namelen >= 2`` rejects 1-byte coincidental matches, and the type
-byte is NOT used (unstable across files). The tree is rebuilt from *preorder +
-per-folder child count* (a structural invariant: arbitrary depth, empty folders,
-duplicate/unicode/spaced names). Validated byte-exact vs live COM on all 5
+``FitLine``), ``namelen >= 2`` rejects 1-byte coincidental matches, and ``<type>``
+is a LEB128-style varint (1 byte below 0x80, else 2) -- a per-window serial that
+is consumed for its WIDTH only (its value is not used; it is not stable across
+files, but the width must be right or every window past the 127th is
+missed). The tree is rebuilt from *preorder + per-folder child count* (a
+structural invariant: arbitrary depth, empty folders, duplicate/unicode/spaced
+names). Validated byte-exact vs live COM on all 5
 corpus files (incl. the 39-book ``Hc2 data`` with report-table windows and
 nested folders) plus 11 controlled 4.3811 specimens. Fail-closed: an ordinal
 past the window list, an inconsistent child count, or any framing mismatch
@@ -54,8 +57,91 @@ _OPJU_SEPS = (b"\x80\x12\x8d\x10", b"\x80\x16\x03\x00\x00\x01\x8a\x10")
 # The name charset + the trailing hi-bit byte remain the validity gates.
 # Order = the 0-based ordinal the folder tree references (Origin writes
 # headers grouped by folder, depth-first).
-_OPJU_WIN_HEAD_RE = re.compile(rb"\x0a\x00?\x80.(.)\x00\x00", re.DOTALL)
+#
+# ``<type>`` is a LEB128-style varint -- 1 byte below 0x80, else 2 bytes
+# ``[80-ff][01-7f]`` -- a per-window serial counting up through the file (0x69
+# .. 0x7f, then ``80 01`` .. ``95 01`` across the 359-file corpus). This pattern
+# once read it as ONE byte of any value, so every window whose serial passed 127
+# (``80 87 01 08 00 00 Graph2``: the ``01`` was taken for the length) was never
+# enumerated -- its graph anchors then fell into the PREVIOUS page's span
+# (phantom layers) and its columns into the previous page's book.
+#
+# The continuation byte is ``[01-7f]``, not ``[00-7f]``: a ``00`` continuation
+# would encode a value a 1-byte form already covers (non-canonical), and every
+# real 2-byte type in the corpus ends ``01`` (680 gated headers; the serial is
+# < 16384). Corpus measurement (2026-11-14, 359 files): the enumerated window
+# set is identical under ``[00-7f]`` and ``[01-7f]`` (the 7 raw ``[80-ff] 00``
+# matches -- Hc2 data, Fig3_e, ... -- are data, rejected by the name/trail
+# gates either way), and NO header with a one-byte type >= 0x80 exists (no
+# gated match under the old any-byte pattern is lost by the varint reading).
+_OPJU_WIN_HEAD_RE = re.compile(
+    rb"\x0a\x00?\x80(?:[\x00-\x7f]|[\x80-\xff][\x01-\x7f])(.)\x00\x00", re.DOTALL
+)
 _OPJU_WIN_NAME_RE = re.compile(rb"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
+
+
+# Name-field grammar after ``<namelen+2> 00 00``. Surveyed 2026-11-15 over every
+# page header in the 359-file ``.opju`` corpus and confirmed against Origin
+# 2026b ``%H`` page names (``axis_ranges.json``: 2,187 graph pages, 0 unread):
+#
+#   SHORT (<= 22 chars, no run):  <name: namelen bytes> <trail >= 80>
+#   RUN ESCAPE (one per name):  <literal: namelen bytes> c0 <ch> [<n> <n chars>]
+#       <trail 80-bf>.  ``c0 <ch>`` is <ch> x3 (Origin run-length-codes a char
+#       repeating three times); the optional literal segment after it is
+#       counted WITHOUT the +2.  ``Graph c0 31 8e`` = ``Graph111``;
+#       ``Graph1B c0 41 8c`` = ``Graph1BAAA``; ``fig_ c0 43 06 Verror 89`` =
+#       ``fig_CCCVerror``; ``D c0 41 01 B 91`` = ``DAAAB``; the 13-char
+#       hash-named books ``T0dbde c0 39 04 e9a5 89`` = ``T0dbde999e9a5``.
+#       Reading the ``c0`` as the trail truncated the name (``Graph``) or, once
+#       the escape sat after the namelen run, hid the page altogether; its
+#       anchors then fell into the previous page's span as phantom layers.
+#   LONG (23-24 chars; the namelen byte is NOT name length -- 39 and 42 seen --
+#       and there is no hi-bit trail): the name is the whole charset run, ended
+#       by ``00``.
+#
+# Any other shape returns ``None`` (fail closed): two escapes in one name and
+# an escape followed by anything but a trail have no corpus evidence.
+_NAME_CHARS = rb"[A-Za-z0-9_-]"
+_NAME_CHAR_RE = re.compile(_NAME_CHARS)
+_NAME_SEG_RE = re.compile(_NAME_CHARS + rb"+")
+_NAME_RUN_RE = re.compile(rb"[A-Za-z0-9]" + _NAME_CHARS + rb"*")
+_RUN_ESCAPE = 0xC0
+_LONG_NAME_LEN = (23, 24)
+
+
+def _window_name(b: bytes, pos: int, length_byte: int) -> str | None:
+    """The window name whose name field starts at ``pos`` (just past the
+    ``00 00`` of a page header), or ``None`` when no known form validates --
+    never a guess (see the grammar note above)."""
+    nlen = length_byte - 2
+    if nlen < 1:
+        return None
+    lit = b[pos : pos + nlen]
+    if len(lit) == nlen and _OPJU_WIN_NAME_RE.fullmatch(lit):
+        name, q = lit, pos + nlen
+        if q >= len(b):
+            return None
+        if b[q] != _RUN_ESCAPE:  # SHORT form: any hi-bit trail
+            return name.decode("latin1") if b[q] >= 0x80 else None
+        ch = b[q + 1 : q + 2]
+        if not _NAME_CHAR_RE.fullmatch(ch):
+            return None
+        name, q = name + ch * 3, q + 2
+        n = b[q] if q < len(b) else 0
+        if 1 <= n < 0x80:  # literal segment after the run
+            seg = b[q + 1 : q + 1 + n]
+            if len(seg) < n or not _NAME_SEG_RE.fullmatch(seg):
+                return None
+            name, q = name + seg, q + 1 + n
+        if q < len(b) and 0x80 <= b[q] < _RUN_ESCAPE:
+            return name.decode("latin1")
+        return None
+    run = _NAME_RUN_RE.match(b, pos)  # LONG form
+    if run is None or not _LONG_NAME_LEN[0] <= len(run.group()) <= _LONG_NAME_LEN[1]:
+        return None
+    if nlen <= len(run.group()) or b[run.end() : run.end() + 1] != b"\x00":
+        return None
+    return run.group().decode("latin1")
 
 
 def iter_opju_windows(b: bytes) -> list[tuple[int, str]]:
@@ -65,17 +151,8 @@ def iter_opju_windows(b: bytes) -> list[tuple[int, str]]:
     out: list[tuple[int, str]] = []
     seen: set[str] = set()
     for m in _OPJU_WIN_HEAD_RE.finditer(b):
-        nlen = m.group(1)[0] - 2
-        if nlen < 1:
-            continue
-        raw = b[m.end() : m.end() + nlen]
-        if len(raw) < nlen or not _OPJU_WIN_NAME_RE.fullmatch(raw):
-            continue
-        trail = b[m.end() + nlen : m.end() + nlen + 1]
-        if not trail or trail[0] < 0x80:
-            continue
-        name = raw.decode("latin1")
-        if name not in seen:
+        name = _window_name(b, m.end(), m.group(1)[0])
+        if name is not None and name not in seen:
             seen.add(name)
             out.append((m.start(), name))
     return out

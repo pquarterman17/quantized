@@ -17,13 +17,13 @@ persisted storage location at all. Every other classification
 *computed* from a canonical field rather than stored a second time, so it has
 nothing to "own." The canonical set is exactly two contracts:
 
-- `PLOT_VIEW_FIELD_CONTRACT` — all 51 fields of `PlotView` (checked by
+- `PLOT_VIEW_FIELD_CONTRACT` — all 52 fields of `PlotView` (checked by
   `figureContract.test.ts`'s "keeps PlotView as the canonical editable-state
   foundation" spec).
 - `FIGURE_DOC_FIELD_CONTRACT` — 5 of `FigureDoc`'s 6 fields (`id`, `name`,
   `datasetId`, `live`, `dataSnapshot`; `config` is `derived`).
 
-Those 56 fields are the "persisted figure/plot-view fields" this document
+Those 57 fields are the "persisted figure/plot-view fields" this document
 covers, one row each, below.
 
 ## The two representations
@@ -52,7 +52,7 @@ every field it must move.
 ## Adapter legend
 
 Every row below is written through one or more of these. **Bridge** applies
-to all 56 fields and is not repeated per row.
+to all 57 fields and is not repeated per row.
 
 | Tag | What it is |
 |---|---|
@@ -116,6 +116,7 @@ to all 56 fields and is not repeated per row.
 | `regionShades` | `decor.regionShades` | `plot.view.regionShades` | Setter `addRegionShade`/`updateRegionShade`/`removeRegionShade` (`store/regionShades.ts`); Bulk (Recipe, Origin) | no |
 | `shapes` | `decor.shapes` | `plot.view.shapes` | Setter `addShape`/`updateShape`/`removeShape`/`clearShapes` (`store/shapes.ts`); Bulk (Recipe) | no |
 | `seriesStyles` | `series.styles` | `plot.view.seriesStyles` | Setter `setSeriesStyle`/`resetSeriesStyle`; Reset; Bulk (Recipe, Origin) | no (see `FIGURE_SPEC_FIELD_CONTRACT.series_styles`/`log_offsets` — those are one-way *readers*, not a second writer) |
+| `seriesRamp` | `series.colorRamp` | `plot.view.seriesRamp` | Setter `setSeriesRamp` (Plot ▸ Colour gradient…, plot context menu; one undo step); Bulk (templates, Copy Format, Graph Builder save); cleared by Origin figure apply (`originApplyRun`) | no |
 | `seriesLabels` | `series.labels` | `plot.view.seriesLabels` | Setter `setSeriesLabel`; Reset; Bulk (Recipe, Origin) | no — but see BUG-014 note below (a known rendering divergence, not an extra adapter) |
 | `errKeys` | `bindings.errors` | **`bindings.errors`** (rich); legacy `errKeys` Record is a synced facade | Setter `setErrKey` (writes the legacy Record shape); Reset (`defaultErrKeys`); Bulk (Recipe); **Legacy-shape** translation `legacyErrorBindings`/`errKeysFromBindings` (`lib/figureDocument.ts`/`lib/errorRoles.ts`) | **partial — see "Removable candidates" below** |
 | `seriesOrder` | `series.order` | `plot.view.seriesOrder` | Setter `setSeriesOrder`; Bulk (Recipe) | no |

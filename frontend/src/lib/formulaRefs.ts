@@ -47,6 +47,10 @@
 //   rowsd rowmin rowmax  blank (NaN) cells are skipped; with none left the
 //   rowsum rown          result is NaN (rown is then 0); rowsd is the sample
 //                        SD (n − 1), NaN below 2 values.
+//   erf erfc gamma       special functions, round(v, n), seeded rnd(seed) /
+//   lgamma round rnd     normal(seed), and interp(v, X, Y) — gap audit 4 G3;
+//   normal interp        each agrees with numpy/scipy (lib/formulaMath.ts,
+//                        lib/formulaSpecial.ts).
 
 import { applyFormulasWithErrors, baseColumns, channelLetter } from "./formula";
 import { AGGREGATE_NAMES, computeAggregate, type AggregateName } from "./formulaAggregates";
@@ -55,6 +59,8 @@ import { tokenize } from "./formulaTokenize";
 import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 import { CONSTS } from "./formulaFuncs";
+import { MATH_FUNCS } from "./formulaMath";
+import { tryParseSpecialCall } from "./formulaSpecial";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
 import type { DataStruct, Dataset } from "./types";
@@ -428,10 +434,10 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
-  funcs: ROW_FUNCS,
+  funcs: { ...ROW_FUNCS, ...MATH_FUNCS },
   linkSheets,
   renameSheetRefs,
   renameRefusal,

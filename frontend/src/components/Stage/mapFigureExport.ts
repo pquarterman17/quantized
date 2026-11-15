@@ -26,7 +26,7 @@ import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
 import { shouldLockAspect } from "../../lib/mapAspect";
 import type { CutSpace } from "../../lib/mapcuts";
 import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
-import type { MapPayload } from "../../lib/mapdataFetch";
+import { interpolatedNote, type MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOpActions";
 import { askParams } from "../overlays/ParamDialog";
@@ -111,6 +111,7 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     ...(marks?.lines.length ? { lines: marks.lines } : {}),
     ...(marks?.labels.length ? { labels: marks.labels } : {}),
     ...contour,
+    ...(p.interpolated ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,
     style: o.style,
     cmap: MPL_CMAP[view.cmap] ?? "viridis",

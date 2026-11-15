@@ -34,6 +34,7 @@ import { useApp } from "../../store/useApp";
 import PolarStageCore from "../Stage/PolarStageCore";
 import StatStagePlot from "../Stage/StatStagePlot";
 import { useBreakSeriesStyles, useWindowCycles } from "../Stage/useBreakSeriesStyles";
+import { useRampedStyles } from "../Stage/useSeriesRamp";
 import { useFacetEncoding } from "../Stage/useFacetEncoding";
 import { useGreyedFacets } from "../Stage/useGreyedFacets";
 import { stackDataset } from "../Stage/stackRows";
@@ -160,7 +161,8 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
     view.xKey, view.yKeys, view.seriesLabels, view.seriesStyles, excludedDisplay,
   );
   const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
-  const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, view);
+  const rampedStyles = useRampedStyles(view, dataset, document); // G1: the gradient, as the flat plot
+  const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, { ...view, seriesStyles: rampedStyles });
   const stackActive = useMemo(() => stackDataset(dataset), [dataset]); // the rows the flat plot draws
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: stackActive,

@@ -16,6 +16,7 @@ import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
+import { colorGradientCommand } from "./plotStyleCommands";
 
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
@@ -103,6 +104,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Separate overlapping curves with an adjustable vertical offset.",
       run: () => s().setWaterfallOpen(true),
     },
+    { id: "contour-scattered", group: "Plot", section: "Layout", label: "Contour from scattered XYZ…", description: "Interpolate scattered X, Y, Z points onto a grid and show them as a map.", run: () => graphFormatCommand(s, (m) => m.contourFromScattered) },
+    { id: "function-plot", group: "Plot", section: "Layout", label: "Function plot (y = f(x))…", description: "Plot y = f(x; parameters) over an x range as a live, editable curve.", run: () => s().setDatasetMathOpen(true, "function") },
     {
       // P3.5: the unified browse surface. Plot-specific operations remain one
       // click away in the existing manager rather than being duplicated here.
@@ -331,6 +334,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       keywords: "layer contents curves add remove reorder rebind plot dataset book",
       run: openLayerContents,
     },
+    colorGradientCommand, // origin gap audit 4 G1 (commands/plotStyleCommands.ts)
     {
       // Gap audit 3 N3: the named way to set the windows' x link group.
       id: "link-x-axis",

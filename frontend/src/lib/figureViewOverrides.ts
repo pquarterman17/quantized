@@ -19,6 +19,7 @@ import type { StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import { layersWire } from "./graphLayersWire";
 import { insetWire } from "./inset";
+import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import type { Dataset } from "./types";
 import { useApp } from "../store/useApp";
@@ -175,4 +176,16 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
 /** Store facade retained for existing callers and tests. */
 export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   return viewOverrides(s());
+}
+
+/** The view's overrides plus its page (#54 Stage 3): the window page's figsize
+ *  and margins as `page_pad` (audit B3); no page = the preset + tight_layout.
+ *  Moved out of `figureSpec.buildFigureSpecForView` (its module ceiling). */
+export function pageViewOverrides(st: Parameters<typeof viewOverrides>[0] & Pick<PlotView, "pageSetup">): {
+  pageSize: ReturnType<typeof pageSizeInches> | null;
+  overrides: FigureOverrides | undefined;
+} {
+  const ps = st.pageSetup;
+  if (!ps) return { pageSize: null, overrides: viewOverrides(st) };
+  return { pageSize: pageSizeInches(ps), overrides: compactOverrides({ ...(viewOverrides(st) ?? {}), page_pad: marginFractions(ps) }) ?? undefined };
 }

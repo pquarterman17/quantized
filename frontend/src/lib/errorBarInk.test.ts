@@ -3,7 +3,12 @@
 // draws each in its series' colour (`calc/figure_errorbars.py`), so four
 // overlapping curves' bars could not be told apart on screen and read
 // differently in the PDF. A hidden series' bars are not drawn either.
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { regionDecorSettled } from "./regionDecorLoader";
+
+// The bars are drawn by the startup chunk (lib/uplotErrorDraw.ts).
+beforeAll(() => regionDecorSettled);
 
 import { errorBarsPlugin, errorSpansPlugin } from "./uplotOverlays";
 

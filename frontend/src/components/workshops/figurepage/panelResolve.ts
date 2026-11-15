@@ -261,6 +261,14 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
           s.y2AxisLabel,
           s.axisLabelStyles,
           s.axisLabelOffsets,
+          // Gap audit 4 G1: the colour gradient and every input its resolver and gate read
+          // (the labels for value order, the view modes, the document's pins / encodings).
+          s.seriesRamp,
+          s.seriesLabels,
+          s.groupKey,
+          s.facetKey,
+          win.document.publication?.seriesStyles,
+          win.document.bindings.encoding,
         );
       } else {
         parts.push(

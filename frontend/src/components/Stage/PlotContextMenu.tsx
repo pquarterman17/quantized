@@ -255,6 +255,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       pointMask,
       pointUnder,
       layerContents: activeDs ? openLayerContents : undefined,
+      colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
       linkXAxis: st.plotWindows.filter((w) => w.kind === "plot").length > 1
         ? () => void runLazy("Loading window links…", () => import("../../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure)
         : undefined,

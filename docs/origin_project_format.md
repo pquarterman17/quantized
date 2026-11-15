@@ -2540,6 +2540,91 @@ the "Remaining gap" note above. Implementation: `opju_figure_curves.py`;
 the counting decoders remain only as the fallback for id-table-less
 streams (synthetic fixtures, templates).
 
+**Page-header `<type>` is a varint (2026-11-14) — phantom layers.** The page
+header is `0a [00] 80 <type> <namelen+2> 00 00 <name> <hi>`; `<type>` is a
+LEB128-style varint — one byte below `0x80`, else two (`80 01` … `95 01` seen) —
+a per-window serial counting up through the file. The scan used to read it as
+one byte, so every window past the 127th (`0a 80 87 01 08 00 00 Graph2`: the
+`01` was taken as the length) was never enumerated. That is the whole
+"phantom layer" mechanism: the missing window's layer anchors fell inside the
+PREVIOUS page's span and were emitted as extra layers of that page (a 1-layer
+`Graph3` carried `Graph2`'s four), with the previous page's workbook bound to
+the curves and, for workbook pages, the column records attributed to the wrong
+book. Origin 2026b COM is the oracle: on 23 files phantoms go 2 → 0 and
+`ground_truth/<stem>/curve_style.json` curve bindings go 2 right / 9 wrong → 15
+right / 0 wrong (UnpolPlots, Hc2 data). 88 more files now resolve a folder tree
+whose window ordinals cover the enumerated windows exactly. No page-header
+form with a one-byte type `>= 0x80` exists in the 359-file corpus.
+
+**Separator 5th byte is a flag field (2026-11-14).** In
+`81|80 <id> <plen> 00 <flag> 01`, `<flag>` is not constant. Over the 244
+records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21,
+41 ×6, 01 ×7, 08 ×6, 30 ×3, 88 ×3, 48 ×1 (bit combinations: c0 = 40|80, 88 =
+08|80). The retry-only wide separator admits only the oracle-CONFIRMED values
+00/40/80/88/c0 (60 records match Origin's axes exactly). 01/08/30/41/48 await
+an oracle.
+
+**Layer numbering is the anchor ordinal (2026-11-14).** A graph page's layer
+`N` is its `N`-th layer anchor (`03 00 00 1f` / `5f`), counted whether or not
+that anchor's record decodes. An undecodable layer therefore leaves a GAP
+(`layer` 1 absent, 2 present) instead of renumbering every later layer down —
+which would have labelled Origin's layer 2 as layer 1. Oracle check
+(`test-data/origin/ground_truth_public/axis_ranges.json`, 47 projects, 1,426
+Origin graph pages incl. two 434-page projects with up to 27 layers per page):
+of the 1,106 oracle pages that have any layer anchor, 1,102 have exactly as many
+anchors as Origin has layers; the other 320 pages (`sparkline*`, `Residual*`,
+`FitLine*`) have no anchor and nothing is emitted for them. The four
+disagreements: `SOP_meas` `Graph6` (2 anchors, Origin 1; layer 1 decoded and
+correct), `histogram_released_viruses` `Graph1` (2 anchors, Origin 1; neither
+decodes), and `Graph221` in both `PerceivedRiskandPrediction` projects (4
+anchors, Origin 2: the extra two are the un-enumerated page `Graph222`, see the
+page-name escape below). So an anchor ordinal can over-count a page when a
+neighbouring header is missed or a layer is anchored twice; on this oracle it
+never under-counts. A missed header remains the residual risk (it shifts the
+following page's anchors onto the previous page) and is pinned as a known gap.
+
+**Retry separator search tries every candidate (2026-11-14).** The wide retry
+no longer takes the first `8x ?? ?? 00 <flag> 01` hit inside the search span:
+each candidate is tried in order and the first whose X span exact-fills up to
+it, and whose Y span exact-fills up to the following one, wins (a lookalike in
+a value token or the geometry filler can no longer shadow the real
+separator). The strict pass still takes only its first hit. Whole-corpus
+measurement: 0 of 2,153 (page, layer) values changed.
+
+**Page-header name field: run escapes and 23-24 char names (2026-11-15).**
+Three name-field forms follow `0a [00] 80 <type> <namelen+2> 00 00`
+(`tree_opju._window_name`; surveyed over every header in the 359-file corpus):
+
+- SHORT, names of up to 22 chars: `<namelen bytes> <trail >= 80>`.
+- RUN ESCAPE: `<namelen bytes> c0 <ch> [<n> <n chars>] <trail 80-bf>`. `c0 <ch>`
+  is `<ch>` x3 (Origin run-length-codes a char repeating three times); the
+  optional literal after it is counted without the +2. `Graph c0 31 8e` =
+  `Graph111`, `Graph1B c0 41 8c` = `Graph1BAAA`, `fig_ c0 43 06 Verror 89` =
+  `fig_CCCVerror`, `D c0 41 01 B 91` = `DAAAB`, `T0dbde c0 39 04 e9a5 89` =
+  `T0dbde999e9a5` (a 13-char hash-named book). The old reading took `c0` for the
+  trail: the name came out truncated (`Graph`, `D`, `T0dbde`) when the escape
+  closed the namelen run, and the page was not enumerated at all when it did not.
+- LONG, 23-24 chars (Origin's short-name limit): the byte after the type is no
+  longer the name length (`0x27` and `0x2a` seen) and there is no hi-bit trail;
+  the name is the whole charset run, ended by `00`
+  (`fig_SOPestimation_US06ou`, `ModulationTCRGraph_TEMPL`).
+
+Two escapes in one name, an escape not followed by a trail, and runs outside
+23-24 chars have no corpus evidence and are not read (fail closed). A missed
+header is the same phantom-layer mechanism as the varint type: its anchors fall
+into the previous page's span.
+
+Oracle (Origin 2026b `%H`, `axis_ranges.json`, 96 projects, 2,187 graph pages):
+pages the reader did not enumerate 17 -> 0 (the 686 `FitLine*`/`Residual*`/
+`sparkline*` child graphs that carry no `0a`-framed header are a separate
+documented gap); named figure pages Origin does not list 3 -> 0; per-(page,
+layer) decoded layers 1,718 match / 2 wrong / 18 phantom -> 1,753 / 2 / 0. The
+two wrong values (`OriginLab_Battery_Aging_Project` `Graph2` Y and `Graph3` X, a
+span value shifted a slot) are identical on main and are pinned in
+`KNOWN_DEFECTS`. Folder trees: 8 files that were flat now resolve (the window
+ordinals cover the enumerated windows exactly); 3 keep their shape with
+corrected window names (`T0dbde` -> `T0dbde999e9a5`).
+
 Axis-record grammar extensions found in the same pass
 (`opju_axis_real_form.py`): the span separator's lead byte can be `80` as
 well as `81` (strict-`81` is tried first so every pre-2026-07-05 record
@@ -2550,6 +2635,103 @@ splits are unaffected); and the Y-start scan reaches one byte further
 (plen=5 records carry an 11-byte geometry payload the old 6-byte scan
 missed by exactly one). Result: 51 of Hc2's anchors decode (was 32),
 covering 38 of its 40 graph pages.
+
+**X-span value-token grammar: length-headed first value, 1-byte flag
+(2026-11-15).** Two X-span misreads, both pinned earlier as "value-token
+defects", were one mechanism: the flag/header bytes in front of the first X
+value were skipped by a fixed 2-byte rule and the value bytes then re-split by
+the exact-fill search, which prefers three tokens over two.
+
+- **`9T nn <nn bytes>` with `T + nn == 9`** (`96 03`, `97 02`; the only forms in
+  the 359-file corpus, 98 01 once, undecoded): the first X value is `nn` compact
+  bytes (reversed BE top bytes) delimited by its own header. `96 03 80 56 40 83
+  02 24 40` is `to` = `0x405680` = 90, step 10 (`from` elided), but the fill
+  search split it `80` + `56 40` = `-0.0`, 88 (three tokens, unique, accepted).
+  Same for `96 03 40 60 40` (130 read as `[2, 128]`), `80 61 40` (140 read
+  136), `40 9f 40` (2000 read `[2, 1984]`) and `97 02 3f 40` (31 read
+  `[3.05e-5, 2]`).
+- **A single `81..9f` flag byte before a run-first RLE value** (was: `91`
+  only): `89 c3 ff 02 ef 3f 83 02 10 40 83 02 f0 3f` is `from` = `ff*6 ef 3f` =
+  0.9999999999999999 (Origin's own `layer.x.from`), `to` 4.0, step 1.0; the
+  2-byte rule swallowed the `c3` marker and read the tail as a bare double
+  (4.0025). The hybrid reader's COM-verified `89 c3 33 03 eb 3f` (0.85,
+  `symbol_kinds`) is the same token.
+
+Whole corpus (359 files, every layer anchor, 4,199): 90 records change, all
+with a first X token of one of these forms. Against Origin's axis ranges (47
+files): 8 wrong values become correct (`histogram_released_viruses` `Graph2`;
+`SOP_meas` `fig_SOPvsHPPC_A123`, `Graph3`, `Graph24`, `Graph12`, `Graph30`,
+`Graph58` layer 10, `fig_AgingSummary`), 1 previously unrecovered layer is
+recovered correctly (`Bqqbar` `Graph2`), 2 stay wrong only on Y
+(`origin_scientific_colors` `ColorPage1` 7 / `ColorPage2` 12; X now 180 not 176)
+and 2 phantoms keep their (page-name-escape) identity with corrected X. Every
+record that matched Origin before is byte-identical. Of the 90, 77 have no
+oracle: 56 `x_to` 88/54/124-style values become 90/55/125-style, and 21
+undecoded layers now decode to round Origin-style spans (e.g. `[0, 800]`,
+`[0.7, 3.3]` step 1).
+
+**Y-span start grammar (2026-11-15).** The 13 Y-span misreads in the 76-file
+oracle were three mechanisms, all visible in the bytes after the second
+separator (`81 id plen 00 flag 01`):
+
+- **The geometry payload opens with its own value token.** `82 03 fc 8c 40`
+  (= 927.5) or `c3 66 02 7b 40` (= 438.4) is the layer-geometry double, not a
+  Y value. The start scan began at the payload's first byte, so with `y_from`
+  elided (0) the 3-token fill `[geometry, to, step]` beat the true 2-token
+  fill and `y_from` read 927.5 / 438.4 / 731.17. The Y span now starts at or
+  after the end of the first tagged/RLE token at `y_lo` (never inside it). All
+  15 records the old scan started at `y_lo` were inverted (`from > to`) or
+  Origin-wrong. This also fixed `y_to` 2 vs 4 and 1.0 vs 0.0 in the specimen
+  family below.
+- **A tagged value's literal run carries the next token's lead byte.** The
+  stream is chunked: `8T nn <nn literals>` or `c2/c3 <byte> ctx <ctx
+  literals>`; a lead-form RLE value's first byte is the last literal of the
+  PREVIOUS chunk. `85 03 e8 3f` + `cd c2 cc 03 f0 3f 9a c2 99 02 a9 3f` is
+  `y_from` 0.75 (`e8 3f`), `y_to` 1.05, step 0.05: nn = 3 counts `e8 3f` AND
+  the `cd` that leads the RLE 1.05, so `e8 3f cd` is not a value (implausible,
+  rejected). Read as `nn - 1` compact bytes + lead, accepted only when the
+  byte after the run is `c2`/`c3` and the plain `nn`-byte reading failed.
+  Evidence: 27 of 27 oracle-covered records this affects match Origin
+  exactly (hyperspectral Graph4 + 26 previously-undecoded layers).
+- **Specimen skeleton, no X-scale trailer.** `c3 66 <ctx> 7b 40 [ctx-2
+  literals]`: ctx 02 = no `01`/`08 01` scale trailer, so the Y span's first tag
+  (`8d`, `86`, `8e`) follows `7b 40` directly. `_parse_specimen_record` assumed
+  `7b 40 01` and skipped 3 filler bytes, eating the tag (`8d 03 40 6e 40` =
+  242 read as 240; `86 02 e0 bf` -0.5 read as +-3.05e-05). It now declines
+  when the third filler byte is a value tag; the real-form reader decodes
+  these. The corpus has 6 such records and 33 true specimen ones (`7b 40
+  01`, `7b 40 08 01`) -- unchanged.
+
+Oracle (76 files, decoded layers): 1549 match / 13 wrong / 16 phantom before
+-> 1588 / 0 / 16 after (phantoms are the page-name-escape class above, unchanged).
+
+**RLE value inside a specimen skeleton (2026-11-15).** XRD_no_card's Y span
+`85 02 e0 bf | c3 66 02 25 40 | 83 02 f0 3f` is -0.5, 10.7, step 1.0 (the run
+`c3 66` = six `66`s, ctx `02`, suffix `25 40` = 0x4025666666666666). The
+specimen reader (`_parse_pair`/`_value_candidates`) offers a "skip 2 tag
+bytes, read 1-3 compact bytes" candidate at every token start; at `c3` that
+skipped the run marker and read `02 25 40` as a compact = 0x4025020000000000 =
+10.50390625 -- the mantissa cut after two bytes. `c2`/`c3` at a token start is
+an RLE marker, never a tag, so the skip candidates are not offered there; the
+specimen reader then declines (it has no RLE token) and the real form decodes
+the record (also yielding the tick steps, 10 and 1). Over all 359 `.opju` files
+exactly one decoded record changes (this one); Origin 2026b COM, 102 oracle
+files: 1773 match / 3 wrong -> 1774 / 2 wrong (the two left are the Battery
+Aging value-shift defects, unchanged).
+
+**Layer anchor = length-prefixed (2026-11-15).** A real layer anchor follows its
+record-length varint (`b9 01`: a byte `>= 0x80`, then a final byte `1..0x7f`).
+All 2,752 anchors in oracle pages whose anchor count equals Origin's layer
+count carry it. The only two count mismatches in the 102-file oracle (`SOP_meas`
+Graph6, `histogram_released_viruses` Graph1: 2 anchors, 1 Origin layer) are a
+bare `03 00 00 5f` without it (`c0 ff` / `06 62` before). Corpus-wide, 6 anchors
+inside graph pages lack it and none decodes; four are outside the oracle -- in
+`Figure 6 Currents vary parameters` Graph3, anchors 10 and 11 are an id table
+(`03 00 00 20 03 00 00 21 ...`) sitting BEFORE the real 10th layer, which was
+numbered 12. A graph page that has at least one prefixed anchor now counts only
+those in the layer ordinal (pages with none keep counting every match). The
+layer frame is NOT a usable signal: 6 real anchors in oracle pages have no
+`12 00 20 22` frame (composite/embedded layers).
 
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`

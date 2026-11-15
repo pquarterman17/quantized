@@ -61,12 +61,15 @@ describe("column structure menu", () => {
     deleteColumns: vi.fn(),
     moveColumn: vi.fn(),
     sortWorksheet: vi.fn(),
+    fill: vi.fn(),
+    setRowCount: vi.fn(),
   });
   const labels = (items: ReturnType<typeof columnEditItems>) => items.flatMap((i) => ("label" in i ? [i.label] : []));
 
-  it("offers Set Column Values only on a computed column, and never deletes or moves X", () => {
+  it("offers Set Column Values on every column (editing the formula of a computed one), and never deletes or moves X", () => {
     expect(labels(columnEditItems(1, ctx([1])))).toContain("Set Column Values… (edit formula)");
-    expect(labels(columnEditItems(0, ctx([0])))).not.toContain("Set Column Values… (edit formula)");
+    expect(labels(columnEditItems(0, ctx([0])))).toContain("Set Column Values…");
+    expect(labels(columnEditItems(-1, ctx([-1])))).toContain("Set Column Values…");
     const x = columnEditItems(-1, ctx([-1]));
     const del = x.find((i) => "label" in i && i.label === "Delete column") as { disabled?: boolean; title?: string };
     expect(del.disabled).toBe(true);
@@ -74,5 +77,17 @@ describe("column structure menu", () => {
     const move = x.find((i) => "label" in i && i.label === "Move column") as { disabled?: boolean };
     expect(move.disabled).toBe(true);
     expect(labels(columnEditItems(0, ctx([0, 1])))).toContain("Delete 2 columns");
+  });
+
+  it("Fill column with and Set row count (G12): fill is refused on a computed column", () => {
+    const c = ctx([0]);
+    const fill = columnEditItems(0, c).find((i) => "label" in i && i.label === "Fill column with") as { submenu: { label: string; run: () => void }[] };
+    expect(fill.submenu.map((i) => i.label)).toEqual(["Row numbers", "Linear sequence…", "Uniform random numbers…", "Normal random numbers…"]);
+    fill.submenu[0].run();
+    expect(c.fill).toHaveBeenCalledWith("rownum");
+    const onComputed = columnEditItems(1, ctx([1])).find((i) => "label" in i && i.label === "Fill column with") as { disabled?: boolean; title?: string };
+    expect(onComputed.disabled).toBe(true);
+    expect(onComputed.title).toMatch(/formula/);
+    expect(labels(columnEditItems(0, c))).toContain("Set row count…");
   });
 });

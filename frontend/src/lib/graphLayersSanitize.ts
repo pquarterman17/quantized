@@ -7,6 +7,7 @@
 import type { FigureDocument } from "./figureDocument";
 import type { PlotWindow } from "./plotview";
 import type { LinkedCurve } from "./types";
+import { cleanSymbolStyles } from "./symbolSanitize";
 
 /** [left, top, width, height]: fractions of the main plot frame, top-origin. */
 export type LayerAt = [number, number, number, number];
@@ -161,14 +162,18 @@ export function sanitizeLayers(v: unknown): GraphLayer[] {
 
 /** A loaded window with every layer list it holds validated in full (its
  *  live view and its figure document's), so nothing unchecked from a `.dwk`
- *  reaches the store — the eager reader keeps the list as given. */
+ *  reaches the store — the eager reader keeps the list as given. The series'
+ *  symbol values (`markerEvery`, `markerAlpha`, gap audit 4 review L5) are
+ *  validated here too, for the same reason. */
 export function withValidLayers(w: PlotWindow): PlotWindow {
   if (w.kind !== "plot") return w;
   const document = w.document && withValidFigureLayers(w.document);
-  return { ...w, view: { ...w.view, layers: sanitizeLayers(w.view.layers) }, ...(document ? { document } : {}) };
+  const view = { ...w.view, layers: sanitizeLayers(w.view.layers), seriesStyles: cleanSymbolStyles(w.view.seriesStyles) };
+  return { ...w, view, ...(document ? { document } : {}) };
 }
 
-/** A loaded figure document with its layers validated in full. */
+/** A loaded figure document with its layers (and symbol values) validated in full. */
 export function withValidFigureLayers(d: FigureDocument): FigureDocument {
-  return { ...d, plot: { ...d.plot, view: { ...d.plot.view, layers: sanitizeLayers(d.plot.view.layers) } } };
+  const v = d.plot.view;
+  return { ...d, plot: { ...d.plot, view: { ...v, layers: sanitizeLayers(v.layers), seriesStyles: cleanSymbolStyles(v.seriesStyles) } } };
 }

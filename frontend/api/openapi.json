@@ -8099,6 +8099,11 @@
             ],
             "title": "Lines"
           },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
           "style": {
             "default": "default",
             "title": "Style",
@@ -13048,6 +13053,80 @@
           "y"
         ],
         "title": "ShirleyRequest",
+        "type": "object"
+      },
+      "SigopRequest": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "channels": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "method"
+        ],
+        "title": "SigopRequest",
+        "type": "object"
+      },
+      "SigopResponse": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "flagged": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Flagged",
+            "type": "object"
+          },
+          "rows_in": {
+            "title": "Rows In",
+            "type": "integer"
+          },
+          "rows_out": {
+            "title": "Rows Out",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "warnings",
+          "flagged",
+          "rows_in",
+          "rows_out"
+        ],
+        "title": "SigopResponse",
         "type": "object"
       },
       "SimsBackground": {
@@ -27933,6 +28012,48 @@
           }
         },
         "summary": "Resample",
+        "tags": [
+          "transform"
+        ]
+      }
+    },
+    "/api/transform/sigop": {
+      "post": {
+        "description": "Median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT / Reduce XY.",
+        "operationId": "sigop_api_transform_sigop_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SigopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SigopResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sigop",
         "tags": [
           "transform"
         ]

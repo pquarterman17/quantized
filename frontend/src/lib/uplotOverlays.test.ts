@@ -1,4 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+import { regionDecorSettled } from "./regionDecorLoader";
+
+// The error bars are drawn by the startup chunk (lib/uplotErrorDraw.ts).
+beforeAll(() => regionDecorSettled);
 import { ERROR_CAP_HALF_PX } from "./uplotErrorRange";
 import type uPlot from "uplot";
 

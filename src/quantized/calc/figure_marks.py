@@ -31,6 +31,7 @@ from numpy.typing import NDArray
 from quantized.calc.figure_bars import draw_series
 from quantized.calc.figure_colorscatter import MARKER_CODES
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
+from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_warnings import note_figure_warning
 from quantized.heavy_import import heavy_imports
 
@@ -175,6 +176,7 @@ def draw_marked_series(
     if mark is not None and "marker" in kw:
         kw["markevery"] = mark
     (line,) = ax.plot(px, py, label=label, **kw)
+    apply_symbol_details(line, spec)  # gap audit 4 G10: edge / fill / opacity / every N
     color = line.get_color()
     if sizes is not None:
         _scatter_sized(ax, xv, yv, sizes, spec, color)

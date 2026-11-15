@@ -208,3 +208,11 @@ describe("worksheetMenuModel — rowMenuItems", () => {
     expect(copyRow).toHaveBeenCalledWith(5);
   });
 });
+
+describe("New column from formula… on a sheet that cannot take one (review M1)", () => {
+  it("is hidden when the caller passes no onNewColumn", () => {
+    const items = columnMenuItems(0, makeColCtx({ onNewColumn: undefined }));
+    expect(labelsOf(items)).not.toContain("New column from formula…");
+    expect(labelsOf(columnMenuItems(0, makeColCtx()))).toContain("New column from formula…");
+  });
+});

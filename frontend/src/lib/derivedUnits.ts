@@ -53,9 +53,9 @@ export interface UnitResult {
 const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 const DIMENSIONLESS = new Set(["1", "-", "dimensionless", "unitless"]);
 const AFFINE = new Set(["°C", "°F", "degC", "degF", "C°"]);
-const TRANSCENDENTAL = new Set(["exp", "log", "ln", "log10", "log2", "sinh", "cosh", "tanh", "asin", "acos", "atan", "arcsin", "arccos", "arctan"]);
+const TRANSCENDENTAL = new Set(["erf", "erfc", "gamma", "lgamma", "exp", "log", "ln", "log10", "log2", "sinh", "cosh", "tanh", "asin", "acos", "atan", "arcsin", "arccos", "arctan"]);
 const TRIG = new Set(["sin", "cos", "tan"]);
-const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil"]);
+const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil", "round"]);
 const MATCHING = new Set(["min", "max", "hypot", "rowmean", "rowsd", "rowmin", "rowmax", "rowsum"]);
 
 const clean = (e: number): number => {
@@ -339,7 +339,11 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "sqrt") return power(n.args[0], { k: "num", v: 0.5 }, `"${printExpr(n)}"`);
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
-        if (f === "sign" || f === "rown") return LIT;
+        if (f === "sign" || f === "rown" || f === "rnd" || f === "normal") return LIT;
+        if (f === "interp") {
+          unify(n.args.slice(0, 2), us.slice(0, 2), `"${printExpr(n)}"`); // v is looked up along X
+          return us[2]; // the Y column's unit
+        }
         if (SAME_UNIT.has(f)) return us[0];
         if (MATCHING.has(f)) return unify(n.args, us, `"${printExpr(n)}"`);
         if (f === "atan2") {

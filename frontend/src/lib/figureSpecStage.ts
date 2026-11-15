@@ -15,6 +15,7 @@ import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, liveFigureView, type FigureRenderOpts } from "./figureSpec";
 import { figureDocumentToPlotView } from "./figureDocument";
+import { windowRampApplies } from "./seriesRampImpl";
 import { withAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
@@ -110,7 +111,12 @@ export function buildStageFigureSpec(
   // below, so every overlay decision (placement, shown curves, offsets gate,
   // palette slot) is made from the object the spec came from (I2, lib/overlayPlacement).
   // (On the document route `windowsForSave` has folded the live view into it.)
-  const view = canRouteThroughDocument ? figureDocumentToPlotView(document) : liveFigureView(st, ds);
+  // Review L7: the live fallback never sees the document's pin / encodings, so the
+  // canvas' gradient refusal (`windowRampApplies`) is applied to the live view here.
+  const liveView = liveFigureView(st, ds);
+  const view = canRouteThroughDocument
+    ? figureDocumentToPlotView(document)
+    : windowRampApplies(st, document) ? liveView : { ...liveView, seriesRamp: null };
   // `count`: the canvas' plotted channels (`usePlotPayload.fetchChannels`) — past
   // the palette's eight the cycle engages on its own, as on screen. Like every
   // other input of this cycle decision it is asked of the LIVE view (above);

@@ -61,7 +61,8 @@ export function canRenderMap(data: DataStruct | null | undefined): boolean {
   for (let c = 0; c < data.labels.length && gridAxes < 2; c++) {
     if (repeats(data.values.map((row) => row[c]))) gridAxes++;
   }
-  const ok = gridAxes >= 2;
+  // Scattered XYZ is opt-in (Plot > Contour from scattered XYZ), never guessed.
+  const ok = gridAxes >= 2 || data.metadata["scatteredXYZ"] === true;
   mappableCache.set(data, ok);
   return ok;
 }

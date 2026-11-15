@@ -12,7 +12,8 @@ Two gaps the first wave couldn't cover:
   it is ``0x0d`` here just as for Y-log-only, proving the byte does NOT encode
   X once Y is log (so X-log is only recoverable in the Y-linear ``0x04`` case).
 
-COM rules as ever: ONE Origin.ApplicationSI instance, never concurrent with
+COM rules as ever: ONE Origin.Application instance (never ApplicationSI,
+which attaches to the owner's open Origin), never concurrent with
 another COM tool; page-limited student editions handle these tiny projects.
 
 Run:  uv run python tools/origin_trial/generate_specimens2.py
@@ -40,7 +41,7 @@ NOTE_TEXT = "QZNOTE line one: sample MnN 30nm\nQZNOTE line two: field sweep at 3
 
 def main() -> None:
     SPEC.mkdir(exist_ok=True)
-    app = wc.gencache.EnsureDispatch("Origin.ApplicationSI")
+    app = wc.gencache.EnsureDispatch("Origin.Application")
     app.Visible = 0
 
     def lt(cmd: str) -> bool:

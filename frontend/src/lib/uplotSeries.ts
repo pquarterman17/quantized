@@ -155,10 +155,16 @@ export function buildSeriesDefs(
       // AND points are hidden entirely here to avoid double-drawing. No fill
       // (a fill-under/between a colour-mapped point cloud isn't meaningful).
       const cbSpec = args.colorByColumns?.get(i + 1);
+      // Error-bar styling (gap audit 2 #6) rides on the series, where the error plugins
+      // read it (`uplotErrorDraw.styleErrorDraw`); a colour is contrast-checked like the
+      // stroke. Resolved BEFORE the early return below, so a colour-mapped or pending
+      // series keeps its band (gap audit 4 review L4). A change rebuilds.
+      const eb = style?.errorBar;
+      const qzErr: ErrorBarPaint | undefined = eb && { ...eb, color: eb.color && resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) };
       // A spline / size-by / drop-line series is hidden until its module has loaded: never a
       // straight stand-in that later jumps, nor default-size dots (see marksLoader).
       if ((cbSpec && !cbSpec.flat) || (usesMarks(style) && marksPending())) {
-        return { label, scale, stroke, width: 0, points: { show: false }, show };
+        return { label, scale, stroke, width: 0, points: { show: false }, show, ...(qzErr && { qzErr }) } as uPlot.Series;
       }
       // Default trace shape (Preferences) when the series has no explicit style:
       // Scatter = markers, no line; Line + markers = both; Step = stepped line.
@@ -170,7 +176,10 @@ export function buildSeriesDefs(
       // `markers.seriesPoints` owns that decision now, and its doc records why
       // the two branches must NOT be merged (the export emits a marker only for
       // an explicit `marker`).
-      const points = seriesPoints(style, trace, stroke);
+      // Gap audit 4 G10's symbol details ride the marks chunk (lib/symbolDetails.ts): a
+      // series that sets one is hidden above until it lands. Colours contrast-checked like the stroke.
+      const points = marks()?.symbolPoints(seriesPoints(style, trace, stroke), style, stroke,
+        (c) => resolveDrawColor(seriesColor(i, { color: c }), isDarkBg, inkColor)) ?? seriesPoints(style, trace, stroke);
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
@@ -182,11 +191,7 @@ export function buildSeriesDefs(
       };
       // A size-only series (N5): the plugin draws the points; the line stays.
       if (cbSpec?.flat) def.points = { show: false };
-      // Error-bar styling (gap audit 2 #6) rides on the series, where the
-      // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
-      // contrast-checked like the stroke. A change rebuilds (not a paint field).
-      const eb = style?.errorBar;
-      if (eb) def.qzErr = { ...eb, color: eb.color && resolveDrawColor(seriesColor(i, { color: eb.color }), isDarkBg, inkColor) };
+      if (qzErr) def.qzErr = qzErr;
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series
