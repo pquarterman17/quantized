@@ -120,8 +120,13 @@ def parse_dataset_header(payload: bytes) -> DatasetHeader | None:
 
     Recognition is structural, not by block size, so a future header length
     still parses: the name sits at 0x58, and the bytes that are zero in all
-    1358 corpus headers (0x00-0x01, 0x12-0x13, 0x40-0x47, 0x54-0x57) are
-    zero. The synthetic fixtures older tests build (a name 40 bytes in, no
+    1358 corpus headers (0x00-0x01, 0x13, 0x54-0x57) are zero. Bytes 0x12
+    and 0x40-0x47 are NOT gated: ``Book12_C`` of SuperlatticeFits.opj sets
+    0x12 and is otherwise a valid Text & Numeric header, so "zero in every
+    header seen" was a statistic about the corpus, not a property of the
+    format. The structure decides: a printable name, a non-zero element size
+    and, at decode time, a data block of exactly ``total * elem`` bytes. The
+    synthetic fixtures older tests build (a name 40 bytes in, no
     fields) fail this on length and keep the legacy content-sniffing path.
 
     The row counts are NOT validated here: a header whose used range does
@@ -130,7 +135,7 @@ def parse_dataset_header(payload: bytes) -> DatasetHeader | None:
     """
     if len(payload) < _NAME_OFFSET + 2 or payload[0] or payload[1]:
         return None
-    if payload[0x12] or payload[0x13] or any(payload[0x40:0x48]) or any(payload[0x54:0x58]):
+    if payload[0x13] or any(payload[0x54:0x58]):
         return None
     end = payload.find(b"\x00", _NAME_OFFSET)
     if end <= _NAME_OFFSET:
@@ -279,8 +284,17 @@ def _decode_text_numeric(h: DatasetHeader, data: bytes, out: DecodedDataset) -> 
     values[is_text | missing] = np.nan
     values = values[:end]
     strings: dict[int, str] = {}
+    # A string longer than the record's inline slot is stored as a 4-byte
+    # marker (<n> <02|7f> 7f 7f) followed by only the first part of the text
+    # (hc2convert.opj column A: every such cell is a strict prefix of the
+    # Origin-exported string). That prefix is not the value, so the cell is
+    # blanked and counted rather than returned as if it were complete.
+    marked = np.isin(rec[:, 3], (0x02, 0x7F)) & (rec[:, 4] == 0x7F) & (rec[:, 5] == 0x7F)
+    overflow = is_text & marked
     for k in np.flatnonzero(is_text & (rec[:, 2] != 0)):
-        strings[int(k)] = _cstr(rec[k, 2:].tobytes())
+        strings[int(k)] = "" if overflow[k] else _cstr(rec[k, 2:].tobytes())
+    if int(overflow.sum()):
+        out.notes.append(f"{int(overflow.sum())} overflow text cell(s) not decoded")
     for k in np.flatnonzero(_wrecked(values)):
         legacy = _legacy_inline_text(rec[k, 2:10].tobytes())
         if legacy is not None:

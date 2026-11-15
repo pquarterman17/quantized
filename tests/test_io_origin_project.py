@@ -12,7 +12,9 @@ Format: see docs/origin_project_format.md.
 
 from __future__ import annotations
 
+import csv
 import json
+import re
 import struct
 from collections import OrderedDict
 from pathlib import Path
@@ -1359,12 +1361,40 @@ def test_realdata_hc2convert_text_columns_recovered() -> None:
 
     books = read_origin_books(_CORPUS / "hc2convert.opj")
     total_text_cols = sum(len(b.metadata.get("origin_text_columns", {})) for b in books)
-    assert total_text_cols == 58  # every fit-failure column recovered, no false positives
+    # 58 literal-"NaN" fit-failure columns + one parameter-text column "A" in
+    # each of the 34 A6221Lockin* books (header-driven decode, #643).
+    with_a = [b for b in books if "A" in b.metadata.get("origin_text_columns", {})]
+    assert len(with_a) == 34
+    assert total_text_cols == 58 + 34
 
     da = next(b for b in books if b.metadata["origin_book"] == "A6221LockinDA")
-    assert set(da.metadata["origin_text_columns"]) == {"U", "V"}
+    assert set(da.metadata["origin_text_columns"]) == {"A", "U", "V"}
     assert da.metadata["origin_text_columns"]["U"] == ["NaN"] * 1930
     assert "U" not in da.labels and "V" not in da.labels  # never in the numeric contract
+
+    # Column A against Origin's own export of the same books (the .opju twin's
+    # COM oracle): no cell carries storage framing bytes, and every decoded
+    # cell is a string Origin shows. A string longer than the record's inline
+    # slot is stored as a truncated prefix behind a marker; such a cell is
+    # blank (and diagnosed), never the prefix posing as the value.
+    oracle = _CORPUS / "specimens" / "ground_truth" / "Hc2 data"
+    checked = 0
+    for b in with_a:
+        name = b.metadata["origin_book"]
+        f = oracle / f"{name}_s1.csv"
+        if not name.startswith("A6221Lockin") or not f.exists():
+            continue
+        with f.open(encoding="utf-8-sig", newline="") as fh:
+            shown = {row[0] for row in list(csv.reader(fh))[2:] if row}
+        cells = b.metadata["origin_text_columns"]["A"]
+        assert not any(chr(ch) in c for c in cells for ch in (1, 2, 0x7F))  # framing bytes
+        # (the oracle hides the first stored row of 7 books: a view artifact)
+        assert all(c == "" or c in shown for c in cells[1:])
+        diag = b.metadata.get("origin_data_diagnostics")
+        assert diag is None or all(d["category"] == "cells" for d in diag["details"])
+        checked += 1
+    if oracle.exists():
+        assert checked == 34
 
 
 @pytest.mark.realdata
@@ -1381,7 +1411,18 @@ def test_realdata_hc2convert_report_sheets_recovered() -> None:
 
     books = read_origin_books(_CORPUS / "hc2convert.opj")
     total_report_cols = sum(len(b.metadata.get("origin_report_sheets", {})) for b in books)
-    assert total_report_cols == 407
+    # The 407 of the pre-header-driven decode were 404 fit-sheet columns plus
+    # 3 (of 34) columns of the report-only Table shells. The 404 are unchanged;
+    # the header-driven decode completes the shells: all 17 Tables carry
+    # exactly A and B. (No oracle exports these -- Origin evaluates their
+    # cell:// references -- so the pin is structural, and the shells are
+    # flagged unresolved below.)
+    shells = [b for b in books if re.fullmatch(r"Table\d+", b.metadata["origin_book"])]
+    assert len(shells) == 17
+    assert all(sorted(b.metadata["origin_report_sheets"]) == ["A", "B"] for b in shells)
+    assert all(b.metadata["origin_values_unresolved"] is True for b in shells)
+    assert all(b.values.shape == (0, 0) for b in shells)
+    assert total_report_cols - 2 * len(shells) == 404
 
     book2_2 = next(b for b in books if b.metadata["origin_book"] == "Book2@2")
     reports = book2_2.metadata["origin_report_sheets"]

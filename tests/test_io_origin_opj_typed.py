@@ -820,7 +820,9 @@ def test_header_directly_followed_by_another_header_does_not_eat_it(tmp_path: Pa
 
 def _bad_header(name: str, offset: int) -> bytes:
     """A dataset header this reader does not recognise: a real one with a
-    byte set where every known header has zero."""
+    byte set at an offset the structural gate still requires to be zero
+    (0x13, 0x54-0x57; 0x12 and 0x40-0x47 are NOT gated -- SuperlatticeFits
+    Book12_C sets 0x12 and is a valid header)."""
     raw = bytearray(dataset_header(name, DOUBLE, total=3, used=3))
     raw[offset] = 1
     return bytes(raw)
@@ -829,7 +831,7 @@ def _bad_header(name: str, offset: int) -> bytes:
 def test_unrecognised_header_first_in_the_section_is_reported(tmp_path: Path) -> None:
     """The first dataset has a header the reader cannot parse. It used to
     vanish without a word, and the next column became the X axis."""
-    lost = dataset(_bad_header("Book1_A", 0x41), _doubles([1.0, 2.0, 3.0], 3))
+    lost = dataset(_bad_header("Book1_A", 0x55), _doubles([1.0, 2.0, 3.0], 3))
     kept = dataset(dataset_header("Book1_B", DOUBLE, total=3, used=3), _doubles([4.0, 5.0, 6.0], 3))
     book = _books(tmp_path, project([lost, kept]))["Book1"]
     # B is NOT promoted to X: its X was the column that could not be read.
@@ -841,6 +843,9 @@ def test_unrecognised_header_first_in_the_section_is_reported(tmp_path: Path) ->
     assert diag["omissions"] == ["1 worksheet dataset(s) not decoded"]
     assert diag["details"][0]["dataset"] == "Book1_A"
     assert "not recognised" in diag["details"][0]["reason"]
+    # ... and the book itself says it is incomplete, naming the column.
+    assert list(book.metadata["origin_columns_lost"]) == ["A"]
+    assert "not recognised" in book.metadata["origin_columns_lost"]["A"]
 
 
 def test_unrecognised_header_mid_section_loses_only_itself(tmp_path: Path) -> None:
@@ -852,7 +857,7 @@ def test_unrecognised_header_mid_section_loses_only_itself(tmp_path: Path) -> No
             dataset_header(name, DOUBLE, total=3, used=3), _doubles([base, base + 1, base + 2], 3)
         )
 
-    lost = dataset(_bad_header("Book1_B", 0x12), _doubles([4.0, 5.0, 6.0], 3))
+    lost = dataset(_bad_header("Book1_B", 0x13), _doubles([4.0, 5.0, 6.0], 3))
     books = _books(
         tmp_path, project([col("Book1_A", 1.0), lost, col("Book1_C", 7.0), col("Book2_A", 7.0)])
     )
@@ -866,6 +871,8 @@ def test_unrecognised_header_mid_section_loses_only_itself(tmp_path: Path) -> No
     diag = book.metadata["origin_data_diagnostics"]
     assert diag["omissions"] == ["1 worksheet dataset(s) not decoded"]
     assert [d["dataset"] for d in diag["details"]] == ["Book1_B"]
+    assert list(book.metadata["origin_columns_lost"]) == ["B"]
+    assert "origin_columns_lost" not in books["Book2"].metadata  # a clean book says nothing
 
 
 def test_undecodable_first_column_does_not_promote_the_next_to_x(tmp_path: Path) -> None:
