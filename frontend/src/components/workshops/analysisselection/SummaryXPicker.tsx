@@ -65,7 +65,7 @@ export default function SummaryXPicker({ choice, onChange, metaFields = [], para
           placeholder={s.kind === "meta" ? "e.g. Temperature" : "e.g. T"} onChange={(e) => typedText(e.target.value)} />
       )}
       <Checkbox checked={choice.sort} disabled={disabled} onChange={(sort) => onChange({ ...choice, sort })}
-        title="Order the summary rows by X. Off keeps the inputs' own order; a row with no X goes last.">
+        title="Order the summary rows by X (off keeps input order; rows with no X go last)">
         Sort rows by X
       </Checkbox>
     </span>
