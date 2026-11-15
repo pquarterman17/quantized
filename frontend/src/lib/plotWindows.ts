@@ -14,6 +14,10 @@ const PLOT_BG_CYCLE: readonly PlotBg[] = ["theme", "light", "dark"];
  *  (theme -> light -> dark -> theme -> ...). Pure; used by both the
  *  per-window toggle button (`PlotWindowFrame`) and the "Window Background"
  *  command (`useWindowCommands`). */
+/** A saved link group, or null: only groups 1..MAX_LINK_GROUP exist. */
+const validLinkGroup = (g: unknown): number | null =>
+  typeof g === "number" && Number.isInteger(g) && g >= 1 && g <= MAX_LINK_GROUP ? g : null;
+
 export function nextPlotBg(current: PlotBg): PlotBg {
   return PLOT_BG_CYCLE[(PLOT_BG_CYCLE.indexOf(current) + 1) % PLOT_BG_CYCLE.length];
 }
@@ -338,14 +342,8 @@ export function sanitizePlotWindows(
       bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
       // Only plot windows can sync, and only groups 1..MAX_LINK_GROUP exist —
       // a hand-edited .dwk can't smuggle in a ⧟7 badge or a "linked" snapshot.
-      linkGroup:
-        kind === "plot" &&
-        typeof o.linkGroup === "number" &&
-        Number.isInteger(o.linkGroup) &&
-        o.linkGroup >= 1 &&
-        o.linkGroup <= MAX_LINK_GROUP
-          ? o.linkGroup
-          : null,
+      linkGroup: kind === "plot" ? validLinkGroup(o.linkGroup) : null,
+      ...(kind === "plot" && validLinkGroup(o.linkYGroup) !== null ? { linkYGroup: validLinkGroup(o.linkYGroup) } : {}),
       pinned: o.pinned === true, // a boolean, else false (the plain-boolean view fields: plotviewSanitize.boolViewFields)
       ...(snapshot ? { snapshot } : {}),
       ...(panel ? { panel } : {}),

@@ -88,6 +88,7 @@ export function usePlotStageActions(
 ): PlotStageActions & {
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
+  onLasso: (u: uPlot, poly: [number, number][], unmask: boolean) => void;
   onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
   function resetView() {
@@ -205,6 +206,13 @@ export function usePlotStageActions(
     }, onLoadFailure);
   }
 
+  // Lasso Mask (gap audit 4 G19): mask / unmask what the outline encloses, one undo step.
+  function onLasso(u: uPlot, poly: [number, number][], unmask: boolean) {
+    if (!displayPayload || !active) return;
+    const payload = displayPayload;
+    void runLazy("Masking points…", () => import("../../lib/plotLassoMask")).then((m) => m.lassoMask(u, payload, plotted, active, poly, unmask), onLoadFailure);
+  }
+
   // Gap audit 2 #8: a double-click in the plot area is held back from uPlot's
   // own re-fit (document capture runs before its listener on `u.over`) until
   // the lazy `curveDoubleClick` decides: Plot Details on a curve, re-fit on
@@ -248,5 +256,6 @@ export function usePlotStageActions(
     snapshot,
     onRegionSelect,
     onRangeSelect,
+    onLasso,
   };
 }

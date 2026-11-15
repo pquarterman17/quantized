@@ -28,8 +28,19 @@ export interface AxisFormat {
   ticks?: "in" | "out" | "both";
   /** tick-label font size, pt; */
   size?: number;
-  /** "e" on a log axis = Origin's "Ln" scale: majors at powers of e. */
-  base?: "e";
+  /** "e" on a log axis = Origin's "Ln" scale: majors at powers of e; "2" =
+   *  Origin's "Log2": majors at powers of 2 (gap audit 4 G17). */
+  base?: "e" | "2";
+  /** Gap audit 4 G17 (`lib/axisScales.ts`, `calc/axis_scales.py`): on a
+   *  LINEAR axis, Origin's "Probability" scale -- positions by the normal
+   *  quantile (probit) of a fraction in (0, 1) or a percent in (0, 100); */
+  prob?: "fraction" | "percent";
+  /** explicit major tick positions, with an optional label for each (a blank
+   *  or missing label keeps the number); */
+  custom?: CustomTicks;
+  /** the axis drawn crossing the OTHER axis at this value (Origin's "axis
+   *  position at", e.g. Y at X = 0), clamped to the frame when off view. */
+  cross?: number;
   /** Axis breaks on a LINEAR Y / Y2 axis: each `[lo, hi]` stretch is elided
    *  and a break mark drawn in its place (`lib/axisBreaks.ts`,
    *  `calc/axis_breaks.py`). Sorted, non-overlapping, at most `MAX_AXIS_BREAKS`.
@@ -55,6 +66,27 @@ export interface AxisGrid {
   /** `#rrggbb`; absent = the theme's grid colour. */
   color?: string;
   dash?: "solid" | "dash" | "dot";
+}
+
+export interface CustomTicks {
+  at: number[];
+  labels?: string[];
+}
+
+/** At most this many custom ticks (a typed list, not a data column). */
+export const MAX_CUSTOM_TICKS = 50;
+
+/** `raw` as valid custom ticks -- finite, distinct positions (at most
+ *  `MAX_CUSTOM_TICKS`) with labels index-aligned -- or `undefined`. A list
+ *  with any invalid entry is refused whole, never repaired: a label that
+ *  slid onto its neighbour's position would mislabel the axis. */
+export function normalizeCustomTicks(raw: unknown): CustomTicks | undefined {
+  const c = raw as Partial<CustomTicks> | null | undefined;
+  if (!c || typeof c !== "object" || !Array.isArray(c.at) || c.at.length === 0 || c.at.length > MAX_CUSTOM_TICKS) return undefined;
+  if (!c.at.every((v) => typeof v === "number" && Number.isFinite(v)) || new Set(c.at).size !== c.at.length) return undefined;
+  const labels = c.labels;
+  if (labels !== undefined && (!Array.isArray(labels) || labels.length > c.at.length || !labels.every((l) => typeof l === "string" && l.length <= 100))) return undefined;
+  return { at: [...c.at], ...(labels?.some((l) => l.trim()) ? { labels: [...labels] } : {}) };
 }
 
 /** `reciprocal`: factor / x (1/T, 1000/T); `dspacing`: Bragg d = λ / (2 sin θ)
@@ -90,6 +122,7 @@ export function normalizeBreaks(raw: unknown): [number, number][] | undefined {
 export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
   const { mode, digits, divide, minor, ticks, size, base, rotate, offset } = fmt;
   const breaks = normalizeBreaks(fmt.breaks);
+  const custom = normalizeCustomTicks(fmt.custom);
   const pos = (v: unknown, max: number): v is number => typeof v === "number" && v > 0 && v <= max;
   const g = fmt.grid as Partial<AxisGrid> | undefined;
   const t = fmt.top as Partial<TopAxis> | undefined;
@@ -101,7 +134,10 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     ...(Number.isInteger(minor) && pos(minor, 20) ? { minor } : {}),
     ...(ticks === "in" || ticks === "out" || ticks === "both" ? { ticks } : {}),
     ...(pos(size, 72) ? { size } : {}),
-    ...(base === "e" ? { base } : {}),
+    ...(base === "e" || base === "2" ? { base } : {}),
+    ...(fmt.prob === "fraction" || fmt.prob === "percent" ? { prob: fmt.prob } : {}),
+    ...(custom ? { custom } : {}),
+    ...(fin(fmt.cross) ? { cross: fmt.cross } : {}),
     ...(breaks ? { breaks } : {}),
     ...(fmt.reverse === true ? { reverse: true } : {}),
     ...(fin(rotate) && rotate !== 0 && Math.abs(rotate) <= 90 ? { rotate } : {}),
@@ -125,18 +161,19 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
 
 /** The format a Y2 axis with none of its own inherits from the primary Y
  *  axis: its number format and tick look, but not what belongs to the Y
- *  axis itself -- the breaks (in Y's units), reverse, offset and grid. */
+ *  axis itself -- the breaks and custom ticks (in Y's units), the
+ *  probability scale, reverse, offset, crossing and grid. */
 export function inheritedAxisFormat(fmt: AxisFormat): AxisFormat {
-  if (!fmt.breaks && !fmt.reverse && !fmt.offset && !fmt.grid && !fmt.top) return fmt;
-  const { breaks: _b, reverse: _r, offset: _o, grid: _g, top: _t, ...rest } = fmt;
-  void [_b, _r, _o, _g, _t];
+  if (!fmt.breaks && !fmt.reverse && !fmt.offset && !fmt.grid && !fmt.top && !fmt.prob && !fmt.custom && fmt.cross === undefined) return fmt;
+  const { breaks: _b, reverse: _r, offset: _o, grid: _g, top: _t, prob: _p, custom: _c, cross: _x, ...rest } = fmt;
+  void [_b, _r, _o, _g, _t, _p, _c, _x];
   return rest;
 }
 
 /** True when `fmt` carries any Axis-dialog extra (figures-audit #6). */
 export function hasAxisExtras(fmt: AxisFormat | null | undefined): boolean {
   return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length
-    || !!fmt.reverse || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top);
+    || !!fmt.reverse || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top || !!fmt.prob || !!fmt.custom || fmt.cross !== undefined);
 }
 
 /** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`

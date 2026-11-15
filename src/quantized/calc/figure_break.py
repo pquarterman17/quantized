@@ -42,6 +42,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.axis_breaks import apply_y_breaks
+from quantized.calc.axis_cross import apply_cross
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_layout import apply_figure_layout
@@ -239,6 +240,12 @@ def render_breaks_impl(
     if ov.get("y_lim") is not None:  # shared y: set once, after the autoscale
         apply_axis_shape_overrides(axes[0], st, {"y_lim": ov["y_lim"]}, lim_keys=("y_lim",))
     clear_seam_labels(fig, axes)
+    # Gap audit 4 G17: an axis crossing on every panel, as the screen draws
+    # it -- the Y crossing clamped into each panel's own X slice, labelled on
+    # panel 0 only (the shared Y's labels are panel 0's).
+    for i, ax in enumerate(axes):
+        apply_cross(ax, "x", x_fmt, "bottom")
+        apply_cross(ax, "y", panel_y_fmt, "left", labels=i == 0)
 
     # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
     # short strokes angled across each seam, on both the outgoing panel's

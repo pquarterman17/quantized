@@ -369,6 +369,10 @@ export interface PlotWindow {
    *  default). Like `bg`, a per-window display choice on the record itself,
    *  not part of the swapped `PlotView`. Wired in `lib/windowsync.ts`. */
   linkGroup: number | null;
+  /** Gap audit 4 G19: the Y-axis link group, the same model as `linkGroup`
+   *  (1..MAX_LINK_GROUP, plot windows only) but syncing the primary Y range
+   *  only (`lib/windowsync.windowYSyncHook`). Absent / null = unlinked. */
+  linkYGroup?: number | null;
   /** kind:"snapshot" only (item 11): the frozen composed display bundle this
    *  window renders VERBATIM — no fetch, no rowstate, no live dataset binding
    *  (a snapshot window's `datasetId` is always null; frozen means frozen).

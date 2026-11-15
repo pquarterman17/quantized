@@ -323,3 +323,22 @@ describe("PlotToolbar on a horizontal bar graph (the plot turned on its side)", 
     expect(screen.getByRole("button", { name: /^Measure/ })).toBeEnabled();
   });
 });
+
+// Gap audit 4 G19 review L4: the multi-panel stage draws no lasso, so the
+// tool is disabled there with its reason, and a picked lasso falls back to
+// zoom with a status message rather than silently doing nothing.
+describe("Lasso Mask in a multi-panel layout", () => {
+  it("is disabled with the reason, and an active lasso falls back to zoom with a status", () => {
+    useApp.setState({ stackMode: true, plotTool: "lasso", status: "" });
+    render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: /^Lasso Mask/ })).toBeDisabled();
+    expect(document.body.textContent ?? "").toContain("Lasso Mask works on a single graph");
+    expect(useApp.getState().plotTool).toBe("zoom");
+    expect(useApp.getState().status).toMatch(/Lasso Mask works on a single graph/);
+  });
+
+  it("is enabled on a single graph", () => {
+    render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: /^Lasso Mask/ })).toBeEnabled();
+  });
+});
