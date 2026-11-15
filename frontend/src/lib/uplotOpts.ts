@@ -40,7 +40,7 @@ import {
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
-import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
+import { regionLiveBoxHook, regionSelectPick, selectBoxPick } from "./uplotRegionBox";
 import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
@@ -536,8 +536,9 @@ export interface BuildOptsArgs {
   /** In `region` tool: the drag's x edges (unordered); y0/y1 too past
    *  `MIN_BOX_HEIGHT_PX` (2-D box, GAP #96/#20). Baseline's region fit. */
   onRegionSelect?: (x0: number, x1: number, y0?: number, y1?: number) => void;
-  /** #50 plot-brush: drag-end x-band edges for the "select" tool. */
-  onRangeSelect?: (x0: number, x1: number) => void;
+  /** #50 plot-brush: drag-end x-band edges for the "select" tool; a 2-D box
+   *  (gap audit 3 N2) also carries its y edges on the box's axis. */
+  onRangeSelect?: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
    *  two-point ruler (null when the ruler is cleared). */
   onMeasure?: (m: Measurement | null) => void;
@@ -1213,13 +1214,12 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     width,
     height,
     ...(args.title?.trim() ? { title: args.title.trim() } : {}),
-    // Box-zoom in zoom/pointer (MAIN #18); select drags x-only, region also
-    // tracks y (2-D box, MATLAB `onBGMouseUp` parity, GAP #96/#20), neither
-    // rescales; pan/cursor disable drag; pointer hides the dashed crosshair.
+    // Box-zoom in zoom/pointer (MAIN #18); region and select also track y
+    // past a threshold (2-D box: MATLAB `onBGMouseUp` parity, GAP #96/#20;
+    // select's box mask, gap audit 3 N2), neither rescales; pan/cursor disable drag; pointer hides the dashed crosshair.
     cursor: {
       drag:
-        tool === "region" ? { x: true, y: true, setScale: false, uni: 1 }
-        : tool === "select" ? { x: true, y: false, setScale: false, uni: 1 }
+        tool === "region" || tool === "select" ? { x: true, y: true, setScale: false, uni: 1 }
         : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
       ...(tool === "pointer" ? { x: false, y: false } : {}),
     },
@@ -1232,9 +1232,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       setSelect: [
         (u: uPlot): void => {
           if (u.select.width <= 0) return;
-          if (tool === "select") {
-            return void args.onRangeSelect?.(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + u.select.width, "x"));
-          }
+          if (tool === "select") return void (args.onRangeSelect && selectBoxPick(u, payload, hasY2, args.onRangeSelect));
           if (tool !== "region" || !onRegionSelect) return;
           regionSelectPick(u, payload, hasY2, onRegionSelect);
         },

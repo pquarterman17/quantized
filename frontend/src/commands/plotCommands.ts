@@ -9,7 +9,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
-import { addCurveFrom, plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
@@ -320,14 +320,34 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => void plotSelectedTogether(s().selectedIds),
     },
     {
-      // Origin gap audit 2 #1: Origin's Layer Contents "add a curve".
+      // Origin gap audit 2 #1 / 3 N1: Origin's Layer Contents — one dialog
+      // (no chained prompts) to add, remove, reorder and re-bind curves.
+      id: "layer-contents",
+      group: "Plot",
+      section: "Layout",
+      label: "Layer Contents…",
+      description: "List the current graph's curves: add from any dataset, remove, reorder, or re-bind a curve to another X/Y.",
+      keywords: "layer contents curves add remove reorder rebind plot dataset book",
+      run: openLayerContents,
+    },
+    {
+      // Gap audit 3 N3: the named way to set the windows' x link group.
+      id: "link-x-axis",
+      group: "Plot",
+      section: "Layout",
+      label: "Link X axis with…",
+      description: "Pick graph windows whose X axis follows this one: zoom or pan X in one and the others follow.",
+      keywords: "link sync synchronize x axis zoom pan windows graphs compare",
+      run: () => void runLazy("Loading window links…", () => import("../lib/windowLinkX")).then((m) => m.linkXAxisWith(), onLoadFailure),
+    },
+    {
       id: "add-curve-from",
       group: "Plot",
       section: "Layout",
       label: "Add curve from…",
-      description: "Add a curve from another dataset to the current graph; the graph stays linked to its sources.",
+      description: "Add a curve from another dataset to the current graph (opens Layer Contents); the graph stays linked to its sources.",
       keywords: "layer contents add plot curve overlay dataset book",
-      run: () => void addCurveFrom(),
+      run: openLayerContents,
     },
     {
       // P3.6: the frontend producer of spec-carrying report figure blocks.

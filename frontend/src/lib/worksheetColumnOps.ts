@@ -93,16 +93,21 @@ function remapMetadata(meta: Record<string, unknown>, edit: ColumnEdit): Record<
     out["default_value_channels"] = remapChannelList(defaults as number[], edit.shift);
   }
   const roles = meta["error_roles"];
-  if (Array.isArray(roles)) {
-    out["error_roles"] = roles.flatMap((r: unknown) => {
-      const b = r as { channel?: unknown; target?: unknown };
-      if (typeof b?.channel !== "number" || typeof b.target !== "number") return [r];
-      const channel = remapChannel(b.channel, edit.shift);
-      const target = b.target < 0 ? b.target : remapChannel(b.target, edit.shift);
-      return channel === null || target === null ? [] : [{ ...(r as object), channel, target }];
-    });
-  }
+  if (Array.isArray(roles)) out["error_roles"] = remapMetaErrorRoles(roles, edit.shift);
   return out;
+}
+
+/** `metadata.error_roles` (confirmed error pairings, column-indexed on both
+ *  ends) after one column shift; a pairing whose column went is dropped.
+ *  Shared with Layer Contents (store/layerContentsApply.ts). */
+export function remapMetaErrorRoles(roles: readonly unknown[], shift: ColumnShift): unknown[] {
+  return roles.flatMap((r: unknown) => {
+    const b = r as { channel?: unknown; target?: unknown };
+    if (typeof b?.channel !== "number" || typeof b.target !== "number") return [r];
+    const channel = remapChannel(b.channel, shift);
+    const target = b.target < 0 ? b.target : remapChannel(b.target, shift);
+    return channel === null || target === null ? [] : [{ ...(r as object), channel, target }];
+  });
 }
 
 /** Rebuild `base` (no computed columns) for one structure edit. A blank
