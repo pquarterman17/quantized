@@ -19,6 +19,7 @@
 //   applied at all (an intensity column plotted as error whiskers, or a
 //   completely unrelated technique's figure), not merely incomplete.
 
+import type { ExtraYAxis } from "./multiYModel";
 import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import type { LegendPos } from "./plotview";
 import type { PlotMark } from "./plotspec";
@@ -96,6 +97,9 @@ export interface ResolvedRecipeVisual {
   seriesLabels: Record<number, string>;
   seriesOrder: number[] | null;
   hiddenChannels: number[];
+  /** Gap audit 4 G11: the Y3+ axes, assignments re-keyed to this dataset's channels. */
+  yAxes: ExtraYAxis[];
+  yAxisOf: Record<number, number>;
   decorations: RecipeDecorations;
   compositionKind: CompositionKind | null;
 }
@@ -420,6 +424,8 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
       seriesLabels: pickRecord(recipe.visual.seriesLabels),
       seriesOrder: recipe.visual.seriesOrder ? resolveList(recipe.visual.seriesOrder) : null,
       hiddenChannels: resolveList(recipe.visual.hiddenChannels),
+      yAxes: structuredClone(recipe.visual.yAxes ?? []),
+      yAxisOf: pickRecord(recipe.visual.yAxisOf ?? {}),
       // Deep-copied (finding 3): `decorations` arrays hold objects owned by
       // `recipe` -- without this, mutating an applied annotation/shape would
       // silently mutate the saved recipe too.

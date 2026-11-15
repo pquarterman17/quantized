@@ -45,6 +45,7 @@ import { usePlotStageActions } from "./usePlotStageActions";
 import { useShapeDraw } from "./useShapeDraw";
 import { useShapeEdit } from "./useShapeEdit";
 import { useStageContextMenu } from "./useStageContextMenu";
+import { useStageMultiY } from "./useMultiY";
 export type PlotStageProps = { activeDataset?: Dataset | null; rowSelection?: { datasetId: string; rows: number[] } | null; onRowsSelected?: (rows: number[]) => void };
 export default function PlotStage({ activeDataset, rowSelection, onRowsSelected }: PlotStageProps = {}) {
   const liveActive = useActiveDataset(), focusedDocument = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document);
@@ -87,9 +88,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const groupKey = useApp((s) => s.groupKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
-  const y2Lim = useApp((s) => s.y2Lim);
-  const y2Scale = useApp((s) => s.y2Scale);
-  const y2Step = useApp((s) => s.y2Step);
+  const y2Lim = useApp((s) => s.y2Lim), y2Scale = useApp((s) => s.y2Scale), y2Step = useApp((s) => s.y2Step);
   const errKeys = useApp((s) => s.errKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -157,7 +156,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const {
     payload,
     payloadDatasetId,
-    displayPayload,
+    displayPayload: basePayload, // + Y3+ axis tags just below (useMultiY)
     plotted,
     styleList,
     labelList, legendLabels, // P1.4: an encoded render's finished legend text (usePlotPayload)
@@ -196,6 +195,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
     // is what makes that re-fetch reachable at all.
     xLim,
   });
+  const { payload: displayPayload, axes: yAxesShown } = useStageMultiY(basePayload, plotted, { yScale, yFmt, groupKey, y2Keys, hiddenChannels, active, multiPanel: multiPanelShowing(composition, stackMode, plotted.length), picks: focusedBindings?.encoding });
 
   // Right-click state (menu position + the gesture-cancel-then-open handler)
   // lives in useStageContextMenu — kept PlotStage at its line-ceiling pin
@@ -288,9 +288,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         xLim={xLim} yLim={yLim} onLimCrossed={onLimCrossed}
         xStep={xStep}
         yStep={yStep}
-        y2Lim={y2Lim}
-        y2Scale={y2Scale}
-        y2Step={y2Step}
+        y2Lim={y2Lim} y2Scale={y2Scale} y2Step={y2Step} yAxes={yAxesShown}
         xFmt={xFmt}
         yFmt={yFmt} y2Fmt={y2Fmt}
         showGrid={showGrid}

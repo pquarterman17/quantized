@@ -190,7 +190,7 @@ describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () =
     const type = screen.getByRole("combobox", { name: "Moment modeling type" });
     expect(screen.getByRole("combobox", { name: "Field modeling type" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Moment column role" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Draw Moment on the secondary Y axis" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Moment Y axis" })).toBeInTheDocument();
     // The name's label and the selects no longer share a flex line.
     const name = screen.getByText("Moment (emu)", { selector: "span" });
     expect(name.closest("label")?.parentElement).not.toBe(type.parentElement);

@@ -88,13 +88,17 @@ export interface PlotViewBounds {
   yLim: [number, number] | null;
   /** Present only when the plot has a secondary y axis. */
   y2Lim?: [number, number] | null;
+  /** Y3+ (gap audit 4 G11), by axis number; present only when some are drawn. */
+  yN?: Record<number, [number, number] | null>;
 }
 
 /** The live view: x, y and (only when the plot has one) the secondary y range;
  *  `auto` gives the same shape with every limit null. */
 export function viewBounds(u: uPlot, auto = false): PlotViewBounds {
   const lim = (s: uPlot.Scale): [number, number] | null => (auto ? null : [s.min ?? 0, s.max ?? 1]);
-  return { xLim: lim(u.scales.x), yLim: lim(u.scales.y), ...(u.scales.y2 ? { y2Lim: lim(u.scales.y2) } : {}) };
+  let yN: PlotViewBounds["yN"]; // "y3" .. "y8" sort after "y2"
+  for (const k in u.scales) if (k > "y2") (yN ??= {})[+k.slice(1)] = lim(u.scales[k]);
+  return { xLim: lim(u.scales.x), yLim: lim(u.scales.y), ...(u.scales.y2 ? { y2Lim: lim(u.scales.y2) } : {}), ...(yN ? { yN } : {}) };
 }
 
 /** Observe completed navigation gestures without participating in their

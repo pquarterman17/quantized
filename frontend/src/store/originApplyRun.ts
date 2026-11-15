@@ -92,6 +92,8 @@ const ORIGIN_FIGURE_Y2_RESET = {
   y2Scale: null,
   y2Step: null,
   y2AxisLabel: "",
+  yAxes: [],
+  yAxisOf: {},
 };
 
 /** Apply `entry` (figure `id`) to the store. Callers have already run every

@@ -100,6 +100,17 @@ export function stripPageIncompatibleOverrides(
   return Object.keys(overrides).length > 0 ? overrides : undefined;
 }
 
+/** A page panel's figure: the overrides a page cannot honour dropped, and the
+ *  Y3+ axes (gap audit 4 G11) too -- the page renderer draws Y1 / Y2 only, so
+ *  those series land on Y1 (the spec's `y2_keys` already leaves them out), as
+ *  the stack page does (`lib/stackPageExport.ts`). A page never fails over it;
+ *  the status line says so. */
+export function pagePanelSpec(spec: FigureSpec): FigureSpec {
+  const { y_axes: extra, ...rest } = spec;
+  if (extra?.length) useApp.getState().setStatus("Figure page: a panel's Y3+ axes are drawn on Y1 (a page panel draws Y1 and Y2 only)");
+  return { ...rest, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+}
+
 /** Resolve one panel source into the single-figure payload the page route
  *  embeds. Reads through the store at call time: `windowsForSave()` so the
  *  FOCUSED window's live view is captured, `resolveDataset` so a pending
@@ -132,7 +143,7 @@ export async function panelFigure(
     // "this source can no longer render" case, same as a dead window/figdoc.
     try {
       const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
-      return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+      return pagePanelSpec(spec);
     } catch {
       return null;
     }
@@ -156,7 +167,7 @@ export async function panelFigure(
     if (!dataset) return null;
     try {
       const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
-      return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+      return pagePanelSpec(spec);
     } catch {
       return null;
     }
@@ -184,7 +195,7 @@ export async function panelFigure(
   if (document.data.mode === "live" && !dataset) return null;
   try {
     const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
-    return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+    return pagePanelSpec(spec);
   } catch {
     return null;
   }
@@ -349,7 +360,7 @@ export async function buildPageSpecFromDocument(
     let figure: FigureSpec;
     try {
       const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
-      figure = { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+      figure = pagePanelSpec(spec);
     } catch (e) {
       throw new Error(
         `panel ${label}: "${document.name}" can't be rendered — ${e instanceof Error ? e.message : "error"}`,

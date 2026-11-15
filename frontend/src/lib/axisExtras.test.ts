@@ -24,7 +24,8 @@ describe("axis extras", () => {
   it("Ln puts majors at powers of e on a log axis, labelled e^n", () => {
     const axes: uPlot.Axis[] = [{ filter: () => [] }];
     applyAxisExtras(axes, [{ mode: "auto", digits: 2, base: "e" }], ["log"], "#000");
-    expect(axes[0].filter).toBeUndefined();
+    // every e^n major keeps its label (uPlot's log filter would blank them)
+    expect((axes[0].filter as (u: uPlot, s: number[]) => number[])({} as uPlot, [1, Math.E])).toEqual([1, Math.E]);
     expect(lnSplits(1, 60).map((v) => Math.round(Math.log(v)))).toEqual([0, 1, 2, 3, 4]);
     expect((axes[0].values as Values)({} as uPlot, [Math.E ** 2], 0, 0, 1)).toEqual(["e²"]);
   });

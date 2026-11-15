@@ -25,6 +25,10 @@ type SizeFn = Extract<NonNullable<uPlot.Axis["size"]>, (...args: never[]) => unk
 
 const keyOf = (axis: uPlot.Axis, idx: number): string => axis.scale ?? (idx === 0 ? "x" : idx === 1 ? "y" : "y2");
 
+/** An axis filter that keeps every split's label (custom majors already are
+ *  exactly the ticks to label). */
+export const keepEveryLabel: NonNullable<uPlot.Axis["filter"]> = (_u, splits) => splits;
+
 /** The drawn scale of an axis: "probit" for a probability axis. */
 export function effectiveScale(scale: string, fmt: AxisFormat): string {
   return scale === "linear" && fmt.prob ? "probit" : scale;
@@ -56,7 +60,8 @@ export function probExtent(payload: AxisExtrasContext["payload"], idx: number, u
 function applyProb(axis: uPlot.Axis, idx: number, unit: ProbUnit, ctx: AxisExtrasContext): void {
   const key = keyOf(axis, idx);
   const prev = ctx.scales[key] ?? {};
-  const extent = probExtent(ctx.payload, idx, unit, ctx.hidden);
+  // Its own series by scale key (x / y / y2 / y3 ...), so a Y3+ axis (lib/multiY.ts) reads its own.
+  const extent = probExtent(ctx.payload, key === "x" ? 0 : key === "y" ? 1 : Number(key.slice(1)), unit, ctx.hidden);
   const auto = (): uPlot.Range.MinMax => probAutoRange(extent?.[0] ?? null, extent?.[1] ?? null, unit);
   const typed = prev.range;
   ctx.scales[key] = {
@@ -143,7 +148,10 @@ export function applyScaleExtras(axis: uPlot.Axis, idx: number, fmt: AxisFormat,
   if (scale === "log" && fmt.base === "2") {
     axis.splits = (_u, _i, min, max) => log2Ticks(min, max);
     axis.values = (_u, splits) => splits.map((v) => (v == null ? "" : log2Label(v)));
-    delete axis.filter;
+    // Every major keeps its label: with no filter uPlot falls back to its
+    // decade filter on a log scale, which blanked 4, 8, 64 ... while the
+    // export labels every power of 2 (found by the multi-Y wire fixture).
+    axis.filter = keepEveryLabel;
   }
   if (effectiveScale(scale, fmt) !== "probit" || !fmt.prob || !ctx) return scale;
   applyProb(axis, idx, fmt.prob, ctx);

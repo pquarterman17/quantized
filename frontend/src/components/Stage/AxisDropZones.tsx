@@ -17,7 +17,6 @@ import { useRef, useState } from "react";
 import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "../../lib/dragaxis";
 import { dropOntoGraph, isLibraryDrag } from "./graphDrop";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
-import { openFigureDialog } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -73,10 +72,8 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
         // The hit test is a lazy piece (axisAtPoint.ts, eager-bundle budget);
         // the boxes and point are read now, while the event is current.
         const [o, r, x, y] = [over.getBoundingClientRect(), root.getBoundingClientRect(), e.clientX, e.clientY];
-        void runLazy("Loading the axis dialog…", () => import("./axisAtPoint")).then((m) => {
-          const axis = m.axisAtPoint(o, r, x, y, hasY2);
-          if (axis) openFigureDialog({ kind: "axis", axis });
-        }, onLoadFailure);
+        // With Y3+ (gap audit 4 G11) the right-hand axis hit opens its own settings.
+        void runLazy("Loading the axis dialog…", () => import("./axisAtPoint")).then((m) => m.openAxisAt(o, r, x, y, hasY2, root), onLoadFailure);
       }}
       onDragEnter={(e) => {
         if (isGraphDrop(e)) return void (e.preventDefault(), setAdding(true));

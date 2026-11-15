@@ -71,6 +71,10 @@ export default function PlotViewport(props: PlotViewportProps) {
     y2: args.y2Lim ?? null,
   });
   const [rebuildEpoch, setRebuildEpoch] = useState(0);
+  // Y3+ axes (gap audit 4 G11) rebuild on any change, their committed zoom
+  // too: unlike x / y / y2 there is no live nudge (eager bundle budget), so a
+  // plot WITH extra axes rebuilds once per committed zoom / Back.
+  const yAxes = useStableByEquality(args.yAxes);
 
   // Display-only edits (legend hide, colour/width/dash) patch the live
   // instance instead of rebuilding it (lib/uplotLivePaint.ts), so
@@ -90,7 +94,8 @@ export default function PlotViewport(props: PlotViewportProps) {
     () => !displayPayload || xIsAscending(displayPayload.data[0] as (number | null)[]),
     [displayPayload],
   );
-  const hiddenKey = xAscending && !displayPayload?.blockRows ? "" : (args.hidden ?? []).map(Number).join("");
+  // Y3+ (gap audit 4 G11): a hide can free or take a right-axis slot, so it rebuilds.
+  const hiddenKey = xAscending && !displayPayload?.blockRows && !yAxes?.length ? "" : (args.hidden ?? []).map(Number).join("");
 
   // Declared BEFORE the create/destroy effect so that within a single commit
   // where a lim change lands ALONGSIDE a genuine structural change (e.g. a
@@ -319,6 +324,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.xFmt,
     args.yFmt,
     args.y2Fmt,
+    yAxes,
     args.showGrid,
     args.axisBox, args.xReversed,
     args.fontSize,

@@ -74,4 +74,13 @@ describe("graph format on many graphs", () => {
     expect(s().history).toHaveLength(1);
     expect(s().status).toMatch(/3 graphs restyled/);
   });
+
+  it("a template whose series sit on a Y axis it lacks says so for every graph (gap audit 4 G11)", async () => {
+    const format = { ...captureGraphFormat(s(), [0, 1]), yAxes: [], seriesAxis: [null, 3] };
+    saveGraphTemplate({ name: "Lost", style: "default", overrides: null, seriesStyles: [], format });
+    vi.mocked(askParams).mockResolvedValueOnce({ name: "Lost", scope: "All open graphs" });
+    await applyGraphTemplateToGraphs(s);
+    expect(s().status).toMatch(/3 graphs restyled.*1 series per graph on a Y axis the format does not have, drawn on Y1/);
+    expect(view(b).yAxisOf).toEqual({});
+  });
 });

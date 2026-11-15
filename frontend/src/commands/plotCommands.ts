@@ -339,6 +339,13 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => openFigureDialog({ kind: "axis", axis: "x" }),
     },
     {
+      id: "y-axis-settings", // gap audit 4 G11: Y3, Y4, ... (lib/multiYCommands.ts)
+      group: "Plot",
+      section: "Axes",
+      label: "Y Axis Settings…",
+      run: () => graphFormatCommand(s, (m) => m.editExtraYAxes), // rides the graph-format chunk (eager budget)
+    },
+    {
       id: "plot-type",
       group: "Plot",
       section: "Display",

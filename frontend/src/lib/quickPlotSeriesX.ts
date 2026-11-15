@@ -75,6 +75,7 @@ export function quickPlotSeriesXSeed(
     groupKey: null,
     facetKey: null,
     y2Keys: null,
+    yAxisOf: {},
     seriesStyles: {},
     seriesLabels: {},
     seriesOrder: null,

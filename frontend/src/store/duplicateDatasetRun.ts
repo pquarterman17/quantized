@@ -56,6 +56,7 @@ export function duplicateDatasetRun(id: string, set: SliceSet, get: SliceGet): v
       y2Scale: null,
       y2Step: null,
       y2AxisLabel: "",
+      yAxes: [], yAxisOf: {},
       seriesStyles: {},
       errKeys: {},
       hiddenChannels: [],

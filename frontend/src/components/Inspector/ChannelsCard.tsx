@@ -1,6 +1,6 @@
 // Inspector card: assign per-channel plot roles. Choose the x-axis source
-// (x_key), which value channels the plot draws (y_keys), which ride the secondary
-// (right) Y axis (y2_keys — the dual-Y feature), and which channel holds a series'
+// (x_key), which value channels the plot draws (y_keys), which Y axis each rides
+// (Y1 left; Y2, Y3, ... right -- y2_keys / yAxisOf, lib/multiY.ts), and which channel holds a series'
 // ± error (error bars). Only shown for multi-channel datasets — keeps reflectivity
 // (R / dR / resolution) etc. legible. Analysis workshops still use the first
 // channel; this controls the plot only.
@@ -11,9 +11,10 @@ import { withErrKey, withSymmetricYError } from "../../lib/errorRoleEdits";
 import { symmetricBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
+import { MAX_EXTRA_Y } from "../../lib/multiY";
+import { setSeriesYAxis } from "../../lib/multiYEdit";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Pill } from "../primitives/Pill";
 import { SliderRow } from "../primitives/SliderRow";
 import BufferedNumberField from "../primitives/BufferedNumberField";
 import { Select } from "../primitives";
@@ -29,6 +30,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const setYKeys = useApp((s) => s.setYKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const setY2Keys = useApp((s) => s.setY2Keys);
+  const yAxes = useApp((s) => s.yAxes), yAxisOf = useApp((s) => s.yAxisOf);
   const errKeys = useApp((s) => s.errKeys);
   const setErrKey = useApp((s) => s.setErrKey);
   const setErrorRoles = useApp((s) => s.setErrorRoles);
@@ -119,16 +121,17 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
     }
   };
 
-  const toggleAxis = (i: number) => {
-    if (y2.has(i)) {
-      const ny2 = (y2Keys ?? []).filter((x) => x !== i);
-      setY2Keys(ny2.length ? ny2 : null);
-    } else {
-      // Keep at least one visible channel on the primary axis.
-      const primaries = selected.filter((x) => !y2.has(x));
-      if (primaries.length <= 1) return;
-      setY2Keys([...(y2Keys ?? []), i].sort((a, b) => a - b));
+  // The axis a channel draws on: an extra axis that exists, else Y2 / Y1 (an
+  // orphan assignment draws on Y1 -- lib/multiY.ts).
+  const axisOf = (i: number): number => (yAxisOf[i] !== undefined && yAxisOf[i] - 3 < yAxes.length ? yAxisOf[i] : y2.has(i) ? 2 : 1);
+  const axisChoices = [1, 2, ...yAxes.map((_, k) => k + 3), ...(yAxes.length < MAX_EXTRA_Y ? [yAxes.length + 3] : [])];
+  const moveAxis = (i: number, n: number) => {
+    // Keep at least one visible channel on the primary axis.
+    if (n !== 1 && axisOf(i) === 1 && selected.filter((x) => x !== xKey && axisOf(x) === 1).length <= 1) {
+      useApp.getState().setStatus("Keep at least one series on Y1");
+      return;
     }
+    setSeriesYAxis(useApp.getState, i, n);
   };
 
   return (
@@ -203,15 +206,15 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                   {units[i] ? ` (${units[i]})` : ""}
                 </span>
               </label>
-              <Pill
-                active={y2.has(i)}
+              <Select
+                style={{ flex: "0 0 auto", width: 64 }}
+                aria-label={`${lab} Y axis`}
                 disabled={!visible}
-                title="Draw on the secondary (right) Y axis"
-                aria-label={`Draw ${lab} on the secondary Y axis`}
-                onClick={() => toggleAxis(i)}
-              >
-                Y2
-              </Pill>
+                value={String(axisOf(i))}
+                onChange={(e) => moveAxis(i, Number(e.target.value))}
+                title="The Y axis this series is drawn on: Y1 left, Y2 right, Y3 and up further right, each pushed out one slot (Plot ▸ Y Axis Settings… sets each one's range, scale, title and colour)"
+                options={axisChoices.map((n) => ({ value: String(n), label: n - 3 === yAxes.length ? `+Y${n}` : `Y${n}` }))}
+              />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 21 }}>
               <Select

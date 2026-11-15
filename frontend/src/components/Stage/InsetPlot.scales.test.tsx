@@ -11,9 +11,9 @@ import { useApp } from "../../store/useApp";
 import InsetPlot from "./InsetPlot";
 
 const { created, MockUPlot } = vi.hoisted(() => {
-  const created: { scales: Record<string, { distr?: number; dir?: number }> }[] = [];
+  const created: { scales: Record<string, { distr?: number; dir?: number }>; series: { scale?: string; show?: boolean }[] }[] = [];
   class MockUPlot {
-    constructor(opts: { scales: Record<string, { distr?: number; dir?: number }> }) {
+    constructor(opts: { scales: Record<string, { distr?: number; dir?: number }>; series: { scale?: string; show?: boolean }[] }) {
       created.push(opts);
     }
     destroy(): void {}
@@ -65,5 +65,15 @@ describe("the magnifier inset", () => {
     useApp.setState({ yScale: "linear", xScale: "linear", xReversed: false });
     render(<InsetPlot payload={payload} view={{ yScale: "log", xScale: "linear", y2Scale: null, xReversed: false }} />);
     expect(created[created.length - 1].scales.y.distr).toBe(3);
+  });
+
+  it("magnifies Y1 and Y2 series only: a Y3+ series is not drawn, as in the export (gap audit 4 G11)", () => {
+    const multi: PlotPayload = {
+      ...payload,
+      data: [[10, 20, 30, 40], [5, 50, 500, 50], [1, 2, 3, 4], [6, 7, 8, 9]],
+      series: [{ label: "I", unit: "" }, { label: "J", unit: "", axis: 1 }, { label: "K", unit: "", axis: 2 }],
+    };
+    render(<InsetPlot payload={multi} />);
+    expect(created[created.length - 1].series.slice(1).map((s) => s.show)).toEqual([true, true, false]);
   });
 });

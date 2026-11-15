@@ -142,7 +142,8 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, windo
       y2Scale: y2Scale ?? undefined,
       xReversed,
       showGrid,
-      hidden,
+      // Y1 and Y2 only: Y3+ series (gap audit 4 G11) are not magnified, as in the export's inset.
+      hidden: payload.series.map((s, i) => !!hidden?.[i] || (s.axis ?? 0) > 1),
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
       seriesStyles: styleList?.map((s) => s && { ...s, dropLines: undefined, sizeBy: undefined }), // the export's inset omits them (and warns)

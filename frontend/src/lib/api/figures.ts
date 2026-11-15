@@ -22,6 +22,7 @@ import { postBlob, postDownload, postJSON } from "./http";
 import type { ExportSeriesStyle } from "../exportStyles";
 import type { FigureOverrides } from "../figureOverrides";
 import type { FigureHitmap } from "../previewmap";
+import type { ExtraYAxisWire } from "../multiYWire";
 import type { AxisFormat, AxisKey, AxisLabelStyle, AxisScale, DataStruct } from "../types";
 import type { ErrorPair } from "../api";
 import type { components } from "./schema";
@@ -103,6 +104,8 @@ export interface FigureSpec {
   y2_scale?: AxisScale;
   y2_fmt?: AxisFormat;
   y2_step?: number | null;
+  /** Y3, Y4, ... (gap audit 4 G11, lib/multiYWire.ts): each a subset of `y_keys`. */
+  y_axes?: ExtraYAxisWire[];
   /** Categorical column that splits every `y_keys` channel into one series
    *  per group level (GUI_INTERACTION #12 Slice 5 -- the Graph Builder
    *  "group" zone's colour split; see `lib/plotspec.ts`'s `buildXY`).

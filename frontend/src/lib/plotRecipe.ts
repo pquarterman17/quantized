@@ -294,6 +294,8 @@ export function captureRecipe(
       seriesLabels: pickRecord(view.seriesLabels),
       seriesOrder: view.seriesOrder ? pickList(view.seriesOrder) : null,
       hiddenChannels: pickList(view.hiddenChannels),
+      // Gap audit 4 G11: captured only from a graph that has Y3+ assignments.
+      ...(Object.keys(view.yAxisOf).length ? { yAxes: structuredClone(view.yAxes), yAxisOf: pickRecord(view.yAxisOf) } : {}),
       decorations: {
         annotations: view.annotations.map((a) => ({ ...a })),
         shapes: view.shapes.map((s) => ({ ...s })),

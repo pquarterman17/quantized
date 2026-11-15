@@ -166,6 +166,8 @@ const DATASET_REBIND_RESET_FIELDS = [
   "y2Lim",
   "y2Scale",
   "y2Step",
+  "yAxes",
+  "yAxisOf",
   "y2AxisLabel",
   "xAxisLabel",
   "yAxisLabel",

@@ -58,7 +58,7 @@ function panelOverrides(ov: FigureOverrides | null | undefined): FigureOverrides
 function panelFigure(flat: FigureSpec, i: number, ch: number, top: boolean, view: StackExportView): FigureSpec {
   /* eslint-disable @typescript-eslint/no-unused-vars -- dropped: the stack canvas draws none of these */
   const {
-    y2_keys, y2_label, y2_scale, y2_fmt, y2_step, group_col, encoding, waterfall_offsets,
+    y2_keys, y2_label, y2_scale, y2_fmt, y2_step, y_axes, group_col, encoding, waterfall_offsets,
     waterfall_x_offsets, log_offsets, axis_label_styles, axis_label_offsets, series_styles, error_spans,
     y_label, overrides, ...kept
   } = flat;

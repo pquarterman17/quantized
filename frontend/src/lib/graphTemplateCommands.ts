@@ -23,6 +23,7 @@ import {
   type GraphFormat,
 } from "./graphFormat";
 import { applyFormatToGraphs, GRAPH_SCOPES, type GraphScope } from "./graphFormatBulk";
+import { formatAxisOrphans } from "./graphFormatMultiY";
 import type { PlotView } from "./plotview";
 import { recordUse } from "./recipeIndex";
 import { useApp } from "../store/useApp";
@@ -55,7 +56,10 @@ function applyFormat(s: StoreGet, format: GraphFormat, label: string): boolean {
   if (!plotted) return false;
   s().recordHistory(label.toLowerCase());
   useApp.setState(graphFormatPatch(format, plotted, s().seriesStyles, s()));
-  return true;
+  // Fail closed (gap audit 4 G11): a position on an axis the format lacks drew on Y1 -- say so.
+  const lost = formatAxisOrphans(format);
+  if (lost) s().setStatus(`${label}: ${lost} series assigned to a Y axis the format does not have — drawn on Y1`);
+  return !lost;
 }
 
 export function copyStageFormat(s: StoreGet): void {
@@ -91,8 +95,11 @@ function templateFormatFor(template: GraphTemplate, view: Parameters<typeof capt
 const SCOPE_FIELD = { key: "scope", label: "Apply to", type: "select" as const, default: GRAPH_SCOPES[0].label, options: GRAPH_SCOPES.map((o) => o.label) };
 const scopeOf = (answer: unknown): GraphScope => GRAPH_SCOPES.find((o) => o.label === answer)?.value ?? "folder";
 
-function reportMany(s: StoreGet, n: number, what: string): void {
-  s().setStatus(n === 0 ? `${what}: no open graph matches -- open the graphs first, or pick another scope` : `${what}: ${n} graph${n === 1 ? "" : "s"} restyled (one undo step)`);
+function reportMany(s: StoreGet, n: number, what: string, format?: GraphFormat | null): void {
+  // Fail closed (gap audit 4 G11): positions on a Y axis the format lacks drew on Y1 -- say so here too.
+  const lost = n && format ? formatAxisOrphans(format) : 0;
+  const onY1 = lost ? ` -- ${lost} series per graph on a Y axis the format does not have, drawn on Y1` : "";
+  s().setStatus(n === 0 ? `${what}: no open graph matches -- open the graphs first, or pick another scope` : `${what}: ${n} graph${n === 1 ? "" : "s"} restyled (one undo step)${onY1}`);
 }
 
 /** Gap-audit-2 #13: Paste Format onto every graph of a folder / selection. */
@@ -104,7 +111,7 @@ export async function pasteFormatToGraphs(s: StoreGet): Promise<void> {
   }
   const params = await askParams("Paste Format to Graphs", [SCOPE_FIELD], { confirmLabel: "Paste" });
   if (!params) return;
-  reportMany(s, applyFormatToGraphs(s, scopeOf(params.scope), () => format, "Paste Format to graphs"), "Paste Format");
+  reportMany(s, applyFormatToGraphs(s, scopeOf(params.scope), () => format, "Paste Format to graphs"), "Paste Format", format);
 }
 
 /** Gap-audit-2 #13: a graph template onto every graph of a folder / selection. */
@@ -122,7 +129,7 @@ export async function applyGraphTemplateToGraphs(s: StoreGet): Promise<void> {
   if (!params || !template) return;
   recordUse({ kind: "graph", scope: "global", id: template.name });
   const n = applyFormatToGraphs(s, scopeOf(params.scope), (view: PlotView, plotted) => templateFormatFor(template, view, plotted), `Apply Graph Template "${template.name}" to graphs`);
-  reportMany(s, n, `Graph template "${template.name}"`);
+  reportMany(s, n, `Graph template "${template.name}"`, sanitizeGraphFormat(template.format));
 }
 
 export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
@@ -163,3 +170,4 @@ export async function applyStageGraphTemplate(s: StoreGet): Promise<void> {
   }
 }
 export { contourFromScattered } from "./scatteredContour";
+export { editExtraYAxes } from "./multiYCommands"; // Plot ▸ Y Axis Settings… (gap audit 4 G11)

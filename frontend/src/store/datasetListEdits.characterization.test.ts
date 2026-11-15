@@ -320,7 +320,7 @@ describe("duplicateDataset", () => {
         "gadgetFftPreview", "gadgetIntegrateResult", "gadgetStatsResult", "groupKey", "hiddenChannels",
         "history", "integral", "librarySelection", "qfitBusy", "qfitError", "qfitResult", "qfitRoi",
         "rsmPeaks", "selectedIds", "seriesStyles", "stageTab", "worksheetId", "xKey", "xLim", "xStep",
-        "y2AxisLabel", "y2Keys", "y2Lim", "y2Scale", "y2Step", "yKeys", "yLim", "yStep",
+        "y2AxisLabel", "y2Keys", "y2Lim", "y2Scale", "y2Step", "yAxes", "yAxisOf", "yKeys", "yLim", "yStep",
       ],
     );
     const s = act();

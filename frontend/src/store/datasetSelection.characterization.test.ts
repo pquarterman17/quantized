@@ -163,7 +163,7 @@ const SWITCH_KEYS = [
   "gadgetStatsResult", "groupKey", "hiddenChannels", "integral", "librarySelection", "plotWindows",
   "qfitBusy", "qfitError", "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "seriesLabels",
   "seriesOrder", "seriesStyles", "stageTab", "worksheetId", "xKey", "xLim", "xStep", "y2AxisLabel",
-  "y2Keys", "y2Lim", "y2Scale", "y2Step", "yKeys", "yLim", "yStep",
+  "y2Keys", "y2Lim", "y2Scale", "y2Step", "yAxes", "yAxisOf", "yKeys", "yLim", "yStep",
 ];
 // Re-activating the id that is ALREADY active: no view reset, no memory.
 const REACTIVATE_KEYS = [

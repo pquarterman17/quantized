@@ -82,6 +82,7 @@ def _xy_only_fields(req: FigureRequest) -> list[str]:
         "group_col": req.group_col is not None,
         "encoding": req.encoding is not None and req.encoding.active(),
         "y2_keys": req.y2_keys,
+        "y_axes": req.y_axes,
         "waterfall_offsets": req.waterfall_offsets,
         "waterfall_x_offsets": req.waterfall_x_offsets,
         "log_offsets": req.log_offsets,

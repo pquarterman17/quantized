@@ -14,6 +14,7 @@ import type uPlot from "uplot";
 
 import type { PlotPayload } from "../../lib/plotdata";
 import PlotViewport, { type PlotViewportProps } from "./PlotViewport";
+import { loadAxisExtras } from "../../lib/axisExtrasHook";
 
 const { created, sizes, calls, MockUPlot } = vi.hoisted(() => {
   const created: unknown[] = [];
@@ -315,6 +316,22 @@ describe("PlotViewport — half-open limits", () => {
     expect(range[1]).toBe(25);
     expect(onLimCrossed).toHaveBeenCalledWith("y", "log");
     expect(onLimCrossed).toHaveBeenCalledTimes(1);
+  });
+
+  it("a committed Y3 range or look rebuilds with it (gap audit 4 G11)", async () => {
+    await loadAxisExtras();
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    const y3 = { n: 3, keys: [0], lim: [0, 5] as [number, number], scale: "linear" as const, fmt: { mode: "auto" as const, digits: 2 }, step: null, label: null, color: null };
+    const props = { ...baseProps(), displayPayload: { ...PAYLOAD, series: [{ label: "M", unit: "emu", axis: 2 }] }, plotted: [0], yAxes: [y3] };
+    const { rerender } = render(<PlotViewport {...props} />);
+    expect((created[0] as { opts: uPlot.Options }).opts.scales?.y3?.range).toEqual([0, 5]);
+    rerender(<PlotViewport {...props} yAxes={[{ ...y3, lim: [1, 6] }]} />);
+    expect(created).toHaveLength(2);
+    expect((created[1] as { opts: uPlot.Options }).opts.scales?.y3?.range).toEqual([1, 6]);
+    rerender(<PlotViewport {...props} yAxes={[{ ...y3, lim: [1, 6] }]} />);
+    expect(created).toHaveLength(2); // same content, new identity: no rebuild
+    rerender(<PlotViewport {...props} yAxes={[{ ...y3, lim: [1, 6], color: "#ff0000" }]} />);
+    expect(created).toHaveLength(3);
   });
 
   it("editing the typed side nudges the live instance, keeping the resolved auto side, without a rebuild", () => {

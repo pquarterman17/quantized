@@ -10,6 +10,7 @@ import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import type { PlotPayload } from "./plotdata";
 import { lassoRows, type Polygon } from "./plotPointMask";
+import { yScaleKey } from "./multiYModel";
 import { excludedSet } from "./rowstate";
 import type { Dataset } from "./types";
 
@@ -19,8 +20,8 @@ export function lassoMask(u: uPlot, payload: PlotPayload, plotted: readonly numb
   const pr = devicePixelRatio || 1;
   const w = u.bbox.width / pr;
   const h = u.bbox.height / pr;
-  const toPx = (x: number, y: number, axis: 0 | 1): [number, number] | null => {
-    const p: [number, number] = [u.valToPos(x, "x"), u.valToPos(y, axis === 1 ? "y2" : "y")];
+  const toPx = (x: number, y: number, axis: number): [number, number] | null => {
+    const p: [number, number] = [u.valToPos(x, "x"), u.valToPos(y, yScaleKey(axis))];
     return p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h ? p : null;
   };
   const got = lassoRows(payload, plotted, ds, useApp.getState().xKey, poly, toPx);

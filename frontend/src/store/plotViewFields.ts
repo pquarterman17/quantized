@@ -97,6 +97,7 @@ export interface PlotViewFieldsSlice {
   y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
   y2Step: number | null; // decoded major-tick increment for y2Lim (see xStep/yStep)
   y2AxisLabel: string; // override for the secondary y-axis label ("" = auto)
+  yAxes: PlotView["yAxes"]; yAxisOf: PlotView["yAxisOf"]; // Y3, Y4, ... and channel -> axis number (lib/multiY.ts)
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
