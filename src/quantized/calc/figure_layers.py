@@ -42,6 +42,8 @@ from typing import Any
 import numpy as np
 from matplotlib.ticker import FixedLocator, NullLocator
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = ["apply_layers", "validate_layers"]
 
 _KINDS = ("inset", "image", "table")
@@ -204,7 +206,8 @@ def _decode_image(src: str) -> np.ndarray:
     PNG is refused, never guessed at) and the pixel count is checked from the
     header before anything is decoded, so a tiny crafted file cannot cost
     gigabytes."""
-    from PIL import Image  # matplotlib's own image backend
+    with heavy_imports("PIL", "PIL.Image"):
+        from PIL import Image  # matplotlib's own image backend
 
     m = _IMAGE_URL.match(src)
     if m is None:  # validated upstream; kept for direct callers
