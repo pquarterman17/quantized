@@ -196,13 +196,24 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
          + the id table's sheet map; a sheet is labelled only when every
          column is covered). Scorer: column metadata 0 -> 1,609 match /
          0 wrong (108 omitted); error bars 0 -> 12 match.
-   - [ ] **Error-bar plots decode as curves** (6 specimens: the
-         `error_columns` Y-error column drawn as a phantom line). The curve
-         token's plot byte 76 = 0xe7 / 0xe9 is Origin's plot 231 / 233
-         (y / x error bar). Pre-existing on every Text & Numeric file:
-         2,734 such curves in 36 real files on main. Owner decision
-         2026-11-15: omit them (separate commit, COM-proven). Anchor
-         `line/error_columns`.
+   - [x] ~~**Error-bar plots decode as curves**~~ FIXED 2026-11-15 (own
+         commit). The curve token's plot byte 76 = 0xe7 / 0xe9 is Origin's
+         plot 231 / 233 (y / x error bar); such a curve is omitted
+         (`error_bar_plot`, `opju_plot_gates`) and its caption dropped with
+         the rest renumbered. Scorer: curve/drawn phantoms 6 -> 0. Real
+         corpus: 2,738 error-bar curves -> 0 (36 files; 2,734 of them on
+         main). COM `GetPlotType()`: all 2,738 tokens with those bytes are
+         error-bar plots, 0 of 1,731 other-byte tokens are; resolved legend
+         captions of all 1,395 kept curves on those layers unchanged; 109
+         Y-error bars still attach to Origin's Y from the decoded
+         designations, 13 X-error bars do not draw (no horizontal whiskers)
+         and 2,616 Y-error bars are lost because their column's designation
+         does not decode (2,447), it is not Y-error (95) or pairs with
+         another Y (60) / an undrawn Y (14) -- an omission, never a line.
+   - [ ] **Error bars lost with the phantom lines** (2,616 Y-error + 13
+         X-error on the real corpus, above): bind a bar to the Y it
+         decorates from the token itself (its record X = the decorated Y),
+         not only from designations; X-error whiskers need a renderer.
    - [x] ~~**Step drawn as a line**~~ FIXED 2026-11-15: curve record byte 17
          = 11 is `line.connect` 7 (13 specimens, 39 curves; 0 of 7,103
          corpus records), so the line style is withheld

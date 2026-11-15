@@ -127,7 +127,7 @@ from quantized.io.origin_project.opju_curve_token import (
 )
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
-from quantized.io.origin_project.opju_plot_gates import withhold_step_style
+from quantized.io.origin_project.opju_plot_gates import error_bar_reason, withhold_step_style
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
@@ -412,6 +412,8 @@ def extract_curves_by_id(
             curve.update(style_fields(record))
         if not reason:  # a plot of part of its column: no row-range binding
             reason = range_reason(b, record, sheet or book, y_col)
+        # an error-bar DataPlot: bars drawn from designations, never a line
+        reason = error_bar_reason(record) or reason
         # the shipped 8f-tag reader stays authoritative for line/scatter
         style = curve_plot_style(b, m.start())
         if style:

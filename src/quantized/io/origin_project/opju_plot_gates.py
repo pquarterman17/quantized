@@ -23,9 +23,22 @@ oracle.
 X-error-bar plots (OriginLab ``plotxy`` ids; ``tools/plot_corpus`` README).
 Such a DataPlot draws bars on the curve before it, from the error column the
 token names; quantized draws error bars from the column designation, so a
-curve bound to that column is a phantom line. Evidence: every
-``error_columns`` specimen's error column token stores 231 where Origin's
-``GetPlotType()`` reads 231 (6 specimens), and its X-error column 233.
+curve bound to that column is a phantom line: it is omitted
+(``error_bar_plot``), its legend caption with it (``without_captions``
+renumbers the rest, so no kept curve's caption changes).
+
+Evidence (Origin 2026b COM ``DataPlot::GetPlotType()`` per plot,
+2026-11-15): the ``error_columns`` specimens' error tokens store 231 / 233
+exactly where Origin reads 231 / 233. On the 36 real files carrying such
+tokens, all 2,738 decoded tokens with byte 0xe7 / 0xe9 are Origin error-bar
+plots (2,725 + 1 type-matched, 12 0xe7 tokens that Origin reads 233), and
+none of the 1,731 decoded tokens with any other byte is. Every one was a
+curve drawn against the wrong X before (the bar's own X is the Y it
+decorates). Resolved legend captions of all 1,395 kept curves on those
+layers are unchanged. Bars that still draw from designations: 109 Y-error
+bars attach to Origin's Y; 2,616 Y-error and 13 X-error bars are lost
+(mostly books whose designations do not decode) -- an omission, not a wrong
+line.
 """
 
 from __future__ import annotations

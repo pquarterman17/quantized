@@ -224,3 +224,32 @@ def test_realdata_numeric_book_labels(corpus_dir: Path) -> None:
     assert md["x_column_long"] == "timepoint"
     assert md["column_designations"]["A"] == "X"
     assert books["Book2"].labels[0] == "Stimulus"
+
+
+def test_error_bar_plot_is_not_a_curve() -> None:
+    from quantized.io.origin_project.opju_plot_gates import error_bar_reason
+
+    rec = bytearray(519)
+    for byte, want in ((0xE7, "error_bar_plot"), (0xE9, "error_bar_plot"), (0xC8, "")):
+        rec[76] = byte
+        assert error_bar_reason(bytes(rec)) == want
+    assert error_bar_reason(None) == ""
+
+
+_BET = (
+    "origin/public/zhichaojin357-ctrl_ResearchDataOriginPipeline/templates/"
+    "origin_styles/reference_opju/BET.opju"
+)
+
+
+@pytest.mark.realdata
+def test_realdata_error_bar_plots_are_omitted(corpus_dir: Path) -> None:
+    """Origin (``GetPlotType``): Graph1 plots ``Isotherm_A`` and
+    ``Isotherm_C`` as Y-error bars (231) and B, D, F, H, J, L as lines."""
+    from quantized.io.origin_project.figures_opju import extract_figures_opju
+
+    b = _path(corpus_dir, _BET).read_bytes()
+    fig = next(f for f in extract_figures_opju(b) if f["name"] == "Graph1")
+    assert {c["y"] for c in fig["curves"]} == {"B", "D", "F", "H", "J", "L"}
+    omitted = {(n["y"], n["reason"]) for n in fig["curve_sheet_omitted"]}
+    assert omitted == {("A", "error_bar_plot"), ("C", "error_bar_plot")}
