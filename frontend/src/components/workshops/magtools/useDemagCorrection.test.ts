@@ -81,13 +81,72 @@ describe("useDemagCorrection", () => {
     expect(result.current.problem).toMatch(/Units tab first/);
   });
 
-  it("refuses to understate uncertainty when applied-field error exists", () => {
-    const data = loop();
-    data.errorRoles = [...(data.errorRoles ?? []), { channel: 1, target: -1, axis: "x", side: "both" }];
-    useApp.setState({ datasets: [data], activeId: "mh" });
+  function loopWithFieldError(side: "both" | "+" | "-" = "both", unit = "Oe", target = -1): Dataset {
+    const d = loop();
+    d.data = {
+      ...d.data,
+      values: [[-10, 0.2, 5], [0, Number.NaN, 5], [10, 0.4, Number.NaN]],
+      labels: ["Magnetization", "M uncertainty", "H uncertainty"],
+      units: [d.data.units[0], d.data.units[1], unit],
+    };
+    d.errorRoles = [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 2, target, axis: "x", side },
+    ];
+    return d;
+  }
+
+  it("propagates applied-field uncertainty (sent as field_errors) and keeps its gap rows as gaps", async () => {
+    useApp.setState({ datasets: [loopWithFieldError()], activeId: "mh" });
     const { result } = renderHook(() => useDemagCorrection());
     act(() => result.current.setShape("Sphere"));
-    expect(result.current.problem).toMatch(/applied-field uncertainty/);
+    expect(result.current.problem).toBeNull();
+    vi.mocked(demagCorrectField).mockResolvedValue({
+      field: [-958.1121, 0, 958.1121], field_errors: [[5.1, 5, 0]],
+      field_unit: "Oe", magnetization_unit: "emu/cm³",
+      shape: "Sphere", n_factor: 1 / 3, n_cgs: 4 * Math.PI / 3,
+    });
+    await act(async () => { await result.current.apply(); });
+    expect(demagCorrectField).toHaveBeenCalledWith(expect.objectContaining({
+      magnetization_errors: [[0.2, 0, 0.4]], field_errors: [[5, 5, 0]],
+    }));
+    const out = useApp.getState().datasets[1];
+    // Row 1 has a gap M uncertainty and row 2 a gap field uncertainty: neither is invented.
+    expect(out.data.values.map((r) => r[2])).toEqual([5.1, Number.NaN, Number.NaN]);
+    expect(out.data.metadata.magnetometry_demag_correction).toEqual(expect.objectContaining({
+      uncertainty: expect.stringContaining("magnetization and applied-field"),
+    }));
+  });
+
+  it("carries applied-field uncertainty alone into one internal-field error column", async () => {
+    const d = loopWithFieldError();
+    d.errorRoles = [{ channel: 2, target: -1, axis: "x", side: "both" }];
+    useApp.setState({ datasets: [d], activeId: "mh" });
+    const { result } = renderHook(() => useDemagCorrection());
+    act(() => result.current.setShape("Sphere"));
+    vi.mocked(demagCorrectField).mockResolvedValue({
+      field: [-958.1121, 0, 958.1121], field_errors: [[5, 5, 0]],
+      field_unit: "Oe", magnetization_unit: "emu/cm³",
+      shape: "Sphere", n_factor: 1 / 3, n_cgs: 4 * Math.PI / 3,
+    });
+    await act(async () => { await result.current.apply(); });
+    expect(demagCorrectField).toHaveBeenCalledWith(expect.objectContaining({ magnetization_errors: [], field_errors: [[5, 5, 0]] }));
+    const out = useApp.getState().datasets[1];
+    expect(out.data.labels).toEqual(["Magnetization", "Internal field uncertainty"]);
+    expect(out.errorRoles).toEqual([{ channel: 1, target: -1, axis: "x", side: "both" }]);
+  });
+
+  it("fails closed on asymmetric, wrong-unit, or foreign-axis applied-field uncertainty", () => {
+    for (const [d, re] of [
+      [loopWithFieldError("+"), /asymmetric/],
+      [loopWithFieldError("both", "T"), /not the field unit Oe/],
+      [loopWithFieldError("both", "Oe", 1), /different x axis/],
+    ] as const) {
+      useApp.setState({ datasets: [d], activeId: "mh" });
+      const { result } = renderHook(() => useDemagCorrection());
+      act(() => result.current.setShape("Sphere"));
+      expect(result.current.problem).toMatch(re);
+    }
   });
 
   it("reverses asymmetric uncertainty sides because magnetization is subtracted", async () => {

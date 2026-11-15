@@ -7262,6 +7262,8 @@ export interface components {
         CurieWeissDataFitRequest: {
             /** Field */
             field?: number[] | null;
+            /** Field Errors */
+            field_errors?: number[][];
             /**
              * Field Unit
              * @default Oe
@@ -7437,6 +7439,8 @@ export interface components {
         DemagCorrectRequest: {
             /** Field */
             field: number[];
+            /** Field Errors */
+            field_errors?: number[][];
             /** Field Unit */
             field_unit: string;
             /** Magnetization */

@@ -110,7 +110,7 @@ export function useCurieWeiss() {
     setFieldKey(null);
   }, [active?.id, xKey, yKey, sourceRange]);
 
-  const fields = active ? fieldColumns(active.data, yKey) : [];
+  const fields = active ? fieldColumns(active.data, yKey, (active.errorRoles ?? []).map((r) => r.channel)) : [];
   const selectedField = fields.find((field) => field.index === fieldKey) ??
     (fieldKey == null && fields.length === 1 ? fields[0] : null);
   const basis = active ? responseBasis(basisChoice, active.data.units[yKey] ?? "") : null;
@@ -142,7 +142,7 @@ export function useCurieWeiss() {
       const current = magXY(analysisDataset, request.xKey, request.yKeys, request.seriesOrder);
       const full = magXY(dataset, request.xKey, request.yKeys, request.seriesOrder);
       const sourceRows = view.rowIds ?? current.x.map((_, index) => index);
-      const currentFields = fieldColumns(view.data, current.yKey);
+      const currentFields = fieldColumns(view.data, current.yKey, (dataset.errorRoles ?? []).map((r) => r.channel));
       const field = currentFields.find((candidate) => candidate.index === runParams.fieldKey) ??
         (runParams.fieldKey == null && currentFields.length === 1 ? currentFields[0] : null);
       const currentBasis = responseBasis(runParams.basisChoice, dataset.data.units[current.yKey] ?? "");
@@ -155,10 +155,21 @@ export function useCurieWeiss() {
         setReadout({ ...EMPTY, owners, error: currentProblem ?? "The response basis is not supported." });
         return;
       }
-      if (field && (dataset.errorRoles ?? []).some((role) => role.target === field.index)) {
+      // Applied-field uncertainty (a role targeting the field column) only
+      // matters when the field is divided out. Symmetric, same-unit columns are
+      // propagated in quadrature; anything else is refused, never understated.
+      const fieldRoles = currentBasis === "molar_susceptibility" || !field ? [] :
+        (dataset.errorRoles ?? []).filter((role, i, roles) => role.target === field.index &&
+          role.channel >= 0 && role.channel < dataset.data.labels.length &&
+          roles.findIndex((other) => other.channel === role.channel && other.target === role.target) === i);
+      const badField = fieldRoles.find((role) => role.side !== "both" ||
+        ((dataset.data.units[role.channel] ?? "") !== "" && dataset.data.units[role.channel] !== field!.unit));
+      if (badField) {
         setReadout({
           ...EMPTY, owners,
-          error: "The applied-field column has uncertainty. Field-error propagation is not supported yet, so the fit was not run.",
+          error: badField.side !== "both"
+            ? "The applied-field uncertainty is asymmetric (+/-). Only symmetric field uncertainty can be propagated, so the fit was not run."
+            : `The applied-field uncertainty column is in ${dataset.data.units[badField.channel]}, not the field unit ${field!.unit}; convert it first. The fit was not run.`,
         });
         return;
       }
@@ -184,11 +195,18 @@ export function useCurieWeiss() {
         return;
       }
 
-      const roles = yErrorRoles(dataset, current.yKey);
+      const responseRoles = yErrorRoles(dataset, current.yKey);
+      // Field uncertainty alone still yields one propagated error column.
+      const roles: ErrorBinding[] = responseRoles.length || !fieldRoles.length ? responseRoles :
+        [{ channel: -1, target: current.yKey, axis: "y", side: "both" }];
       const errorFinite = roles.map((role) => keep.map((row) =>
-        Number.isFinite(view.data!.values[row]?.[role.channel]),
+        role.channel < 0 || Number.isFinite(view.data!.values[row]?.[role.channel]),
       ));
-      const responseErrors = roles.map((role, roleIndex) => keep.map((row, index) =>
+      const fieldFinite = keep.map((row) => fieldRoles.every((role) => Number.isFinite(view.data!.values[row]?.[role.channel])));
+      const fieldErrors = fieldRoles.map((role) => keep.map((row, index) =>
+        fieldFinite[index] ? Math.abs(view.data!.values[row][role.channel]) : 0,
+      ));
+      const responseErrors = responseRoles.map((role, roleIndex) => keep.map((row, index) =>
         errorFinite[roleIndex][index] ? Math.abs(view.data!.values[row][role.channel]) : 0,
       ));
       const result = await magneticCurieWeissDataFit({
@@ -201,6 +219,7 @@ export function useCurieWeiss() {
         sample_mass_g: currentBasis === "total_moment" ? runParams.sampleMassG : null,
         molar_mass_g_mol: currentBasis === "molar_susceptibility" ? null : runParams.molarMass,
         response_errors: responseErrors,
+        ...(fieldErrors.length ? { field_errors: fieldErrors } : {}),
       });
       if (!resolvedSourceStillCurrent(request, dataset.data)) return;
       const liveDataset = currentRequestDataset(dataset.id);
@@ -227,7 +246,7 @@ export function useCurieWeiss() {
         const values = scatter(result.inverse_errors[roleIndex] ?? [], sourceKeep, full.x.length);
         const outputSide = swappedSide(role.side);
         for (let index = 0; index < keep.length; index++) {
-          if (!errorFinite[roleIndex][index]) values[sourceKeep[index]] = Number.NaN;
+          if (!errorFinite[roleIndex][index] || !fieldFinite[index]) values[sourceKeep[index]] = Number.NaN;
         }
         const channel = columns.length;
         columns.push(values);
@@ -267,7 +286,8 @@ export function useCurieWeiss() {
             mu_eff_mu_b: result.mu_eff,
             r2: result.r2,
             n_fit: result.n_fit,
-            field_and_sample_quantities_treated_exact: currentBasis !== "molar_susceptibility",
+            field_and_sample_quantities_treated_exact: currentBasis !== "molar_susceptibility" && !fieldRoles.length,
+            field_uncertainty_propagated: fieldRoles.length > 0,
             fit_weighting: "unweighted",
           },
         },
@@ -286,7 +306,9 @@ export function useCurieWeiss() {
       if ((dataset.errorRoles ?? []).some((role) => role.axis === "x" && role.target === -1)) {
         warnings.push("Temperature uncertainty is not used by this ordinary least-squares fit.");
       }
-      if (currentBasis !== "molar_susceptibility") warnings.push("Field, sample mass, and molar mass were treated as exact.");
+      if (currentBasis !== "molar_susceptibility") {
+        warnings.push(`${fieldRoles.length ? "Sample mass and molar mass were" : "Field, sample mass, and molar mass were"} treated as exact${fieldRoles.length ? "; applied-field uncertainty was propagated" : ""}.`);
+      }
       if (runParams.basisChoice === "molar" && !isMolarSusceptibilityUnit(dataset.data.units[current.yKey] ?? "")) {
         warnings.push("The selected response was explicitly treated as cm³/mol despite its unrecognized unit label.");
       }

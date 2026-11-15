@@ -3704,6 +3704,16 @@
             ],
             "title": "Field"
           },
+          "field_errors": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Field Errors",
+            "type": "array"
+          },
           "field_unit": {
             "default": "Oe",
             "title": "Field Unit",
@@ -4138,6 +4148,16 @@
               "type": "number"
             },
             "title": "Field",
+            "type": "array"
+          },
+          "field_errors": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Field Errors",
             "type": "array"
           },
           "field_unit": {

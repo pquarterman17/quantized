@@ -78,15 +78,41 @@ describe("useCurieWeiss", () => {
     expect(hook.current.theta).toBe(50);
   });
 
-  it("refuses field uncertainty rather than silently understating the result", async () => {
-    const data = mt();
-    data.errorRoles = [...(data.errorRoles ?? []), { channel: 1, target: 2, axis: "y", side: "both" }];
-    useApp.setState({ datasets: [data] });
+  function withFieldError(side: "both" | "+" = "both", unit = "Oe"): Dataset {
+    const d = mt();
+    d.data = {
+      ...d.data,
+      values: d.data.values.map((r, i) => [...r, i === 3 ? Number.NaN : 5]),
+      labels: [...d.data.labels, "Field error"],
+      units: [...d.data.units, unit],
+    };
+    d.errorRoles = [...(d.errorRoles ?? []), { channel: 3, target: 2, axis: "y", side }];
+    return d;
+  }
+
+  it("propagates symmetric applied-field uncertainty as field_errors and gaps rows where it is missing", async () => {
+    useApp.setState({ datasets: [withFieldError()] });
     const { result: hook } = renderHook(() => useCurieWeiss());
     act(() => { hook.current.setSampleMass(100); hook.current.setMolarMass(200); });
     await act(async () => { await hook.current.fit(); });
-    expect(hook.current.error).toMatch(/field.*uncertainty/i);
-    expect(magneticCurieWeissDataFit).not.toHaveBeenCalled();
+    expect(magneticCurieWeissDataFit).toHaveBeenCalledWith(expect.objectContaining({
+      response_errors: [[0.004, 0.002, 0, 0.001]], field_errors: [[5, 5, 5, 0]],
+    }));
+    const output = useApp.getState().datasets[1];
+    expect(output.data.values[3][2]).toBeNaN(); // last row: field error is a gap
+    expect(output.data.metadata.curie_weiss_fit).toEqual(expect.objectContaining({ field_uncertainty_propagated: true }));
+  });
+
+  it("fails closed on asymmetric or wrong-unit applied-field uncertainty", async () => {
+    for (const [d, re] of [[withFieldError("+"), /asymmetric/], [withFieldError("both", "T"), /not the field unit Oe/]] as const) {
+      vi.mocked(magneticCurieWeissDataFit).mockClear();
+      useApp.setState({ datasets: [d] });
+      const { result: hook } = renderHook(() => useCurieWeiss());
+      act(() => { hook.current.setSampleMass(100); hook.current.setMolarMass(200); });
+      await act(async () => { await hook.current.fit(); });
+      expect(hook.current.error).toMatch(re);
+      expect(magneticCurieWeissDataFit).not.toHaveBeenCalled();
+    }
   });
 
   it("abandons an in-flight fit when the source data is replaced", async () => {
