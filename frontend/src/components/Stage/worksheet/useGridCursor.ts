@@ -224,7 +224,12 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       setAll({ range: full, active: { anchor: f, focus: f } });
       return true;
     }
-    if (!range) {
+    // A grid that has focus but no cursor (a header click or right-click clears
+    // it) still answers the jump keys, starting from the first cell — Ctrl+End
+    // then Home must reach the last row's first cell, not do nothing.
+    const jumpFromNone = !range && (e.target as HTMLElement).id === gridId && ["Home", "End", "PageUp", "PageDown"].includes(e.key);
+    const start = range ?? (jumpFromNone ? cellAt({ pos: 0, col: -1 }, b) : null);
+    if (!start) {
       // Keyboard entry into a grid that has focus but no cursor yet.
       if ((e.target as HTMLElement).id === gridId && (ARROWS[e.key] || e.key === "Enter" || e.key === "Tab")) {
         place(cellAt({ pos: 0, col: -1 }, b));
@@ -235,8 +240,8 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const k = e.key;
     // Keys that move or edit act from the pre-select-all active cell and
     // collapse the selection to it; clear / copy / cut / fill keep the range.
-    const fromAll = all && all.range === range && !accel && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
-    const cur = fromAll ? { anchor: clampCell(all.active.focus, b), focus: clampCell(all.active.focus, b) } : range;
+    const fromAll = all && all.range === range && !(accel && ["a", "c", "x", "v", "d"].includes(k.toLowerCase())) && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
+    const cur = fromAll ? { anchor: clampCell(all.active.focus, b), focus: clampCell(all.active.focus, b) } : start;
     if (fromAll) setRange(cur);
     // A jump to the bottom lands on the last DATA row, as Ctrl+End does in a
     // spreadsheet — never on the blank entry row under it.

@@ -101,6 +101,22 @@ describe("worksheet Ctrl+A", () => {
     expect(next).toMatch(/-r3-c/);
   });
 
+  it("Ctrl+Arrow after Ctrl+A jumps from the remembered cell, not from the select-all corner", () => {
+    selectAllFromCell(2, 0);
+    key("ArrowRight", { ctrlKey: true });
+    expect(active()).toMatch(/-r2-c1$/); // row 2 (the remembered cell's), not row 299
+  });
+
+  it("a focused grid with NO cursor (a header click clears it): Ctrl+End then Home reach the last row's first cell", () => {
+    render(<WorksheetPane datasetId="w" />);
+    grid().focus();
+    expect(active()).toBeNull();
+    key("End", { ctrlKey: true });
+    expect(active()).toMatch(new RegExp(`-r${N - 1}-c1$`));
+    key("Home");
+    expect(active()).toMatch(new RegExp(`-r${N - 1}-c0$`));
+  });
+
   it("hiding the remembered active column AFTER Ctrl+A: the active cell and the next arrow key stay on shown columns", () => {
     const d = big();
     d.data = { ...d.data, values: d.data.values.map((r) => [r[0]!, r[0]! + 1, r[0]! + 2]), labels: ["A", "B", "C"], units: ["", "", ""] };
