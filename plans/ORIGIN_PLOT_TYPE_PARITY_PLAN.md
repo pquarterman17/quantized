@@ -160,22 +160,61 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
    stacked area, double-Y, error bars/bands, log/reversed axes, multi-layer.
    Measured by the item 2 scorer (2026-11-15, 231 specimens; anchor
    specimen named per gap). Items 6 and 7 share the first two gaps.
-   - [ ] **No curve binding decodes on any Origin 2026b `.opju`: 0 / 484
-         Origin curves.** `column_id_table` is empty on 231 / 231 specimens,
-         so `extract_figures_opju` takes the legacy counting fallback, which
-         binds nothing and leaves every figure unnamed (page unattributed).
-         Everything per curve is blocked behind it: plot type (0 decoded),
-         styles (0 / 750 planted: colour 334, line width 139, dash 139,
-         symbol 69, symbol size 69) and the drawn view. Anchor `line/clean`.
-   - [ ] **No column metadata decodes: designations 0 / 806, long names
-         0 / 806 (labels fall back to the letter), units 0 / 105.** With no
-         binding either, the frontend's default view draws WRONG curves:
-         `error_columns` draws Y-error and X-error as Y curves (12 phantom
-         curves in 6 specimens: line, scatter, line+symbol, step, area,
-         y_error); `area/multi_x` draws X2 as a curve and D against A instead
-         of C (1 wrong, 1 phantom); `double_y` draws every column on both
-         layers (6 phantom curves in 6 specimens). Error bars: 0 / 12.
-         Anchor `line/error_columns`.
+   - [x] ~~**No curve binding decodes on any Origin 2026b `.opju`: 0 / 484
+         Origin curves.**~~ FIXED 2026-11-15
+         (`fix/opju-2026b-saved-bindings`). Cause: the column-id table's
+         field walk required the `09` "separator" and the `21 51/21 61/30 61`
+         markers, which are really the column's display format (offset 30 =
+         9, Text & Numeric) and two format flag bits -- every COM/LabTalk-
+         filled column is Numeric (`01 50/01 60/10 60`, no `09`). Proven by a
+         COM matched pair (same book saved as format 1 vs 9: only offsets
+         30, 37 bit 0x20 and 38 bit 0x01 differ). New `opju_column_fixed`
+         reads the record at fixed offsets (code 17, name 18, format 30,
+         partner 35, flags 37/38; 36,240 corpus records where both readers
+         decode agree 100% on name + designation) and only ADDS ids the
+         walk did not resolve; `opju_curve_token_x` masks the same two
+         format bits. Scorer: curves 0 -> 229 match / 0 wrong; styles 0 ->
+         412 match / 0 wrong; plot type 13 -> 46 match; axes 804 -> 870
+         match. Histograms bind but omit (`x_not_a_column`, record X id 0:
+         Origin plots them against row numbers, item 71 of the decode plan).
+         Real corpus vs main (359 `.opju`, Origin 2026b COM `%Z` / `xof` /
+         `wks.col.type` / `lname$` on every changed file): 0 curves
+         vanished; every newly drawn curve matches Origin except 4 that are
+         error-bar plots (sub-task below); 3 main curves drawn against the
+         wrong X now bind Origin's X; every changed designation matches
+         `wks.col.type`; labels match or stay the short name (omitted), 11
+         carry the importer's existing duplicate-name suffix (`E (2)`).
+   - [x] ~~**No column metadata decodes: designations 0 / 806, long names
+         0 / 806, units 0 / 105.**~~ FIXED 2026-11-15. New `opju_record_meta`
+         labels sheets `windows_opju`'s raw marker scan leaves unlabelled,
+         from the column records themselves (designation code at offset 17,
+         label record after the record, sheet by the window's sheet headers
+         + the id table's sheet map; a sheet is labelled only when every
+         column is covered). Scorer: column metadata 0 -> 1,609 match /
+         0 wrong (108 omitted); error bars 0 -> 12 match.
+   - [x] ~~**Error-bar plots decode as curves**~~ FIXED 2026-11-15 (own
+         commit). The curve token's plot byte 76 = 0xe7 / 0xe9 is Origin's
+         plot 231 / 233 (y / x error bar); such a curve is omitted
+         (`error_bar_plot`, `opju_plot_gates`) and its caption dropped with
+         the rest renumbered. Scorer: curve/drawn phantoms 6 -> 0. Real
+         corpus: 2,738 error-bar curves -> 0 (36 files; 2,734 of them on
+         main). COM `GetPlotType()`: all 2,738 tokens with those bytes are
+         error-bar plots, 0 of 1,731 other-byte tokens are; resolved legend
+         captions of all 1,395 kept curves on those layers unchanged; 109
+         Y-error bars still attach to Origin's Y from the decoded
+         designations, 13 X-error bars do not draw (no horizontal whiskers)
+         and 2,616 Y-error bars are lost because their column's designation
+         does not decode (2,447), it is not Y-error (95) or pairs with
+         another Y (60) / an undrawn Y (14) -- an omission, never a line.
+   - [ ] **Error bars lost with the phantom lines** (2,616 Y-error + 13
+         X-error on the real corpus, above): bind a bar to the Y it
+         decorates from the token itself (its record X = the decorated Y),
+         not only from designations; X-error whiskers need a renderer.
+   - [x] ~~**Step drawn as a line**~~ FIXED 2026-11-15: curve record byte 17
+         = 11 is `line.connect` 7 (13 specimens, 39 curves; 0 of 7,103
+         corpus records), so the line style is withheld
+         (`opju_plot_gates`); the curve stays bound. Drawing true steps is
+         the "no quantized mapping for step" sub-task below.
    - [ ] **Phantom sheet from a deleted sheet.** `deleted_sheet` imports the
          deleted sheet's data as book `DelA@2` (wrong book name too) and names
          the survivor `Del@3`. 5 specimens (line, scatter, line+symbol, step,
@@ -212,16 +251,25 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
    multi-panel. Measured by the item 2 scorer (2026-11-15).
-   - [ ] **Bubble / colour-mapped: the size / colour column is drawn as its
-         own curve** (22 phantom curves in 12 specimens: bubble and
-         color_mapped x {clean, descending_x, nan_gaps, negative, noisy,
-         unicode_names}). Anchor `bubble/clean`.
+   - [ ] **Bubble / colour-mapped: the size / colour encoding is not
+         decoded.** Since 2026-11-15 the X/Y bind (7 + 7 specimens) and the
+         figure carries `marker_encoding_not_decoded` (`opju_layer_kind`,
+         from the page's template name `bubble` / `colormapp`); the scorer
+         still counts these 14 plot types "drawn as scatter" (Origin's own
+         `GetPlotType()` reads 201 for them). Book: decode the size / colour
+         modifier column. Anchor `bubble/clean`.
    - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
          (6 / 6 each), but quantized draws Y and Z as lines against X.**
          Heatmap (matrix): no layer recovered. Matrix cells import exactly
          (800 / 800).
-   - [ ] **Polar draws as a Cartesian line** (axes 6 / 6 match; polar is the
-         layer's coordinate system, not a plot byte).
+   - [ ] **Polar and offset-stacked (waterfall) layers are not rebuilt.**
+         Since 2026-11-15 their curves are LEFT OUT
+         (`layer_kind_not_decoded`, `opju_layer_kind`, from the page's
+         template name `Polar` / `OffsetSta` -- a sufficient, not necessary,
+         signal) rather than drawn as Cartesian / un-offset lines. Real
+         corpus: 4 pages in 2 files carry `OffsetSta`, none with a decoded
+         curve, so 0 real-file curves are hidden vs main (8 + 1 specimens). Book: decode the
+         layer's coordinate system and offset (axes 6 / 6 match already).
 8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them
