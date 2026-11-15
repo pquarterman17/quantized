@@ -27,28 +27,14 @@ Usage (Windows, Origin installed, pywin32 available)::
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # ``-I`` omits the script dir
+
+from origin_proc import origin_pids, pid_file  # noqa: E402
+
 _SENTINEL = -987654321.0
-
-
-def _origin_pids() -> set[int]:
-    out = subprocess.run(
-        ["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=False
-    ).stdout
-    pids: set[int] = set()
-    for line in out.splitlines():
-        cols = [c.strip('"') for c in line.split('","')]
-        if len(cols) > 1 and cols[0].lower().startswith("origin"):
-            pids.add(int(cols[1].strip('"')))
-    return pids
-
-
-def pid_file(out: Path) -> Path:
-    """Sidecar naming the Origin instance THIS export started (see the runner)."""
-    return out.with_suffix(".pid")
 
 
 def export(src: Path, out: Path) -> None:
@@ -60,9 +46,9 @@ def export(src: Path, out: Path) -> None:
     # still leaves the runner an exact target. Two new PIDs in that window (the
     # owner opened Origin at the same moment) is ambiguous: record none, and
     # the runner then kills nothing.
-    before = _origin_pids()
+    before = origin_pids()
     app = wc.DispatchEx("Origin.ApplicationSI")
-    new = sorted(_origin_pids() - before)
+    new = sorted(origin_pids() - before)
     pid_file(out).write_text(json.dumps(new if len(new) == 1 else []), encoding="utf-8")
     try:
         app.Visible = 0

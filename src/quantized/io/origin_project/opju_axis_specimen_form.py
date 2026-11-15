@@ -38,6 +38,15 @@ __all__ = ["parse_hybrid_record"]
 _RLE_MARKERS = (0xC2, 0xC3)  # run of 5 / 6 repeated bytes (see ``_real_rle``)
 
 
+def _filler_third_byte_is_tag(b: bytes, tb: int) -> bool:
+    """``7b 40`` after the type byte at ``tb`` followed by a value TAG (0x81..0x8f).
+
+    Slice-based so a stream that ends right after ``7b 40`` is simply ``False``
+    (an index would raise and drop every figure of the project)."""
+    third = b[tb + 3 : tb + 4]
+    return b[tb + 1 : tb + 3] == b"{@" and len(third) == 1 and 0x81 <= third[0] <= 0x8F
+
+
 def _value_candidates(b: bytes, pos: int, end: int) -> list[tuple[float, int]]:
     """Every plausible ``(value, bytes_consumed)`` parse starting at ``pos``.
 
@@ -123,7 +132,7 @@ def _parse_specimen_record(
         x_log = False
     elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
         x_log = True
-    if b[tb + 1 : tb + 3] == b"{@" and 0x81 <= b[tb + 3] <= 0x8F:
+    if _filler_third_byte_is_tag(b, tb):
         # The skeleton's third filler byte is the Y span's first value TAG, not
         # the ``01`` scale flag: the geometry double carries no X-scale trailer
         # (type byte 02 = just ``7b 40``), so the fixed +3 skip below would eat
@@ -171,6 +180,8 @@ def parse_hybrid_record(
         x_log = False
     elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
         x_log = True
+    if _filler_third_byte_is_tag(b, tb):  # same guard as the specimen form
+        return None
     y_start = tb + 1 + 3
     ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
     if ystep < 0:

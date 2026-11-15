@@ -414,9 +414,15 @@ def _parse_real_record_sep(
         # No second separator at all -> the end is bounded by the nominal
         # geometry length (+200); a PRESENT but non-parsing one is not skipped
         # over in the strict pass.
-        m2s: list[re.Match[bytes] | None] = [*_sep_hits(sep_re, b, y_lo + plen, hi2, every=every)]
-        for m2 in m2s or [None]:
+        seen_m2 = False
+        # lazy: the wide pass stops at the first second separator that parses
+        for m2 in _sep_hits(sep_re, b, y_lo + plen, hi2, every=every):
+            seen_m2 = True
             got = _real_y_record(b, window_end, y_lo, plen, xpair, m2)
+            if got is not None:
+                return got
+        if not seen_m2:
+            got = _real_y_record(b, window_end, y_lo, plen, xpair, None)
             if got is not None:
                 return got
     return None
@@ -446,6 +452,9 @@ def _real_y_record(
     # The payload OPENS with its own value token (the layer-geometry double,
     # ``82 03 fc 8c 40`` / ``c3 66 02 7b 40``): the Y span cannot start at or
     # inside it, or an elided ``y_from`` reads that double as ``y_from``.
+    # Depends on ``y_hi`` (a token needing more bytes than ``y_hi - y_lo`` is
+    # rejected), so it is not hoisted out of the second-separator loop; measured
+    # at ~1 call per corpus record, i.e. nothing to save.
     geo_end = min((n for _, n in _real_candidates(b, y_lo, y_hi, bare=False)), default=0)
     for bare in (False, True):
         for y_start in range(y_lo + geo_end, y_scan_hi):

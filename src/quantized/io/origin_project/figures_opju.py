@@ -132,7 +132,11 @@ from typing import Any
 
 from quantized.io.origin_project.annotation_marks import _AUTO_TITLE
 from quantized.io.origin_project.annotation_marks import _clean_annotations as _drop_internal_noise
-from quantized.io.origin_project.figure_geometry import opju_layer_frame, opju_page_size
+from quantized.io.origin_project.figure_geometry import (
+    opju_anchor_has_length_prefix,
+    opju_layer_frame,
+    opju_page_size,
+)
 from quantized.io.origin_project.figure_layers import _log_heuristic
 from quantized.io.origin_project.figure_text import _LEGEND_RE, _texts_in
 from quantized.io.origin_project.opju_axis_real_form import (
@@ -304,6 +308,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     page_starts = [off for off, _name in pages]
     page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
     anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
+    # A page whose anchors carry the record-length varint counts ONLY those: a
+    # bare 4-byte match without it is a coincidence inside another block, not a
+    # layer, and must not shift the ordinal of the real layers after it. A page
+    # with no such anchor (legacy/synthetic streams) keeps counting every match.
+    prefixed = [opju_anchor_has_length_prefix(b, a) for a in anchors]
+    prefixed_pages = {
+        bisect_right(page_starts, a) - 1 for a, ok in zip(anchors, prefixed, strict=True) if ok
+    }
     for idx, anchor in enumerate(anchors):
         p = anchor + len(_ANCHOR)
         next_anchor = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
@@ -325,6 +337,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         # graphs: unnamed, layer 1.
         is_graph_page = not legacy and page_name is not None and page_name not in table.book_pages
         if is_graph_page:
+            if page_idx in prefixed_pages and not prefixed[idx]:
+                continue  # coincidental anchor match: not a layer, not counted
             page_layers[page_idx] = page_layers.get(page_idx, 0) + 1
         # Layer frame quad (12 00 20 22 marker; figure_geometry) -- with
         # the page size this places every panel of a multi-panel page.

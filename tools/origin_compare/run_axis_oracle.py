@@ -29,21 +29,18 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))  # ``-I`` omits the script dir
+
+from origin_proc import origin_pids, pid_file  # noqa: E402
+
 ROOT = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (HERE.parents[2] / "test-data"))
 
 
-def _origin_pids() -> set[int]:
-    if os.name != "nt":
-        return set()
-    out = subprocess.run(
-        ["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=False
-    ).stdout
-    pids: set[int] = set()
-    for line in out.splitlines():
-        cols = [c.strip('"') for c in line.split('","')]
-        if len(cols) > 1 and cols[0].lower().startswith("origin"):
-            pids.add(int(cols[1].strip('"')))
-    return pids
+def _write_status(outdir: Path, status: dict[str, dict[str, object]]) -> None:
+    """Atomically rewrite ``status.json`` so a crash keeps every finished file."""
+    tmp = outdir / "status.json.tmp"
+    tmp.write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, outdir / "status.json")
 
 
 def main() -> None:
@@ -53,9 +50,10 @@ def main() -> None:
     timeout = int(sys.argv[3]) if len(sys.argv) > 3 else 150
     outdir.mkdir(parents=True, exist_ok=True)
     status: dict[str, dict[str, object]] = {}
+    _write_status(outdir, status)
     for i, rel in enumerate(files):
         dst = outdir / f"{i:03d}.json"
-        sidecar = dst.with_suffix(".pid")  # written by export_axis_ranges.pid_file
+        sidecar = pid_file(dst)  # written by export_axis_ranges
         sidecar.unlink(missing_ok=True)
         cmd = [sys.executable, "-I", str(HERE / "export_axis_ranges.py"), str(ROOT / rel), str(dst)]
         try:
@@ -65,7 +63,7 @@ def main() -> None:
             ours: list[int] = []
             if sidecar.exists():
                 ours = json.loads(sidecar.read_text(encoding="utf-8"))
-            target = [p for p in ours if p in _origin_pids()]
+            target = [p for p in ours if p in origin_pids()]
             if len(target) == 1:
                 kill = ["taskkill", "/F", "/PID", str(target[0])]
                 subprocess.run(kill, capture_output=True, check=False)
@@ -73,11 +71,10 @@ def main() -> None:
             else:
                 status[rel] = {"out": None, "rc": "TIMEOUT", "killed": None}
                 print(i, "TIMEOUT: no exact Origin PID recorded; killed nothing, stopping", rel)
+                _write_status(outdir, status)
                 break
+        _write_status(outdir, status)
         print(i, status[rel]["rc"], rel, flush=True)
-    (outdir / "status.json").write_text(
-        json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8"
-    )
 
 
 if __name__ == "__main__":

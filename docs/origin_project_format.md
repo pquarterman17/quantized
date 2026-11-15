@@ -2719,6 +2719,20 @@ exactly one decoded record changes (this one); Origin 2026b COM, 102 oracle
 files: 1773 match / 3 wrong -> 1774 / 2 wrong (the two left are the Battery
 Aging value-shift defects, unchanged).
 
+**Layer anchor = length-prefixed (2026-11-15).** A real layer anchor follows its
+record-length varint (`b9 01`: a byte `>= 0x80`, then a final byte `1..0x7f`).
+All 2,752 anchors in oracle pages whose anchor count equals Origin's layer
+count carry it. The only two count mismatches in the 102-file oracle (`SOP_meas`
+Graph6, `histogram_released_viruses` Graph1: 2 anchors, 1 Origin layer) are a
+bare `03 00 00 5f` without it (`c0 ff` / `06 62` before). Corpus-wide, 6 anchors
+inside graph pages lack it and none decodes; four are outside the oracle -- in
+`Figure 6 Currents vary parameters` Graph3, anchors 10 and 11 are an id table
+(`03 00 00 20 03 00 00 21 ...`) sitting BEFORE the real 10th layer, which was
+numbered 12. A graph page that has at least one prefixed anchor now counts only
+those in the layer ordinal (pages with none keep counting every match). The
+layer frame is NOT a usable signal: 6 real anchors in oracle pages have no
+`12 00 20 22` frame (composite/embedded layers).
+
 **Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
 above, now resolved via ids). Per-graph vs the populated `index.json`
 oracles (`tools/origin_trial/score_curve_bindings.py`'s per-graph section +

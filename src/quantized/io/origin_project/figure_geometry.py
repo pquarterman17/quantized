@@ -35,7 +35,13 @@ from __future__ import annotations
 
 import struct
 
-__all__ = ["opj_layer_frame", "opj_page_size", "opju_layer_frame", "opju_page_size"]
+__all__ = [
+    "opj_layer_frame",
+    "opj_page_size",
+    "opju_anchor_has_length_prefix",
+    "opju_layer_frame",
+    "opju_page_size",
+]
 
 _OPJ_FRAME_OFFSET = 113
 _OPJ_PAGE_SIZE_OFFSET = 35
@@ -70,6 +76,18 @@ def opj_page_size(header_payload: bytes) -> dict[str, int] | None:
     if not (200 <= w <= 60000 and 200 <= h <= 60000):
         return None
     return {"width": int(w), "height": int(h)}
+
+
+def opju_anchor_has_length_prefix(b: bytes, anchor: int) -> bool:
+    """Whether the 2 bytes before a layer anchor end a LEB128 length varint.
+
+    Every layer anchor Origin 2026b confirms (2,752 of them, across the whole
+    axis oracle) follows its record-length varint (``b9 01``: continuation byte
+    ``>= 0x80`` then a final byte ``1..0x7f``); a ``03 00 00 1f``/``5f`` that
+    does not is a coincidental 4-byte match inside another block (an id table
+    ``03 00 00 1f 03 00 00 20 ...``, a style block). Used only to decide what
+    the layer ordinal counts, never to decode."""
+    return anchor >= 2 and b[anchor - 2] >= 0x80 and 0 < b[anchor - 1] < 0x80
 
 
 def opju_layer_frame(b: bytes, anchor: int, end: int) -> tuple[int, int, int, int] | None:
