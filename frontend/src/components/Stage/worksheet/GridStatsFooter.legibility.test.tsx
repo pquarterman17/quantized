@@ -9,7 +9,10 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import GridStatsFooter, { STAT_ROWS } from "./GridStatsFooter";
+import { layoutTextColumns } from "./textColumns";
 import { DEFAULT_GUTTER_WIDTH } from "../../../lib/gridwindow";
+
+const EMPTY_TEXT_LAYOUT = layoutTextColumns([], [], []);
 
 const shellCss = readFileSync(join(__dirname, "../../../styles/shell.css"), "utf8");
 
@@ -45,7 +48,7 @@ function renderFooter() {
       widthOf={() => 100}
       gutterWidth={DEFAULT_GUTTER_WIDTH}
       rowHeight={22}
-      textCols={[]}
+      textLayout={EMPTY_TEXT_LAYOUT}
     />,
   );
 }

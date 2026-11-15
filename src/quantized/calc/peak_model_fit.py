@@ -145,7 +145,7 @@ def fit_peak_model(
     if not math.isfinite(x_ref):
         raise ValueError("bg_x_ref must be finite")
     model = PeakModel(list(shapes), background, x_ref)
-    params = PeakParams(parameters, model.names, xspan, yscale)
+    params = PeakParams(parameters, model.names, xspan, yscale, list(shapes))
     n_points, n_free = int(xf.size), len(params.free)
     if n_points <= n_free:
         raise ValueError(f"{n_points} usable points cannot constrain {n_free} free parameters")
@@ -167,7 +167,9 @@ def fit_peak_model(
                         "without uncertainties")
     obj = float(np.sum(fit.residuals(xs) ** 2))
     dof = n_points - n_free
+    ext = params.ext(xs)
     v = params.full(xs)
+    dmat = params.jacobian(ext)
     if n_dropped:
         warnings.append(f"{n_dropped} rows with a non-finite value were dropped")
 
@@ -175,7 +177,7 @@ def fit_peak_model(
     # (budget or deadline stop) describes no minimum, so it would mislead.
     jac = fit.jac if fit.status == "converged" else None
     cov, undetermined = _covariance(jac, params, obj / dof)
-    at_bound = params.at_bound(v) if fit.jac is not None else [False] * n_free
+    at_bound = params.at_bound(ext) if fit.jac is not None else [False] * n_free
     no_err = [at_bound[k] or undetermined[k] or cov is None for k in range(n_free)]
     free_pos = {i: k for k, i in enumerate(params.free)}
     _flag(warnings, params, at_bound, "parameters ended on a bound (errors not reported): ")
@@ -184,17 +186,26 @@ def fit_peak_model(
           "fix or tie some of them): ")
 
     def stderr(i: int) -> float | None:
-        k = free_pos.get(params.root[i])
-        if k is None or no_err[k] or cov is None:
-            return None
-        return _finite(math.sqrt(max(float(cov[k, k]), 0.0)))
+        return _row_stderr(dmat[i], cov, no_err)
+
+    def coef_out(i: int) -> dict[str, Any]:
+        cp = params.coef_pos.get(i)
+        if cp is None:
+            return {"tie_op": params.op[i], "tie_coef": None, "tie_coef_stderr": None,
+                    "tie_coef_vary": False}
+        k = free_pos.get(cp)
+        err = None if k is None or no_err[k] or cov is None else _finite(
+            math.sqrt(max(float(cov[k, k]), 0.0)))
+        return {"tie_op": params.op[i], "tie_coef": float(ext[cp]), "tie_coef_stderr": err,
+                "tie_coef_vary": k is not None}
 
     out_params = [{
         "name": n, "value": float(v[i]), "stderr": stderr(i), "vary": i in free_pos,
         "tie": params.tie[i], "at_bound": bool(i in free_pos and at_bound[free_pos[i]]),
+        **coef_out(i),
     } for i, n in enumerate(params.names)]
 
-    peaks = [_derived(model, params, k, v, cov, no_err, free_pos)
+    peaks = [_derived(model, k, v, cov, no_err, dmat, params.scale)
              for k in range(len(model.shapes))]
     _peak_warnings(warnings, peaks, xlo, xhi)
 
@@ -202,7 +213,7 @@ def fit_peak_model(
     resid = yf - fit_y
     return {
         "parameters": out_params,
-        "free": [params.names[i] for i in params.free],
+        "free": [params.ext_names[i] for i in params.free],
         "correlation": _correlation(cov, no_err),
         "peaks": peaks,
         "background": {"kind": background, "x_ref": x_ref},
@@ -241,7 +252,7 @@ def _covariance(jac: NDArray[np.float64] | None, params: PeakParams,
 _DERIVED = ("center", "height", "fwhm", "area")
 
 
-def _quantity(key: str, shape: str, p: list[float]) -> float:
+def _quantity(key: str, shape: str, p: list[float]) -> float | None:
     if key == "center":
         return p[0]
     if key == "height":
@@ -249,31 +260,52 @@ def _quantity(key: str, shape: str, p: list[float]) -> float:
     return peak_fwhm(shape, p) if key == "fwhm" else peak_area(shape, p)
 
 
-def _derived(model: PeakModel, params: PeakParams, k: int, v: NDArray[np.float64],
+def _row_stderr(row: NDArray[np.float64], cov: NDArray[np.float64] | None,
+                no_err: list[bool]) -> float | None:
+    """1 sigma of a model parameter whose free-parameter gradient is ``row``
+    (a unit row reads the covariance diagonal directly, bit for bit)."""
+    touched = np.flatnonzero(row)
+    if touched.size == 0 or cov is None or any(no_err[int(q)] for q in touched):
+        return None
+    if touched.size == 1 and row[touched[0]] == 1.0:
+        k = int(touched[0])
+        return _finite(math.sqrt(max(float(cov[k, k]), 0.0)))
+    return _finite(math.sqrt(max(float(row @ cov @ row), 0.0)))
+
+
+def _derived(model: PeakModel, k: int, v: NDArray[np.float64],
              cov: NDArray[np.float64] | None, no_err: list[bool],
-             free_pos: dict[int, int]) -> dict[str, Any]:
-    """Peak ``k``'s centre/height/FWHM/area with delta-method errors."""
+             dmat: NDArray[np.float64], scale: NDArray[np.float64]) -> dict[str, Any]:
+    """Peak ``k``'s centre/height/FWHM/area with delta-method errors (None
+    where the shape does not define the quantity)."""
     shape, idx = model.shapes[k], model.fields[k]
     vals = [float(v[i]) for i in idx]
     out: dict[str, Any] = {"id": f"p{k}", "shape": shape}
     for key in _DERIVED:
-        out[key] = _quantity(key, shape, vals)
-        grad = np.zeros(len(params.free))
+        base = _quantity(key, shape, vals)
+        out[key] = None if base is None else _finite(base)
+        grad = np.zeros(dmat.shape[1])
         touched: set[int] = set()
+        ok = out[key] is not None
         for j, i in enumerate(idx):
-            pos = free_pos.get(params.root[i])
-            if pos is None:
+            row = dmat[i]
+            nz = np.flatnonzero(row)
+            if not ok or nz.size == 0:
                 continue
-            h = _REL_STEP * (abs(vals[j]) or float(params.scale[pos]))
+            h = _REL_STEP * (abs(vals[j]) or float(scale[int(nz[0])]))
             up, dn = list(vals), list(vals)
             up[j] += h
             dn[j] -= h
-            dg = (_quantity(key, shape, up) - _quantity(key, shape, dn)) / (2.0 * h)
+            q_up, q_dn = _quantity(key, shape, up), _quantity(key, shape, dn)
+            if q_up is None or q_dn is None:
+                ok = False
+                continue
+            dg = (q_up - q_dn) / (2.0 * h)
             if dg != 0.0:
-                grad[pos] += dg
-                touched.add(pos)
+                grad += dg * row
+                touched.update(int(q) for q in nz)
         err: float | None = None
-        if touched and cov is not None and not any(no_err[q] for q in touched):
+        if ok and touched and cov is not None and not any(no_err[q] for q in touched):
             err = _finite(math.sqrt(max(float(grad @ cov @ grad), 0.0)))
         out[f"{key}_stderr"] = err
     return out
@@ -288,6 +320,8 @@ def _peak_warnings(warnings: list[str], peaks: list[dict[str, Any]],
     for a in range(len(peaks)):
         for b in range(a + 1, len(peaks)):
             pa, pb = peaks[a], peaks[b]
+            if pa["fwhm"] is None or pb["fwhm"] is None:
+                continue
             sep = abs(pa["center"] - pb["center"])
             mean_w = 0.5 * (pa["fwhm"] + pb["fwhm"])
             if sep < OVERLAP_FWHM_FRACTION * mean_w:
@@ -296,7 +330,7 @@ def _peak_warnings(warnings: list[str], peaks: list[dict[str, Any]],
                     f"{OVERLAP_FWHM_FRACTION:g} x their mean FWHM ({mean_w:.4g}), so their "
                     "split is weakly defined")
     for p in peaks:
-        if p["height"] < 0 or p["area"] < 0:
+        if p["height"] < 0 or (p["area"] is not None and p["area"] < 0):
             warnings.append(f"peak {p['id']} has a negative height/area (a dip); set its "
                             "height min to 0 to forbid this")
 
@@ -327,7 +361,7 @@ def _metrics(yf: NDArray[np.float64], ef: NDArray[np.float64] | None,
 
 
 def _flag(warnings: list[str], params: PeakParams, flags: list[bool], head: str) -> None:
-    names = [params.names[i] for k, i in enumerate(params.free) if flags[k]]
+    names = [params.ext_names[i] for k, i in enumerate(params.free) if flags[k]]
     if names:
         warnings.append(head + ", ".join(names))
 

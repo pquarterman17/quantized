@@ -3,6 +3,8 @@
 // the source-vs-resampled overlay, the row counts and every warning before
 // "Create" adds anything. Thin — the logic lives in useResample.
 
+import { useState } from "react";
+
 import ToolWindow from "../../overlays/ToolWindow";
 import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button, Select } from "../../primitives";
@@ -10,6 +12,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { RESAMPLE_METHODS, resampleSource, type OutOfRange, type ResampleMethod, type ResampleMode } from "../../../lib/transformResample";
 import { useResampleDialog } from "../../../store/resampleDialog";
+import ReduceXYSection from "./ReduceXYSection";
 import ResamplePreviewPlot from "./ResamplePreviewPlot";
 import { MODE_OPTIONS, OUT_OF_RANGE_OPTIONS } from "./resampleForm";
 import { useResample, type ResampleState } from "./useResample";
@@ -104,11 +107,19 @@ export default function ResamplePanel() {
 
 function ResampleWorkshop() {
   const r = useResample();
+  const [tool, setTool] = useState<"grid" | "reduce">("grid");
   const matchName = r.form.mode === "match" ? r.datasets.find((d) => d.id === r.form.matchId)?.name : undefined;
   const n = r.targets.length;
   return (
-    <ToolWindow id="resample" title="Resample / align" width={340} onClose={r.close}>
-      {!r.datasets.length ? (
+    <ToolWindow id="resample" title="Resample / align" width={tool === "reduce" ? 440 : 340} onClose={r.close}>
+      <Select
+        aria-label="Operation"
+        options={[{ value: "grid", label: "Resample onto a grid" }, { value: "reduce", label: "Reduce rows (bin / duplicates / every Nth)" }]}
+        value={tool}
+        onChange={(e) => setTool(e.target.value as "grid" | "reduce")}
+        style={{ marginBottom: 8 }}
+      />
+      {tool === "reduce" ? <ReduceXYSection onClose={r.close} /> : !r.datasets.length ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Load a dataset to resample.</div>
       ) : (
         <>

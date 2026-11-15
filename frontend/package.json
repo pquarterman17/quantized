@@ -55,5 +55,8 @@
       "typescript": "$typescript"
     },
     "minimatch@^10": "^11.0.1"
+  },
+  "allowScripts": {
+    "canvas": true
   }
 }

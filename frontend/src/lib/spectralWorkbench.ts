@@ -30,7 +30,7 @@ export interface SpectralAnalysisRecipe {
   xMin?: number;
   xMax?: number;
   resample: boolean;
-  outputType: "magnitude" | "psd" | "phase";
+  outputType: "magnitude" | "psd" | "phase" | "magnitude+phase";
   sided: "one" | "two";
   window: "none" | "hanning" | "hamming" | "blackman" | "flattop";
   detrend: "mean" | "linear" | "none";
@@ -159,7 +159,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
   if (r.kind !== "spectral" || r.version !== 1) return undefined;
   const choices: Record<string, readonly string[]> = {
     operation: ["fft", "filter", "correlation"],
-    outputType: ["magnitude", "psd", "phase"],
+    outputType: ["magnitude", "psd", "phase", "magnitude+phase"],
     sided: ["one", "two"],
     window: ["none", "hanning", "hamming", "blackman", "flattop"],
     detrend: ["mean", "linear", "none"],

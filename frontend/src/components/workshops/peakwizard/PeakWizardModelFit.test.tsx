@@ -128,6 +128,34 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     expect(get("p1.height").tie).toBeNull();
   });
 
+  it("edits a doublet's offset and area-ratio ties and sends them (gap audit 4 G5)", async () => {
+    await findTwoPeaks();
+    step("Model");
+    expect(screen.queryByRole("combobox", { name: "#2 center tie operation" })).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "#2 center tie" }), { target: { value: "p0.center" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "#2 center tie operation" }), { target: { value: "offset" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "#2 center tie offset" }), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "#2 center fit tie coefficient" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "#2 height tie" }), { target: { value: "p0.height" } });
+    const op = screen.getByRole("combobox", { name: "#2 height tie operation" });
+    expect(within(op).getAllByRole("option").map((o) => o.getAttribute("value"))).toEqual(["equal", "ratio", "area_ratio"]);
+    fireEvent.change(op, { target: { value: "area_ratio" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "#2 height tie ratio" }), { target: { value: "0.5" } });
+    // A Fano reference peak has no area: the table says so and Fit is blocked.
+    fireEvent.change(screen.getByRole("combobox", { name: "peak 1 shape" }), { target: { value: "fano" } });
+    expect(screen.getByRole("list", { name: "parameter problems" })).toHaveTextContent("no finite area");
+    fireEvent.change(screen.getByRole("combobox", { name: "peak 1 shape" }), { target: { value: "split_gaussian" } });
+    expect(screen.queryByRole("list", { name: "parameter problems" })).toBeNull();
+
+    await fitWith(modelFitResponse());
+    await waitFor(() => expect(screen.getByLabelText("fit metrics")).toBeInTheDocument());
+    const params = bodies[0].parameters as Record<string, unknown>[];
+    const get = (n: string) => params.find((p) => p.name === n)!;
+    expect(bodies[0].shapes).toEqual(["split_gaussian", "gaussian"]);
+    expect(get("p1.center")).toMatchObject({ tie: "p0.center", tie_op: "offset", tie_coef: 2, tie_coef_vary: true });
+    expect(get("p1.height")).toMatchObject({ tie: "p0.height", tie_op: "area_ratio", tie_coef: 0.5, tie_coef_vary: false });
+  });
+
   it("cannot fix a parameter others are tied to, and blocks Fit on a table the backend would reject", async () => {
     await findTwoPeaks();
     step("Model");

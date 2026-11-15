@@ -14,6 +14,7 @@
 import type { TableColumnKind, TableColumnWire } from "../../../lib/api/worksheetExport";
 import { categoricalLevels } from "../../../lib/categorical";
 import { clipboardCellText } from "../../../lib/clipboardGrid";
+import type { TextColumn } from "../../../lib/originTextColumns";
 import type { Dataset } from "../../../lib/types";
 import { fmtDateCell } from "./cellFormat";
 import { worksheetTextColumns } from "./textColumns";
@@ -63,24 +64,72 @@ export function worksheetTableColumns(ds: Dataset, skipDisregard = false): Table
   return inFileOrder(cols, metadata?.["all_column_names"], metadata?.["origin_column_names"]);
 }
 
-/** `cols` reordered to the file's own column order when the importer recorded
- *  it; a column the file did not have (a formula column) keeps its place
- *  after the one before it. Stable, and the identity without a record. */
-function inFileOrder(cols: TableColumnPlan[], allNames: unknown, originNames: unknown): TableColumnPlan[] {
-  if (!Array.isArray(allNames) || Array.isArray(originNames)) return cols; // Origin books keep their own order
+/** Each of `names`' position within the file's own column list `allNames`
+ *  (bare-matched, each occurrence consumed left to right so a repeated bare
+ *  name resolves to successive file occurrences); a name with no match gets
+ *  a synthetic position just after the previous one — shared by `inFileOrder`
+ *  (Copy/Export) and `textColumnAnchors` (the grid) so both can never agree
+ *  to disagree about a file's column order. */
+function matchFilePositions(names: readonly string[], allNames: readonly string[]): number[] {
   const free = new Map<string, number[]>();
   allNames.forEach((n, i) => {
     const key = bare(String(n));
     free.set(key, [...(free.get(key) ?? []), i]);
   });
   let last = -1;
-  const keyed = cols.map((col, k) => {
-    const slots = free.get(bare(col.name));
+  return names.map((name) => {
+    const slots = free.get(bare(name));
     const pos = slots?.shift();
     last = pos ?? last + 1e-3; // unknown: just after the previous column
-    return { col, pos: last, k };
+    return last;
   });
-  return keyed.sort((a, b) => a.pos - b.pos || a.k - b.k).map((e) => e.col);
+}
+
+/** `cols` reordered to the file's own column order when the importer recorded
+ *  it; a column the file did not have (a formula column) keeps its place
+ *  after the one before it. Stable, and the identity without a record. */
+function inFileOrder(cols: TableColumnPlan[], allNames: unknown, originNames: unknown): TableColumnPlan[] {
+  if (!Array.isArray(allNames) || Array.isArray(originNames)) return cols; // Origin books keep their own order
+  const positions = matchFilePositions(cols.map((c) => c.name), allNames.map(String));
+  return cols
+    .map((col, k) => ({ col, pos: positions[k], k }))
+    .sort((a, b) => a.pos - b.pos || a.k - b.k)
+    .map((e) => e.col);
+}
+
+/** Which channel each of `textCols` (in order) displays immediately after in
+ *  the file's own column order — -1 meaning before every channel (right
+ *  after the pinned x column). Worksheet audit follow-up: the grid used to
+ *  always show every text column after every numeric one; this is what lets
+ *  it match Copy/Export's file order instead, without touching how the
+ *  channels themselves are stored or indexed. Shares `matchFilePositions`
+ *  (and its tie-break order: x, then channels, then text, same as
+ *  `inFileOrder`'s own `cols` traversal) with Copy/Export, so the two can
+ *  never drift apart. An Origin project, or a file with no recorded column
+ *  list, anchors every text column after the LAST channel — today's
+ *  always-trailing layout, unchanged. */
+export function textColumnAnchors(data: Dataset["data"], textCols: readonly TextColumn[]): number[] {
+  if (textCols.length === 0) return [];
+  const allNames = data.metadata?.["all_column_names"];
+  const originNames = data.metadata?.["origin_column_names"];
+  const lastChannel = data.labels.length - 1;
+  if (!Array.isArray(allNames) || Array.isArray(originNames)) return textCols.map(() => lastChannel);
+
+  const xName = String(data.metadata?.["x_column_long"] || data.metadata?.["x_column_name"] || "x");
+  const names = [xName, ...data.labels, ...textCols.map((t) => t.longName ?? t.shortName)];
+  const positions = matchFilePositions(names, allNames.map(String));
+  const order = names
+    .map((_, k) => k)
+    .sort((a, b) => positions[a] - positions[b] || a - b);
+
+  const channelCount = data.labels.length;
+  const anchors = new Array<number>(textCols.length);
+  let lastSeenChannel = -1;
+  for (const k of order) {
+    if (k >= 1 && k <= channelCount) lastSeenChannel = k - 1; // a channel (k=1..channelCount -> channel 0..N-1)
+    else if (k > channelCount) anchors[k - channelCount - 1] = lastSeenChannel; // a text column
+  }
+  return anchors;
 }
 
 /** Row `r`'s cell in column `col`, for a file: numbers as numbers, a date as

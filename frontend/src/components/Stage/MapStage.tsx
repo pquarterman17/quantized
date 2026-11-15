@@ -28,6 +28,7 @@ import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
 import { useMapRuler } from "./useMapRuler";
 import { useMapSectorWedge } from "./useMapSectorWedge";
+import MapInterpolatedBadge from "./MapInterpolatedBadge";
 import MapStageNotice from "./MapStageNotice";
 
 export interface MapStageProps {
@@ -381,6 +382,8 @@ export default function MapStage({ dataset }: MapStageProps) {
       {active && enoughChannels && mapError && (
         <MapStageNotice passThrough lines={["These columns can't be mapped:", mapError, "Choose other x, y and z columns in the toolbar."]} />
       )}
+
+      {payload?.interpolated && <MapInterpolatedBadge nPoints={payload.interpolated.nPoints} />}
 
       {readout && (
         <div className="qzk-glass qzk-readout">

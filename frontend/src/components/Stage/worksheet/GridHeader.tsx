@@ -1,8 +1,12 @@
 // The worksheet grid's header row (WORKSHEET_PLAN items 2 + 4 + 6 + 8): the
 // row-number corner + x column (both pinned — sticky left, like the gutter),
-// then the windowed slice of value/computed-column headers, then (item 8) any
-// read-only Origin text columns, unvirtualized, appended at the very end.
-// Each numeric header cell shows the label, its role line (channel letter /
+// then the windowed slice of value/computed-column headers, interleaved with
+// any read-only Origin text columns at THEIR OWN position in the file's
+// column order (worksheet audit follow-up — `textLayout`, textColumns.ts's
+// `layoutTextColumns`; a text column the grid can't place precisely, because
+// its anchor channel is scrolled out of the current window, falls back to
+// the trailing position it always rendered at before this). Each numeric
+// header cell shows the label, its role line (channel letter /
 // user role / Origin designation badge — item 4), a truncated Origin comment
 // line (full text in the tooltip), a sort mark, and — for computed (formula)
 // columns — a remove button.
@@ -28,11 +32,14 @@
 // double-click autofits to a content sample. Handles stopPropagation so the
 // select-click gesture above never fires from a resize.
 
+import { Fragment } from "react";
+
 import { columnMetaList, type ColumnMeta, type OriginDesignation } from "../../../lib/columnmeta";
 import { DESIGNATION_BADGE, type TextColumn } from "../../../lib/originTextColumns";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import { Select } from "../../primitives";
+import type { TextColumnLayout } from "./textColumns";
 
 /** Compact modeling-type tags — same table as ChannelsCard's, kept in sync
  *  by hand (P1.6b: the worksheet header is the SECOND surface for this, not
@@ -72,9 +79,9 @@ export interface GridHeaderProps {
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
   /** Right-click on a TEXT column's header (its sort menu), by column name. */
   onTextHeaderContext?: (name: string, e: React.MouseEvent) => void;
-  /** Read-only Origin text columns (item 8), unvirtualized, always appended
-   *  after the numeric/computed run (and its trailing spacer). */
-  textCols: TextColumn[];
+  /** Read-only Origin text columns (item 8), positioned per the file's own
+   *  column order (worksheet audit follow-up) — see textColumns.ts's doc. */
+  textLayout: TextColumnLayout;
   /** P1.6b item 6 (worksheet C/O/N visibility): the EFFECTIVE modeling type
    *  per column (override-or-inferred — `lib/modeling.channelModelingType`).
    *  Optional so every existing caller/test (which never rendered a badge)
@@ -150,7 +157,7 @@ export default function GridHeader({
   formulaErrors,
   onHeaderContext,
   onTextHeaderContext,
-  textCols,
+  textLayout,
   modelingTypeOf,
   channelTypes,
   onChangeChannelType,
@@ -188,6 +195,32 @@ export default function GridHeader({
     />
   );
 
+  // One text-column header cell — rendered at up to three different spots
+  // (before every channel, right after a given one, or trailing) depending
+  // on `textLayout`, so it's a shared renderer rather than three copies.
+  const textHeaderCell = (t: TextColumn) => (
+    <div
+      key={`text-${t.shortName}`}
+      role="columnheader"
+      className="qzk-grid-headcell"
+      style={{ width: colWidth, flexShrink: 0 }}
+      title={`${t.longName ? `${t.longName} (${t.shortName})` : t.shortName}${t.unit ? ` [${t.unit}]` : ""} — read-only text column (Origin)`}
+      onContextMenu={onTextHeaderContext ? (e) => onTextHeaderContext(t.shortName, e) : undefined}
+    >
+      {/* Origin names a column by its Long Name, the short name otherwise. */}
+      {t.longName ?? t.shortName}
+      <span className="role">
+        text
+        {t.unit && (
+          <>
+            {" · "}
+            <span className="unit">{t.unit}</span>
+          </>
+        )}
+      </span>
+    </div>
+  );
+
   return (
     <div className="qzk-grid-row qzk-grid-header" role="row" style={{ position: "sticky", top: 0, zIndex: 3 }}>
       <div
@@ -220,6 +253,7 @@ export default function GridHeader({
         {comment(-1, undefined)}
         {resizeHandle(-1)}
       </div>
+      {textLayout.before.map(textHeaderCell)}
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
       {visibleCols.map((c) => {
         const computed = c >= baseCount;
@@ -228,93 +262,74 @@ export default function GridHeader({
         const shown = userSet ?? meta?.designation;
         const dimmed = Boolean(channelRoles[c]) || shown === "label" || shown === "disregard";
         return (
-          <div
-            key={c}
-            role="columnheader"
-            className="qzk-grid-headcell"
-            style={{ position: "relative", width: widthOf(c), flexShrink: 0, opacity: dimmed ? 0.55 : 1, ...selStyle(selectedCols.has(c)) }}
-            onClick={(e) => onHeaderClick(c, e)}
-            onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
-            onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(c, e))}
-            data-col={c}
-            title={headerTitle(c, computed, channelRoles[c], meta)}
-          >
-            {data.labels[c]}
-            {computed && (
-              <button
-                className="qzk-col-x"
-                title="remove computed column"
-                aria-label="remove computed column"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveFormula(c - baseCount);
-                }}
-              >
-                ×
-              </button>
-            )}
-            {computed && formulaErrors?.[data.labels[c]] && (
-              <span className="qzk-formula-err" title={`Formula error: ${formulaErrors[data.labels[c]]}`}>
-                ⚠
-              </span>
-            )}
-            <span className="role">
-              {roleText(c, computed, channelRoles[c], meta, userSet)}
-              {data.units[c] && (
-                <>
-                  {" · "}
-                  <span className="unit">{data.units[c]}</span>
-                </>
+          <Fragment key={c}>
+            <div
+              role="columnheader"
+              className="qzk-grid-headcell"
+              style={{ position: "relative", width: widthOf(c), flexShrink: 0, opacity: dimmed ? 0.55 : 1, ...selStyle(selectedCols.has(c)) }}
+              onClick={(e) => onHeaderClick(c, e)}
+              onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
+              onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(c, e))}
+              data-col={c}
+              title={headerTitle(c, computed, channelRoles[c], meta)}
+            >
+              {data.labels[c]}
+              {computed && (
+                <button
+                  className="qzk-col-x"
+                  title="remove computed column"
+                  aria-label="remove computed column"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveFormula(c - baseCount);
+                  }}
+                >
+                  ×
+                </button>
               )}
-              {sortMark(c)}
-            </span>
-            {modelingTypeOf && onChangeChannelType && (
-              <Select
-                className="qzk-col-type"
-                style={{ width: "100%", marginTop: 2 }}
-                value={channelTypes?.[c] ?? ""}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  onChangeChannelType(c, e.target.value === "" ? null : (e.target.value as ModelingType));
-                }}
-                title="Modeling type — Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories; Auto = inferred (a level table always reads as nominal)."
-                options={[
-                  { value: "", label: `auto·${TYPE_TAG[modelingTypeOf(c)]}` },
-                  { value: "continuous", label: "Cont" },
-                  { value: "ordinal", label: "Ord" },
-                  { value: "nominal", label: "Nom" },
-                ]}
-              />
-            )}
-            {comment(c, meta?.comment)}
-            {resizeHandle(c)}
-          </div>
+              {computed && formulaErrors?.[data.labels[c]] && (
+                <span className="qzk-formula-err" title={`Formula error: ${formulaErrors[data.labels[c]]}`}>
+                  ⚠
+                </span>
+              )}
+              <span className="role">
+                {roleText(c, computed, channelRoles[c], meta, userSet)}
+                {data.units[c] && (
+                  <>
+                    {" · "}
+                    <span className="unit">{data.units[c]}</span>
+                  </>
+                )}
+                {sortMark(c)}
+              </span>
+              {modelingTypeOf && onChangeChannelType && (
+                <Select
+                  className="qzk-col-type"
+                  style={{ width: "100%", marginTop: 2 }}
+                  value={channelTypes?.[c] ?? ""}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    onChangeChannelType(c, e.target.value === "" ? null : (e.target.value as ModelingType));
+                  }}
+                  title="Modeling type — Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories; Auto = inferred (a level table always reads as nominal)."
+                  options={[
+                    { value: "", label: `auto·${TYPE_TAG[modelingTypeOf(c)]}` },
+                    { value: "continuous", label: "Cont" },
+                    { value: "ordinal", label: "Ord" },
+                    { value: "nominal", label: "Nom" },
+                  ]}
+                />
+              )}
+              {comment(c, meta?.comment)}
+              {resizeHandle(c)}
+            </div>
+            {textLayout.after(c).map(textHeaderCell)}
+          </Fragment>
         );
       })}
       {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}
-      {textCols.map((t) => (
-        <div
-          key={`text-${t.shortName}`}
-          role="columnheader"
-          className="qzk-grid-headcell"
-          style={{ width: colWidth, flexShrink: 0 }}
-          title={`${t.longName ? `${t.longName} (${t.shortName})` : t.shortName}${t.unit ? ` [${t.unit}]` : ""} — read-only text column (Origin)`}
-          onContextMenu={onTextHeaderContext ? (e) => onTextHeaderContext(t.shortName, e) : undefined}
-        >
-          {/* Origin names a column by its Long Name, the short name otherwise. */}
-          {t.longName ?? t.shortName}
-          <span className="role">
-            text
-            {t.unit && (
-              <>
-                {" · "}
-                <span className="unit">{t.unit}</span>
-              </>
-            )}
-          </span>
-        </div>
-      ))}
+      {textLayout.trailing.map(textHeaderCell)}
     </div>
   );
 }

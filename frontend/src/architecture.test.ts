@@ -990,7 +990,8 @@ const TS_MODULE_PINS: Record<string, number> = {
   // call to `store/pendingEdit.refusePendingEdit`, and dropping the duplicate paid
   // for the import exactly — net zero, so there is no ratchet to record here.
   // 648 -> 614 (1M x 6 audit): the stats footer moved to useWorksheetStats.ts.
-  "/components/Stage/worksheet/useWorksheetView.ts": 614,
+  // 614 -> 594 (gap audit 4, G3): the Set Column Values prompt became its own dialog.
+  "/components/Stage/worksheet/useWorksheetView.ts": 594,
   "/lib/roi.ts": 638,
   // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
   // to lib/seriesStyleCycle.ts, where it is DERIVED from the marker cycle, so
@@ -2335,7 +2336,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   magToolsOpen: "workshop/dialog visibility; UI state",
   rsmOpen: "workshop/dialog visibility; UI state",
   datasetMathOpen: "workshop/dialog visibility; UI state",
-  datasetMathMode: "Dataset Math's tab (combine / average); UI state",
+  datasetMathMode: "Dataset Math's tab (combine / average / function plot); UI state",
   distributionOpen: "workshop/dialog visibility; UI state",
   signalProcessingOpen: "workshop/dialog visibility; UI state",
   dataFilterOpen: "workshop/dialog visibility; UI state",

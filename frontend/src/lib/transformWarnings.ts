@@ -36,7 +36,9 @@ export type TransformWarningCode =
   | "duplicate-x"
   | "blank-values"
   | "blank-output"
-  | "reordered";
+  | "reordered"
+  // Signal filters / Reduce XY (calc.signal_ops): always informational.
+  | "sigop";
 
 export interface TransformWarning {
   code: TransformWarningCode;
