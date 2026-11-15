@@ -32,9 +32,9 @@ const snap = (page: Page): Promise<Snap> =>
   });
 /** What the newest autosave generation in IndexedDB holds for its focused
  *  window's figure (the real recovery slot a reload restores from). */
-const autosavedFit = (page: Page): Promise<{ fit: boolean; band: boolean; background: boolean }> =>
+const autosavedFit = (page: Page): Promise<{ fit: boolean; band: boolean; background: boolean; datasets: number }> =>
   page.evaluate(() => new Promise((resolve) => {
-    const none = { fit: false, band: false, background: false };
+    const none = { fit: false, band: false, background: false, datasets: 0 };
     const req = indexedDB.open("qz.autosave", 1);
     req.onerror = () => resolve(none);
     req.onsuccess = () => {
@@ -45,9 +45,9 @@ const autosavedFit = (page: Page): Promise<{ fit: boolean; band: boolean; backgr
           db.close();
           const gens = (get.result as { at: number; text: string }[]).sort((a, b) => b.at - a.at);
           type W = { id: string; document?: { overlays?: { fit?: { band?: unknown[] }; background?: unknown } } };
-          const ws = gens[0] ? (JSON.parse(gens[0].text) as { focusedWindowId?: string; plotWindows?: W[] }) : null;
+          const ws = gens[0] ? (JSON.parse(gens[0].text) as { focusedWindowId?: string; plotWindows?: W[]; datasets?: unknown[] }) : null;
           const o = ws?.plotWindows?.find((w) => w.id === ws.focusedWindowId)?.document?.overlays;
-          resolve({ fit: Boolean(o?.fit), band: Boolean(o?.fit?.band?.length), background: Boolean(o?.background) });
+          resolve({ fit: Boolean(o?.fit), band: Boolean(o?.fit?.band?.length), background: Boolean(o?.background), datasets: ws?.datasets?.length ?? 0 });
         };
         get.onerror = () => { db.close(); resolve(none); };
       } catch {
@@ -105,8 +105,9 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
 
   // ── Autosave reload: the focused figure's fit (with its band) comes back ──
   // Waits on the STORED autosave holding the fit, not on a timer (review L1).
-  await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, band: true });
+  await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, band: true, datasets: 2 });
   await page.reload();
+  await waitForDatasetCount(page, 2);
   await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz));
   await expect.poll(async () => (await snap(page)).fitFor, { timeout: 15_000 }).not.toBeNull();
   expect((await snap(page)).band).toBeGreaterThan(0);

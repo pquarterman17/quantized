@@ -30,6 +30,7 @@ import PeakBatchView from "./PeakBatchView";
 export default function PeakWizardPanel() {
   const setOpen = useApp((s) => s.setPeakWizardOpen);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
+  const baselineIsFitted = useApp((s) => Boolean(s.baselineOverlay?.fitOf));
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const w = usePeakWizard();
   const [mode, setMode] = useState<"wizard" | "batch">("wizard");
@@ -44,7 +45,7 @@ export default function PeakWizardPanel() {
     // lane C): they stay. The estimated baseline and the peak markers are
     // previews of the open wizard: they go.
     w.model.release();
-    if (!useApp.getState().baselineOverlay?.fitOf) setBaselineOverlay(null);
+    if (!baselineIsFitted) setBaselineOverlay(null);
     setPeakOverlay(null);
     setOpen(false);
   };

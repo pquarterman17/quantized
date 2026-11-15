@@ -41,6 +41,7 @@
 // with the same fidelity a promoted (editable) copy of that figure already
 // has.
 
+import { rowStateIdentity } from "../../../lib/rowstate";
 import { type FigureSpec } from "../../../lib/api/figures";
 import { type PagePanelSpec } from "../../../lib/api";
 import type { FigurePageSpec } from "../../../lib/api/figurePage";
@@ -333,7 +334,7 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
  *  must re-render the panel too (review L2). Stable references only. */
 function boundRows(s: AppState, datasetId: string | null): unknown[] {
   const ds = datasetId ? s.datasets.find((d) => d.id === datasetId) : undefined;
-  return [ds?.data ?? null, ds?.excludedRows, ds?.filter, ds?.columnDesignations, ds?.channelRoles, ds?.channelTypes];
+  return [...rowStateIdentity(ds), ds?.columnDesignations, ds?.channelRoles, ds?.channelTypes];
 }
 
 /** F3.6 "export a saved page without reopening it": resolve a SAVED
