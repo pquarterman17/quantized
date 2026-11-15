@@ -2517,7 +2517,128 @@ in every worksheet column's own windows-section record, two forms:
 ```
 form A:  80 <serial> 01 10 80 03 <id:u16 LE> <pb> <fields…>
 form B:  80 <serial> 07 10 01 00 00 <id:u16 LE> <pb> <fields…>   (rare)
+form A1: 80 <serial> 01 10 80 01 <id:u8> <fields…>              (no <pb>)
+form B1: 80 <serial> 05 10 01 00 00 <id:u8> <fields…>           (no <pb>)
 ```
+
+Forms A1/B1 (2026-11-15, plan item 68) carry the curve token's own u8 id
+width. 54 records corpus-wide (53 A1 + 1 B1), all in
+`pedotpss_IV_2019-08-01.opju` (`Book1` B..AB on two sheets); every other
+match of those lead bytes in the 359-file corpus fails the field walk.
+Admitting them decodes the 54 columns Origin 2026b plots in Graph2/Graph7
+(`%Z` and plotted values compared over COM, all identical).
+
+**Second sheet signal for `.opju` (2026-11-15, plan item 67).** The id
+record has no sheet; `opju_curve_sheets` proves one by RANK (k-th smallest
+id of a name = k-th `Book_Col[@N]` dataset in file order), which fails when
+the id and dataset counts of a name differ (a deleted sheet, an unparsed
+record). Two independent signals then decide (`opju_sheet_signals`):
+**H** — the dataset header's u16 at `0x52` is a column id (the column the
+dataset is plotted against, as in `.opj` §5), and that id is on the
+dataset's own sheet: 8,642 rank-proven references agree, 0 disagree, over
+the 359 `.opju` files (references to another book's id — `Residual*`
+report pages — are ignored). **P** — a Y column is on its stored X
+partner's sheet: 15,556 rank-proven pairs agree, 0 disagree. A result is
+kept only if both signals that speak agree, the `Book_Col@N` dataset
+exists, and no other id of the name lands on that sheet. Corpus effect
+(vs the token-X decoder of `opju_curve_token_x`): 828 more curves drawn,
+`sheet_unknown` omissions down to 133; the re-bound curves in the
+COM-checked layers match Origin's `%Z` sheet and plotted values. The sheet
+proves the Y, not the X Origin draws it against: a curve placed only this
+way is still omitted when it plots an X-designated column
+(`y_is_x_column`) or when a `<id:u16> 21 61` reference in its token record
+— or, if it names none, in another token of the layer — names a different
+column of the book (`x_token_differs`), or when its token's plot-type tag
+(`8f 01 <type> 83`) is not 200-203 line/scatter/line+symbol/column
+(`plot_type_not_drawn`; 219 `0xdb` is a histogram). Without the two X
+gates 12 more newly drawn, COM-checked curves drew the wrong X.
+
+**Zero-low-byte column ids (2026-11-15, plan items 67-68,
+`opju_zero_low_ids`).** The id sits at offset 4 of both the column record
+and the curve token's sparse record, after the 3 zeros an `80` chunk
+skips. When the id's LOW byte is 0 (256, 512, 3072, …) the writer folds it
+into the skip: `81 02 <hi> <next>` (`81 01 <hi>` when `<next>` is 0 too) —
+`01 10 81 02 <hi> <pb> <fields…>` in the column record,
+`<flag> 01 01 01 81 0[12] <hi>` in the token. Neither form was read, so
+every such column was missing from the id table (107 records corpus-wide,
+all passing the same field walk) and every curve plotting one was never
+decoded; one missing id is enough to break the rank alignment of its
+whole `(book, column)` name (`PerceivedRisk` `Book1D`: 26 `D` ids against
+27 `Book1D_D[@N]` datasets).
+
+**The id chunk at every length (2026-11-15, plan item 68,
+`opju_curve_token`).** `80 <len>` is a literal run, not a field width: the
+writer emits literals from offset 4 up to the last non-zero byte it wants,
+so the same id appears as `80 01 <u8>`, `80 02 <u16>` (flag byte 0),
+`80 03 <u16> <flag>` and `80 04+ <u16> <flag> …` (the run continues into
+the record's next fields). Only lengths 1 and 3 (plus lane #694's `81`
+forms) were read. Corpus: `80` lengths 1/2/3/4/5/9/10 = 1,125 / 875 /
+11,250 / 15 / 1 / 26 / 12 graph-page tokens; 850 length-2 and 13 length-4
+ids name a column. Column records use the same grammar (`01 10 80 04 <id>
+<pb> 0c` for Discretewithsum `Mid1_I` / `Mid2_I`). `opju_curve_token` is
+the one decoder for every `80`/`81` form, used by the id table, the token
+reader and the sheet segments; where a shipped form (`80 01|03`, `81
+01|02`) and a newly read one name the same id in a layer, the shipped
+token keeps the curve (Figure2-c Graph2 plots `Book2_D` twice: the dedup
+keeps one, with the colour it had). A Y-error column with no X of its own
+read through a new length keeps the book's first X only when the curve
+before it on the same sheet uses that X (optimal_MOI Graph5: Origin plots
+`Book29_D` against `Book29_B`, the X of the curve before it).
+
+**Plot row range (2026-11-15, `opju_curve_range`).** The curve record's
+offsets 7-10 (u32) are the first plotted row (0-based) and 11-14 the end
+row (exclusive): Origin's per-plot data range. A non-zero first row is
+also why a token's id chunk runs past 3 literals. COM: `Figure_20` Graph3
+records `(15, 901)`, Origin plots 886 of 901 rows; `SOP_meas` `old`
+layers `(0, 2154)` for 13,143/14,403-row columns, Origin plots 2,154;
+`origin.opju` Graph1 `(0, 844)` of 4,096 rows; `fig_6_b` Graph1 `(0, 12)`
+of 24; Analiza Graph6 `(10, 6)` (empty) and Origin plots none. quantized's
+binding has no row range, so a curve whose range leaves out a filled row
+is omitted (`plot_row_range`).
+
+**Column display range (2026-11-15, plan item 71, `opju_display_range`).**
+Header `0x1D` (u32) is the column's first row (0-based) -- Origin's "Set as
+Begin" -- beside `0x19` allocated and `0x21` used rows. Rows above it stay
+stored but are not in the dataset: `col[i]` reads missing, `sum()` and
+plots skip them. Over 7,364 COM-swept columns `0x1D` = `get -b` - 1 and
+`0x21` = `get -e` on every one (including all 38 corpus columns with a
+non-zero first row); those cells now decode as missing (Discretewithsum
+`Mid1_I@5` / `Mid2_I@3` rows 1-12, stored ~1e-57).
+
+**Row masks (2026-11-15, plan item 71; not applied).** PerceivedRisk
+`Book1D_F@27` row 1 (stored 0.0) reads missing because it is MASKED
+(`ismasked(1, range)` = 1 over COM). The mask is stored after the record
+as `<len> 06 <5 bytes> <rle stream>` (header RLE grammar, `rle_expand`):
+the stream expands to `81 <u16>`, 28 zeros, then one byte per allocated
+row (+4), `01` on a masked row. In the swept PerceivedRisk columns it is
+present on all 12 swept columns with an Origin-missing stored value and on
+none of 788 others; the flagged rows equal Origin's (rows 1 / 1 and 61).
+quantized has no per-cell mask, so these cells keep their stored values.
+
+**Third sheet signal S (2026-11-15, plan item 67,
+`opju_sheet_segments`).** A book's window section writes its sheets in
+window order, each opened by a sheet header whose sparse stream carries
+the `Pd` field (`82 02 50 64`, the 2-byte prefix of the `.opj` layer
+header's sheet name, §4.1) and followed by that sheet's column records.
+Every record between one marker and the next is on one sheet. The segment
+names no sheet id (ids are creation ids: `Catchment A`'s second window
+sheet is `@7`), so it is anchored by its rank/H/P-proven ids. Over the 32
+multi-sheet books of the 16 COM-checked files the marker count equals the
+sheet count and each segment holds its sheet's name; over the 359-file
+corpus, 3,598 segments, 35,128 proven ids: 0 segments whose proven ids
+disagree, 0 sheets claimed by two segments. Report sheets (`FitNL1`,
+`FitLinear1`) write no id records, which is why their extra datasets break
+the rank alignment (`SOP_meas` `figSOPvsR`: 4 ids, 7 datasets).
+
+**Worksheet data filter (2026-11-15).** A book page whose span holds a
+`__STGCOLFILTER` storage block (the filter column's name and a condition
+text such as `0.07` follow it) has an Origin data filter: rows the
+condition rejects read as missing in Origin (`sum()` count) and are left
+out of every plot. `likelihood_profile.opju` (COM): the 5 filtered books
+plot 48/2/5/16/290 of 3000/1000/1010/1000/1000 rows, the unfiltered one
+all 1000; `simulated-IFN-pretreatment-longer.opju` 1549 of 1600. The
+condition is not decoded, so every curve of such a book is omitted
+(`worksheet_filter`); the worksheet data itself still imports in full.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix

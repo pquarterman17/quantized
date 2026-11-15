@@ -24,6 +24,18 @@ export interface OriginCurveSheetNote {
   recorded: string;
 }
 
+/** A `.opju` curve LEFT OUT of its graph because the sheet it plots is not
+ *  proven or that sheet's column did not reach the import
+ *  (`opju_curve_sheets`): `recorded` is the sheet's `Book@N` key, or "" when
+ *  unknown. `lib/originCurveOmissions.ts` words it. */
+export interface OriginCurveSheetOmission {
+  book: string;
+  x: string;
+  y: string;
+  recorded: string;
+  reason: string;
+}
+
 export interface OriginSavedPreview {
   format: "png";
   mime: "image/png";

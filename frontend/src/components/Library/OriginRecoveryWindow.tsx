@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { omittedCurveLines } from "../../lib/originCurveOmissions";
 import { curveSheetGroups, curveSheetLine } from "../../lib/originCurveSheets";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../../lib/originFigures";
 import { resolveOriginFigureSources, resolveOriginSourceManually } from "../../lib/originSources";
@@ -71,6 +72,8 @@ export default function OriginRecoveryWindow({
     return curveSheetGroups((family.length ? family : [entry]).map((e) => e.figure), imported)
       .map(curveSheetLine);
   }, [datasets, entry, figures]);
+  // `.opju` curves the reader LEFT OUT (`curve_sheet_omitted`), one line each.
+  const omitted = omittedCurveLines(entry.figure);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleCandidates = normalizedQuery
     ? candidates.filter(({ dataset, inspectSource }) =>
@@ -105,7 +108,9 @@ export default function OriginRecoveryWindow({
         <p>
           {resolution.unresolved.length > 0
             ? "Quantized could not match every saved curve to an imported workbook."
-            : "The file records a curve's column on another sheet than the one it is plotted from."}
+            : sheetNotes.length > 0
+              ? "The file records a curve's column on another sheet than the one it is plotted from."
+              : "Some curves of this graph were left out rather than drawn from a sheet that could not be proven."}
           {" "}Choose a compatible workbook to inspect its columns or rebuild an editable plot.
         </p>
         {splitBooks.map(([book, sheets]) => (
@@ -119,6 +124,14 @@ export default function OriginRecoveryWindow({
             <strong>Recorded on another sheet</strong>
             <ul>
               {sheetNotes.map((note) => <li key={note}>{note}</li>)}
+            </ul>
+          </div>
+        )}
+        {omitted.length > 0 && (
+          <div className="qzk-origin-recovery-hints">
+            <strong>Left out of this graph</strong>
+            <ul>
+              {omitted.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
             </ul>
           </div>
         )}

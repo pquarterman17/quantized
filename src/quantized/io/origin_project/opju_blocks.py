@@ -179,6 +179,7 @@ class DatasetHeader:
     used_rows: int
     value_size: int
     flags: int  # header byte 0x3F
+    first_row: int = 0  # 0x1D: Origin's display begin, 0-based (opju_display_range)
 
     @property
     def is_column(self) -> bool:
@@ -234,6 +235,7 @@ def find_headers(
                 kind_bits=raw[0x17],
                 total_rows=int.from_bytes(raw[0x19:0x1D], "little"),
                 used_rows=int.from_bytes(raw[0x21:0x25], "little"),
+                first_row=int.from_bytes(raw[0x1D:0x21], "little"),
                 value_size=raw[0x3D],
                 flags=raw[0x3F],
             )
