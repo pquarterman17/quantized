@@ -1,5 +1,5 @@
 {
-  "note": "Lane L (audit 6 P3): matplotlib's AutoLocator (MaxNLocator nbins='auto', steps 1-2-2.5-5-10) on an axis of LENGTH (pt, or CSS px on screen) at tick FONT size: nbins = clip(floor(length / (font * per_tick)), 1, 9), per_tick 2 on Y and 3 on X, and the increment is the smallest nice step >= span / nbins. The canvas applies the same rule as uPlot's tick `space` (lib/uplotRightPad.ts); the export lets matplotlib's own locator place ticks for the export's size. Generated from matplotlib; read by tickDensityFixture.test.ts and tests/test_tick_density_fixture.py.",
+  "note": "Lane L (audit 6 P3): matplotlib's AutoLocator (MaxNLocator nbins='auto', steps 1-2-2.5-5-10) on an axis of LENGTH (pt, or CSS px on screen) at tick FONT size: nbins = clip(floor(length / (font * per_tick)), 1, 9), per_tick 2 on Y and 3 on X, and the increment is the smallest nice step >= span / nbins. The canvas applies the same rule to its linear, numeric main axes as uPlot's tick `space` (lib/uplotRightPad.ts); an export places its own ticks with this locator unless the screen's increment fits as a hint (tick_hint.json). Generated from matplotlib; read by tickDensity.test.ts and tests/test_tick_density_fixture.py.",
   "cases": [
     {
       "name": "MPMS M(T) moment, 640 px canvas",

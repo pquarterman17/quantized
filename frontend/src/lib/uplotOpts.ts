@@ -193,12 +193,13 @@ function stripNegZero(formatted: string): string {
 
 const autoNumberFormatCache = new Map<number, Intl.NumberFormat>();
 function autoNumberFormat(maxFrac: number, pad: boolean): Intl.NumberFormat {
-  const d = Math.max(0, Math.min(20, maxFrac)), key = pad ? d : -1 - d;
-  let nf = autoNumberFormatCache.get(key);
+  // A linear axis shows one decimal count (audit 6 P3): "0.0090" beside "0.0095", as Origin pads --
+  // up to 5 decimals: a finer increment (where matplotlib turns to an offset) keeps labels unpadded.
+  const d = Math.max(0, Math.min(20, maxFrac)), min = pad && d <= 5 ? d : 0;
+  let nf = autoNumberFormatCache.get(d + 21 * min);
   if (!nf) {
-    // A linear axis shows one decimal count (audit 6 P3): "0.0090" beside "0.0095", as Origin pads.
-    nf = new Intl.NumberFormat(undefined, { minimumFractionDigits: pad ? d : 0, maximumFractionDigits: d });
-    autoNumberFormatCache.set(key, nf);
+    nf = new Intl.NumberFormat(undefined, { minimumFractionDigits: min, maximumFractionDigits: d });
+    autoNumberFormatCache.set(d + 21 * min, nf);
   }
   return nf;
 }
@@ -226,11 +227,11 @@ const autoValues = (pad: boolean): TickValues => (_u, splits, _axisIdx, _foundSp
   const nf = autoNumberFormat(decimalsForIncrement(splitsIncrement(splits, foundIncr)), pad);
   return splits.map((v) => (v == null ? null : stripNegZero(nf.format(v))));
 };
-const autoTickValues = autoValues(true);
+const autoTickValues = autoValues(true), autoUnpadded = autoValues(false);
 
 /** Auto labels on a log axis: decade anchors on a multi-decade view, the
  *  ordinary auto labels on a sub-decade one (lib/logTicks.ts). */
-const autoLogTickValues: TickValues = (u, splits, ...rest) => logDecadeLabels(splits) ?? autoValues(false)(u, splits, ...rest);
+const autoLogTickValues: TickValues = (u, splits, ...rest) => logDecadeLabels(splits) ?? autoUnpadded(u, splits, ...rest);
 
 /** Decimal places needed for a value's MANTISSA (sci/eng modes) so that two
  *  ticks `incr` apart in the SAME decade never format to the same digits —
@@ -322,10 +323,13 @@ function dateTickFormatter(
  *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
  *  tick increment (`splitsIncrement`) needs — not sci/eng on log decades, whose
  *  mantissa is always 1 — so a dense axis never repeats a label. */
+/** A date / time / datetime tick mode (`TickMode`). */
+const isDateMode = (mode?: string): mode is "date" | "time" | "datetime" => /date|time/.test(mode ?? "");
+
 export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
   const mode = fmt?.mode ?? "auto";
-  if (mode === "auto") return scale === "log" ? autoLogTickValues : scale === "linear" ? autoTickValues : autoValues(false);
-  if (mode === "date" || mode === "time" || mode === "datetime") {
+  if (mode === "auto") return scale === "log" ? autoLogTickValues : scale === "linear" ? autoTickValues : autoUnpadded;
+  if (isDateMode(mode)) {
     // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
     // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
     // range (±8.64e15 ms, i.e. |seconds| > 8.64e12) — which a date format
@@ -1080,7 +1084,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     : null;
   const scales: uPlot.Scales = {
     x: {
-      time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
+      time: isDateMode(xFmt?.mode),
       dir: args.xReversed ? -1 : 1, ...scaleDistrProps(xScale),
       ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
     },
@@ -1131,7 +1135,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       : undefined;
   };
   // The automatic Y density (lib/uplotRightPad.ts) on a linear, numeric axis only.
-  const ySpace = (scale: AxisScale, fmt?: AxisFormat) => scale === "linear" && !/date|time/.test(fmt?.mode ?? "");
+  const ySpace = (scale: AxisScale, fmt?: AxisFormat) => (scale === "linear" && !isDateMode(fmt?.mode) ? { space: yTickSpace(tickPx) } : {});
   const xSplits = splitsFor(xScale, xLim, args.xStep);
   const ySplits = splitsFor(yScale, yLim, args.yStep);
   // Tick-area `size` (excludes the label, see uPlot's doc) scales with the
@@ -1165,7 +1169,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
       ...(yScale === "log" ? { filter: logMajorTickFilter } : {}),
-      ...(ySpace(yScale, yFmt) ? { space: yTickSpace(tickPx) } : {}),
+      ...ySpace(yScale, yFmt),
     },
   ];
   if (hasY2) {
@@ -1186,12 +1190,12 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(y2Values ? { values: y2Values } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),
       ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
-      ...(ySpace(y2ScaleEff, y2Fmt ?? yFmt) ? { space: yTickSpace(tickPx) } : {}),
+      ...ySpace(y2ScaleEff, y2Fmt ?? yFmt),
     });
   }
   // The extras' per-axis lists follow `axes`; Y3+ (lib/uplotMultiY.ts) drops Y2's slot when it has none and appends its own.
   const look: [unknown[], unknown[], unknown[], unknown[]] = [[xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], [!!xLim, !!yLim, !!args.y2Lim], [args.xStep, args.yStep, args.y2Step]];
-  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: tickFormatter, splits: splitsFor, space: (sc, f) => (ySpace(sc, f) ? yTickSpace(tickPx) : undefined), distr: scaleDistrProps, label: soloLabel, look }) : undefined;
+  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: tickFormatter, splits: splitsFor, space: yTickSpace(tickPx), distr: scaleDistrProps, label: soloLabel, look }) : undefined;
 
   // Figures-audit #6: the Axis dialog's extras (minor/inward ticks, divide-by,
   // tick font, Ln) -- null, and nothing changed, when no axis has one. y2

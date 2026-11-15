@@ -55,7 +55,11 @@ export function yTitleKey(p: BreakPanel, seriesLabels: Record<number, string>): 
 
 /** Wrap an x tick formatter so a label that would cross a seam side of the
  *  plot area (beyond its `pad`) is not drawn (null). Width is estimated as 0.6 em
- *  per character, the monospace rule `lib/uplotRightPad.ts` uses. */
+ *  per character, the monospace rule `lib/uplotRightPad.ts` uses. The break's
+ *  own limit, ON the seam edge, is drawn aligned inward instead (audit 6 review
+ *  H1: padded decimals made "2" a "2.0", too wide to centre there): uPlot
+ *  centres every label, so as many spaces as it has characters on the seam
+ *  side put its glyphs wholly inside the plot area. */
 export function seamXValues(base: XValues, seams: { left: boolean; right: boolean }, fontPx: number, pad: number): XValues {
   return (u, splits, axisIdx, space, incr) => {
     const out = base(u, splits, axisIdx, space, incr);
@@ -67,8 +71,12 @@ export function seamXValues(base: XValues, seams: { left: boolean; right: boolea
       if (s == null || s === "") return s;
       const half = (String(s).length * fontPx * 0.6) / 2;
       const at = u.valToPos(splits[k], "x");
-      if ((seams.left && at - half < lo - pad) || (seams.right && at + half > hi + pad)) return null;
-      return s;
+      const left = seams.left && at - half < lo - pad;
+      const right = seams.right && at + half > hi + pad;
+      if (!left && !right) return s;
+      const fill = " ".repeat(String(s).length);
+      if (left !== right && Math.abs(at - (left ? lo : hi)) <= 1) return left ? fill + s : s + fill;
+      return null;
     });
   };
 }

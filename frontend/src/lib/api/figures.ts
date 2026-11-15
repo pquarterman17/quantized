@@ -103,7 +103,7 @@ export interface FigureSpec {
   y2_label?: string;
   y2_scale?: AxisScale;
   y2_fmt?: AxisFormat;
-  y2_step?: number | null;
+  y2_step?: number | null; /** The canvas' drawn increments: hints the export takes only when they fit (lib/liveTickStepsSpec.ts). */ x_step_hint?: number | null; y_step_hint?: number | null; y2_step_hint?: number | null;
   /** Y3, Y4, ... (gap audit 4 G11, lib/multiYWire.ts): each a subset of `y_keys`. */
   y_axes?: ExtraYAxisWire[];
   /** Categorical column that splits every `y_keys` channel into one series

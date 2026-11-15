@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from quantized.calc.tick_hint import step_or_hint
 from quantized.routes import export_figures_multi_y as multi_y
 from quantized.routes.export_figures_axis_titles import request_overrides
 from quantized.routes.export_figures_schema import _ResolvedFigure, _tick_fmt, _x_tick_fmt
@@ -42,13 +43,13 @@ def flat_render_kwargs(req: Any, resolved: _ResolvedFigure, dpi: int) -> dict[st
         overrides=request_overrides(req),
         x_fmt=_x_tick_fmt(req.x_fmt, resolved),
         y_fmt=_tick_fmt(req.y_fmt),
-        x_step=req.x_step,
-        y_step=req.y_step,
+        x_step=step_or_hint(req.x_step, getattr(req, "x_step_hint", None)),
+        y_step=step_or_hint(req.y_step, getattr(req, "y_step_hint", None)),
         y2_mask=resolved.y2_mask,
         y2_label=resolved.y2_label,
         y2_scale=req.y2_scale,
         y2_fmt=_tick_fmt(req.y2_fmt),
-        y2_step=req.y2_step,
+        y2_step=step_or_hint(req.y2_step, getattr(req, "y2_step_hint", None)),
         extra_y=multi_y.extra_y_kwargs(req, len(resolved.series)),
         svg_text_as_paths=req.svg_text_as_paths,
     )

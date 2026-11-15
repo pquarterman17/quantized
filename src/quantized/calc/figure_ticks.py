@@ -40,6 +40,8 @@ from typing import Any
 from matplotlib.ticker import Formatter, MultipleLocator
 
 from quantized.calc.axis_extras import apply_axis_extras
+from quantized.calc.figure_tick_hint import HintLocator
+from quantized.calc.tick_hint import TickHint
 from quantized.heavy_import import heavy_imports
 
 __all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
@@ -302,6 +304,10 @@ def apply_tick_steps(
     """
     def apply_one(axis: Any, limits: tuple[float, float], step: float | None, scale: str) -> None:
         if step is None or not math.isfinite(step) or step <= 0:
+            return
+        if isinstance(step, TickHint):  # the screen's increment, only if it fits
+            if scale == "linear":
+                axis.set_major_locator(HintLocator(step))
             return
         if scale == "log":
             if hasattr(axis.get_major_locator(), "step"):  # figure_log_ticks.LogMajorLocator

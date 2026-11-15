@@ -1,12 +1,14 @@
-"""One automatic tick-density rule on screen and in every export (audit 6
+"""The automatic tick density of the linear, numeric main axes (audit 6
 lane L, P3 / B3) -- the BACKEND half.
 
 The canvas used uPlot's 30 px tick spacing (about 20 Y majors) and the Stage
 exports carried that increment into a 6x4 in PDF as ``y_step``, while
-Publication preview let matplotlib choose: two tick sets for one graph. Now no
-route sends an automatic increment; matplotlib's AutoLocator places the
-export's ticks for its own size, and the canvas applies the same rule
-(``frontend/src/lib/uplotRightPad.ts``'s ``autoTickStep``).
+Publication preview let matplotlib choose: two tick sets for one graph. The
+canvas now applies matplotlib's AutoLocator rule
+(``frontend/src/lib/uplotRightPad.ts``'s ``autoTickStep``); every route sends
+the drawn increment only as a hint the export takes when it fits
+(``tests/test_tick_hint_fixture.py``), so matplotlib's own locator spaces an
+export whose axes cannot hold the screen's step.
 
 ``tests/fixtures/wire/tick_density.json`` was generated from matplotlib; this
 file pins that matplotlib still lands there, ``tickDensity.test.ts`` that the
@@ -51,9 +53,9 @@ def test_matplotlib_places_the_fixture_ticks(case: dict[str, Any]) -> None:
     assert min(np.diff(got)) == pytest.approx(case["step"], rel=1e-9)
 
 
-def test_a_4in_mpms_export_has_at_most_ten_y_tick_labels() -> None:
+def test_a_6x4in_mpms_export_has_at_most_ten_y_tick_labels() -> None:
     """Acceptance 4: the request Export figure now sends (no automatic
-    ``y_step``) keeps a 4 in tall SVG of ``mpms_mvst.dat`` publication-sparse."""
+    ``y_step``, no hint) keeps a 6x4 in SVG of ``mpms_mvst.dat`` publication-sparse."""
     ds = import_mpms(ROOT / "fixtures" / "mpms_mvst.dat")
     body = {
         "dataset": {

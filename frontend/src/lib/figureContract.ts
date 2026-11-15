@@ -190,6 +190,9 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   y2_scale: derived("axes.y2.scale"),
   y2_fmt: derived("axes.y2.format"),
   y2_step: derived("axes.y2.step"),
+  x_step_hint: derived(null, "The focused canvas' drawn increment, read at request time (lib/liveTickStepsSpec)."),
+  y_step_hint: derived(null, "The focused canvas' drawn increment, read at request time (lib/liveTickStepsSpec)."),
+  y2_step_hint: derived(null, "The focused canvas' drawn increment, read at request time (lib/liveTickStepsSpec)."),
   y_axes: derived("axes.yExtra", "Y3+ axes resolved against the drawn series (lib/multiYWire.ts), with series.yAxis membership."),
   group_col: derived("bindings.group.channel"),
   encoding: derived(

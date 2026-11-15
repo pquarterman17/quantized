@@ -26,7 +26,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-__all__ = ["collect_figure_warnings", "note_figure_warning"]
+__all__ = ["collect_figure_warnings", "note_figure_warning", "retract_figure_warning"]
 
 _SINK: ContextVar[list[str] | None] = ContextVar("figure_warnings", default=None)
 
@@ -49,3 +49,11 @@ def note_figure_warning(message: str) -> None:
     sink = _SINK.get()
     if sink is not None and message not in sink:
         sink.append(message)
+
+
+def retract_figure_warning(message: str) -> None:
+    """Drop ``message`` from the active collector, if there: a decision a
+    later layout pass reversed (``calc.figure_tick_hint``)."""
+    sink = _SINK.get()
+    if sink is not None and message in sink:
+        sink.remove(message)

@@ -166,6 +166,21 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 - Install hints in error messages now name the real PyPI package,
   `quantized-lab` (for example `pip install quantized-lab[desktop]`). The
   bare `quantized` on PyPI is an unrelated project.
+- Automatic ticks on the plot's linear, numeric axes are spaced as
+  matplotlib spaces them: about 5–9 majors instead of the ~20 a tall Y axis
+  used to get. Their labels carry one decimal count per axis ("0.0090" beside
+  "0.0095"), up to five decimals. Insets, Y breaks and date axes keep their
+  own spacing.
+- Export figure, Copy figure and Publication preview now send the same
+  request. 0.34.0's "an export marks the same tick positions the screen
+  drew" now holds only when those ticks fit the exported axes. The screen's
+  increments travel as a hint, which the export follows when the export
+  axis holds at most one interval more than matplotlib would place there.
+  This holds for a default-size export of a typical plot, but not
+  always for a short axis such as a single-column APS or Nature figure.
+  When the hint does not fit, matplotlib spaces that axis itself and the
+  export says "ticks re-spaced for the export size". A typed increment is
+  always kept.
 
 ### Fixed
 

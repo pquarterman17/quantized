@@ -144,15 +144,13 @@ def test_every_right_axis_draws_what_the_canvas_draws(
             assert _hex(ax.spines["right"].get_edgecolor()) == want
             assert _hex(ax.yaxis.label.get_color()) == want
             assert all(_hex(t.get_color()) == want for t in ax.get_yticklabels())
-        # The majors either side draws, compared over the range both show --
-        # for a Y3+ axis whose majors a RULE fixes (a fixed range and step, a
-        # log, Log2 or probability scale, custom ticks). An autoscaled linear
-        # axis' majors come from two different locators; its range compares
-        # (`test_a_fixed_or_error_bar_range_is_the_canvas_range`).
-        fmt = (own or {}).get("fmt") or {}
-        if own is None or not (
-            own.get("lim") or own.get("scale") == "log" or fmt.get("prob") or fmt.get("custom")
-        ):
+        # The majors either side draws, compared over the range both show, on
+        # every Y3+ axis: a RULE fixes them (a fixed range and step, a log, Log2
+        # or probability scale, custom ticks), or, autoscaled and linear, both
+        # sides space them by matplotlib's AutoLocator (audit 6 lane L:
+        # `lib/uplotRightPad.ts`), which at this fixture's sizes lands on the
+        # same increment.
+        if own is None:
             continue
         lo = max(min(ax.get_ylim()), spec["range"][0])
         hi = min(max(ax.get_ylim()), spec["range"][1])

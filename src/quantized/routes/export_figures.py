@@ -130,6 +130,12 @@ class FigureRequest(
     y2_scale: str | None = None
     y2_fmt: TickFormatSpec | None = None
     y2_step: float | None = None
+    # Audit 6 lane L: the increments the focused canvas DREW on automatic
+    # axes, a hint the export takes only when it fits the laid-out axes
+    # (calc.tick_hint); a typed `*_step` wins.
+    x_step_hint: float | None = None
+    y_step_hint: float | None = None
+    y2_step_hint: float | None = None
     # GUI_INTERACTION #12 Slice 5: an optional categorical column that
     # splits every `y_keys` channel into one series per (channel, group
     # level) instead of one series per channel -- the Graph Builder "group"

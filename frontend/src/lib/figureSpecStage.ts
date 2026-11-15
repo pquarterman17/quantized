@@ -138,8 +138,6 @@ export function buildStageFigureSpec(
   // markers / Step), read like `autoSeriesStyles` from the live store.
   const defaultTrace = st.defaultTrace;
   const defaultLineWidth = st.defaultLineWidth; // and its line width (`exportLineWidth`)
-  // No automatic tick increment rides along: matplotlib picks for the export's
-  // own size by the canvas' rule, as Publication preview does (lib/uplotRightPad.ts).
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
