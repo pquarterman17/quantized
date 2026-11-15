@@ -81,6 +81,19 @@ describe("Build source figure keeps the fit", () => {
     expect(useApp.getState().editableFigures.at(-1)!.overlays).toBeUndefined();
   });
 
+  it("review L3: a mapping remapped off the fitted Y builds the figure without the fit", async () => {
+    const two: Dataset = {
+      ...fitted,
+      data: { time: [0, 1, 2], values: [[1, 9], [3, 8], [5, 7]], labels: ["Signal", "Other"], units: ["V", "V"], metadata: {} },
+    };
+    openResult(two);
+    fireEvent.click(screen.getByRole("button", { name: "Build source figure" }));
+    await waitFor(() => expect(useApp.getState().quickFigureBuilderOverlays).not.toBeNull());
+    const s = useApp.getState();
+    expect(s.createQuickFigureFromMapping("source", { ...s.quickFigureBuilderSeed!, yKeys: [1] }, "line")).toBe(true);
+    expect(useApp.getState().editableFigures.at(-1)!.overlays).toBeUndefined();
+  });
+
   it("review #2: the focused window's own fit survives Build source figure, and Cancel changes nothing", async () => {
     const other: Dataset = { ...fitted, id: "b", name: "B", fitSpec: undefined };
     const own = { datasetId: "b", binding: { yKey: 0, xKey: null }, y: [1.5, 2.5, 3.5] };

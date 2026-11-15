@@ -13,6 +13,7 @@ import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersiste
 import { editableFigureHasUnsavedEdits } from "./figureUnsavedEdits";
 import { useApp } from "./useApp";
 import { createPlotWindowDocument } from "./windowDocuments";
+import { resetWindowOverlaysForTests } from "./windowOverlays";
 import { loadWindowOverlays } from "./windowOverlaysLazy";
 
 const A: Dataset = { id: "a", name: "a.csv", data: { time: [1, 2, 3], values: [[5], [6], [7]], labels: ["y"], units: [""], metadata: {} } };
@@ -37,6 +38,7 @@ const focus = (id: string) => useApp.getState().focusWindow(id);
 beforeAll(async () => { await loadWindowOverlays(); }); // the lazy fold / handoff module
 
 beforeEach(() => {
+  resetWindowOverlaysForTests(); // review L6
   useApp.setState(useApp.getInitialState(), true);
   useApp.setState({
     datasets: [A, B], activeId: "a", yKeys: [0], editableFigures: [], staleFits: [],
@@ -92,6 +94,17 @@ describe("fold: the focused window's document takes the fit its canvas draws", (
     useApp.setState({ hiddenChannels: [0] });
     focus("w2");
     expect(windowDoc("w1").overlays).toBeUndefined();
+  });
+
+  it("review L2: a figure panel's preview key moves with staleFits and the dataset's row state", () => {
+    useApp.setState({ editableFigures: [withFit("fig-saved", A, FIT)] });
+    const key = () => panelRenderInputs([{ source: { kind: "figure", id: "fig-saved", name: "f" } }], useApp.getState());
+    const before = key();
+    useApp.setState({ staleFits: ["a"] });
+    const stale = key();
+    expect(stale).not.toEqual(before);
+    useApp.setState({ staleFits: [], datasets: [{ ...A, excludedRows: [1] }, B] });
+    expect(key()).not.toEqual(before);
   });
 
   it("the Figure Page's preview key moves with the live fit of a focused window source", () => {

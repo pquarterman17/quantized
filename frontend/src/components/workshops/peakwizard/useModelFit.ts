@@ -128,6 +128,10 @@ export interface ModelFitState {
   startFromResult: () => void;
   /** Drop the result, any in-flight request and our overlays. Stable. */
   clear: () => void;
+  /** Closing the panel: stop any request and let go of the result's curve
+   *  and fitted background WITHOUT clearing them -- a model fit is figure
+   *  content (gap audit 5 lane C), like a Curve Fit kept on close. Stable. */
+  release: () => void;
 }
 
 export interface ModelFitInputs {
@@ -250,16 +254,23 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     dropOverlays(restore);
   }, [dropOverlays]);
   const clear = useCallback(() => reset(false), [reset]);
+  const release = useCallback(() => {
+    seq.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    own.current = { fit: null, bg: null }; // no longer ours: input edits never drop it now
+  }, []);
 
   // Any input change invalidates: within one dataset the preview comes back;
-  // across a switch (or on unmount) we only clear.
+  // across a switch we only clear. Unmount (the panel closing) RELEASES: the
+  // committed curve stays on the figure.
   const lastActive = useRef(activeId);
   useEffect(() => {
     const same = lastActive.current === activeId;
     lastActive.current = activeId;
     reset(same);
   }, [key, activeId, reset]);
-  useEffect(() => () => reset(false), [reset]);
+  useEffect(() => () => release(), [release]);
 
   const stale = ran !== null && ran.setup !== setupJson;
   useEffect(() => {
@@ -276,7 +287,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     const curve: FitOverlay = { datasetId: ds.id, binding: seg.binding, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
     const bg = res.background.kind === "none" && !offsets
       ? null
-      : { datasetId: ds.id, binding: seg.binding, y: curveToRows(c.x, c.background, seg.x, segToRow, n, offsets) };
+      : { datasetId: ds.id, binding: seg.binding, y: curveToRows(c.x, c.background, seg.x, segToRow, n, offsets), fitOf: curve };
     own.current = { fit: curve, bg };
     setFitOverlay(curve);
     if (bg) setBaselineOverlay(bg);
@@ -412,5 +423,6 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
       if (ran) edit({ ...setup, params: startFromFit(setup.params, ran.result.parameters) });
     },
     clear,
+    release,
   };
 }

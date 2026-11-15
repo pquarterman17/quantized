@@ -55,7 +55,7 @@ export async function restoreSavedFitOverlay(): Promise<"drawn" | "refused" | "n
   if (!fitPlaced(dataset, view, probe)) {
     return say("the fitted curve is not on this plot (another X, or the fitted Y is hidden or not plotted)");
   }
-  const y = await evaluateSavedFit(dataset, spec, spec.params, binding.xKey);
+  const y = await evaluateSavedFit(dataset, spec, spec.params);
   const now = useApp.getState();
   const current = now.datasets.find((d) => d.id === dataset.id);
   if (now.fitOverlay || now.focusedWindowId !== s.focusedWindowId || current?.data !== dataset.data || current.fitSpec !== spec) {

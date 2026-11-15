@@ -4,9 +4,10 @@
 // a batch-built figure and a Library multi-figure PDF carry the fit instead of
 // the bare data.
 //
-// Only the fit: the estimated baseline and the peak markers are tool PREVIEWS
-// (their panels clear them on close, and a dataset/view change clears them
-// too), so they are not figure content.
+// The fit, and with a Peak Analyzer model fit its FITTED background (a result
+// of that fit, tagged `BaselineOverlay.fitOf`). An ESTIMATED baseline and the
+// peak markers are tool PREVIEWS (their panels clear them on close, and a
+// dataset/view change clears them too), so they are not figure content.
 //
 // The live canvas draws the store's transient `fitOverlay` singleton. A plot
 // window's document captures the fit IT drew whenever its view is committed,
@@ -29,7 +30,7 @@
 
 import { dataFingerprint } from "./dataFingerprint";
 import type { FitBandEdges } from "./fitBandOverlay";
-import type { FitOverlay, OverlayBinding } from "./fitTypes";
+import type { BaselineOverlay, FitOverlay, OverlayBinding } from "./fitTypes";
 import { droppedRows } from "./rowstate";
 import type { Dataset } from "./types";
 
@@ -45,6 +46,8 @@ export interface FigureOverlays {
   /** `overlayRowsKey` of the dataset the curve aligns to. */
   rows: string;
   fit?: FigureOverlayCurve;
+  /** The fit's fitted background (Peak Analyzer), saved and restored with it. */
+  background?: FigureOverlayCurve;
 }
 
 /** The numbers and the row state a fit curve was drawn over (module header). */
@@ -64,12 +67,31 @@ function curveFits(curve: { y: readonly unknown[]; band?: FitBandEdges }, n: num
   return curve.y.length === n && (curve.band ?? []).every((edge) => edge.y.length === n);
 }
 
-/** `fit` as a document section for dataset `ds`, or undefined when it is not
+/** A gap is null: the canvas fills gap rows with NaN, which JSON cannot carry
+ *  and the section validator refuses (review N1). */
+const cell = (v: number | null): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** `fit` (and its fitted `background`, when it is this fit's) as a document
+ *  section for dataset `ds`, keyed `rows` (default: `ds`'s rows now -- pass the
+ *  key from when the curve was DRAWN, review N7); undefined when it is not
  *  `ds`'s, has no binding, or does not align to `ds`'s rows. A copy. */
-export function captureFit(fit: FitOverlay | null, ds: Dataset | undefined): FigureOverlays | undefined {
+export function captureFit(
+  fit: FitOverlay | null, ds: Dataset | undefined, rows?: string, background?: BaselineOverlay | null,
+): FigureOverlays | undefined {
   if (!fit || !ds || fit.datasetId !== ds.id || !fit.binding || !curveFits(fit, ds.data.time.length)) return undefined;
-  const curve = structuredClone({ binding: fit.binding, y: fit.y, ...(fit.band?.length ? { band: fit.band } : {}) });
-  return { rows: overlayRowsKey(ds), fit: curve };
+  const band = fit.band?.length ? { band: fit.band.map((e) => ({ ...e, y: e.y.map(cell) })) } : {};
+  const out: FigureOverlays = { rows: rows ?? overlayRowsKey(ds), fit: structuredClone({ binding: fit.binding, y: fit.y.map(cell), ...band }) };
+  if (background?.fitOf === fit && background.binding && curveFits(background, ds.data.time.length)) {
+    out.background = structuredClone({ binding: background.binding, y: background.y.map(cell) });
+  }
+  return out;
+}
+
+/** The fitted background a section restores with `fit` (its own), or null. */
+export function backgroundFromDocument(section: unknown, ds: Dataset | undefined, fit: FitOverlay | null): BaselineOverlay | null {
+  const overlays = fit && ds ? sanitizeFigureOverlays(section) : undefined;
+  if (!overlays?.background || !fit || !ds || !curveFits(overlays.background, ds.data.time.length)) return null;
+  return { datasetId: ds.id, ...structuredClone(overlays.background), fitOf: fit };
 }
 
 /** The store overlay a document's saved section stands for, tagged with `ds`,
@@ -120,5 +142,10 @@ function sanitizeCurve(value: unknown): FigureOverlayCurve | null {
 export function sanitizeFigureOverlays(value: unknown): FigureOverlays | undefined {
   if (!isObject(value) || typeof value.rows !== "string" || !value.rows) return undefined;
   const fit = sanitizeCurve(value.fit);
-  return fit ? { rows: value.rows, fit } : undefined;
+  if (!fit) return undefined;
+  if (value.background === undefined) return { rows: value.rows, fit };
+  const background = sanitizeCurve(value.background);
+  return background && !background.band && background.y.length === fit.y.length
+    ? { rows: value.rows, fit, background }
+    : undefined;
 }

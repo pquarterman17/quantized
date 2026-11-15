@@ -206,6 +206,12 @@ function withSavedFits(ws: LoadedWorkspace): void {
 }
 
 describe("derived and report-spec fields (measured against v0.34.0)", () => {
+  it("review N8: the derived set is pinned -- a new derived field is a deliberate edit here", () => {
+    const DERIVED = ["FigureDocument.overlays"];
+    const derived = Object.entries(CLASSIFICATIONS).flatMap(([t, m]) => Object.keys(m).filter((k) => m[k] === "derived").map((k) => `${t}.${k}`));
+    expect(derived.sort()).toEqual(DERIVED);
+  });
+
   it("FigureDocument.overlays is derived: classified, written, and the file stays v4", () => {
     expect(CLASSIFICATIONS.FigureDocument.overlays).toBe("derived");
     const ws = load();

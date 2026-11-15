@@ -441,7 +441,7 @@ export async function runSendEditableFigureToReport(s: StoreGet, figureId: strin
           (greyExcluded) =>
             buildFigureSpecFromDocument(doc, dataset, stem, {
               ...choice.opts, dpi: REPORT_FIGURE_DPI, greyExcluded, defaultTrace: s().defaultTrace,
-              defaultLineWidth: s().defaultLineWidth,
+              defaultLineWidth: s().defaultLineWidth, staleFits: s().staleFits,
             }),
           excludedChoiceMatters,
           s().excludedDisplay,

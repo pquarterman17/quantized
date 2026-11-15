@@ -148,4 +148,8 @@ export interface BaselineOverlay {
   /** The curve the baseline was estimated for (OverlayBinding). */
   binding: OverlayBinding;
   y: (number | null)[];
+  /** A Peak Analyzer model fit's FITTED background (not an estimate): the fit
+   *  it belongs to. In memory only -- it makes the background figure content
+   *  saved with that fit (lib/figureOverlays), unlike a baseline preview. */
+  fitOf?: FitOverlay;
 }

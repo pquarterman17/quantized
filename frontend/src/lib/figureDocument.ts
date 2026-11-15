@@ -92,12 +92,13 @@ export interface FigureDocumentV2 extends Omit<FigureDocumentV1, "version"> {
   version: typeof FIGURE_DOCUMENT_VERSION;
   /** Absent on migrated v1 documents, preserving canonical-only render derivation. */
   publication?: FigurePublicationState;
-  /** Gap audit 5 lane C: the fit curve this figure draws (lib/figureOverlays.ts).
-   *  ABSENT when there is none. v0.34.0 DROPS it on open + save (measured); it
-   *  is classified "derived" in lib/workspaceForwardCompat.ts, not gated: this
-   *  build redraws the focused window's fit from the dataset's saved FitSpec
-   *  (which 0.34 keeps), so a 0.34 round trip costs the band and the other
-   *  windows' curves until re-fit, but never forces a v6 file. */
+  /** Gap audit 5 lane C: the fit curve this figure draws, and a Peak Analyzer
+   *  fit's fitted background (lib/figureOverlays.ts). ABSENT when there is
+   *  none. v0.34.0 DROPS it on open + save (measured); it is classified
+   *  "derived" in lib/workspaceForwardCompat.ts, not gated: this build redraws
+   *  a Curve Fit's curve on the focused window from the dataset's saved
+   *  FitSpec (which 0.34 keeps). Everything else it held is lost by a 0.34
+   *  round trip until re-fit -- that module's header lists exactly what. */
   overlays?: FigureOverlays;
 }
 

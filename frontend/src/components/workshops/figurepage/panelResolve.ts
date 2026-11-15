@@ -147,7 +147,7 @@ export async function panelFigure(
     // grouped+secondary-axis combination) — any such failure is exactly a
     // "this source can no longer render" case, same as a dead window/figdoc.
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
       return pagePanelSpec(spec);
     } catch {
       return null;
@@ -171,7 +171,7 @@ export async function panelFigure(
       : undefined;
     if (!dataset) return null;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
       return pagePanelSpec(spec);
     } catch {
       return null;
@@ -199,7 +199,7 @@ export async function panelFigure(
       : undefined;
   if (document.data.mode === "live" && !dataset) return null;
   try {
-    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
+    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
     return pagePanelSpec(spec);
   } catch {
     return null;
@@ -242,7 +242,9 @@ export async function panelFigure(
  *  code used, extended with the fields the canonical adapter now also reads
  *  (error bindings, hidden/reordered series, secondary axis). */
 export function panelRenderInputs(slots: { source: PanelSource | null }[], s: AppState): unknown[] {
-  const parts: unknown[] = [s.defaultTrace]; // every panel's series draw in it
+  // Every panel's series draw in the default trace; a saved fit is refused
+  // when its dataset is in `staleFits` (lib/figureDocumentOverlaySpec).
+  const parts: unknown[] = [s.defaultTrace, s.staleFits];
   for (const { source } of slots) {
     if (!source) continue;
     if (source.kind === "window") {
@@ -254,7 +256,7 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
       if (win.id === s.focusedWindowId) {
         parts.push(
           win.datasetId,
-          s.datasets.find((d) => d.id === win.datasetId)?.data,
+          ...boundRows(s, win.datasetId),
           s.xKey,
           s.yKeys,
           s.xScale,
@@ -294,9 +296,7 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
       } else {
         parts.push(
           win.document,
-          win.document.bindings.datasetId
-            ? s.datasets.find((d) => d.id === win.document?.bindings.datasetId)?.data
-            : null,
+          ...boundRows(s, win.document.bindings.datasetId),
         );
       }
     } else if (source.kind === "figure") {
@@ -309,9 +309,7 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
       }
       parts.push(
         document,
-        document.data.mode === "live" && document.bindings.datasetId
-          ? s.datasets.find((d) => d.id === document.bindings.datasetId)?.data
-          : null,
+        ...boundRows(s, document.data.mode === "live" ? document.bindings.datasetId : null),
       );
     } else {
       const doc = s.figureDocs.find((d) => d.id === source.id);
@@ -328,6 +326,14 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
     }
   }
   return parts;
+}
+
+/** A bound dataset's data AND the row state a saved fit is checked against
+ *  (lib/figureOverlays.overlayRowsKey): an exclusion, filter or re-designation
+ *  must re-render the panel too (review L2). Stable references only. */
+function boundRows(s: AppState, datasetId: string | null): unknown[] {
+  const ds = datasetId ? s.datasets.find((d) => d.id === datasetId) : undefined;
+  return [ds?.data ?? null, ds?.excludedRows, ds?.filter, ds?.columnDesignations, ds?.channelRoles, ds?.channelTypes];
 }
 
 /** F3.6 "export a saved page without reopening it": resolve a SAVED
@@ -369,7 +375,7 @@ export async function buildPageSpecFromDocument(
     }
     let figure: FigureSpec;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
       figure = pagePanelSpec(spec);
     } catch (e) {
       throw new Error(

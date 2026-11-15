@@ -50,7 +50,7 @@ export async function batchSavedFitOverlays(
     while (next < jobs.length && !signal?.aborted) {
       const { dataset, binding } = jobs[next++];
       const spec = dataset.fitSpec!;
-      const y = await evaluateSavedFit(dataset, spec, spec.params!, binding.xKey);
+      const y = await evaluateSavedFit(dataset, spec, spec.params!);
       if (typeof y === "string") continue;
       const overlays = captureFit({ datasetId: dataset.id, binding, y }, dataset);
       if (overlays) out.set(dataset.id, overlays);

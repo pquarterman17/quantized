@@ -14,12 +14,11 @@
 
 import type { FigureSpec } from "./api/figures";
 import type { FigureDocument } from "./figureDocument";
-import { fitFromDocument, sanitizeFigureOverlays } from "./figureOverlays";
+import { backgroundFromDocument, fitFromDocument, sanitizeFigureOverlays } from "./figureOverlays";
 import { placeAnalysisOverlays } from "./figureSpecOverlays";
 import { FIT_SERIES_LABEL } from "./overlaySpecShape";
 import type { PlotView } from "./plotview";
 import type { Dataset, DataStruct, DefaultTrace } from "./types";
-import { useApp } from "../store/useApp";
 
 export interface DocumentOverlayOpts {
   defaultTrace?: DefaultTrace;
@@ -27,6 +26,9 @@ export interface DocumentOverlayOpts {
   /** The export greys excluded rows (its "(excluded)" companions ride the wire). */
   greyed: boolean;
   onDropped?: (labels: string[]) => void;
+  /** Datasets whose saved fit is out of date (`AppState.staleFits`): passed in
+   *  by the caller (review L7), so this module stays pure. */
+  staleFits?: readonly string[];
 }
 
 /** `spec` with `doc`'s saved fit appended, drawn against `data` -- the rows
@@ -41,17 +43,23 @@ export function withDocumentOverlays(
   view: PlotView,
   opts: DocumentOverlayOpts,
 ): FigureSpec {
-  if (!sanitizeFigureOverlays(doc.overlays)) return spec;
+  if (!doc.overlays) return spec;
+  if (!sanitizeFigureOverlays(doc.overlays)) {
+    opts.onDropped?.([FIT_SERIES_LABEL]); // unreadable: said, not silently skipped (review N1)
+    return spec;
+  }
   // A frozen document renders its own snapshot: no live rows are excluded there.
   const ds: Dataset = doc.data.mode === "live" && dataset
     ? dataset
     : { id: doc.bindings.datasetId ?? doc.id, name: doc.name, data, channelRoles: undefined };
   // A fit marked stale (its source changed after it ran) is drawn nowhere --
   // the focused canvas and a background window refuse it the same way.
-  const stale = useApp.getState().staleFits.includes(ds.id);
+  const stale = opts.staleFits?.includes(ds.id) ?? false;
+  const fit = stale ? null : fitFromDocument(doc.overlays, ds);
   const sources = {
-    fitOverlay: stale ? null : fitFromDocument(doc.overlays, ds),
-    baselineOverlay: null,
+    fitOverlay: fit,
+    // A Peak Analyzer fit's fitted background goes with its fit (review N9).
+    baselineOverlay: backgroundFromDocument(doc.overlays, ds, fit),
     peakOverlay: null,
     defaultTrace: opts.defaultTrace,
     defaultLineWidth: opts.defaultLineWidth,

@@ -135,8 +135,37 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   the right with its own range, scale, tick step, number format, label and
   colour (**Plot ▸ Y Axis Settings…** or double-click the axis), on screen and
   in export.
+- Saved figures keep their fit curve. A plot window's figure saves the fit
+  its graph draws (with the Curve Fit band, and a Peak Analyzer fit's fitted
+  background), so Save editable figure, Figure Page panels, Batch Figure
+  Builder output (each worksheet's saved fit is redrawn from its parameters),
+  Library multi-figure PDFs, Send to report and Analysis Results' Build
+  source figure all carry it. A fit belongs to the window that drew it: other
+  windows on the same worksheet do not show it, and it comes back when its
+  window takes focus, after undo, and when a project or autosave reopens. If
+  the worksheet's rows, excluded rows or column roles have changed since,
+  the saved curve is not drawn (the export says it was left out). Fitting
+  marks the project changed, so the autosave keeps it.
+- Reopening a project made before this keeps its fit: the focused window's
+  Curve Fit curve is redrawn from the saved parameters, over the rows that
+  were fitted (no re-fit). If the model cannot be evaluated or the fit is
+  out of date, nothing is drawn and the status line says why. The Curve Fit
+  panel then offers Remove fit for that saved fit.
 
 ### Changed
+
+- Peak markers and an estimated baseline are previews, not figure content:
+  they are not saved with a figure and go when their panel closes. A Peak
+  Analyzer model fit and its fitted background are results: closing the
+  panel now keeps them, and they are saved with the figure. (This replaces
+  the gap-audit-6 lane K acceptance item "a two-peak fit reopens with the
+  peaks overlay": the model curve and fitted background reopen; the peak
+  markers do not.)
+- API: `POST /api/export/figure`, `/api/export/figure-page` and
+  `/api/export/figure-batch` take an optional `analysis_overlays` list (one
+  boolean per `y_keys` entry) that marks fit, band, baseline and peak series,
+  and return **422** when it is not exactly one strict boolean per `y_keys`
+  entry.
 
 - Analysis tools compute on each Y's own X (#666): baseline, magnetometry,
   batch integrate, the peak tools and Curve Fit used the plot's shared X, so
@@ -169,6 +198,9 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- An exported PDF/SVG/EPS of a graph with a fit, band, baseline or peak
+  overlay titled its Y axis "signal, fit, 95% CI low, …"; it now reads
+  exactly as on screen ("signal").
 - Origin `.opju` graph pages are recovered with their per-layer axis ranges,
   checked against Origin itself (#676, #681, #682).
 - Origin `.opju` curves bind to the sheet they plot (#684) and to their own
@@ -220,6 +252,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   templates made in this version. (Recipes saved inside a `.dwk` are part of
   the version-6 rule above.)
 - `qz convert` writes `.dwk` version 3, which this version migrates on open.
+- A figure's saved fit curve is not gated: 0.34.0 opens such a project (it
+  stays version 4) but drops the saved curves, keeping each worksheet's saved
+  fit recipe. Back in this version, only the focused window's Curve Fit curve
+  is redrawn from that recipe. Lost until you fit again: the Curve Fit band,
+  the fit in every other window and in every editable figure (including
+  Figure Pages, Build source figure and Batch Figure Builder output), and
+  fits with no recipe to redraw from (Peak Analyzer and its fitted
+  background, Quick Fit, equation, ODR, global, bumps and reflectivity).
 
 ### Known limitations
 

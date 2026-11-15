@@ -12,6 +12,8 @@
 import type { BreakComposition, SpatialComposition } from "../lib/composition";
 import { hydrateView, navigationView, snapshotView, type PlotView } from "../lib/plotview";
 import { focusTransientReset } from "./windows";
+import { windowsWithLiveFit } from "./windowDocuments";
+import { overlaysNow } from "./windowOverlaysLazy";
 import type { LibrarySelection } from "./libraryPanel";
 import type { AppState } from "./useApp";
 
@@ -143,7 +145,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     fitModelCarry: s.fitModelCarry,
     macroSteps: s.macroSteps,
     techniqueViewMemory: s.techniqueViewMemory,
-    plotWindows: s.plotWindows,
+    plotWindows: windowsWithLiveFit(s),
     focusedWindowId: s.focusedWindowId,
     view: snapshotView(s),
     carriedComposition:
@@ -209,6 +211,11 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     // Preserve scratch across unrelated edits, but clear it when restored
     // worksheet state may no longer match the rendered fit curve.
     fitOverlay: fitOverlaySurvives(s, snap) ? s.fitOverlay : null,
+    // Then the window-scoped fit (gap audit 5 lane C, review N3): a restore
+    // that changes the focused window, or leaves its fit slot empty, hands
+    // the slot to the restored window's own saved fit -- never another
+    // window's fit drawn meanwhile, never a lost one.
+    ...restoredFitSlot(s, snap),
     // After the reset, which nulls `composition`: a snapshotted break or
     // spatial arrangement comes back.
     composition: carriedComposition,
@@ -217,6 +224,14 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     openReportId: hasId(snap.reports, s.openReportId) ? s.openReportId : null,
     openAnalysisResultId: hasId(snap.analysisResults, s.openAnalysisResultId) ? s.openAnalysisResultId : null,
   };
+}
+
+function restoredFitSlot(s: AppState, snap: HistorySnapshot): Partial<AppState> {
+  const focusChanged = snap.focusedWindowId !== s.focusedWindowId;
+  if (!focusChanged && fitOverlaySurvives(s, snap) && s.fitOverlay) return {};
+  const target = snap.plotWindows.find((w) => w.id === snap.focusedWindowId);
+  const patch = overlaysNow()?.handoff(target, { datasets: snap.datasets, staleFits: s.staleFits, baselineOverlay: s.baselineOverlay });
+  return patch ?? {};
 }
 
 /** Does the drawn fit curve still describe its worksheet after this restore?

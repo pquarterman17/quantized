@@ -29,6 +29,7 @@ export async function exportSavedFiguresPdf(ids: readonly string[], fileName = "
       defaultTrace: state.defaultTrace,
       defaultLineWidth: state.defaultLineWidth,
       greyExcluded: ghosterFor(state.excludedDisplay),
+      staleFits: state.staleFits,
     },
     undefined,
     (id) => useApp.getState().resolveDataset(id),

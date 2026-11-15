@@ -42,6 +42,8 @@ async function flush() {
 }
 
 const base: AutosaveState = {
+  fitOverlay: null, // gap audit 5 lane C: the focused window's saved fit (untouched)
+  baselineOverlay: null,
   mapViews: EMPTY_MAP_VIEWS, // P2.8 — the per-dataset durable map views (untouched)
   savedSampleProfiles: [], // MAIN_PLAN #42 — named sample profiles (untouched)
   datasets: [],
@@ -128,6 +130,21 @@ describe("shouldAutosave", () => {
     ] as const,
   )("saves when %s changes", (field) => {
     expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
+  });
+
+  // Review N2 (gap audit 5 lane C): the fit curve is saved content now, and
+  // most fits (Peak Analyzer, Quick Fit, ...) change nothing else.
+  it("saves when a fit is drawn, changed or removed, and when a FITTED background changes", () => {
+    const fit = { datasetId: "d", binding: { yKey: 0, xKey: null }, y: [1, 2] };
+    expect(shouldAutosave({ ...base, fitOverlay: fit }, base)).toBe(true);
+    expect(shouldAutosave(base, { ...base, fitOverlay: fit })).toBe(true);
+    const fitted = { datasetId: "d", binding: { yKey: 0, xKey: null }, y: [0, 0], fitOf: fit };
+    expect(shouldAutosave({ ...base, baselineOverlay: fitted }, base)).toBe(true);
+  });
+
+  it("an estimated-baseline PREVIEW does not save (it is not figure content)", () => {
+    const preview = { datasetId: "d", binding: { yKey: 0, xKey: null }, y: [0, 0] };
+    expect(shouldAutosave({ ...base, baselineOverlay: preview }, base)).toBe(false);
   });
 
   it("saves when recalculation mode changes", () => {

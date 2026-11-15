@@ -170,6 +170,18 @@ export function commitFocusedWindow(w: PlotWindow, s: AppState): PlotWindow {
   return overlaysNow()?.commit(synced, s) ?? synced;
 }
 
+/** `s.plotWindows` with the focused window's document holding the fit its
+ *  canvas draws -- what an undo step must snapshot, or undoing a window step
+ *  restores a document without the fit (review N3). The view is NOT synced
+ *  here: the snapshot keeps the live view separately (`snapshotView`). */
+export function windowsWithLiveFit(s: AppState): AppState["plotWindows"] {
+  const m = overlaysNow();
+  const i = m ? s.plotWindows.findIndex((w) => w.id === s.focusedWindowId) : -1;
+  if (!m || i < 0) return s.plotWindows;
+  const w = m.commit(s.plotWindows[i], s, false);
+  return w === s.plotWindows[i] ? s.plotWindows : s.plotWindows.map((x, j) => (j === i ? w : x));
+}
+
 /** Replace a plot window's canonical document and regenerate every legacy
  * projection from it. Figure lifecycle actions must use this rather than
  * assigning `window.document` beside a hand-maintained title/view/datasetId

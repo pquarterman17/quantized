@@ -1,40 +1,58 @@
-// A plot window's document keeps the fit curve ITS canvas draws (gap audit 5
-// lane C; lib/figureOverlays.ts has the section and its fail-closed row
-// check). The fit is WINDOW-SCOPED: the store's one `fitOverlay` slot belongs
-// to the focused window. Three moves:
-//   * HANDOFF -- when a window takes focus, the slot becomes that window's own
-//     saved fit (if its rows still match and the fit is not stale), else
-//     empty: another window's fit never spreads onto it. What was put there is
-//     remembered as "seeded on this focus".
+// A plot window's document keeps the fit ITS canvas draws (gap audit 5 lane C;
+// lib/figureOverlays.ts has the section and its fail-closed rows key). The
+// fit slot is WINDOW-SCOPED: the store's one `fitOverlay` slot (and, with a
+// Peak Analyzer model fit, its fitted background in `baselineOverlay`) belongs
+// to the focused window. Moves:
+//   * HANDOFF -- when a window takes focus, or a history restore lands on one
+//     (store/historySnapshot), the slot becomes that window's own saved fit (if
+//     its rows key still matches and the fit is not stale), else empty: another
+//     window's fit never spreads onto it. What was put there is remembered as
+//     "shown on this focus".
 //   * FOLD -- whenever the focused window's view is committed to its document
 //     (store/windowDocuments.commitFocusedWindow: a focus switch, minimize,
-//     `windowsForSave`; liveWindowDocument: Save / Save As, Publication
-//     Preview, the unsaved-edits check), a fit drawn for its dataset and
-//     actually placed on its view replaces the section. The section is
-//     REMOVED only when this window showed it on this focus (seeded, or
-//     drawn) and the slot is now empty -- the user removed it. Anything else
-//     (rows changed, data still loading, the slot holding another dataset's
-//     fit, this module arriving after the focus) keeps the section as it is.
-//   * RESEED -- when the focused window's lazy book finishes loading, its
-//     saved fit is put back (it could not be checked against preview rows).
+//     `windowsForSave`, a history snapshot; liveWindowDocument: Save / Save As,
+//     Publication Preview, the unsaved-edits check), a fit THIS window drew for
+//     its dataset and placed on its view replaces the section, keyed with the
+//     rows it was DRAWN on (review N7: a row-state change since never certifies
+//     the old curve as current). The section is REMOVED only when this window
+//     showed it on this focus, the slot is now empty, and the section still
+//     matches its rows (review N3) -- the user removed it. Anything else (rows
+//     edited, data loading, another dataset's or another window's fit in the
+//     slot, a focus this module did not see) keeps the section as it is.
+//   * RESEED -- when the focused window's lazy book finishes loading, its saved
+//     fit is put back (it could not be checked against preview rows).
+// Who drew a curve is recorded as it lands in the slot, so the Curve Fit
+// panel's retained curve never re-spreads onto another window (review N4).
 // Only a LIVE document captures: a frozen one renders its own snapshot.
 // LAZY: the eager store reaches it through store/windowOverlaysLazy.ts only.
 
 import type { FigureDocument } from "../lib/figureDocument";
 import { figureDocumentToPlotView } from "../lib/figureDocument";
-import { captureFit, fitFromDocument, sanitizeFigureOverlays } from "../lib/figureOverlays";
+import { backgroundFromDocument, captureFit, fitFromDocument, overlayRowsKey, sanitizeFigureOverlays } from "../lib/figureOverlays";
 import { overlayLayout, placeOverlay } from "../lib/overlayPlacement";
 import { perSeriesXDataset } from "../lib/perSeriesX";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import { shownCurves } from "../lib/shownCurves";
-import type { Dataset, FitOverlay } from "../lib/types";
+import type { BaselineOverlay, Dataset, FitOverlay } from "../lib/types";
 import { useApp, type AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
+import { clearMissedHandoff, missedHandoff } from "./windowOverlaysLazy";
 
-type State = Pick<AppState, "fitOverlay" | "datasets" | "staleFits">;
+type State = Pick<AppState, "fitOverlay" | "baselineOverlay" | "datasets" | "staleFits">;
 
-/** What the focused window showed: set at each handoff this module saw. */
-let focus: { windowId: string; shown: FitOverlay | null } | null = null;
+/** What the focused window showed on this focus. `foreign`: the slot may hold
+ *  a fit drawn before this module saw the focus (L5) -- never captured. */
+let focus: { windowId: string; shown: FitOverlay | null; foreign: boolean } | null = null;
+/** The window each curve was drawn in, and the rows key it was drawn on. */
+let owner = new WeakMap<object, string>();
+let drawnKey = new WeakMap<object, string>();
+
+/** Test isolation (review L6): forget the focus record and the ownership maps. */
+export function resetWindowOverlaysForTests(): void {
+  focus = null;
+  owner = new WeakMap();
+  drawnKey = new WeakMap();
+}
 
 /** Is `fit` drawn on `view` of `ds`? The canvas' own placement (I1,
  *  lib/overlayPlacement): its bound Y shown, on its own X's block. */
@@ -45,51 +63,89 @@ export function fitPlaced(ds: Dataset, view: PlotView, fit: FitOverlay): boolean
   return !!placed && placed.y.length >= (v?.dataset ?? ds).data.time.length;
 }
 
+/** `section` if its fit is placed on `view` of `ds` (Build source figure, L3). */
+export function placedSection<T>(section: T, ds: Dataset, view: PlotView): T | undefined {
+  const fit = fitFromDocument(section, ds);
+  return fit && fitPlaced(ds, view, fit) ? section : undefined;
+}
+
+/** May the focused window draw `fit`? Not when another window drew it (N4). */
+export function mayDraw(windowId: string | null, fit: FitOverlay): boolean {
+  const who = owner.get(fit);
+  return who === undefined || who === windowId;
+}
+
 const datasetOf = (doc: FigureDocument | undefined, s: Pick<AppState, "datasets">): Dataset | undefined =>
   doc?.bindings.datasetId ? s.datasets.find((d) => d.id === doc.bindings.datasetId) : undefined;
 
-/** The fit a document puts on the canvas: its own, fresh, not stale. */
-function savedFit(doc: FigureDocument | undefined, s: Pick<AppState, "datasets" | "staleFits">): FitOverlay | null {
-  if (!doc || doc.data.mode !== "live" || !doc.overlays) return null;
+/** The fit (and fitted background) a document puts on the canvas: its own,
+ *  fresh, not stale. */
+function saved(doc: FigureDocument | undefined, s: Pick<AppState, "datasets" | "staleFits">): { fit: FitOverlay | null; bg: BaselineOverlay | null } {
+  if (!doc || doc.data.mode !== "live" || !doc.overlays) return { fit: null, bg: null };
   const ds = datasetOf(doc, s);
-  return ds && !s.staleFits.includes(ds.id) ? fitFromDocument(doc.overlays, ds) : null;
+  const fit = ds && !s.staleFits.includes(ds.id) ? fitFromDocument(doc.overlays, ds) : null;
+  return { fit, bg: backgroundFromDocument(doc.overlays, ds, fit) };
 }
 
-/** The slot when `target` takes focus (see HANDOFF). */
-export function handoff(target: PlotWindow | undefined, s: Pick<AppState, "datasets" | "staleFits">): Partial<AppState> {
+function claim(windowId: string, curve: object, key: string): void {
+  owner.set(curve, windowId);
+  if (!drawnKey.has(curve)) drawnKey.set(curve, key);
+}
+
+/** The slot when `target` takes focus (see HANDOFF). An estimated-baseline
+ *  preview in `baselineOverlay` is left alone; a fitted background follows
+ *  its fit. */
+export function handoff(
+  target: PlotWindow | undefined,
+  s: Pick<AppState, "datasets" | "staleFits" | "baselineOverlay">,
+): Partial<AppState> {
   watch();
   if (!target) return {};
-  const shown = target.kind === "plot" ? savedFit(target.document, s) : null;
-  focus = { windowId: target.id, shown };
-  return { fitOverlay: shown };
+  clearMissedHandoff();
+  const { fit, bg } = target.kind === "plot" ? saved(target.document, s) : { fit: null, bg: null };
+  const key = target.kind === "plot" && target.document?.overlays ? target.document.overlays.rows : "";
+  if (fit) claim(target.id, fit, key);
+  if (bg) claim(target.id, bg, key);
+  focus = { windowId: target.id, shown: fit, foreign: false };
+  return {
+    fitOverlay: fit,
+    ...(bg ? { baselineOverlay: bg } : s.baselineOverlay?.fitOf ? { baselineOverlay: null } : {}),
+  };
 }
 
-/** `doc` (window `windowId`'s) with the fit its canvas draws folded in. */
-export function fold(doc: FigureDocument, s: State, windowId: string): FigureDocument {
+/** `doc` (window `windowId`'s) with the fit its canvas draws folded in.
+ *  `record` false (a history snapshot) folds without touching the focus record. */
+export function fold(doc: FigureDocument, s: State, windowId: string, record = true): FigureDocument {
   watch();
   if (doc.data.mode !== "live") return doc;
   // A focus this module did not see (the startup window, or one taken before
   // the chunk arrived): nothing was shown from the section, so it is never
-  // inferred removed -- only a fit drawn now for its dataset is captured.
-  if (focus?.windowId !== windowId) focus = { windowId, shown: null };
+  // inferred removed; and if a handoff was skipped, the slot may hold another
+  // window's fit, so nothing is captured either (L5).
+  let f = focus;
+  if (f?.windowId !== windowId) {
+    f = { windowId, shown: null, foreign: missedHandoff() };
+    if (record) focus = f;
+  }
   const ds = datasetOf(doc, s);
   const cur = s.fitOverlay;
-  if (cur && ds && !ds.pending && cur.datasetId === ds.id) {
-    focus.shown = cur;
-    const overlays = fitPlaced(ds, figureDocumentToPlotView(doc), cur) ? captureFit(cur, ds) : undefined;
-    return overlays ? { ...doc, overlays } : doc; // not placed on this view: the section stands
+  if (cur && ds && !ds.pending && cur.datasetId === ds.id && !f.foreign && mayDraw(windowId, cur)) {
+    if (record) f.shown = cur;
+    if (!fitPlaced(ds, figureDocumentToPlotView(doc), cur)) return doc; // not on this view: the section stands
+    const overlays = captureFit(cur, ds, drawnKey.get(cur) ?? overlayRowsKey(ds), s.baselineOverlay);
+    return overlays ? { ...doc, overlays } : doc;
   }
-  if (cur === null && focus.shown && doc.overlays) {
-    const { overlays: _removed, ...rest } = doc; // shown on this focus, now removed
+  if (cur === null && f.shown && doc.overlays && fitFromDocument(doc.overlays, ds)) {
+    const { overlays: _removed, ...rest } = doc; // shown on this focus, rows unchanged, now removed
     return rest;
   }
   return doc;
 }
 
 /** `w` (the focused window, just synced) with its fold applied. */
-export function commit(w: PlotWindow, s: AppState): PlotWindow {
+export function commit(w: PlotWindow, s: AppState, record = true): PlotWindow {
   if (w.kind !== "plot" || !w.document) return w;
-  const doc = fold(w.document, s, w.id);
+  const doc = fold(w.document, s, w.id, record);
   return doc === w.document ? w : withPlotWindowDocument(w, doc);
 }
 
@@ -129,25 +185,36 @@ function dropUnreadable(): void {
   });
 }
 
-// RESEED: the focused window's lazy book finished loading. Installed on first
-// use (never at import: this chunk can load while the store is still being
-// built, during the eager graph's own evaluation).
+// Installed on first use (never at import: this chunk can load while the
+// store is still being built, during the eager graph's own evaluation).
 let watching = false;
-function watch(): void {
+export function watch(): void {
   if (watching) return;
-  watching = true;
-  useApp.subscribe(reseed);
+  try {
+    useApp.subscribe(onChange);
+    watching = true;
+  } catch {
+    // The store is still being built (this chunk loaded during its graph's
+    // evaluation): the next handoff / fold installs it.
+  }
 }
 
-function reseed(s: AppState, prev: AppState): void {
-  if (s.datasets === prev.datasets || s.fitOverlay || !focus || focus.windowId !== s.focusedWindowId) return;
+function onChange(s: AppState, prev: AppState): void {
+  // OWNERSHIP: a curve landing in the slot was drawn by the focused window,
+  // on the rows its dataset has now.
   const w = s.plotWindows.find((x) => x.id === s.focusedWindowId);
+  for (const curve of [s.fitOverlay, s.baselineOverlay?.fitOf ? s.baselineOverlay : null]) {
+    if (!curve || owner.has(curve) || !s.focusedWindowId) continue;
+    if (focus?.windowId === s.focusedWindowId && focus.foreign) continue;
+    const ds = s.datasets.find((d) => d.id === curve.datasetId);
+    if (ds && !ds.pending) claim(s.focusedWindowId, curve, overlayRowsKey(ds));
+  }
+  // RESEED: the focused window's lazy book finished loading.
+  if (s.datasets === prev.datasets || s.fitOverlay || !focus || focus.windowId !== s.focusedWindowId) return;
   const id = w?.kind === "plot" ? w.document?.bindings.datasetId : null;
   const was = prev.datasets.find((d) => d.id === id);
   const now = s.datasets.find((d) => d.id === id);
   if (!w || !was?.pending || !now || now.pending) return;
-  const fit = w.kind === "plot" ? savedFit(w.document, s) : null;
-  if (!fit) return;
-  focus.shown = fit;
-  useApp.setState({ fitOverlay: fit });
+  const patch = handoff(w, s);
+  if (patch.fitOverlay) useApp.setState(patch);
 }

@@ -40,8 +40,11 @@ export default function PeakWizardPanel() {
   };
 
   const close = () => {
-    w.model.clear(); // the model engine's curve + in-flight request
-    setBaselineOverlay(null);
+    // The model fit and its fitted background are figure content (gap audit 5
+    // lane C): they stay. The estimated baseline and the peak markers are
+    // previews of the open wizard: they go.
+    w.model.release();
+    if (!useApp.getState().baselineOverlay?.fitOf) setBaselineOverlay(null);
     setPeakOverlay(null);
     setOpen(false);
   };

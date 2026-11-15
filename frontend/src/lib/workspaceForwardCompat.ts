@@ -17,15 +17,24 @@
 // and re-saved by v0.34.0's own parseWorkspace/serializeWorkspace (the
 // `git archive v0.34.0` procedure in `__fixtures__/workspace/README.md`).
 // "kept-by-034" means 0.34 keeps the value but does not draw it.
-// "derived" means 0.34 DROPS the value, but this build regenerates what matters
-// of it from data 0.34 keeps, so it does not force v6 (refusing a whole project
-// over a cache would be worse than redrawing it). The one derived field is
-// `FigureDocument.overlays` (gap audit 5 lane C): a figure's saved fit curve.
-// 0.34 drops it on open + save but keeps the dataset's `fitSpec`, and on open
-// this build redraws the focused window's fit from those saved parameters
-// (store/overlayRestore.ts, gap audit 6 lane K). What a 0.34 round trip costs:
-// the Curve Fit band, and the curve in windows other than the focused one,
-// until the user re-fits. Measured with the procedure below.
+// "derived" means 0.34 DROPS the value, but a NAMED regenerator in this build
+// rebuilds the part that matters from data 0.34 keeps, so it does not force v6
+// (refusing a whole project over a cache would be worse than redrawing it).
+// The one derived field is `FigureDocument.overlays` (gap audit 5 lane C): a
+// figure's saved fit curve. 0.34 drops it on open + save but keeps the
+// dataset's `fitSpec`; on open this build's regenerator,
+// store/overlayRestore.restoreSavedFitOverlay (gap audit 6 lane K), redraws a
+// CURVE FIT's curve on the FOCUSED window from those saved parameters. A 0.34
+// round trip therefore loses, until the user fits again:
+//   * the Curve Fit band (the regenerated curve has none);
+//   * the fit in every plot window but the focused one;
+//   * every EDITABLE FIGURE's fit (Library figures, Build source figure and
+//     Batch Figure Builder output, and the Figure Pages built from them);
+//   * fits with no `fitSpec` the regenerator can evaluate: Peak Analyzer (and
+//     its fitted background), Quick Fit, equation, ODR, global, bumps and
+//     reflectivity curves.
+// Measured with the procedure below; the set of derived fields is pinned by
+// workspaceForwardCompat.test.ts, so a new one is a deliberate decision.
 //
 // Report figure blocks store their export request (`ReportFigureBlock.spec`)
 // opaquely, in 0.34 too: its `analysis_overlays` flags are kept by 0.34
@@ -37,7 +46,10 @@
 // 1. tsc names the map to edit; classify the field. "v034" only for fields that
 //    existed in v0.34.0 (they will not be new).
 // 2. For a new field, measure it against v0.34.0 with the procedure above, then
-//    mark it "gated" (lost) or "kept-by-034" (carried through).
+//    mark it "gated" (lost) or "kept-by-034" (carried through). "derived" (lost,
+//    yet no v6) only with a named regenerator over data 0.34 keeps, a test that
+//    exercises that regenerator, the real losses listed above, and an entry in
+//    the test's pinned DERIVED list -- never as a way around v6.
 // 3. For "gated", add the matching FEATURES case in
 //    workspaceForwardCompat.test.ts (the test lists any missing one).
 // 4. A field on a type with no map here (for example a map 3-D view in the map

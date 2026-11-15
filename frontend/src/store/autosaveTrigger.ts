@@ -80,6 +80,14 @@ export type AutosaveState = Pick<
   // independently (store/sampleProfiles.ts), same class as `collections`.
   | "savedSampleProfiles"
   | "fitModelCarry" // P2.7: a refused fit-model merge grows it on its own (store/workspaceHydration.ts)
+  // Gap audit 5 lane C (review N2): the focused window's fit curve is SAVED
+  // content now (`windowsForSave` folds it into the window's document), and
+  // most fits (Peak Analyzer, Quick Fit, equation, ODR, global, reflectivity)
+  // and the band toggle change nothing else -- a reload lost them unless an
+  // unrelated edit happened to save. Every writer replaces the object.
+  | "fitOverlay"
+  // ...and a Peak Analyzer fit's fitted background (`fitOf`), saved with it.
+  | "baselineOverlay"
 >;
 
 /** The focused window's LIVE view: the singleton PlotView fields (axis
@@ -130,6 +138,9 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.collections === prev.collections &&
     state.savedSampleProfiles === prev.savedSampleProfiles &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
-    state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry
+    state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry &&
+    state.fitOverlay === prev.fitOverlay &&
+    // An estimated-baseline PREVIEW is not saved: only a fitted background counts.
+    (state.baselineOverlay === prev.baselineOverlay || (!state.baselineOverlay?.fitOf && !prev.baselineOverlay?.fitOf))
   );
 }

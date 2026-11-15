@@ -1,6 +1,7 @@
-// Review #4: a saved fit is regenerated over the rows it was FITTED on -- its
-// row selection, its fit window and the active (not excluded / filtered) rows
-// -- as Curve Fit drew it, never extrapolated across the whole sheet.
+// Reviews #4 / N6: a saved fit is regenerated over the rows it was FITTED on --
+// its fit window, its active (not excluded / filtered) rows and only rows with
+// a finite X AND Y -- as Curve Fit drew it, never extrapolated across the
+// sheet, and a row selection that no longer matches is refused with a reason.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { evaluateSavedFit, fittedRows } from "./savedFitCurve";
@@ -17,6 +18,7 @@ const LOOP: Dataset = {
   data: { time: [-3, -2, -1, 0, 1, 2, 3], values: [[-1], [-1], [-0.5], [0], [0.5], [1], [1]], labels: ["M"], units: ["emu"], metadata: {} },
 };
 const LINE: FitSpec = { model: "Linear", xKey: null, yKey: 0, params: [0, 0.5], range: [-1, 1] };
+const rowsOf = (r: ReturnType<typeof fittedRows>) => (typeof r === "string" ? r : r.rows);
 
 beforeEach(() => {
   mocks.fitBands.mockReset();
@@ -25,27 +27,41 @@ beforeEach(() => {
 
 describe("fittedRows", () => {
   it("keeps only the rows inside the recorded fit window", () => {
-    expect(fittedRows(LOOP, LINE, null)).toEqual([2, 3, 4]);
+    expect(rowsOf(fittedRows(LOOP, LINE))).toEqual([2, 3, 4]);
   });
 
-  it("drops excluded rows, and honours an explicit row selection while the row count holds", () => {
-    expect(fittedRows({ ...LOOP, excludedRows: [3] }, LINE, null)).toEqual([2, 4]);
-    const picked = { ...LINE, range: undefined, rowIds: [0, 1, 5], sourceRowCount: 7 };
-    expect(fittedRows(LOOP, picked, null)).toEqual([0, 1, 5]);
-    // A structural edit since (row count changed): the selection no longer applies.
-    expect(fittedRows(LOOP, { ...picked, sourceRowCount: 9 }, null)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  it("drops excluded rows", () => {
+    expect(rowsOf(fittedRows({ ...LOOP, excludedRows: [3] }, LINE))).toEqual([2, 4]);
+  });
+
+  it("review N6a: skips a row whose Y is blank, as the screen breaks there", () => {
+    const gappy: Dataset = { ...LOOP, data: { ...LOOP.data, values: [[-1], [-1], [-0.5], [Number.NaN], [0.5], [1], [1]] } };
+    expect(rowsOf(fittedRows(gappy, LINE))).toEqual([2, 4]);
+  });
+
+  it("review N6b: a recorded row selection that no longer matches is refused, never widened", () => {
+    const picked: FitSpec = { ...LINE, range: undefined, rowIds: [0, 1, 5], sourceRowCount: 9 }; // rows changed since
+    const out = fittedRows(LOOP, picked);
+    expect(typeof out).toBe("string");
+    expect(out).toMatch(/row selection no longer matches the sheet/);
   });
 });
 
 describe("evaluateSavedFit", () => {
   it("draws a range-limited fit over its own window only, null elsewhere (no extrapolation)", async () => {
-    const y = await evaluateSavedFit(LOOP, LINE, LINE.params!, null);
+    const y = await evaluateSavedFit(LOOP, LINE, LINE.params!);
     expect(y).toEqual([null, null, -0.5, 0, 0.5, null, null]);
     expect(mocks.fitBands).toHaveBeenCalledWith(expect.objectContaining({ x: [-1, 0, 1] }));
   });
 
   it("never draws through an excluded point", async () => {
-    const y = await evaluateSavedFit({ ...LOOP, excludedRows: [3] }, LINE, LINE.params!, null);
+    const y = await evaluateSavedFit({ ...LOOP, excludedRows: [3] }, LINE, LINE.params!);
     expect(y).toEqual([null, null, -0.5, null, 0.5, null, null]);
+  });
+
+  it("returns the reason when the selection no longer matches (nothing evaluated)", async () => {
+    const out = await evaluateSavedFit(LOOP, { ...LINE, rowIds: [2, 3], sourceRowCount: 4 }, LINE.params!);
+    expect(out).toMatch(/row selection no longer matches/);
+    expect(mocks.fitBands).not.toHaveBeenCalled();
   });
 });

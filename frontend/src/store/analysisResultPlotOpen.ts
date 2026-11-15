@@ -47,7 +47,7 @@ export async function resultFitCurve(id: string, prepared: PreparedAnalysisResul
   if (!params?.length) return { kind: "fail", why: "the saved fit has no parameter values" };
   const binding = fitDrawBinding(fitDataset, prepared, fitSpec);
   if (!binding) return { kind: "refused", why: fitDrawRefusal(fitSpec) };
-  const evaluated = await evaluateSavedFit(fitDataset, fitSpec, params, binding.xKey);
+  const evaluated = await evaluateSavedFit(fitDataset, fitSpec, params, binding.yKey);
   if (typeof evaluated === "string") return { kind: "fail", why: evaluated };
   const now = useApp.getState();
   const current = now.analysisResults.find((item) => item.id === id);

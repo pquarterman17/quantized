@@ -135,11 +135,26 @@ describe("a saved figure keeps its fit (gap audit 5 lane C)", () => {
     const dropped: string[][] = [];
     const excluded = { ...SHEET, excludedRows: [1] };
     expect(wire(buildFigureSpecFromDocument(saved, excluded, "x", { onDroppedOverlays: (l) => dropped.push(l) }), "fit")).toEqual([]);
-    useApp.setState({ staleFits: ["own"] });
-    expect(wire(buildFigureSpecFromDocument(saved, SHEET, "x", { onDroppedOverlays: (l) => dropped.push(l) }), "fit")).toEqual([]);
+    // Review L7: stale fits are passed in, not read from the store.
+    expect(wire(buildFigureSpecFromDocument(saved, SHEET, "x", { staleFits: ["own"], onDroppedOverlays: (l) => dropped.push(l) }), "fit")).toEqual([]);
     expect(dropped).toEqual([["fit"], ["fit"]]);
-    useApp.setState({ staleFits: [] });
     expect(wire(buildFigureSpecFromDocument(saved, SHEET, "x"), "fit")).toEqual(FIT_PAIRS);
+  });
+
+  it("review N9: a Peak Analyzer fit's fitted background is exported with its saved fit", () => {
+    useApp.setState({ baselineOverlay: { datasetId: "own", binding: { yKey: 2, xKey: 1 }, y: [1, 2, 3, 4], fitOf: FIT } });
+    const saved = saveAndForget();
+    expect(saved.overlays?.background?.y).toEqual([1, 2, 3, 4]);
+    const own = buildFigureSpecFromDocument(saved, SHEET, saved.name);
+    expect(wire(own, "baseline")).toEqual([[40, 1], [10, 2], [30, 3], [20, 4]]);
+  });
+
+  it("review N1: an unreadable section is reported as left out, never skipped silently", () => {
+    const saved = saveAndForget();
+    const broken = { ...saved, overlays: { rows: saved.overlays!.rows, fit: { binding: {}, y: "no" } } as never };
+    const dropped: string[][] = [];
+    expect(wire(buildFigureSpecFromDocument(broken, SHEET, "x", { onDroppedOverlays: (l) => dropped.push(l) }), "fit")).toEqual([]);
+    expect(dropped).toEqual([["fit"]]);
   });
 
   it("fails closed when its bound curve is hidden on the saved figure", () => {

@@ -123,8 +123,8 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
   /** The document's saved fit / baseline / peaks (lib/figureDocumentOverlaySpec).
    *  `false` = left off: the Stage export appends the canvas' live ones itself. */
   analysisOverlays?: false;
-  /** Saved overlays this figure cannot carry (stale rows, refused placement). */
-  onDroppedOverlays?: (labels: string[]) => void;
+  onDroppedOverlays?: (labels: string[]) => void; // saved fit not carried (stale, refused, unreadable)
+  staleFits?: readonly string[]; // datasets whose saved fit is out of date (never drawn)
 }
 
 /** Resolve the data that a canonical document is allowed to render. A frozen
@@ -493,6 +493,6 @@ export function buildFigureSpecFromDocument(
   );
   return overrides.analysisOverlays === false ? spec : withDocumentOverlays(spec, document, dataset, resolved.data, view, {
     defaultTrace: overrides.defaultTrace, defaultLineWidth: overrides.defaultLineWidth,
-    greyed: Boolean(overrides.greyExcluded), onDropped: overrides.onDroppedOverlays,
+    greyed: Boolean(overrides.greyExcluded), onDropped: overrides.onDroppedOverlays, staleFits: overrides.staleFits,
   });
 }

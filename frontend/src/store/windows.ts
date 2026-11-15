@@ -36,10 +36,10 @@ import { datasetViewDefaults } from "./windowDefaults";
 import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
-import { overlaysNow } from "./windowOverlaysLazy";
+import { noteMissedHandoff, overlaysNow } from "./windowOverlaysLazy";
 
 /** A window taking focus: the fit slot becomes its own saved fit (lane C, store/windowOverlays). */
-const seedOf = (w: PlotWindow, s: AppState) => overlaysNow()?.handoff(w, s);
+const seedOf = (w: PlotWindow, s: AppState) => overlaysNow()?.handoff(w, s) ?? noteMissedHandoff();
 
 // Moved-out helpers + the slice contract (store-size ratchet), re-exported so no importer changed.
 export { analysisResultReset, datasetViewDefaults, focusedRebindPatch, focusTransientReset, focusWindowShowing, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";

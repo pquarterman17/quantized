@@ -287,7 +287,10 @@ describe("Peak Analyzer — model fit results (step 4)", () => {
     expect(sent.result).toHaveProperty("yUnit", "cts");
   });
 
-  it("switching to the classic engine, or closing the panel, takes the model curve off the plot", async () => {
+  // Switching engine takes the model curve off; CLOSING keeps it (gap audit 5
+  // lane C, second review N9): a model fit is figure content, saved with the
+  // figure like a Curve Fit kept on close -- only the find-step previews go.
+  it("switching to the classic engine takes the model curve off the plot; closing the panel keeps it", async () => {
     await findTwoPeaks();
     await fitWith(modelFitResponse());
     await waitFor(() => expect(useApp.getState().fitOverlay?.datasetId).toBe("d1"));
@@ -297,8 +300,13 @@ describe("Peak Analyzer — model fit results (step 4)", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "fit engine" }), { target: { value: "model" } });
     await fitWith(modelFitResponse());
     await waitFor(() => expect(useApp.getState().fitOverlay?.datasetId).toBe("d1"));
+    const curve = useApp.getState().fitOverlay;
+    const bg = useApp.getState().baselineOverlay; // the FITTED background, tagged with its fit
+    if (bg) expect(bg.fitOf).toBe(curve);
     fireEvent.click(screen.getByTitle("Close"));
+    expect(useApp.getState().baselineOverlay).toBe(bg);
     expect(useApp.getState().peakWizardOpen).toBe(false);
-    expect(useApp.getState().fitOverlay).toBeNull();
+    expect(useApp.getState().fitOverlay).toBe(curve);
+    expect(useApp.getState().peakOverlay).toBeNull(); // the markers were a preview
   });
 });

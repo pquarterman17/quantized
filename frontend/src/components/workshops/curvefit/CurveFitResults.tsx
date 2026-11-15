@@ -75,9 +75,23 @@ export default function CurveFitResults(p: Props) {
       {saved && (
         <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <span>Saved {saved.model} fit. Press Fit to see its statistics again.</span>
-          <Button size="sm" variant="ghost" title="Delete this saved fit, its curve and its Library result (Undo restores)" onClick={p.onRemoveFit}>
+          <Button size="sm" variant="ghost" title="Delete this fit's saved recipe and Library result, and its curve in this window (other figures keep their saved copy; Undo restores)" onClick={p.onRemoveFit}>
             Remove fit
           </Button>
+        </div>
+      )}
+      {saved && (
+        // The saved parameters, as recorded (gap audit 6 lane K acceptance 1);
+        // names only when the picker is on the saved model.
+        <div style={{ marginTop: 8 }}>
+          <DataTable
+            columns={["param", "value", "± err"]}
+            rows={saved.params!.map((v, i) => [
+              (modelName === saved.model ? p.paramNames[i] : undefined) ?? `p${i}`,
+              fmt(v),
+              fmt(saved.errors?.[i] ?? null),
+            ])}
+          />
         </div>
       )}
       {done && p.stale && (
@@ -111,7 +125,7 @@ export default function CurveFitResults(p: Props) {
           <Button
             size="sm"
             variant="ghost"
-            title="Delete this fit, its curve, saved recipe and Library result (closing the window keeps them; Undo restores)"
+            title="Delete this fit, its saved recipe and Library result, and its curve in this window (other figures keep their saved copy; closing the window keeps them; Undo restores)"
             onClick={p.onRemoveFit}
           >
             Remove fit
