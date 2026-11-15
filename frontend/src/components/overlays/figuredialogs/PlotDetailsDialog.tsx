@@ -12,6 +12,7 @@ import { useState } from "react";
 import { MARKER_SHAPES } from "../../../lib/markerShapes";
 import type { LineStyle, MarkerShape, SeriesStyle } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import SeriesMarkMapControls from "../../Inspector/SeriesMarkMapControls";
 import SeriesSymbolErrorControls from "../../Inspector/SeriesSymbolErrorControls";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
@@ -123,6 +124,8 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
       <SeriesSymbolErrorControls
         channel={channel} style={draft} setSeriesStyle={(_ch, p) => patch(p)} markers={draft.marker ?? false} errors
       />
+
+      <SeriesMarkMapControls channel={channel} style={draft} setSeriesStyle={(_ch, p) => patch(p)} />
 
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
         <button type="button" className="qz-btn" onClick={onClose}>Cancel</button>

@@ -39,6 +39,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.figure import _plot_kwargs, style_rc
 from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_marks import warn_marks_not_drawn
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -123,6 +124,7 @@ def render_polar_figure(
     lo, hi = r_lim if r_lim is not None else radial_range([y for _, y in series])
     if not (np.isfinite(lo) and np.isfinite(hi) and hi > lo):
         raise ValueError("r_lim must be two finite numbers, centre below rim")
+    warn_marks_not_drawn(series_styles, "polar figures")
     if greyscale:
         series_styles = apply_greyscale(series_styles, len(series))
     st = figure_style(style)

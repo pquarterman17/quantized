@@ -125,7 +125,7 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
       ...args.cell,
       width: args.box.w,
       height: 0,
-      seriesStyles: [args.seriesStyles[i]],
+      seriesStyles: [args.seriesStyles[i] && { ...args.seriesStyles[i], sizeBy: undefined }], // no size-by in a stacked cell (the page export warns)
       seriesLabels: [args.seriesLabels[i]],
       // Item A: same class of fix as the spatial multi-panel path — an
       // Origin "Y-error" column is already dropped from `plotted`, so its

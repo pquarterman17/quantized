@@ -121,6 +121,12 @@ export interface FigureOverrides {
    *  figure the y2 series draw on a twin inset axis ranged by `y2` (as last
    *  drawn; absent = autoscaled), as the screen's inset does. */
   inset?: { x?: [number, number]; y?: [number, number]; y2?: [number, number]; at: [number, number, number, number]; lines?: boolean };
+  /** Graph layers (`PlotView.layers`, origin gap audit 3 #15): inset graphs
+   *  of other data, images and tables at main-frame fractions, with every
+   *  inset axis already resolved (range, ticks, tick text) so the export
+   *  draws what the screen drew — `lib/graphLayersWire.ts`,
+   *  `calc.figure_layers.apply_layers`. */
+  layers?: import("./graphLayersWire").LayerWire[];
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only

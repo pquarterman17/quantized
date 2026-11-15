@@ -90,7 +90,7 @@
 // along untouched onto the merged dataset.
 
 import { UNRESOLVED_SOURCE } from "./linkedCurvesLite";
-import { remapSheetRefIds } from "./sheetBindings";
+import { remapSheetRefIds } from "./sheetRefsAppend";
 import type { AnalysisResult } from "./analysisResult";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";

@@ -13,6 +13,7 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
+import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -53,6 +54,7 @@ export function buildSeriesDefs(
   colors: SeriesColors,
 ): { series: uPlot.Series[]; bands: uPlot.Band[] } {
   const { seriesStyles } = args;
+  ensureMarks(seriesStyles);
   const { accentColor, inkColor, inkDimColor, isDarkBg } = colors;
   // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
   // index window and draws the full acquisition order. See `linearPaths` docs.
@@ -152,7 +154,10 @@ export function buildSeriesDefs(
       // for this column itself, keyed to the z channel — so the native line
       // AND points are hidden entirely here to avoid double-drawing. No fill
       // (a fill-under/between a colour-mapped point cloud isn't meaningful).
-      if (args.colorByColumns?.has(i + 1)) {
+      const cbSpec = args.colorByColumns?.get(i + 1);
+      // A spline / size-by / drop-line series is hidden until its module has loaded: never a
+      // straight stand-in that later jumps, nor default-size dots (see marksLoader).
+      if ((cbSpec && !cbSpec.flat) || (usesMarks(style) && marksPending())) {
         return { label, scale, stroke, width: 0, points: { show: false }, show };
       }
       // Default trace shape (Preferences) when the series has no explicit style:
@@ -175,6 +180,8 @@ export function buildSeriesDefs(
         ...seriesFillProps(style?.fill, stroke),
         ...(xAscending ? { gaps: logGaps } : {}),
       };
+      // A size-only series (N5): the plugin draws the points; the line stays.
+      if (cbSpec?.flat) def.points = { show: false };
       // Error-bar styling (gap audit 2 #6) rides on the series, where the
       // error plugins read it (`uplotErrorRange.styleErrorDraw`); a colour is
       // contrast-checked like the stroke. A change rebuilds (not a paint field).
@@ -189,6 +196,11 @@ export function buildSeriesDefs(
         def.paths = BAR_PATHS;
         def.fill = translucent(stroke, 70);
         def.points = { show: false };
+      } else if (style?.connect === "spline" && marks() && !(style.fill && typeof style.fill === "object")) {
+        // N6 Spline connect (wins over a step shape; a fill-under follows it; a fill-BETWEEN keeps
+        // the straight line, as in the export): SPLINE_PATHS strokes the natural cubic spline, or the
+        // row-order polyline where X is not ascending (a loop) / the series is too long.
+        def.paths = marks()!.SPLINE_PATHS;
       } else if (style?.step) {
         const builder =
           style.step === "pre" ? args.steppedPathsPre

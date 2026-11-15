@@ -70,6 +70,7 @@ import { hasDesktopShell, pathState } from "../lib/desktopBridge";
 // VALUE here.
 import type * as FigureReshape from "../lib/figureDocumentReimport";
 import { applyFormulas } from "../lib/formula";
+import { layerSourcesPatch } from "../lib/graphLayerRemap";
 import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
@@ -157,9 +158,22 @@ function followReimportedColumns(
   ds: Dataset,
   fresh: DataStruct,
   follow: ReimportMerge["follow"],
+  s: AppState,
 ): Partial<AppState> {
   const remapped = follow && patch.datasets ? follow.remapLinkedCurvesByLabel(patch.datasets, ds.id, ds.data.labels, fresh.labels) : null;
-  return remapped ? { ...patch, datasets: remapped } : patch;
+  const out = remapped ? { ...patch, datasets: remapped } : patch;
+  // Graph layers' inset curves follow by the same label rule (lib/graphLayerRemap.ts).
+  return follow
+    ? {
+        ...out,
+        ...layerSourcesPatch(
+          { layers: s.layers, plotWindows: out.plotWindows ?? s.plotWindows, editableFigures: out.editableFigures ?? s.editableFigures },
+          ds.id,
+          follow.moveByLabel(ds.data.labels, fresh.labels),
+          { view: plotWindowView, sync: (w, v) => syncPlotWindow(w, v) },
+        ),
+      }
+    : out;
 }
 
 /** Commit an already-staged `merge` (from `computeReimportMerge`) for `ds`:
@@ -301,7 +315,7 @@ export function applyReimportMerge(
           savedPlotSpecs: s.savedPlotSpecs.map((p) => ({ ...p, spec: reshape!.resetPlotSpecRefs(p.spec, ds.id) })),
         }
       : {}),
-  }, ds, newData, merge.follow));
+  }, ds, newData, merge.follow, s));
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }

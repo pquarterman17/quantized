@@ -32,6 +32,7 @@ import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/originEscap
 import type { AxisFormat, SeriesStyle } from "../../lib/types";
 import { hasHorizontalBars, orientTurnReady, orientTurnSettled } from "../../lib/uplotOrient";
 import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
+import { loadMarks, marksPending, usesMarks } from "../../lib/marksLoader";
 import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
 
 /** What the startup chunks would change on this plot: every label it draws
@@ -44,6 +45,8 @@ export interface LazyDecorNeeds {
   regionResult?: boolean;
   /** Horizontal bars: the plot is turned (lib/uplotOrient.ts). */
   turned?: boolean;
+  /** A series asks for spline / drop lines / size-by (lib/marksLoader.ts): rebuild once that chunk settles. */
+  marks?: boolean;
 }
 
 /** The `LazyDecorNeeds` of a viewport's labels, payload and overlays. */
@@ -58,6 +61,7 @@ export function plotDecorNeeds(
     texts: [...labels, payload?.xLabel, ...(payload?.series.map((s) => s.label) ?? []), ...(annotations ?? []).map((a) => a.text)],
     overlays: overlays > 0,
     ...(hasHorizontalBars(styles) ? { turned: true } : {}),
+    ...(styles?.some(usesMarks) ? { marks: true } : {}),
   };
 }
 
@@ -101,6 +105,19 @@ export function useLazyPlotParts(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
   }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn]);
+  // The marks chunk (lib/marksLoader.ts) is its OWN effect, keyed on whether a series asks for a mark
+  // (stable) rather than on "still pending": the arrival flips pending in the same commit and must not
+  // cancel the rebuild it is about to ask for.
+  const wantsMarks = !!decor.marks;
+  useEffect(() => {
+    if (!wantsMarks || !marksPending()) return;
+    let live = true;
+    void loadMarks().then(() => live && onReady());
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render.
+  }, [wantsMarks]);
 }
 
 /** `useLazyPlotParts` for a renderer that rebuilds on a counter (the

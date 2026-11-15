@@ -11,6 +11,7 @@
 
 import { colormap, normalize, type ColormapName } from "./colormap";
 import { FILLED_SHAPES, markerSubpaths } from "./markers";
+import type { SizeKey } from "./sizescatter";
 import type { DataStruct, MarkerShape, SeriesStyle } from "./types";
 
 export interface ColorScatterSpec {
@@ -26,6 +27,12 @@ export interface ColorScatterSpec {
   shape?: MarkerShape;
   /** Gap audit 2 #6: open symbols (`SeriesStyle.markerFill: "hollow"`). */
   hollow?: boolean;
+  /** N5 size-by (built by the lazy `marksImpl.withSizes`): the legend key and
+   *  the per-row marker DIAMETERS in px (null = no point), aligned like `z`. */
+  size?: SizeKey;
+  diam?: (number | null)[];
+  /** A size-only series: the points take the series' stroke; no colour scale. */
+  flat?: boolean;
 }
 
 /** The fill of row `i`'s point: its z value normalized over [lo, hi] (linear;
@@ -113,6 +120,7 @@ export function colorScaleLegendEntries(
 ): ColorScaleLegendEntry[] {
   const seen = new Set<string>();
   return [...columns.values()].flatMap((spec) => {
+    if (spec.flat) return [];
     const e = { label: spec.label ?? ds.labels[spec.channel] ?? `channel ${spec.channel}`, colormap: spec.colormap, lo: spec.lo, hi: spec.hi };
     const key = JSON.stringify(e);
     return seen.has(key) ? [] : (seen.add(key), [e]);

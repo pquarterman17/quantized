@@ -9,7 +9,7 @@
 // check exactly as before. Lazy-only (imported by the .dwk parse path), so
 // none of this ships in the entry chunk.
 
-import { decodeWireRow } from "./nonFiniteCells";
+import { decodeWireRow } from "./wireRowDecode";
 
 /** Legacy null cells read during one workspace parse. */
 export interface LegacyNullTally {
