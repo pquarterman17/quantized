@@ -10,6 +10,8 @@
 // or d-spacing axis they are unevenly spaced, as in Origin.
 
 import type { TopAxis } from "./axisFormat";
+import { compileFormula, tokenize } from "./formula";
+import { CONSTS, FUNCS } from "./formulaFuncs";
 
 export interface TopTick {
   /** Where the tick sits, in bottom-axis (x) units. */
@@ -23,6 +25,15 @@ export interface TopTick {
 export const TOP_TICK_TARGET = 8;
 /** Closest two top-axis labels may sit, as a fraction of the axis length. */
 export const TOP_MIN_GAP = 0.05;
+/** ... and at least this much per character of the widest label (+1), so wide
+ *  labels such as "1200" never touch: the gap scales with the label width.
+ *  Mirrors TOP_GAP_PER_CHAR in calc/axis_top.py. */
+export const TOP_GAP_PER_CHAR = 0.015;
+/** A top axis shows at least this many ticks when the spacing rule allows:
+ *  while fewer survive, the next finer nice step is added (at most two finer
+ *  levels). Mirrors TOP_MIN_TICKS in calc/axis_top.py. */
+export const TOP_MIN_TICKS = 5;
+const MANTISSAS = [1, 2, 2.5, 5];
 
 /** Where a transform is undefined at one end of the axis (1/x at 0, d-spacing
  *  at 0 or 180 deg), the drawn part starts this fraction of its upper end
@@ -30,10 +41,116 @@ export const TOP_MIN_GAP = 0.05;
 export const TOP_SPAN_FLOOR = 0.01;
 const DSPACING_MAX = 179.99;
 
+/** An `expr` axis samples the bottom axis this many times to find its valid,
+ *  monotonic stretch. Mirrors EXPR_SAMPLES in calc/axis_top.py. */
+export const EXPR_SAMPLES = 400;
+/** ... and trims a same-sign stretch to at most this change in magnitude (the
+ *  end next to a pole is cut back), so ticks do not crowd where the value
+ *  explodes. Mirrors EXPR_MAX_RATIO in calc/axis_top.py. */
+export const EXPR_MAX_RATIO = 20;
+const EXPR_BISECT = 80;
 const DEG = Math.PI / 180;
+
+type ExprFn = (x: number) => number;
+const exprCache = new Map<string, ExprFn | string>();
+
+/** The compiled `f(x)` for `src`, or why it cannot be one. Only `x`, numbers,
+ *  `pi`/`e`, the worksheet's plain functions and arithmetic are allowed -- the
+ *  grammar `calc/axis_expr.py` evaluates too, so both draw the same axis. The
+ *  parser is the worksheet formula compiler: no eval anywhere. */
+function exprOf(src: string): ExprFn | string {
+  const hit = exprCache.get(src);
+  if (hit !== undefined) return hit;
+  let out: ExprFn | string;
+  try {
+    if (!src.trim()) throw new Error("empty expression");
+    if (src.length > 200) throw new Error("expression too long");
+    if (/\b(np|numpy|math)\./.test(src)) throw new Error("write plain functions, e.g. sqrt(x)");
+    for (const t of tokenize(src)) {
+      if (t.t === "str") throw new Error("text is not allowed");
+      if (t.t === "name" && t.v !== "x" && !(t.v in FUNCS) && !(t.v in CONSTS)) throw new Error(`unknown name "${t.v}"; only x, pi, e and functions of x are allowed`);
+      if (t.t === "op" && !/^(\*\*|\/\/|[-+*/%^(),])$/.test(t.v)) throw new Error(`"${t.v}" is not allowed`);
+    }
+    const f = compileFormula(src, undefined, () => {
+      throw new Error("only x and functions of x are allowed");
+    });
+    out = (x) => {
+      try {
+        return f({ x });
+      } catch {
+        return NaN;
+      }
+    };
+  } catch (e) {
+    out = e instanceof Error ? e.message : "invalid expression";
+  }
+  if (exprCache.size > 64) exprCache.clear();
+  exprCache.set(src, out);
+  return out;
+}
+
+const exprFnOf = (top: TopAxis): ExprFn | null => {
+  const f = exprOf(top.expr ?? "");
+  return typeof f === "function" ? f : null;
+};
+
+/** The longest stretch of [lo, hi] (sampled) where `f` is finite and strictly
+ *  monotonic; a tie keeps the later one (the positive side of a pole). */
+function exprSpan(f: ExprFn, lo: number, hi: number): [number, number] | null {
+  if (!(Number.isFinite(lo) && Number.isFinite(hi) && hi > lo)) return null;
+  const n = EXPR_SAMPLES;
+  const xs = Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1));
+  const ys = xs.map(f);
+  let best: [number, number] | null = null;
+  let start = 0;
+  let dir = 0;
+  for (let i = 1; i <= n; i++) {
+    let d = 0;
+    if (i < n && Number.isFinite(ys[i]) && Number.isFinite(ys[i - 1])) d = Number(ys[i] > ys[i - 1]) - Number(ys[i] < ys[i - 1]);
+    if (i < n && d !== 0 && (dir === 0 || dir === d)) {
+      dir = d;
+      continue;
+    }
+    if (i - 1 > start && (best === null || xs[i - 1] - xs[start] >= best[1] - best[0])) best = [xs[start], xs[i - 1]];
+    [start, dir] = d !== 0 ? [i - 1, d] : [i, 0];
+  }
+  return best && trimToRatio(f, best);
+}
+
+function trimToRatio(f: ExprFn, span: [number, number]): [number, number] {
+  const [lo, hi] = span;
+  const flo = f(lo);
+  const fhi = f(hi);
+  if (!(flo * fhi > 0)) return span;
+  const bigIsLo = Math.abs(flo) > Math.abs(fhi);
+  const cap = EXPR_MAX_RATIO * Math.min(Math.abs(flo), Math.abs(fhi));
+  if (Math.max(Math.abs(flo), Math.abs(fhi)) <= cap) return span;
+  let [a, c] = bigIsLo ? [lo, hi] : [hi, lo]; // |f(a)| > cap >= |f(c)|
+  for (let k = 0; k < EXPR_BISECT; k++) {
+    const mid = (a + c) / 2;
+    if (Math.abs(f(mid)) > cap) a = mid;
+    else c = mid;
+  }
+  return bigIsLo ? [c, hi] : [lo, c];
+}
+
+function exprInverse(f: ExprFn, t: number, span: [number, number]): number {
+  let [lo, hi] = span;
+  const flo = f(lo);
+  const fhi = f(hi);
+  if (!(Number.isFinite(t) && t >= Math.min(flo, fhi) && t <= Math.max(flo, fhi))) return NaN;
+  const rising = fhi > flo;
+  for (let k = 0; k < EXPR_BISECT; k++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) < t === rising) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
 
 /** x -> the top axis' value, or NaN outside the transform's domain. */
 export function topForward(top: TopAxis, x: number): number {
+  if (top.kind === "expr") return exprFnOf(top)?.(x) ?? NaN;
   const factor = top.factor ?? 1;
   if (top.kind === "reciprocal") return x === 0 ? NaN : factor / x;
   if (top.kind === "linear") return factor * x + (top.shift ?? 0);
@@ -42,7 +159,8 @@ export function topForward(top: TopAxis, x: number): number {
 }
 
 /** The top axis' value -> x, or NaN outside the domain. */
-export function topInverse(top: TopAxis, t: number): number {
+export function topInverse(top: TopAxis, t: number, range?: [number, number]): number {
+  if (top.kind === "expr") return inverseOn(top, t, range ? topSpan(top, range[0], range[1]) : null);
   const factor = top.factor ?? 1;
   if (top.kind === "reciprocal") return t === 0 ? NaN : factor / t;
   if (top.kind === "linear") return factor === 0 ? NaN : (t - (top.shift ?? 0)) / factor;
@@ -50,9 +168,23 @@ export function topInverse(top: TopAxis, t: number): number {
   return t > 0 && r <= 1 ? (2 * Math.asin(r)) / DEG : NaN;
 }
 
+function inverseOn(top: TopAxis, t: number, span: [number, number] | null): number {
+  const f = exprFnOf(top);
+  return f && span ? exprInverse(f, t, span) : NaN;
+}
+
 /** Nice tick values covering [a, b] (either order): steps of 1, 2, 2.5 or 5
  *  times a power of ten, about `target` of them. Returns the values and the
  *  decimals their labels need. */
+function niceStep(a: number, b: number, target = TOP_TICK_TARGET): { step: number | null } {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || !(hi > lo)) return { step: null };
+  const raw = (hi - lo) / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  return { step: ([1, 2, 2.5, 5, 10].find((m) => m * mag >= raw * (1 - 1e-9)) ?? 10) * mag };
+}
+
 export function niceTicks(a: number, b: number, target = TOP_TICK_TARGET): { values: number[]; decimals: number } {
   const lo = Math.min(a, b);
   const hi = Math.max(a, b);
@@ -82,6 +214,10 @@ export function topSpan(top: TopAxis, min: number, max: number): [number, number
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
   if (top.kind === "linear") return [lo, hi];
+  if (top.kind === "expr") {
+    const f = exprFnOf(top);
+    return f ? exprSpan(f, lo, hi) : null;
+  }
   const upper = top.kind === "reciprocal" ? hi : top.kind === "dspacing" ? Math.min(hi, DSPACING_MAX) : NaN;
   if (!Number.isFinite(lo) || !Number.isFinite(upper) || upper <= 0 || lo >= upper) return null;
   return [lo > 0 ? lo : upper * TOP_SPAN_FLOOR, upper];
@@ -89,28 +225,84 @@ export function topSpan(top: TopAxis, min: number, max: number): [number, number
 
 /** The top axis' ticks for a bottom axis showing [min, max]: only the part of
  *  the axis inside the transform's domain gets ticks, none when no part does. */
+function stepParts(step: number): [number, number] {
+  const exp = Math.floor(Math.log10(step) + 1e-9);
+  const idx = MANTISSAS.indexOf(Number((step / 10 ** exp).toFixed(6)));
+  return [exp, Math.max(0, idx)];
+}
+
+/** `step` then the `finer` next smaller nice steps (1, 2, 2.5, 5 x 10^e). */
+function stepLevels(step: number, finer: number): number[] {
+  let [exp, idx] = stepParts(step);
+  const out = [step];
+  for (let i = 0; i < finer; i++) {
+    idx -= 1;
+    if (idx < 0) [idx, exp] = [MANTISSAS.length - 1, exp - 1];
+    out.push(Number((MANTISSAS[idx] * 10 ** exp).toPrecision(12)));
+  }
+  return out;
+}
+
+function stepDecimals(step: number): number {
+  const [exp, idx] = stepParts(step);
+  return Math.min(12, Math.max(0, -exp + (MANTISSAS[idx] === 2.5 ? 1 : 0)));
+}
+
+/** Ticks from the nice multiples of every step in `levels`. The coarsest step a
+ *  value is a multiple of is its rank; candidates are taken nicest first and
+ *  kept only when their centre sits far enough from every kept one: at least
+ *  TOP_MIN_GAP of the axis, and TOP_GAP_PER_CHAR per character of the wider of
+ *  the two labels (+1), so labels never touch. Mirrors `_select` in Python. */
+function selectTicks(top: TopAxis, valid: [number, number], values: [number, number], levels: number[], span: number): TopTick[] {
+  const [lo, hi] = valid;
+  const decimals = stepDecimals(levels[levels.length - 1]);
+  const ranked = new Map<number, number>();
+  levels.forEach((step, rank) => {
+    for (let k = Math.ceil(Math.min(...values) / step - 1e-9); k <= Math.floor(Math.max(...values) / step + 1e-9); k++) {
+      const v = Number((k * step).toPrecision(12));
+      if (!ranked.has(v)) ranked.set(v, rank);
+    }
+  });
+  const cands: { rank: number; tick: TopTick }[] = [];
+  for (const [value, rank] of ranked) {
+    const pos = top.kind === "expr" ? inverseOn(top, value, valid) : topInverse(top, value);
+    if (Number.isFinite(pos) && pos >= lo - span * 1e-9 && pos <= hi + span * 1e-9) cands.push({ rank, tick: { pos, value, label: topLabel(value, decimals) } });
+  }
+  cands.sort((p, q) => p.rank - q.rank || p.tick.pos - q.tick.pos);
+  const kept: TopTick[] = [];
+  for (const { tick } of cands) {
+    const clear = kept.every((k) => Math.abs(tick.pos - k.pos) >= span * Math.max(TOP_MIN_GAP, TOP_GAP_PER_CHAR * (Math.max(tick.label.length, k.label.length) + 1)) - span * 1e-9);
+    if (clear) kept.push(tick);
+  }
+  return kept.sort((p, q) => p.pos - q.pos);
+}
+
+/** The top axis' ticks for a bottom axis showing [min, max]: only the part of
+ *  the axis inside the transform's domain gets ticks, none when no part does.
+ *  Where the nice-step ticks bunch up (1/T), finer steps are added, nicest
+ *  first, until TOP_MIN_TICKS fit without touching. */
 export function topTicks(top: TopAxis, min: number, max: number): TopTick[] {
   const valid = topSpan(top, min, max);
   if (!valid) return [];
   const span = Math.max(min, max) - Math.min(min, max); // label spacing is measured on the whole axis
-  const [lo, hi] = valid;
-  const { values, decimals } = niceTicks(topForward(top, lo), topForward(top, hi));
-  const out: TopTick[] = [];
-  for (const value of values) {
-    const pos = topInverse(top, value);
-    if (Number.isFinite(pos) && pos >= lo - span * 1e-9 && pos <= hi + span * 1e-9) out.push({ pos, value, label: topLabel(value, decimals) });
+  const values: [number, number] = [topForward(top, valid[0]), topForward(top, valid[1])];
+  const { step } = niceStep(values[0], values[1]);
+  if (step === null) return [];
+  const levels = stepLevels(step, 2);
+  let kept: TopTick[] = [];
+  for (const n of [1, 2, 3]) {
+    kept = selectTicks(top, valid, values, levels.slice(0, n), span);
+    if (kept.length >= TOP_MIN_TICKS) break;
   }
-  out.sort((p, q) => p.pos - q.pos);
-  // Uneven (reciprocal / d-spacing) ticks bunch up at one end: keep a tick only
-  // when it sits at least TOP_MIN_GAP of the axis from the last kept one, so
-  // labels never overlap. Mirrored in calc/axis_top.py.
-  const kept: TopTick[] = [];
-  for (const tick of out) if (kept.length === 0 || tick.pos - kept[kept.length - 1].pos >= span * TOP_MIN_GAP - span * 1e-9) kept.push(tick);
   return kept;
 }
 
 /** Why `top` cannot be drawn (missing wavelength, zero factor), or null. */
 export function topAxisProblem(top: TopAxis): string | null {
+  if (top.kind === "expr") {
+    const f = exprOf(top.expr ?? "");
+    return typeof f === "string" ? f : null;
+  }
   if (top.kind === "dspacing" && !(top.wavelength && top.wavelength > 0)) return "A d-spacing top axis needs a wavelength (Å).";
   if (top.kind !== "dspacing" && top.factor === 0) return "The top-axis factor cannot be 0.";
   return null;
@@ -125,5 +317,6 @@ export function topRangeProblem(top: TopAxis, min: number | null, max: number | 
   const lo = min ?? max ?? hi;
   if (top.kind === "reciprocal" && topSpan(top, lo, hi) === null) return "1/T needs X > 0.";
   if (top.kind === "dspacing" && topSpan(top, lo, hi) === null) return "d-spacing needs 0 < 2θ < 180°.";
+  if (top.kind === "expr" && exprFnOf(top) && topSpan(top, lo, hi) === null) return "The expression has no finite, monotonic part over these limits.";
   return null;
 }
