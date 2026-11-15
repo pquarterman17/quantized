@@ -20,6 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io.excel import import_excel, sheet_titles
 from quantized.io.sims import import_sims, is_sims_sheet
 from quantized.io.technique import stamp_technique
@@ -33,6 +34,11 @@ _NOT_DATA = (ValueError, IndexError, KeyError)
 
 
 def _other_sheet(path: Path, index: int) -> DataStruct:
+    if path.suffix.lower() == ".xls":
+        with heavy_imports("quantized.io.excel_xls"):
+            from quantized.io.excel_xls import import_xls
+
+        return stamp_technique(import_xls(path, sheet=index), import_xls)
     if is_sims_sheet(path, index):
         return stamp_technique(import_sims(path, sheet=index), import_sims)
     return stamp_technique(import_excel(path, sheet=index), import_excel)
@@ -50,7 +56,13 @@ def import_workbook_sheets(
     0); a one-sheet workbook returns exactly ``[first_sheet(path)]``.
 
     Raises sheet 0's own error when no sheet holds data."""
-    titles = sheet_titles(path)
+    if path.suffix.lower() == ".xls":
+        with heavy_imports("quantized.io.excel_xls"):
+            from quantized.io.excel_xls import xls_sheet_titles
+
+        titles = xls_sheet_titles(path)
+    else:
+        titles = sheet_titles(path)
     if len(titles) <= 1:
         return [first_sheet(path)]
     found: list[DataStruct] = []

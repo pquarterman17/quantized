@@ -161,6 +161,17 @@ _import_excel_lazy.__qualname__ = "import_excel"
 _import_excel_lazy.__doc__ = """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
 
 
+def _import_xls_lazy(path: Path) -> DataStruct:
+    """Deferred ``import_xls`` (xlrd loads only when a legacy ``.xls`` is parsed)."""
+    with heavy_imports("quantized.io.excel_xls"):
+        from quantized.io.excel_xls import import_xls
+
+    return import_xls(path)
+
+
+_import_xls_lazy.__name__ = _import_xls_lazy.__qualname__ = "import_xls"
+
+
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".dat": [
@@ -219,6 +230,7 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".xye": [(_is_text_table, import_csv)],
     ".xlsx": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
     ".xlsm": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
+    ".xls": [(_accept_any, _import_xls_lazy)],
 }
 
 
@@ -316,17 +328,15 @@ def is_recognised_data_name(filename: str) -> bool:
 
 
 # Extensions the browser Open dialog offers but no parser reads: say why.
-_UNSUPPORTED_HINTS: dict[str, str] = {
-    ".xls": "legacy Excel 97-2003 workbooks cannot be read; re-save it as .xlsx",
-}
+_UNSUPPORTED_HINTS: dict[str, str] = {}
 
 # Origin's single-window and template files share the project family but are
 # not projects: Quantized reads .opj/.opju projects only (audit 2026-11 -- these
 # used to get the generic "no parser registered").
 _ORIGIN_WINDOW_HINT = (
-    "Origin window/template files can't be opened directly; open it in Origin "
-    "and save the project as .opj, or open it in the free Origin Viewer and "
-    "export the worksheet to CSV/ASCII, then import that file"
+    "Quantized can't decode Origin window files yet. If you have Origin, export "
+    "the data from it (worksheet to CSV/ASCII); otherwise import the .opj/.opju "
+    "project the window belongs to"
 )
 for _ext in (".ogw", ".ogwu", ".ogg", ".oggu", ".ogm", ".ogmu", ".otw", ".otwu", ".otm", ".otmu"):
     _UNSUPPORTED_HINTS[_ext] = _ORIGIN_WINDOW_HINT
@@ -385,7 +395,7 @@ def import_auto_sheets(path: str | Path) -> list[DataStruct]:
     (``io/excel_sheets.py``). The first entry is always the primary dataset;
     every non-workbook file gives exactly ``[import_auto(path)]``."""
     resolved = Path(path)
-    if resolved.suffix.lower() in (".xlsx", ".xlsm") and match_filter(resolved) is None:
+    if resolved.suffix.lower() in (".xlsx", ".xlsm", ".xls") and match_filter(resolved) is None:
         with heavy_imports("quantized.io.excel_sheets"):
             from quantized.io.excel_sheets import import_workbook_sheets
 
