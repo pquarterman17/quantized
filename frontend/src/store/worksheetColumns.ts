@@ -228,14 +228,15 @@ export function setColumnHeader(id: string, col: number, patch: HeaderPatch): vo
 }
 
 /** Set Column Values on an existing computed column: its new name and
- *  formula (`updateFormula`'s checks and recalculation), with a status line. */
-export function editColumnFormula(id: string, col: number, name: string, expr: string): void {
+ *  formula (`updateFormula`'s checks and recalculation), with a status line.
+ *  False when refused — the status then says why. */
+export function editColumnFormula(id: string, col: number, name: string, expr: string): boolean {
   const ds = get().datasets.find((d) => d.id === id);
-  if (!ds) return;
-  const index = col - baseCountOf(ds);
-  const current = ds.formulas?.[index];
-  if (!current) return;
-  if (get().updateFormula(id, index, { name, expr })) get().setStatus(`updated the formula of "${name.trim() || current.name}"`);
+  const current = ds?.formulas?.[col - (ds ? baseCountOf(ds) : 0)];
+  if (!ds || !current) return false;
+  if (!get().updateFormula(id, col - baseCountOf(ds), { name, expr })) return false;
+  get().setStatus(`updated the formula of "${name.trim() || current.name}"`);
+  return true;
 }
 
 /** Set (or, with `null`, reset to Auto) the display format of `cols`. */
