@@ -274,7 +274,7 @@ export function useEquationFit(
         const kept = activeRowIndices(n, droppedRows(ds));
         const aligned = restoreGapRows(yFit, pairs);
         const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-        setFitOverlay({ datasetId: ds.id, y });
+        setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "fit failed");

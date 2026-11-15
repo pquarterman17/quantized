@@ -66,7 +66,7 @@ import type { PeakTable } from "../../../lib/peakTable";
 import { plural } from "../../../lib/plural";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { DEFAULT_FIT, type FitEngine, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
-import type { BaselineOverlay, Dataset, FitOverlay } from "../../../lib/types";
+import type { BaselineOverlay, Dataset, FitOverlay, OverlayBinding } from "../../../lib/types";
 import { confirmReplacingPeakTable, incomingPeaks, publishBuiltPeakTable } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 import { curveToRows, segmentRows, segmentToFullRows } from "./modelFitOverlay";
@@ -132,7 +132,7 @@ export interface ModelFitState {
 
 export interface ModelFitInputs {
   active: Dataset | null;
-  segment: { x: number[]; kept: number[]; yKey: number } | null;
+  segment: { x: number[]; kept: number[]; yKey: number; binding: OverlayBinding } | null;
   workingY: number[] | null;
   /** 1σ per segment point (the designated error column), or null = unweighted. */
   yErr?: number[] | null;
@@ -221,7 +221,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const previewRef = useRef<() => BaselineOverlay | null>(() => null);
   previewRef.current = () =>
     active && segment && baseline && baselineOn
-      ? { datasetId: active.id, y: segmentToFullRows(baseline, active, segment.kept) }
+      ? { datasetId: active.id, binding: segment.binding, y: segmentToFullRows(baseline, active, segment.kept) }
       : null;
 
   const dropOverlays = useCallback((restore: boolean) => {
@@ -268,15 +268,15 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setPublishNote(null); // "published" no longer describes what is on screen
   }, [stale, dropOverlays]);
 
-  const publish = (res: PeakModelFitResponse, ds: Dataset, seg: { x: number[]; kept: number[] }) => {
+  const publish = (res: PeakModelFitResponse, ds: Dataset, seg: { x: number[]; kept: number[]; binding: OverlayBinding }) => {
     const n = ds.data.time.length;
     const segToRow = segmentRows(ds, seg.kept);
     const offsets = baselineOn && baseline ? baseline : null;
     const c = res.curves;
-    const curve = { datasetId: ds.id, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
+    const curve: FitOverlay = { datasetId: ds.id, binding: seg.binding, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
     const bg = res.background.kind === "none" && !offsets
       ? null
-      : { datasetId: ds.id, y: curveToRows(c.x, c.background, seg.x, segToRow, n, offsets) };
+      : { datasetId: ds.id, binding: seg.binding, y: curveToRows(c.x, c.background, seg.x, segToRow, n, offsets) };
     own.current = { fit: curve, bg };
     setFitOverlay(curve);
     if (bg) setBaselineOverlay(bg);

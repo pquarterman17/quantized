@@ -18,6 +18,7 @@ import { defaultPlotView, type PlotView } from "../../lib/plotview";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
+import { SINGLE_X } from "../../test/overlayBinding";
 
 /** `defaultPlotView()` with the axis box switched OFF. The box is ON by default
  *  (all four sides — see `store/useApp.ts`), and it is a DECORATION plugin, not
@@ -156,7 +157,7 @@ describe("BackgroundPlotWindow", () => {
     // A background window must NEVER show a fit/peak/baseline/deriv overlay
     // even if the LIVE singleton happens to have one set (e.g. from whatever
     // the focused window is doing) — it always passes null regardless.
-    useApp.setState({ fitOverlay: { datasetId: "d1", y: [1, 2, 3, 4] } });
+    useApp.setState({ fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: [1, 2, 3, 4] } });
     render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const data = created[0].data as unknown[][];

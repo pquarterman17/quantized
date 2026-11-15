@@ -7,6 +7,7 @@ import { pushEscapeSurface } from "../../../lib/escapeStack";
 import type { Dataset } from "../../../lib/types";
 import { pressEscape } from "../../../test/pressEscape";
 import { useApp } from "../../../store/useApp";
+import { SINGLE_X } from "../../../test/overlayBinding";
 
 const { findMock, fitMock, integrateMock, emitMock, alsMock } = vi.hoisted(() => ({
   findMock: vi.fn(),
@@ -175,8 +176,8 @@ describe("PeakWizardPanel", () => {
   it("close clears both overlays", () => {
     render(<PeakWizardPanel />);
     useApp.setState({
-      peakOverlay: { datasetId: "d1", y: [] },
-      baselineOverlay: { datasetId: "d1", y: [] },
+      peakOverlay: { datasetId: "d1", binding: SINGLE_X, y: [] },
+      baselineOverlay: { datasetId: "d1", binding: SINGLE_X, y: [] },
     });
     fireEvent.click(screen.getByTitle("Close"));
     const s = useApp.getState();
