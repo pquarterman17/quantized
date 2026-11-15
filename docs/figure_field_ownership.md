@@ -84,6 +84,7 @@ to all 56 fields and is not repeated per row.
 | `stackMode` | `plot.stack.enabled` | `plot.view.stackMode` | Setter `setStackMode` (also clears `facetKey`/`composition`); Bulk (Recipe, Origin, `facetByColumn` sets it true) | no |
 | `insetMode` | `plot.inset.enabled` | `plot.view.insetMode` | Setter `setInsetMode` | no |
 | `inset` | `plot.inset.geometry` | `plot.view.inset` | `Stage/InsetPlot` (zoom, header drag, corner resize, connector toggle; one undo step each); sanitized by `sanitizeInset` (`lib/plotviewDecor.ts`) | no |
+| `layers` | `decor.layers` | `plot.view.layers` | `Stage/GraphLayers` (drag move, corner resize, arrow-key nudge, Delete; one undo step each), the Layer properties dialog (Apply = one undo step), Insert ▸ Inset graph / Image / Table; kept as an array by `sanitizePlotView` and validated in full by `sanitizeLayers` (`lib/graphLayers.ts`) at every reader | no |
 | `polarMode` | `plot.coordinateSystem` | `plot.view.polarMode` | Setter `setPolarMode` | no |
 | `statMode` | `plot.statMode` | `plot.view.statMode` | Setter `setStatMode` | no |
 | `statHideEmptyLevels` | `plot.stat.hideEmptyLevels` | `plot.view.statHideEmptyLevels` | Setter `setStatHideEmptyLevels` (`store/statLevelOptions.ts`) | no |

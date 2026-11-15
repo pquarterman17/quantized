@@ -122,6 +122,26 @@ describe("dialog basics — store-driven dialogs", () => {
     expect(await auditDialog(dialog, { opener, user })).toEqual([]);
   });
 
+  it("Layer properties for a graph layer (gap audit 3 #15)", async () => {
+    useFigureDialog.setState({ open: null });
+    const user = userEvent.setup();
+    useApp.setState({
+      layers: [{ id: "L1", kind: "table", at: [0.1, 0.1, 0.3, 0.2], rows: [["Hc", "120"]], header: true }],
+    });
+    const opener = await openWith(<FigureDialogs />, () => openFigureDialog({ kind: "graphLayer", id: "L1" }));
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
+    await act(async () => {
+      useApp.setState({
+        layers: [{
+          id: "L2", kind: "inset", at: [0.5, 0.1, 0.3, 0.3], mark: "line", curves: [{ datasetId: "d1", xKey: null, yKey: 0, label: "" }],
+          x: { lim: null, scale: "linear", label: "", step: null }, y: { lim: null, scale: "log", label: "", step: null },
+        }],
+      });
+      openFigureDialog({ kind: "graphLayer", id: "L2" });
+    });
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
+  });
+
   it("Split dataset", async () => {
     const user = userEvent.setup();
     const opener = await openWith(<SplitDatasetDialog />, () => useApp.setState({ splitDialogTargetId: "d1" }));

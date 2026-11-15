@@ -2026,6 +2026,8 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   stackMode: "display toggle, not channel-indexed",
   insetMode: "display toggle, not channel-indexed",
   inset: "the magnifier's source region (data coords) + placement fractions, not channel-indexed",
+  layers:
+    "graph layers' inset curves index columns of ANY dataset, not the window's bound one, so channelRemap's per-binding registry cannot reach them: store/columnRemovalRefs.ts and store/reimport.ts move them through lib/graphLayerRemap.ts (store/graphLayerSources.test.ts)",
   polarMode: "display toggle, not channel-indexed",
   statMode: "display toggle, not channel-indexed",
   statHideEmptyLevels: "display toggle (P2.6 box 2), not channel-indexed",
@@ -3634,6 +3636,27 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // ...and the `.dwk` figure-doc sanitizer, which only the lazy workspace
     // read calls (slice 25 listed it; re-measured once the chunk tax was gone).
     "/lib/figuredocSanitize.ts",
+    // Origin gap audit 3 #15 (2026-11-15): graph layers (inset graphs of
+    // other data, images, tables) ride their own chunks -- the overlay, the
+    // Insert commands' bodies, the dialog -- and are funded by six halves
+    // only lazy modules call, each imported by its own path.
+    "/lib/graphLayers.ts",
+    "/lib/graphLayersSanitize.ts",
+    "/lib/graphLayersWire.ts",
+    "/lib/graphLayerDraft.ts",
+    "/lib/graphLayerCommands.ts",
+    "/store/graphLayerEdit.ts",
+    "/components/Stage/GraphLayers.tsx",
+    "/components/Stage/GraphLayerBox.tsx",
+    "/components/Stage/InsetLayerPlot.tsx",
+    "/lib/dataStructSanitize.ts",
+    "/lib/recalcOrder.ts",
+    "/lib/linkedCurvesSanitize.ts",
+    "/lib/wireRowDecode.ts",
+    "/lib/sheetRefsAppend.ts",
+    "/lib/smartFoldersSanitize.ts",
+    "/lib/recentLabels.ts",
+    "/store/windowOpenGuard.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

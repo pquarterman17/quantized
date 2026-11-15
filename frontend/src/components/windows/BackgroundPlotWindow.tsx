@@ -68,6 +68,7 @@ import {
 import BackgroundLegend from "./BackgroundLegend";
 
 const InsetPlot = lazyRegion(() => import("../Stage/InsetPlot"), "Inset");
+const GraphLayers = lazyRegion(() => import("../Stage/GraphLayers"), "Inset");
 
 export interface BackgroundPlotWindowProps {
   /** The window's bound dataset (null = unbound, or its dataset was removed
@@ -323,6 +324,7 @@ function BackgroundXYWindow({
           staggeredRows={waterfallStaggeredRows(displayPayload)}
         />
       )}
+      {view.layers?.length > 0 && displayPayload && <GraphLayers plotRef={plotRef} view={view} windowId={windowId} bg={bg} />}
     </div>
   );
 }

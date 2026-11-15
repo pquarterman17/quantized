@@ -22,9 +22,9 @@ import {
 import { memoryBackend } from "./autosaveBackend";
 import { resetBookTransportForTests } from "./bookData";
 import { createFigureDocument } from "./figureDocument";
+import { decodeWireRow } from "./wireRowDecode";
 import {
   decodeCell,
-  decodeWireRow,
   encodeCell,
   encodeCells,
   encodeDataStruct,

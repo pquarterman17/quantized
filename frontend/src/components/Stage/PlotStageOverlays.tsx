@@ -26,7 +26,7 @@ import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, DefaultTrace, SeriesStyle } from "../../lib/types";
 import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
-import type { IntegralResult } from "../../store/useApp";
+import { useApp, type IntegralResult } from "../../store/useApp";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
 const EmptyGraphNotice = lazyRegion(() => import("./EmptyGraphNotice"), "Plot");
 import PlotLegend from "./PlotLegend";
@@ -47,6 +47,8 @@ import type { GadgetChipState } from "./useGadgetChip";
 const PlotResultChips = lazyRegion(() => import("./PlotResultChips"), "Plot");
 // The magnifier shows only in inset mode: its own chunk (plot audit round 3).
 const InsetPlot = lazyRegion(() => import("./InsetPlot"), "Inset");
+// Graph layers (inset graphs of other data, images, tables): their own chunk.
+const GraphLayers = lazyRegion(() => import("./GraphLayers"), "Inset");
 
 export interface PlotStageOverlaysProps {
   displayPayload: PlotPayload | null;
@@ -83,6 +85,7 @@ export interface PlotStageOverlaysProps {
 }
 
 export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
+  const hasLayers = useApp((s) => s.layers.length > 0);
   return (
     <>
       {p.displayPayload && (
@@ -139,6 +142,8 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
           staggeredRows={waterfallStaggeredRows(p.displayPayload)}
         />
       )}
+      {/* After the legend: a layer paints over it, as the export stacks them (Origin's layer 2 over layer 1). */}
+      {hasLayers && p.displayPayload && <GraphLayers plotRef={p.plotRef} />}
     </>
   );
 }

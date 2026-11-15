@@ -183,7 +183,7 @@ const UNEDITED_SWITCH_KEYS = SWITCH_KEYS.filter((k) => ![
 // A pinned focused window: `focusWindow` hands the live view to the retarget
 // window first, so its hydrated view fields land on top of a switch.
 const FOCUS_HANDOFF_KEYS = [
-  "annotations", "axisLabelOffsets", "axisLabelStyles", "focusedWindowId", "refLines",
+  "annotations", "axisLabelOffsets", "axisLabelStyles", "focusedWindowId", "layers", "refLines",
   "regionShades", "shapes", "statMarks", "statPicks", "xFmt", "yFmt",
 ];
 const withKeys = (base: string[], extra: string[]): string[] => [...base, ...extra].sort();

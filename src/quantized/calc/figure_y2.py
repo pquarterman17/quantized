@@ -32,6 +32,7 @@ from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
+from quantized.calc.figure_layers import apply_layers
 from quantized.calc.figure_legend_order import draw_legend, tag_series_slots
 from quantized.calc.figure_marks import (
     DropLine,
@@ -270,7 +271,8 @@ def render_with_secondary_axis(
     primary_ov = ov if not secondary_shades else {**ov, "region_shades": primary_shades}
     # The magnifier inset shows BOTH axes' series, so it is drawn below once
     # the twin exists (calc.figure_inset), not by the primary-only pass.
-    primary_ov = {k: v for k, v in primary_ov.items() if k != "inset"}
+    # The graph layers too: over the twin, so no y2 curve draws across them.
+    primary_ov = {k: v for k, v in primary_ov.items() if k not in ("inset", "layers")}
     artists = draw_series_axes(  # turned when ANY series, either axis, is horizontal
         fig, oriented(ax, series_styles), xv, primary,
         st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
@@ -313,6 +315,7 @@ def render_with_secondary_axis(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
     )
+    apply_layers(ax2, ov)
     _combined_legend(fig, ax, st, ov, artists, y2_artists, y2_mask, n_series=len(series))
     return artists + y2_artists
 
