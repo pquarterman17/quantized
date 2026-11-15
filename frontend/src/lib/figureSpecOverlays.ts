@@ -166,7 +166,7 @@ export function withAnalysisOverlays(
   const factorFor = (o: { binding?: OverlayBinding | null }): number =>
     offsetsApply ? 10 ** overlayDecadesFromStyles(o.binding, view.seriesStyles, layout.shown, []) : 1;
   const present = candidates.flatMap(([label, o, points]) => {
-    if (!o || o.datasetId !== ds.id || o.y.length < n) return [];
+    if (!o || o.y.length < n) return []; // placement already dropped another dataset's
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
     return [
       { label, legend: label, y: o.y, points, band: 0, factor: factorFor(o) },

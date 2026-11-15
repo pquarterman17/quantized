@@ -24,6 +24,7 @@
 // field cannot drift from "Export figure…"'s.
 import { askParams } from "../store/paramDialog";
 import type { FigureSpec } from "./api/figures";
+import type { Dataset } from "./types";
 import type { ParamField } from "./params";
 import { NEW_REPORT, reportChoices } from "./reportChoices";
 import type { ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
@@ -242,7 +243,8 @@ export async function runSendFigureToReportCommand(s: StoreGet, requirement?: Se
   }
 }
 
-export type SendRequirement = (spec: FigureSpec | null) => string | null;
+/** `built`: the dataset the spec was built from (null spec: a stat figure). */
+export type SendRequirement = (spec: FigureSpec | null, built: Dataset) => string | null;
 
 async function sendActivePlot(s: StoreGet, requirement?: SendRequirement): Promise<boolean> {
   // Finding #3 (P3.6 review round 2): checked BEFORE any dialog opens, not
@@ -269,7 +271,7 @@ async function sendActivePlot(s: StoreGet, requirement?: SendRequirement): Promi
       // Stat mode: the stat renderer's PNG as the block's image (lib/statFigureCommands.ts).
       const stat = activeStatExporter(s());
       if (stat) {
-        const refused = requirement?.(null); // a stat figure carries no row-aligned overlay
+        const refused = requirement?.(null, ds); // a stat figure carries no row-aligned overlay
         if (refused) throw new Error(refused);
         const statBlock = await statReportBlock(stat, { style: opts.style, dpi: REPORT_FIGURE_DPI, signal }, stem, caption);
         addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
@@ -295,7 +297,7 @@ async function sendActivePlot(s: StoreGet, requirement?: SendRequirement): Promi
         s().excludedDisplay,
       );
       if (!picked) return false;
-      const refused = requirement?.(picked.value); // checked before the screen-only question
+      const refused = requirement?.(picked.value, ds); // checked before the screen-only question
       if (refused) throw new Error(refused);
       if (!(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);

@@ -20,7 +20,6 @@ import { weightRequestFields } from "../lib/fitweights";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import type { FigureSpec } from "../lib/api/figures";
-import { canvasGroupCol } from "../lib/plotGroupSplit";
 import { openResultPlot, specCarriesFit } from "./analysisResultPlotOpen";
 import type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
@@ -187,26 +186,27 @@ export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Pro
 /** Use the same gate as Open plot, then hand the live store to the existing
  * report command. A fitted plot is never sent without its fit: a fit the gate
  * refuses stops the send before anything changes; once the plot is open (a
- * dataset switch can change its modes and focus), a view whose figure can never
- * carry an overlay -- polar, stat, faceted, grouped -- is refused before the
- * dialog asks anything (the opened plot stays); and the built figure must carry
- * THIS fit -- the overlay object the gate drew, on the dataset it opened -- or
- * the send fails (an encoded view is caught there). */
+ * dataset switch can change its modes and focus), a polar or stat view -- the
+ * two the Stage export itself routes on the LIVE modes, never an XY figure --
+ * is refused before the dialog asks anything (the opened plot stays); and the
+ * built figure (from the spec's own view: grouped, faceted and encoded views
+ * are caught there) must carry THIS fit -- the overlay object the gate drew --
+ * or the send fails. */
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
   const opened = await openResultPlot(id, bindingIndex, "report");
   if (!opened) return false;
   const { fit, dataset } = opened;
   const st = useApp.getState();
-  if (fit && (st.polarMode || st.statMode || st.facetKey !== null || canvasGroupCol(st.groupKey, st.y2Keys) !== null)) {
-    st.setStatus("can't send fitted plot: a polar, stat, faceted or grouped view's figure cannot carry the fit; show it as a plain plot first");
+  if (fit && (st.polarMode || st.statMode)) {
+    st.setStatus("can't send fitted plot: a polar or stat view's figure cannot carry the fit; show it as a plain plot first");
     return false;
   }
   const requirement = fit
-    ? (spec: FigureSpec | null) => {
+    ? (spec: FigureSpec | null, built: Dataset) => {
         const now = useApp.getState();
-        if (now.activeId !== dataset.id || now.fitOverlay !== fit) return "the plot changed while sending; send it again";
+        if (built.id !== dataset.id || now.fitOverlay !== fit) return "the plot changed while sending; send it again";
         if (!spec) return "a stat figure cannot carry the fit";
-        return specCarriesFit(spec, dataset) ? null
+        return specCarriesFit(spec, built) ? null
           : "the figure does not carry the fit (its curve is not drawn there, or the view splits or encodes series)";
       }
     : undefined;
