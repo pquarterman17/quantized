@@ -316,7 +316,6 @@ function BackgroundXYWindow({
           plotRef={plotRef} hidden={hidden}
         />
       )}
-      {view.layers?.length > 0 && displayPayload && <GraphLayers plotRef={plotRef} view={view} windowId={windowId} bg={bg} />}
       {displayPayload && view.showLegend && (
         <BackgroundLegend
           dataset={dataset} view={view} series={displayPayload.series} styleList={styleList} labels={legendLabels}
@@ -325,6 +324,7 @@ function BackgroundXYWindow({
           staggeredRows={waterfallStaggeredRows(displayPayload)}
         />
       )}
+      {view.layers?.length > 0 && displayPayload && <GraphLayers plotRef={plotRef} view={view} windowId={windowId} bg={bg} />}
     </div>
   );
 }

@@ -20,152 +20,17 @@
 // closed); with none left the inset shows the live graph's own notice.
 //
 // Pure; imported only by lazy code (the eager `.dwk` reader keeps the list
-// as given, and every reader validates it here: `sanitizeLayers`).
+// as given; a `.dwk` load and every reader validate it in full:
+// `sanitizeLayers`, lib/graphLayersSanitize.ts).
 
 import { NO_CURVES_REASON } from "./linkedCurvesLite";
+import { ownXKey } from "./perSeriesX";
 import { droppedRows } from "./rowstate";
-import type { Dataset, LinkedCurve } from "./types";
+import { MAX_TABLE_COLS, MAX_TABLE_ROWS, type InsetLayer, type LayerAxis, type LayerScale } from "./graphLayersSanitize";
+import type { Dataset } from "./types";
 import { fixedLinearAxisSplits, niceLinearStep } from "./uplotOpts";
 
-/** [left, top, width, height]: fractions of the main plot frame, top-origin. */
-export type LayerAt = [number, number, number, number];
-export type LayerScale = "linear" | "log";
-export type LayerMark = "line" | "scatter" | "linesymbol";
-
-export interface LayerAxis {
-  /** [lo, hi]; null = automatic (from the curves, see `layerAxisRange`). */
-  lim: [number, number] | null;
-  scale: LayerScale;
-  label: string;
-  /** Major tick increment (linear); null = a nice step for the range. */
-  step: number | null;
-}
-
-interface LayerBase {
-  id: string;
-  at: LayerAt;
-}
-export interface InsetLayer extends LayerBase {
-  kind: "inset";
-  curves: LinkedCurve[];
-  x: LayerAxis;
-  y: LayerAxis;
-  mark: LayerMark;
-}
-export interface ImageLayer extends LayerBase {
-  kind: "image";
-  /** A data: URL (png, jpeg or svg+xml) — the screen shows it as given. */
-  src: string;
-  name: string;
-  /** For an SVG: a PNG rendering of it, which the export embeds
-   *  (matplotlib cannot read SVG). Absent for a PNG/JPEG. */
-  raster?: string;
-}
-export interface TableLayer extends LayerBase {
-  kind: "table";
-  rows: string[][];
-  /** The first row is a header (bold). */
-  header: boolean;
-}
-export type GraphLayer = InsetLayer | ImageLayer | TableLayer;
-export type LayerKind = GraphLayer["kind"];
-
-/** The largest image a layer carries (data URL characters): images live in
- *  the workspace file. */
-export const MAX_IMAGE_CHARS = 4_000_000;
-export const MAX_TABLE_ROWS = 50;
-export const MAX_TABLE_COLS = 20;
-const IMAGE_URL = /^data:image\/(png|jpeg|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
-const RASTER_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
-
-const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const obj = (v: unknown): Record<string, unknown> | null =>
-  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
-
-/** A placement kept inside the frame, at least 5% each way. */
-export function clampLayerAt(v: unknown, fallback: LayerAt): LayerAt {
-  if (!Array.isArray(v) || v.length !== 4 || !v.every(finite)) return [...fallback];
-  const c = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
-  const w = c(v[2], 0.05, 1);
-  const h = c(v[3], 0.05, 1);
-  return [c(v[0], 0, 1 - w), c(v[1], 0, 1 - h), w, h];
-}
-
-export const DEFAULT_LAYER_AT: Record<LayerKind, LayerAt> = {
-  inset: [0.56, 0.08, 0.38, 0.36],
-  image: [0.06, 0.06, 0.3, 0.3],
-  table: [0.62, 0.7, 0.32, 0.22],
-};
-
-export function defaultAxis(): LayerAxis {
-  return { lim: null, scale: "linear", label: "", step: null };
-}
-
-function sanitizeAxis(v: unknown): LayerAxis {
-  const o = obj(v) ?? {};
-  const lim = Array.isArray(o.lim) && o.lim.length === 2 && o.lim.every(finite) && o.lim[0] < o.lim[1]
-    ? ([o.lim[0], o.lim[1]] as [number, number])
-    : null;
-  return {
-    lim,
-    scale: o.scale === "log" ? "log" : "linear",
-    label: typeof o.label === "string" ? o.label : "",
-    step: finite(o.step) && o.step > 0 ? o.step : null,
-  };
-}
-
-function sanitizeCurve(v: unknown): LinkedCurve | null {
-  const o = obj(v);
-  const idx = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= -1;
-  if (!o || typeof o.datasetId !== "string" || !idx(o.yKey) || !(o.xKey === null || idx(o.xKey))) return null;
-  return { datasetId: o.datasetId, xKey: o.xKey, yKey: o.yKey, label: typeof o.label === "string" ? o.label : "" };
-}
-
-/** One persisted layer, validated (null = drop it): a hand-edited or stale
- *  `.dwk` never reaches the screen or the export unchecked. */
-export function sanitizeLayer(v: unknown): GraphLayer | null {
-  const o = obj(v);
-  if (!o || typeof o.id !== "string" || !o.id) return null;
-  const kind = o.kind;
-  if (kind !== "inset" && kind !== "image" && kind !== "table") return null;
-  const at = clampLayerAt(o.at, DEFAULT_LAYER_AT[kind]);
-  if (kind === "inset") {
-    const curves = Array.isArray(o.curves) ? o.curves.map(sanitizeCurve).filter((c): c is LinkedCurve => !!c) : [];
-    const mark: LayerMark = o.mark === "scatter" || o.mark === "linesymbol" ? o.mark : "line";
-    return { id: o.id, kind, at, curves, x: sanitizeAxis(o.x), y: sanitizeAxis(o.y), mark };
-  }
-  if (kind === "image") {
-    if (typeof o.src !== "string" || o.src.length > MAX_IMAGE_CHARS || !IMAGE_URL.test(o.src)) return null;
-    const raster = typeof o.raster === "string" && o.raster.length <= MAX_IMAGE_CHARS && RASTER_URL.test(o.raster)
-      ? { raster: o.raster }
-      : {};
-    // An SVG exports as its PNG rendering; without one it could not export
-    // as shown, so it is not drawn on either side.
-    if (o.src.startsWith("data:image/svg") && !raster.raster) return null;
-    return { id: o.id, kind, at, src: o.src, name: typeof o.name === "string" ? o.name : "image", ...raster };
-  }
-  const rows = Array.isArray(o.rows)
-    ? o.rows.slice(0, MAX_TABLE_ROWS).map((r) =>
-        (Array.isArray(r) ? r : []).slice(0, MAX_TABLE_COLS).map((c) => (typeof c === "string" ? c : finite(c) ? String(c) : "")),
-      )
-    : [];
-  return { id: o.id, kind, at, rows: rows.length ? rows : [[""]], header: o.header !== false };
-}
-
-/** A persisted layer list, validated; ids unique (a repeat is dropped). */
-export function sanitizeLayers(v: unknown): GraphLayer[] {
-  if (!Array.isArray(v)) return [];
-  const seen = new Set<string>();
-  const out: GraphLayer[] = [];
-  for (const raw of v) {
-    const l = sanitizeLayer(raw);
-    if (l && !seen.has(l.id)) {
-      seen.add(l.id);
-      out.push(l);
-    }
-  }
-  return out;
-}
+export * from "./graphLayersSanitize";
 
 // ── Inset graph: curves, ranges, ticks ────────────────────────────────────
 
@@ -179,8 +44,11 @@ export interface ResolvedCurve {
 
 /** The curves the inset draws: each bound column read off its LIVE source,
  *  without the source's masked or filtered-out rows (as the main graph
- *  drops them). A curve whose dataset or column is gone is skipped — never
- *  rebound (fail closed). */
+ *  drops them). "Its own X" (`xKey` null) is the main graph's rule: the Y's
+ *  nearest preceding X column on a multi-X book (T1,R1,T2,R2: R2 against T2),
+ *  else the book's X. A point a log axis cannot show (<= 0) is a gap, on both
+ *  sides. A curve whose dataset or column is gone is skipped — never rebound
+ *  (fail closed). */
 export function resolveInsetCurves(layer: InsetLayer, datasets: readonly Dataset[]): ResolvedCurve[] {
   const byId = new Map(datasets.map((d) => [d.id, d]));
   const out: ResolvedCurve[] = [];
@@ -189,26 +57,33 @@ export function resolveInsetCurves(layer: InsetLayer, datasets: readonly Dataset
     const width = ds?.data.labels.length ?? 0;
     if (!ds || c.yKey < 0 || c.yKey >= width || (c.xKey !== null && (c.xKey < 0 || c.xKey >= width))) return;
     const drop = droppedRows(ds);
+    const xk = c.xKey === null ? ownXKey(ds, null, c.yKey) : c.xKey;
+    const [logX, logY] = [layer.x.scale === "log", layer.y.scale === "log"];
     const x: number[] = [];
     const y: (number | null)[] = [];
     ds.data.time.forEach((t, r) => {
       if (drop.has(r)) return;
-      const xv = c.xKey === null ? t : ds.data.values[r]?.[c.xKey];
+      const xv = xk === null ? t : ds.data.values[r]?.[xk];
       const yv = ds.data.values[r]?.[c.yKey];
       if (typeof xv !== "number" || !Number.isFinite(xv)) return;
       x.push(xv);
-      y.push(typeof yv === "number" && Number.isFinite(yv) ? yv : null);
+      const ok = typeof yv === "number" && Number.isFinite(yv) && !(logY && yv <= 0) && !(logX && xv <= 0);
+      y.push(ok ? yv : null);
     });
     out.push({ slot, x, y });
   });
   return out;
 }
 
-/** The notice an inset shows instead of curves, or null when it has some. */
+/** The notice an inset shows instead of curves, or null when it has some:
+ *  "" (a framed, empty inset) when it has none bound yet — the screen adds
+ *  its own hint (`EMPTY_INSET_HINT`), which never reaches the export. */
 export function insetNotice(layer: InsetLayer, resolved: readonly ResolvedCurve[]): string | null {
   if (resolved.length) return null;
-  return layer.curves.length ? NO_CURVES_REASON : "No curves yet: add one in the layer's properties";
+  return layer.curves.length ? NO_CURVES_REASON : "";
 }
+
+export const EMPTY_INSET_HINT = "No curves yet: add one in the layer's properties";
 
 /** The range an axis draws over `values`: its typed limits when they are
  *  valid for the scale, else the data's extent with a 5% pad (log: in
@@ -227,13 +102,18 @@ export function layerAxisRange(axis: LayerAxis, values: readonly (number | null)
   if (log) {
     const [a, b] = [Math.log10(lo), Math.log10(hi)];
     const pad = (b - a || 1) * 0.05;
-    return [clean(10 ** (a - pad)), clean(10 ** (b + pad))];
+    return cleanPair(10 ** (a - pad), 10 ** (b + pad));
   }
   const pad = (hi - lo || Math.abs(hi) || 1) * 0.05;
-  return [clean(lo - pad), clean(hi + pad)];
+  return cleanPair(lo - pad, hi + pad);
 }
 
-const clean = (v: number) => Number(v.toPrecision(12));
+/** 12-significant-digit ends, unless that would collapse a span that is tiny
+ *  next to its magnitude (epoch-ms X: 1.7e12 .. 1.7e12 + 3). */
+function cleanPair(lo: number, hi: number): [number, number] {
+  const [a, b] = [Number(lo.toPrecision(12)), Number(hi.toPrecision(12))];
+  return a < b ? [a, b] : [lo, hi];
+}
 
 /** Tick positions for `range`: log = every decade inside it (a nice linear
  *  step when fewer than two fall inside); linear = multiples of the step
@@ -257,11 +137,16 @@ export function layerTicks(range: [number, number], scale: LayerScale, step: num
 export function layerTickLabels(ticks: readonly number[], scale: LayerScale = "linear"): string[] {
   const plain = (t: number) => t === 0 || (Math.abs(t) < 1e5 && Math.abs(t) >= 1e-3);
   const d = Math.max(0, ...ticks.filter(plain).map(precisionOf));
-  return ticks.map((t) => {
-    if (plain(t)) return t.toFixed(scale === "log" ? precisionOf(t) : d);
-    const mant = t / 10 ** Math.floor(Math.log10(Math.abs(t)));
-    return t.toExponential(Math.min(3, precisionOf(mant))).replace("e+", "e");
-  });
+  // An exponent label's mantissa gets as many digits as it takes for
+  // neighbouring ticks to read differently (an FMR sweep: 9.4002e9 .. 9.4003e9).
+  for (let m = 3; ; m++) {
+    const out = ticks.map((t) => {
+      if (plain(t)) return t.toFixed(Math.min(20, Math.max(scale === "log" ? precisionOf(t) : d, m - 3)));
+      const mant = t / 10 ** Math.floor(Math.log10(Math.abs(t)));
+      return t.toExponential(Math.min(m, Math.max(precisionOf(mant), m - 3))).replace("e+", "e");
+    });
+    if (m >= 15 || new Set(out).size === out.length) return out;
+  }
 }
 
 /** Decimal places a value prints with (0.25 -> 2), capped at 6. */

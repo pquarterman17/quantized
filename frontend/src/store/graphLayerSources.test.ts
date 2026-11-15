@@ -77,6 +77,17 @@ describe("layer curves follow their source's columns", () => {
   });
 });
 
+describe("hostile layer shapes from a hand-edited .dwk (review M4)", () => {
+  it("a column insert / delete still works, and real curves still follow", () => {
+    const junk = [{ id: "a", kind: "inset", curves: {} }, { id: "b", kind: "inset", curves: "x" }, 5, null, inset()];
+    useApp.setState({ layers: junk as never });
+    expect(() => insertColumn("src", 0)).not.toThrow();
+    expect(st().datasets.find((d) => d.id === "src")!.data.labels[1]).toBe("H");
+    expect(((st().layers as unknown[])[4] as InsetLayer).curves[0]).toMatchObject({ xKey: 1, yKey: 2 });
+    expect(() => deleteColumns("src", [0])).not.toThrow();
+  });
+});
+
 describe("layer edits are undoable, on the focused plot or a background window", () => {
   it("edit + undo + redo on the live view", () => {
     editLayers((ls) => ls.map((l) => ({ ...l, at: [0, 0, 0.2, 0.2] as InsetLayer["at"] })), "move inset graph");

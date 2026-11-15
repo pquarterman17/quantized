@@ -78,7 +78,7 @@ export default function GraphLayerBox({
   // without telling this overlay. Writes the style only on change.
   useEffect(() => {
     let raf = 0;
-    let last = "";
+    let last: number[] = [];
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const box = boxRef.current;
@@ -92,10 +92,14 @@ export default function GraphLayerBox({
       const br = box.getBoundingClientRect();
       const g = ar?.width ? { l: ar.left - br.left, t: ar.top - br.top, r: br.right - ar.right, b: br.bottom - ar.bottom } : { l: 0, t: 0, r: 0, b: 0 };
       const r = insetBoxRect(frame, atRef.current, g);
-      const key = JSON.stringify(r);
-      if (key === last) return;
-      last = key;
-      Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+      // Whole pixels, and a move under one pixel is no move: the inset's plot
+      // area snaps to device pixels, so its measured gutters shift with the box
+      // size, and re-placing on every sub-pixel change made the box jitter
+      // forever (found live: a double-click never landed on a "stable" box).
+      const next = [r.left, r.top, r.width, r.height].map(Math.round);
+      if (last.length && next[0] === last[0] && next[1] === last[1] && Math.abs(next[2] - last[2]) <= 1 && Math.abs(next[3] - last[3]) <= 1) return;
+      last = next;
+      Object.assign(box.style, { left: `${next[0]}px`, top: `${next[1]}px`, width: `${next[2]}px`, height: `${next[3]}px` });
     };
     tick();
     return () => cancelAnimationFrame(raf);

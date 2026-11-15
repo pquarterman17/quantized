@@ -37,10 +37,16 @@ export function layerSourcesPatch(
   move: (c: number) => number,
   io: WindowViewIO,
 ): Partial<LayerHolders> {
-  const reads = (ls?: Layers) => ls?.some((l) => (l as InsetLayer | null)?.curves?.some((c) => c?.datasetId === id));
+  // A hand-edited `.dwk` can hold anything here until a reader validates it
+  // (lib/graphLayers.sanitizeLayers): only real arrays are walked.
+  const curvesOf = (l: unknown) => {
+    const c = (l as InsetLayer | null)?.curves;
+    return Array.isArray(c) ? c : null;
+  };
+  const reads = (ls?: Layers) => Array.isArray(ls) && ls.some((l) => curvesOf(l)?.some((c) => c?.datasetId === id));
   const mv = (ls: Layers): Layers =>
     ls.map((l) => {
-      const c0 = (l as InsetLayer | null)?.curves;
+      const c0 = curvesOf(l);
       return c0 ? { ...l, curves: c0.map((c) => (c?.datasetId === id ? { ...c, yKey: move(c.yKey), xKey: c.xKey == null ? c.xKey : move(c.xKey) } : c)) } : l;
     }) as Layers;
   return {

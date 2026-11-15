@@ -36,7 +36,8 @@ export type LayerWire =
       y: LayerWireAxis;
       mark: LayerMark;
       curves: { x: number[]; y: (number | null)[]; color: string }[];
-      /** Shown inside the inset instead of curves (their sources are missing). */
+      /** Present when there are no curves: the frame is drawn empty, with this text
+       *  ("" for an inset with none bound yet; the sources-missing notice otherwise). */
       notice?: string;
     }
   | { kind: "image"; at: LayerAt; src: string }
@@ -76,7 +77,7 @@ export function layersWire(
       y: axisWire(axes.y),
       mark: l.mark,
       curves: curves.map((c) => ({ x: c.x, y: c.y, color: color(c.slot) })),
-      ...(notice ? { notice } : {}),
+      ...(notice !== null ? { notice } : {}),
     };
   });
   return out.length ? out : undefined;

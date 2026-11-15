@@ -2,23 +2,27 @@
 // plot — its position and size in percent of the plot frame (what a drag
 // sets, typed), an inset graph's curves and axes, a table's cells, an
 // image's name. Edits a draft (lib/graphLayerDraft.ts); Apply commits it as
-// ONE undo step, Delete removes the layer (one step), Cancel changes nothing.
+// ONE undo step (for a just-inserted layer, the insert itself), Delete
+// removes the layer (one step), Cancel changes nothing.
 // Mounted in the lazy `FigureDialogs` host (modal frame and focus).
 
 import { useId, useMemo, useState } from "react";
 
 import { draftErrors, draftOf, layerFromDraft, type LayerDraft } from "../../../lib/graphLayerDraft";
-import { sanitizeLayers } from "../../../lib/graphLayers";
-import { editLayers, removeLayer } from "../../../store/graphLayerEdit";
+import { sanitizeLayers, type GraphLayer } from "../../../lib/graphLayers";
+import { addLayer, editLayers, layerNoun, removeLayer } from "../../../store/graphLayerEdit";
 import { useApp } from "../../../store/useApp";
 import InsetLayerFields from "./InsetLayerFields";
 import TableLayerFields from "./TableLayerFields";
 
 const AT_FIELDS = ["Left", "Top", "Width", "Height"] as const;
 
-export default function GraphLayerDialog({ id, onClose }: { id: string; onClose: () => void }) {
+export default function GraphLayerDialog({ id, draft: fresh, onClose }: { id: string; draft?: GraphLayer; onClose: () => void }) {
   const raw = useApp((s) => s.layers);
-  const layer = useMemo(() => sanitizeLayers(raw).find((l) => l.id === id) ?? null, [raw, id]);
+  const stored = useMemo(() => sanitizeLayers(raw).find((l) => l.id === id) ?? null, [raw, id]);
+  // A just-inserted layer is a draft until Apply adds it: Cancel leaves nothing.
+  const isNew = !stored && !!fresh;
+  const layer = stored ?? fresh ?? null;
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const [draft, setDraft] = useState<LayerDraft | null>(() => (layer ? draftOf(layer) : null));
@@ -29,7 +33,11 @@ export default function GraphLayerDialog({ id, onClose }: { id: string; onClose:
   const apply = () => {
     if (errors.length) return;
     const next = layerFromDraft(layer, draft);
-    editLayers((ls) => ls.map((l) => (l.id === id ? next : l)), `edit ${layer.kind === "inset" ? "inset graph" : layer.kind}`);
+    if (isNew) {
+      if (addLayer(next)) onClose();
+      return;
+    }
+    editLayers((ls) => ls.map((l) => (l.id === id ? next : l)), `edit ${layerNoun(layer)}`);
     onClose();
   };
 
@@ -59,7 +67,7 @@ export default function GraphLayerDialog({ id, onClose }: { id: string; onClose:
         </ul>
       )}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="qz-btn" onClick={() => { removeLayer(id); onClose(); }}>Delete layer</button>
+        {!isNew && <button type="button" className="qz-btn" onClick={() => { removeLayer(id); onClose(); }}>Delete layer</button>}
         <span style={{ flex: 1 }} />
         <button type="button" className="qz-btn" onClick={onClose}>Cancel</button>
         <button type="button" className="qz-btn qz-primary" disabled={errors.length > 0}

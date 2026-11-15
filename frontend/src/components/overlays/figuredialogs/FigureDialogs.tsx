@@ -39,7 +39,7 @@ export default function FigureDialogs() {
         {open.kind === "axis" ? <AxisDialog key={open.axis} axis={open.axis} onClose={close} />
           : open.kind === "plotDetails" ? <PlotDetailsDialog key={open.channel} channel={open.channel} onClose={close} />
           : open.kind === "layerContents" ? <LayerContentsDialog onClose={close} />
-          : open.kind === "graphLayer" ? <GraphLayerDialog key={open.id} id={open.id} onClose={close} />
+          : open.kind === "graphLayer" ? <GraphLayerDialog key={open.id} id={open.id} draft={open.draft} onClose={close} />
           : <PlotTypeGallery onClose={close} />}
       </div>
     </div>

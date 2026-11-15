@@ -13,12 +13,16 @@ import {
   resolveInsetCurves,
   sanitizeLayers,
   tableFromRows,
+  MAX_LAYERS,
+  withValidFigureLayers,
+  withValidLayers,
   type InsetLayer,
 } from "./graphLayers";
+import { createFigureDocument } from "./figureDocument";
 import { layersWire } from "./graphLayersWire";
 import { viewOverrides } from "./figureViewOverrides";
 import { templateStyleOverrides } from "./graphTemplateOverrides";
-import { defaultPlotView } from "./plotview";
+import { defaultPlotView, type PlotWindow } from "./plotview";
 import { NO_CURVES_REASON } from "./linkedCurvesLite";
 import type { Dataset } from "./types";
 
@@ -133,7 +137,7 @@ describe("layersWire: what the export draws is what the screen resolved", () => 
     const wire = layersWire(
       [
         inset(),
-        { id: "i", kind: "image", at: [0, 0, 0.2, 0.2], src: "data:image/png;base64,AAAA", name: "a" },
+        { id: "i", kind: "image", at: [0, 0, 0.2, 0.2], src: "data:image/png;base64,iVBORw0KGgoAAAA", name: "a" },
         { id: "t", kind: "table", at: [0, 0.7, 0.3, 0.2], rows: [["a"]], header: true },
       ],
       [loop],
@@ -146,7 +150,7 @@ describe("layersWire: what the export draws is what the screen resolved", () => 
     });
     const x = wire[0].kind === "inset" ? wire[0].x : null;
     expect(x?.tick_labels).toEqual(layerTickLabels(x!.ticks, "linear"));
-    expect(wire[1]).toEqual({ kind: "image", at: [0, 0, 0.2, 0.2], src: "data:image/png;base64,AAAA" });
+    expect(wire[1]).toEqual({ kind: "image", at: [0, 0, 0.2, 0.2], src: "data:image/png;base64,iVBORw0KGgoAAAA" });
     expect(wire[2]).toEqual({ kind: "table", at: [0, 0.7, 0.3, 0.2], rows: [["a"]], header: true });
   });
 
@@ -168,5 +172,70 @@ describe("layersWire: what the export draws is what the screen resolved", () => 
 
   it("a graph template never carries another figure's layers", () => {
     expect(templateStyleOverrides({ layers: [], font_size: 9 })).toEqual({ font_size: 9 });
+  });
+});
+
+// ── Review round (lane D): H1, M1, M2, M4, L2, L3, L4 ─────────────────────
+
+describe("review fixes", () => {
+  it("H1: a multi-X book's Y draws against its OWN X (nearest preceding), never the first", () => {
+    const book: Dataset = {
+      id: "book", name: "R(T)",
+      data: { time: [1, 2, 3], values: [[10, 300, 5], [20, 200, 6], [30, 100, 7]], labels: ["R1", "T2", "R2"], units: ["", "K", ""], metadata: {} },
+      columnDesignations: { 0: "Y", 1: "X", 2: "Y" },
+    };
+    const r2 = inset({ curves: [{ datasetId: "book", xKey: null, yKey: 2, label: "" }] });
+    expect(resolveInsetCurves(r2, [book])[0].x).toEqual([300, 200, 100]); // T2, descending, row order kept
+    const r1 = inset({ curves: [{ datasetId: "book", xKey: null, yKey: 0, label: "" }] });
+    expect(resolveInsetCurves(r1, [book])[0].x).toEqual([1, 2, 3]); // R1 belongs to T1
+  });
+
+  it("M1: a point a log axis cannot show is a gap (both sides read this)", () => {
+    const logY = inset({ y: { lim: null, scale: "log", label: "", step: null } });
+    expect(resolveInsetCurves(logY, [loop])[0].y).toEqual([1, 0.2, null, 1]); // M = -1 cannot show on log
+    const logX = inset({ x: { lim: null, scale: "log", label: "", step: null } });
+    const c = resolveInsetCurves(logX, [loop])[0];
+    expect(c.x).toEqual([100, 0, -100, 100]); // the row stays, so the line breaks there
+    expect(c.y).toEqual([1, null, null, 1]);
+  });
+
+  it("M2: an image whose bytes are not what its data URL says is dropped", () => {
+    const jpegAsPng = { id: "i", kind: "image", at: [0, 0, 0.2, 0.2], src: "data:image/png;base64,/9j/4AAQ", name: "x.png" };
+    const junk = { ...jpegAsPng, id: "j", src: "data:image/png;base64,SGVsbG8=" };
+    const ok = { ...jpegAsPng, id: "k", src: "data:image/jpeg;base64,/9j/4AAQ" };
+    expect(sanitizeLayers([jpegAsPng, junk, ok]).map((l) => l.id)).toEqual(["k"]);
+  });
+
+  it("L4: at most MAX_LAYERS survive (the export's cap)", () => {
+    const many = Array.from({ length: MAX_LAYERS + 3 }, (_, i) => ({ id: `t${i}`, kind: "table", rows: [["a"]] }));
+    expect(sanitizeLayers(many)).toHaveLength(MAX_LAYERS);
+  });
+
+  it("L2: labels of a narrow, large-magnitude range stay distinct", () => {
+    const labels = layerTickLabels(layerTicks([9.4002e9, 9.4003e9], "linear", null));
+    expect(new Set(labels).size).toBe(labels.length);
+    const close = layerTickLabels([100000.0001, 100000.0002]);
+    expect(new Set(close).size).toBe(2);
+  });
+
+  it("L3: a span tiny next to its magnitude does not collapse", () => {
+    const [lo, hi] = layerAxisRange({ lim: null, scale: "linear", label: "", step: null }, [1.7e12, 1.7e12 + 3]);
+    expect(hi).toBeGreaterThan(lo);
+    expect(layerTicks([lo, hi], "linear", null).length).toBeGreaterThan(1);
+  });
+
+  it("M4: a .dwk's layers are validated in full on load (window view, its document, saved figures)", () => {
+    const junk = [{ id: "a", kind: "inset", curves: {} }, 5, { id: "t", kind: "table", rows: [["x"]] }];
+    const view = { ...defaultPlotView(), layers: junk as never };
+    const doc = createFigureDocument({ id: "f", name: "F", datasetId: null, view });
+    const win: PlotWindow = {
+      id: "w", kind: "plot", title: "W", datasetId: null, geometry: { x: 0, y: 0, w: 1, h: 1 }, z: 0,
+      winState: "normal", view, document: doc, bg: "theme", linkGroup: null, pinned: false,
+    };
+    const out = withValidLayers(win);
+    expect(out.view.layers.map((l) => l.id)).toEqual(["a", "t"]);
+    expect((out.view.layers[0] as InsetLayer).curves).toEqual([]);
+    expect(out.document?.plot.view.layers.map((l) => l.id)).toEqual(["a", "t"]);
+    expect(withValidFigureLayers(doc).plot.view.layers).toHaveLength(2);
   });
 });

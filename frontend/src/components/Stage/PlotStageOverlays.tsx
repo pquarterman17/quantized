@@ -105,7 +105,6 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         // seriesCycle, hidden, plotRef): spread, not restated (eager bytes).
         <InsetPlot {...p} payload={p.displayPayload} />
       )}
-      {hasLayers && p.displayPayload && <GraphLayers plotRef={p.plotRef} />}
 
       {!p.active && (
         <div
@@ -143,6 +142,8 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
           staggeredRows={waterfallStaggeredRows(p.displayPayload)}
         />
       )}
+      {/* After the legend: a layer paints over it, as the export stacks them (Origin's layer 2 over layer 1). */}
+      {hasLayers && p.displayPayload && <GraphLayers plotRef={p.plotRef} />}
     </>
   );
 }

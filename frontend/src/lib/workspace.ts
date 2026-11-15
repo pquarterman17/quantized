@@ -16,6 +16,7 @@ import type { PlotRecipe } from "./plotRecipe";
 import { sanitizeRecipes } from "./plotRecipeIO";
 import { pruneDanglingWorkbookScopeTemplates, type QuickPlotTemplate } from "./quickPlotTemplates";
 import { sanitizeQuickPlotTemplates } from "./quickPlotTemplatesSanitize";
+import { withValidFigureLayers, withValidLayers } from "./graphLayersSanitize";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
@@ -373,9 +374,10 @@ export function parseWorkspace(
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
   // Legacy Publication Preview FigureDocs stay unchanged until F2 preserves their unsupported overrides.
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
-  const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings);
+  // Graph layers are validated in full here (origin gap audit 3 #15).
+  const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings).map(withValidFigureLayers);
   const pages = sanitizePageDocuments(o.pages);
-  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport);
+  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport).map(withValidLayers);
   const focusedWindowId =
     typeof o.focusedWindowId === "string" &&
     plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")

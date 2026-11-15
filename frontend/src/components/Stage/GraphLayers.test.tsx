@@ -9,7 +9,10 @@ import { createRef } from "react";
 import type uPlot from "uplot";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { GraphLayer, InsetLayer } from "../../lib/graphLayers";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { EMPTY_INSET_HINT, type GraphLayer, type InsetLayer } from "../../lib/graphLayers";
 import { NO_CURVES_REASON } from "../../lib/linkedCurvesLite";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
@@ -23,12 +26,12 @@ interface Opts {
   axes: { splits: () => number[]; values: () => string[]; label?: string }[];
 }
 const { plots, MockUPlot } = vi.hoisted(() => {
-  const plots: { opts: Opts; data: unknown[]; under: HTMLElement }[] = [];
+  const plots: { opts: Opts; data: unknown[]; under: HTMLElement; over: HTMLElement }[] = [];
   class MockUPlot {
     over = document.createElement("div");
     under = document.createElement("div");
     constructor(opts: Opts, data: unknown[]) {
-      plots.push({ opts, data, under: this.under });
+      plots.push({ opts, data, under: this.under, over: this.over });
     }
     destroy(): void {}
     setSize(): void {}
@@ -104,6 +107,49 @@ describe("an inset graph layer of another dataset", () => {
     mount();
     expect(screen.getByTestId("layer-notice").textContent).toBe(NO_CURVES_REASON);
     expect(plots).toHaveLength(0);
+  });
+
+  it("an inset with no curve yet shows the screen-only hint in its empty frame", () => {
+    useApp.setState({ layers: [{ ...insetLayer, curves: [] }] });
+    mount();
+    expect(screen.getByTestId("layer-notice").textContent).toBe(EMPTY_INSET_HINT);
+  });
+});
+
+describe("an inset's box settles (live-check find)", () => {
+  it("does not keep re-placing itself when its plot area snaps to device pixels", async () => {
+    useApp.setState({ layers: [insetLayer] });
+    mount();
+    const box = screen.getByTestId("graph-layer");
+    const px = (v: string) => Number.parseFloat(v) || 0;
+    box.getBoundingClientRect = () => rect(px(box.style.left), px(box.style.top), px(box.style.width), px(box.style.height));
+    // The plot area: the box less 40/10/8/24 px of gutters, its size snapped
+    // to 0.75 px "device pixels" — so a fractional box size moves the gutters.
+    const snap = (v: number) => Math.round(v / 0.75) * 0.75;
+    plots[0].over.getBoundingClientRect = () => {
+      const b = box.getBoundingClientRect();
+      return rect(b.left + 40, b.top + 10, snap(b.width - 48), snap(b.height - 34));
+    };
+    const writes: string[] = [];
+    new MutationObserver(() => writes.push(box.style.cssText)).observe(box, { attributes: true, attributeFilter: ["style"] });
+    await new Promise((r) => setTimeout(r, 400)); // ~24 animation frames
+    const settled = writes.length;
+    await new Promise((r) => setTimeout(r, 300));
+    expect(writes.length).toBe(settled);
+    expect(box.style.width).toMatch(/^\d+px$/);
+  });
+});
+
+describe("stacking against the legend (review M5)", () => {
+  // The export draws layers over the legend (calc/figure_layers.py, pinned in
+  // test_layers_draw_over_the_legend_as_on_screen); the screen paints the
+  // later sibling on top, so the layers must mount after the legend.
+  const src = (f: string) => readFileSync(join(__dirname, f), "utf8");
+  it("the focused plot and a background window mount their layers after their legend", () => {
+    const stage = src("PlotStageOverlays.tsx");
+    expect(stage.indexOf("<GraphLayers")).toBeGreaterThan(stage.indexOf("<PlotLegend"));
+    const bg = src("../windows/BackgroundPlotWindow.tsx");
+    expect(bg.indexOf("<GraphLayers")).toBeGreaterThan(bg.indexOf("<BackgroundLegend"));
   });
 });
 

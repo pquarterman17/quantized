@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, type RefObject } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
-import { insetNotice, resolveInsetAxes, resolveInsetCurves, type InsetLayer, type ResolvedAxis } from "../../lib/graphLayers";
+import { EMPTY_INSET_HINT, insetNotice, resolveInsetAxes, resolveInsetCurves, type InsetLayer, type ResolvedAxis } from "../../lib/graphLayers";
 import { layerCurveColor } from "../../lib/graphLayersWire";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { Dataset, SeriesStyle } from "../../lib/types";
@@ -74,7 +74,7 @@ export default function InsetLayerPlot({
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || built.notice) return;
+    if (!host || built.notice !== null) return;
     const { payload, styles, axes } = built;
     const w = host.clientWidth || 200;
     const h = host.clientHeight || 120;
@@ -120,11 +120,11 @@ export default function InsetLayerPlot({
     };
   }, [built, theme, accent, areaRef, bg]);
 
-  if (built.notice) {
+  if (built.notice !== null) {
     return (
       <div className="qzk-ds-meta" role="status" data-testid="layer-notice"
         style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", fontSize: 11, padding: 4, border: "1px solid var(--border)", background: resolvePlotBg(bg).axesBg }}>
-        {built.notice}
+        {built.notice || EMPTY_INSET_HINT}
       </div>
     );
   }

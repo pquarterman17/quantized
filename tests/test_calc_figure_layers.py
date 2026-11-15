@@ -59,8 +59,9 @@ def _render(layers: list[dict[str, Any]], **kw: Any) -> Any:
         captured["fig"] = fig
         return real(fig, *a, **k)
 
+    ov = {**kw.pop("overrides", {}), "layers": layers}
     with patch.object(fig_mod, "savefig_bytes", grab):
-        render_figure(X, [("M", M)], fmt="svg", overrides={"layers": layers}, **kw)
+        render_figure(X, [("M", M)], fmt="svg", overrides=ov, **kw)
     return captured["fig"]
 
 
@@ -103,6 +104,88 @@ def test_missing_sources_show_the_screen_notice_not_a_curve() -> None:
     assert [t.get_text() for t in ins.texts] == [notice]
     # A framed notice, as on screen: no axes.
     assert not list(ins.get_xticks()) and not list(ins.get_yticks())
+
+
+def test_an_inset_with_no_curve_bound_yet_exports_an_empty_frame() -> None:
+    """Review L1: the screen's "add one in the layer's properties" hint is UI,
+    never printed into a publication figure."""
+    fig = _render([{**INSET, "curves": [], "notice": ""}])
+    (ins,) = fig.axes[0].child_axes
+    assert not list(ins.texts) and not list(ins.get_xticks())
+
+
+def test_log_axes_gap_non_positive_points_as_the_screen_does() -> None:
+    """Review M1: a y <= 0 on a log axis is a gap, not a dive to the edge."""
+    fig = _render([{**INSET, "curves": [{"x": [0.5, 1.0, 2.5], "y": [10.0, 0.0, 50.0],
+                                          "color": "#000000"}]}])
+    (ins,) = fig.axes[0].child_axes
+    (line,) = [ln for ln in ins.lines if ln.get_label() == "_layer"]
+    np.testing.assert_array_equal(line.get_ydata(), [10.0, np.nan, 50.0])
+
+
+def test_dollar_signs_in_layer_text_print_literally() -> None:
+    """Review M3: the screen shows layer text literally, so must the export
+    (an unpaired `$` used to fail the export; a pair became math)."""
+    x = _axis([0.0, 3.0], [0.0, 3.0], ["$0", "3$"], label="cost $x^$ y")
+    table = {"kind": "table", "at": AT, "rows": [["$a^$ b", "$5-$10"]], "header": False}
+    fig = _render([{**INSET, "x": x}, table])
+    fig.canvas.draw()  # mathtext would raise here
+    (ins,) = fig.axes[0].child_axes
+    assert ins.xaxis.label.get_text() == r"cost \$x^\$ y"
+    (t,) = [c for c in fig.axes[0].get_children() if isinstance(c, Table)]
+    assert t.get_celld()[0, 1].get_text().get_text() == r"\$5-\$10"
+    ok = _route_svg([{**INSET, "x": x}, table])
+    assert ok.status_code == 200 and b"cost $x^$ y" in ok.content
+
+
+def _jpeg() -> str:
+    buf = io.BytesIO()
+    plt.imsave(buf, np.zeros((2, 4, 3)), format="jpeg")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def test_an_image_is_read_as_what_its_bytes_are() -> None:
+    """Review M2: a JPEG labelled PNG is refused with a clear reason (the
+    bytes are sniffed, never trusted to the label); a real JPEG draws."""
+    with pytest.raises(ValueError, match="not the format"):
+        _render([{"kind": "image", "at": AT, "src": "data:image/png;base64," + _jpeg()}])
+    fig = _render([{"kind": "image", "at": AT, "src": "data:image/jpeg;base64," + _jpeg()}])
+    assert fig.axes[0].child_axes[0].images
+
+
+def test_a_huge_image_is_refused_before_it_is_decoded() -> None:
+    """Review M6: a tiny crafted PNG of 6000x6000 pixels (36 M > 25 M) is
+    refused from its header, without decoding it."""
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("1", (6000, 6000)).save(buf, format="PNG")
+    src = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    assert len(src) < 100_000
+    with patch.object(Image.Image, "load", side_effect=AssertionError("decoded")), \
+            pytest.raises(ValueError, match="too large"):
+        _render([{"kind": "image", "at": AT, "src": src}])
+
+
+def test_layers_draw_over_the_legend_as_on_screen() -> None:
+    """Review M5: the screen mounts layers after the legend (Origin: layer 2
+    over layer 1's legend); the export stacks them the same way."""
+    fig = _render([INSET], overrides={"legend": {"show": True, "loc": "upper right"}})
+    main = fig.axes[0]
+    legend = main.get_legend()
+    assert legend is not None
+    assert main.child_axes[0].get_zorder() > legend.get_zorder()
+
+
+def _route_svg(layers: list[dict[str, Any]]) -> Any:
+    from fastapi.testclient import TestClient
+
+    from quantized.app import app
+
+    ds = {"time": [1.0, 2.0, 3.0], "values": [[1.0], [4.0], [9.0]], "labels": ["a"], "units": ["V"],
+          "metadata": {}}
+    return TestClient(app).post("/api/export/figure", json={
+        "dataset": ds, "fmt": "svg", "dpi": 60, "overrides": {"layers": layers}})
 
 
 def test_image_layer_fits_inside_its_rect() -> None:
@@ -221,8 +304,9 @@ def test_the_export_draws_the_wire_the_screen_resolved(case: dict[str, Any]) -> 
         for ln, c in zip(lines, spec["curves"], strict=True):
             np.testing.assert_array_equal(ln.get_xdata(), c["x"])
             assert ln.get_color() == c["color"]
-        if spec.get("notice"):
-            assert [t.get_text() for t in ins.texts] == [spec["notice"]]
+        if "notice" in spec:  # a framed box, its notice ("" = none) and no axes
+            assert [t.get_text() for t in ins.texts] == ([spec["notice"]] if spec["notice"] else [])
+            assert not list(ins.get_xticks())
             continue
         for which, ax in (("x", ins.xaxis), ("y", ins.yaxis)):
             want = spec[which]

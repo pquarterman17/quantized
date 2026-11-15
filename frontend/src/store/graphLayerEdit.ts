@@ -4,7 +4,8 @@
 // without a focus swap unmounting it mid-gesture). Every write is ONE undo
 // step labelled `history`. Imported only by lazy code.
 
-import { sanitizeLayers, type GraphLayer } from "../lib/graphLayers";
+import { MAX_LAYERS, sanitizeLayers, type GraphLayer } from "../lib/graphLayers";
+import { toast } from "./toasts";
 import { useApp } from "./useApp";
 import { patchBackgroundView } from "./windowViewEdit";
 import { plotWindowView } from "./windowDocuments";
@@ -43,7 +44,13 @@ export function removeLayer(id: string, windowId?: string): void {
 let seq = 0;
 export const nextLayerId = (): string => `layer-${Date.now().toString(36)}-${++seq}`;
 
-/** Add `layer` on top of the focused plot's layers. */
-export function addLayer(layer: GraphLayer): void {
+/** Add `layer` on top of the focused plot's layers (refused past `MAX_LAYERS`,
+ *  the export's own cap). True when added. */
+export function addLayer(layer: GraphLayer): boolean {
+  if (layersOf().length >= MAX_LAYERS) {
+    toast(`a plot holds at most ${MAX_LAYERS} layers`, "danger");
+    return false;
+  }
   editLayers((ls) => [...ls, layer], `insert ${layerNoun(layer)}`);
+  return true;
 }

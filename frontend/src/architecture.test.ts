@@ -3640,6 +3640,7 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // Insert commands' bodies, the dialog -- and are funded by six halves
     // only lazy modules call, each imported by its own path.
     "/lib/graphLayers.ts",
+    "/lib/graphLayersSanitize.ts",
     "/lib/graphLayersWire.ts",
     "/lib/graphLayerDraft.ts",
     "/lib/graphLayerCommands.ts",

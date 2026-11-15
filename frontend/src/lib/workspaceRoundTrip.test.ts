@@ -119,6 +119,14 @@ describe("PlotView.statPicks: an older file without it opens as today", () => {
     expect(back.view.statMode).toBe(true);
   });
 
+  it("graph layers are validated in full when a .dwk opens (review M4)", () => {
+    const doc = savedDoc(defaultPlotView());
+    doc.plotWindows[0].view.layers = [{ id: "a", kind: "inset", curves: {} }, 5, { id: "b", kind: "chart" }];
+    const back = parseWorkspace(JSON.stringify(doc), VIEWPORT).plotWindows[0];
+    expect(back.view.layers).toHaveLength(1);
+    expect(back.view.layers[0]).toMatchObject({ id: "a", kind: "inset", curves: [] });
+  });
+
   it("junk picks drop field by field; a malformed column ref drops the whole column set", () => {
     const doc = savedDoc(defaultPlotView());
     doc.plotWindows[0].view.statPicks = {

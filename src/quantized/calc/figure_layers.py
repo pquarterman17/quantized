@@ -40,7 +40,6 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
-from matplotlib.image import imread
 from matplotlib.ticker import FixedLocator, NullLocator
 
 __all__ = ["apply_layers", "validate_layers"]
@@ -51,6 +50,7 @@ _IMAGE_URL = re.compile(r"^data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)$")
 _MAX_IMAGE_CHARS = 4_000_000  # frontend lib/graphLayers.ts MAX_IMAGE_CHARS
 _MAX_LAYERS = 32
 _MAX_ROWS, _MAX_COLS = 50, 20  # MAX_TABLE_ROWS / MAX_TABLE_COLS
+_MAX_PIXELS = 25_000_000  # frontend MAX_IMAGE_PIXELS: refused before any decode
 _LINE_WIDTH = 1.1  # pt: the screen's 1.5 px line
 _MARKER_SIZE = 3.0  # pt
 _TEXT_SIZE = 7.0  # pt: the screen's compact inset text
@@ -107,7 +107,7 @@ def _check_inset(spec: Mapping[str, Any], i: int) -> None:
         if not (isinstance(xs, list) and isinstance(ys, list) and len(xs) == len(ys)
                 and isinstance(c.get("color"), str)):
             raise ValueError(f"layers[{i}].curves entries need x and y of equal length and a color")
-    if spec.get("notice") is not None and not isinstance(spec["notice"], str):
+    if "notice" in spec and not isinstance(spec["notice"], str):
         raise ValueError(f"layers[{i}].notice must be a string")
 
 
@@ -146,31 +146,44 @@ def _bounds(at: Sequence[float]) -> tuple[float, float, float, float]:
     return left, 1.0 - top - height, width, height
 
 
+def _literal(text: str) -> str:
+    """``text`` as matplotlib must print it to match the screen, which shows
+    layer text literally: every ``$`` escaped, so none starts mathtext (an
+    unpaired one used to fail the whole export; a pair turned into math)."""
+    return text.replace("$", r"\$")
+
+
 def _axis(ins: Any, which: str, spec: Mapping[str, Any]) -> None:
     axis = ins.xaxis if which == "x" else ins.yaxis
     (ins.set_xscale if which == "x" else ins.set_yscale)(spec["scale"])
     (ins.set_xlim if which == "x" else ins.set_ylim)(float(spec["lim"][0]), float(spec["lim"][1]))
     axis.set_major_locator(FixedLocator([float(t) for t in spec["ticks"]]))
     axis.set_minor_locator(NullLocator())
-    axis.set_ticklabels(list(spec["tick_labels"]))  # the screen's text, verbatim
+    axis.set_ticklabels([_literal(s) for s in spec["tick_labels"]])  # the screen's text
     label = spec.get("label") or ""
     if label:
-        (ins.set_xlabel if which == "x" else ins.set_ylabel)(label, fontsize=_TEXT_SIZE)
+        (ins.set_xlabel if which == "x" else ins.set_ylabel)(_literal(label), fontsize=_TEXT_SIZE)
 
 
 def _draw_inset(host: Any, spec: Mapping[str, Any]) -> Any:
     ins = host.inset_axes(_bounds(spec["at"]))
-    if spec.get("notice"):
-        # Every curve's source is gone: the screen's framed notice, no axes.
+    if "notice" in spec:
+        # No curve to draw: the screen's framed box, no axes, and its notice
+        # when every curve's source is gone ("" = none bound yet: empty frame).
         ins.set_xticks([])
         ins.set_yticks([])
-        ins.text(0.5, 0.5, spec["notice"], transform=ins.transAxes, ha="center", va="center",
-                 fontsize=_TEXT_SIZE, color=_NOTICE_INK, wrap=True)
+        if spec["notice"]:
+            ins.text(0.5, 0.5, _literal(spec["notice"]), transform=ins.transAxes, ha="center",
+                     va="center", fontsize=_TEXT_SIZE, color=_NOTICE_INK, wrap=True)
         return ins
     mark = spec.get("mark", "line")
+    log_x, log_y = spec["x"]["scale"] == "log", spec["y"]["scale"] == "log"
     for c in spec["curves"]:
         x = np.asarray([np.nan if v is None else v for v in c["x"]], dtype=float)
         y = np.asarray([np.nan if v is None else v for v in c["y"]], dtype=float)
+        # A point a log axis cannot show is a gap, as on screen (the wire
+        # already sends it as null; a direct caller gets the same rule).
+        y[(log_y & (y <= 0)) | (log_x & (x <= 0))] = np.nan
         ins.plot(
             x, y, color=c["color"],
             linestyle="none" if mark == "scatter" else "-",
@@ -187,13 +200,31 @@ def _draw_inset(host: Any, spec: Mapping[str, Any]) -> Any:
 
 
 def _decode_image(src: str) -> np.ndarray:
+    """The pixels of a PNG/JPEG data URL. The bytes are SNIFFED (a JPEG called
+    PNG is refused, never guessed at) and the pixel count is checked from the
+    header before anything is decoded, so a tiny crafted file cannot cost
+    gigabytes."""
+    from PIL import Image  # matplotlib's own image backend
+
     m = _IMAGE_URL.match(src)
     if m is None:  # validated upstream; kept for direct callers
         raise ValueError("image layer src must be a PNG or JPEG data URL")
     try:
         raw = base64.b64decode(m.group(2), validate=True)
-        return np.asarray(imread(io.BytesIO(raw), format="png" if m.group(1) == "png" else "jpeg"))
-    except (binascii.Error, OSError, ValueError, SyntaxError) as exc:
+        with Image.open(io.BytesIO(raw)) as im:
+            if (im.format or "").lower() != m.group(1):
+                raise ValueError("image layer is not the format its data URL names")
+            w, h = im.size
+            if w * h > _MAX_PIXELS:
+                raise ValueError(f"image layer is too large ({w}x{h} pixels)")
+            return np.asarray(im.convert("RGBA"))
+    except ValueError as exc:
+        if "image layer" in str(exc):
+            raise
+        raise ValueError("image layer src is not a readable PNG or JPEG") from exc
+    except Image.DecompressionBombError as exc:
+        raise ValueError("image layer is too large") from exc
+    except (binascii.Error, OSError, SyntaxError) as exc:
         raise ValueError("image layer src is not a readable PNG or JPEG") from exc
 
 
@@ -209,7 +240,7 @@ def _draw_image(host: Any, spec: Mapping[str, Any]) -> Any:
 def _draw_table(host: Any, spec: Mapping[str, Any]) -> Any:
     rows = [list(r) for r in spec["rows"]]
     width = max(1, *(len(r) for r in rows))
-    cells = [r + [""] * (width - len(r)) for r in rows]
+    cells = [[_literal(c) for c in r] + [""] * (width - len(r)) for r in rows]
     table = host.table(cellText=cells, cellLoc="center", bbox=list(_bounds(spec["at"])))
     table.auto_set_font_size(False)
     table.set_fontsize(_TEXT_SIZE)
@@ -224,9 +255,13 @@ def apply_layers(host: Any, ov: Mapping[str, Any]) -> list[Any]:
     (a later layer on top); returns the artists drawn. ``host`` is the main
     axes -- a dual-Y figure's twin, so no y2 curve draws over a layer."""
     out: list[Any] = []
+    # Over the legend too (Origin: a later layer is above layer 1 and its
+    # legend), as the screen mounts the layers after the legend.
+    legend = host.get_legend()
+    base = max(_ZORDER, legend.get_zorder() + 1 if legend is not None else 0)
     for i, spec in enumerate(ov.get("layers") or []):
         draw = {"inset": _draw_inset, "image": _draw_image, "table": _draw_table}[spec["kind"]]
         artist = draw(host, spec)
-        artist.set_zorder(_ZORDER + i)  # stacked in list order, as the screen's boxes are
+        artist.set_zorder(base + i)  # stacked in list order, as the screen's boxes are
         out.append(artist)
     return out
