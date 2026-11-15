@@ -1323,8 +1323,13 @@ The marker does not name the designation; the record's offset-17 code does
 whose record does not prove its code reads by the marker only when that is
 unambiguous (X, Y, disregard); an unproven `30 61` / `20 61` keeps counting
 its column but carries no designation. The marker bytes also occur in label
-text (`20 61` = " a", `30 61` = "0a"); because columns are bound by run
-POSITION, such a stray marker shifts a book's labels (decode-plan item 73).
+text (`20 61` = " a", `30 61` = "0a", `21 61` = "!a"), so a run read by
+POSITION shifts every later column's label after one stray marker. Since
+decode-plan item 73 (2026-11-15) a sheet is labelled from its own column
+records BY NAME (offset 18, searched only inside the book's own window
+span), and a positional reading a record of that span contradicts is
+dropped; on 113 COM-checked files that left 0 wrong designations, long
+names or units (`opju_record_meta.py`, `opju._bind_by_record`).
 
 **These markers exist only for Text & Numeric columns (2026-11-15).** The
 column record is the `.opj` column property block in CPYUA's sparse grammar;
