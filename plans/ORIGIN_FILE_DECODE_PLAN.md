@@ -14,7 +14,7 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
+**Updated:** 2026-11-15 (items 69-70 struck: embedded `Residual*` report-graph headers no longer end their host book; curves bind the X their own token record stores — 380 wrong-X curves and 3 phantoms on main → 0 on the 22 COM-checked files, 307 newly match Origin, 255 omitted with a reason; residue booked as item 71. Earlier: item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
 3,508 curves re-bound to `Book@N` plus 531 previously deduped away, 875
 omitted and diagnosed; 495 of 498 COM-checked re-bound curves draw
 Origin's exact data. Items 67-70 booked. Earlier: items 64-65 fixed: the axis record is run-length
@@ -959,33 +959,46 @@ work.
     - [ ] datasets Origin names with an explicit `@1` suffix
     - [ ] `mid1_*@5` and `Book1B_D@10`
 
-69. **Rise-time file book mis-binding** — `Figure 3 and 4 amplitude - rise
-    time data.opju`: the decoder binds `Residual39_B` (and siblings
-    `Residual38/41/43/58/60/63_B`) where Origin plots `Book40_B@3`
-    (`Book39/42/44_B@3`, `Book3_B@11`, …), and keeps `Residual65_B`
-    (Graph66) and `Residual64_B` (Graph67#5) that Origin does not plot.
-    The `Residual*` pages are embedded fit-report books; their ids alias
-    the fitted source column. Wrong bindings on SHEET 1, so the sheet
-    re-binding does not touch them.
-    - [ ] Decode which book a report-page id resolves to, or fail closed
-          on `Residual*` bindings until it is decoded
+(items 69-70 shipped 2026-11-15 — see Completed; their residue is item 71)
 
-70. **Plot-level X and cell residues found by the data check** — the
-    2026-11-15 value comparison against Origin found three re-bound
-    curves (of 498) and 33 sheet-1 control curves (of 129) whose drawn
-    data differs, none caused by the sheet:
-    - [ ] The curve token stores its own X: Graph73's tokens carry the X
-          id (`3d 09` = 2365 = `A@5`) right before the `21 61` marker,
-          Graph72's carry a different shape and Origin plots them against
-          Row Numbers. The decoder uses the Y column's designated X
-          instead, so SOP_meas Graph72 `D@5`, Figure4 Graph1 (Origin X
-          `Book1_B`), ResonatorData RawAndFit#2 (Origin X `S2136_K`/`_L`)
-          draw against the wrong X; SOP_meas Graph16/Graph41#6
-          `SOPvsHPPC5_AH`… have no X name Origin will report at all
-    - [ ] PerceivedRisk Fig3 `Book1D_F@27`/`_H@27` row 1: Origin holds a
-          missing value, the Text&Numeric decode yields 0.0 (the stored
-          run is 73 repeated zeros from row 1; begin row is 1, no column
-          formula). Find what marks the cell missing
+71. **Residue of items 69-70 (rise-time report pages, token X, cell
+    missing-ness)** — booked 2026-11-15 with the evidence below; none of it
+    draws a wrong value today (each case is omitted or pre-existing):
+    - [ ] Row-number / binned X: 236 curves are omitted `x_not_a_column`
+          (record X id 0). Origin draws SOP_meas Graph72 and Graph10 against
+          `Row Numbers`; Graph16/21, Graph41 even layers etc. report no X
+          dataset at all (binned distribution layers, axis -5..45 / 0..11).
+          Needs a row-index binding in the frontend (`figureBindingFor`) for
+          the line/scatter case; binned layers stay omitted
+    - [ ] The 21 rise-time curves that now name their host book stay
+          `sheet_unknown`: the host's ids and its `Book_Col@N` datasets do
+          not align (`Book40_B`: 3 ids vs 7 datasets, sheets in file order
+          `"", 3, 2, 5, 4, 6, 7`) — item 67's second sheet signal would
+          resolve them (Origin plots `Book40_B@3`, `Book31_B@15`, …)
+    - [ ] Unframed curve tokens: 8 of 8,401 resolved tokens corpus-wide are
+          not preceded by the `0a [00] 80 <flag>` record framing (they sit in
+          a `Style` object, `28 aa 00 80 b0 | 01 01 01 80 01 …`). One is COM-
+          proven a phantom: rise-time Graph67#4 `HEKrisetime_G` (Origin plots
+          `Book3_B` vs `Book3_H` and `Book3_B@17` there). The other 7
+          (Bqqbar `BqqbarFit_A-D`, origin.opju `Book3_J`, two FTIR
+          `Book1_B`) need COM before a framing gate is admitted
+    - [ ] Token X pair `30 61` (Y-error tokens) is not decoded, and the
+          `.opj` curve-anchor record (same 519-byte layout) very likely
+          carries the X at offset 35 too: check both against COM
+    - [ ] PerceivedRisk Fig3 `Book1D_F@27`/`G@27`/`H@27` row 1: Origin
+          reads missing, the decode 0.0 — NOT proven, left open. COM probe
+          (2026-11-15): begin row 1, end 301, empty `formula$`, not hidden,
+          and `G@27` (a Y column Origin does not plot here) is missing at
+          row 1 too. All three bodies open with the same `+73 × 0.0` repeat
+          segment (`92 01 64`), but 21 other COM-checked columns open with a
+          repeated-0.0 run and read 0.0 at row 1 in Origin, so the run is
+          not the marker. Header bytes differ only in fields already known
+          (designation `30 61`/`21 61`, x-partner id). Next: diff the
+          sheet's windows-section column records / the `SYSTEM` block after
+          the record against a column whose row 1 is 0.0
+    - [ ] Discretewithsum `Mid1_I@5` / `Mid2_I@3` rows 1-5: Origin reads
+          missing, the FPC decode gives tiny values (~1e-57) — same
+          question (found by the 2026-11-15 row-1 sweep over 6,595 COM cells)
 
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
@@ -1129,6 +1142,39 @@ the shipped contract)
 
 ## Completed
 
+- ~~**69. Rise-time file book mis-binding**~~ (2026-11-15) — the `Residual*`
+  pages are NLFit report graphs embedded in their host workbook; their page
+  headers (`fb 0a 80 01 …`: window type `01` AND an `fb` before the `0a` —
+  21 such headers in 359 files, all in this file, no other header meets
+  either gate) opened a new span, so the host's later column records were
+  attributed to `Residual<N>`. New `opju_embedded_pages.py` drops them from
+  the span list (`opju_pages`); the folder tree still counts them. Every
+  `Residual*` binding now names its host (`Residual39` → `Book40`); the
+  host's sheet for those ids cannot be aligned, so they are omitted
+  `sheet_unknown` (residue in item 71). Corpus diff vs main: only this file
+  changes; 3 drawn curves leave (`Residual37_B` Graph40, `Residual65_B`
+  Graph66, `Residual64_B` Graph67#5) — all 3 COM-proven phantoms (Origin
+  plots no such Y there); 0 curves lost, 0 new.
+- ~~**70. Plot-level X**~~ (2026-11-15) — the curve token's record stores
+  its own X: offsets 35-36 the X column id, 37-38 `21 61` (or `21 21`).
+  New `opju_curve_token_x.py`; it outranks the designated partner, and a
+  record X of 0 (no column) / an id with no column record / another book's
+  column omits the curve (`x_not_a_column` / `x_column_unknown` /
+  `x_other_book`). Corpus diff vs main (359 files): 298 drawn curves change
+  X, 255 omitted (236 / 19), 3 re-bound curves newly drawn, 0 vanished, no
+  other field changes except 4 legends (captions of omitted / new curves).
+  COM oracle (Origin 2026b, `%(i,@D)`/`%(iX,@D)` + paired (x, y)
+  fingerprint) on every touched layer of all 22 affected files plus the
+  `21 21` layers: main 380 wrong-X + 3 phantom → branch 0 wrong, 0 phantom;
+  271 + 36 curves newly match Origin (Hc2 data's lockin graphs had been
+  undrawable: X `A` absent from those books, Origin plots `AE`/`AC`/`R`);
+  the 6 main matches that change X still match (identical columns). Fixed
+  the plan's named cases: SOP_meas Graph72 (omitted, Row Numbers), Figure4
+  Graph1 (omitted, `Book1_B` has no column record), ResonatorData
+  RawAndFit#2 (now `K`/`L`, matches), SOP_meas Graph16/Graph41#6 (omitted).
+  The `Book1D_F@27` row-1 sub-task is NOT proven and moves to item 71 with
+  its evidence. Anchored in `tests/test_io_origin_opju_token_x.py`
+  (synthetic shapes + realdata anchors).
 - ~~**Owner gate: "Send to Origin" attaches to the open Origin session**~~
   (2026-11-15) — DECIDED: keep sending into the running Origin, but confirm
   first. `runSendToOrigin` now asks "Add N workbook(s) to the Origin project

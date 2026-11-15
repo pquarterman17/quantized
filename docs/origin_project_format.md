@@ -2556,6 +2556,50 @@ right / 0 wrong (UnpolPlots, Hc2 data). 88 more files now resolve a folder tree
 whose window ordinals cover the enumerated windows exactly. No page-header
 form with a one-byte type `>= 0x80` exists in the 359-file corpus.
 
+**Embedded report-graph headers do not end a book (2026-11-15, plan item
+69).** An NLFit report embeds small graphs (`Residual<N>`) inside its host
+workbook, each with a full page header — so each one opened a new span and
+the host's later column records (its report sheet and every sheet after it)
+were attributed to `Residual<N>`, a book the importer never produces. The
+embedded header is `fb 0a 80 01 …`: window type `01` (real windows carry a
+counting serial, `0x69` … `0x95 01`) AND the byte before the `0a` is `fb`
+(it sits inside the host's report record; a real header follows zero padding
+or a thumbnail's `IEND ae 42 60 82`). Over 359 files / 3,800 headers the 21
+type-`01` headers are exactly the 21 `fb`-preceded ones, all `Residual*` of
+`Figure 3 and 4 amplitude - rise time data.opju`, each right after its host
+(`Residual39` after `Book40`). `opju_pages` now drops them
+(`opju_embedded_pages.py`); the folder tree still counts them as windows.
+Their records then belong to the host book, whose sheet for them is decided
+like any other column (§5; in that file the dataset counts do not align, so
+the curves are omitted `sheet_unknown` — Origin plots `Book40_B@3` etc., and
+quantized no longer draws `Residual37/64/65_B` there).
+
+**The curve token stores its own X (2026-11-15, plan item 70).** The token
+is the sparse form of the 519-byte curve record (§6.2 style notes); record
+offsets 35-36 hold the plotted X column's id (u16 LE) and 37-38 the pair
+`21 61` (or `21 21`) — the same `<x id> 21 61` shape a Y column record uses
+for its designated partner. The decoder used the designated partner; Origin
+plots the record's X. COM `%(iX,@D)` agrees with the record on every checked
+case (Figure4 Graph1 X `Book1_B` = id 2; ResonatorData RawAndFit#2
+`S2136_K`/`_L` = ids 43/44; Hc2 data's lockin graphs `…_AE`/`…_AC`/`…_R`
+rather than `A`; EIS Graph1 `Book1_E` via a `21 21` token; SOP_meas Graph73
+`A@5` = 2365). Corpus diff vs main (359 files): 298 drawn curves change X,
+255 are omitted (236 `x_not_a_column`, 19 `x_column_unknown`), 3 re-bound
+curves newly drawn (`2x glass Epoxy` — their record X is on the curve's
+sheet, the designated partner was not); scored per curve against Origin on
+all 22 affected files (Y values + paired (x, y) fingerprint): 380 wrong-X
+curves on main → 0 on the branch, 271 newly match, 0 new wrong, 0 phantom. X id `0` = no X column: Origin draws Graph72
+against Row Numbers and Graph16 / Graph41#6 (binned distribution layers)
+with no X dataset at all. Decode (`opju_curve_token_x.py`): the walk must
+reach offset 39 and offsets 37-38 must read `21 61` or `21 21`, else the field is
+undecoded and the partner stands (no regression); id `0` →
+omit `x_not_a_column`; an id the table does not hold → omit
+`x_column_unknown` (Figure4's `Book1_B` has no column record); another
+book's column → omit `x_other_book`. Other pairs at 37-38 (`30 61`
+on Y-error tokens) are not decoded. The `.opj` curve-anchor record
+is the same layout, so `.opj` very likely carries the X at offset 35 too —
+unverified there.
+
 **Separator 5th byte is a flag field (2026-11-14).** In
 `81|80 <id> <plen> 00 <flag> 01`, `<flag>` is not constant. Over the 244
 records that parse only with a free 5th byte: 00 ×44, 40 ×71, 80 ×82, c0 ×21,
