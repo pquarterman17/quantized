@@ -25,7 +25,7 @@ import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
 import { createAnnotationFromDialog } from "./annotationShapeActions";
-import { hitTest, pointNear } from "./curveHit";
+import { hiddenByFilter, hitTest, pointNear } from "./curveHit";
 import { openLayerContents } from "../../lib/plotSelectedTogether";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import type { PlotStageActions } from "./usePlotStageActions";
@@ -192,11 +192,13 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       includeAll: () => st.clearRowExclusions(activeDs.id),
     } : undefined;
     // Gap audit 3 N2: mask / unmask the one point under the cursor.
-    const near = activeDs && zone === "plot" ? pointNear(u, x, y, payload, plotted.length) : null;
-    const pointUnder = near !== null && activeDs ? {
-      row: near,
-      excluded: excluded.has(near),
-      toggle: () => st.setRowsExcluded(activeDs.id, excluded.has(near) ? [...excluded].filter((r) => r !== near) : [...excluded, near]),
+    const hit = activeDs && zone === "plot" ? pointNear(u, x, y, payload, plotted, activeDs, st.xKey) : null;
+    const near = hit && "row" in hit ? hit.row : null;
+    const pointUnder = hit && activeDs ? {
+      row: near ?? -1,
+      excluded: near !== null && excluded.has(near),
+      refused: "refused" in hit ? hit.refused : near !== null ? hiddenByFilter(activeDs, near, st.datasets) : undefined,
+      toggle: () => near !== null && st.setRowsExcluded(activeDs.id, excluded.has(near) ? [...excluded].filter((r) => r !== near) : [...excluded, near]),
     } : undefined;
 
     return buildPlotMenu({

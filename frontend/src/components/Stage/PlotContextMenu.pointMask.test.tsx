@@ -39,9 +39,11 @@ const win = (id: string): PlotWindow => ({
   winState: "normal", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
 });
 
-function open(x: number, y: number, ghost?: (number | null)[]) {
+function open(x: number, y: number, ghost?: (number | null)[], extra: Partial<PlotPayload> = {}) {
   const payload = {
+    data: [[0, 100, 200, 300, 400], [10, 20, 150, 40, 50], ...(ghost ? [ghost] : [])],
     series: [{ label: "A", unit: "" }, ...(ghost ? [{ label: "A (excluded)", unit: "", kind: "points", muted: true }] : [])],
+    ...extra,
   } as unknown as PlotPayload;
   render(
     <PlotContextMenu
@@ -74,6 +76,19 @@ describe("PlotContextMenu: mask one point (N2)", () => {
     open(300, 250, [null, null, 150, null, 50]);
     fireEvent.click(screen.getByText("Unmask this point (row 3)"));
     expect(useApp.getState().datasets[0].excludedRows).toEqual([4]);
+  });
+
+  it("on a decimated plot with no row map the point is refused, never guessed (review #1)", () => {
+    open(300, 250, undefined, { decimated: true });
+    expect(screen.getByText(/Can't mask this point/)).toBeInTheDocument();
+    expect(screen.queryByText(/Mask this point \(row/)).toBeNull();
+  });
+
+  it("a point hidden by a filter offers no unmask: it names the filter (review #9)", () => {
+    useApp.setState({ datasets: [{ ...ds, filter: [{ col: 0, kind: "range", min: 0, max: 100 }] }] });
+    open(300, 250, [null, null, 150, null, null]);
+    expect(screen.queryByText(/Unmask this point/)).toBeNull();
+    expect(screen.getByText(/hidden by the “A” filter of “d.csv”/)).toBeInTheDocument();
   });
 
   it("no point entry away from every point", () => {

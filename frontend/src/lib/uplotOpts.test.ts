@@ -925,7 +925,7 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select", onRangeSelect });
     const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: (px: number) => px / 100, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
-    expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5, 0.2, 0.5, false);
+    expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5, [0.2, 0.5], undefined);
   });
 
   it("ignores a zero-width (click) select", () => {

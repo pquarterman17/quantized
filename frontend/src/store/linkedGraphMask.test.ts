@@ -13,6 +13,7 @@ import { parseWorkspace } from "../lib/workspace";
 import { serializeWorkspace } from "../lib/workspaceSerialize";
 import { flushLinkedCurves } from "./linkedCurvesSync";
 import { sortWorksheetRows } from "./sortRows";
+import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
 const sheet = (id: string, n: number): Dataset => ({
@@ -63,6 +64,13 @@ describe("a mask set on a live graph lives on the source point", () => {
     expect(maskedOnGraph()).toEqual([50]);
   });
 
+  it("Undo of the mask itself unmasks both the source point and the graph", () => {
+    useApp.getState().undo();
+    flushLinkedCurves();
+    expect(maskedOnSource()).toEqual([]);
+    expect(maskedOnGraph()).toEqual([]);
+  });
+
   it("1. survives two rows inserted above it in the source (and Undo)", () => {
     step(() => useApp.getState().insertRows("s", 2, 2), [50]);
   });
@@ -88,6 +96,50 @@ describe("a mask set on a live graph lives on the source point", () => {
     flushLinkedCurves();
     expect(maskedOnSource()).toEqual([]);
     expect(maskedOnGraph()).toEqual([]);
+  });
+
+  it("a .dwk saved by the earlier build (mask on GRAPH rows) is written through to the sources on load", () => {
+    useApp.getState().clearRowExclusions(graph().id);
+    flushLinkedCurves();
+    const doc = JSON.parse(serializeWorkspace(useApp.getState())) as { datasets: { linkedCurves?: unknown; excludedRows?: number[] }[] };
+    doc.datasets.find((d) => d.linkedCurves)!.excludedRows = [5, 9]; // s row 5 (Y=50), t row 1 (Y=1010)
+    useApp.getState().loadWorkspace(parseWorkspace(JSON.stringify(doc)));
+    flushLinkedCurves();
+    expect(maskedOnSource()).toEqual([50]);
+    expect(maskedOnGraph()).toEqual([50, 1010]);
+  });
+
+  it("an earlier-build graph mask that no longer matches its source is kept on the graph, with a notice", () => {
+    useApp.getState().clearRowExclusions(graph().id);
+    flushLinkedCurves();
+    type Doc = { datasets: { id: string; linkedCurves?: unknown; excludedRows?: number[]; data: { time: number[]; values: number[][] } }[] };
+    const doc = JSON.parse(serializeWorkspace(useApp.getState())) as Doc;
+    doc.datasets.find((d) => d.linkedCurves)!.excludedRows = [5];
+    const s = doc.datasets.find((d) => d.id === "s")!; // the source gained a row since: layout moved
+    s.data.time = [...s.data.time, 8];
+    s.data.values = [...s.data.values, [80]];
+    useApp.getState().loadWorkspace(parseWorkspace(JSON.stringify(doc)));
+    flushLinkedCurves();
+    expect(maskedOnSource()).toEqual([]);
+    expect([...excludedSet(graph())]).toEqual([5]); // never dropped
+    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).toMatch(/could not be matched/);
+  });
+
+  it("a graph mask set in the same burst as a source row change is refused, never mis-mapped", () => {
+    useApp.setState((st) => ({ datasets: st.datasets.map((d) => (d.linkedCurves ? { ...d, excludedRows: [5, 6] } : d)) }));
+    useApp.setState((st) => ({ datasets: st.datasets.map((d) => (d.id === "s" ? { ...d, data: { ...d.data, values: d.data.values.map((r) => [r[0] + 1]) } } : d)) }));
+    flushLinkedCurves();
+    expect(maskedOnSource()).toEqual([51]); // only the earlier mask (row 5, now 51)
+    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).toMatch(/source rows changed at the same time/);
+  });
+
+  it("a graph mask never writes into a still-loading (preview) source", () => {
+    useApp.setState((st) => ({ datasets: st.datasets.map((d) => (d.id === "t" ? { ...d, pending: {} as never } : d)) }));
+    flushLinkedCurves();
+    useApp.getState().setRowsExcluded(graph().id, [5, 9]); // row 9 = t's row 1
+    flushLinkedCurves();
+    expect([...excludedSet(get("t"))]).toEqual([]);
+    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).toMatch(/still loading/);
   });
 
   it("round-trips a .dwk on the same point", () => {

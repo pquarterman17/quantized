@@ -18,8 +18,10 @@ type LinkWin = Pick<PlotWindow, "id" | "kind" | "linkGroup">;
 /** The link groups after linking window `id` with exactly `picked` (other
  *  plot windows): they share one group (this window's own, else the lowest one
  *  nobody else uses); windows that were in that group and are not picked
- *  leave it; picking none unlinks this window. Only CHANGED windows appear. */
-export function linkXGroups(windows: readonly LinkWin[], id: string, picked: readonly string[]): Map<string, number | null> {
+ *  leave it; picking none unlinks this window. Only CHANGED windows appear.
+ *  null when every group is taken by other windows: another group is never
+ *  borrowed (that would break up links the user did not touch). */
+export function linkXGroups(windows: readonly LinkWin[], id: string, picked: readonly string[]): Map<string, number | null> | null {
   const self = windows.find((w) => w.id === id);
   const out = new Map<string, number | null>();
   if (!self) return out;
@@ -39,6 +41,7 @@ export function linkXGroups(windows: readonly LinkWin[], id: string, picked: rea
   if (group === null) {
     group = 1;
     while (used.has(group) && group < MAX_LINK_GROUP) group++;
+    if (used.has(group)) return null;
   }
   for (const w of windows) {
     if (w.id === id || chosen.has(w.id)) set(w, group);
@@ -76,6 +79,10 @@ export async function linkXAxisWith(): Promise<void> {
   const picked = others.filter((w) => values[w.id] === true).map((w) => w.id);
   const now = useApp.getState();
   const changes = linkXGroups(now.plotWindows, id, picked);
+  if (changes === null) {
+    toast(`all ${MAX_LINK_GROUP} link groups are in use — unlink one (its windows' link button) first`, "danger");
+    return;
+  }
   if (changes.size === 0) return;
   now.recordHistory("link X axes");
   useApp.setState((st) => ({

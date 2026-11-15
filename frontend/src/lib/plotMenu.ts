@@ -134,7 +134,7 @@ export interface PlotMenuContext {
   openDetails?: (channel: number) => void;
   /** Gap audit 3 N2: the data point under the right-click (`row` = its
    *  dataset row) and a toggle masking / unmasking just that point. */
-  pointUnder?: { row: number; excluded: boolean; toggle: () => void };
+  pointUnder?: { row: number; excluded: boolean; toggle: () => void; refused?: string };
   /** Gap audit 3 N1: open Layer Contents for this graph. */
   layerContents?: () => void;
   /** Gap audit 3 N3: link this graph's X axis with other graph windows. */
@@ -277,7 +277,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   // Gap audit 2 #7: exclude / include the brushed points, Origin's "mask".
   const p = ctx.pointUnder;
   if (p) {
-    items.push({ label: p.excluded ? `Unmask this point (row ${p.row + 1})` : `Mask this point (row ${p.row + 1})`, run: p.toggle });
+    if (p.refused) items.push({ label: `Can't mask this point: ${p.refused}`, run: () => undefined, disabled: true, title: p.refused });
+    else items.push({ label: p.excluded ? `Unmask this point (row ${p.row + 1})` : `Mask this point (row ${p.row + 1})`, run: p.toggle });
     if (!(ctx.pointMask && (ctx.pointMask.selected > 0 || ctx.pointMask.excluded > 0))) items.push({ separator: true });
   }
   const m = ctx.pointMask;

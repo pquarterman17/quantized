@@ -16,13 +16,14 @@
 // Loaded on demand (the dialog chunk and the drop-onto-graph gesture).
 
 import { remapDatasetChannels, type ColumnShift } from "../lib/channelRemap";
+import { remapMetaErrorRoles } from "../lib/worksheetColumnOps";
 import { layerRowsChanged, layerRowsProblems, layerShifts, sameBinding, type LayerRow } from "../lib/layerContents";
 import { assembleLinkedCurves, curvesForDatasets, linkedGraphReaches, linkedGraphYTitle } from "../lib/linkedCurves";
 import { is2DMap } from "../lib/mapdata";
 import { primaryChannel } from "../lib/plotdataExtras";
 import { UNRESOLVED_SOURCE } from "../lib/linkedCurvesLite";
 import { drawnCurves, landGraph } from "../lib/plotSelectedTogetherRun";
-import type { Dataset, LinkedCurve } from "../lib/types";
+import type { Dataset, DataStruct, LinkedCurve } from "../lib/types";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { flushLinkedCurves, noteAssembled, watchLinkedCurves } from "./linkedCurvesSync";
 import { resolvePendingEdit } from "./pendingEdit";
@@ -56,12 +57,18 @@ export function layerCurvesOf(s: AppState, targetId: string): LinkedCurve[] {
 
 /** Apply `rows` to the graph `targetId` shows. Returns true when it changed
  *  something; a draft with problems is refused (toast) and changes nothing. */
-export function applyLayerContents(targetId: string, rows: readonly LayerRow[]): boolean {
+export function applyLayerContents(targetId: string, rows: readonly LayerRow[], drafted?: readonly LinkedCurve[]): boolean {
   flushLinkedCurves(); // a mask just set on the graph reaches its sources first
   const s = useApp.getState();
   const target = s.datasets.find((d) => d.id === targetId);
   if (!target) return false;
   const old = layerCurvesOf(s, targetId);
+  // The draft's `from` indices name the curves as the dialog saw them: if the
+  // graph changed since (an Undo, a drop), they could land on other curves.
+  if (drafted && JSON.stringify(drafted) !== JSON.stringify(old)) {
+    toast(`“${target.name}” changed while Layer Contents was open — reopen it to edit the current curves`, "danger");
+    return false;
+  }
   if (!layerRowsChanged(old, rows)) return false;
   const problems = layerRowsProblems(old, rows, s.datasets, (id) => !!target.linkedCurves && linkedGraphReaches(s.datasets, id, targetId));
   if (problems.length > 0) {
@@ -86,7 +93,9 @@ function applyToGraph(target: Dataset, old: readonly LinkedCurve[], rows: readon
     const ds = cur.datasets.find((d) => d.id === id);
     if (!ds?.linkedCurves) break;
     const linkedCurves = shiftCurves(ds.linkedCurves, shift);
-    const next: Dataset = { ...ds, ...remapDatasetChannels(ds, shift), linkedCurves, data: assembleLinkedCurves(linkedCurves, cur.datasets, ds.data) };
+    // No reassembly per shift (one Apply stays O(rows x curves)): the data is
+    // rebuilt once below; only its column-indexed error pairings move now.
+    const next: Dataset = { ...ds, ...remapDatasetChannels(ds, shift), linkedCurves, data: shiftMeta(ds.data, shift) };
     const datasets = cur.datasets.map((d) => (d.id === id ? next : d));
     const patch = { datasets, ...columnRemovalRefsPatch(cur, id, shift, datasets) };
     out = { ...out, ...patch };
@@ -94,7 +103,10 @@ function applyToGraph(target: Dataset, old: readonly LinkedCurve[], rows: readon
   }
   // The draft's bindings (re-bound and added curves), assembled from the live sources.
   const curves = rows.map((r) => r.curve);
-  const ds = cur.datasets.find((d) => d.id === id)!;
+  // A curve re-bound to other data loses what described the OLD data: its
+  // typed legend label and any error-bar pairing on its column.
+  const rebound = new Set(rows.flatMap((r, i) => (r.from !== null && !sameBinding(r.curve, old[r.from]) ? [i] : [])));
+  const ds = withoutPairings(cur.datasets.find((d) => d.id === id)!, rebound);
   // The mask lives on the source points (lib/linkedCurves.linkedGraphMask), so it follows every curve.
   const graph = noteAssembled({ ...ds, linkedCurves: curves, data: assembleLinkedCurves(curves, cur.datasets, ds.data) }, cur.datasets);
   const datasets = cur.datasets.map((d) => (d.id === id ? graph : d));
@@ -102,17 +114,45 @@ function applyToGraph(target: Dataset, old: readonly LinkedCurve[], rows: readon
   const added = rows.flatMap((r, i) => (r.from === null ? [i] : []));
   const withAdded = (keys: number[] | null): number[] | null => (keys === null ? null : [...keys, ...added]);
   const plotWindows = (out.plotWindows ?? cur.plotWindows).map((w) =>
-    w.datasetId === id && w.view.yKeys !== null ? { ...w, view: { ...w.view, yKeys: withAdded(w.view.yKeys) } } : w,
+    w.datasetId === id ? { ...w, view: { ...w.view, yKeys: withAdded(w.view.yKeys), ...forgetColumns(w.view, rebound) } } : w,
   );
   useApp.setState({
     ...out,
     datasets,
     plotWindows,
-    ...(cur.activeId === id ? { yKeys: withAdded(cur.yKeys) } : {}),
+    ...(cur.activeId === id ? { yKeys: withAdded(cur.yKeys), ...forgetColumns(cur, rebound) } : {}),
     ...(autoTitle ? { yAxisLabel: linkedGraphYTitle(curves, datasets) } : {}),
   });
   watchLinkedCurves();
   toast(`updated “${target.name}”: ${curves.length} curve${curves.length === 1 ? "" : "s"} — Undo restores the previous layer`, "ok");
+}
+
+/** `data` with its column-indexed error pairings moved by one shift. */
+function shiftMeta(data: DataStruct, shift: ColumnShift): DataStruct {
+  const roles = data.metadata?.error_roles;
+  return Array.isArray(roles) ? { ...data, metadata: { ...data.metadata, error_roles: remapMetaErrorRoles(roles, shift) } } : data;
+}
+
+const touches = (cols: Set<number>) => (b: { channel?: unknown; target?: unknown }) =>
+  cols.has(b.channel as number) || cols.has(b.target as number);
+
+/** The graph without any error pairing (declared or confirmed) on `cols`. */
+function withoutPairings(ds: Dataset, cols: Set<number>): Dataset {
+  if (cols.size === 0) return ds;
+  const roles = ds.data.metadata?.error_roles;
+  const meta = Array.isArray(roles)
+    ? { ...ds.data, metadata: { ...ds.data.metadata, error_roles: roles.filter((r) => !touches(cols)(r as object)) } }
+    : ds.data;
+  const errorRoles = ds.errorRoles?.filter((b) => !touches(cols)(b));
+  return { ...ds, data: meta, ...(ds.errorRoles ? { errorRoles: errorRoles?.length ? errorRoles : undefined } : {}) };
+}
+
+/** A view's typed labels and error keys, minus those of `cols`. */
+function forgetColumns(v: Pick<AppState, "seriesLabels" | "errKeys">, cols: Set<number>): Pick<AppState, "seriesLabels" | "errKeys"> | object {
+  if (cols.size === 0) return {};
+  const seriesLabels = Object.fromEntries(Object.entries(v.seriesLabels).filter(([k]) => !cols.has(Number(k))));
+  const errKeys = Object.fromEntries(Object.entries(v.errKeys).filter(([k, e]) => !cols.has(Number(k)) && !cols.has(e)));
+  return { seriesLabels, errKeys };
 }
 
 function applyToPlain(target: Dataset, old: readonly LinkedCurve[], rows: readonly LayerRow[]): void {
@@ -155,6 +195,13 @@ export async function addDatasetsToGraph(targetId: string, ids: readonly string[
   const curves = curvesForDatasets(usable, (d) => primaryChannel(d.data));
   if (!target || curves.length === 0) {
     toast(target ? "nothing to plot from the dropped data (a map, or the graph itself)" : "that graph is gone", "danger");
+    return false;
+  }
+  // A plain dataset's graph is the focused window's drawn curves: if focus
+  // moved to another window while the drop loaded, they are not the ones the
+  // data was dropped on -- never build a graph from the wrong window.
+  if (!target.linkedCurves && useApp.getState().activeId !== targetId) {
+    toast(`the drop on “${target.name}” was not applied: another graph took focus while it loaded — drop it again`, "danger");
     return false;
   }
   return appendCurvesTo(targetId, curves);

@@ -88,7 +88,7 @@ export default function LayerContentsDialog({ onClose }: { onClose: () => void }
     setRows((rs) => [...rs, ...curves.map((curve) => ({ curve, from: null }))]);
   };
   const apply = () => {
-    if (!changed || applyLayerContents(target.id, rows)) onClose();
+    if (!changed || applyLayerContents(target.id, rows, old)) onClose();
   };
 
   return (

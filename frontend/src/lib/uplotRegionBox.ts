@@ -116,14 +116,15 @@ export function regionSelectPick(
 
 /** The Select Rows tool's drag-END pick (gap audit 3 N2): an x-band as
  *  before, or -- once the vertical span clears `MIN_BOX_HEIGHT_PX` -- a 2-D
- *  box with its y edges on `regionYScale`'s axis, whose rows are those with a
- *  point inside it. The picked area stays painted (the brush's feedback): an
- *  x-band repainted full height, as it always looked, a box as drawn. */
+ *  box with its y edges on EACH Y axis drawn (so a Y2 curve's points inside
+ *  the box count too), whose rows are those with a point inside it. The
+ *  picked area stays painted (the brush's feedback): an x-band repainted full
+ *  height, as it always looked, a box as drawn. */
 export function selectBoxPick(
   u: uPlot,
   payload: PlotPayload,
   hasY2: boolean,
-  onRangeSelect: (x0: number, x1: number, y0?: number, y1?: number, onY2?: boolean) => void,
+  onRangeSelect: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void,
 ): void {
   const { left, width } = u.select;
   const x0 = u.posToVal(left, "x");
@@ -134,7 +135,8 @@ export function selectBoxPick(
     onRangeSelect(x0, x1);
     return;
   }
-  const scale = regionYScale(payload, hasY2);
   const top = u.select.top ?? 0;
-  onRangeSelect(x0, x1, u.posToVal(top, scale), u.posToVal(top + h, scale), scale === "y2");
+  const edges = (scale: string): [number, number] => [u.posToVal(top, scale), u.posToVal(top + h, scale)];
+  const primary = !hasY2 || regionYScale(payload, hasY2) === "y";
+  onRangeSelect(x0, x1, primary ? edges("y") : undefined, hasY2 ? edges("y2") : undefined);
 }

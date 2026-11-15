@@ -80,6 +80,7 @@ export interface PlotPayload {
   xIsDate?: boolean;
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
+  rowIds?: number[]; // a reduced (decimated/windowed) payload: row i is dataset row rowIds[i] (lib/plotRowMap.ts)
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.
@@ -270,7 +271,7 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
-    decimated: r.decimated ?? false,
+    decimated: r.decimated ?? false, ...(r.rows ? { rowIds: r.rows } : {}),
     window:
       r.window && r.window.x_min != null && r.window.x_max != null
         ? [r.window.x_min, r.window.x_max]

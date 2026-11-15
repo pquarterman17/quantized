@@ -27,13 +27,18 @@ beforeEach(() => {
 
 describe("linkXGroups", () => {
   it("joins the picked windows in a group nobody else uses, and drops unpicked members", () => {
-    expect([...linkXGroups([win("a"), win("b"), win("c", 1)], "a", ["b"])]).toEqual([["a", 2], ["b", 2]]);
-    expect([...linkXGroups([win("a", 1), win("b", 1), win("c", 1)], "a", ["c"])]).toEqual([["b", null]]);
+    expect([...linkXGroups([win("a"), win("b"), win("c", 1)], "a", ["b"])!]).toEqual([["a", 2], ["b", 2]]);
+    expect([...linkXGroups([win("a", 1), win("b", 1), win("c", 1)], "a", ["c"])!]).toEqual([["b", null]]);
+  });
+
+  it("never borrows another link group when all are taken: refuses instead", () => {
+    const busy = [win("a"), win("b"), win("c", 1), win("d", 1), win("e", 2), win("f", 2), win("g", 3), win("h", 3)];
+    expect(linkXGroups(busy, "a", ["b"])).toBeNull();
   });
 
   it("picking none unlinks this window (and a partner left alone)", () => {
-    expect([...linkXGroups([win("a", 1), win("b", 1)], "a", [])]).toEqual([["a", null], ["b", null]]);
-    expect([...linkXGroups([win("a", 1), win("b", 1), win("c", 1)], "a", [])]).toEqual([["a", null]]);
+    expect([...linkXGroups([win("a", 1), win("b", 1)], "a", [])!]).toEqual([["a", null], ["b", null]]);
+    expect([...linkXGroups([win("a", 1), win("b", 1), win("c", 1)], "a", [])!]).toEqual([["a", null]]);
   });
 });
 

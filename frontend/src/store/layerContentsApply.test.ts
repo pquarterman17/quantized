@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { layerRowsOf, newCurve, type LayerRow } from "../lib/layerContents";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Dataset } from "../lib/types";
-import { applyLayerContents, appendCurvesTo } from "./layerContentsApply";
+import { addDroppedToGraph, applyLayerContents, appendCurvesTo } from "./layerContentsApply";
 import { flushLinkedCurves } from "./linkedCurvesSync";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
@@ -114,5 +114,57 @@ describe("Layer Contents apply", () => {
     appendCurvesTo(graph().id, [newCurve(c, null, 1)]);
     expect(curveIds()).toEqual(["a0", "b0", "c0", "c1"]);
     expect(useApp.getState().yKeys).toEqual([0, 2, 3]);
+  });
+});
+
+describe("Layer Contents review fixes (gap audit 3 N1)", () => {
+  const roles = () => graph().data.metadata.error_roles;
+  const pair = (channel: number, target: number) => ({ channel, target, axis: "y", side: "both" });
+
+  it("confirmed error pairings (metadata.error_roles) follow their curves, and go with a removed one", () => {
+    useApp.setState((st) => ({
+      datasets: st.datasets.map((d) => (d.linkedCurves ? { ...d, data: { ...d.data, metadata: { ...d.data.metadata, error_roles: [pair(1, 0)] } } } : d)),
+    }));
+    const rows = layerRowsOf(graph().linkedCurves!);
+    applyLayerContents(graph().id, [rows[2], rows[1], rows[0]]); // c, b, a
+    expect(roles()).toEqual([pair(1, 2)]);
+    applyLayerContents(graph().id, layerRowsOf(graph().linkedCurves!).slice(0, 2)); // drop a (the target)
+    expect(roles()).toEqual([]);
+  });
+
+  it("a re-bound curve drops its typed legend label and its error-bar pairing, keeps its style", () => {
+    useApp.setState((st) => ({
+      seriesLabels: { 0: "Sample A, 300 K", 2: "third" },
+      errKeys: { 0: 1 },
+      datasets: st.datasets.map((d) => (d.linkedCurves ? { ...d, errorRoles: [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }] } : d)),
+    }));
+    const rows = layerRowsOf(graph().linkedCurves!);
+    rows[0] = { ...rows[0], curve: newCurve(b, null, 1) };
+    applyLayerContents(graph().id, rows);
+    const s = useApp.getState();
+    expect(s.seriesLabels).toEqual({ 2: "third" });
+    expect(s.errKeys).toEqual({});
+    expect(graph().errorRoles).toBeUndefined();
+    expect(s.seriesStyles[0]).toEqual({ color: "#ff0000" });
+    expect(graph().data.labels[0]).toBe("Sb: Z"); // the auto label follows the new data
+  });
+
+  it("a drop onto a plain graph whose window lost focus while loading is refused, not misapplied", async () => {
+    useApp.setState({ activeId: "a", xKey: null, yKeys: [0], seriesOrder: null, hiddenChannels: [] });
+    const before = useApp.getState().datasets.length;
+    const pending = addDroppedToGraph("a", { book: "", dataset: "b" });
+    useApp.setState({ activeId: "c" }); // focus moves before the drop resolves
+    expect(await pending).toBe(false);
+    expect(useApp.getState().datasets).toHaveLength(before);
+    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).toMatch(/took focus while it loaded/);
+  });
+
+  it("refuses a draft made against curves that have since changed", () => {
+    const drafted = graph().linkedCurves!;
+    const rows = layerRowsOf(drafted);
+    appendCurvesTo(graph().id, [newCurve(c, null, 1)]); // the graph moves on
+    expect(applyLayerContents(graph().id, [rows[1], rows[0]], drafted)).toBe(false);
+    expect(curveIds()).toEqual(["a0", "b0", "c0", "c1"]);
+    expect(useToasts.getState().toasts.map((t) => t.msg).join(" ")).toMatch(/changed while Layer Contents was open/);
   });
 });
