@@ -60,40 +60,66 @@ tools/plot_corpus/origin_build.py  (COM) book per family → graph per plot type
 passing specimens → test-data/origin/generated/<type>/<family>/
 ```
 
-### Plot-type codes seen in the 2026-11-15 visual probe
+### Plot-type codes (Origin 2026b, measured 2026-11-15)
 
-Measured with `plotxy plot:=N` on 4 columns. `plotxy` reports success for ANY
-code, so the PNG is the only proof.
+`plotxy plot:=N` reports success for ANY N (even 999), and no LabTalk or COM
+property reports a plot's type. The readback is Origin C
+`DataPlot::GetPlotType()` (`tools/plot_corpus/qz_oracle.c`), checked against
+the exported PNGs. "Menu recipe" is Origin's own Plot-menu command from its
+installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 
-| Code | Plot type |
-|---|---|
-| 200 | line |
-| 201 | scatter |
-| 202 | line+symbol |
-| 203 | grouped column |
-| 204 | area |
-| 205 | high-low bars |
-| 206 | box |
-| 207 | floating column |
-| 213 | stacked column |
-| 214 | stacked area |
-| 215 | horizontal bar |
-| 216 | stacked bar |
-| 219 | histogram |
-| 120 / 123 | bubble |
-| 122 | doughnut |
-| 225 | 3D pie |
-| 114 / 218 | vector |
-| 108 | drop lines |
-| 210 / 212 | 3D (out of scope) |
+| Read-back type | Plot type | Menu recipe (`worksheet -p`) | Notes |
+|---|---|---|---|
+| 200 | line | `200 Line` | also polar (`192 Polar`), 2D stacked/offset lines (`200 OffsetStackY`) and steps |
+| 201 | scatter | `201 Scatter` | also bubble (`193 bubble`), colour-mapped (`247 colormapped`) and ternary (`245 Ternary`) |
+| 202 | line+symbol | `202 LineSymb` | double-Y (`? DOUBLEY`) is two layers of 202 |
+| 203 | column | `203 Column` | |
+| 204 | area | `204 Area` | |
+| 205 | high-low-close | `205 HLClose` | |
+| 206 | box | `206 Box` | violin (`206 Violin`) and strip (`206 ColumnScatter`) read back the SAME 206; the template is what differs |
+| 207 | floating column | `207 FloatCol` | needs >= 2 Y columns |
+| 208 | vector XYAM | `208 vector` | |
+| 213 | stacked column | `213 StackColumn` | |
+| 214 | stacked area | `214 StackArea` | |
+| 215 | bar (horizontal) | `215 Bar` | |
+| 216 | stacked bar | `216 StackBar` | |
+| 219 | histogram | `219 Hist` | |
+| 220 | image (matrix) | `220 image` | |
+| 226 | contour (matrix) | `226 Contour` | |
+| 243 | contour (XYZ) | `243 TriContour` | |
+| 105 | heatmap (matrix) | `105 HeatMap` | `105 HeatMap` on an XYZ sheet made no graph |
+| 231 / 233 | Y- / X-error bars | added for Y-error / X-error columns | `plotxy plot:=231` on a sheet with no error column KILLED Origin |
+| 232 | data labels | `plotxy` scan | |
+| 241, 249 | fill area between curves | `plotxy` scan | |
 
-Codes that need XYZ, matrix or template input were blank: contour, heatmap,
-ternary, polar, waterfall and violin. Codes 231+ were not reached.
+- **Line connect is not a plot type.** Steps set `layer.plotN.line.connect`:
+  1 none, 2 straight, 3/4 2-/3-point segment, 7 step horizontal, 8 step
+  vertical, 9/10 centred steps. `set %C -l` numbers these differently.
+- **Polar and ternary are layer coordinate systems.** Their plots read back
+  as 200/201, so an importer must read the layer, not the plot byte.
+- **The type is one byte.** Codes 256 and above read back mod 256. The
+  exceptions are template-level ids that map onto base types:
+  - 263 → 206 (split violin);
+  - 264 / 271 → 104;
+  - 265-268 → 225 (pie family);
+  - 269 → 203 (radial bar);
+  - 270 → 213;
+  - 343 → 120;
+  - 344 / 345 → 123;
+  - 349 → 200 (colour-mapped line).
+- **Codes 234-239, 244 and 250-255** are accepted with XY input and draw
+  nothing (234, 235, 244, 250-255) or 3D-style lines (236-239). Their input
+  shape is still unknown.
+- **Out of scope (3D).** Origin 2026b's `Waterfal` template is the 3D
+  waterfall, and `247 CMAP` draws 3D walls (it read back 204).
+- Earlier visual codes kept from the first probe: 120/123 bubble map, 122
+  doughnut/sunburst, 225 3D pie, 114 compass, 218 vector XYXY (made no
+  graph from a 4-column XY selection), 108 polar tree, 210/212 3D.
 
 ### Dependency map
 
-- Item 1 is first: the harness everything else uses.
-- Items 2 and 3 need item 1. Items 2 and 3 are independent of each other.
+- Items 2 and 3 use the shipped item 1 harness and are independent of each
+  other.
 - Item 4 needs 2 and 3.
 - Items 5-8 are per plot-type family and parallelizable. Each one runs its
   import fixes (this session, COM) and books its creation gaps (cloud).
@@ -121,33 +147,6 @@ ternary, polar, waterfall and violin. Codes 231+ were not reached.
 ---
 
 ## Tier 1 — High Impact
-
-1. **Plot-corpus harness** — the generator, the Origin builder and the oracle
-   record
-   - [ ] `tools/plot_corpus/generate.py`: seeded data families, each with a
-         `.truth.json`. Families:
-         - clean, noisy, gaps (NaN), masked rows;
-         - descending X, non-monotonic X (loop), multi-X `X,Y,X,Y`;
-         - log-range, negative, huge/tiny magnitudes;
-         - text categories, dates;
-         - 100k points, single point, duplicates;
-         - Unicode names and units, error columns;
-         - many sheets, a deleted sheet;
-         - XYZ / matrix for contour, heatmap and ternary.
-   - [ ] `tools/plot_corpus/origin_build.py` (COM): build each (family ×
-         type), set known styles, save `.opju`, export PNG, and write
-         `oracle.json`:
-         - `%Z` datasets per layer;
-         - plot type read back, not as requested;
-         - axis from/to/type;
-         - colour, symbol and line style per curve.
-         Per-file timeout; exact-PID cleanup.
-   - [ ] Probe the plot-type ids not yet identified (contour, heatmap,
-         ternary, polar, waterfall, violin, step, strip, bubble/colour-mapped
-         scatter; codes 231+) with the right input shapes and record them in
-         this plan
-   - [ ] Find a LabTalk/COM readback of a plot's actual type, since `plotxy`
-         accepts any code
 
 2. **Check 1 — Origin → quantized import scorer**
    - [ ] Score each specimen's import against `oracle.json`:
@@ -188,4 +187,37 @@ ternary, polar, waterfall and violin. Codes 231+ were not reached.
 
 ## Completed
 
-- (none yet)
+- ~~**#1 Plot-corpus harness**~~ (2026-11-15). Built in `tools/plot_corpus/`
+  (README there), with `tests/test_plot_corpus_tools.py` running without
+  Origin.
+  - `generate.py` / `families.py` write 23 seeded families, each with a
+    `.truth.json`. Output is byte-identical for the same seed. Designations,
+    display units and the Origin date epoch are imported from quantized.
+    Each family asserts its own edge case. "Large" is 20,000 points.
+  - `origin_build.py` builds every applicable (family × type) with Origin's
+    own menu recipe, applies known styles, saves `.opju`, exports a PNG, and
+    writes an `oracle.json` read back from Origin. That readback covers plot
+    type, `%Z` per layer, `[Book]Sheet!Col` and X dataset per plot, axis
+    from/to/type, colour, line width/connect/dash, symbol kind/size, and the
+    book's sheets.
+  - `origin_session.py` refuses to start beside another Origin. It records
+    the `-Embedding` PID with its creation time and kills only that exact
+    process, from `finally`, `atexit`, a KILL_ON_JOB_CLOSE job object and a
+    per-specimen deadline. In the scan the deadline caught Origin dying on
+    code 231, and the run continued on a fresh instance.
+  - **Plot-type readback found:** Origin C `DataPlot::GetPlotType()`, loaded
+    with `run.LoadOC` (backslash path, CRLF file). LabTalk `layer.plotN.*`,
+    `get %C -a..z`, the COM `DataPlot`/`Theme` tree and embedded `originpro`
+    all lack a type property. Verified against PNGs; see the code table
+    above.
+  - **Codes probed:** contour, heatmap, ternary, polar, violin, step, strip,
+    bubble/colour-mapped, and codes 231-420. All recorded in the table above.
+  - **Corpus run.** 233 specimens across 25 types × 23 families (in
+    `$SCRATCH/plot_corpus/corpus`, NOT in test-data; item 8 commits them).
+    231 are ok and every read-back type is in the expected set. The other 2
+    are input refusals: floating column needs >= 2 Y, and `duplicates` and
+    `single_point` have one Y.
+  - **Student refused no type.** What does not reach the 2D corpus is a
+    recipe or scope matter, not a refusal: heatmap from an XYZ sheet made no
+    graph (heatmap is built from the matrix family); the waterfall template
+    is 3D; vector XYXY (218) made no graph from the probe selection.
