@@ -120,7 +120,8 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 
 - Items 2 and 3 use the shipped item 1 harness and are independent of each
   other.
-- Item 4 needs 2 and 3.
+- Item 4 (done) merged 2 and 3; re-run it with `tools/plot_corpus/scorecard.py`
+  after any fix to see which gaps closed.
 - Items 5-8 are per plot-type family and parallelizable. Each one runs its
   import fixes (this session, COM) and books its creation gaps (cloud).
 - Item 9 (round trip quantized → Origin) is a later batch and reuses item 1.
@@ -151,8 +152,7 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
 
 ## Tier 1 — High Impact
 
-4. **First scorecard** — every 2D type × family, both checks, with a review
-   page of side-by-side PNGs for the owner
+None open.
 
 ## Tier 2 — Medium Impact
 
@@ -191,7 +191,11 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
          label record after the record, sheet by the window's sheet headers
          + the id table's sheet map; a sheet is labelled only when every
          column is covered). Scorer: column metadata 0 -> 1,609 match /
-         0 wrong (108 omitted); error bars 0 -> 12 match.
+         0 wrong (108 omitted); error bars 0 -> 12 match. Re-measured on main
+         `4b544c8e` (2026-11-15, after #704/#706/#707/#709): 1,709 match /
+         0 wrong / 8 omitted -- the 100 closed by the Numeric-format column
+         records, designation codes and name-bound labels; the 8 left are
+         `label_is_short_name` (text-category X x5, ternary x1, see item 6).
    - [x] ~~**Error-bar plots decode as curves**~~ FIXED 2026-11-15 (own
          commit). The curve token's plot byte 76 = 0xe7 / 0xe9 is Origin's
          plot 231 / 233 (y / x error bar); such a curve is omitted
@@ -215,16 +219,44 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
          corpus records), so the line style is withheld
          (`opju_plot_gates`); the curve stays bound. Drawing true steps is
          the "no quantized mapping for step" sub-task below.
-   - [ ] **Phantom sheet from a deleted sheet.** `deleted_sheet` imports the
-         deleted sheet's data as book `DelA@2` (wrong book name too) and names
-         the survivor `Del@3`. 5 specimens (line, scatter, line+symbol, step,
-         area). Anchor `line/deleted_sheet`.
+   - [x] ~~**Phantom sheet from a deleted sheet.**~~ FIXED 2026-11-15 with
+         the stacked `CS` book (item 6, `opju_loose_books`): Origin renames a
+         deleted sheet's datasets into a window-less book (`DelA_A@2`,
+         COM `doc -e S`), which is no book in Origin's `WorksheetPages`; it
+         is dropped (`loose_books_omitted`). The survivor's datasets are
+         Origin's own `Del_A@3` / `Del_B@3`, so its key `Del@3` is Origin's
+         sheet id, not a wrong name. Scorer: 5 phantom sheets -> 0.
+   - [ ] **Sheet display names.** A `Book@N` pseudo-book is titled
+         `"<Book> (sheet N)"` from its dataset id; Origin's sheet name
+         (`Keep3`, COM `Layers.Item(j).Name`) is not decoded for `.opju`.
+         The window section writes one `82 02 50 64` sheet header per live
+         sheet (`opju_sheet_segments`), the name ~65 bytes after it, and
+         segments map to ids. Needs a COM sheet-name / `%(i,@D)` dump of
+         every multi-sheet book before any title changes.
+   - [ ] **Loose datasets Origin plots** (real corpus, COM `%Z`):
+         `Book1A_D` / `Book1B_D` (`迭代次数`), `Book2_C` (`30流场`),
+         `Book2_C@3` (`50流场`) are drawn by graphs whose curves the figure
+         decode does not bind, and are no longer Library books. When those
+         curves decode they need their data without a Library book.
    - [ ] **Graph layer not recovered** (`graphs_not_recovered`, no axis
-         record decoded): line / line+symbol / scatter / step x {duplicates,
-         huge_tiny, log_range, masked_rows, multi_x}; area x {huge_tiny,
-         log_range, masked_rows}; double_y, stacked_area, stacked_lines_offset
-         x {log_range, masked_rows}. Where a layer IS recovered the axes are
-         exact: 804 / 804 from/to/log match, 0 wrong.
+         record decoded). Combined scorecard 2026-11-15 (main `4b544c8e`):
+         line / line+symbol / scatter / step x {duplicates, huge_tiny,
+         log_range, multi_x}; area x {huge_tiny, log_range}; double_y,
+         stacked_area, stacked_lines_offset x {log_range}. `masked_rows` is
+         recovered everywhere now (struck from the lists above). Where a layer
+         IS recovered the axes are exact: 870 / 870 from/to/log match, 0
+         wrong. Scorecard: 114 of 233 specimens still carry an omitted
+         curves cell, 93 an omitted axes cell.
+   - [ ] **double_y: layer exists but is not recovered on 7 / 8 specimens**
+         (clean, descending_x, masked_rows, nan_gaps, negative, noisy,
+         unicode_names; reason `graph_layer_not_recovered` without the
+         `graphs_not_recovered` page report, so a different mechanism from the
+         bullet above). Curves and axes omitted on all 7. Anchor
+         `double_y/clean`.
+   - [ ] **area/multi_x draws Y against the wrong X** (the only `wrong` cell
+         in the import scorecard: `MultiX` Y=B bound to X=C, Origin X=A).
+         The decoded binding is right; the drawn view picks C. Anchor
+         `area/multi_x`.
    - [ ] **No quantized mapping for step, area, stacked area, waterfall
          (offset lines)** even once bindings decode: `OriginCurve.style` has
          only line / scatter / line+symbol, and there is no dash field (the
@@ -234,20 +266,39 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
    wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers.
    Measured by the item 2 scorer (2026-11-15); bindings and metadata are
    item 5's first two gaps.
-   - [ ] **Phantom book: the stacked plots' hidden helper book `CS`** (the
-         cumulative sums, 3 columns, flagged `complex_imaginary`) is listed
-         as a Library book though Origin's own book list does not have it.
-         26 specimens: every stacked_area, stacked_column and stacked_bar.
-         Anchor `stacked_column/clean`.
-   - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33.**
-         Column, bar, stacked column/bar and floating column: not recovered
-         for {clean, descending_x, huge_tiny, masked_rows, nan_gaps, noisy};
-         histogram for {huge_tiny, masked_rows}. Anchor `box/clean`.
+   - [x] ~~**Phantom book: the stacked plots' hidden helper book `CS`**~~
+         FIXED 2026-11-15. `CS_1..n` are loose datasets: no window owns them,
+         COM `WorksheetPages` / `doc -e W` never list `CS`, and the graph's
+         `%Z` plots the source sheet, never `CS` (35 / 35 stacked + deleted
+         specimens: 0 loose datasets plotted). New `opju_loose_books` drops
+         every book whose name is no window's (case-insensitive, as Origin's
+         names are; fail closed when the file has no windows or every book
+         is loose). Scorer: sheets phantom 31 -> 0, every other cell
+         unchanged. Real corpus vs main (359 `.opju`, COM on all 22 changed
+         files): 111 books dropped (`CS`, `TableN`, `<Book>A` leftovers),
+         0 of them a `WorksheetPages` book, 0 COM books vanished, 0 decoded
+         curves / labels / values changed, 1 primary book now a real one
+         (`CompareRc`: `Table1` -> `Book1`).
+   - [ ] **Residual phantom books (pre-existing).** Kept although COM lists
+         no such book: 184 `TableN` books in 10 files (they DO have a window
+         header -- table objects, not `WorksheetPages`; e.g. `Hc2 data`
+         `Table1..`, `Figure 3 and 4 amplitude` 68) and 35 books of 5
+         graph-only projects (all loose, kept by the fail-closed rule:
+         `BD_*_all`, `RSOS_*_all`, `F72_...TB_Product`).
+   - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33**
+         (re-measured 2026-11-15, unchanged). Column, bar, stacked column/bar
+         and floating column: not recovered for {clean, descending_x,
+         huge_tiny, masked_rows, nan_gaps, noisy}; histogram for {huge_tiny}
+         only (masked_rows now recovered), but 10 / 11 histograms decode no
+         curve bindings (`no_curve_bindings_decoded`). Anchor `box/clean`.
    - [ ] **Plot type: 0 decoded on `.opju`** (203, 207, 213, 215, 216, 206,
          219 all draw the default line view); `.opju` sets no `plotType`.
+         Scorecard: 174 / 233 specimens omit plot type; the 43 matches are
+         the default line view on line-like types.
    - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
          plots against the text categories; quantized draws against the row
-         index.
+         index. The same 5 specimens hold the only category-family omitted
+         labels (`label_is_short_name`).
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
    multi-panel. Measured by the item 2 scorer (2026-11-15).
@@ -259,7 +310,9 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
          `GetPlotType()` reads 201 for them). Book: decode the size / colour
          modifier column. Anchor `bubble/clean`.
    - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
-         (6 / 6 each), but quantized draws Y and Z as lines against X.**
+         (axes match on all 4 specimens incl. polar), but no curve binding
+         decodes (`no_curve_bindings_decoded`; matrix: graph page unattributed,
+         id table empty) so quantized draws Y and Z as lines against X.**
          Heatmap (matrix): no layer recovered. Matrix cells import exactly
          (800 / 800).
    - [ ] **Polar and offset-stacked (waterfall) layers are not rebuilt.**
@@ -417,3 +470,19 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
   - Review page with Origin's PNG beside quantized's for every specimen:
     `scratch_run.py --out <review>` writes `index.html`, `scorecard.md`,
     `scorecard.json` (run output stays out of the repo).
+- ~~**#4 First scorecard**~~ (2026-11-15). `tools/plot_corpus/scorecard.py`
+  (+ `scorecard_page.py`) merges check 1 and check 2 into one row per
+  type x family: per import dimension (curves / plot type / axes / styles /
+  labels / values) the worst-cell verdict wrong > phantom > omitted > match
+  with counts, check 2 built / match / unbuildable, and the owning plan
+  item. Writes `scorecard.md`, `scorecard.json` and an owner review page
+  (`index.html`: Origin PNG | quantized import | quantized from scratch;
+  the import column is a placeholder because `score_import.py` scores the
+  decoded figure and the frontend's drawn curves but rasterises nothing).
+  Merge logic unit-tested (`tests/test_plot_corpus_scorecard.py`). Run on
+  main `4b544c8e`, 233 specimens: import curves 116 specimens match / 1
+  wrong / 114 omitted, plot type 43 match / 14 wrong (bubble + colour-
+  mapped drawn as scatter) / 174 omitted, axes 138 / 0 / 93 omitted, styles
+  58 / 0 / 102 omitted (partly the missing dash field), labels 223 / 0 / 6
+  omitted, values 231 / 231 match, phantoms 0; from scratch 191 built, 158
+  match, 39 unbuildable (+1 failed build, 2 specimens Origin refused).

@@ -59,7 +59,11 @@ from quantized.io.origin_project.opju_book_checks import (
 )
 from quantized.io.origin_project.opju_codec import scan_marked_columns, shared_fpc_decodes
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
-from quantized.io.origin_project.opju_record_meta import record_column_metadata
+from quantized.io.origin_project.opju_loose_books import loose_books
+from quantized.io.origin_project.opju_record_meta import (
+    contradicted_books,
+    record_column_metadata,
+)
 from quantized.io.origin_project.opju_reports import scan_marked_report_columns
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 from quantized.io.origin_project.opju_worksheet import MatrixBook, scan_worksheet
@@ -155,17 +159,30 @@ def _window_metadata(
         if wide is not None and all(wide.columns.get(c) == m for c, m in base.columns.items()):
             columns = {**wide.columns, **base.columns}
         merged[book] = BookMeta(base.short, base.long_name, columns)
-    unlabelled = {k: v for k, v in columns_by_book.items() if k not in merged and v}
-    if unlabelled:  # non-Text&Numeric columns: no markers (opju_record_meta)
-        merged.update(_record_metadata(b, unlabelled))
-    return {k: merged[k] for k in columns_by_book if k in merged}
+    return _bind_by_record(b, merged, columns_by_book)
 
 
-def _record_metadata(b: bytes, wanted: dict[str, list[str]]) -> dict[str, BookMeta]:
+def _bind_by_record(
+    b: bytes, positional: dict[str, BookMeta], columns_by_book: dict[str, list[str]]
+) -> dict[str, BookMeta]:
+    """Labels bound to columns BY NAME (``opju_record_meta``) where the
+    book's own column records cover the sheet; elsewhere the positional
+    reading, unless a record in the book's window contradicts it (then the
+    sheet stays unlabelled). Decode-plan item 73."""
+    wanted = {k: v for k, v in columns_by_book.items() if v}
+    if not wanted:
+        return {}
     pages = opju_pages(b)
     table = column_id_table(b, pages)
     off_sheet, _gates = sheet_map_with_segments(b, table)
-    return record_column_metadata(b, pages, table, off_sheet, wanted)
+    by_record = record_column_metadata(b, pages, table, off_sheet, wanted)
+    rest = {k: m for k, m in positional.items() if k not in by_record}
+    bad = contradicted_books(b, pages, rest)
+    out = {k: m for k, m in rest.items() if k not in bad}
+    for book, rec in by_record.items():
+        old = positional.get(book)  # its book title (import filename) is not per column
+        out[book] = rec if old is None else BookMeta(old.short, old.long_name, rec.columns)
+    return {k: out[k] for k in columns_by_book if k in out}
 
 
 def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
@@ -193,6 +210,12 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         )
     books = _group(scan.columns)
     text_books = _group_named(scan.text_columns)
+    loose = loose_books(b, dict.fromkeys([*books, *text_books, *report_books]))
+    if loose:  # datasets no worksheet window owns: not Origin books
+        for group in (books, text_books, report_books):
+            for k in loose:
+                group.pop(k, None)
+    fidelity = {**scan.fidelity, "loose_books_omitted": loose}
     columns_by_book = {k: [c for c, _ in v] for k, v in books.items()}
     for k, tcols in text_books.items():
         known = columns_by_book.setdefault(k, [])
@@ -219,7 +242,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         report_books=report_books,
         books_meta=books_meta,
         inventory=inventory,
-        fidelity=scan.fidelity,
+        fidelity=fidelity,
         matrices=scan.matrices,
         column_status=scan.column_status,
         losses=scan.losses,
@@ -255,6 +278,9 @@ def _book(parsed: _ParseResult, key: str, *, primary: bool = False) -> DataStruc
     ``origin_fidelity``)."""
     text_cols = parsed.text_books.get(key)
     cols = pad_to_text(parsed.books.get(key, []), text_cols)
+    # A sheet ``Book@N`` takes its own record-bound columns (item 73); the
+    # positional reader never labels one, so only a by-name binding is here.
+    sheet = parsed.books_meta.get(key) if "@" in key else None
     ds = _build_book(
         key,
         cols,
@@ -263,6 +289,7 @@ def _book(parsed: _ParseResult, key: str, *, primary: bool = False) -> DataStruc
         source_format="origin_opju",
         text_cols=text_cols,
         report_cols=parsed.report_books.get(key),
+        sheet_columns=sheet.columns if sheet is not None else None,
         x_unconfirmed=x_unconfirmed(
             key, cols, parsed.books_meta, parsed.column_status.get(key, [])
         ),
