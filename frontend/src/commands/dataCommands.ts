@@ -86,7 +86,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       section: "Combine & split",
       label: "Resample / align to a common grid…",
       description: "Interpolate one or more datasets onto a new x-grid or another dataset's x, with a live preview.",
-      keywords: "interpolate interp1 align regrid common grid match x resample",
+      keywords: "interpolate interp1 align regrid common grid match x resample reduce rows bin average duplicate x every nth decimate thin",
       run: () => openResampleDialog(seedIds(s)),
     },
     { id: "meta-factors", group: "Data", section: "Combine & split", label: "Metadata → factors…", description: "Clean up metadata; add a metadata field as a factor column.", keywords: "promote sample unify", run: () => openMetaFactors(seedIds(s)) },

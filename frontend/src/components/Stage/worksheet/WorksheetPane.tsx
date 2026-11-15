@@ -43,8 +43,10 @@ import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
+import type { ScvTarget } from "../../../lib/setColumnValues";
 
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
+const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set Column Values");
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {
@@ -103,6 +105,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
   const [menu, setMenu] = useState<WorksheetMenu | null>(null);
   const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
+  const [scv, setScv] = useState<ScvTarget | null>(null); // Set Column Values (G3)
   const rootRef = useRef<HTMLDivElement>(null);
   /** Open the header editor ON column `col`'s header cell. */
   const editHeader = (col: number) => {
@@ -343,7 +346,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         menu={menu}
         onClose={() => setMenu(null)}
         onEditHeader={editHeader}
+        onSetColumnValues={setScv}
       />
+      {scv && <SetColumnValuesDialog ds={ds} target={scv} xName={view.xName} onClose={() => setScv(null)} />}
       {headerEdit && (
         <HeaderEditor
           key={headerEdit.col}
