@@ -1,6 +1,6 @@
 // Open a saved analysis result's plot, and decide -- ONCE, for every consumer
 // -- whether its fit is drawn there (I4, lib/overlayPlacement.ts). Split out of
-// store/analysisResultActions.ts, which re-exports both entry points.
+// store/analysisResultActions.ts, whose Open / Send-to-report actions wrap it.
 //
 // Two separate decisions:
 //   * PLOT-OPEN is legacy-tolerant: the plot opens on the RESOLVED binding
@@ -19,32 +19,15 @@
 
 import type { FigureSpec } from "../lib/api/figures";
 import { fitBands } from "../lib/api/fitStats";
-import { FIT_SERIES_LABEL } from "../lib/figureSpecOverlays";
+import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/figureSpecOverlays";
+import { fitDrawBinding } from "../lib/fitDrawBinding";
 import { fullPlottedX } from "../lib/fitselectionActions";
-import { curveX } from "../lib/perSeriesX";
-import type { Dataset, FitSpec, OverlayBinding } from "../lib/types";
+import type { Dataset, FitSpec } from "../lib/types";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { useApp } from "./useApp";
 
 /** The status suffix for a refused fit. */
 export const REFIT_GUIDANCE = "does not match the plot's X/Y channels; use Edit / Re-fit first";
-
-/** Where the fit is drawn on `prepared` -- the X and Y it was computed on --
- *  or null when that plot is not them (refused). Pure. */
-export function fitDrawBinding(
-  ds: Pick<Dataset, "data" | "columnDesignations" | "channelRoles">,
-  prepared: Pick<PreparedAnalysisResultPlot, "channels" | "xChannel">,
-  spec: Pick<FitSpec, "xKey" | "yKey">,
-): OverlayBinding | null {
-  const x = spec.xKey;
-  if (x === undefined || x !== prepared.xChannel) return null; // no recorded X, or the plot is on another X
-  const y = prepared.channels[0];
-  if (y === undefined || (spec.yKey !== undefined && spec.yKey !== y)) return null;
-  // The Y must be a curve whose OWN X is that X (placement draws it nowhere
-  // else): never an X-designated, role or plot-X column, never R2 against T1.
-  if (curveX(ds, x)[y] !== x || ds.channelRoles?.[y]) return null;
-  return { yKey: y, xKey: x };
-}
 
 /** `spec`'s model evaluated at every finite row of X `xKey`, or an error message. */
 async function evaluateFit(ds: Dataset, spec: FitSpec, params: number[], xKey: number | null): Promise<(number | null)[] | string> {
@@ -126,9 +109,11 @@ export async function openResultPlot(
   return { ...prepared, fitDrawn: drawn !== null };
 }
 
-/** Does a built figure carry the fit? lib/figureSpecOverlays appends it as a
- *  series labelled "fit" past the dataset's own columns; a view whose export
- *  cannot carry overlays (grouped, faceted, encoded, stat) has none. */
+/** Does a built figure carry the fit? Only a request shape overlays can ride
+ *  (`specCanCarryOverlays`, the predicate withAnalysisOverlays itself asks --
+ *  so an encoding's appended category labels never count) whose columns past
+ *  the dataset's own include the fit series. A stat figure (null) has none. */
 export function specCarriesFit(spec: FigureSpec | null, ds: Pick<Dataset, "data">): boolean {
-  return !!spec && spec.dataset.labels.slice(ds.data.labels.length).includes(FIT_SERIES_LABEL);
+  return !!spec && specCanCarryOverlays(spec) &&
+    spec.dataset.labels.slice(ds.data.labels.length).includes(FIT_SERIES_LABEL);
 }

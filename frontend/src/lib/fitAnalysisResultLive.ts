@@ -29,7 +29,7 @@ export function liveFitPlotBinding(result: AnalysisResult, dataset: Dataset): {
   datasetId: string;
   channels: number[];
   /** Absent = a legacy fit that never recorded its X: the plot keeps its X, and
-   *  the fit is refused there (store/analysisResultActions' fit-draw gate). */
+   *  the fit is refused there (lib/fitDrawBinding, asked by store/analysisResultPlotOpen). */
   xChannel?: number | null;
 } | null {
   if (result.settingsRef?.field !== "fitSpec" || result.settingsRef.datasetId !== dataset.id || !dataset.fitSpec) return null;

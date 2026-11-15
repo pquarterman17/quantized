@@ -24,11 +24,12 @@ import type { Dataset, FitOverlay, FitSpec, OverlayBinding } from "../../lib/typ
 import {
   prepareAnalysisResultPlot, recalculateFitAnalysisResult, sendAnalysisResultPlotToReport,
 } from "../../store/analysisResultActions";
-import { fitDrawBinding } from "../../store/analysisResultPlotOpen";
+import { fitDrawBinding } from "../../lib/fitDrawBinding";
+import { specCarriesFit } from "../../store/analysisResultPlotOpen";
 import { useApp } from "../../store/useApp";
 import { peakBinding, peakInputs } from "../workshops/peaks/peakInputs";
 import { dropGapRows } from "../../lib/api/finitePairs";
-import { commitRecomputedFit } from "../../lib/fitRecompute";
+import { commitRecomputedFit, withReadProvenance } from "../../lib/fitRecompute";
 import { qfitSpec } from "../../lib/quickfit";
 import { R1, T1, T2, t1r1t2r2 } from "../../test/ownXFixture";
 import { usePerSeriesX } from "./usePerSeriesX";
@@ -267,6 +268,20 @@ describe("I3 -- provenance is what was really fitted, separate from where marker
     expect(saved.params).toEqual([2, 1]);
   });
 
+  it("a re-fit records the X it read only when the spec recorded X and Y and that Y was read", () => {
+    const spec: FitSpec = { model: "Linear", xKey: null, yKey: 2 };
+    expect(withReadProvenance(spec, ON_R2)).toEqual({ ...spec, xKey: 1 }); // R2 re-read on its own T2
+    expect(withReadProvenance({ model: "Linear", yKey: 2 }, ON_R2).xKey).toBeUndefined(); // no recorded X: kept
+    expect(withReadProvenance({ model: "Linear", xKey: null, yKey: 5 }, ON_R2)).toMatchObject({ xKey: null, yKey: 5 }); // fallback read
+    const same = { model: "Linear", xKey: 1, yKey: 2 };
+    expect(withReadProvenance(same, ON_R2)).toBe(same);
+  });
+
+  it("the result card refuses to send exactly what the gate refuses", () => {
+    // Both ask lib/fitDrawBinding; a stale X (resolved to time) is refused.
+    expect(fitDrawBinding(SHEET, { channels: [2], xChannel: null }, { xKey: 7, yKey: 2 })).toBeNull();
+  });
+
   it("a fit is never drawn against an X-designated column as its Y", () => {
     expect(fitDrawBinding(SHEET, { channels: [1], xChannel: null }, { xKey: null, yKey: 1 })).toBeNull();
     expect(fitDrawBinding(SHEET, { channels: [2], xChannel: 1 }, { xKey: 1, yKey: 2 })).toEqual(ON_R2);
@@ -340,13 +355,20 @@ describe("I4 -- plot-open and fit-draw are separate, and every consumer honours 
     expect(screen(await canvas(), "fit")).toEqual(MODEL_ON_T2);
   });
 
-  it("Send to report fails, adding nothing, when the view's figure cannot carry the drawn fit (polar)", async () => {
+  it("Send to report refuses before the dialog when the view's figure cannot carry the drawn fit (polar)", async () => {
     saveFit({ ...base, xKey: 1, yKey: 2 });
     useApp.setState({ polarMode: true });
-    mocks.ask.mockResolvedValueOnce({ target: NEW_REPORT, caption: "", fmt: "svg", style: "default", greyscale: false });
     expect(await sendAnalysisResultPlotToReport("analysis-fit-own", 0)).toBe(false);
     expect(useApp.getState().reports).toEqual([]);
     expect(useApp.getState().status).toContain("cannot carry the fit");
+    expect(mocks.ask).not.toHaveBeenCalled(); // no answers asked for, then thrown away
+  });
+
+  it("the built-figure check counts only a fit series on a shape overlays can ride", () => {
+    const fitCol = { dataset: { ...SHEET.data, labels: [...SHEET.data.labels, "fit"] }, y_keys: [0, 3], fmt: "svg" } as FigureSpec;
+    expect(specCarriesFit(fitCol, SHEET)).toBe(true);
+    expect(specCarriesFit({ ...fitCol, encoding: {} } as FigureSpec, SHEET)).toBe(false); // an encoding's "fit" category
+    expect(specCarriesFit(null, SHEET)).toBe(false); // a stat figure
   });
 });
 

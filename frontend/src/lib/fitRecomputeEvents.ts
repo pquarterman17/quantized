@@ -6,7 +6,7 @@
 // worksheet output on screen, unmarked, beside a curve that had already been
 // re-fitted to the changed data.
 
-import type { CalcResult, FitSpec } from "./types";
+import type { CalcResult, FitSpec, OverlayBinding } from "./types";
 
 export interface FitRecomputed {
   datasetId: string;
@@ -24,6 +24,9 @@ export interface FitRecomputed {
   /** The re-fitted curve on the worksheet's full rows (null where it has no
    *  value), or null when the fitter's curve could not be aligned. */
   curve: (number | null)[] | null;
+  /** The Y and X the re-fit actually READ -- what `curve` belongs to, which a
+   *  legacy spec may not record. */
+  binding: OverlayBinding;
 }
 
 type Listener = (e: FitRecomputed) => void;

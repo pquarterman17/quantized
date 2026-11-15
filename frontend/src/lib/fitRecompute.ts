@@ -71,20 +71,25 @@ export function commitRecomputedFit(
   /** The 1-sigma errors the re-fit was weighted with (aligned to `pairs`). */
   dy?: readonly number[],
 ): void {
-  // The X/Y the re-fit actually read (`binding`) become the recorded ones (a
-  // spec on a multi-X sheet is re-read on the Y's own X, I3) -- except for a
-  // fully legacy spec, whose selection came from the LIVE plot: that guess is
-  // never promoted to provenance.
-  const legacy = spec.xKey === undefined && spec.yKey === undefined;
-  const updatedSpec = stampRecompute(legacy ? spec : { ...spec, xKey: binding.xKey, yKey: binding.yKey }, result);
+  const updatedSpec = stampRecompute(withReadProvenance(spec, binding), result);
   if (get().datasets.find((item) => item.id === dataset.id) !== dataset) {
     throw new Error("source or fit changed while recalculating");
   }
   set((state) => recomputedFitPatch(state, dataset, spec, updatedSpec, pairs, binding, result.yFit, sourceRows));
   announceFitRecomputed({
     datasetId: dataset.id, previousSpec: spec, result, x: pairs.x, y: pairs.y, dy: dy ? [...dy] : null,
-    curve: fitOverlayValues(dataset, pairs, result.yFit, sourceRows),
+    curve: fitOverlayValues(dataset, pairs, result.yFit, sourceRows), binding,
   });
+}
+
+/** `spec` with the X its re-fit actually READ recorded (I3: a Y on a multi-X
+ *  sheet is re-read on its own X, which a stale spec may name wrongly) -- but
+ *  ONLY when the spec recorded both X and Y and the re-fit read that very Y.
+ *  Any other read came from a fallback to the live plot (no recorded Y, an
+ *  out-of-range Y) or a default (no recorded X), and a guess is never
+ *  promoted to provenance: the spec keeps its own, honest record. */
+export function withReadProvenance(spec: FitSpec, read: OverlayBinding): FitSpec {
+  return spec.xKey !== undefined && spec.yKey === read.yKey && spec.xKey !== read.xKey ? { ...spec, xKey: read.xKey } : spec;
 }
 
 /** Replace a saved fit's result snapshot and mark when it was regenerated. */

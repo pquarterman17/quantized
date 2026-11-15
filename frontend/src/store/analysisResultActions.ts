@@ -12,7 +12,7 @@ import { csvBlob } from "../lib/csvCell";
 import { saveBlob } from "../lib/download";
 import { stemFromName } from "../lib/exportActive";
 import { boundsFromWire } from "../lib/fitBoundsWire";
-import { fitOverlayValues, stampRecompute } from "../lib/fitRecompute";
+import { fitOverlayValues, stampRecompute, withReadProvenance } from "../lib/fitRecompute";
 import { announceFitRecomputed } from "../lib/fitRecomputeEvents";
 import { fitDataForSpec } from "../lib/fitselection";
 import { statsVersionField } from "../lib/fitStatsVersion";
@@ -20,6 +20,7 @@ import { weightRequestFields } from "../lib/fitweights";
 import type { Dataset } from "../lib/types";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import type { FigureSpec } from "../lib/api/figures";
+import { overlayModesMatchTheCanvas } from "../lib/seriesStyleCycle";
 import { openResultPlot, specCarriesFit } from "./analysisResultPlotOpen";
 import type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
@@ -187,13 +188,21 @@ export function prepareAnalysisResultPlot(id: string, bindingIndex: number): Pro
  * report command. A fitted plot is never sent without its fit: a fit the gate
  * refuses stops the send before anything changes, and a drawn fit the built
  * figure does not carry (a grouped/faceted/stat view) fails the send. */
+const CANNOT_CARRY_FIT = "this view's figure cannot carry the fit (a polar, stacked, grouped, faceted, encoded or stat view); show it as a plain plot first";
+
 export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: number): Promise<boolean> {
   const opened = await openResultPlot(id, bindingIndex, "report");
   if (!opened) return false;
+  // Known from the view before the dialog asks anything: a mode whose figure
+  // cannot carry an overlay. (An encoding is caught on the built spec below.)
+  if (opened.fitDrawn && !overlayModesMatchTheCanvas(useApp.getState())) {
+    useApp.getState().setStatus(`can't send fitted plot: ${CANNOT_CARRY_FIT}`);
+    return false;
+  }
   const require = opened.fitDrawn
     ? (spec: FigureSpec | null) => specCarriesFit(spec, opened.dataset)
       ? null
-      : "this view's figure cannot carry the fit (a polar, grouped, faceted or stat view); show it as a plain plot first"
+      : CANNOT_CARRY_FIT
     : undefined;
   try {
     // True only when a figure block was really added (not cancelled, refused or a duplicate click).
@@ -350,15 +359,16 @@ export async function recalculateFitAnalysisResult(
     const overlayWasVisible = current.fitOverlay?.datasetId === sourceId;
     const nextOverlay = overlayWasVisible ? fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows) : null;
     current.recordHistory(`recalculate ${result.name}`);
-    // Records the X/Y this re-fit actually read (I3), as commitRecomputedFit does.
-    current.setFitSpec(sourceId, stampRecompute({ ...spec, xKey: selection.xKey, yKey: selection.yKey }, fitted));
+    const read = { yKey: selection.yKey, xKey: selection.xKey };
+    // Records the X this re-fit actually read, never a fallback guess (I3, `withReadProvenance`).
+    current.setFitSpec(sourceId, stampRecompute(withReadProvenance(spec, read), fitted));
     if (overlayWasVisible) useApp.setState({
-      fitOverlay: nextOverlay ? { datasetId: sourceId, binding: { yKey: selection.yKey, xKey: selection.xKey }, y: nextOverlay } : null,
+      fitOverlay: nextOverlay ? { datasetId: sourceId, binding: read, y: nextOverlay } : null,
     });
     publishFitAnalysisResult(sourceId);
     announceFitRecomputed({
       datasetId: sourceId, previousSpec: spec, result: fitted, x: pairs.x, y: pairs.y, dy: dy ?? null,
-      curve: fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows),
+      curve: fitOverlayValues(source, pairs, fitted.yFit, selection.sourceRows), binding: read,
     });
     useApp.getState().setStatus(opts.updateStatistics
       ? `updated ${result.name} to the current statistics definitions`

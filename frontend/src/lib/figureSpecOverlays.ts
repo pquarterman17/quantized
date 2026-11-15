@@ -60,6 +60,12 @@ import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding
  *  caller checking "does this figure carry the fit?" looks for. */
 export const FIT_SERIES_LABEL = "fit";
 
+/** A request shape a row-aligned overlay column can ride: not grouped,
+ *  encoded, faceted or polar (their rows are re-split server-side). */
+export function specCanCarryOverlays(spec: FigureSpec): boolean {
+  return !spec.polar && !spec.facets && !spec.encoding && spec.group_col == null;
+}
+
 /** The view fields the overlays are decided from: a slice of the SAME PlotView
  *  the spec was built from -- never re-assembled from two sources. */
 export type OverlayView = Pick<
@@ -144,7 +150,7 @@ export function withAnalysisOverlays(
   sources: OverlaySources,
   grey: OverlayGrey = { screen: false, wire: false },
 ): FigureSpec {
-  if (spec.polar || spec.facets || spec.encoding || spec.group_col != null) return spec;
+  if (!specCanCarryOverlays(spec)) return spec;
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
   const { target, layout } = overlayTarget(ds, view);
@@ -160,9 +166,9 @@ export function withAnalysisOverlays(
   // The bound Y's offset: the canvas' rule (lib/logOffset.overlayDecadesFromStyles),
   // read from the series styles by CHANNEL. Whether offsets apply at all is the
   // SAME predicate `logOffsetWire` asked for this spec (`exportLogOffsetsApply`,
-  // same view, the spec's own `group_col`), NOT the presence of
+  // same view, the spec's `group_col`), NOT the presence of
   // `spec.log_offsets` (omitted when no LISTED channel is offset).
-  const offsetsApply = exportLogOffsetsApply(view, spec.group_col ?? null);
+  const offsetsApply = exportLogOffsetsApply(view, null); // group_col: null (a grouped spec returned above)
   const factorFor = (o: { binding?: OverlayBinding | null }): number =>
     offsetsApply ? 10 ** overlayDecadesFromStyles(o.binding, view.seriesStyles, layout.shown, []) : 1;
   const present = candidates.flatMap(([label, o, points]) => {
