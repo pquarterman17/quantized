@@ -14,7 +14,7 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, SCORE_PLACEHOLDER. Earlier: `.opju` curves now bind the sheet they plot:
+**Updated:** 2026-11-15 (item 66 struck: separator flags `01/08/30/41/48` admitted, 23 layers recovered, 23 more per-layer axis matches, still 0 wrong / 0 phantom on the 113-file oracle; their 367 curves match Origin's `%Z` exactly, sheet included, 0 wrong, 26 not decoded (item 68). Earlier: `.opju` curves now bind the sheet they plot:
 3,508 curves re-bound to `Book@N` plus 531 previously deduped away, 875
 omitted and diagnosed; 495 of 498 COM-checked re-bound curves draw
 Origin's exact data. Items 67-70 booked. Earlier: items 64-65 fixed: the axis record is run-length
@@ -1148,6 +1148,11 @@ the shipped contract)
   same 23 and nothing more; other values stay unadmitted (fail closed).
   Anchored per value by a realdata test in
   `test_io_origin_opju_page_attribution`.
+  Landed after the sheet re-binding (#684): the 23 new layers' curves were
+  checked against Origin's `%Z` per layer (COM, 2026-11-15): 367 curves
+  match exactly, sheet included (SOP_meas Graph73 binds
+  `SOPvsHPPCA123@5`, as Origin plots it), 0 wrong; 26 Origin plots are not
+  decoded (item 68). Before #684 the same flags drew Graph73 from sheet 1.
 
 - ~~**`.opju` curves bind the sheet they plot**~~ (2026-11-15) — a curve
   token's column id resolves to `(book page, column)` with no sheet, so
