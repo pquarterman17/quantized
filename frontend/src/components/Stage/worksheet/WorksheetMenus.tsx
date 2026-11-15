@@ -14,7 +14,7 @@ import { isRederived } from "../../../lib/rederived";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { Dataset } from "../../../lib/types";
 import { deleteRowsAt, insertRowsAbove, moveWorksheetRows } from "../../../store/moveRows";
-import { setColumnModelingType } from "../../../store/columnTypeActions";
+import { setColumnsModelingType } from "../../../store/columnTypeActions";
 import { useRecode } from "../../../store/recode";
 import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import { sortWorksheetRows } from "../../../store/sortRows";
@@ -114,11 +114,11 @@ function columnItems(
               ),
           }),
     }),
-    ...(readOnly || col < 0
+    ...(readOnly || targets.every((c) => c < 0)
       ? []
       : [
           { separator: true } as const,
-          ...modelingTypeItems(col, ds.channelTypes?.[col], (c, t) => setColumnModelingType(ds.id, c, t)),
+          ...modelingTypeItems(targets, ds.channelTypes, (cols, t) => setColumnsModelingType(ds.id, cols, t)),
         ]),
     ...(colView ? [{ separator: true } as const, ...columnViewItems(colView, targets)] : []),
     ...(readOnly

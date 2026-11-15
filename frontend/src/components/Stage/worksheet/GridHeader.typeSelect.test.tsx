@@ -2,19 +2,18 @@
 // on the header BODY selects the column (Origin / Excel), and the type picker
 // is a small, labelled corner select plus a context-menu submenu.
 
-import { readFileSync } from "node:fs";
-
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DataStruct } from "../../../lib/types";
 import { modelingTypeItems } from "./columnTypeMenu";
+import { CHIP_MIN_WIDTH } from "./GridHeader";
 import GridViewport from "./GridViewport";
 
 const noop = () => {};
 const data: DataStruct = { time: [0, 1], values: [[0], [1]], labels: ["Grade"], units: [""], metadata: {} };
 
-function renderTyped(onToggleColSelect = vi.fn(), onChangeChannelType = vi.fn()) {
+function renderTyped(onToggleColSelect = vi.fn(), onChangeChannelType = vi.fn(), colWidths?: Record<number, number>) {
   const utils = render(
     <GridViewport
       data={data}
@@ -40,21 +39,33 @@ function renderTyped(onToggleColSelect = vi.fn(), onChangeChannelType = vi.fn())
       textCols={[]}
       modelingTypeOf={() => "continuous"}
       onChangeChannelType={onChangeChannelType}
+      colWidths={colWidths}
     />,
   );
   return { ...utils, onToggleColSelect, onChangeChannelType };
 }
 
 describe("worksheet header modeling-type control", () => {
-  it("is a compact corner select, not a header-wide one", () => {
+  it("is a labelled select whose spoken label carries the full state", () => {
     renderTyped();
-    const select = screen.getByRole("combobox", { name: "Modeling type of column Grade" });
-    // No inline full-width sizing: the header body stays free for the select-column click.
-    expect(select.style.width).toBe("");
-    const css = readFileSync("src/styles/shell.css", "utf8");
-    const rule = css.split("\n").find((l) => l.startsWith(".qzk-grid-headcell .qzk-col-type"));
-    expect(rule).toMatch(/position:\s*absolute/);
-    expect(rule).toMatch(/width:\s*[\d.]+em/);
+    expect(screen.getByRole("combobox", { name: "Modeling type of column Grade: Continuous (auto)" })).toBeTruthy();
+  });
+
+  it("sits in the role row beside the role text, not over the header body", () => {
+    const { container } = renderTyped();
+    const chip = screen.getByRole("combobox", { name: /Modeling type/ });
+    const row = chip.parentElement as HTMLElement;
+    expect(row.className).toBe("qzk-head-role");
+    expect(row.querySelector(".role")).toBeTruthy();
+    expect(container.querySelector('[role="columnheader"][data-col="0"]')).toContain(row);
+  });
+
+  it("is left out of a column too narrow to hold it (the menu still sets the type)", () => {
+    const { container } = renderTyped(undefined, undefined, { 0: CHIP_MIN_WIDTH - 1 });
+    expect(container.querySelector(".qzk-col-type")).toBeNull();
+    cleanup();
+    renderTyped(undefined, undefined, { 0: CHIP_MIN_WIDTH });
+    expect(screen.getByRole("combobox", { name: /Modeling type/ })).toBeTruthy();
   });
 
   it("a click on the header cell selects the column; a click on the select does not", () => {
@@ -68,7 +79,7 @@ describe("worksheet header modeling-type control", () => {
 
   it("the context-menu submenu marks the current type and sets a new one", () => {
     const set = vi.fn();
-    const [item] = modelingTypeItems(0, "ordinal", set) as { submenu: unknown }[];
+    const [item] = modelingTypeItems([0], { 0: "ordinal" }, set) as { submenu: unknown }[];
     const sub = item.submenu as { label: string; checked?: boolean; run: () => void }[];
     expect(sub.map((s) => [s.label, s.checked])).toEqual([
       ["Auto (inferred)", false],
@@ -77,9 +88,18 @@ describe("worksheet header modeling-type control", () => {
       ["Nominal", false],
     ]);
     sub[3].run();
-    expect(set).toHaveBeenCalledWith(0, "nominal");
+    expect(set).toHaveBeenCalledWith([0], "nominal");
     sub[0].run();
-    expect(set).toHaveBeenCalledWith(0, null);
-    expect(modelingTypeItems(-1, undefined, set)).toEqual([]);
+    expect(set).toHaveBeenCalledWith([0], null);
+    expect(modelingTypeItems([-1], undefined, set)).toEqual([]);
+  });
+
+  it("acts on every target and checks a type only when all of them share it", () => {
+    const set = vi.fn();
+    const [item] = modelingTypeItems([0, 2], { 0: "ordinal", 2: "nominal" }, set) as { label: string; submenu: { checked?: boolean; run: () => void }[] }[];
+    expect(item.label).toBe("Modeling type (2 columns)");
+    expect(item.submenu.some((s) => s.checked)).toBe(false);
+    item.submenu[2].run();
+    expect(set).toHaveBeenCalledWith([0, 2], "ordinal");
   });
 });

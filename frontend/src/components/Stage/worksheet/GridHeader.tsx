@@ -105,6 +105,8 @@ export interface GridHeaderProps {
   colPos?: ColumnAria;
 }
 
+/** Narrowest column (px) that still shows the modeling-type chip beside the role line. */
+export const CHIP_MIN_WIDTH = 96;
 const NO_FROZEN: number[] = [];
 const FROZEN_EDGE = "2px 0 0 var(--accent)"; // where the pinned columns end
 /** True short-name-aware role badge for one value channel: computed columns
@@ -296,24 +298,35 @@ export default function GridHeader({
               ⚠
             </span>
           )}
-          <span className="role">
-            {roleText(c, computed, channelRoles[c], meta, userSet)}
-            {data.units[c] && (
-              <>
-                {" · "}
-                <span className="unit">{data.units[c]}</span>
-              </>
-            )}
-            {sortMark(c)}
-          </span>
-          {modelingTypeOf && onChangeChannelType && (
-            <ColumnTypeSelect
-              name={data.labels[c]}
-              effective={modelingTypeOf(c)}
-              override={channelTypes?.[c]}
-              onChange={(t) => onChangeChannelType(c, t)}
-            />
-          )}
+          {(() => {
+            const role = (
+              <span className="role">
+                {roleText(c, computed, channelRoles[c], meta, userSet)}
+                {data.units[c] && (
+                  <>
+                    {" · "}
+                    <span className="unit">{data.units[c]}</span>
+                  </>
+                )}
+                {sortMark(c)}
+              </span>
+            );
+            // The chip is a flex item of the role row (never over its text), and
+            // is left out of a column too narrow to hold both: the column
+            // context menu still sets the type there.
+            if (!modelingTypeOf || !onChangeChannelType || widthOf(c) < CHIP_MIN_WIDTH) return role;
+            return (
+              <div className="qzk-head-role">
+                {role}
+                <ColumnTypeSelect
+                  name={data.labels[c]}
+                  effective={modelingTypeOf(c)}
+                  override={channelTypes?.[c]}
+                  onChange={(t) => onChangeChannelType(c, t)}
+                />
+              </div>
+            );
+          })()}
           {comment(c, meta?.comment)}
           {paramLines(c)}
           {hiddenMarker(c)}

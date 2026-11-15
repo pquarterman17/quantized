@@ -1538,6 +1538,10 @@ body {
 .qz-recipe-details-section-title { color: var(--text-faint); font-size: var(--type-micro, 10px); font-weight: var(--weight-medium, 500); text-transform: uppercase; letter-spacing: 0.04em; }
 .qz-recipe-details-section ul { margin: 3px 0 0; padding-left: 16px; color: var(--text-dim); font-size: var(--type-label, 11px); }
 .qz-recipe-details-section .qz-recipe-details-empty { margin-top: 3px; color: var(--text-faint); font-size: var(--type-label, 11px); }
-/* The modeling-type select is a small corner control (ColumnTypeSelect.tsx): the header body is the
-   select-column click target, so the picker never fills it. Sits bottom-right, clear of the resize edge. */
-.qzk-grid-headcell .qzk-col-type { position: absolute; right: 9px; bottom: 2px; width: 4.4em; padding: 0 3px; appearance: none; text-align: right; font-size: var(--type-nano); line-height: 1.3; height: auto; }
+/* The modeling-type chip (ColumnTypeSelect.tsx) is a flex item of the header's role row: role/unit text on
+   the left (ellipsised), the chip at the right, so it can never sit over any text. Its right margin keeps it
+   clear of the 4px hidden-columns stripe (right: 7px) and the resize edge. The header body stays the
+   select-column click target. */
+.qzk-head-role { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.qzk-head-role .role { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-grid-headcell .qzk-col-type { flex: 0 0 auto; margin-right: 4px; width: 4.4em; padding: 0 3px; appearance: none; text-align: right; font-size: var(--type-nano); line-height: 1.3; height: auto; }

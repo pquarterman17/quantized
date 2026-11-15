@@ -11,6 +11,7 @@ import type { ModelingType } from "../../../lib/types";
 import { Select } from "../../primitives";
 
 /** Compact modeling-type tags — the same table as ChannelsCard's. */
+const TYPE_WORD: Record<ModelingType, string> = { continuous: "Continuous", ordinal: "Ordinal", nominal: "Nominal" };
 const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
 
 interface Props {
@@ -29,7 +30,8 @@ export default function ColumnTypeSelect({ name, effective, override, onChange }
     <Select
       className="qzk-col-type"
       value={override ?? ""}
-      aria-label={`Modeling type of column ${name}`}
+      // The visible text is compact ("auto·C"); the spoken label carries the full state.
+      aria-label={`Modeling type of column ${name}: ${TYPE_WORD[effective]}${override ? "" : " (auto)"}`}
       onClick={stop}
       onDoubleClick={stop}
       onChange={(e) => {
