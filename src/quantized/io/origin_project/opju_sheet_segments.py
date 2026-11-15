@@ -43,16 +43,13 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 
+from quantized.io.origin_project.opju_curve_token import column_id_records
 from quantized.io.origin_project.opju_figure_curves import (
-    _ID_FORM_A,
-    _ID_FORM_B,
-    _NARROW,
     ColumnIdTable,
     _parse_column_record,
     opju_pages,
 )
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, header_column_refs, sheet_map
-from quantized.io.origin_project.opju_zero_low_ids import ID_FORM_ZERO_LOW, zero_low_id
 
 __all__ = ["SHEET_MARK", "record_segments", "resolve_by_segments", "sheet_map_with_segments"]
 
@@ -73,16 +70,11 @@ def record_segments(
         if not marks:
             continue
         recs: list[tuple[int, int]] = []
-        for pattern in (_ID_FORM_A, _ID_FORM_B, *_NARROW, ID_FORM_ZERO_LOW):
-            for m in pattern.finditer(b, start, end):
-                if pattern is ID_FORM_ZERO_LOW:
-                    cid = zero_low_id(m)
-                else:
-                    cid = int.from_bytes(m.group(1), "little")
-                parsed = _parse_column_record(b, m.end() - (pattern in _NARROW))
-                if parsed is None or ids.get(cid) != (book, parsed[0]):
-                    continue
-                recs.append((m.start(), cid))
+        for off, cid, fields in column_id_records(b, start, end):  # every id form
+            parsed = _parse_column_record(b, fields - 1)  # it skips one <pb> byte
+            if parsed is None or ids.get(cid) != (book, parsed[0]):
+                continue
+            recs.append((off, cid))
         if not recs or min(o for o, _ in recs) < marks[0]:
             continue  # a column before the first sheet header: not understood
         segs: dict[tuple[str, int], list[int]] = defaultdict(list)

@@ -292,8 +292,10 @@ def test_realdata_segments_place_sop_sheets_1_and_5(corpus_dir: Path) -> None:
 @pytest.mark.realdata
 def test_realdata_repeated_plot_of_a_placed_column_is_withheld(corpus_dir: Path) -> None:
     """Graph12 plots ``figSOPvsR_E`` three times (Origin's first plot holds 4
-    of its 15 rows): the row ranges are not decoded, so it is omitted."""
+    of its 15 rows): the curve record stores that row range
+    (``opju_curve_range``) and quantized has no row-range binding, so it is
+    omitted -- now with the specific reason."""
     figs, _books = _import(corpus_dir, _SOP)
     f = _layer(figs, "Graph12", 1)
     assert "E" not in [c["y"] for c in f["curves"]]
-    assert ("E", "plotted_twice") in [(n["y"], n["reason"]) for n in f["curve_sheet_omitted"]]
+    assert ("E", "plot_row_range") in [(n["y"], n["reason"]) for n in f["curve_sheet_omitted"]]
