@@ -107,7 +107,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_right
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 from typing import NamedTuple
 
 from quantized.io.origin_project.curve_style_color import (
@@ -119,7 +119,7 @@ from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
-from quantized.io.origin_project.opju_sheet_signals import newly_proven_reason
+from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
@@ -275,7 +275,7 @@ def extract_curves_by_id(
     table: ColumnIdTable,
     off_sheet: Mapping[int, str] | None = None,
     omitted: list[tuple[int, dict[str, str]]] | None = None,
-    newly: Collection[int] = (),
+    gates: SheetGates | None = None,
 ) -> list[dict[str, str | float]]:
     """Every curve binding in ``b[start:end)`` via the unified id token.
 
@@ -301,9 +301,10 @@ def extract_curves_by_id(
     colour resolution, so the kept curves keep their plot-order colours --
     and appended to ``omitted`` as ``(plot index, {book, x, y, recorded,
     reason})``; the index is the curve's position in plot order, the order
-    ``legend_labels`` follows. A curve plotting a ``newly`` proven id
-    (``opju_sheet_signals.sheet_map``) is omitted the same way when
-    ``opju_sheet_signals.newly_proven_reason`` gives a reason. Dedup is per
+    ``legend_labels`` follows. ``gates`` (``opju_sheet_signals.sheet_map``)
+    omits the same way a curve whose book carries a worksheet data filter
+    (``worksheet_filter``) and a curve placed only by the second sheet signal
+    when ``opju_sheet_signals.newly_proven_reason`` gives a reason. Dedup is per
     ``(book, y, sheet)``, so a layer plotting ``B`` of two sheets keeps both.
     """
     off = off_sheet or {}
@@ -342,6 +343,9 @@ def extract_curves_by_id(
             x_col = sheet_x.get(sheet, x_col)
             reason = "" if sheet in sheet_x else "x_sheet_unproven"
         reason = reason or x_reason
+        if not reason and gates is not None and book in gates.filtered_books:
+            reason = "worksheet_filter"  # rows Origin filters out (opju_sheet_signals)
+        newly = gates.newly if gates is not None else frozenset()
         if not reason and (cid in newly or partner in newly):  # placed by opju_sheet_signals
             if token_starts is None:  # the token's record runs to the next token
                 token_starts = [t.start() for t in _CURVE_TOKEN.finditer(b, start, end)] + [end]

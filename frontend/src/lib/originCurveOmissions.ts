@@ -15,6 +15,8 @@ const WHY: Record<string, (recorded: string) => string> = {
   y_is_sheet_x: (r) => `${r} was imported with this column as its X`,
   y_is_x_column: () => "it plots an X column, against an X stored in a form not decoded yet",
   x_token_differs: () => "the graph stores another X for it, in a form not decoded yet",
+  worksheet_filter: () => "its workbook has a data filter; Origin plots only the rows it keeps",
+  plot_type_not_drawn: () => "Origin draws it as a plot type not rebuilt here (e.g. a histogram)",
 };
 
 /** One line per omitted curve of `figure`, e.g. "Book1 column B (X A): the

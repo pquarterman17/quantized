@@ -2541,15 +2541,27 @@ report pages — are ignored). **P** — a Y column is on its stored X
 partner's sheet: 15,556 rank-proven pairs agree, 0 disagree. A result is
 kept only if both signals that speak agree, the `Book_Col@N` dataset
 exists, and no other id of the name lands on that sheet. Corpus effect
-(vs the token-X decoder of `opju_curve_token_x`): 830 more curves drawn,
+(vs the token-X decoder of `opju_curve_token_x`): 828 more curves drawn,
 `sheet_unknown` omissions down to 133; the re-bound curves in the
 COM-checked layers match Origin's `%Z` sheet and plotted values. The sheet
 proves the Y, not the X Origin draws it against: a curve placed only this
 way is still omitted when it plots an X-designated column
 (`y_is_x_column`) or when a `<id:u16> 21 61` reference in its token record
 — or, if it names none, in another token of the layer — names a different
-column of the book (`x_token_differs`). Without those two gates 12 more
-newly drawn, COM-checked curves drew the wrong X.
+column of the book (`x_token_differs`), or when its token's plot-type tag
+(`8f 01 <type> 83`) is not 200-203 line/scatter/line+symbol/column
+(`plot_type_not_drawn`; 219 `0xdb` is a histogram). Without the two X
+gates 12 more newly drawn, COM-checked curves drew the wrong X.
+
+**Worksheet data filter (2026-11-15).** A book page whose span holds a
+`__STGCOLFILTER` storage block (the filter column's name and a condition
+text such as `0.07` follow it) has an Origin data filter: rows the
+condition rejects read as missing in Origin (`sum()` count) and are left
+out of every plot. `likelihood_profile.opju` (COM): the 5 filtered books
+plot 48/2/5/16/290 of 3000/1000/1010/1000/1000 rows, the unfiltered one
+all 1000; `simulated-IFN-pretreatment-longer.opju` 1549 of 1600. The
+condition is not decoded, so every curve of such a book is omitted
+(`worksheet_filter`); the worksheet data itself still imports in full.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix

@@ -44,17 +44,28 @@ with Origin's own ``%Z`` per layer and with the data Origin plots.
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Collection, Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from quantized.io.origin_project.opju_blocks import HEADER_LEN, find_headers, rle_expand
 from quantized.io.origin_project.opju_curve_sheets import off_sheet_ids
+from quantized.io.origin_project.opju_curve_style import _STYLE_RE
+from quantized.io.origin_project.opju_embedded_pages import span_pages
+from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 if TYPE_CHECKING:  # opju_figure_curves imports this module
     from quantized.io.origin_project.opju_figure_curves import ColumnIdTable
 
-__all__ = ["header_column_refs", "newly_proven_reason", "resolve_unknown_sheets", "sheet_map"]
+__all__ = [
+    "SheetGates",
+    "filtered_books",
+    "header_column_refs",
+    "newly_proven_reason",
+    "resolve_unknown_sheets",
+    "sheet_map",
+]
 
 _REF_OFF = 0x52  # u16 LE column id in the expanded 147-byte header
 
@@ -144,20 +155,67 @@ def resolve_unknown_sheets(
     return out
 
 
-def sheet_map(b: bytes, table: ColumnIdTable) -> tuple[dict[int, str], frozenset[int]]:
-    """``(off_sheet, newly)`` for ``opju_figure_curves.extract_curves_by_id``.
+class SheetGates(NamedTuple):
+    """What ``opju_figure_curves.extract_curves_by_id`` checks per curve.
+
+    ``newly``: the ids only the second sheet signal places (a curve plotting
+    one is drawn only if ``newly_proven_reason`` finds nothing against it).
+    ``filtered_books``: book pages that store a worksheet data filter
+    (``__STGCOLFILTER``: a column + condition, e.g. ``error`` < 0.07).
+    Origin leaves the rows the filter rejects out of every plot and reads
+    them as missing; the condition is not decoded, so every curve of such a
+    book is omitted (``worksheet_filter``) rather than drawn with all rows.
+    Evidence (Origin 2026b COM, 2026-11-15): ``likelihood_profile.opju``
+    Graph2 plots 6 books; the 5 with a filter report 48 / 5 / 2 / 16 / 290
+    numeric rows of 3000 / 1010 / 1000 / 1000 / 1000, the unfiltered
+    ``Book4`` all 1000; ``simulated-IFN-pretreatment-longer.opju`` 1549 of
+    1600 on 5 filtered books. The corpus holds the tag in these 2 of 359
+    files; every COM-checked curve on a filtered book differed, none other.
+    """
+
+    newly: frozenset[int]
+    filtered_books: frozenset[str]
+
+
+_FILTER_TAG = b"__STGCOLFILTER"
+
+
+def filtered_books(b: bytes) -> frozenset[str]:
+    """Book pages whose span stores a worksheet data filter (``SheetGates``)."""
+    if _FILTER_TAG not in b:
+        return frozenset()
+    pages = span_pages(b, iter_opju_windows(b))  # = opju_figure_curves.opju_pages
+    starts = [s for s, _name in pages]
+    out: set[str] = set()
+    at = b.find(_FILTER_TAG)
+    while at >= 0:
+        k = bisect_right(starts, at) - 1
+        if k >= 0:
+            out.add(pages[k][1])
+        at = b.find(_FILTER_TAG, at + 1)
+    return frozenset(out)
+
+
+def sheet_map(b: bytes, table: ColumnIdTable) -> tuple[dict[int, str], SheetGates]:
+    """``(off_sheet, gates)`` for ``opju_figure_curves.extract_curves_by_id``.
 
     ``off_sheet`` is the rank alignment (``off_sheet_ids``) with the unknown
     ids signal H or P proves filled in (``resolve_unknown_sheets``);
-    ``newly`` is the ids that only this second signal proves. A curve
-    plotting one of them is drawn only if ``newly_proven_reason`` finds
-    nothing against its X.
+    ``gates`` is ``SheetGates``.
     """
     before = off_sheet_ids(b, table.ids)
     after = resolve_unknown_sheets(b, table.ids, table.x_partner, before)
     newly = frozenset(c for c, s in after.items() if s and not before.get(c))
-    return after, newly
+    return after, SheetGates(newly, filtered_books(b))
 
+
+# The token's plot-type tag (``opju_curve_style``'s ``8f 01 <type> 83``):
+# Origin plot ids 200 line, 201 scatter, 202 line+symbol, 203 column -- the
+# ones every newly placed, COM-checked curve carried. 219 (0xdb) is a
+# histogram: rise-time Graph62 plots ``Book3_B`` binned (X axis -0.01..0.07
+# spans B's values, Y 0..15 counts), never against ``H``.
+_PLOT_STYLE = _STYLE_RE  # 8f 01 <type> 83
+_DRAWN_PLOT_TYPES = frozenset({0xC8, 0xC9, 0xCA, 0xCB})
 
 # A column id right before the Y designation marker: inside a curve token's
 # record, an X the plot itself stores (`opju_curve_token_x` reads the one at offset 35).
@@ -177,6 +235,8 @@ def newly_proven_reason(
     (``""`` = draw it), checked against Origin 2026b COM (plan item 67):
 
     * ``y_is_x_column``: the plotted column is itself X-designated;
+    * ``plot_type_not_drawn``: the token's plot-type tag is not a line /
+      scatter / line+symbol / column plot (a histogram, say);
     * ``x_token_differs``: a ``<id> 21 61`` reference in the token's own
       record (``token_span``, up to the next curve token) -- or, when it
       names none, in another token of the layer (``layer_span``) -- names a
@@ -201,6 +261,9 @@ def newly_proven_reason(
                 out.add(ids[ref][1])
         return out
 
+    style = _PLOT_STYLE.search(b, *token_span)
+    if style is not None and style.group(1)[0] not in _DRAWN_PLOT_TYPES:
+        return "plot_type_not_drawn"
     own = stored(token_span)
     # A token storing no X of its own may still be drawn against one another
     # token of the layer stores (2x glass Epoxy Graph2 O/Q -> N@2): any

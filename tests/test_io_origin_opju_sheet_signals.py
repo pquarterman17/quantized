@@ -165,9 +165,7 @@ def test_newly_placed_curve_whose_token_stores_another_x_is_omitted() -> None:
     """Id 4 is placed by signal P with X ``A``; its token stores column B
     (id 2) as its X, which the decoder does not use: omitted, not drawn
     against A (2x glass Epoxy Graph1, Catchment Graph6 over COM)."""
-    figs = extract_figures_opju(
-        _blob(_DATA, _RECORDS, _id_curve_token(0xBA, cid=4) + _stored_x(2))
-    )
+    figs = extract_figures_opju(_blob(_DATA, _RECORDS, _id_curve_token(0xBA, cid=4) + _stored_x(2)))
     assert figs[0]["curves"] == []
     assert [(n["recorded"], n["y"], n["reason"]) for n in figs[0]["curve_sheet_omitted"]] == [
         ("WBook@2", "B", "x_token_differs")
@@ -175,9 +173,7 @@ def test_newly_placed_curve_whose_token_stores_another_x_is_omitted() -> None:
 
 
 def test_newly_placed_curve_whose_token_stores_its_own_x_is_drawn() -> None:
-    figs = extract_figures_opju(
-        _blob(_DATA, _RECORDS, _id_curve_token(0xBA, cid=4) + _stored_x(3))
-    )
+    figs = extract_figures_opju(_blob(_DATA, _RECORDS, _id_curve_token(0xBA, cid=4) + _stored_x(3)))
     assert _curves(figs) == [("WBook@2", "A", "B")]
 
 
@@ -195,6 +191,35 @@ def test_newly_placed_curve_is_omitted_when_another_token_stores_another_x() -> 
     assert ("WBook@2", "B", "x_token_differs") in [
         (n["recorded"], n["y"], n["reason"]) for n in figs[0]["curve_sheet_omitted"]
     ]
+
+
+def test_newly_placed_histogram_is_omitted() -> None:
+    """A plot-type tag Origin draws as a histogram (219 = ``0xdb``): the
+    decoder would draw Y against its designated X, Origin bins Y."""
+    figs = extract_figures_opju(
+        _blob(_DATA, _RECORDS, _id_curve_token(0xBA, cid=4) + b"\x8f\x01\xdb\x83")
+    )
+    assert figs[0]["curves"] == []
+    assert figs[0]["curve_sheet_omitted"][0]["reason"] == "plot_type_not_drawn"
+
+
+def test_newly_placed_line_plot_type_is_drawn() -> None:
+    figs = extract_figures_opju(
+        _blob(_DATA, _RECORDS, _id_curve_token(0xBA, cid=4) + b"\x8f\x01\xc8\x83")
+    )
+    assert _curves(figs) == [("WBook@2", "A", "B")]
+
+
+def test_every_curve_of_a_filtered_book_is_omitted() -> None:
+    """A book page storing a worksheet data filter (``__STGCOLFILTER``):
+    Origin plots only the rows the undecoded condition keeps, so no curve of
+    that book is drawn -- rank-proven ones included."""
+    records = _RECORDS + b"\x9a\x01\x1b__STGCOLFILTER\x04\x01"
+    figs = extract_figures_opju(
+        _blob(_DATA, records, _id_curve_token(0xBA, cid=4), _id_curve_token(0xBB, cid=1))
+    )
+    assert figs[0]["curves"] == []
+    assert {n["reason"] for n in figs[0]["curve_sheet_omitted"]} == {"worksheet_filter"}
 
 
 def _narrow_record(cid: int, name: str, partner: int, form: str) -> bytes:
@@ -291,3 +316,23 @@ def test_realdata_perceived_risk_graph50_binds_sheet_18(corpus_dir: Path) -> Non
     assert y.size == 301 and x.size == 301
     assert (y.min(), y.max()) == pytest.approx((1.04696788288531, 1.8825768813079), rel=1e-12)
     assert (x.min(), x.max()) == pytest.approx((0.0, 30.0))
+
+
+_LIKELIHOOD = (
+    "origin/public/pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/"
+    "likelihood_profile.opju"
+)
+
+
+@pytest.mark.realdata
+def test_realdata_filtered_books_are_not_drawn(corpus_dir: Path) -> None:
+    """Graph2 plots B of Book1-7. Origin's own row counts (COM 2026-11-15):
+    the 5 books with a worksheet data filter plot 48/2/5/16/290 rows, not
+    the 3000/1000/1010/1000/1000 stored; Book4 (no filter) plots all 1000
+    and stays drawn."""
+    figs, _books = _import(corpus_dir, _LIKELIHOOD)
+    (f,) = [f for f in figs if (f["name"], f["layer"]) == ("Graph2", 1)]
+    assert [c["book"] for c in f["curves"]] == ["Book4"]  # type: ignore[union-attr]
+    notes = f["curve_sheet_omitted"]
+    filtered = {n["book"] for n in notes if n["reason"] == "worksheet_filter"}  # type: ignore[union-attr]
+    assert {"Book1", "Book2", "Book3", "Book6", "Book7"} <= filtered
