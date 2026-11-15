@@ -33,18 +33,38 @@ describe("Waterfall3dSection", () => {
     await waitFor(() => expect(useApp.getState().status).toBe("exported waterfall3d_Signal.svg"));
     const exported = vi.mocked(exportMapFigure).mock.calls[0]![0];
     expect({ ...exported, fmt: "", filename: "" }).toEqual({ ...preview, fmt: "", filename: "" });
-    expect(exported).toMatchObject({ kind: "waterfall", fmt: "svg", y_axis: [0, 1] });
+    expect(exported).toMatchObject({ kind: "waterfall", fmt: "svg", contour_source: "curves" });
+    expect(exported.curves?.map((c) => c.depth)).toEqual([0, 1]);
   });
 
   it("depth by number in name; one curve is refused with the reason and nothing is requested", async () => {
     const { rerender } = render(<Waterfall3dSection series={two} channel="Signal" />);
     fireEvent.change(screen.getByLabelText("Depth by"), { target: { value: "number" } });
     await screen.findByAltText("3-D waterfall preview");
-    expect(vi.mocked(renderMapFigure).mock.calls.at(-1)![0].y_axis).toEqual([10, 20]);
+    expect(vi.mocked(renderMapFigure).mock.calls.at(-1)![0].curves?.map((c) => c.depth)).toEqual([10, 20]);
     vi.mocked(renderMapFigure).mockClear();
     rerender(<Waterfall3dSection series={two.slice(0, 1)} channel="Signal" />);
     expect((await screen.findByRole("alert")).textContent).toMatch(/at least 2 curves/);
     expect(screen.getByText("Export 3-D PDF").hasAttribute("disabled")).toBe(true);
     expect(renderMapFigure).not.toHaveBeenCalled();
+  });
+
+  it("angles commit on blur/Enter, not per keystroke; a blank or out-of-range angle is invalid, not 0", async () => {
+    render(<Waterfall3dSection series={two} channel="Signal" />);
+    await screen.findByAltText("3-D waterfall preview");
+    const elev = screen.getByLabelText("Elevation (°)");
+    vi.mocked(renderMapFigure).mockClear();
+    fireEvent.change(elev, { target: { value: "4" } });
+    fireEvent.change(elev, { target: { value: "45" } });
+    await new Promise((r) => setTimeout(r, 600)); // longer than the render debounce
+    expect(renderMapFigure).not.toHaveBeenCalled(); // typing alone requests nothing
+    fireEvent.change(elev, { target: { value: "" } });
+    fireEvent.blur(elev);
+    expect(elev.getAttribute("aria-invalid")).toBe("false"); // restored, never committed as 0
+    expect((elev as HTMLInputElement).value).toBe("30");
+    fireEvent.change(elev, { target: { value: "45" } });
+    fireEvent.keyDown(elev, { key: "Enter" });
+    await waitFor(() => expect(vi.mocked(renderMapFigure).mock.calls.at(-1)?.[0].view_elev).toBe(45));
+    expect(vi.mocked(renderMapFigure).mock.calls.every((c) => c[0].view_elev !== 0)).toBe(true);
   });
 });

@@ -27,6 +27,18 @@ from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_map3d import (
+    MAX_SCATTER_POINTS,
+    check_angles,
+    check_curve_inputs,
+    check_extent,
+    check_grid_3d,
+    decimate,
+    draw_curves,
+    parse_curves,
+    set_log_zticks,
+    step_rows,
+)
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -35,7 +47,7 @@ __all__ = ["MAP_KINDS", "log_decade_ticks", "render_map_figure"]
 _FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 MAP_KINDS = ("contourf", "contour", "heatmap", "surface", "scatter3d", "waterfall")
 _3D_KINDS = ("surface", "scatter3d", "waterfall")
-_CONTOUR_SOURCES = ("grid", "points")
+_CONTOUR_SOURCES = ("grid", "points", "curves")
 # Scattered-source kinds: the two tri-contours, and a 3-D scatter of the raw
 # points themselves (never a regridded surface sampled as points).
 _POINTS_KINDS = ("contour", "contourf", "scatter3d")
@@ -63,34 +75,6 @@ def _contour_levels(
     if scale != "linear":
         raise ValueError("level_scale must be 'linear' or 'log'")
     return np.asarray(np.linspace(z_min, z_max, n), dtype=float)
-
-
-def _check_angles(elev: float, azim: float) -> None:
-    if not (math.isfinite(elev) and -90.0 <= elev <= 90.0):
-        raise ValueError("view_elev must be a finite number from -90 to 90 degrees")
-    if not (math.isfinite(azim) and -360.0 <= azim <= 360.0):
-        raise ValueError("view_azim must be a finite number from -360 to 360 degrees")
-
-
-def _check_3d(
-    kind: str, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64],
-    elev: float, azim: float,
-) -> None:
-    """Fail closed on a 3-D request that cannot make a meaningful figure: a
-    non-finite or out-of-range view angle, too few finite cells for the mark,
-    or a waterfall of fewer than two curves (a profile line needs two points)."""
-    _check_angles(elev, azim)
-    n_finite = int(np.isfinite(z).sum())
-    if kind == "waterfall":
-        curves = int((np.isfinite(z).sum(axis=1) >= 2).sum())
-        if curves < 2:
-            raise ValueError(
-                f"a 3-D waterfall needs at least 2 curves with 2 or more points; found {curves}"
-            )
-    elif kind == "surface" and n_finite < 4:
-        raise ValueError(f"a 3-D surface needs at least 4 finite grid cells; found {n_finite}")
-    elif n_finite < 3:
-        raise ValueError(f"a 3-D scatter needs at least 3 finite points; found {n_finite}")
 
 
 def render_map_figure(
@@ -124,6 +108,7 @@ def render_map_figure(
     colorbar_log10: bool = False,
     note: str = "",
     max_lines: int = 0,
+    curves: Sequence[Mapping[str, Any]] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -186,6 +171,7 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
+    curve_list: list[Any] = []
     clim = _z_limits(z_limits)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
@@ -207,11 +193,19 @@ def render_map_figure(
             )
         finite = np.isfinite(xr) & np.isfinite(yr) & np.isfinite(zr)
         x, y, z = xr[finite], yr[finite], zr[finite]
-        if x.size < 3:
-            raise ValueError("need at least 3 finite points to triangulate a scattered contour")
         if kind == "scatter3d":
-            _check_angles(view_elev, view_azim)
+            if x.size < 3:
+                raise ValueError(f"a 3-D scatter needs at least 3 finite points; found {x.size}")
+            check_angles(view_elev, view_azim)
+            check_extent(x, y, z)
+        elif x.size < 3:
+            raise ValueError("need at least 3 finite points to triangulate a scattered contour")
         z_min, z_max = float(np.min(z)), float(np.max(z))
+    elif contour_source == "curves":
+        check_curve_inputs(kind, view_elev, view_azim)
+        curve_list = parse_curves(curves)
+        x = y = z = np.empty(0)
+        z_min = z_max = float("nan")
     else:
         if z_grid is None:
             raise ValueError("z_grid is required when contour_source='grid'")
@@ -224,11 +218,21 @@ def render_map_figure(
             raise ValueError(f"a map needs at least a 2x2 grid, got ({y.size}, {x.size})")
 
         if kind in _3D_KINDS:
-            _check_3d(kind, x, y, z, view_elev, view_azim)
+            check_grid_3d(kind, x, y, z, view_elev, view_azim)
         if np.any(np.isfinite(z)):
             z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
         else:
             z_min = z_max = float("nan")  # all-gaps map; contour kinds raise below
+        if kind == "scatter3d":
+            # A grid scatter is its finite cells as points: one path (and one cap).
+            xg, yg = np.meshgrid(x, y)
+            fin = np.isfinite(z)
+            x, y, z = xg[fin], yg[fin], z[fin]
+            contour_source = "points"
+    if kind == "scatter3d" and x.size > MAX_SCATTER_POINTS:
+        keep = decimate(x.size)
+        note = f"{note} Plotting {keep.size:,} of {x.size:,} points, evenly sampled.".strip()
+        x, y, z = x[keep], y[keep], z[keep]
 
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
     rc: dict[str, Any] = {
@@ -260,7 +264,7 @@ def render_map_figure(
         mappable = _draw(
             ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
             label_contours, view_elev, view_azim, contour_source=contour_source,
-            max_lines=max_lines,
+            max_lines=max_lines, curve_list=curve_list,
         )
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
@@ -279,6 +283,8 @@ def render_map_figure(
             ax.set_ylabel(y_label)
         if kind in _3D_KINDS and z_label:
             ax.set_zlabel(z_label)
+        if colorbar_log10 and kind in _3D_KINDS:
+            set_log_zticks(ax, log_decade_ticks)
         if colorbar and mappable is not None:
             cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
             if colorbar_log10:
@@ -358,8 +364,13 @@ def _draw(
     *,
     contour_source: str = "grid",
     max_lines: int = 0,
+    curve_list: list[Any] | None = None,
 ) -> Any:
     """Draw the requested mark; return the colorbar mappable (or None)."""
+    if contour_source == "curves":
+        ax.view_init(elev=view_elev, azim=view_azim)
+        draw_curves(ax, curve_list or [], cmap)
+        return None
     if contour_source == "points" and kind == "scatter3d":
         # The measured points themselves, coloured by z -- no grid, no resampling.
         ax.view_init(elev=view_elev, azim=view_azim)
@@ -413,12 +424,7 @@ def _draw(
         return sc
     # waterfall: one profile line per y-row, stacked in depth
     line_cmap = matplotlib.colormaps[cmap]
-    # ``max_lines`` (> 0) steps the rows to at most that many, evenly spaced and
-    # always keeping the first and last, so a 200-row grid reads as a waterfall
-    # rather than a dense surface; 0 draws every row.
-    rows: Sequence[int] = range(y.size)
-    if 0 < max_lines < y.size:
-        rows = sorted({int(round(v)) for v in np.linspace(0, y.size - 1, max(max_lines, 2))})
+    rows = step_rows(z, max_lines)  # rows with data only, evenly stepped
     for j in rows:
         row = z[j]
         finite = np.isfinite(row)

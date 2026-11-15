@@ -15,42 +15,10 @@ import { DEFAULT_MAP3D, MAP3D_KINDS, type Map3dView } from "../../lib/mapView3d"
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+import AngleField from "./AngleField";
 import { FLAT_CHOICE, MAP3D_LABELS, WATERFALL_MAX_LINES } from "./map3dRequest";
 
 const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11 } as const;
-
-function AngleField({ label, value, lim, onCommit }: { label: string; value: number; lim: number; onCommit: (v: number) => void }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const n = Number(draft);
-  const bad = draft !== null && (draft.trim() === "" || !Number.isFinite(n) || Math.abs(n) > lim);
-  const commit = () => {
-    if (draft === null) return;
-    if (!bad) onCommit(n);
-    if (!bad || draft.trim() === "") setDraft(null);
-  };
-  return (
-    <label style={ROW}>
-      {label}
-      <input
-        type="number"
-        step="any"
-        min={-lim}
-        max={lim}
-        aria-label={label}
-        aria-invalid={bad}
-        title={bad ? `${label} must be a number from -${lim} to ${lim}` : `-${lim} to ${lim} degrees`}
-        value={draft ?? value}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") setDraft(null);
-        }}
-        style={{ width: 70, ...(bad ? { borderColor: "var(--danger)" } : {}) }}
-      />
-    </label>
-  );
-}
 
 function TextField({ label, value, onCommit, width }: { label: string; value: string; onCommit: (v: string) => void; width: number }) {
   const [draft, setDraft] = useState<string | null>(null);

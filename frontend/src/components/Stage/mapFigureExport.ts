@@ -31,7 +31,7 @@ import { interpolatedNote, type MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOpActions";
 import { askParams } from "../overlays/ParamDialog";
-import { choose3d, FLAT_CHOICE, MAP3D_LABELS, rawSource, view3dOptions, WATERFALL_MAX_LINES, type MapSource } from "./map3dRequest";
+import { choose3d, FLAT_CHOICE, MAP3D_LABELS, MAP3D_MAX_POINTS, rawSource, sampleEvenly, view3dOptions, WATERFALL_MAX_LINES, type MapSource } from "./map3dRequest";
 import { sameMap3d } from "../../lib/mapView3d";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";
@@ -73,7 +73,10 @@ function zCell(v: number | null, view: MapExportView): number | null {
   // The canvas drops a non-positive cell under log BEFORE any limit applies.
   if (view.logZ && v <= 0) return null;
   let z = v;
-  if (view.colorLimits) {
+  // Colour limits saturate the COLOUR in 2-D. In 3-D z is the height: it goes out
+  // unchanged and `z_limits` alone sets the colour range, so a limit never
+  // flattens the data.
+  if (view.colorLimits && !view.view3d) {
     // Only a typed side saturates; an auto side is the data's own extent.
     const [lo, hi] = view.colorLimits;
     if (hi !== null) z = Math.min(hi, z);
@@ -96,19 +99,39 @@ function zLimits(p: MapPayload, view: MapExportView): [number, number] | null {
   return lim && view.logZ ? [Math.log10(lim[0]), Math.log10(lim[1])] : lim;
 }
 
-/** The raw measured points as the route's scattered source: rows with a
- *  non-finite value (or, under a log scale, a non-positive z) are dropped whole,
- *  and every kept point goes out unchanged -- no grid, no resampling. */
-function pointsBody(raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView) {
-  const out = { x_axis: [] as number[], y_axis: [] as number[], z_values: [] as number[], contour_source: "points" };
+export interface PointStats {
+  /** Rows in the file, rows usable (finite; positive under log), rows sent. */
+  total: number;
+  valid: number;
+  sent: number;
+}
+
+/** Row indices of the raw points that can be drawn, then sampled to at most
+ *  MAP3D_MAX_POINTS evenly (first and last kept, order kept) -- the server's own
+ *  `decimate` rule, so a 465k-point cloud neither costs a 20 s render nor a 10 MB
+ *  request. */
+function sampledPoints(raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView): { rows: number[]; stats: PointStats } {
+  const valid: number[] = [];
   raw.z.forEach((v, i) => {
-    const z = zCell(v, view);
-    if (z === null || !Number.isFinite(raw.x[i]) || !Number.isFinite(raw.y[i])) return;
-    out.x_axis.push(raw.x[i]);
-    out.y_axis.push(raw.y[i]);
-    out.z_values.push(z);
+    if (zCell(v, view) !== null && Number.isFinite(raw.x[i]) && Number.isFinite(raw.y[i])) valid.push(i);
   });
-  return out;
+  const rows = valid.length <= MAP3D_MAX_POINTS ? valid : sampleEvenly(valid, MAP3D_MAX_POINTS);
+  return { rows, stats: { total: raw.z.length, valid: valid.length, sent: rows.length } };
+}
+
+export const pointStats = (raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView): PointStats => sampledPoints(raw, view).stats;
+
+/** The raw measured points as the route's scattered source: every kept point
+ *  goes out unchanged (no grid, no resampling; z unclamped in 3-D). */
+function pointsBody(raw: { x: number[]; y: number[]; z: number[] }, view: MapExportView) {
+  const { rows, stats } = sampledPoints(raw, view);
+  return {
+    x_axis: rows.map((i) => raw.x[i]),
+    y_axis: rows.map((i) => raw.y[i]),
+    z_values: rows.map((i) => zCell(raw.z[i], view) as number),
+    contour_source: "points",
+    ...(stats.sent < stats.valid ? { note: `Plotting ${stats.sent.toLocaleString("en-US")} of ${stats.valid.toLocaleString("en-US")} points, evenly sampled.` } : {}),
+  };
 }
 
 /** The /api/export/map-figure body for what this map is showing. Pure. */
@@ -211,9 +234,14 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
     return;
   }
   const next3d = choice.view3d;
-  if (!sameMap3d(v3, next3d)) setView3d?.(next3d);
+  // The dialog's view choice is kept with the map only once the export went
+  // through: a failed or cancelled export leaves the figure state alone.
+  const keep = () => {
+    if (!sameMap3d(v3, next3d)) setView3d?.(next3d);
+  };
   if (fmt === "png" && !next3d) {
     if (canvas) exportCanvasPng(canvas, `${filename}.png`);
+    keep();
     return;
   }
   if (!payload) {
@@ -227,6 +255,7 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
   );
   try {
     const done = await runCancellable("Exporting map…", (signal) => exportMapFigure(body, signal));
+    if (done) keep();
     setStatus(done ? `exported ${filename}.${fmt}` : "export cancelled");
   } catch (e) {
     setStatus(`map export failed — ${e instanceof Error ? e.message : "unknown error"}`);

@@ -2560,3 +2560,37 @@ def test_map_figure_3d_bad_angle_is_422_with_a_reason() -> None:
     )
     assert resp.status_code == 422
     assert "view_elev" in resp.text
+
+
+def test_map_figure_3d_contract_points_curves_and_bounds() -> None:
+    pts = {"x_axis": [0.0, 1.0, 2.0, 0.5], "y_axis": [0.0, 1.0, 0.0, 2.0],
+           "z_values": [1.0, 2.0, 3.0, 4.0], "contour_source": "points"}
+    ok = client.post("/api/export/map-figure", json={**pts, "kind": "scatter3d", "fmt": "png"})
+    assert ok.status_code == 200 and ok.content[:4] == b"\x89PNG"
+
+    curves = [{"x": [0.0, 1.0, 0.5], "z": [1.0, 2.0, 1.5], "depth": 10.0},
+              {"x": [0.0, 1.0, 0.5], "z": [2.0, 3.0, 2.5], "depth": 20.0}]
+    ok = client.post("/api/export/map-figure",
+                     json={"contour_source": "curves", "curves": curves, "kind": "waterfall",
+                           "fmt": "png"})
+    assert ok.status_code == 200
+    one = client.post("/api/export/map-figure",
+                      json={"contour_source": "curves", "curves": curves[:1], "kind": "waterfall"})
+    assert one.status_code == 422 and "at least 2 curves" in one.text
+
+    for bad in (-1, 1001, 1.5):
+        assert client.post("/api/export/map-figure",
+                           json={**_demo_map(), "kind": "waterfall", "max_lines": bad}
+                           ).status_code == 422
+
+
+def test_map_figure_figure_size_is_bounded() -> None:
+    # 200 in x 200 in at 600 dpi used to be an unhandled 500.
+    for dims in ({"width_in": 200, "height_in": 200, "dpi": 600}, {"width_in": 0},
+                 {"height_in": -3}):
+        resp = client.post("/api/export/map-figure",
+                           json={**_demo_map(), "kind": "heatmap", "fmt": "png", **dims})
+        assert resp.status_code == 422, dims
+    fine = client.post("/api/export/map-figure",
+                       json={**_demo_map(), "kind": "heatmap", "fmt": "png", "width_in": 6})
+    assert fine.status_code == 200

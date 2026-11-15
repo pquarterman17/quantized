@@ -26,6 +26,11 @@ export interface Map3dView {
   title: string;
 }
 
+/** The figure styles a stored view may name (mirrors `FIGURE_STYLES`; pinned equal
+ *  by `mapView3d.test.ts`). An unknown name would render a 422 and show the
+ *  panel's first option instead of the stored value. */
+export const MAP3D_STYLES: readonly string[] = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
+
 export const DEFAULT_MAP3D: Map3dView = { kind: "surface", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" };
 
 const clamp = (v: unknown, lim: number, d: number): number =>
@@ -41,7 +46,7 @@ export function sanitizeMap3d(raw: unknown): Map3dView | undefined {
   const d = DEFAULT_MAP3D;
   return {
     kind, elev: clamp(o.elev, 90, d.elev), azim: clamp(o.azim, 360, d.azim),
-    zLabel: str(o.zLabel, ""), zUnit: str(o.zUnit, ""), style: str(o.style, d.style) || d.style, title: str(o.title, ""),
+    zLabel: str(o.zLabel, ""), zUnit: str(o.zUnit, ""), style: MAP3D_STYLES.find((s) => s === o.style) ?? d.style, title: str(o.title, ""),
   };
 }
 

@@ -3,7 +3,9 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_MAP3D, sanitizeMap3d, type Map3dView } from "./mapView3d";
+import { FIGURE_STYLES } from "../components/workshops/figurebuilder/figureOutputConstants";
+import { DEFAULT_MAP3D, MAP3D_STYLES, sanitizeMap3d, type Map3dView } from "./mapView3d";
+import { withRecipeMap } from "../store/plotRecipeApply";
 import { mapViewFor, sanitizeMapViews } from "./mapView";
 import { captureMapView } from "./plotRecipePanels";
 import { sanitizeMapView as sanitizeRecipeMapView } from "./plotRecipeMigrate";
@@ -32,6 +34,11 @@ describe("sanitizeMap3d", () => {
     expect(v.zLabel).toHaveLength(80);
     expect(v.style).toBe(DEFAULT_MAP3D.style);
     expect(sanitizeMap3d({ kind: "scatter3d", elev: "x", azim: NaN })).toMatchObject({ elev: 30, azim: -60 });
+  });
+  it("an unknown style falls back to the default (the panel could not show it)", () => {
+    expect(sanitizeMap3d({ kind: "surface", style: "bogus" })?.style).toBe("default");
+    expect(sanitizeMap3d({ kind: "surface", style: "nature" })?.style).toBe("nature");
+    expect([...MAP3D_STYLES]).toEqual(FIGURE_STYLES); // the eager copy cannot drift from the figure presets
   });
   it("keeps a valid view unchanged", () => {
     expect(sanitizeMap3d(V)).toEqual(V);
@@ -77,6 +84,15 @@ describe("the 3-D view is figure state", () => {
     useApp.getState().setMapView3d("a", V);
     useApp.getState().setMapView3d("a", undefined);
     expect("view3d" in mapViewFor(useApp.getState().mapViews, "a")).toBe(false);
+  });
+
+  it("applying a recipe decides the 3-D view: one saved without it returns the target to 2-D", () => {
+    const target = { a: { ...mapViewFor({}, "a"), view3d: V } };
+    const cleared = withRecipeMap(target, "a", { colormap: "magma", logZ: false, colorLimits: null });
+    expect(cleared.a.colormap).toBe("magma");
+    expect("view3d" in cleared.a).toBe(false);
+    const set = withRecipeMap({}, "a", { colormap: "gray", logZ: false, colorLimits: null, view3d: V });
+    expect(set.a.view3d).toEqual(V);
   });
 
   it("rides in a saved figure (recipe) and is sanitized on read", () => {

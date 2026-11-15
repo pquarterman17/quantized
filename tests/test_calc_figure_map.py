@@ -367,3 +367,107 @@ def test_waterfall_max_lines_steps_rows_and_keeps_the_ends(monkeypatch: pytest.M
     calls.clear()
     render_map_figure(x, y, z, kind="waterfall", fmt="png")  # 0 = every row
     assert len(calls) == 100
+
+
+# ── review fixes: separate curves, caps, row stepping, log z ticks (lane F) ──
+
+
+def test_curves_keep_each_polyline_in_original_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A hysteresis loop: x goes up then back down. No sort, no union, no resample.
+    loop_x = [0.0, 1.0, 2.0, 3.0, 2.0, 1.0, 0.0]
+    loop_z = [0.0, 1.0, 3.0, 4.0, 3.5, 2.0, 0.5]
+    calls = _capture(monkeypatch, "plot")
+    curves = [
+        {"x": loop_x, "z": loop_z, "depth": 50.0},
+        {"x": loop_x, "z": [v + 1 for v in loop_z], "depth": 100.0},
+    ]
+    data = render_map_figure([], [], None, contour_source="curves", curves=curves,
+                             kind="waterfall", fmt="png")
+    assert data[:4] == b"\x89PNG"
+    assert len(calls) == 2
+    for call, c in zip(calls, curves, strict=True):
+        assert list(call[0]) == c["x"] and list(call[2]) == c["z"]
+        assert set(call[1]) == {c["depth"]}
+
+
+def test_curves_fail_closed() -> None:
+    one = [{"x": [0.0, 1.0], "z": [1.0, 2.0], "depth": 0.0}]
+    with pytest.raises(ValueError, match="at least 2 curves"):
+        render_map_figure([], [], None, contour_source="curves", curves=one, kind="waterfall")
+    two = [*one, {"x": [0.0, 1.0], "z": [3.0, 4.0], "depth": 1.0}]
+    with pytest.raises(ValueError, match="only supports kind 'waterfall'"):
+        render_map_figure([], [], None, contour_source="curves", curves=two, kind="surface")
+    bad = [*one, {"x": [0.0, 1.0], "z": [3.0], "depth": 1.0}]
+    with pytest.raises(ValueError, match="same length"):
+        render_map_figure([], [], None, contour_source="curves", curves=bad, kind="waterfall")
+    nan = [*one, {"x": [0.0, 1.0], "z": [3.0, 4.0], "depth": float("nan")}]
+    with pytest.raises(ValueError, match="depth must be a finite"):
+        render_map_figure([], [], None, contour_source="curves", curves=nan, kind="waterfall")
+    with pytest.raises(ValueError, match="view_elev"):
+        render_map_figure([], [], None, contour_source="curves", curves=two, kind="waterfall",
+                          view_elev=120.0)
+
+
+def test_scatter3d_cloud_is_sampled_to_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from quantized.calc.figure_map3d import MAX_SCATTER_POINTS
+
+    n = 120_000
+    x = np.arange(n, dtype=float)
+    calls = _capture(monkeypatch, "scatter")
+    render_map_figure(x, x * 0.5, None, contour_source="points", z_values=np.sin(x),
+                      kind="scatter3d", fmt="png")
+    px = calls[0][0]
+    assert len(px) == MAX_SCATTER_POINTS
+    assert px[0] == 0.0 and px[-1] == n - 1 and np.all(np.diff(px) > 0)  # ends kept, order kept
+
+
+def test_scatter3d_of_a_big_grid_is_sampled_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    from quantized.calc.figure_map3d import MAX_SCATTER_POINTS
+
+    x = np.linspace(0.0, 1.0, 300)
+    z = np.add.outer(x, x)  # 90,000 finite cells
+    calls = _capture(monkeypatch, "scatter")
+    render_map_figure(x, x, z, kind="scatter3d", fmt="png")
+    assert len(calls[0][0]) == MAX_SCATTER_POINTS
+
+
+def test_waterfall_steps_only_rows_that_have_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    x = np.linspace(0.0, 1.0, 6)
+    y = np.arange(100.0)
+    z = np.full((100, 6), np.nan)
+    z[1] = np.arange(6.0)
+    z[2] = np.arange(6.0) + 1
+    calls = _capture(monkeypatch, "plot")
+    render_map_figure(x, y, z, kind="waterfall", fmt="png", max_lines=10)
+    assert [float(c[1][0]) for c in calls] == [1.0, 2.0]  # not 10 mostly-empty rows
+
+
+def test_3d_log_colour_scale_labels_the_z_axis_by_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mpl_toolkits.mplot3d import Axes3D
+
+    seen: list[list[str]] = []
+    real = Axes3D.set_zticks
+
+    def spy(self: Any, ticks: Any, labels: Any = None, **kw: Any) -> Any:
+        seen.append(list(labels or []))
+        return real(self, ticks, labels=labels, **kw)
+
+    monkeypatch.setattr(Axes3D, "set_zticks", spy)
+    x, y, z = _demo_grid()
+    render_map_figure(x, y, np.log10(np.maximum(z, 1e-3) * 1e3), kind="surface", fmt="png",
+                      colorbar_log10=True)
+    assert seen and all(not lab.startswith("-") for lab in seen[0])
+    assert any(lab in {"1", "10", "100", "1000", "1e3", "1e4"} for lab in seen[0])
+
+
+def test_3d_refuses_values_too_large_to_draw() -> None:
+    x = np.array([0.0, 1.0, 2.0])
+    z = np.array([[1e308, 1.0, 2.0], [3.0, 4.0, 5.0], [1.0, 2.0, 3.0]])
+    with pytest.raises(ValueError, match=r"beyond \+/-1e100"):
+        render_map_figure(x, x, z, kind="surface", fmt="png")
+
+
+def test_raw_scatter_with_too_few_points_has_a_scatter_message() -> None:
+    with pytest.raises(ValueError, match="3-D scatter needs at least 3"):
+        render_map_figure([0.0, 1.0], [0.0, 1.0], None, contour_source="points",
+                          z_values=[1.0, 2.0], kind="scatter3d")

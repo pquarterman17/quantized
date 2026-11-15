@@ -19,6 +19,7 @@ import {
   type WaterfallSeries,
 } from "../../../lib/waterfall";
 import type { Dataset } from "../../../lib/types";
+import { withUnit } from "../../../lib/unitDisplay";
 import { useApp } from "../../../store/useApp";
 
 export interface WaterfallState {
@@ -37,6 +38,9 @@ export interface WaterfallState {
   traceLabels: string[];
   /** The included datasets' raw channel series (no offset), for the 3-D section. */
   series: WaterfallSeries[];
+  /** Axis labels with units for a figure of the stack ("H (T)", "M (emu)"). */
+  xLabel: string;
+  zLabel: string;
   count: number; // number of included datasets
   setIncluded: (id: string, on: boolean) => void;
   setChannel: (c: string) => void;
@@ -115,6 +119,13 @@ export function useWaterfall(): WaterfallState {
   const traces = useMemo(() => buildWaterfall(series, opts), [series, resolvedSpacing, mode, reverse]);
   const aligned = useMemo(() => alignToUnionX(traces), [traces]);
 
+  const first = included[0]?.data;
+  const xName = String(first?.metadata["x_column_long"] || first?.metadata["x_column_name"] || "x");
+  const xUnit = first?.metadata["x_column_unit"];
+  const xLabel = withUnit(xName, typeof xUnit === "string" ? xUnit : "");
+  const ci = first ? first.labels.indexOf(activeChannel) : -1;
+  const zLabel = first && ci >= 0 ? withUnit(activeChannel, first.units[ci]) : activeChannel;
+
   const setIncluded = (id: string, on: boolean) =>
     setExcluded((prev) => {
       const next = new Set(prev);
@@ -162,6 +173,8 @@ export function useWaterfall(): WaterfallState {
     aligned,
     traceLabels: traces.map((t) => t.label),
     series,
+    xLabel,
+    zLabel,
     count: included.length,
     setIncluded,
     setChannel: setChannelRaw,

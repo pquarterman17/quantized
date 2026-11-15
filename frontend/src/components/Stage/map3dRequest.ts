@@ -16,6 +16,20 @@ import type { MapExportOptions, MapExportView } from "./mapFigureExport";
  *  200-row map reads as lines, not a dense surface (the route's `max_lines`). */
 export const WATERFALL_MAX_LINES = 40;
 
+/** A 3-D scatter draws at most this many points (the route's own cap): 250k took
+ *  6 s as PNG and 20 s as SVG while holding the global render lock. */
+export const MAP3D_MAX_POINTS = 50_000;
+
+/** At most `limit` of `items`, evenly spread, first and last kept, order kept --
+ *  the server's `decimate` rule (round(linspace), de-duplicated). */
+export function sampleEvenly<T>(items: readonly T[], limit: number): T[] {
+  const n = items.length;
+  if (n <= limit) return [...items];
+  const idx = new Set<number>();
+  for (let k = 0; k < limit; k++) idx.add(Math.round((k * (n - 1)) / (limit - 1)));
+  return [...idx].map((i) => items[i]);
+}
+
 export interface MapSource {
   data: DataStruct;
   keys: readonly [number, number, number];
@@ -29,17 +43,6 @@ export function rawSource(p: MapPayload, view: MapExportView): { x: number[]; y:
   if (view.view3d?.kind !== "scatter3d" || !src || !(p.interpolated || p.fallback)) return undefined;
   const col = (k: number) => src.data.values.map((row) => row[k]);
   return { x: col(src.keys[0]), y: col(src.keys[1]), z: col(src.keys[2]) };
-}
-
-/** One line under the preview saying what is actually drawn. */
-export function view3dCaption(p: MapPayload, view: MapExportView): string {
-  const raw = rawSource(p, view);
-  if (raw) return `Plotting your ${raw.z.length} original points (not the regridded surface).`;
-  const rows = p.yAxis.length;
-  if (view.view3d?.kind === "waterfall") {
-    return `Drawing ${Math.min(rows, WATERFALL_MAX_LINES)} of ${rows} grid rows${rows > WATERFALL_MAX_LINES ? " (evenly stepped)" : ""}.`;
-  }
-  return p.interpolated ? `Interpolated onto a regular grid from ${p.interpolated.nPoints} points.` : "";
 }
 
 export const FLAT_CHOICE = "2-D map";

@@ -16,7 +16,8 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import type { DataStruct } from "../../lib/types";
 import type { Map3dView } from "../../lib/mapView3d";
 import { mapFigureBody } from "./mapFigureExport";
-import { view3dCaption, view3dOptions } from "./map3dRequest";
+import { view3dCaption } from "./map3dCaption";
+import { view3dOptions } from "./map3dRequest";
 import { useMap3dImage } from "./useMap3dImage";
 
 export interface Map3dPreviewProps {
@@ -43,20 +44,32 @@ export default function Map3dPreview({ payload, fresh, view3d, cmap, logZ, color
     () => (payload && fresh ? mapFigureBody(payload, view, view3dOptions(view3d, "png", "preview")) : null),
     [payload, fresh, view, view3d],
   );
-  const caption = payload ? view3dCaption(payload, view) : "";
-  const shot = useMap3dImage(body);
+  const { shot, busy } = useMap3dImage(body);
+  // While the picture held is not the one for the current inputs it is dimmed,
+  // marked busy, and NOT described: the caption speaks for the new inputs only.
+  const caption = payload && !busy ? view3dCaption(payload, view) : "";
+  const error = shot && "error" in shot && !busy ? shot.error : null;
 
   return (
     <div
       data-map3d-preview=""
-      aria-busy={!shot}
+      aria-busy={busy}
       style={{ position: "absolute", inset: 8, top, zIndex: 2, display: "grid", placeItems: "center", background: "var(--surface-1)", overflow: "hidden" }}
     >
       {shot && "url" in shot ? (
-        <img alt="3-D map preview" src={shot.url} style={{ maxWidth: "100%", maxHeight: "calc(100% - 22px)", objectFit: "contain" }} />
+        <img alt="3-D map preview" src={shot.url} style={{ maxWidth: "100%", maxHeight: "calc(100% - 22px)", objectFit: "contain", opacity: busy ? 0.4 : 1, transition: "opacity 120ms" }} />
+      ) : error ? (
+        <div role="alert" className="qzk-ds-meta qzk-msg" style={{ padding: 16, maxWidth: 420, textAlign: "center", color: "var(--danger)" }}>
+          3-D view not drawn — {error}
+        </div>
       ) : (
-        <div role={shot ? "alert" : "status"} className="qzk-ds-meta qzk-msg" style={{ padding: 16, maxWidth: 420, textAlign: "center", color: shot ? "var(--danger)" : "var(--text-dim)" }}>
-          {shot ? `3-D view not drawn — ${shot.error}` : "Rendering 3-D view…"}
+        <div role="status" className="qzk-ds-meta qzk-msg" style={{ padding: 16, color: "var(--text-dim)" }}>
+          Rendering 3-D view…
+        </div>
+      )}
+      {busy && shot && "url" in shot && (
+        <div role="status" data-map3d-updating="" style={{ position: "absolute", top: 8, left: 0, right: 0, textAlign: "center", fontSize: 12, color: "var(--text-dim)" }}>
+          Updating 3-D view…
         </div>
       )}
       {caption && (

@@ -8,7 +8,8 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import type { Map3dView } from "../../lib/mapView3d";
 import { mapFigureBody, type MapExportView } from "./mapFigureExport";
 import type { DataStruct } from "../../lib/types";
-import { choose3d, view3dCaption, view3dOptions, WATERFALL_MAX_LINES } from "./map3dRequest";
+import { view3dCaption } from "./map3dCaption";
+import { choose3d, MAP3D_MAX_POINTS, view3dOptions, WATERFALL_MAX_LINES } from "./map3dRequest";
 
 const payload = {
   xAxis: [0, 1, 2], yAxis: [0, 1],
@@ -90,14 +91,43 @@ describe("static 3-D map request", () => {
       expect(b.note).toBeUndefined(); // nothing was interpolated
     }
     expect({ ...preview, fmt: "", filename: "" }).toEqual({ ...exported, fmt: "", filename: "" });
-    expect(view3dCaption(scattered, v)).toMatch(/4 original points/);
+    // 4 rows in the file, 3 drawable: the caption counts what was SENT.
+    expect(view3dCaption(scattered, v)).toBe("Plotting 3 original points; 1 not drawn (non-finite).");
   });
 
-  it("log scale drops non-positive raw points whole; limits still clamp", () => {
+  it("log scale drops non-positive raw points whole; the heights are NOT clipped by the colour limits", () => {
     const v = { ...view(SC), logZ: true, colorLimits: [null, 8] as [null, number], source: { data, keys: [0, 1, 2] as const } };
     const b = mapFigureBody(scattered, v, view3dOptions(SC, "png", "p"));
-    expect(b.z_values).toEqual([Math.log10(8), Math.log10(4)]);
+    expect(b.z_values).toEqual([Math.log10(10), Math.log10(4)]); // 10 stays 10, not 8
     expect(b.x_axis).toEqual([5, 3.5]);
+    expect(b.z_limits).toEqual([expect.any(Number), Math.log10(8)]); // limits only set the colour range
+    expect(view3dCaption(scattered, v)).toBe("Plotting 2 original points; 2 not drawn (non-finite or non-positive).");
+  });
+
+  it("colour limits never flatten a 3-D surface or waterfall (z is height); the 2-D map still clamps", () => {
+    const lim = { ...view(V), colorLimits: [1, 3] as [number, number] };
+    const flat = mapFigureBody(payload, { ...lim, view3d: undefined }, { fmt: "pdf", style: "default", title: "", filename: "f" });
+    expect(flat.z_grid).toEqual([[1, 2, 3], [3, null, 3]]); // 2-D: colour saturation
+    for (const kind of ["surface", "waterfall", "scatter3d"] as const) {
+      const v3 = { ...V, kind };
+      const b = mapFigureBody(payload, { ...lim, view3d: v3 }, view3dOptions(v3, "png", "p"));
+      expect(b.z_grid).toEqual([[1, 2, 3], [4, null, 6]]); // heights unchanged
+      expect(b.z_limits).toEqual([1, 3]);
+    }
+  });
+
+  it("a huge raw cloud is sampled to the cap on the client too, ends and order kept, and says so", () => {
+    const n = 60_000;
+    const big: DataStruct = { time: [], values: Array.from({ length: n }, (_, i) => [i, i * 2, Math.sin(i)]), labels: ["x", "y", "z"], units: ["", "", ""], metadata: {} };
+    const v = { ...view(SC), colorLimits: null, source: { data: big, keys: [0, 1, 2] as const } };
+    const b = mapFigureBody(scattered, v, view3dOptions(SC, "png", "p"));
+    expect(b.x_axis).toHaveLength(MAP3D_MAX_POINTS);
+    expect(b.z_values).toHaveLength(MAP3D_MAX_POINTS);
+    expect(b.x_axis![0]).toBe(0);
+    expect(b.x_axis![MAP3D_MAX_POINTS - 1]).toBe(n - 1);
+    expect(b.x_axis!.every((x, i, a) => i === 0 || x > a[i - 1])).toBe(true);
+    expect(b.note).toBe("Plotting 50,000 of 60,000 points, evenly sampled.");
+    expect(view3dCaption(scattered, v)).toBe("Plotting 50,000 original points, evenly sampled from 60,000.");
   });
 
   it("genuinely gridded data keeps the grid path for a scatter", () => {
@@ -113,7 +143,10 @@ describe("static 3-D map request", () => {
     const W: Map3dView = { ...V, kind: "waterfall" };
     const b = mapFigureBody(big, view(W), view3dOptions(W, "png", "p"));
     expect(b.max_lines).toBe(WATERFALL_MAX_LINES);
-    expect(view3dCaption(big, view(W))).toBe(`Drawing ${WATERFALL_MAX_LINES} of 200 grid rows (evenly stepped).`);
+    expect(view3dCaption(big, view(W))).toBe(`Drawing ${WATERFALL_MAX_LINES} of 200 grid rows with data (evenly stepped).`);
+    // rows with no data are not drawn and not counted
+    const sparse = { ...big, zGrid: big.zGrid.map((r, i) => (i < 5 ? r : r.map(() => null))) } as unknown as MapPayload;
+    expect(view3dCaption(sparse, view(W))).toBe("Drawing 5 of 5 grid rows with data.");
     expect(mapFigureBody(payload, view(V), view3dOptions(V, "png", "p")).max_lines).toBeUndefined();
   });
 });

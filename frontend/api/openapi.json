@@ -8155,6 +8155,38 @@
         "title": "MagnetizationRequest",
         "type": "object"
       },
+      "MapCurve": {
+        "description": "One separate curve of a 3-D waterfall: points in ORIGINAL order, drawn at\n``depth`` along the third axis (no union, no sort).",
+        "properties": {
+          "depth": {
+            "title": "Depth",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 1000000,
+            "title": "X",
+            "type": "array"
+          },
+          "z": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 1000000,
+            "title": "Z",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "z",
+          "depth"
+        ],
+        "title": "MapCurve",
+        "type": "object"
+      },
       "MapFigureRequest": {
         "properties": {
           "cmap": {
@@ -8176,6 +8208,21 @@
             "default": "grid",
             "title": "Contour Source",
             "type": "string"
+          },
+          "curves": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MapCurve"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curves"
           },
           "dpi": {
             "anyOf": [
@@ -8206,6 +8253,8 @@
           "height_in": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
+                "maximum": 40.0,
                 "type": "number"
               },
               {
@@ -8310,6 +8359,8 @@
           "width_in": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
+                "maximum": 40.0,
                 "type": "number"
               },
               {
@@ -8319,9 +8370,11 @@
             "title": "Width In"
           },
           "x_axis": {
+            "default": [],
             "items": {
               "type": "number"
             },
+            "maxItems": 1000000,
             "title": "X Axis",
             "type": "array"
           },
@@ -8331,9 +8384,11 @@
             "type": "string"
           },
           "y_axis": {
+            "default": [],
             "items": {
               "type": "number"
             },
+            "maxItems": 1000000,
             "title": "Y Axis",
             "type": "array"
           },
@@ -8391,6 +8446,7 @@
                 "items": {
                   "type": "number"
                 },
+                "maxItems": 1000000,
                 "type": "array"
               },
               {
@@ -8400,10 +8456,6 @@
             "title": "Z Values"
           }
         },
-        "required": [
-          "x_axis",
-          "y_axis"
-        ],
         "title": "MapFigureRequest",
         "type": "object"
       },

@@ -169,7 +169,7 @@ export default function WaterfallView() {
             3-D waterfall…
           </button>
         </div>
-        {show3d && canPlot && <Waterfall3dSection series={w.series} channel={w.channel} />}
+        {show3d && canPlot && <Waterfall3dSection series={w.series} channel={w.channel} xLabel={w.xLabel} zLabel={w.zLabel} />}
       </div>
     </ToolWindow>
   );

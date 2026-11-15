@@ -8951,6 +8951,19 @@ export interface components {
             /** Volume */
             volume: number;
         };
+        /**
+         * MapCurve
+         * @description One separate curve of a 3-D waterfall: points in ORIGINAL order, drawn at
+         *     ``depth`` along the third axis (no union, no sort).
+         */
+        MapCurve: {
+            /** Depth */
+            depth: number;
+            /** X */
+            x: number[];
+            /** Z */
+            z: number[];
+        };
         /** MapFigureRequest */
         MapFigureRequest: {
             /**
@@ -8973,6 +8986,8 @@ export interface components {
              * @default grid
              */
             contour_source?: string;
+            /** Curves */
+            curves?: components["schemas"]["MapCurve"][] | null;
             /** Dpi */
             dpi?: number | null;
             /**
@@ -9048,15 +9063,21 @@ export interface components {
             view_elev?: number;
             /** Width In */
             width_in?: number | null;
-            /** X Axis */
-            x_axis: number[];
+            /**
+             * X Axis
+             * @default []
+             */
+            x_axis?: number[];
             /**
              * X Label
              * @default
              */
             x_label?: string;
-            /** Y Axis */
-            y_axis: number[];
+            /**
+             * Y Axis
+             * @default []
+             */
+            y_axis?: number[];
             /**
              * Y Label
              * @default
