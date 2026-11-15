@@ -200,14 +200,25 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   and run `qz --desktop` with the `desktop` extra. Otherwise Copy figure
   works as before.
 - **Opening new files in 0.34.0**: a workspace that uses graph layers, Y3+
-  axes, a colour gradient, linked Y axes, live multi-dataset graphs, column
-  comments or number formats, or the new symbol, error-bar or axis styling is
-  saved as `.dwk` version 6. v0.34.0 refuses it ("unsupported workspace
-  version: 6") instead of opening it without those features and losing them
-  on save. A workspace without them stays version 4 and opens in 0.34.0.
-  Graph templates and Plot Recipes have no such gate: 0.34.0 reads the
-  fields it knows, so one that uses the new styling applies there without
-  it.
+  axes, a colour gradient (on a graph or in a saved Graph Builder spec),
+  linked Y axes, live multi-dataset graphs, column comments or number
+  formats, the new axis options (log2, probability, custom ticks, crossing,
+  grid styling, top axis, reverse, rotation, offset) or the new publication
+  (export) series styles is saved as `.dwk` version 6. v0.34.0 refuses it
+  ("unsupported workspace version: 6") instead of opening it without those
+  features and losing them on save. A workspace without them stays version 4
+  and opens in 0.34.0. The new per-series styling on a graph (hollow
+  symbols, symbol details, error-bar style, size by column, drop lines,
+  spline) does not bump the version: 0.34.0 keeps it, though it does not
+  draw it. A copied workbook follows the same rule (transfer version 2,
+  which 0.34.0 refuses to paste).
+- Graph templates kept in the app and exported Plot Recipe files have no
+  such gate: 0.34.0 reads the fields it knows and applies them without the
+  rest. Graph templates live in the browser profile, so after going back to
+  0.34.0 on the same machine, the first template 0.34.0 saves rewrites the
+  list without the newer fields (gradient, Y3+ axes, new styles) of
+  templates made in this version. (Recipes saved inside a `.dwk` are part of
+  the version-6 rule above.)
 - `qz convert` writes `.dwk` version 3, which this version migrates on open.
 
 ### Known limitations
@@ -229,6 +240,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   weighted fits and fits on a row selection are written as comments, and the
   script stops at the first such data step. Error-column bindings are not
   recorded.
+- 0.34.0 opens a version-4 or version-5 file that uses the new worksheet
+  functions (`erf`, `gamma`, `interp`, …) or the new signal operations, but
+  cannot compute them: 0.34.0's formula engine reports `unknown function
+  "erf"` for such a computed column, and a recorded signal-operation step
+  fails when run (`"sigop" is not a single-output transform`). The formula and the
+  step are kept, so the file works again in this version.
 - `.xls` import reads legacy (BIFF) workbooks. A `.xlsx`, TSV or HTML file
   renamed to `.xls` is detected by its content instead.
 

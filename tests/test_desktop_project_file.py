@@ -136,8 +136,17 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
     # The end-to-end proof, not just the two constants in isolation: a
     # payload built from the frontend's OWN current values must actually
     # pass the backend's gate.
-    payload = f'{{"format": "{frontend_format}", "version": {frontend_version}, "datasets": []}}'
-    assert validate_workspace_payload(payload) is None
+    for version in (
+        frontend_version,
+        int(transform_match.group(1)),
+        int(new_features_match.group(1)),
+    ):
+        payload = f'{{"format": "{frontend_format}", "version": {version}, "datasets": []}}'
+        assert validate_workspace_payload(payload) is None, version
+    # ... and the next version up is still refused (the gate is not "anything").
+    too_new = int(new_features_match.group(1)) + 1
+    payload = f'{{"format": "{frontend_format}", "version": {too_new}, "datasets": []}}'
+    assert validate_workspace_payload(payload) is not None
 
 
 # --- extract_declared_source_paths (P1.7 P1-A) ------------------------------

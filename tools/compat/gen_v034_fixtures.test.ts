@@ -22,6 +22,7 @@ import { parseRecipe } from "./lib/plotRecipeIO";
 import { exportRecipeFile } from "./lib/plotRecipeStorage";
 import { defaultPlotView, type PlotWindow } from "./lib/plotview";
 import { sanitizePlotWindows } from "./lib/plotWindows";
+import type { SavedPlotSpec } from "./lib/plotspec";
 import type { Dataset } from "./lib/types";
 import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
 
@@ -112,7 +113,21 @@ it("generates the v0.34.0 compatibility fixtures", () => {
       fmt: "pdf",
       dpi: 300,
       overrides: null,
-      seriesStyles: null,
+      seriesStyles: [{ color: "#d62728", width: 2, marker: true, marker_size: 6, marker_shape: "s" }, null],
+    },
+  };
+
+  // A saved Graph Builder spec with a v2 display block (series styles + order + labels).
+  const savedSpec: SavedPlotSpec = {
+    id: "pspec-034",
+    name: "Book1 builder",
+    createdAt: "2026-11-14T12:00:00.000Z",
+    modifiedAt: "2026-11-14T12:00:00.000Z",
+    spec: {
+      version: 2,
+      zones: { x: { datasetId: "c", channel: -1 }, y: [{ datasetId: "c", channel: 0 }, { datasetId: "c", channel: 1 }], group: null, facet: null, yErr: [], xErr: null },
+      mark: "line",
+      display: { series: { 0: { color: "#d62728", width: 2 } }, order: [1, 0], labels: { 0: "R1", 1: "R2" } },
     },
   };
 
@@ -124,6 +139,7 @@ it("generates the v0.34.0 compatibility fixtures", () => {
     plotWindows,
     focusedWindowId: "w-034",
     figureDocs: [savedFigure],
+    savedPlotSpecs: [savedSpec],
     editableFigures: [...(base.editableFigures ?? []), editable],
     macroSteps: [...(base.macroSteps ?? []), fit],
   };

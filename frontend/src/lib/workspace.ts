@@ -81,12 +81,13 @@ export const WORKSPACE_VERSION = 4;
 // version"), which is the safe failure. Content is otherwise identical to v4. (Templates need no
 // bump: an older `parseTemplate` already rejects the whole file on an unknown step kind.)
 export const WORKSPACE_VERSION_TRANSFORM_STEPS = 5;
-// v6 (release prep after 0.34.0): written ONLY when the file uses a feature v0.34.0 would silently
-// drop on open + save (graph layers, Y3+ axes, colour gradients, linked Y axes, live multi-dataset
-// graphs, column formats, the new symbol/error-bar/axis styling -- `featuresV034WouldDrop` in
-// lib/workspaceSerialize.ts). v0.34.0 accepts only v1-v5, so it refuses such a file instead of
-// losing those features; a file without them stays v4/v5 and still opens in 0.34. Content is
-// otherwise identical to v4/v5.
+// v6 (release prep after 0.34.0): written ONLY when the file holds a field v0.34.0 silently drops on
+// open + save (graph layers, Y3+ axes, colour gradients incl. a saved Graph Builder spec's, linked Y
+// axes, live multi-dataset graphs, column comments/formats, the new axis-format options and the new
+// publication (export) series styles -- the "gated" entries of lib/workspaceForwardCompat.ts).
+// v0.34.0 accepts only v1-v5, so it refuses such a file instead of losing those features; a file
+// without them stays v4/v5 and still opens in 0.34. Fields 0.34 carries through untouched (the new
+// per-series SeriesStyle keys) do not bump. Content is otherwise identical to v4/v5.
 export const WORKSPACE_VERSION_NEW_FEATURES = 6;
 
 /** The persistable slice of app state (input to serialize). The store's AppState

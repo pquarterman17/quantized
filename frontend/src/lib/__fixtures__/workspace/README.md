@@ -80,8 +80,9 @@ checks that this build shows everything v0.34.0 showed from them.
   designation, Origin book metadata), a plot window that passed v0.34.0's
   `sanitizePlotWindows` (a Y axis break, a second Y axis, error bars, series
   styles, a reference line), an editable figure from v0.34.0's
-  `createFigureDocument` with a Y axis break, a saved legacy figure, and a
-  pipeline fit step from v0.34.0's `makeStep`.
+  `createFigureDocument` with a Y axis break, a saved legacy figure with
+  publication (export) series styles, a saved Graph Builder spec with a v2
+  display block, and a pipeline fit step from v0.34.0's `makeStep`.
 - `graphTemplates-0.34.0.json`: the raw localStorage `qz.graphTemplates`
   value v0.34.0's `saveGraphTemplate` wrote (with a `captureGraphFormat`
   format).

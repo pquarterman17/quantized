@@ -236,7 +236,15 @@
      "fmt": "pdf",
      "dpi": 300,
      "overrides": null,
-     "seriesStyles": null
+     "seriesStyles": [
+      {
+       "color": "#d62728",
+       "width": 2,
+       "marker": true,
+       "marker_size": 6
+      },
+      null
+     ]
     },
     "live": true
    }
@@ -709,7 +717,54 @@
   ],
   "focusedWindowId": "w-034",
   "toolWindowLayout": {},
-  "savedPlotSpecs": [],
+  "savedPlotSpecs": [
+   {
+    "id": "pspec-034",
+    "name": "Book1 builder",
+    "createdAt": "2026-11-14T12:00:00.000Z",
+    "modifiedAt": "2026-11-14T12:00:00.000Z",
+    "spec": {
+     "version": 2,
+     "zones": {
+      "x": {
+       "datasetId": "c",
+       "channel": -1
+      },
+      "y": [
+       {
+        "datasetId": "c",
+        "channel": 0
+       },
+       {
+        "datasetId": "c",
+        "channel": 1
+       }
+      ],
+      "group": null,
+      "facet": null,
+      "yErr": [],
+      "xErr": null
+     },
+     "mark": "line",
+     "display": {
+      "series": {
+       "0": {
+        "color": "#d62728",
+        "width": 2
+       }
+      },
+      "order": [
+       1,
+       0
+      ],
+      "labels": {
+       "0": "R1",
+       "1": "R2"
+      }
+     }
+    }
+   }
+  ],
   "techniqueViewMemory": {},
   "savedRois": [],
   "mapViews": {},
