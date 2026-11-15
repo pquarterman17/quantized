@@ -25,6 +25,7 @@ Pure leaf: bytes in → floats out. No fastapi/pydantic/routes imports.
 from __future__ import annotations
 
 from quantized.io.origin_project.opju_axis_real_form import (
+    _SEP_WIDE,
     _STEP_TAG,
     _TAG_SEARCH_SPAN,
     _Y_TRANSITION,
@@ -36,6 +37,36 @@ from quantized.io.origin_project.opju_axis_real_form import (
 __all__ = ["parse_hybrid_record"]
 
 _RLE_MARKERS = (0xC2, 0xC3)  # run of 5 / 6 repeated bytes (see ``_real_rle``)
+# The step tag opens the span's LAST token (``83 02`` + 2 value bytes), so it
+# must end where the next field begins: ``_Y_TRANSITION`` after X, an end
+# separator after Y. ``83 02`` is also how ANY value with two significant bytes
+# encodes when the token before it ended non-zero (a zero-run of 6 + 2
+# literals, see ``opju_axis_zero_slot``), so a ``to`` such as 48.0
+# (``83 02 48 40``) or 3.0 (``83 02 08 40``) carries it too. Taking the first
+# or last ``83 02`` stopped at that ``to`` and read the span one slot early --
+# (0, 12) for Origin's (12, 48), (0, -0.5) for (-0.5, 3.0) in
+# OriginLab_Battery_Aging_Project (item 65). Shared by the specimen and hybrid
+# parsers, which use the same skeleton.
+_STEP_LEN = len(_STEP_TAG) + 2
+
+
+def _x_step(b: bytes, p: int, ytrans: int) -> int | None:
+    """Start of the X step token: the ``83 02`` token ending AT ``ytrans``."""
+    xstep = ytrans - _STEP_LEN
+    return xstep if xstep >= p and b[xstep : xstep + len(_STEP_TAG)] == _STEP_TAG else None
+
+
+def _y_step(b: bytes, y_start: int) -> int | None:
+    """Start of the Y step token: the first ``83 02`` token followed by an end
+    separator (the same admitted-flag `_SEP_WIDE` gate the real form uses), so
+    a ``to`` shaped like the tag is stepped over, never taken."""
+    hi = min(len(b), y_start + _TAG_SEARCH_SPAN)
+    q = b.find(_STEP_TAG, y_start, hi)
+    while q >= 0:
+        if _SEP_WIDE.match(b, q + _STEP_LEN):
+            return q
+        q = b.find(_STEP_TAG, q + 1, hi)
+    return None
 
 
 def _filler_third_byte_is_tag(b: bytes, tb: int) -> bool:
@@ -142,8 +173,8 @@ def _parse_specimen_record(
     ytrans = b.find(_Y_TRANSITION, p, min(len(b), p + _TAG_SEARCH_SPAN))
     if ytrans < 0:
         return None
-    xstep = b.rfind(_STEP_TAG, p, ytrans)
-    if xstep < 0:
+    xstep = _x_step(b, p, ytrans)
+    if xstep is None:
         return None
     xpair = _parse_pair(b, p, xstep)
     if xpair is None:
@@ -156,8 +187,8 @@ def _parse_specimen_record(
     if filler is None:
         return None
     x_log, y_start = filler
-    ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
-    if ystep < 0:
+    ystep = _y_step(b, y_start)
+    if ystep is None:
         return None
     ypair = _parse_pair(b, y_start, ystep)
     if ypair is None:
@@ -184,8 +215,8 @@ def parse_hybrid_record(
     ytrans = b.find(_Y_TRANSITION, p, min(len(b), p + _TAG_SEARCH_SPAN))
     if ytrans < 0 or ytrans + len(_Y_TRANSITION) >= len(b):
         return None
-    xstep = b.rfind(_STEP_TAG, p, ytrans)
-    if xstep < 0:
+    xstep = _x_step(b, p, ytrans)
+    if xstep is None:
         return None
     xpair = real_form_bare_pair(b, p, xstep)
     if xpair is None:
@@ -196,8 +227,8 @@ def parse_hybrid_record(
     if filler is None:
         return None
     x_log, y_start = filler
-    ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
-    if ystep < 0:
+    ystep = _y_step(b, y_start)
+    if ystep is None:
         return None
     ypair = real_form_bare_pair(b, y_start, ystep)
     if ypair is None:

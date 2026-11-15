@@ -14,9 +14,12 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (`.opju` graph-page recovery against a live Origin
-oracle, PR #676: 984 → 1,777 per-layer axis matches, phantom layers
-185 → 0; items 64-66 and an owner gate booked. See Completed.)
+**Updated:** 2026-11-15 (items 64-65 fixed: the axis record is run-length
+compressed, which decides the elided-zero slot and the specimen step tag;
+1,777 → 1,784 per-layer axis matches, 7 → 0 wrong, 0 phantom. Earlier the
+same day: `.opju` graph-page recovery against a live Origin oracle, PR #676:
+984 → 1,777, phantom layers 185 → 0; items 64-66 and an owner gate booked.
+See Completed.)
 Previously 2026-08-21 (real-data + live-Origin verification campaign. The
 "25 pre-existing renderer failures" every sweep since 2026-07-25 carried
 were PHANTOM: commit `5cdc7303` (2026-07-19, composition-union refactor)
@@ -934,14 +937,7 @@ work.
 
 ### Tier 2 — Medium Impact
 
-64. **Swapped Y endpoints** — Figure 6 Currents vary parameters
-    Graph3 (layers 1, 2, 3, 7, 9) decodes Y (0, -80) where Origin says
-    (-80, 0). It is identical on main, and pinned in `KNOWN_DEFECTS`
-    (`tests/test_io_origin_opju_page_attribution.py`). Possibly an elided-0
-    `y_from` against a stored negative `y_to`. Diagnose with the axis oracle.
-65. **Battery Aging slot shift** — `OriginLab_Battery_Aging_Project`
-    Graph2 Y and Graph3 X each read one value slot early (pinned). This is
-    pre-existing and still undiagnosed.
+(items 64-65 shipped 2026-11-15 — see Completed)
 
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
@@ -1090,6 +1086,20 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#64 Swapped Y endpoints + #65 Battery Aging slot shift**~~ (2026-11-15)
+  — one root: the axis record is a byte-level run-length stream (`0x80|k` =
+  `k+3` zeros, `0xc0|k` = `k+3` repeats, then a literal count), so a 0.0
+  endpoint has no token of its own. #64: its zeros ride in the step token's
+  run, so a run 8 longer than the step needs means `to` is the zero (Figure 6
+  Graph3 Y `85 02 54 c0 | 8b 02 34 40` = (-80, 0), not (0, -80)); new
+  `opju_axis_zero_slot.py`, fail-closed on any other surplus. #65: the
+  specimen parser's `83 02` step tag is also how any 2-byte value encodes
+  (`83 02 48 40` = 48), so it stopped at `to` and read one slot early; the
+  step token must now end at the next field, else the real form decodes the
+  record. Oracle 103 files: 1,777 / 7 / 0 → 1,784 / 0 / 0; corpus-wide 20
+  records change, 0 drop, and all 20 equal Origin's COM values (13 the
+  committed-oracle test does not score were checked over COM here). `KNOWN_DEFECTS` is empty. Evidence:
+  `docs/origin_project_format.md` §6.2, `docs/origin_re/validation_log.md`.
 - ~~**`.opju` graph-page recovery, verified against Origin**~~ (2026-11-15,
   #676). Origin 2026b's own per-page, per-layer axis state, read over COM
   (`test-data/origin/ground_truth_public/axis_ranges.json`, 103 files,
