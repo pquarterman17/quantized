@@ -30,7 +30,8 @@ import {
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
-import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
+import type { SmartFolder } from "./smartfolders";
+import { sanitizeSmartFolders } from "./smartFoldersSanitize";
 import { sanitizeCollections, type Collection } from "./collections";
 import { sanitizeSavedSampleProfiles, type SavedSampleProfile } from "./sampleGeometry";
 import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";

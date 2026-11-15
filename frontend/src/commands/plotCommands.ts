@@ -476,5 +476,15 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       description: "Place a movable rich-text annotation box on the active plot.",
       run: () => s().setDrawShapeKind("textbox"),
     },
+    // Gap audit 3 #15: Origin-style layers — bodies lazy (lib/graphLayerCommands.ts).
+    layer("inset", "Inset graph…", "A small graph of any data, on its own axes, over the plot."),
+    layer("image", "Image…", "A PNG, JPEG or SVG image on the plot."),
+    layer("table", "Table…", "A small table, typed or from worksheet rows, on the plot."),
   ];
 }
+
+/** An Insert ▸ layer command (`insert-inset` / `-image` / `-table`): the body loads on first use. */
+const layer = (kind: "inset" | "image" | "table", label: string, description: string): Action => ({
+  id: `insert-${kind}`, group: "Insert", label, description,
+  run: () => void runLazy("Loading layers…", () => import("../lib/graphLayerCommands")).then((m) => m.insertGraphLayer(kind), onLoadFailure),
+});

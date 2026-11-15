@@ -718,6 +718,8 @@ describe("figure documents — openFigureDocInWindow", () => {
         // exactly as it does xFmt / yFmt's. `statPicks` likewise.
         "statMarks",
         "statPicks",
+        // Origin gap audit 3 #15: the graph-layer list, a fresh `[]` likewise.
+        "layers",
       ].sort(),
     );
   });

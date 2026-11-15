@@ -1,8 +1,9 @@
 // An edit made ON a background (unfocused) plot window, written to that
 // window's own view rather than the live singleton fields the focused window
-// owns. Today only the magnifier inset edits in place (`Stage/InsetPlot.tsx`:
+// owns. The magnifier inset (`Stage/InsetPlot.tsx`) and the graph layers
+// (`Stage/GraphLayerBox.tsx`, via store/graphLayerEdit.ts) edit in place:
 // focusing swaps the window's content, which used to unmount the inset
-// mid-gesture and drop the edit). Undoable like every view edit: `history`
+// mid-gesture and drop the edit. Undoable like every view edit: `history`
 // labels the step (plotWindows is in the history snapshot). Imported only by
 // lazy code.
 

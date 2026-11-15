@@ -39,6 +39,17 @@ function everyFieldChanged(): PlotView {
     axisLabelOffsets: { x: [3, 4], y2: [1, 2] }, axisLabelStyles: { x: { size: 14, italic: true }, y: { bold: true } },
     plotTemplate: "aps", showAxisBox: false, xReversed: true, stackMode: true, insetMode: true, polarMode: true, statMode: true,
     inset: { x: [1, 2], y: [3, 4], yZoom: true, at: [0.1, 0.2, 0.3, 0.4], lines: false },
+    // Origin gap audit 3 #15: one of each layer kind, every field non-default.
+    layers: [
+      {
+        id: "L1", kind: "inset", at: [0.5, 0.1, 0.3, 0.25], mark: "linesymbol",
+        curves: [{ datasetId: "d1", xKey: 0, yKey: 1, label: "D: b" }],
+        x: { lim: [0, 2], scale: "log", label: "H (Oe)", step: 0.5 },
+        y: { lim: null, scale: "linear", label: "dM/dH", step: null },
+      },
+      { id: "L2", kind: "image", at: [0.05, 0.05, 0.2, 0.2], src: "data:image/png;base64,iVBORw0KGgo=", name: "tem.png" },
+      { id: "L3", kind: "table", at: [0.05, 0.6, 0.3, 0.2], rows: [["T", "Hc"], ["10", "120"]], header: false },
+    ],
     statHideEmptyLevels: true, statShowGroupN: false, statShowSummary: true,
     statMarks: { box: { points: "none", jitterWidth: 0.5 } },
     statPicks: {

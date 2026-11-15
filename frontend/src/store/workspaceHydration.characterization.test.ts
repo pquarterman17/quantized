@@ -556,6 +556,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "hiddenChannels",
       "insetMode",
       "integral",
+      "layers", // origin gap audit 3 #15: the restored window's graph layers
       "legendFrameXY",
       "legendPos",
       "legendStatic",
