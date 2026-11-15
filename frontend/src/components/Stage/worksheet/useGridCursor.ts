@@ -16,7 +16,7 @@
 // clears it, and a cell click clears the column selection — so the block the
 // clipboard commands act on is always the one the user can see highlighted.
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { categoricalLevels } from "../../../lib/categorical";
 import { parseClipboardGrid } from "../../../lib/clipboardGrid";
@@ -86,6 +86,9 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const [range, setRange] = useState<CellRange | null>(null);
   const [reveal, setReveal] = useState<GridReveal | null>(null);
   const { order, data, baseCount } = view;
+  // Hidden columns (lib/worksheetColumnView.ts): the cursor steps over them
+  // and a range's block ops leave them out.
+  const hidden = useMemo(() => new Set(ds.hiddenCols ?? []), [ds.hiddenCols]);
   const readOnly = isRederived(ds);
   // The entry row only where display position = row index (no view filter or
   // view sort) and the data is fully loaded and editable.
@@ -100,12 +103,12 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   useEffect(() => {
     setRange((r) => {
       if (!r) return r;
-      const b = { rows: rowCount, cols: colCount };
+      const b = { rows: rowCount, cols: colCount, hidden };
       const [a, f] = [clampCell(r.anchor, b), clampCell(r.focus, b)];
       const same = a.pos === r.anchor.pos && a.col === r.anchor.col && f.pos === r.focus.pos && f.col === r.focus.col;
       return same ? r : { anchor: a, focus: f };
     });
-  }, [rowCount, colCount]);
+  }, [rowCount, colCount, hidden]);
   useEscapeSurface("selection", () => {
     setRange(null);
     return true;
@@ -116,7 +119,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const bounds = (): GridBounds => {
     const live = liveShape(ds.id);
     const rows = Math.max(order.length, live?.rows ?? 0);
-    return { rows: rows + (entryRow ? 1 : 0), cols: live?.cols ?? data.labels.length };
+    return { rows: rows + (entryRow ? 1 : 0), cols: live?.cols ?? data.labels.length, hidden };
   };
   // Synchronous: the next key must already land on the grid, not on <body>.
   const focusGrid = () => document.getElementById(gridId)?.focus({ preventScroll: true });
@@ -170,7 +173,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
   const cursorOps = useWorksheetBlockOps({
     datasetId: ds.id,
     rows: range ? rangeRows(range, order) : [],
-    cols: range ? rangeCols(range) : [],
+    cols: range ? rangeCols(range, hidden) : [],
     order,
     rowCount: data.time.length,
     writableCols: baseCount,
@@ -202,7 +205,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const b = bounds();
     const accel = e.ctrlKey || e.metaKey;
     if (accel && e.key.toLowerCase() === "a" && b.rows > 0) {
-      const last = { pos: Math.max(0, order.length - 1), col: b.cols - 1 };
+      const last = clampCell({ pos: Math.max(0, order.length - 1), col: b.cols - 1 }, b);
       place({ anchor: { pos: 0, col: -1 }, focus: last });
       return true;
     }

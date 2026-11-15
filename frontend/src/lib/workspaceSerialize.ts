@@ -289,6 +289,8 @@ export function serializeWorkspace(
       ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
       ...(d.columnDesignations && Object.keys(d.columnDesignations).length ? { columnDesignations: d.columnDesignations } : {}),
       ...(d.columnProps && Object.keys(d.columnProps).length ? { columnProps: d.columnProps } : {}),
+      ...(d.hiddenCols?.length ? { hiddenCols: d.hiddenCols } : {}),
+      ...(d.frozenCols ? { frozenCols: d.frozenCols } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       fitSpec: d.fitSpec,

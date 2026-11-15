@@ -1049,7 +1049,7 @@ body {
    top/left offsets, widths) is computed in JS and applied inline since it's
    data-driven; these classes only carry the look. */
 .qzk-grid { flex: 1; overflow: auto; min-height: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); }
-.qzk-grid-row { display: flex; }
+.qzk-grid-row { display: flex; min-width: max-content; } /* as wide as its cells, so a sticky (pinned) cell stays pinned across the whole horizontal scroll, not just the first viewport width */
 .qzk-grid-row:hover .qzk-grid-cell { background: var(--surface-1); }
 .qzk-grid-cell, .qzk-grid-headcell { border: 1px solid var(--border-soft); padding: 3px 10px; text-align: right; color: var(--text-dim); box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: pointer; white-space: normal; }
@@ -1085,6 +1085,7 @@ body {
 .qzk-col-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; touch-action: none; }
 .qzk-col-resize::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px; background: transparent; }
 .qzk-col-resize:hover::after, .qzk-col-resize:active::after { background: var(--accent); }
+.qzk-col-hidden { position: absolute; top: 2px; left: 2px; z-index: 6; padding: 0 4px; font: inherit; font-size: 10px; line-height: 14px; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 7px; cursor: default; }
 
 /* sheet tab strip (components/Stage/worksheet/SheetTabs) — Origin's own
    bottom worksheet-tab convention for a multi-sheet workbook; hidden entirely

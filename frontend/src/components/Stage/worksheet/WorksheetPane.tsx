@@ -37,6 +37,7 @@ import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
 import HeaderEditor, { type HeaderEditTarget } from "./HeaderEditor";
 import SheetTabs from "./SheetTabs";
+import { useColumnVisibility } from "./useColumnVisibility";
 import { useGridCursor } from "./useGridCursor";
 import { useRowReveal } from "./useRowReveal";
 import { useWorksheetView } from "./useWorksheetView";
@@ -114,6 +115,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     const box = cell?.getBoundingClientRect();
     setHeaderEdit({ col, x: box?.left ?? 80, y: box?.bottom ?? 80 }); // just under the header
   };
+  const colVis = useColumnVisibility(ds, view.selectedCols, view.clearColSelection);
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
     onEditHeader: editHeader,
@@ -123,11 +125,11 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   const [find, setFind] = useState<{ replace: boolean; tick: number } | null>(null);
   const closeFind = useCallback(() => setFind(null), []);
   const findSelection = useMemo(() => {
-    if (cursor.range) return { rows: new Set(rangeRows(cursor.range, view.order)), cols: new Set(rangeCols(cursor.range)) };
+    if (cursor.range) return { rows: new Set(rangeRows(cursor.range, view.order)), cols: new Set(rangeCols(cursor.range, colVis.hiddenSet)) };
     return view.selected.size || view.selectedCols.size
       ? { rows: view.selected.size ? view.selected : new Set(view.order), cols: view.selectedCols.size ? view.selectedCols : new Set([-1, ...view.data.labels.keys()]) }
       : null;
-  }, [cursor.range, view.order, view.selected, view.selectedCols, view.data.labels]);
+  }, [cursor.range, colVis.hiddenSet, view.order, view.selected, view.selectedCols, view.data.labels]);
   // Two scroll requests share the grid's one `reveal`: an outside "show this
   // row" (useRowReveal) and the cursor's own moves. The newer one wins.
   const [rowRevealFirst, setRowRevealFirst] = useState(false);
@@ -234,6 +236,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onAnalyzeSelection={view.openSelectionInAnalysisCenter}
         onClearColSelection={view.clearColSelection}
         plotLinked={view.plotLinked}
+        columnView={colVis.controls}
       />
 
       <WorksheetFilterBar
@@ -338,6 +341,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         cursor={cursor.grid}
         columnProps={ds.columnProps}
         onHeaderDoubleClick={isRederived(ds) ? undefined : (col) => editHeader(col)}
+        hiddenCols={colVis.hiddenSet}
+        frozenCols={colVis.frozen}
+        onShowCols={colVis.controls.show}
       />
 
       <WorksheetMenus
@@ -347,6 +353,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onClose={() => setMenu(null)}
         onEditHeader={editHeader}
         onSetColumnValues={setScv}
+        colView={colVis.controls}
       />
       {scv && <SetColumnValuesDialog ds={ds} target={scv} xName={view.xName} onClose={() => setScv(null)} />}
       {headerEdit && (

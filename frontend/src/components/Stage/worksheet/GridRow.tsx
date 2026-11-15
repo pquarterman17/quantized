@@ -36,6 +36,7 @@ import type { CellEditApi } from "./useCellEdit";
  *  collision because it's checked as an exact `<option value>`, not parsed
  *  from level text). */
 const ADD_NEW = "__new__";
+const NO_FROZEN: number[] = [];
 
 export interface GridRowProps {
   r: number; // original row index
@@ -95,6 +96,13 @@ export interface GridRowProps {
   cursor?: GridRowCursor;
   /** The blank entry row under the data: empty cells you can type into. */
   entry?: boolean;
+  /** Pinned (frozen) value columns, left to right, and each one's sticky
+   *  `left` (lib/worksheetColumnView.ts): drawn before the windowed run. */
+  frozenCols?: number[];
+  frozenLeft?: (col: number) => number;
+  /** Number the cells by their TRUE column (`aria-colindex`) — set while some
+   *  column is hidden, so a screen reader still says which column a cell is. */
+  colIndexed?: boolean;
 }
 
 export interface GridRowCursor {
@@ -133,6 +141,9 @@ export default function GridRow({
   fmtOf,
   cursor,
   entry = false,
+  frozenCols = NO_FROZEN,
+  frozenLeft = () => 0,
+  colIndexed = false,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -234,6 +245,7 @@ export default function GridRow({
         key={col}
         role="gridcell"
         id={cursor?.cellId(cursor.pos, col)}
+        aria-colindex={colIndexed ? col + 3 : undefined}
         aria-selected={cursor ? mark !== null : undefined}
         className={clsx("qzk-grid-cell", mark === "cursor" && "qzk-cell-cursor", mark && "qzk-cell-range")}
         onMouseDown={cursor && ((e) => cursor.onCellDown(cursor.pos, col, e))}
@@ -244,7 +256,7 @@ export default function GridRow({
           color: computed ? "var(--text-dim)" : undefined,
           ...(colSelected ? { background: "var(--accent-soft)" } : {}),
           ...(pinnedLeft != null
-            ? { position: "sticky" as const, left: pinnedLeft, zIndex: 2, background: colSelected || mark ? "var(--accent-soft)" : "var(--surface-0)" }
+            ? { position: "sticky" as const, left: pinnedLeft, zIndex: 2, background: colSelected || mark ? "var(--accent-soft)" : "var(--surface-0)", ...(col >= 0 && col === frozenCols[frozenCols.length - 1] ? { boxShadow: "2px 0 0 var(--accent)" } : {}) }
             : {}),
         }}
         onDoubleClick={
@@ -323,6 +335,7 @@ export default function GridRow({
           flexShrink: 0,
           ...(isSelected ? { color: "var(--accent)", fontWeight: 600 } : {}),
         }}
+        aria-colindex={colIndexed ? 1 : undefined}
         title={rowTitle}
         onClick={(e) => onRowNumClick(r, e)}
       >
@@ -330,6 +343,7 @@ export default function GridRow({
       </div>
       {cell(-1, time[r], gutterWidth)}
       {textLayout.before.map(textCell)}
+      {frozenCols.map((c) => cell(c, values[r]?.[c], frozenLeft(c)))}
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
       {visibleCols.map((c) => (
         <Fragment key={c}>

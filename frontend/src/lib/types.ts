@@ -470,6 +470,12 @@ export interface Dataset {
   /** Worksheet column comments and display number formats, by column (-1 = X);
    *  user-set, round-trips .dwk (lib/columnProps.ts). */
   columnProps?: Record<number, import("./columnProps").ColumnProps>;
+  /** Worksheet VIEW state, per sheet: value columns the grid does not draw
+   *  (still plottable, still named by formulas), and how many leading columns
+   *  stay pinned while scrolling sideways. Sorted unique indices / a count;
+   *  absent = none. Round-trips .dwk (lib/worksheetColumnView.ts). */
+  hiddenCols?: number[];
+  frozenCols?: number;
   /** Excluded original-row indices (JMP-style row state, #50). Excluded rows
    *  stay visible in the worksheet (greyed) but drop from analysis everywhere.
    *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
