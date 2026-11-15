@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
-import { worksheetTableColumns, worksheetTableWire, worksheetTsvTable } from "./worksheetTable";
+import { textColumnAnchors, worksheetTableColumns, worksheetTableWire, worksheetTsvTable } from "./worksheetTable";
 
 const T0 = Date.UTC(2026, 2, 1, 12, 0, 0) / 1000;
 
@@ -61,5 +61,38 @@ describe("the worksheet as a table", () => {
     const ds = mixed({ columnDesignations: { 1: "disregard" } });
     expect(worksheetTableWire(ds, [0]).map((c) => c.name)).toContain("Ref");
     expect(worksheetTableWire(ds, [0], true).map((c) => c.name)).not.toContain("Ref");
+  });
+});
+
+describe("textColumnAnchors (worksheet grid — same file order as Copy/Export)", () => {
+  const textCols = [
+    { shortName: "Sample", rows: ["S0", "S1", "S2"] },
+    { shortName: "Date", rows: ["2026-03-01", "2026-03-02", "2026-03-03"] },
+  ];
+
+  it("anchors each text column after the channel it follows in the file", () => {
+    const ds = mixed();
+    // worksheetTableColumns puts them Temp, Signal, Sample, Ref, Date — so
+    // Sample (channel 0 = Signal) and Date (channel 1 = Ref).
+    expect(textColumnAnchors(ds.data, textCols)).toEqual([0, 1]);
+  });
+
+  it("anchors before every channel (-1) when the file puts it ahead of them all", () => {
+    const ds = mixed({}, { all_column_names: ["Temp (K)", "Sample", "Signal (mV)", "Ref (mV)", "Date"] });
+    expect(textColumnAnchors(ds.data, textCols)).toEqual([-1, 1]);
+  });
+
+  it("falls back to after the last channel with no recorded column order (today's old layout)", () => {
+    const ds = mixed({}, { all_column_names: undefined });
+    expect(textColumnAnchors(ds.data, textCols)).toEqual([1, 1]); // channel count - 1 = 1 (Ref)
+  });
+
+  it("falls back the same way for an Origin project (its own origin_column_names)", () => {
+    const ds = mixed({}, { origin_column_names: ["Temp", "Signal", "Ref"] });
+    expect(textColumnAnchors(ds.data, textCols)).toEqual([1, 1]);
+  });
+
+  it("returns [] for no text columns", () => {
+    expect(textColumnAnchors(mixed().data, [])).toEqual([]);
   });
 });

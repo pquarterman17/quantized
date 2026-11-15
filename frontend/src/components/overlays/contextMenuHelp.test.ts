@@ -36,6 +36,10 @@ const EXEMPT: Readonly<Record<string, string>> = {
   // The row "⋯" overflow lives inside the Recipe Library ToolWindow, whose
   // title-bar `?` already opens Recipe Library help (lib/workshopHelp.ts).
   "../workshops/recipelibrary/RecipeRowActions.tsx": "inside a workshop that has its own ? link",
+  // The worksheet toolbar's own "⋯" is a TOOLBAR OVERFLOW menu (the buttons
+  // that don't fit the window, verbatim) — same shape as PlotToolbar's own
+  // "Toolbar Options" flyout above, not an object context menu over data.
+  "../Stage/worksheet/WorksheetToolbar.tsx": "toolbar overflow menu",
 };
 
 // Where each seeded query LANDS: the first Help topic it lists. A footer that
