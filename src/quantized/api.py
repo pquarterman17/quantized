@@ -26,14 +26,30 @@ Example — load a scan, integrate a peak, build a report, render it::
     open("report.html", "w").write(qz.to_html(report.to_dict()))
     pdf = qz.render_figure(x, [("intensity", y)], fmt="pdf")   # publication vector
 
+Example — every book of an Origin project, without Origin (``qz convert`` on
+the command line is the batch form of the second call)::
+
+    books = qz.read_origin_books("legacy.opj")     # one DataStruct per book/sheet
+    for b in books:
+        print(b.metadata["origin_book"], b.metadata["origin_folder_path"], b.n_points)
+    report = qz.convert_origin_project("legacy.opj", "out", "xlsx")
+    qz.save_table(books[0], "first_book.csv")      # Long Name + Units header rows
+
+A pipeline recorded in the app exports as a Python script built on this module
+(``Export script`` in the Pipeline panel; ``docs/pipeline-studio-replay.md``).
+
 Note: importing this module pulls in matplotlib (for the render helpers), so it
 is heavier than ``import quantized``; the FastAPI server never imports it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
+
+import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
 # ── Data contract + file loading ──────────────────────────────────────────
 from quantized.calc.backgrounds import (
@@ -59,6 +75,8 @@ from quantized.calc.figure_map import render_map_figure
 from quantized.calc.figure_statplots import render_statplot_figure
 
 # ── Curve & peak fitting ───────────────────────────────────────────────────
+from quantized.calc.fit_autoguess import auto_guess
+from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import curve_fit
 from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_fit import fit_single_peak
@@ -127,9 +145,105 @@ from quantized.calc.stats_tests import (
 )
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.io.datastruct_table import write_table
+from quantized.io.origin_convert import convert_origin_project as _convert_origin_project
+from quantized.io.origin_project import read_origin_books as _read_origin_books
 from quantized.io.registry import import_auto as load
 from quantized.io.report_export import figure_target, format_value_error, to_html, to_latex
 from quantized.io.report_export import render_report as _render_report_io
+
+
+def read_origin_books(path: str | Path) -> list[DataStruct]:
+    """Every workbook sheet of an Origin project (``.opj``/``.opju``), each its
+    own DataStruct, in project order — no Origin needed.
+
+    :func:`load` keeps the one-file-one-DataStruct contract and returns only
+    the project's largest book; this returns them all. Each carries
+    ``metadata["origin_book"]`` (``"Book4"``, ``"Book4@2"`` for sheet 2),
+    ``metadata["origin_folder_path"]`` (its Project Explorer folders, ``[]``
+    at the root) and the reader's own loss markers when the decode was
+    incomplete (``origin_columns_lost``, ``origin_worksheet_losses``,
+    ``x_column_recovered`` false) — check those before trusting a book;
+    :func:`convert_origin_project` does. Raises ``OriginProjectError`` (a
+    ``ValueError``) when the project cannot be read at all.
+    """
+    return _read_origin_books(Path(path))
+
+
+def convert_origin_project(
+    path: str | Path,
+    out_dir: str | Path,
+    fmt: str = "csv",
+    *,
+    prefix: str | None = None,
+    allow_partial: bool = False,
+) -> dict[str, Any]:
+    """Write every book of one Origin project to ``out_dir`` as ``fmt``
+    (``"csv"``, ``"xlsx"`` or ``"dwk"``) and return its report.
+
+    Fails closed per book: a book the reader could not fully decode is
+    reported and not written (``allow_partial=True`` writes it anyway, still
+    reported). Never raises for an unreadable project — the report's
+    ``status`` is ``"failed"`` with an ``error``. File naming and the report
+    shape: ``quantized.io.origin_convert``. ``qz convert`` runs this over
+    many files.
+    """
+    return _convert_origin_project(
+        Path(path), Path(out_dir), fmt, prefix=prefix, allow_partial=allow_partial
+    )
+
+
+def save_table(
+    data: DataStruct | Sequence[tuple[str, DataStruct]],
+    path: str | Path,
+    *,
+    sheet_name: str = "Sheet1",
+    header: bool = True,
+) -> Path:
+    """Write a DataStruct to ``.csv``, ``.tsv`` or ``.xlsx`` (by suffix).
+
+    The layout is the app's own worksheet export: the X column, every value
+    channel, then any Origin text columns; ``header`` writes the Long Name and
+    Units rows :func:`load` reads back. For an ``.xlsx`` of several tabs pass
+    ``[(tab name, DataStruct), ...]``. Returns the path written.
+    """
+    sheets = [(sheet_name, data)] if isinstance(data, DataStruct) else list(data)
+    return write_table(sheets, Path(path), header=header)
+
+
+def fit_model(
+    model: str,
+    x: ArrayLike,
+    y: ArrayLike,
+    *,
+    p0: Sequence[float] | None = None,
+    lower: Sequence[float] | None = None,
+    upper: Sequence[float] | None = None,
+    fixed: Sequence[bool] | None = None,
+    weights: ArrayLike | None = None,
+) -> dict[str, Any]:
+    """Fit a built-in model BY NAME (``"Gaussian"``, ``"Linear"``, …) to
+    ``(x, y)`` — what the app's Curve Fit and ``POST /api/fitting/fit`` do.
+
+    ``p0`` defaults to the model's automatic initial guess from the data,
+    exactly as the app's fit does; bounds default to unbounded. Returns
+    :func:`curve_fit`'s result (``params``, ``errors``, ``R2``, ``yFit``…)
+    plus ``paramNames``. Raises ``ValueError`` for an unknown model name.
+    """
+    if model not in FIT_MODELS:
+        raise ValueError(f"unknown fit model {model!r}")
+    xs = np.asarray(x, dtype=float)
+    ys = np.asarray(y, dtype=float)
+
+    def model_fcn(xx: NDArray[np.float64], pp: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.asarray(evaluate(model, xx, pp), dtype=float)
+
+    start = list(p0) if p0 is not None else auto_guess(model, xs, ys)
+    result = curve_fit(
+        xs, ys, model_fcn, start, lower=lower, upper=upper, fixed=fixed, weights=weights
+    )
+    result["paramNames"] = list(FIT_MODELS[model]["paramNames"])
+    return result
 
 
 def render_report(
@@ -172,8 +286,12 @@ __all__ = [
     # data + I/O
     "DataStruct",
     "load",
+    "read_origin_books",
+    "convert_origin_project",
+    "save_table",
     # fitting
     "curve_fit",
+    "fit_model",
     "fit_single_peak",
     "fit_multi_peak",
     "find_peaks_robust",

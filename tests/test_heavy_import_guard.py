@@ -58,6 +58,7 @@ PYPROJECT = SRC.parents[1] / "pyproject.toml"
 #: here, with its reason, rather than weakening the rules above.
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("cli.py", "quantized.plugins"): "`qz plugin ...` CLI subcommand; main thread, no server",
+    ("cli.py", "quantized.cli_convert"): "`qz convert ...` CLI subcommand; main thread, no server",
     ("cli.py", "quantized.routes._uploadcache"): (
         "`qz upload-cache ...` CLI subcommand; main thread, no server"
     ),
@@ -427,6 +428,11 @@ def relative():
 
 def stdlib_is_exempt():
     import json
+
+if __name__ == "__main__":
+    bumps_available()  # a script entry point never runs on import: not flagged
+else:
+    bumps_available()  # L70: but this branch is what an import runs
 """
     sites, problems = _scan_source(source, path)
     unguarded = sorted({s.module for s in sites if not s.covered})
@@ -437,7 +443,7 @@ def stdlib_is_exempt():
     scope = sorted(
         int(p.split(":")[1]) for p in problems if "module-scope call" in p
     )
-    assert scope == [10, 13, 14, 15, 18], (scope, joined)
+    assert scope == [10, 13, 14, 15, 18, 70], (scope, joined)
     assert "may only hold imports" in joined
     assert "only keyword is while_waiting" in joined
     assert "dynamic import" in joined

@@ -128,14 +128,33 @@ class Index:
         return self.canonical(".".join([base, *rest]))
 
 
+def _is_main_guard(node: ast.AST) -> bool:
+    """``if __name__ == "__main__":`` (either operand order)."""
+    if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
+        return False
+    test = node.test
+    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
+        return False
+    sides = [test.left, test.comparators[0]]
+    names = [s.id for s in sides if isinstance(s, ast.Name)]
+    consts = [s.value for s in sides if isinstance(s, ast.Constant)]
+    return names == ["__name__"] and consts == ["__main__"]
+
+
 def module_scope_nodes(tree: ast.Module) -> Iterator[ast.AST]:
-    """Nodes evaluated when the module body runs: everything except function
-    and lambda bodies (decorators and default values DO run at import)."""
+    """Nodes evaluated when the module body runs on IMPORT: everything except
+    function and lambda bodies (decorators and default values DO run at
+    import) and the body of an ``if __name__ == "__main__":`` block, which
+    runs only when the file is executed as a script, never on an import
+    (its ``else`` branch is what an import runs, so that is still scanned)."""
     stack: list[ast.AST] = list(tree.body)
     while stack:
         node = stack.pop()
         yield node
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        if _is_main_guard(node):
+            assert isinstance(node, ast.If)
+            stack += [node.test, *node.orelse]
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             stack += [*node.decorator_list, *node.args.defaults]
             stack += [d for d in node.args.kw_defaults if d is not None]
         elif isinstance(node, ast.Lambda):

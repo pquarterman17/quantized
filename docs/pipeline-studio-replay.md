@@ -19,6 +19,32 @@ script text. The structured `kind` and `params` fields are authoritative.
 Unknown or malformed kinds are removed by the established workspace/template
 sanitizers before they reach the Studio.
 
+## Exported Python script
+
+**Export script** (Pipeline panel) and **Download .py** (Macro recorder card)
+write a runnable Python script built on the public, in-process
+`quantized.api` (`frontend/src/lib/pipeline.ts`, `pipelineToPython`). Run it with
+`python pipeline.py [INPUT ...] [--out result.csv]`; it needs only the
+`quantized` package, no running app or server, and it never changes the
+project open in the app (`quantized.client` cannot read or write an open
+project's workbooks either: it drives a server statelessly, one request at a
+time). INPUT defaults to the file names recorded at import.
+
+| Step kind | In the script |
+| --- | --- |
+| `import` | `qz.load(path)`; an Origin project `qz.read_origin_books(path)[0]`, with a comment saying which book. Pasted or appended data: not reproduced. |
+| `correction` | `qz.apply_corrections(raw, params)`, from the uncorrected base as the app does. Not reproduced when it subtracts a background worksheet. Error-column bindings are not recorded; the comment says to pass `error_bindings`. |
+| `reset` | Back to the uncorrected base. |
+| `fit` | `qz.fit_model(model, x, y)` on the recorded channels and fit window; prints a note when the point count differs from the app's (masked rows are not recorded). Not reproduced for an explicit row selection or a weighted fit. |
+| `ui` | A comment: display settings have no data to re-run. |
+| `expression`, `transform` | Not reproduced: no `quantized.api` equivalent. |
+
+A step that is not reproduced becomes a comment saying why, never stand-in
+code. Because the data then differs from the app's, every later step that
+changes data is listed as a comment too, and the script saves the data as of
+the last step it did reproduce and prints which step it stopped at.
+`tests/test_pipeline_script.py` executes the generator's committed output.
+
 ## Preflight guarantees
 
 Before an interactive, saved-template, or folder/file batch run, Quantized

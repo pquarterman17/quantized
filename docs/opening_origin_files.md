@@ -52,6 +52,36 @@ you don't need to convert anything first.
   `"Book@N (sheet N)"` pseudo-datasets so their data isn't lost, even
   though quantized doesn't (yet) show a nested Book→Sheet tree.
 
+## Converting many projects at once (no Origin, no app)
+
+`qz convert` turns an archive of projects into CSV, Excel or Quantized
+workspaces from the command line, every book and every sheet:
+
+```bash
+qz convert "archive/**/*.opj" "archive/**/*.opju" --to xlsx --out converted/
+```
+
+- `--to csv`: one file per sheet, `<file>__<Book>.csv` and
+  `<file>__<Book>__sheet<k>.csv` for sheet 2 onwards.
+- `--to xlsx`: one workbook per Origin book, `<file>__<Book>.xlsx`, a tab per sheet.
+- `--to dwk`: one workspace per project, `<file>.dwk`, with the Project
+  Explorer folders; open it in quantized with File ▸ Open.
+
+Tables keep the Long Name and Units header rows, so they re-import with the
+same names. Each project gets a summary line, and the whole run a report,
+`converted/convert-report.json`, listing every book, its output and any
+problem.
+
+**It fails closed per book.** A book the reader could not fully decode (a
+column it could not read, an X column it could not recover, values that fail
+their checksum) is reported and **not written**; nothing is guessed.
+`--allow-partial` writes such books anyway, still listed in the report. The
+exit status is 0 only when every file converted completely; otherwise 1.
+
+From Python, the same is `quantized.api.convert_origin_project(path, out_dir,
+"csv")`, and `quantized.api.read_origin_books(path)` returns every book as a
+DataStruct (`quantized.api.load` returns only the largest).
+
 ## Known limitations
 
 Import is thorough but not lossless. In particular:
