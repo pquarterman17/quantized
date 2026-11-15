@@ -36,7 +36,11 @@ SRC = ROOT / "src" / "quantized"
 # `liborigin`/`ropj` read Origin projects but are GPL — quantized rolls its own
 # clean-room reader instead (see io/origin_project.py). Substring match, so
 # "liborigin" also blocks the "python-liborigin2" wrapper.
-GPL_PACKAGES = {"rosettasciio", "rsciio", "hyperspy", "exspy", "holospy", "liborigin", "ropj"}
+GPL_PACKAGES = {
+    "rosettasciio", "rsciio", "hyperspy", "exspy", "holospy", "liborigin", "ropj",
+    # Igor .ibw readers on PyPI are LGPL/GPL: io/igor_ibw.py is in-house.
+    "igor2", "pyigor", "igorpy",
+}
 MAX_MODULE_LINES = 500
 # plugins/ is pure too: the plugin machinery (discovery, contract, registration)
 # must never reach the web stack — plugins register through io/calc, not routes.
