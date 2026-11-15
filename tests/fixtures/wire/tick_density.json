@@ -1,0 +1,210 @@
+{
+  "note": "Lane L (audit 6 P3): matplotlib's AutoLocator (MaxNLocator nbins='auto', steps 1-2-2.5-5-10) on an axis of LENGTH (pt, or CSS px on screen) at tick FONT size: nbins = clip(floor(length / (font * per_tick)), 1, 9), per_tick 2 on Y and 3 on X, and the increment is the smallest nice step >= span / nbins. The canvas applies the same rule as uPlot's tick `space` (lib/uplotRightPad.ts); the export lets matplotlib's own locator place ticks for the export's size. Generated from matplotlib; read by tickDensityFixture.test.ts and tests/test_tick_density_fixture.py.",
+  "cases": [
+    {
+      "name": "MPMS M(T) moment, 640 px canvas",
+      "axis": "y",
+      "lim": [
+        -0.00045,
+        0.01015
+      ],
+      "length": 520,
+      "font": 12,
+      "step": 0.002,
+      "ticks": [
+        0.0,
+        0.002,
+        0.004,
+        0.006,
+        0.008,
+        0.01
+      ]
+    },
+    {
+      "name": "MPMS M(T) moment, 4 in export",
+      "axis": "y",
+      "lim": [
+        -0.00045,
+        0.01015
+      ],
+      "length": 216,
+      "font": 9,
+      "step": 0.002,
+      "ticks": [
+        0.0,
+        0.002,
+        0.004,
+        0.006,
+        0.008,
+        0.01
+      ]
+    },
+    {
+      "name": "MPMS M(T) temperature, 6 in export",
+      "axis": "x",
+      "lim": [
+        2,
+        298
+      ],
+      "length": 360,
+      "font": 9,
+      "step": 50.0,
+      "ticks": [
+        50.0,
+        100.0,
+        150.0,
+        200.0,
+        250.0
+      ]
+    },
+    {
+      "name": "MPMS M(T) temperature, wide canvas",
+      "axis": "x",
+      "lim": [
+        2,
+        298
+      ],
+      "length": 900,
+      "font": 12,
+      "step": 50.0,
+      "ticks": [
+        50.0,
+        100.0,
+        150.0,
+        200.0,
+        250.0
+      ]
+    },
+    {
+      "name": "figures integration x 2..21.5",
+      "axis": "x",
+      "lim": [
+        2,
+        21.5
+      ],
+      "length": 700,
+      "font": 12,
+      "step": 2.5,
+      "ticks": [
+        2.5,
+        5.0,
+        7.5,
+        10.0,
+        12.5,
+        15.0,
+        17.5,
+        20.0
+      ]
+    },
+    {
+      "name": "short Y band",
+      "axis": "y",
+      "lim": [
+        0,
+        110
+      ],
+      "length": 180,
+      "font": 12,
+      "step": 20.0,
+      "ticks": [
+        0.0,
+        20.0,
+        40.0,
+        60.0,
+        80.0,
+        100.0
+      ]
+    },
+    {
+      "name": "tiny Y band",
+      "axis": "y",
+      "lim": [
+        -3.7,
+        4.7
+      ],
+      "length": 60,
+      "font": 12,
+      "step": 2.5,
+      "ticks": [
+        -2.5,
+        0.0,
+        2.5
+      ]
+    },
+    {
+      "name": "narrow X",
+      "axis": "x",
+      "lim": [
+        0.1,
+        9.9
+      ],
+      "length": 300,
+      "font": 12,
+      "step": 2.0,
+      "ticks": [
+        2.0,
+        4.0,
+        6.0,
+        8.0
+      ]
+    },
+    {
+      "name": "negative Y",
+      "axis": "y",
+      "lim": [
+        -22,
+        -3
+      ],
+      "length": 300,
+      "font": 10,
+      "step": 2.5,
+      "ticks": [
+        -20.0,
+        -17.5,
+        -15.0,
+        -12.5,
+        -10.0,
+        -7.5,
+        -5.0
+      ]
+    },
+    {
+      "name": "offset Y",
+      "axis": "y",
+      "lim": [
+        1228,
+        1296
+      ],
+      "length": 400,
+      "font": 12,
+      "step": 10.0,
+      "ticks": [
+        1230.0,
+        1240.0,
+        1250.0,
+        1260.0,
+        1270.0,
+        1280.0,
+        1290.0
+      ]
+    },
+    {
+      "name": "sub-ppm Y",
+      "axis": "y",
+      "lim": [
+        -1.2e-07,
+        3.4e-07
+      ],
+      "length": 260,
+      "font": 9,
+      "step": 1e-07,
+      "ticks": [
+        -1e-07,
+        0.0,
+        1e-07,
+        2e-07,
+        3e-07
+      ]
+    }
+  ]
+}

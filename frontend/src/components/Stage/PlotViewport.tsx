@@ -32,7 +32,6 @@ import { registerSyncPlot, windowXSyncHook, windowYSyncHook } from "../../lib/wi
 // file's "driven entirely by props, NO store reads" contract (same reasoning
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
-import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
 import { plotDecorNeeds, startupOverlayCount, useLazyPlotParts } from "./useLazyPlotParts";
 import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
@@ -242,9 +241,6 @@ export default function PlotViewport(props: PlotViewportProps) {
       plotData = buildDecimatedData(fullData, x0, x1, w) as uPlot.AlignedData;
       opts.plugins = [...(opts.plugins ?? []), decimatePlugin(() => fullData)];
     }
-    // The focused stage (the one recording view history) publishes the tick
-    // increments it draws, so an export marks the same ticks (lib/liveTickSteps.ts).
-    if (args.onViewChange) opts.plugins = [...(opts.plugins ?? []), liveTicksPlugin()];
     const plot = new uPlot(opts, plotData, host);
     plotRef.current = plot;
     const unregister = syncKey ? registerSyncPlot(syncKey, plot) : null;

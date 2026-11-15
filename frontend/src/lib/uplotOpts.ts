@@ -47,7 +47,7 @@ import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
-import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
+import { xLabelRightPad, xTickSpace, yTickSpace } from "./uplotRightPad";
 import { orientArgs, orientAxes, orientPlugins } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
 import { measuredYAxisSize } from "./uplotAxisSize";
@@ -192,11 +192,12 @@ function stripNegZero(formatted: string): string {
 }
 
 const autoNumberFormatCache = new Map<number, Intl.NumberFormat>();
-function autoNumberFormat(maxFrac: number): Intl.NumberFormat {
-  const key = Math.max(0, Math.min(20, maxFrac));
+function autoNumberFormat(maxFrac: number, pad: boolean): Intl.NumberFormat {
+  const d = Math.max(0, Math.min(20, maxFrac)), key = pad ? d : -1 - d;
   let nf = autoNumberFormatCache.get(key);
   if (!nf) {
-    nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: key });
+    // A linear axis shows one decimal count (audit 6 P3): "0.0090" beside "0.0095", as Origin pads.
+    nf = new Intl.NumberFormat(undefined, { minimumFractionDigits: pad ? d : 0, maximumFractionDigits: d });
     autoNumberFormatCache.set(key, nf);
   }
   return nf;
@@ -216,19 +217,20 @@ function autoNumberFormat(maxFrac: number): Intl.NumberFormat {
  *  same screenshot (Field, integer Oe values) never needed >0 fraction
  *  digits, so it never showed the bug). This replaces `undefined` (defer to
  *  uPlot's own formatter) as the "auto" mode's `values` callback: SAME
- *  Intl locale-grouping behaviour uPlot already provides (so a healthy
- *  range renders byte-identical — see uplotOpts.test.ts's auto-mode
- *  regression case), but with a `splitsIncrement`-derived floor instead of
- *  a hardcoded 3. */
-const autoTickValues: TickValues = (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
-  const incr = splitsIncrement(splits, foundIncr);
-  const nf = autoNumberFormat(decimalsForIncrement(incr));
+ *  Intl locale-grouping behaviour uPlot already provides, but with a
+ *  `splitsIncrement`-derived floor instead of a hardcoded 3. On a linear
+ *  axis (`pad`) it is also the minimum, so every label of one axis carries
+ *  the same decimals (audit 6 P3); log and reciprocal ticks are uneven, so
+ *  theirs stay unpadded. */
+const autoValues = (pad: boolean): TickValues => (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
+  const nf = autoNumberFormat(decimalsForIncrement(splitsIncrement(splits, foundIncr)), pad);
   return splits.map((v) => (v == null ? null : stripNegZero(nf.format(v))));
 };
+const autoTickValues = autoValues(true);
 
 /** Auto labels on a log axis: decade anchors on a multi-decade view, the
  *  ordinary auto labels on a sub-decade one (lib/logTicks.ts). */
-const autoLogTickValues: TickValues = (u, splits, ...rest) => logDecadeLabels(splits) ?? autoTickValues(u, splits, ...rest);
+const autoLogTickValues: TickValues = (u, splits, ...rest) => logDecadeLabels(splits) ?? autoValues(false)(u, splits, ...rest);
 
 /** Decimal places needed for a value's MANTISSA (sci/eng modes) so that two
  *  ticks `incr` apart in the SAME decade never format to the same digits —
@@ -322,7 +324,7 @@ function dateTickFormatter(
  *  mantissa is always 1 — so a dense axis never repeats a label. */
 export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
   const mode = fmt?.mode ?? "auto";
-  if (mode === "auto") return scale === "log" ? autoLogTickValues : autoTickValues;
+  if (mode === "auto") return scale === "log" ? autoLogTickValues : scale === "linear" ? autoTickValues : autoValues(false);
   if (mode === "date" || mode === "time" || mode === "datetime") {
     // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
     // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
@@ -1128,6 +1130,8 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
           logGridSplits(u, axisIdx, fixedLogAxisSplits(scaleMin, scaleMax, step ?? null))
       : undefined;
   };
+  // The automatic Y density (lib/uplotRightPad.ts) on a linear, numeric axis only.
+  const ySpace = (scale: AxisScale, fmt?: AxisFormat) => scale === "linear" && !/date|time/.test(fmt?.mode ?? "");
   const xSplits = splitsFor(xScale, xLim, args.xStep);
   const ySplits = splitsFor(yScale, yLim, args.yStep);
   // Tick-area `size` (excludes the label, see uPlot's doc) scales with the
@@ -1152,7 +1156,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
       ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
-      ...(xScale === "linear" && !payload.xCategories ? { space: xTickSpace(tickPx) } : {}),
+      ...(xScale === "linear" && !payload.xCategories ? { space: xTickSpace(tickPx, !scales.x.time) } : {}),
     },
     {
       ...axis,
@@ -1161,6 +1165,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
       ...(yScale === "log" ? { filter: logMajorTickFilter } : {}),
+      ...(ySpace(yScale, yFmt) ? { space: yTickSpace(tickPx) } : {}),
     },
   ];
   if (hasY2) {
@@ -1181,11 +1186,12 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(y2Values ? { values: y2Values } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),
       ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
+      ...(ySpace(y2ScaleEff, y2Fmt ?? yFmt) ? { space: yTickSpace(tickPx) } : {}),
     });
   }
   // The extras' per-axis lists follow `axes`; Y3+ (lib/uplotMultiY.ts) drops Y2's slot when it has none and appends its own.
   const look: [unknown[], unknown[], unknown[], unknown[]] = [[xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], [!!xLim, !!yLim, !!args.y2Lim], [args.xStep, args.yStep, args.y2Step]];
-  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: tickFormatter, splits: splitsFor, distr: scaleDistrProps, label: soloLabel, look }) : undefined;
+  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: tickFormatter, splits: splitsFor, space: (sc, f) => (ySpace(sc, f) ? yTickSpace(tickPx) : undefined), distr: scaleDistrProps, label: soloLabel, look }) : undefined;
 
   // Figures-audit #6: the Axis dialog's extras (minor/inward ticks, divide-by,
   // tick font, Ln) -- null, and nothing changed, when no axis has one. y2

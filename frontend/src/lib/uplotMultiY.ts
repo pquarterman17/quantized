@@ -27,6 +27,8 @@ export interface MultiYContext {
   scan: boolean;
   values: (fmt: AxisFormat, scale: AxisScale) => uPlot.Axis["values"];
   splits: Splits;
+  /** The automatic tick density of a linear numeric axis (lib/uplotRightPad.ts). */
+  space: (scale: AxisScale, fmt: AxisFormat) => uPlot.Axis["space"] | undefined;
   distr: (scale: AxisScale) => Pick<uPlot.Scale, "distr" | "fwd" | "bwd">;
   /** The derived title of payload axis `which` (one series: its name). */
   label: (which: number) => string | undefined;
@@ -62,6 +64,7 @@ export function pushExtraYAxes(scales: uPlot.Scales, axes: uPlot.Axis[], extra: 
     const ink = a.color ?? (ctx.axis.stroke as string);
     const values = ctx.values(a.fmt, a.scale);
     const splits = ctx.splits(a.scale, a.lim, a.step);
+    const space = ctx.space(a.scale, a.fmt);
     axes.push({
       ...ctx.axis,
       scale: `y${a.n}`,
@@ -75,6 +78,7 @@ export function pushExtraYAxes(scales: uPlot.Scales, axes: uPlot.Axis[], extra: 
       border: { show: true, stroke: ink, width: 1 },
       ...(values ? { values } : {}),
       ...(splits ? { splits } : {}),
+      ...(space ? { space } : {}),
       ...(a.scale === "log" ? { filter: logMajorTickFilter } : {}),
     });
   }

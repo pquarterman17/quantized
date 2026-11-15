@@ -51,15 +51,24 @@ describe("x ticks are spaced by their drawn labels", () => {
     return opts.axes?.[0]?.space;
   };
 
-  it("keeps a label-and-a-gap between ticks, never below uPlot's 50 px", () => {
+  // (u, axisIdx, scaleMin, scaleMax, plotDim): -20,000..20,000 across 600 px.
+  const at = (space: unknown, vals: (string | null)[]) => (space as (...a: unknown[]) => number)(plotWith(vals), 0, -20000, 20000, 600);
+
+  it("keeps a label-and-a-gap between ticks, never closer than the auto density rule", () => {
     // Measured live: "-12,500" labels touched at uPlot's default 50 px, and a
     // zoom to "1.00005"-wide labels overlapped them.
     const space = spaceOf({ fontSize: 12 });
     expect(typeof space).toBe("function");
-    const at = (vals: (string | null)[]) => (space as (u: uPlot) => number)(plotWith(vals));
-    expect(at(["-15,000", "-12,500", "-10,000"])).toBeGreaterThanOrEqual(Math.ceil(9 * 12 * 0.6));
-    expect(at(["0", "5", "10"])).toBe(50);
-    expect(at([])).toBe(50);
+    expect(at(space, ["-123,456,789", "-12,500"])).toBeGreaterThanOrEqual(Math.ceil(14 * 12 * 0.6));
+    // Audit 6 P3 (deliberate): short labels no longer fall back to uPlot's
+    // 50 px but to matplotlib's AutoLocator (lib/uplotRightPad.ts): 600 px at
+    // a 12 px font is 9 bins, and 40,000 / 9 rounds up to a 5,000 step: 75 px.
+    expect(at(space, ["0", "5", "10"])).toBeCloseTo(75, 3);
+    expect(at(space, [])).toBeCloseTo(75, 3);
+  });
+
+  it("keeps uPlot's 50 px floor on a date x axis", () => {
+    expect(at(spaceOf({ fontSize: 12, xFmt: { mode: "date", digits: 0 } }), ["0", "5"])).toBe(50);
   });
 
   it("leaves log and categorical x axes to their own tick rules", () => {

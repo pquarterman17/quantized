@@ -596,7 +596,8 @@ describe("buildOpts defaultTrace", () => {
       const fmt = tickFormatter({ mode: "auto", digits: 2 });
       const labels = fmt(null as never, denseSplits, 0, 0, 0.0001);
       expect(new Set(labels).size).toBe(denseSplits.length);
-      expect(labels).toContain("0"); // exact zero still renders bare, not "0.0000"
+      // Audit 6 P3 (deliberate): one decimal count per linear axis, zero included, as Origin pads.
+      expect(labels).toContain("0.0000");
     });
 
     it("auto mode reproduces the SAME duplicate-run shape without a fixed/sci path involved (repro proof)", () => {
