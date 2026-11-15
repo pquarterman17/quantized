@@ -287,7 +287,8 @@ def test_realdata_hardening_specimens_decode() -> None:
     * ``bigcolumn.opju`` — 120k rows decode bit-exact (audit #16);
     * ``designations.opju`` — a book with ALL designations (X/Y/Y-error/
       label/Z/X-error) keeps its whole metadata run: every long name and
-      every designation decodes (audit #10 — one unknown marker used to
+      every designation decodes as Origin reads it (audit #10; the long
+      names are the generator's intent, not Origin's types -- one unknown marker used to
       drop the entire book's names/units/X role);
     * ``symbol_kinds.opju`` — curve records carry symbol kinds 1..8 exactly
       (audit #15: 4-8 previously unverified).
@@ -303,9 +304,11 @@ def test_realdata_hardening_specimens_decode() -> None:
     assert big[0].values[-1, 0] == 60_000.5
 
     des = read_origin_books(spec / "designations.opju")[0]
+    # Origin 2026b COM wks.col.type (decode-plan item 72): D disregard, E
+    # label, F Z -- the marker-only reading said label / Z / X-error
     assert des.metadata["column_designations"] == {
-        "A": "X", "B": "Y", "C": "Y-error", "D": "label",
-        "E": "Z", "F": "X-error", "G": "Y",
+        "A": "X", "B": "Y", "C": "Y-error", "D": "disregard",
+        "E": "label", "F": "Z", "G": "Y",
     }
     assert des.metadata["x_column_long"] == "XXlong"
     assert des.labels == ("YYlong", "EYlong", "LBlong", "ZZlong", "EXlong", "DDlong")
