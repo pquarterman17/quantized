@@ -66,9 +66,10 @@ test("Exclude selected points, Include all points, and undo both", async ({ page
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 6 });
   await page.mouse.up();
-  const afterBrush = await read(page);
-  expect(afterBrush.selected).toBeGreaterThan(0);
-  const selected = afterBrush.selected;
+  // The brush commits through a lazy-loaded module, so the selection lands
+  // a tick after mouseup: poll it rather than reading once.
+  await expect.poll(async () => (await read(page)).selected).toBeGreaterThan(0);
+  const selected = (await read(page)).selected;
 
   // Right-click the plot and exclude the brushed selection.
   const at = await pixelAt(page, lim, 3);
