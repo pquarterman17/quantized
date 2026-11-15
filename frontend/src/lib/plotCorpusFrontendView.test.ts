@@ -18,6 +18,7 @@ import { bookDefaultHiddenChannels } from "./errorbars";
 import { originCurveSeriesStyle } from "./originCurveText";
 import { resolveFigureDataset } from "./originFigureEntries";
 import { figureChannelSelection, figureStatState } from "./originFigureSelection";
+import { buildOverlayDataset } from "./originOverlayFigure";
 import { ownXSeries } from "./ownXSeries";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
@@ -104,7 +105,26 @@ describe("plot-corpus frontend mirror (shared cases)", () => {
     let via: string;
     let kind: string;
     let drawn: { x: string | null; y: string }[];
-    if (stat.statMode) {
+    const overlay = buildOverlayDataset(fig, [ds]);
+    if (overlay) {
+      // The apply's first branch (store/originApplyRun.ts). Read each overlay
+      // column's (x, y) back as the source letters whose cells it carries.
+      via = "overlay";
+      const column = (letter: string): number[] =>
+        letter === xName ? ds.data.time : ds.data.values.map((row) => row[letters.indexOf(letter)]);
+      const same = (a: number[], b: number[]): boolean =>
+        a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+      const all = [xName, ...letters];
+      drawn = overlay.labels.map((_, k) => {
+        const rows = overlay.time.map((_t, i) => i).filter((i) => Number.isFinite(overlay.values[i][k]));
+        const xs = rows.map((i) => overlay.time[i]);
+        const ys = rows.map((i) => overlay.values[i][k]);
+        const x = all.find((l) => same(column(l).filter((_v, i) => i < xs.length), xs)) ?? "?";
+        const y = all.find((l) => same(column(l).filter((_v, i) => i < ys.length), ys)) ?? "?";
+        return { x, y };
+      });
+      kind = kindOf(fig.curves ?? []);
+    } else if (stat.statMode) {
       via = "stat";
       kind = "histogram";
       drawn = [{ x: null, y: fig.curves?.[0]?.y ?? "" }];
