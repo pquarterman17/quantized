@@ -298,33 +298,29 @@ def test_wide_pass_with_only_a_false_separator_still_fails_closed() -> None:
 _AXIS_JSON = "origin/ground_truth_public/axis_ranges.json"
 _REL_TOL = 1e-6
 
-_SOP = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
-_RISK5 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig3_ExtFig5/PerceivedRiskandPrediction.opju"  # noqa: E501
-_RISK9 = "origin/public/he-xiaolin_Online-perceived-risk-study/Fig4_ExtFig9/PerceivedRiskandPrediction.opju"  # noqa: E501
+
+_BATT = "origin/public/jiayu-here_originlab-battery-aging-project/results/OriginLab_Battery_Aging_Project.opju"  # noqa: E501
 
 # (file, page, layer) -> cause: decoded, but the values differ from Origin's.
-# Empty (2026-11-15): every decoded layer in the 76-file oracle matches. The
-# Y-span family that filled this table (a geometry double read as ``y_from``,
-# a real-form record taken by the specimen parser) is fixed; see
-# ``test_io_origin_opju_y_span``. Stale entries fail the test by design.
-KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {}
+# The Y-span family that once filled this table (a geometry double read as
+# ``y_from``, a real-form record taken by the specimen parser) is fixed; see
+# ``test_io_origin_opju_y_span``. The two below surfaced when the oracle grew
+# to 96 files (test-data 6fb31e8). Both are value-token defects (a span value
+# shifted into the neighbouring slot), NOT attribution: main (3f5be063) and
+# 472e4c7b emit the identical values. Not yet diagnosed. Stale entries fail the
+# test by design.
+KNOWN_DEFECTS: dict[tuple[str, str, int], str] = {
+    (_BATT, "Graph2", 1): "Y span (0, -0.5); Origin (-0.5, 3.0): value shifted a slot",
+    (_BATT, "Graph3", 1): "X span (0, 12); Origin (12, 48): value shifted a slot",
+}
 
 # (file, page, layer) -> cause: decoded under a page NAME Origin does not
-# list, so keyed (page, layer) it has no counterpart. All are the same class,
-# a page header whose NAME carries an escape the name scan does not read
-# (``fig_ c0 43 06 Verr..`` is Origin's "fig_CCCVerror"; ``Graph c0 31`` is
-# "Graph111"): the header is truncated ("fig_", "Graph") or not enumerated at
-# all ("Graph222"), so the page's layers surface under the wrong name or as an
-# extra layer of the page before it. The VALUES are Origin's own for the
-# missing page (checked), and the unfixed decoder emitted them too.
-_NAME_ESCAPE = "page-header name escape not read; values are the true page's layer"
-KNOWN_PHANTOMS: dict[tuple[str, str, int], str] = {
-    **{(_SOP, "fig_", n): "Origin 'fig_CCCVerror': " + _NAME_ESCAPE for n in range(1, 13)},
-    (_RISK5, "Graph", 1): "Origin 'Graph111': " + _NAME_ESCAPE,
-    (_RISK5, "Graph221", 3): "Origin 'Graph222' layer 1: " + _NAME_ESCAPE,
-    (_RISK9, "Graph", 1): "Origin 'Graph111': " + _NAME_ESCAPE,
-    (_RISK9, "Graph221", 3): "Origin 'Graph222' layer 1: " + _NAME_ESCAPE,
-}
+# list, so keyed (page, layer) it has no counterpart. Empty (2026-11-15): the
+# last class here -- a page-header name the scan truncated or never enumerated
+# (``fig_CCCVerror``, ``Graph111``, ``Graph222``: a ``c0 <ch>`` run escape in
+# the name field; 23-24 char names) -- is fixed in ``tree_opju._window_name``;
+# see ``test_io_origin_opju_window_names``. Stale entries fail the test.
+KNOWN_PHANTOMS: dict[tuple[str, str, int], str] = {}
 
 _Key = tuple[str, str, int]
 

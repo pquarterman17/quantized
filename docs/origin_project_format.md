@@ -2591,17 +2591,39 @@ a value token or the geometry filler can no longer shadow the real
 separator). The strict pass still takes only its first hit. Whole-corpus
 measurement: 0 of 2,153 (page, layer) values changed.
 
-Known open (reported, not fixed; pinned in
-`tests/test_io_origin_opju_page_attribution.py`; the Y-span defects that filled
-the strict `KNOWN_DEFECTS` table are fixed, see "Y-span start grammar" below):
+**Page-header name field: run escapes and 23-24 char names (2026-11-15).**
+Three name-field forms follow `0a [00] 80 <type> <namelen+2> 00 00`
+(`tree_opju._window_name`; surveyed over every header in the 359-file corpus):
 
-- **Page-header names with an escape.** `fig_ c0 43 06 Verr…` is Origin's page
-  `fig_CCCVerror`, `Graph c0 31 …` is `Graph111`: the header name is read
-  truncated (`fig_`, `Graph`) or the page is not enumerated at all
-  (`Graph222`). Their layers surface under the wrong name or as an extra layer
-  of the preceding page (`Graph221` layer 3). The values are the true page's
-  (checked against Origin); only the page identity is wrong. Same defect
-  class as the varint type above (a missed page header), different cause.
+- SHORT, names of up to 22 chars: `<namelen bytes> <trail >= 80>`.
+- RUN ESCAPE: `<namelen bytes> c0 <ch> [<n> <n chars>] <trail 80-bf>`. `c0 <ch>`
+  is `<ch>` x3 (Origin run-length-codes a char repeating three times); the
+  optional literal after it is counted without the +2. `Graph c0 31 8e` =
+  `Graph111`, `Graph1B c0 41 8c` = `Graph1BAAA`, `fig_ c0 43 06 Verror 89` =
+  `fig_CCCVerror`, `D c0 41 01 B 91` = `DAAAB`, `T0dbde c0 39 04 e9a5 89` =
+  `T0dbde999e9a5` (a 13-char hash-named book). The old reading took `c0` for the
+  trail: the name came out truncated (`Graph`, `D`, `T0dbde`) when the escape
+  closed the namelen run, and the page was not enumerated at all when it did not.
+- LONG, 23-24 chars (Origin's short-name limit): the byte after the type is no
+  longer the name length (`0x27` and `0x2a` seen) and there is no hi-bit trail;
+  the name is the whole charset run, ended by `00`
+  (`fig_SOPestimation_US06ou`, `ModulationTCRGraph_TEMPL`).
+
+Two escapes in one name, an escape not followed by a trail, and runs outside
+23-24 chars have no corpus evidence and are not read (fail closed). A missed
+header is the same phantom-layer mechanism as the varint type: its anchors fall
+into the previous page's span.
+
+Oracle (Origin 2026b `%H`, `axis_ranges.json`, 96 projects, 2,187 graph pages):
+pages the reader did not enumerate 17 -> 0 (the 686 `FitLine*`/`Residual*`/
+`sparkline*` child graphs that carry no `0a`-framed header are a separate
+documented gap); named figure pages Origin does not list 3 -> 0; per-(page,
+layer) decoded layers 1,718 match / 2 wrong / 18 phantom -> 1,753 / 2 / 0. The
+two wrong values (`OriginLab_Battery_Aging_Project` `Graph2` Y and `Graph3` X, a
+span value shifted a slot) are identical on main and are pinned in
+`KNOWN_DEFECTS`. Folder trees: 8 files that were flat now resolve (the window
+ordinals cover the enumerated windows exactly); 3 keep their shape with
+corrected window names (`T0dbde` -> `T0dbde999e9a5`).
 
 Axis-record grammar extensions found in the same pass
 (`opju_axis_real_form.py`): the span separator's lead byte can be `80` as
