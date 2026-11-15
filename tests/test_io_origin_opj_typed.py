@@ -821,8 +821,8 @@ def test_header_directly_followed_by_another_header_does_not_eat_it(tmp_path: Pa
 def _bad_header(name: str, offset: int) -> bytes:
     """A dataset header this reader does not recognise: a real one with a
     byte set at an offset the structural gate still requires to be zero
-    (0x13, 0x54-0x57; 0x12 and 0x40-0x47 are NOT gated -- SuperlatticeFits
-    Book12_C sets 0x12 and is a valid header)."""
+    (0x13, 0x40-0x47, 0x54-0x57; 0x12 is NOT gated -- SuperlatticeFits
+    Book12_C sets it and is a valid header)."""
     raw = bytearray(dataset_header(name, DOUBLE, total=3, used=3))
     raw[offset] = 1
     return bytes(raw)

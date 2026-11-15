@@ -3,9 +3,11 @@
 ``parse_dataset_header`` used to reject any header with a non-zero byte at
 0x12 or 0x40-0x47 -- a statistic about the 1358 headers then in the corpus,
 not a property of the format. SuperlatticeFits ``Book12_C`` is a valid
-Text & Numeric header with 0x12 set, and its column silently vanished. The
-gate is now structural; a header that still cannot be decoded is reported on
-its own book (``origin_columns_lost``), never dropped without a trace.
+Text & Numeric header with 0x12 set, and its column silently vanished. Only
+0x12 is ungated -- that is all the specimen proves; 0x40-0x47 stays gated
+until a specimen proves otherwise. A header that still cannot be decoded is
+reported on its own book (``origin_columns_lost``), never dropped without a
+trace.
 """
 
 from __future__ import annotations
@@ -29,15 +31,16 @@ def _header(name: str, *, rows: int = 3, elem: int = 8, b12: int = 0, b40: bytes
     return bytes(p)
 
 
-def test_header_with_byte_0x12_or_0x40_set_is_still_a_header() -> None:
+def test_header_with_byte_0x12_set_is_still_a_header() -> None:
     plain = parse_dataset_header(_header("Book1_A"))
     assert plain is not None and plain.name == "Book1_A"
-    for h in (
-        _header("Book1_A", b12=0x02),
-        _header("Book1_A", b40=b"\xfc\x01\x00\x00\x08\x00\x00\x00"),
-    ):
-        got = parse_dataset_header(h)
-        assert got is not None and (got.name, got.total_rows, got.elem_size) == ("Book1_A", 3, 8)
+    got = parse_dataset_header(_header("Book1_A", b12=0x02))  # the Book12_C shape
+    assert got is not None and (got.name, got.total_rows, got.elem_size) == ("Book1_A", 3, 8)
+
+
+def test_unproven_zero_byte_gate_at_0x40_still_holds() -> None:
+    # No specimen sets 0x40-0x47, so the gate there is not relaxed on spec.
+    assert parse_dataset_header(_header("Book1_A", b40=b"\xfc\x01\x00\x00\x08\x00\x00\x00")) is None
 
 
 def test_structurally_invalid_header_is_still_rejected() -> None:

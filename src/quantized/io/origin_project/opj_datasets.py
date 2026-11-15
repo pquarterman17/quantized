@@ -120,12 +120,15 @@ def parse_dataset_header(payload: bytes) -> DatasetHeader | None:
 
     Recognition is structural, not by block size, so a future header length
     still parses: the name sits at 0x58, and the bytes that are zero in all
-    1358 corpus headers (0x00-0x01, 0x13, 0x54-0x57) are zero. Bytes 0x12
-    and 0x40-0x47 are NOT gated: ``Book12_C`` of SuperlatticeFits.opj sets
-    0x12 and is otherwise a valid Text & Numeric header, so "zero in every
-    header seen" was a statistic about the corpus, not a property of the
-    format. The structure decides: a printable name, a non-zero element size
-    and, at decode time, a data block of exactly ``total * elem`` bytes. The
+    1358 corpus headers (0x00-0x01, 0x13, 0x40-0x47, 0x54-0x57) are zero.
+    Byte 0x12 is NOT gated: ``Book12_C`` of SuperlatticeFits.opj sets it and
+    is otherwise a valid Text & Numeric header (oracle-confirmed), so "zero
+    in every header seen" was a statistic about the corpus, not a property
+    of the format. The remaining zero-byte gates stay until a specimen
+    likewise proves them wrong -- a set byte there is diagnosed per book
+    (``origin_columns_lost``), never dropped silently. Beyond the gates, the
+    structure decides: a printable name, a non-zero element size and, at
+    decode time, a data block of exactly ``total * elem`` bytes. The
     synthetic fixtures older tests build (a name 40 bytes in, no
     fields) fail this on length and keep the legacy content-sniffing path.
 
@@ -135,7 +138,7 @@ def parse_dataset_header(payload: bytes) -> DatasetHeader | None:
     """
     if len(payload) < _NAME_OFFSET + 2 or payload[0] or payload[1]:
         return None
-    if payload[0x13] or any(payload[0x54:0x58]):
+    if payload[0x13] or any(payload[0x40:0x48]) or any(payload[0x54:0x58]):
         return None
     end = payload.find(b"\x00", _NAME_OFFSET)
     if end <= _NAME_OFFSET:
