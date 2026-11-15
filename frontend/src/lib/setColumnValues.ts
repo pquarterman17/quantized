@@ -250,8 +250,9 @@ export function columnEntries(ds: Dataset, xName: string): InsertEntry[] {
 /** `entry` inserted into `text` over the selection [start, end): the new text
  *  and where the cursor goes. */
 export function insertAt(text: string, start: number, end: number, entry: InsertEntry): { text: string; caret: number } {
+  // The FIRST "|" is the caret marker; any later "|" is literal text.
   const mark = entry.text.indexOf("|");
-  const plain = entry.text.replace("|", "");
+  const plain = mark < 0 ? entry.text : entry.text.slice(0, mark) + entry.text.slice(mark + 1);
   const next = text.slice(0, start) + plain + text.slice(end);
   return { text: next, caret: start + (mark < 0 ? plain.length : mark) };
 }
