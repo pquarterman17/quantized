@@ -105,10 +105,20 @@ function dropStash(upTo = Infinity): void {
   }
 }
 
+/** Every `.dwk` text carries its own write time (`savedAt`), so two writes of
+ *  one state differ only there: compare with it blanked. Returns a matcher
+ *  for `text`, normalising it once. */
+const SAVED_AT = /"savedAt":"[^"]*"/;
+function sameState(text: string): (other: string) => boolean {
+  const key = text.replace(SAVED_AT, "");
+  return (other) => other.length === text.length && other.replace(SAVED_AT, "") === key;
+}
+
 /** Test seam: a fresh page's codec pointer and size memo. */
 export function resetStashMemo(): void {
   codecNow = null;
   lastChars = 0;
+  tail = Promise.resolve(); // and an empty save queue (a test may leave a save hanging)
 }
 
 function isRestorable(parseWorkspace: ParseWorkspace, text: string): boolean {
@@ -119,12 +129,28 @@ function isRestorable(parseWorkspace: ParseWorkspace, text: string): boolean {
   }
 }
 
+/** The end of the save queue: every save (and clear) runs after the one
+ *  before it has settled, so two never interleave a read and a write — a
+ *  hide during a slow save starts another (review N5), and the earlier write
+ *  landing last would otherwise put back its own older read. */
+let tail: Promise<unknown> = Promise.resolve();
+
+function queued<T>(job: () => Promise<T>): Promise<T> {
+  const run = tail.then(job);
+  tail = run.catch(() => undefined);
+  return run;
+}
+
 /** Persist the workspace as a new generation (empty library → clear the slot).
  *
  *  Resolves false on any storage failure, leaving `autosaveHealth().error` set
  *  so the UI can show a PERSISTENT warning instead of a status line that
  *  scrolls away — the transient message was the pre-#32 weakness. */
-export async function saveAutosave(ws: WorkspaceState, now: number): Promise<boolean> {
+export function saveAutosave(ws: WorkspaceState, now: number): Promise<boolean> {
+  return queued(() => writeGeneration(ws, now));
+}
+
+async function writeGeneration(ws: WorkspaceState, now: number): Promise<boolean> {
   const be = backend();
   try {
     if (ws.datasets.length === 0) {
@@ -139,27 +165,40 @@ export async function saveAutosave(ws: WorkspaceState, now: number): Promise<boo
     const text = serializeWorkspace(ws, SERIALIZE);
     lastChars = text.length;
     // The stash joins the rotation (read AFTER the await, so a stash written
-    // while this save waited is seen); the newest generation wins either way.
+    // while this save waited is seen) — unless it holds the very state being
+    // saved or one already stored (review N1: a hide stashes, then saves the
+    // same state, and two of the three slots went to one recovery point).
+    // By CONTENT, not time: another tab's older stash is a distinct state.
     const read = await be.read();
     const stash = readStash();
+    const same = sameState(stash[0]?.text ?? "");
+    const fresh = stash.filter(() => !same(text) && !read.some((r) => same(r.text)));
+    // Until the startup restore has succeeded or been declined, the
+    // generations from before this session are pinned (review N2): a restore
+    // that failed must not be rotated out by the session that replaced it.
+    // Exempt from the count cap only — age and bytes still bound them.
+    const pin = ctx.state.pinBefore;
+    const all = [...fresh, ...read];
+    const pinned = pin === null ? [] : all.filter((g) => g.at < pin);
+    const rotating = pin === null ? all : all.filter((g) => g.at >= pin);
     // Three bounds, applied in sequence, each preserving the newest
     // generation on its own axis (count / age / size) — see
     // autosaveGenerations.ts's docs on rotate/capByAge/capBySize.
     const kept = capBySize(
       // P2.7: the fit-model CARRY only, not the library — a restore happens
       // on this machine, whose library is newer (lib/fitModelsProject.ts).
-      capByAge(rotate([...stash, ...read], { at: now, text }), now),
+      capByAge([...rotate(rotating, { at: now, text }), ...pinned], now),
       AUTOSAVE_BUDGET_BYTES,
     );
     await be.write(kept);
-    // Only the stash this save wrote out, or one older than it: a stash
-    // written while the write was in flight is newer, and waits for the next.
+    // Only the stash this save wrote out (or found duplicated), or one older
+    // than it: a stash written while the write was in flight is newer, and
+    // waits for the next save. (No drop on a failed save, quota included —
+    // review N3: the stash may be the only copy newer than IndexedDB.)
     dropStash(Math.max(now, stash[0]?.at ?? now));
     ctx.state.health = { savedAt: now, error: null, count: kept.length };
     return true;
   } catch (e: unknown) {
-    // A full store: an older stash only competes for the same quota.
-    if (e instanceof DOMException && e.name === "QuotaExceededError") dropStash(now);
     ctx.state.health = { ...ctx.state.health, error: e instanceof Error ? e.message : "storage unavailable" };
     return false;
   }
@@ -182,7 +221,11 @@ export async function loadAutosaveGeneration(): Promise<{ workspace: LoadedWorks
   const { parseWorkspace, autosaveRestoreFitModels } = loaded.value;
   try {
     if (read.status === "rejected") return null;
-    const generations = [...(await withLegacyGeneration(be, read.value, parseWorkspace)), ...readStash()];
+    // When RETRYING a failed startup restore, only what predates this session is a
+    // candidate: a retry must bring back the unrestored work, not this
+    // session's own saves (review N2).
+    const pin = (ctx.state.restoreError && ctx.state.pinBefore) || Infinity;
+    const generations = [...(await withLegacyGeneration(be, read.value, parseWorkspace)), ...readStash()].filter((g) => g.at < pin);
     const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
     ctx.state.health = { ...ctx.state.health, count: generations.length };
     // P2.7: an autosave embeds the fit-model CARRY only (above), so a
@@ -242,7 +285,11 @@ async function withLegacyGeneration(
  *  workspace" means every copy). Resolves null on success, else the failure's
  *  reason — the snapshot is then still there, so the caller must say so
  *  (silent-failure audit 2026-10-01). */
-export async function clearAutosave(): Promise<string | null> {
+export function clearAutosave(): Promise<string | null> {
+  return queued(wipe);
+}
+
+async function wipe(): Promise<string | null> {
   try {
     await backend().clear();
     dropStash();

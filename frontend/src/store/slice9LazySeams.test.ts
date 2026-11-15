@@ -139,8 +139,55 @@ describe("autosave through the codec seam", () => {
       for (let i = 0; i < 10; i++) await Promise.resolve();
     });
 
-    expect(dangerToasts()).toEqual([expect.stringMatching(/^Couldn't restore the autosaved library \(.*\) — reload to try again$/)]);
+    expect(dangerToasts()).toEqual([expect.stringMatching(/^Couldn't restore the autosaved library \(.*\) — retrying; earlier autosaves are kept$/)]);
     expect(useApp.getState().datasets).toEqual([]);
+  });
+});
+
+describe("a failed startup restore is retried (review N2)", () => {
+  async function settleAll(): Promise<void> {
+    await act(async () => {
+      await vi.dynamicImportSettled();
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    });
+  }
+
+  async function failFirstRestore(): Promise<void> {
+    expect(await saveAutosave(stateWithOneDataset())).toBe(true);
+    useApp.setState({ datasets: [] });
+    resetWorkspaceCodecForTests();
+    vi.doMock("../lib/workspace", failLoad);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    renderHook(() => useWorkspaceAutosave());
+    await settleAll();
+    // The failure is on the PERSISTENT health line, not only a toast.
+    expect(autosaveHealth().error).toMatch(/^Couldn't restore the autosaved library/);
+    vi.doUnmock("../lib/workspace");
+    vi.resetModules();
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("restores once the code loads, and clears the health line", async () => {
+    await failFirstRestore();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    await settleAll();
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["a.dat"]);
+    expect(autosaveHealth().error).toBeNull();
+  });
+
+  it("adds the restored library BESIDE work started meanwhile, never over it", async () => {
+    await failFirstRestore();
+    act(() => useApp.setState({ datasets: [{ ...ds, id: "b", name: "b.dat" }] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    await settleAll();
+    expect(useApp.getState().datasets.map((d) => d.name).sort()).toEqual(["a.dat", "b.dat"]);
   });
 });
 

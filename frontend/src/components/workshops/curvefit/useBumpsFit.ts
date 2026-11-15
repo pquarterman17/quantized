@@ -89,7 +89,7 @@ export function resetBumpsFitSession(): void {
   const { jobId } = useBumpsSession.getState();
   generation += 1;
   useBumpsSession.setState(INITIAL, true);
-  if (jobId) void cancelJob(jobId).catch(() => undefined);
+  if (jobId) void cancelById(jobId);
 }
 onWorkspaceReplace(resetBumpsFitSession);
 
@@ -105,14 +105,17 @@ function setDream(p: Partial<DreamSettings>): void {
   patch({ dream: { ...useBumpsSession.getState().dream, ...p } });
 }
 
-async function cancel(): Promise<void> {
-  const id = useBumpsSession.getState().jobId;
-  if (!id) return;
+async function cancelById(id: string): Promise<void> {
   try {
     await cancelJob(id);
   } catch {
     /* job already terminal — the poll loop settles it */
   }
+}
+
+async function cancel(): Promise<void> {
+  const id = useBumpsSession.getState().jobId;
+  if (id) await cancelById(id);
 }
 
 async function run(modelName: string): Promise<void> {
@@ -150,8 +153,13 @@ async function run(modelName: string): Promise<void> {
     });
     let fit: BumpsFitResult;
     if (isJobSubmit(resp)) {
-      patchMine({ jobId: resp.job_id, progress: 0 });
-      op.cancellable(() => void cancel());
+      const jobId = resp.job_id;
+      // Review N6: a reset while the submit was in flight could not cancel a
+      // job it had no id for — cancel it now, by the id the submit returned.
+      if (generation !== mine) return void cancelById(jobId);
+      patchMine({ jobId, progress: 0 });
+      // The op cancels by this job's own id, not whatever the session holds.
+      op.cancellable(() => void cancelById(jobId));
       fit = await pollJob<BumpsFitResult>(resp.job_id, (f) => {
         patchMine({ progress: f });
         op.progress(f);

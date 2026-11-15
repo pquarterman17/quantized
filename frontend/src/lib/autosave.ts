@@ -22,12 +22,23 @@ import type { LoadedWorkspace, WorkspaceState } from "./workspace";
 import { workspaceCodec } from "./workspaceCodecLazy";
 
 /** Shared with the lazy core: the backend (resolved on first use, so the
- *  backend code stays in the core chunk) and the persistent health readout. */
+ *  backend code stays in the core chunk), the persistent health readout, and
+ *  the startup-restore guard (review N2): until the restore has succeeded or
+ *  been declined, generations from before `pinBefore` (this session's start)
+ *  are exempt from the count cap, and `restoreError` keeps a failed restore
+ *  on the persistent health line even after saves succeed. */
 export interface AutosaveState {
   backend: AutosaveBackend | null;
   health: AutosaveHealth;
+  pinBefore: number | null;
+  restoreError: string | null;
 }
-const autosaveState: AutosaveState = { backend: null, health: { savedAt: null, error: null, count: 0 } };
+const autosaveState: AutosaveState = {
+  backend: null,
+  health: { savedAt: null, error: null, count: 0 },
+  pinBefore: Date.now(),
+  restoreError: null,
+};
 
 type Core = typeof import("./autosaveCore");
 let core: Core | null = null;
@@ -53,10 +64,25 @@ const failure = (e: unknown): string => (e instanceof Error ? e.message : "stora
 export function setAutosaveBackend(next: AutosaveBackend): void {
   autosaveState.backend = next;
   autosaveState.health = { savedAt: null, error: null, count: 0 };
+  autosaveState.pinBefore = autosaveState.restoreError = null; // a test starts settled
+}
+
+/** The startup restore failed (`error`) and will be retried: generations from
+ *  before `pinBefore` stay out of the rotation, and the failure stays on the
+ *  health line. */
+export function autosaveRestorePending(error: string, pinBefore = Date.now()): void {
+  autosaveState.pinBefore ??= pinBefore;
+  autosaveState.restoreError = error;
+}
+
+/** The startup restore succeeded, or the user declined it: normal rotation. */
+export function autosaveRestoreSettled(): void {
+  autosaveState.pinBefore = autosaveState.restoreError = null;
 }
 
 export function autosaveHealth(): AutosaveHealth {
-  return autosaveState.health;
+  const { health, restoreError } = autosaveState;
+  return restoreError && !health.error ? { ...health, error: restoreError } : health;
 }
 
 /** Persist the workspace as a new generation (empty library → clear the slot).

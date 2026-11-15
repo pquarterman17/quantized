@@ -14,6 +14,9 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  autosaveHealth,
+  autosaveRestorePending,
+  autosaveRestoreSettled,
   clearAutosave,
   listAutosaveGenerations,
   loadAutosaveGeneration,
@@ -68,6 +71,8 @@ async function settle(): Promise<void> {
 }
 
 const stashText = (): string | null => localStorage.getItem(STASH_KEY);
+/** A generation's state, without its own write time (every `.dwk` carries `savedAt`). */
+const stateOf = (text: string): string => text.replace(/"savedAt":"[^"]*"/, "");
 const restoredName = async (): Promise<string | undefined> =>
   (await loadAutosaveGeneration())?.workspace.datasets[0]?.name;
 
@@ -79,6 +84,12 @@ function counting(base: AutosaveBackend): AutosaveBackend {
       await base.write(g);
     },
   };
+}
+
+/** A memory backend seeded with `seed`, and the core (with the codec) loaded. */
+async function loadCodec(seed: Generation[] = []): Promise<void> {
+  setAutosaveBackend(counting(memoryBackend(seed)));
+  await loadAutosaveGeneration();
 }
 
 beforeEach(() => {
@@ -121,6 +132,29 @@ describe("leaving the page with an edit pending", () => {
     expect(writes).toBe(1); // the async save ran, once; the timer added nothing
     expect(stashText()).toBeNull(); // folded into the rotation, then dropped
     expect(await restoredName()).toBe("a.dat");
+  });
+
+  it("three edit → tab-switch cycles keep three DISTINCT generations (review N1)", async () => {
+    await loadAutosaveGeneration();
+    vi.useFakeTimers();
+    renderHook(() => useWorkspaceAutosave());
+    for (const name of ["one.dat", "two.dat", "three.dat"]) {
+      act(() => useApp.setState({ datasets: [ds(name)] }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      hide(); // stash, then the save of the same state
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      await settle();
+      setVisibility("visible");
+    }
+    vi.useRealTimers();
+    const texts = (await listAutosaveGenerations()).map((g) => stateOf(g.text));
+    expect(texts).toHaveLength(3);
+    expect(new Set(texts).size).toBe(3);
+    for (const name of ["one.dat", "two.dat", "three.dat"]) expect(texts.some((t) => t.includes(name))).toBe(true);
   });
 
   it("a pagehide after the hide neither stashes nor saves a second time", async () => {
@@ -185,10 +219,6 @@ describe("leaving the page with an edit pending", () => {
 });
 
 describe("the stash as a generation", () => {
-  async function loadCodec(seed: Generation[] = []): Promise<void> {
-    setAutosaveBackend(counting(memoryBackend(seed)));
-    await loadAutosaveGeneration();
-  }
 
   it("wins over an older generation and loses to a newer one", async () => {
     await loadCodec([{ at: 100, text: serializeWorkspace({ datasets: [ds("old.dat")] }) }]);
@@ -262,9 +292,9 @@ describe("the stash as a generation", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("a save that fails for quota drops an older stash (S4)", async () => {
+  it("a save that fails for quota KEEPS the stash — it may be the only copy newer than IndexedDB (review N3)", async () => {
     await loadCodec();
-    stashAutosave(ws("old-stash.dat"), 100);
+    stashAutosave(ws("only-copy.dat"), 100);
     setAutosaveBackend({
       ...memoryBackend(),
       async write() {
@@ -272,6 +302,73 @@ describe("the stash as a generation", () => {
       },
     });
     expect(await saveAutosave(ws("now.dat"), 200)).toBe(false);
-    expect(stashText()).toBeNull();
+    expect(stashText()).toContain("only-copy.dat");
+  });
+
+  it("a stash holding the state being saved, or one already stored, is not stored twice (review N1)", async () => {
+    await loadCodec();
+    stashAutosave(ws("same.dat"), 100);
+    await saveAutosave(ws("same.dat"), 101); // the save a hide starts: identical state
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([101]);
+
+    stashAutosave(ws("same.dat"), 150); // a stash equal to a stored generation
+    await saveAutosave(ws("other.dat"), 200);
+    const texts = (await listAutosaveGenerations()).map((g) => stateOf(g.text));
+    expect(texts).toHaveLength(2);
+    expect(new Set(texts).size).toBe(2);
+  });
+
+  it("another tab's older, DIFFERENT stash is still folded in as its own generation", async () => {
+    await loadCodec();
+    stashAutosave(ws("other-tab.dat"), 100);
+    await saveAutosave(ws("mine.dat"), 200);
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([200, 100]);
+  });
+
+  it("saves run one after another — never two reads before a write (review N5)", async () => {
+    await loadCodec();
+    const log: string[] = [];
+    const base = memoryBackend();
+    setAutosaveBackend({
+      ...base,
+      async read() {
+        log.push("read");
+        await new Promise((r) => setTimeout(r, 5));
+        return base.read();
+      },
+      async write(g) {
+        await new Promise((r) => setTimeout(r, 5));
+        log.push("write");
+        await base.write(g);
+      },
+    });
+    await Promise.all([saveAutosave(ws("one.dat"), 100), saveAutosave(ws("two.dat"), 200)]);
+    expect(log).toEqual(["read", "write", "read", "write"]);
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([200, 100]);
+  });
+});
+
+describe("the startup-restore guard (review N2)", () => {
+  const gens = (...ats: number[]): Generation[] => ats.map((at) => ({ at, text: serializeWorkspace({ datasets: [ds(`g${at}.dat`)] }) }));
+
+  it("while a restore is pending, saves never rotate out the generations from before the session", async () => {
+    setAutosaveBackend(counting(memoryBackend(gens(100, 200, 300))));
+    await loadAutosaveGeneration(); // loads the core (the test's own restore)
+    autosaveRestorePending("couldn't restore", 1000);
+    for (const at of [2000, 3000, 4000, 5000]) await saveAutosave(ws(`s${at}.dat`), at);
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([5000, 4000, 3000, 300, 200, 100]);
+
+    autosaveRestoreSettled(); // restored or declined: normal rotation again
+    await saveAutosave(ws("s6000.dat"), 6000);
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([6000, 5000, 4000]);
+  });
+
+  it("keeps the restore failure on the persistent health line, even after a save succeeds", async () => {
+    await loadCodec();
+    autosaveRestorePending("Couldn't restore the autosaved library (x)", 1000);
+    expect(await saveAutosave(ws("a.dat"), 2000)).toBe(true);
+    expect(autosaveHealth().error).toMatch(/Couldn't restore/);
+    autosaveRestoreSettled();
+    expect(autosaveHealth().error).toBeNull();
   });
 });

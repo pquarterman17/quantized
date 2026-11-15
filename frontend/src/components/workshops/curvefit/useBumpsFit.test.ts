@@ -155,6 +155,33 @@ describe("useBumpsFit survives the Curve Fit window closing (soak issue 6)", () 
   });
 });
 
+describe("useBumpsFit orphaned submit (review N6)", () => {
+  it("a reset while the submit is in flight cancels the job by the id the submit returns", async () => {
+    let submitted!: (v: Awaited<ReturnType<typeof fitBumps>>) => void;
+    vi.mocked(fitBumps).mockReturnValue(new Promise((r) => (submitted = r)));
+    vi.mocked(jobs.cancelJob).mockResolvedValue(undefined as never);
+    const { result } = renderHook(() => useBumpsFit());
+    act(() => result.current.setEngine("dream"));
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.run("Linear");
+    });
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve(); // past resolveDataset, into the submit
+    });
+    expect(fitBumps).toHaveBeenCalled();
+    act(() => useApp.getState().clearAll()); // no job id yet: nothing to cancel
+    expect(jobs.cancelJob).not.toHaveBeenCalled();
+    await act(async () => {
+      submitted({ job_id: "dream-orphan" });
+      await p;
+    });
+    expect(jobs.cancelJob).toHaveBeenCalledWith("dream-orphan");
+    expect(jobs.pollJob).not.toHaveBeenCalled();
+    expect(usePendingOps.getState().ops).toEqual([]);
+  });
+});
+
 describe("useBumpsFit session scope (review D1)", () => {
   const LM = { engine: "lm" as const, popt: [1], uncertainties: [0.1], chisq: 1, uncertainty_kind: "hessian" as const, paramNames: ["m"], yFit: [11, 31, 41] };
 

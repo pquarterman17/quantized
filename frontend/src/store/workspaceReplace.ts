@@ -3,6 +3,12 @@
 // it here. Module-level session state that belongs to the OLD workspace (the
 // Curve Fit's DREAM session, the per-window stage-tab memory) subscribes and
 // resets, instead of showing one workspace's leftovers beside another's data.
+//
+// KNOWN LIMIT (review N7, accepted): File ▸ Remove all is undoable, but it is
+// a replace too, so it cancels a running DREAM job and forgets the session.
+// Ctrl+Z brings the datasets back, not the job or its posterior table — rerun
+// "Sample posterior". (The dataset scoping in useBumpsFit already hides a
+// stale result; resetting is what stops an orphaned job from running on.)
 
 const listeners = new Set<() => void>();
 
