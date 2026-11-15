@@ -40,6 +40,16 @@ describe("rowsInPolygon", () => {
     expect(rowsInPolygon([xs, left, right], series, 2, square(0, 40, 40, 60), toPx)).toEqual([0, 1]);
   });
 
+  it("hands a Y3+ curve's own axis number to the pixel mapper (gap audit 4 G11)", () => {
+    const seen: number[] = [];
+    const spy: ToPx = (x, y, axis) => {
+      seen.push(axis);
+      return [x, y];
+    };
+    rowsInPolygon([[1], [2], [3]], [{ label: "a", unit: "" }, { label: "c", unit: "", axis: 2 }], 2, square(50, 50, 60, 60), spy);
+    expect(seen).toEqual([0, 2]);
+  });
+
   it("takes points on a non-monotonic X (a loop) by position, not by X order", () => {
     // Up branch at y = 20, down branch at y = 80, same X values.
     const xs = [10, 20, 30, 30, 20, 10];

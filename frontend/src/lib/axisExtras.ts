@@ -19,8 +19,11 @@ import { divideFont, divideLabelSpot, reserveDivideBand, type AxisSide } from ".
 import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisExtrasContext } from "./axisBreakExtras";
 import type { AxisBreak } from "./axisBreaks";
 import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
-import { applyScaleExtras, applyTickExtras, drawCross, type CrossLook } from "./axisScaleExtras";
+import { applyScaleExtras, applyTickExtras, drawCross, keepEveryLabel, type CrossLook } from "./axisScaleExtras";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
+
+// Gap audit 4 G11: the Y3+ axis builder rides this chunk (lib/axisExtrasHook.ts).
+export { pushExtraYAxes } from "./uplotMultiY";
 
 type TickValues = NonNullable<uPlot.Axis["values"]>;
 type ValuesFn = Extract<TickValues, (...args: never[]) => unknown>;
@@ -87,7 +90,7 @@ export function applyAxisExtras(
     if (fmt.base === "e" && scale === "log") {
       axis.splits = (_u, _i, min, max) => lnSplits(min, max);
       axis.values = lnValues;
-      delete axis.filter;
+      axis.filter = keepEveryLabel; // uPlot's own log filter would blank some powers of e
     }
     // Before divide-by, so the divided labels wrap the break's own formatter.
     const breaks = activeBreaks(idx, fmt.breaks, scale, ctx);

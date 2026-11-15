@@ -236,6 +236,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Edit an axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
     keywords: "scale limits ticks minor divide font break",
   },
+  "y-axis-settings": {
+    description: "Set a Y3+ axis' title, scale, range, tick step, number format and colour, or remove it (assign series to Y3+ in the Channels card).",
+    keywords: "multiple y axes triple y multi y third axis offset right axis color",
+  },
   "plot-type": {
     description: "Switch the graph to line, scatter, area, column, box, violin, histogram, contour, double-Y, polar, waterfall, stacked panels or ternary.",
     keywords: "gallery bar histogram heatmap double y polar violin waterfall ternary panels",

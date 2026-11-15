@@ -32,6 +32,12 @@ describe("rowsInBox", () => {
     expect(isDataSeries(series, 1, 2)).toBe(false);
   });
 
+  it("never hits a Y3+ curve with the Y1 edges: the box has none for its scale (gap audit 4 G11)", () => {
+    const series = [{ label: "a", unit: "" }, { label: "b", unit: "", axis: 2 }];
+    // y1 is 0..40, never in 100..200; the Y3 curve at 150 would be, on the WRONG scale.
+    expect(rowsInBox([xs, y1, [150, 150, 150, 150, 150]], series, 2, { x0: 0, x1: 4, y: [100, 200] })).toEqual([]);
+  });
+
   it("tests a Y2 curve against the box's edges on the Y2 scale (review #7)", () => {
     const series = [{ label: "a", unit: "" }, { label: "b", unit: "", axis: 1 }];
     const onRight = [500, 600, 700, 800, 900];

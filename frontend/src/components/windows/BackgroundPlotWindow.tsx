@@ -57,6 +57,7 @@ import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { useApp } from "../../store/useApp";
 import PlotViewport from "../Stage/PlotViewport";
+import { useMultiY } from "../Stage/useMultiY";
 import { multiPanelShowing } from "../Stage/useEffectiveComposition";
 import { usePlotPayload } from "../Stage/usePlotPayload";
 import { useWindowSeriesCycle } from "../Stage/useStageSeriesCycle";
@@ -217,7 +218,7 @@ function BackgroundXYWindow({
     : selection, [selection, statisticalLink]);
 
   const rampedStyles = useRampedStyles(view, dataset, document);
-  const { displayPayload, plotted, styleList, labelList, legendLabels, errorBars, errorSpans, colorByColumns, hidden } =
+  const { displayPayload: basePayload, plotted, styleList, labelList, legendLabels, errorBars, errorSpans, colorByColumns, hidden } =
     usePlotPayload({
       active: dataset,
       yScale: view.yScale,
@@ -258,6 +259,10 @@ function BackgroundXYWindow({
   // this window's own publication export (`buildStageFigureSpec`, reached the
   // moment it is focused) cycles these exact positions.
   const seriesCycle = useWindowSeriesCycle(view, document, plotted.length);
+  // Y3+ axes (gap audit 4 G11): the focused window's gates, from this window's own view.
+  const picks = document?.bindings.encoding;
+  const multiY = useMemo(() => ({ ...view, picks, active: dataset, multiPanel: false }), [view, picks, dataset]);
+  const { payload: displayPayload, axes: yAxesShown } = useMultiY(basePayload, plotted, multiY, false);
   const { inkColor, isDark: isDarkBg } = resolvePlotBg(bg);
 
   // `.qzk-bg-stage` is the host the frame-vars plugin publishes the plot
@@ -278,7 +283,7 @@ function BackgroundXYWindow({
         yStep={view.yStep}
         y2Lim={view.y2Lim}
         y2Scale={view.y2Scale}
-        y2Step={view.y2Step}
+        y2Step={view.y2Step} yAxes={yAxesShown}
         xFmt={view.xFmt}
         yFmt={view.yFmt}
         showGrid={view.showGrid}

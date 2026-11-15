@@ -290,6 +290,8 @@ export interface ViewChannelState {
   seriesStyles: Record<number, SeriesStyle>;
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
+  /** Channel -> extra Y axis number (lib/multiY.ts); optional for older callers. */
+  yAxisOf?: Record<number, number>;
 }
 
 /** Remap the live plot view after `removedCol` disappears from its dataset.
@@ -319,6 +321,7 @@ export function remapViewChannels(v: ViewChannelState, removedCol: ColumnShift):
     seriesStyles: remapKeyedRecordDense(v.seriesStyles, removedCol),
     seriesLabels: remapKeyedRecordDense(v.seriesLabels, removedCol),
     errKeys,
+    ...(v.yAxisOf ? { yAxisOf: remapKeyedRecordDense(v.yAxisOf, removedCol) } : {}),
   };
 }
 
@@ -347,11 +350,13 @@ export function remapFigureViewChannels(view: FigureViewState, removedCol: Colum
       seriesOrder: view.seriesOrder,
       seriesStyles: view.seriesStyles,
       seriesLabels: view.seriesLabels,
+      yAxisOf: view.yAxisOf,
     },
     removedCol,
   );
   return {
     ...view,
+    yAxisOf: remapped.yAxisOf ?? view.yAxisOf,
     hiddenChannels: remapped.hiddenChannels,
     seriesOrder: remapped.seriesOrder,
     seriesStyles: remapped.seriesStyles,

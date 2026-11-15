@@ -30,6 +30,7 @@ from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes.export_figures import FigureRequest, _figure_series
 from quantized.routes.export_figures_axis_titles import request_overrides
 from quantized.routes.export_figures_facets import _facet_panels
+from quantized.routes.export_figures_multi_y import refuse_multi_y
 from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC, _tick_fmt, _x_tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
@@ -129,6 +130,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
         panels = []
         for spec in req.panels:
             f = spec.figure
+            refuse_multi_y(f, "a figure-page panel")  # its renderer has no Y3+ axes
             panel_title = spec.title if spec.title is not None else f.title
             if f.facets:
                 # F4.4 follow-up (2026-08-24): a faceted panel renders as a

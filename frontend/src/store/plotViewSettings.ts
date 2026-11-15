@@ -238,7 +238,10 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     },
     setY2Keys: (y2Keys) => {
       get().recordHistory("change Y2 channels");
-      set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Scale: null, y2Step: null, y2AxisLabel: "" }) });
+      // A Y2 channel leaves its Y3+ axis (gap audit 4 G11): Y2 wins a direct assignment.
+      const yAxisOf = { ...get().yAxisOf };
+      for (const k of y2Keys ?? []) delete yAxisOf[k];
+      set({ y2Keys, yAxisOf, ...(y2Keys ? {} : { y2Lim: null, y2Scale: null, y2Step: null, y2AxisLabel: "" }) });
       get().recordMacro(
         `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
         `qz.setY2Keys(${lit(y2Keys)})`,

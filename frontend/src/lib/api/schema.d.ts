@@ -7739,6 +7739,31 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /**
+         * ExtraYAxisSpec
+         * @description One extra Y axis: its channels and how it draws.
+         */
+        ExtraYAxisSpec: {
+            /** Color */
+            color?: string | null;
+            fmt?: components["schemas"]["TickFormatSpec"] | null;
+            /**
+             * Keys
+             * @description Its plotted channels, a subset of `y_keys`.
+             */
+            keys: (number | string)[];
+            /** Label */
+            label?: string | null;
+            /** Lim */
+            lim?: [
+                number,
+                number
+            ] | null;
+            /** Scale */
+            scale?: string | null;
+            /** Step */
+            step?: number | null;
+        };
         /** FFTThicknessRequest */
         FFTThicknessRequest: {
             /** Intensity */
@@ -8191,6 +8216,11 @@ export interface components {
             y2_scale?: string | null;
             /** Y2 Step */
             y2_step?: number | null;
+            /**
+             * Y Axes
+             * @description Y3, Y4, ... on the right, each pushed one 60 pt slot further out (Origin's multiple Y axes); null/empty = none.
+             */
+            y_axes?: components["schemas"]["ExtraYAxisSpec"][] | null;
             y_fmt?: components["schemas"]["TickFormatSpec"] | null;
             /** Y Keys */
             y_keys?: (number | string)[] | null;

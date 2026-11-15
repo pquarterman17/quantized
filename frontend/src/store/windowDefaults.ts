@@ -75,6 +75,7 @@ export function datasetViewDefaults(
     y2Scale: null,
     y2Step: null,
     y2AxisLabel: "",
+    yAxes: [], yAxisOf: {}, // Y3+ (lib/multiY.ts) describe the dataset that left
     // Axis-title overrides describe the dataset that just left this window.
     // Keeping them across a rebind made a SIMS workbook whose parser correctly
     // reports `Depth (um)` display a prior magnetometry plot's `H (Oe)` title.

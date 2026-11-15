@@ -720,6 +720,9 @@ describe("figure documents — openFigureDocInWindow", () => {
         "statPicks",
         // Origin gap audit 3 #15: the graph-layer list, a fresh `[]` likewise.
         "layers",
+        // Gap audit 4 G11: the Y3+ axes and their assignments, a fresh `[]` / `{}` likewise.
+        "yAxes",
+        "yAxisOf",
       ].sort(),
     );
   });

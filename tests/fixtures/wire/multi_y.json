@@ -1,0 +1,2521 @@
+{
+  "slot_pt": 60,
+  "cases": [
+    {
+      "name": "Y2 then Y3 log then Y4 fixed, own colours",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          1
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              2
+            ],
+            "scale": "log",
+            "label": "M (emu)",
+            "color": "#c0392b"
+          },
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "Pressure (mbar)",
+            "fmt": {
+              "mode": "fixed",
+              "digits": 1
+            },
+            "step": 2,
+            "lim": [
+              0,
+              10
+            ],
+            "color": "#2e86c1"
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          },
+          {
+            "color": "#8fe08f",
+            "width": 1.5
+          },
+          {
+            "color": "#d9a3ff",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          },
+          "ticks": {
+            "minor": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 2,
+            "offset_pt": 0,
+            "label": "R (ohm)",
+            "color": null,
+            "range": [
+              0.7000000000000001,
+              3.8000000000000007
+            ],
+            "ticks": [
+              0.8,
+              1,
+              1.2,
+              1.4,
+              1.6,
+              1.8,
+              2,
+              2.2,
+              2.4,
+              2.6,
+              2.8,
+              3,
+              3.2,
+              3.4,
+              3.6,
+              3.8
+            ],
+            "tick_labels": [
+              "0.8",
+              "1",
+              "1.2",
+              "1.4",
+              "1.6",
+              "1.8",
+              "2",
+              "2.2",
+              "2.4",
+              "2.6",
+              "2.8",
+              "3",
+              "3.2",
+              "3.4",
+              "3.6",
+              "3.8"
+            ]
+          },
+          {
+            "axis": 3,
+            "offset_pt": 60,
+            "label": "M (emu)",
+            "color": "#c0392b",
+            "range": [
+              0.000001,
+              0.1
+            ],
+            "ticks": [
+              0.000001,
+              0.00001,
+              0.0001,
+              0.001,
+              0.01,
+              0.1
+            ],
+            "tick_labels": [
+              "10⁻⁶",
+              "10⁻⁵",
+              "10⁻⁴",
+              "10⁻³",
+              "10⁻²",
+              "10⁻¹"
+            ]
+          },
+          {
+            "axis": 4,
+            "offset_pt": 120,
+            "label": "Pressure (mbar)",
+            "color": "#2e86c1",
+            "range": [
+              0,
+              10
+            ],
+            "ticks": [
+              0,
+              2,
+              4,
+              6,
+              8,
+              10
+            ],
+            "tick_labels": [
+              "0.0",
+              "2.0",
+              "4.0",
+              "6.0",
+              "8.0",
+              "10.0"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "R (ohm)",
+            "axis": 2,
+            "color": "#ffb37f",
+            "shown": true
+          },
+          {
+            "label": "M (emu)",
+            "axis": 3,
+            "color": "#8fe08f",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 4,
+            "color": "#d9a3ff",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "Y3 without a Y2 sits in the first slot",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P (mbar)",
+            "step": 4,
+            "lim": [
+              1,
+              9
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 3,
+            "offset_pt": 0,
+            "label": "P (mbar)",
+            "color": null,
+            "range": [
+              1,
+              9
+            ],
+            "ticks": [
+              4,
+              8
+            ],
+            "tick_labels": [
+              "4",
+              "8"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#ffb37f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "two series share Y3; display order interleaves",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          1,
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          0
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              1,
+              3
+            ],
+            "scale": "linear",
+            "label": "R (ohm) / P (mbar)",
+            "step": 100,
+            "lim": [
+              0,
+              300
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          },
+          {
+            "color": "#8fe08f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 2,
+            "offset_pt": 0,
+            "label": "T (K)",
+            "color": null,
+            "range": [
+              245,
+              305
+            ],
+            "ticks": [
+              245,
+              250,
+              255,
+              260,
+              265,
+              270,
+              275,
+              280,
+              285,
+              290,
+              295,
+              300,
+              305
+            ],
+            "tick_labels": [
+              "245",
+              "250",
+              "255",
+              "260",
+              "265",
+              "270",
+              "275",
+              "280",
+              "285",
+              "290",
+              "295",
+              "300",
+              "305"
+            ]
+          },
+          {
+            "axis": 3,
+            "offset_pt": 60,
+            "label": "R (ohm) / P (mbar)",
+            "color": null,
+            "range": [
+              0,
+              300
+            ],
+            "ticks": [
+              0,
+              100,
+              200,
+              300
+            ],
+            "tick_labels": [
+              "0",
+              "100",
+              "200",
+              "300"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "R (ohm)",
+            "axis": 3,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "T (K)",
+            "axis": 2,
+            "color": "#ffb37f",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#8fe08f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "an orphan assignment draws on Y1",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 1,
+            "color": "#ffb37f",
+            "shown": true
+          }
+        ],
+        "note": "P: assigned to a Y axis that no longer exists — drawn on Y1"
+      }
+    },
+    {
+      "name": "a colour gradient runs across every axis",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          1
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P",
+            "step": 5,
+            "lim": [
+              0,
+              10
+            ],
+            "color": "#117a65"
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#723684",
+            "ramp_rank": 0,
+            "width": 1.5
+          },
+          {
+            "color": "#158b86",
+            "ramp_rank": 1,
+            "width": 1.5
+          },
+          {
+            "color": "#b4a417",
+            "ramp_rank": 2,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 2,
+            "offset_pt": 0,
+            "label": "R (ohm)",
+            "color": null,
+            "range": [
+              0.7000000000000001,
+              3.8000000000000007
+            ],
+            "ticks": [
+              0.8,
+              1,
+              1.2,
+              1.4,
+              1.6,
+              1.8,
+              2,
+              2.2,
+              2.4,
+              2.6,
+              2.8,
+              3,
+              3.2,
+              3.4,
+              3.6,
+              3.8
+            ],
+            "tick_labels": [
+              "0.8",
+              "1",
+              "1.2",
+              "1.4",
+              "1.6",
+              "1.8",
+              "2",
+              "2.2",
+              "2.4",
+              "2.6",
+              "2.8",
+              "3",
+              "3.2",
+              "3.4",
+              "3.6",
+              "3.8"
+            ]
+          },
+          {
+            "axis": 3,
+            "offset_pt": 60,
+            "label": "P",
+            "color": "#117a65",
+            "range": [
+              0,
+              10
+            ],
+            "ticks": [
+              0,
+              5,
+              10
+            ],
+            "tick_labels": [
+              "0",
+              "5",
+              "10"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#723684",
+            "shown": true
+          },
+          {
+            "label": "R (ohm)",
+            "axis": 2,
+            "color": "#158b86",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#b4a417",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "a hidden Y3 series frees its slot",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P (mbar)",
+            "step": 5,
+            "lim": [
+              0,
+              10
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#8fe08f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 4,
+            "offset_pt": 0,
+            "label": "P (mbar)",
+            "color": null,
+            "range": [
+              0,
+              10
+            ],
+            "ticks": [
+              0,
+              5,
+              10
+            ],
+            "tick_labels": [
+              "0",
+              "5",
+              "10"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "R (ohm)",
+            "axis": 3,
+            "color": "#ffb37f",
+            "shown": false
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 4,
+            "color": "#8fe08f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "a hidden Y2 series takes Y2 off the right",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P (mbar)",
+            "step": 5,
+            "lim": [
+              0,
+              10
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#8fe08f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 3,
+            "offset_pt": 0,
+            "label": "P (mbar)",
+            "color": null,
+            "range": [
+              0,
+              10
+            ],
+            "ticks": [
+              0,
+              5,
+              10
+            ],
+            "tick_labels": [
+              "0",
+              "5",
+              "10"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "R (ohm)",
+            "axis": 2,
+            "color": "#ffb37f",
+            "shown": false
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#8fe08f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "a Y2 axis offset leaves Y3 one slot out",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          1
+        ],
+        "y2_scale": "linear",
+        "y2_fmt": {
+          "mode": "auto",
+          "digits": 2,
+          "offset": 10
+        },
+        "y2_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P (mbar)",
+            "step": 5,
+            "lim": [
+              0,
+              10
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          },
+          {
+            "color": "#8fe08f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 2,
+            "offset_pt": 0,
+            "label": "R (ohm)",
+            "color": null,
+            "range": [
+              0.7000000000000001,
+              3.8000000000000007
+            ],
+            "ticks": [
+              0.8,
+              1,
+              1.2,
+              1.4,
+              1.6,
+              1.8,
+              2,
+              2.2,
+              2.4,
+              2.6,
+              2.8,
+              3,
+              3.2,
+              3.4,
+              3.6,
+              3.8
+            ],
+            "tick_labels": [
+              "0.8",
+              "1",
+              "1.2",
+              "1.4",
+              "1.6",
+              "1.8",
+              "2",
+              "2.2",
+              "2.4",
+              "2.6",
+              "2.8",
+              "3",
+              "3.2",
+              "3.4",
+              "3.6",
+              "3.8"
+            ]
+          },
+          {
+            "axis": 3,
+            "offset_pt": 60,
+            "label": "P (mbar)",
+            "color": null,
+            "range": [
+              0,
+              10
+            ],
+            "ticks": [
+              0,
+              5,
+              10
+            ],
+            "tick_labels": [
+              "0",
+              "5",
+              "10"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "R (ohm)",
+            "axis": 2,
+            "color": "#ffb37f",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#8fe08f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "a Log2 Y3",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          5
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              5
+            ],
+            "scale": "log",
+            "label": "G (count)",
+            "fmt": {
+              "mode": "auto",
+              "digits": 2,
+              "base": "2"
+            }
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          },
+          "ticks": {
+            "minor": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 3,
+            "offset_pt": 0,
+            "label": "G (count)",
+            "color": null,
+            "range": [
+              1,
+              100
+            ],
+            "ticks": [
+              1,
+              2,
+              4,
+              8,
+              16,
+              32,
+              64
+            ],
+            "tick_labels": [
+              "1",
+              "2",
+              "4",
+              "8",
+              "16",
+              "32",
+              "64"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "G (count)",
+            "axis": 3,
+            "color": "#ffb37f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "a probability Y3",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          4
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              4
+            ],
+            "scale": "linear",
+            "label": "F (%)",
+            "fmt": {
+              "mode": "auto",
+              "digits": 2,
+              "prob": "percent"
+            }
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 3,
+            "offset_pt": 0,
+            "label": "F (%)",
+            "color": null,
+            "range": [
+              5,
+              95
+            ],
+            "ticks": [
+              5,
+              10,
+              20,
+              30,
+              40,
+              50,
+              60,
+              70,
+              80,
+              90,
+              95
+            ],
+            "tick_labels": [
+              "5",
+              "10",
+              "20",
+              "30",
+              "40",
+              "50",
+              "60",
+              "70",
+              "80",
+              "90",
+              "95"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "F (%)",
+            "axis": 3,
+            "color": "#ffb37f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "custom ticks on Y3",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P (mbar)",
+            "fmt": {
+              "mode": "auto",
+              "digits": 2,
+              "custom": {
+                "at": [
+                  2.5,
+                  7.5
+                ],
+                "labels": [
+                  "low",
+                  "high"
+                ]
+              }
+            },
+            "lim": [
+              0,
+              10
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 3,
+            "offset_pt": 0,
+            "label": "P (mbar)",
+            "color": null,
+            "range": [
+              0,
+              10
+            ],
+            "ticks": [
+              2.5,
+              7.5
+            ],
+            "tick_labels": [
+              "low",
+              "high"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#ffb37f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    },
+    {
+      "name": "error bars on a Y3 series widen Y3's range",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              300,
+              1,
+              0.000001,
+              2,
+              5,
+              1.4142135623730951,
+              0.5
+            ],
+            [
+              290,
+              1.5,
+              0.000009999999999999999,
+              3,
+              23,
+              2.82842712474619,
+              0.5
+            ],
+            [
+              280,
+              2,
+              0.00009999999999999999,
+              4,
+              41,
+              5.65685424949238,
+              0.5
+            ],
+            [
+              270,
+              2.5,
+              0.001,
+              5,
+              59,
+              11.31370849898476,
+              0.5
+            ],
+            [
+              260,
+              3,
+              0.01,
+              6,
+              77,
+              22.62741699796952,
+              0.5
+            ],
+            [
+              250,
+              3.5,
+              0.1,
+              7,
+              95,
+              45.25483399593904,
+              0.5
+            ]
+          ],
+          "labels": [
+            "T",
+            "R",
+            "M",
+            "P",
+            "F",
+            "G",
+            "dP"
+          ],
+          "units": [
+            "K",
+            "ohm",
+            "emu",
+            "mbar",
+            "%",
+            "count",
+            "mbar"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y_axes": [
+          {
+            "keys": [
+              3
+            ],
+            "scale": "linear",
+            "label": "P (mbar)"
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "y_label": "Temperature (K)",
+        "series_styles": [
+          {
+            "color": "#7fb3ff",
+            "width": 1.5
+          },
+          {
+            "color": "#ffb37f",
+            "width": 1.5
+          }
+        ],
+        "error_spans": [
+          null,
+          {
+            "y": {
+              "plus": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5
+              ],
+              "minus": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "multiy"
+      },
+      "canvas": {
+        "axes": [
+          {
+            "axis": 3,
+            "offset_pt": 0,
+            "label": "P (mbar)",
+            "color": null,
+            "range": [
+              0.9000000000000001,
+              8.100000000000001
+            ],
+            "ticks": [
+              1,
+              1.5,
+              2,
+              2.5,
+              3,
+              3.5,
+              4,
+              4.5,
+              5,
+              5.5,
+              6,
+              6.5,
+              7,
+              7.5,
+              8
+            ],
+            "tick_labels": [
+              "1",
+              "1.5",
+              "2",
+              "2.5",
+              "3",
+              "3.5",
+              "4",
+              "4.5",
+              "5",
+              "5.5",
+              "6",
+              "6.5",
+              "7",
+              "7.5",
+              "8"
+            ]
+          }
+        ],
+        "series": [
+          {
+            "label": "T (K)",
+            "axis": 1,
+            "color": "#7fb3ff",
+            "shown": true
+          },
+          {
+            "label": "P (mbar)",
+            "axis": 3,
+            "color": "#ffb37f",
+            "shown": true
+          }
+        ],
+        "note": null
+      }
+    }
+  ]
+}

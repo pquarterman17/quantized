@@ -64,6 +64,7 @@ import { logOffsetWire } from "./logOffsetWire";
 import { waterfallWire } from "./waterfallWire";
 import { rampView } from "./seriesRampImpl";
 import { axisFmtParam } from "./types";
+import { exportExtraYAxes } from "./multiYWire";
 
 /** The render-time choices a caller supplies. Everything else about the spec
  *  is derived from live view state, so the two callers cannot diverge on it. */
@@ -290,16 +291,6 @@ function buildFigureSpecForView(
     extras.autoSeriesStyles,
   );
 
-  // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
-  // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
-  // subset marker, not a replacement), plus that subset in display order, so
-  // the render shows the same dual-Y split the screen does. The split + the
-  // scale/format inherit rules live in lib/axisspec.ts (#54 pass B). An x-break's
-  // panels draw every channel on their one shared y, so it sends no y2 split.
-  const y2Axis = xBreaks ? null : resolveSecondaryAxis(plotted, secondaryAxisFromView(st), {
-    scale: st.yScale,
-    fmt: st.yFmt,
-  });
   // See `plotGroupSplit.canvasGroupCol`'s own doc: degrades `group_col`
   // exactly like the canvas (BUG-013 round 5; round 4's throw for a REALLY
   // rendered y2 is gone). Called directly — NIT 9 deleted the one-line
@@ -317,11 +308,22 @@ function buildFigureSpecForView(
   // `Stage/useFacetEncoding` draws it; its panels then name their rows so
   // the route re-splits each one.
   const gated = windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys);
-  const facetYKeys =
-    facets !== undefined && st.facetKey != null
-      ? facetSplitChannels(pruneToLiveDataset(data, extras.liveDataset), st.xKey, st.yKeys)
-      : null;
+  const facetYKeys = facets !== undefined && st.facetKey != null
+    ? facetSplitChannels(pruneToLiveDataset(data, extras.liveDataset), st.xKey, st.yKeys) : null;
   const encoding = facets === undefined ? gated : facetYKeys ? facetEncoding(gated) : null;
+  // Y3+ axes (gap audit 4 G11, lib/multiYWire.ts): none where the canvas draws none.
+  const multiY = exportExtraYAxes(st, plotted, data, !!xBreaks || facets !== undefined || groupCol !== null || encoding !== null);
+  // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
+  // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
+  // subset marker, not a replacement), plus that subset in display order, so
+  // the render shows the same dual-Y split the screen does. The split + the
+  // scale/format inherit rules live in lib/axisspec.ts (#54 pass B). An x-break's
+  // panels draw every channel on their one shared y, so it sends no y2 split.
+  // A channel a Y3+ axis takes is never also sent as Y2 (the canvas' tie-break).
+  const y2Axis = xBreaks ? null : resolveSecondaryAxis(plotted.filter((ch) => !multiY.taken.has(ch)), secondaryAxisFromView(st), {
+    scale: st.yScale,
+    fmt: st.yFmt,
+  });
   // Group ALONE splits a facet grid too (`facetSplitEncoding`, the Stage's
   // rule): the panels then carry rows and channels for the route's split, and
   // the group rides `group_col` as ever -- `encoding` stays absent.
@@ -342,7 +344,7 @@ function buildFigureSpecForView(
   const publicationOverrides = mergeFigureOverrides(withBreaks, extras.publicationOverrides);
   const gatedOverrides = gateY2Overrides(publicationOverrides, {
     y2Plotted: y2Axis !== null,
-    minorTicks: st.xScale === "log" || st.yScale === "log" || secondaryAxisIsLog(y2Axis),
+    minorTicks: st.xScale === "log" || st.yScale === "log" || secondaryAxisIsLog(y2Axis) || multiY.log,
   });
 
   // The legend overrides, aligned 1:1 with `plotted` (= the wire's `y_keys`)
@@ -373,6 +375,7 @@ function buildFigureSpecForView(
     // applied that same inherit-default above, so the render matches the live
     // plot without this call site restating the rule.
     ...secondaryAxisWire(y2Axis),
+    ...(multiY.wire ? { y_axes: multiY.wire } : {}),
     ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(encoding === null ? {} : { encoding: figureEncodingWire(encoding) }),
     ...(encoding === null || facets || excludedRows.length === 0 ? {} : { excluded_rows: excludedRows }),

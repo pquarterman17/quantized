@@ -44,7 +44,8 @@ export interface PlotPick {
 export function rowsInBox(cols: Cols, series: readonly PlotSeriesSpec[], nBase: number, box: PlotPick): number[] {
   const xs = cols[0] ?? [];
   const ys = series.flatMap((s, i) => {
-    const range = (s.axis ?? 0) === 1 ? box.y2 : box.y;
+    // A Y3+ series (lib/multiY.ts) has no box edges here: never hit (fail closed).
+    const range = (s.axis ?? 0) === 1 ? box.y2 : s.axis ? undefined : box.y;
     return isDataSeries(series, nBase, i) && range ? [{ col: cols[i + 1] ?? [], range }] : [];
   });
   const rows: number[] = [];
@@ -109,9 +110,9 @@ export function pickRows(
 }
 
 /** A lasso, in screen px; a point's screen px on its own Y axis (0 = y,
- *  1 = y2), or null when it is not drawn. */
+ *  1 = y2, 2 = y3 ...), or null when it is not drawn. */
 export type Polygon = readonly (readonly [number, number])[];
-export type ToPx = (x: number, y: number, axis: 0 | 1) => readonly [number, number] | null;
+export type ToPx = (x: number, y: number, axis: number) => readonly [number, number] | null;
 
 /** Is (`px`, `py`) inside `poly`? The non-zero winding rule: an outline
  *  traced round twice, or crossing itself, still encloses what it circles. */
@@ -133,7 +134,7 @@ export function insidePolygon(poly: Polygon, px: number, py: number): boolean {
  *  drawn, and every row is tested whatever order X runs in. */
 export function rowsInPolygon(cols: Cols, series: readonly PlotSeriesSpec[], nBase: number, poly: Polygon, toPx: ToPx): number[] {
   const xs = cols[0] ?? [];
-  const ys = series.flatMap((s, i) => (isDataSeries(series, nBase, i) ? [{ col: cols[i + 1] ?? [], axis: ((s.axis ?? 0) === 1 ? 1 : 0) as 0 | 1 }] : []));
+  const ys = series.flatMap((s, i) => (isDataSeries(series, nBase, i) ? [{ col: cols[i + 1] ?? [], axis: s.axis ?? 0 }] : []));
   const rows: number[] = [];
   for (let r = 0; r < xs.length; r++) {
     const x = xs[r];

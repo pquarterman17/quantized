@@ -52,6 +52,8 @@ export function resolvedRecipeView(
     seriesLabels: visual.seriesLabels,
     seriesOrder: visual.seriesOrder,
     hiddenChannels: visual.hiddenChannels,
+    yAxes: visual.yAxes,
+    yAxisOf: visual.yAxisOf,
     annotations: visual.decorations.annotations,
     shapes: visual.decorations.shapes,
     regionShades: visual.decorations.regionShades,

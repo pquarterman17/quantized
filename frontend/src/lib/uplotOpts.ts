@@ -4,7 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
-import { axisExtrasApplier, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
+import { axisExtrasApplier, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
 
@@ -50,6 +50,8 @@ import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { xLabelRightPad, xTickSpace } from "./uplotRightPad";
 import { orientArgs, orientAxes, orientPlugins } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
+import { measuredYAxisSize } from "./uplotAxisSize";
+import type { ResolvedExtraY } from "./multiY";
 export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
 import { viewHistoryPlugin, wheelZoomPlugin, type PlotViewBounds, type Readout } from "./uplotTools";
 
@@ -750,6 +752,8 @@ export interface BuildOptsArgs {
   xStep?: number | null;
   yStep?: number | null;
   y2Step?: number | null;
+  /** Y3, Y4, ... in play (gap audit 4 G11, lib/multiY.ts); the payload already tags their series. */
+  yAxes?: readonly ResolvedExtraY[];
   /** This window's background override (item 18) — "theme" (default)
    *  matches today's always-dark plot canvas; "light"/"dark" pin THIS plot
    *  to a fixed background regardless of the app's theme. Resolved via
@@ -1136,30 +1140,8 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // fontSize 9) never shrinks below what already rendered fine — this only
   // grows room for a bigger font, never takes it away.
   const xAxisSize = Math.max(50, tickPx + 42);
-  // Y-axis tick-value band: MEASURE the widest formatted tick label rather than
-  // assuming ~4 chars, so many-digit labels (common in Origin imports, e.g.
-  // "0.000012" or "-1234.5") don't overflow the band and overlap the axis
-  // title. uPlot calls this during layout with the drawn tick strings; we
-  // reserve their width + a generous gap, floored at the prior fixed width so a
-  // small template never shrinks below what already rendered fine.
-  const yGutterFloor = Math.max(60, tickPx * 4 + 16);
-  const yTickPad = tickPx + 12; // tick marks + label gap + breathing room
-  const yAxisSize: uPlot.Axis["size"] = (self, values) => {
-    if (!values || values.length === 0) return yGutterFloor;
-    const ctx = self.ctx;
-    const prevFont = ctx.font;
-    ctx.font = canvasFont;
-    let maxW = 0;
-    for (const v of values) {
-      // Log minor splits deliberately format to null/blank. They draw grid
-      // and tick marks, but must not reserve gutter width for the string
-      // coercion of `null`.
-      if (v == null || v === "") continue;
-      maxW = Math.max(maxW, ctx.measureText(v).width);
-    }
-    ctx.font = prevFont;
-    return Math.max(yGutterFloor, Math.ceil(maxW / pxr + yTickPad));
-  };
+  // Y-axis tick-value band: MEASURED from the drawn tick strings (lib/uplotAxisSize.ts).
+  const yAxisSize = measuredYAxisSize(tickPx, canvasFont, pxr);
   const axes: uPlot.Axis[] = [
     {
       ...axis,
@@ -1201,13 +1183,18 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
     });
   }
+  // The extras' per-axis lists follow `axes`; Y3+ (lib/uplotMultiY.ts) drops Y2's slot when it has none and appends its own.
+  const look: [unknown[], unknown[], unknown[], unknown[]] = [[xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], [!!xLim, !!yLim, !!args.y2Lim], [args.xStep, args.yStep, args.y2Step]];
+  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: tickFormatter, splits: splitsFor, distr: scaleDistrProps, label: soloLabel, look }) : undefined;
 
   // Figures-audit #6: the Axis dialog's extras (minor/inward ticks, divide-by,
   // tick font, Ln) -- null, and nothing changed, when no axis has one. y2
-  // inherits yFmt exactly as its tick formatter above does.
+  // inherits yFmt exactly as its tick formatter above does. The per-axis
+  // lists follow `axes` (`look`, above: Y3+ append theirs).
   // The module loads on demand (axisExtrasHook.ts): absent = none drawn yet.
-  const extrasPlugin = axisExtrasApplier()?.(axes, [xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], axisColor, { scales, payload, typed: [!!xLim, !!yLim, !!args.y2Lim], steps: [args.xStep, args.yStep, args.y2Step], scan: !xAscending, y2Own: !!y2Fmt, hidden: args.hidden, extent: args.yBreakExtent, breakMarks: args.yBreakMarks });
+  const extrasPlugin = axisExtrasApplier()?.(axes, look[0] as AxisFormat[], look[1] as AxisScale[], axisColor, { scales, payload, typed: look[2] as boolean[], steps: look[3] as (number | null | undefined)[], scan: !xAscending, y2Own: !!y2Fmt || !hasY2, hidden: args.hidden, extent: args.yBreakExtent, breakMarks: args.yBreakMarks });
   if (extrasPlugin) plugins.push(extrasPlugin);
+  fitSlots?.(); // after the extras: a grown (offset) Y2 still takes one slot
 
   // The same colour read a live repaint uses (seriesColorsFor), so the two agree.
   const { series: seriesArr, bands } = buildSeriesDefs(payload, args, labels, xAscending, seriesColorsFor(args.bg));
@@ -1254,7 +1241,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     // which builds an Intl formatter per call.
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
     ...orientAxes(scales, axes, args.seriesStyles), // horizontal bars: uplotOrient
-    padding: [null, hasY2 ? null : xLabelRightPad(tickPx), null, null],
+    padding: [null, hasY2 || args.yAxes?.length ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),
   };

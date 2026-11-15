@@ -44,6 +44,7 @@ from quantized.calc.plotting import (
 from quantized.calc.render_lock import acquire_render_lock
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.routes import export_figures_multi_y as multi_y  # Y3+ axes (gap audit 4 G11)
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._disconnect import run_watching_disconnect
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
@@ -55,7 +56,7 @@ from quantized.routes._export_common import (
     _safe_name,
 )
 from quantized.routes._offloop import OffloopJSONRoute
-from quantized.routes.export_figures_axis_titles import AxisTitleFields, request_overrides
+from quantized.routes.export_figures_axis_titles import AxisTitleFields
 from quantized.routes.export_figures_encoded import (
     ExcludedRowsFields,
     FigureEncoding,
@@ -74,6 +75,7 @@ from quantized.routes.export_figures_labels import (
     solo_axis_label,
 )
 from quantized.routes.export_figures_polar import PolarFields, refuse_polar, render_polar_request
+from quantized.routes.export_figures_render import flat_render_kwargs as _flat_render_kwargs
 from quantized.routes.export_figures_schema import (
     LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
@@ -83,8 +85,6 @@ from quantized.routes.export_figures_schema import (
     FigureFacet,
     TickFormatSpec,
     _ResolvedFigure,
-    _tick_fmt,
-    _x_tick_fmt,
     reject_document_only_style_keys,
 )
 
@@ -94,7 +94,9 @@ router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSO
 FIGURE_WARNINGS_HEADER = "X-Figure-Warnings"
 
 
-class FigureRequest(CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields, PolarFields):
+class FigureRequest(
+    CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields, PolarFields, multi_y.MultiYFields
+):
     # `dataset`/`dataset_handle` come from CachedDatasetRequest; only
     # /figure-hitmap caches a posted dataset (see _request_dataset).
     x_key: int | str | None = None
@@ -277,6 +279,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     sound semantic to invent for the combination). ``ds`` is the already-
     resolved dataset when the caller has one (the preview route)."""
     refuse_polar(req)  # no polar renderer on /figure-hitmap or a page panel
+    multi_y.refuse_multi_y(req)  # Y3+ axes: not with facets / a group split / an encoding
     if ds is None:
         ds = _request_dataset(req)
 
@@ -331,7 +334,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         x_log=req.x_log,
         y_log=req.y_log,
     )
-    plot = build_series(ds, state)
+    plot = multi_y.tag_extra_axes(build_series(ds, state), req)  # Y3+ series: axis 2, 3, ...
     plot_series = apply_log_offsets(plot.series, req.log_offsets)  # P2.3 decade offsets
     # BUG-014 rename is verbatim (see series_legends/series_names' docs); the
     # offset disclosure (finding 6) is applied separately for that reason.
@@ -374,44 +377,6 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
     resolved = _figure_series(req)
     kwargs = _flat_render_kwargs(req, resolved, dpi)
     return render_figure(resolved.x, resolved.series, fmt=fmt, **kwargs)
-
-
-def _flat_render_kwargs(req: FigureRequest, resolved: _ResolvedFigure, dpi: int) -> dict[str, Any]:
-    """The flat (non-facet, non-polar) renderer's keyword arguments for
-    ``req`` -- the ONE list shared by the export (``render_figure_request``)
-    and the publication preview (``/figure-hitmap``), so the preview renders
-    exactly what Export writes. It used to be two hand-copied lists, and the
-    preview's lacked ``error_spans``, ``width_in``/``height_in`` and
-    ``transparent`` (publication-figures audit #4): a preview at the preset
-    size with no error bars beside an export at the page size with them."""
-    return dict(
-        title=req.title,
-        x_label=resolved.x_label,
-        y_label=resolved.y_label,
-        x_log=req.x_log,
-        y_log=req.y_log,
-        x_scale=req.x_scale,
-        y_scale=req.y_scale,
-        style=req.style,
-        series_styles=resolved.styles,
-        error_spans=resolved.error_spans,
-        width_in=req.width_in,
-        height_in=req.height_in,
-        dpi=dpi,
-        transparent=req.transparent,
-        greyscale=req.greyscale,
-        overrides=request_overrides(req),
-        x_fmt=_x_tick_fmt(req.x_fmt, resolved),
-        y_fmt=_tick_fmt(req.y_fmt),
-        x_step=req.x_step,
-        y_step=req.y_step,
-        y2_mask=resolved.y2_mask,
-        y2_label=resolved.y2_label,
-        y2_scale=req.y2_scale,
-        y2_fmt=_tick_fmt(req.y2_fmt),
-        y2_step=req.y2_step,
-        svg_text_as_paths=req.svg_text_as_paths,
-    )
 
 
 @router.post("/figure")

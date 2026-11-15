@@ -119,6 +119,7 @@ export function resetFigureDocumentForReshape(document: FigureDocument): FigureD
         y2Scale: null,
         y2Step: null,
         y2AxisLabel: "",
+        yAxisOf: {},
       },
     },
     ...(document.publication?.seriesStyles === undefined
