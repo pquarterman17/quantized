@@ -31,6 +31,18 @@ describe("Annotation.dot", () => {
     expect(ann?.[1] && "dot" in ann[1]).toBe(false);
   });
 
+  it("sized annotations are flagged px, so the export converts to pt (unsized: no flag)", () => {
+    const sized = { ...defaultPlotView(), annotations: [{ id: "t", x: 1, y: 2, text: "note", size: 14 }] };
+    const plain = { ...defaultPlotView(), annotations: [{ id: "p", x: 1, y: 2, text: "peak" }] };
+    expect(viewOverrides(sized)?.annotation_size_px).toBe(true);
+    expect(viewOverrides(plain)?.annotation_size_px).toBeUndefined();
+  });
+
+  it("the px flag survives the stored-override sanitizer; a legacy override has none", () => {
+    expect(sanitizeFigureOverrides({ annotation_size_px: true, annotations: [] })?.annotation_size_px).toBe(true);
+    expect(sanitizeFigureOverrides({ grid: true })?.annotation_size_px).toBeUndefined();
+  });
+
   it("survives the override sanitizer used on stored export overrides", () => {
     const out = sanitizeFigureOverrides({ annotations: [{ x: 1, y: 2, text: "a", dot: false }, { x: 1, y: 2, text: "b" }] });
     expect(out?.annotations?.[0]).toMatchObject({ dot: false });

@@ -37,6 +37,34 @@ def test_annotation_size_override_increases_label_box_height() -> None:
     assert big_h > small_h
 
 
+def _label_height(**over: object) -> float:
+    x = np.linspace(0, 10, 5)
+    ann = {"x": 2.0, "y": 4.0, "text": "pk", "size": over.pop("size")}
+    hm = render_figure_map(x, [("y", x)], overrides={"annotations": [ann], **over})
+    box = _ann_box(hm)
+    return box["y1"] - box["y0"]
+
+
+def test_annotation_size_px_converts_screen_px_to_points() -> None:
+    """Audit 6 M: the canvas `size` is px; flagged, the export draws size*0.75 pt,
+    so a 16 px label is the same box as a legacy 12 pt one, and bigger than the
+    unflagged (legacy points) 16."""
+    flagged = _label_height(size=16, annotation_size_px=True)
+    assert flagged == pytest.approx(_label_height(size=12), rel=1e-3)
+    assert flagged < _label_height(size=16)
+
+
+def test_a_text_box_matches_the_axis_titles_in_the_export_as_on_screen() -> None:
+    """Parity: on screen a text box is the axis-title size (tick px + 2). In the
+    export a flagged `size` = that px * 0.75 pt: the screen template's pt
+    equivalent, which is what the same-template axis title is drawn at."""
+    for tick_px in (9, 11, 12, 14, 18):
+        title_px = tick_px + 2
+        assert _label_height(size=title_px, annotation_size_px=True) == pytest.approx(
+            _label_height(size=title_px * 0.75), rel=1e-3
+        )
+
+
 def test_annotation_without_size_falls_back_to_the_font_size_override() -> None:
     # No per-annotation `size` -> the property panel's global font_size
     # override still applies (the pre-#18 behaviour, unchanged).

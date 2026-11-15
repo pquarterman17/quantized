@@ -37,7 +37,8 @@ import type { DisplayBlock } from "./plotspec2";
 import type { RecipeVisual } from "./plotRecipeSchema";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
-import type { Dataset } from "./types";
+import type { FigureOverrides } from "./figureOverrides";
+import type { Annotation, Dataset } from "./types";
 
 export type V034Class = "v034" | "gated" | "kept-by-034";
 type Classify<T> = Record<keyof T, V034Class>;
@@ -96,6 +97,22 @@ export const RECIPE_VISUAL: Classify<RecipeVisual> = {
   yAxes: G, yAxisOf: G,
 };
 
+// A text label. v0.34.0's two annotation sanitizers (plotviewDecor's, used by the
+// view, plot-spec decor and recipes, and figureOverridesSanitize's) pick known
+// keys, so a `dot` is dropped on open + save, and since an absent `dot` means
+// "draw the dot" the loss is permanent and undetectable: gated, and only
+// `dot: false` counts (see checkType). Measured against `git archive v0.34.0`.
+export const ANNOTATION: Classify<Annotation> = {
+  id: V, groupId: V, x: V, y: V, text: V, axis: V, size: V, anchor: V, frame: V,
+  dot: G,
+};
+// The export-request element is a subset of Annotation: a new key must be one.
+type _OverrideAnnotationIsAnnotation = Exclude<
+  keyof NonNullable<FigureOverrides["annotations"]>[number],
+  keyof Annotation
+> extends never ? true : never;
+export const OVERRIDE_ANNOTATION_OK: _OverrideAnnotationIsAnnotation = true;
+
 export const DATASET: Classify<Dataset> = {
   id: V, name: V, data: V, raw: V, corrections: V, bgRef: V, fitSpec: V, peakTable: V, reflFits: V, notes: V,
   tags: V, group: V, folderId: V, order: V, formulas: V, formulaErrors: V, derivedFrom: V, analysisRecipe: V,
@@ -113,6 +130,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   ExportSeriesStyle: EXPORT_SERIES_STYLE,
   DisplayBlock: DISPLAY_BLOCK,
   RecipeVisual: RECIPE_VISUAL,
+  Annotation: ANNOTATION,
   Dataset: DATASET,
 };
 
@@ -128,7 +146,10 @@ const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSI
 
 function checkType(o: unknown, type: string, found: Set<string>): void {
   if (!isObj(o)) return;
-  for (const k of GATED[type]) if (present(o[k])) found.add(`${type}.${k}`);
+  for (const k of GATED[type]) {
+    // `dot: false` is the value that carries information (absent = dot).
+    if (present(o[k]) || (type === "Annotation" && k === "dot" && o[k] === false)) found.add(`${type}.${k}`);
+  }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
 }
 
@@ -150,6 +171,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
     if (Array.isArray(v)) {
       if (!v.length || typeof v[0] !== "object") return; // cells / numbers: nothing to find
       if (key === "seriesStyles") for (const st of v) checkType(st, "ExportSeriesStyle", found);
+      if (key === "annotations") for (const a of v) checkType(a, "Annotation", found);
       for (const x of v) visit(x, key);
       return;
     }

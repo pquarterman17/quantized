@@ -121,6 +121,7 @@ function panelOverrides(
       ...(ann.dot === false ? { dot: false as const } : {}),
     }));
   return compactOverrides({
+    annotation_size_px: annotations.some((a) => a.size) ? (true as const) : undefined,
     legend: hasLegend
       ? {
           show: true,

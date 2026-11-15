@@ -150,7 +150,8 @@ export interface CanonicalError {
 
 export interface CanonicalDecor {
   legend: { show: boolean; position: LegendPos | null; title: string | null };
-  annotations: { x: number; y: number; text: string }[];
+  /** `dot`: whether the anchor dot is drawn (absent = drawn) -- screen and export must agree. */
+  annotations: { x: number; y: number; text: string; dot: boolean }[];
   shapes: { kind: string; x1: number; y1: number; x2: number; y2: number }[];
   refLines: { axis: "x" | "y"; value: number }[];
   regionShades: { x1: number; x2: number; y1: number; y2: number; fill: string }[];
@@ -383,7 +384,7 @@ export function decorOf(view: PlotView): CanonicalDecor {
     },
     annotations: view.annotations
       .filter((a) => Number.isFinite(a.x) && Number.isFinite(a.y))
-      .map((a) => ({ x: a.x, y: a.y, text: a.text })),
+      .map((a) => ({ x: a.x, y: a.y, text: a.text, dot: a.dot !== false })),
     shapes: view.shapes
       .filter((s) => [s.x1, s.y1, s.x2, s.y2].every(Number.isFinite))
       .map((s) => ({ kind: s.kind, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 })),

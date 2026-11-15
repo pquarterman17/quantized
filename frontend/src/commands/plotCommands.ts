@@ -16,7 +16,7 @@ import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { onLoadFailure, runLazy } from "./fileCommands";
-import { colorGradientCommand } from "./plotStyleCommands";
+import { colorGradientCommand, legendFormatCommand } from "./plotStyleCommands";
 
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
@@ -303,6 +303,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: openLayerContents,
     },
     colorGradientCommand, // origin gap audit 4 G1 (commands/plotStyleCommands.ts)
+    legendFormatCommand, // audit 6 M
     // Gap audit 3 N3 / 4 G19: the named way to set the windows' X or Y link
     // group ("link-x-axis", "link-y-axis").
     ...(["x", "y"] as const).map((a): Action => ({

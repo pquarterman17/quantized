@@ -702,11 +702,7 @@ export interface Annotation {
    *  (see `lib/uplotShapes.ts`'s `resolveShapeOpacity`) when a preset is
    *  picked without a custom color. */
   frame?: { fill?: string; stroke?: string; opacity?: number; pad?: number };
-  /** Draw the 3 px anchor dot beside the label. Absent/true = dot (every
-   *  annotation saved before this field existed, and peak/point labels where
-   *  the dot is the point); only an explicit `false` hides it. New plain text
-   *  and text boxes are created with `dot: false`. Honoured on the canvas
-   *  (`uplotOverlays`) and in export (`calc/figure_overrides`). */
+  /** Anchor dot: only an explicit `false` hides it (absent = shown, the legacy look). */
   dot?: boolean;
 }
 

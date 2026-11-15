@@ -172,6 +172,7 @@ describe("FigureDocument FigureSpec adapter", () => {
         ref_lines: [{ axis: "x", value: 5 }],
         region_shades: [{ x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 }],
         x_lim: [0.1, 10],
+        annotation_size_px: true, // a sized label's `size` is canvas px; the export converts to pt
         y_lim: [1, 9],
         grid: true,
         spines: { top: true, right: true },

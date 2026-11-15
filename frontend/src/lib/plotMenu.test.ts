@@ -161,6 +161,22 @@ describe("buildPlotMenu — 'Add text here…' (UX-R6 manual annotation entry)",
   });
 });
 
+describe("buildPlotMenu — Legend formatting… (audit 6 M)", () => {
+  it("is in the Legend submenu, dispatches ctx.legendFormat, and is disabled while the legend is hidden", () => {
+    const ctx = makeCtx({ legendFormat: vi.fn() });
+    const item = find(submenuOf(buildPlotMenu(ctx), "Legend"), "Legend formatting…")!;
+    expect(item).toBeTruthy();
+    if ("run" in item) item.run();
+    expect(ctx.legendFormat).toHaveBeenCalledTimes(1);
+    const hidden = find(submenuOf(buildPlotMenu(makeCtx({ legendFormat: vi.fn(), showLegend: false })), "Legend"), "Legend formatting…")!;
+    expect("disabled" in hidden && hidden.disabled).toBe(true);
+  });
+
+  it("is absent when there is no active graph to format", () => {
+    expect(find(submenuOf(buildPlotMenu(makeCtx()), "Legend"), "Legend formatting…")).toBeUndefined();
+  });
+});
+
 describe("buildPlotMenu — entries dispatch the ctx actions", () => {
   it("a colour swatch sets that series' colour", () => {
     const ctx = makeCtx({ series: series({ channel: 3 }) });

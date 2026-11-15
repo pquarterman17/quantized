@@ -70,6 +70,7 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
     if (Object.keys(next).length) out.margins = next;
   }
   if (typeof raw.grid === "boolean") out.grid = raw.grid;
+  if (raw.annotation_size_px === true) out.annotation_size_px = true;
   if (Array.isArray(raw.annotations)) {
     out.annotations = raw.annotations.flatMap((value) => {
       const annotation = record(value);

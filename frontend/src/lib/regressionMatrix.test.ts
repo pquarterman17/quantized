@@ -281,6 +281,7 @@ describe("P4.2 regression matrix: every fixture projects its distinguishing feat
   it("decor — annotations, shapes, reference lines, a region shade and the legend title", () => {
     const p = projectScreen(matrixFixture("decor"), dataset);
     expect(p.decor.annotations.map((a) => a.text)).toEqual(["onset", "plateau"]);
+    expect(p.decor.annotations.map((a) => a.dot)).toEqual([true, false]); // a text box has no dot, a peak label does
     expect(p.decor.shapes.map((s) => s.kind)).toEqual(["arrow", "rect"]);
     expect(p.decor.refLines).toEqual([
       { axis: "x", value: 2.5 },

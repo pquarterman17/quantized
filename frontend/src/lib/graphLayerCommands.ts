@@ -19,6 +19,7 @@ import {
 import { newCurve } from "./layerContents";
 import { is2DMap } from "./mapdata";
 import { openFilePicker } from "./openFilePicker";
+import { curveX, ownXKey } from "./perSeriesX";
 import { effectiveChannels } from "./plotdata";
 import type { LinkedCurve } from "./types";
 import { openFigureDialog } from "../store/figureDialogs";
@@ -136,10 +137,13 @@ function parentCurves(): LinkedCurve[] {
   const s = useApp.getState();
   const ds = s.datasets.find((d) => d.id === s.activeId);
   if (!ds || is2DMap(ds.data)) return [];
+  const own = curveX(ds, s.xKey); // undefined = an X / non-curve column, never a curve
   return effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder)
-    .filter((ch) => !s.hiddenChannels.includes(ch))
+    .filter((ch) => !s.hiddenChannels.includes(ch) && own[ch] !== undefined)
     .slice(0, MAX_SEED_CURVES)
-    .map((ch) => newCurve(ds, null, ch));
+    // The parent's own X per curve: a chosen X column, or the nearest preceding
+    // X on a multi-X sheet (R2 against T2); null (the book's X) otherwise.
+    .map((ch) => newCurve(ds, s.xKey === null ? null : ownXKey(ds, s.xKey, ch), ch));
 }
 
 function newLayer(kind: Exclude<LayerKind, "image">): GraphLayer {

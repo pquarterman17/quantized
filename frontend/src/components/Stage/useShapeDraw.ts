@@ -16,6 +16,7 @@ import { useEffect, useMemo } from "react";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
+import { resolveTemplate } from "../../lib/plotTemplates";
 import { useApp } from "../../store/useApp";
 import { createAnnotationFromDialog } from "./annotationShapeActions";
 
@@ -36,9 +37,10 @@ const DRAW_HINTS: Record<DrawShapeKind, string> = {
  *  discoverability requirement). */
 const DEFAULT_TEXTBOX_FRAME = { opacity: 0.9 };
 
-/** A fresh text box's font size: the axis-title size (tick size 12 + 2, see
- *  `uplotOpts.buildOpts`' `titlePx`), not the small tick-label default. */
-const DEFAULT_TEXTBOX_SIZE = 14;
+/** A fresh text box's font size: the active template's axis-title size (its
+ *  tick px + 2, see `uplotOpts.buildOpts`' `titlePx`), not the small
+ *  tick-label default. Screen px; the export converts (`annotation_size_px`). */
+export const textBoxSizeFor = (template: string): number => resolveTemplate(template).fontSize + 2;
 
 export interface ShapeDrawResult {
   /** Pass straight through to <PlotViewport shapeDraw={...}>; null when no
@@ -107,7 +109,7 @@ export function useShapeDraw(): ShapeDrawResult {
           // ruling: unlike a right-click's cancellable menu pick, committing
           // a drag-drawn text box IS the commit — the tool flip isn't
           // conditioned on the dialog outcome).
-          void createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME, size: DEFAULT_TEXTBOX_SIZE });
+          void createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME, size: textBoxSizeFor(useApp.getState().plotTemplate) });
           return;
         }
         const id = addShape({ kind, x1, y1, x2, y2 });

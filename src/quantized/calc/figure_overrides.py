@@ -258,7 +258,12 @@ def _apply_overrides(
             ann_kw["xycoords"] = "figure fraction"
             y = 1.0 - y
         frame = ann.get("frame")
-        fontsize = float(size) if size else float(ov.get("font_size", st.font_size))
+        # `annotation_size_px`: `size` is screen px (the canvas unit) -> pt.
+        # Absent = legacy documents, whose `size` was read as points.
+        if size:
+            fontsize = float(size) * (0.75 if ov.get("annotation_size_px") else 1.0)
+        else:
+            fontsize = float(ov.get("font_size", st.font_size))
         if frame:
             # MAIN #27 "text box": a bbox behind the annotation text. `pad`
             # is screen CSS px around the measured text; matplotlib's

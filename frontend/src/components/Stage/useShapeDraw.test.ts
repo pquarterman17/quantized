@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useApp } from "../../store/useApp";
 import { pressEscape } from "../../test/pressEscape";
-import { useShapeDraw } from "./useShapeDraw";
+import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
+import { textBoxSizeFor, useShapeDraw } from "./useShapeDraw";
 
 vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../store/annotationTextDialog")>()),
@@ -122,6 +123,21 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
     expect(ann.size).toBe(14); // axis-title size, not the 12 px tick-label default
     expect(useApp.getState().shapes).toEqual([]); // never a Shape
     expect(useApp.getState().selectedAnnotationId).toBe(ann.id);
+  });
+
+  it("sizes a new text box from the ACTIVE template's axis-title size, as ONE undo step", async () => {
+    mockAskAnnotationText.mockResolvedValue("Hc2");
+    useApp.setState({ drawShapeKind: "textbox", plotTemplate: "aps", history: [] }); // aps ticks 9 px -> titles 11 px
+    const { result } = renderHook(() => useShapeDraw());
+    act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 5, 6, 5, 6));
+    await waitFor(() => expect(useApp.getState().annotations).toHaveLength(1));
+    expect(useApp.getState().annotations[0].size).toBe(11);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.setState({ plotTemplate: "screen" });
+  });
+
+  it("textBoxSizeFor is every template's tick px + 2 (the screen's axis-title px)", () => {
+    for (const t of PLOT_TEMPLATES) expect(textBoxSizeFor(t.value)).toBe(t.fontSize + 2);
   });
 
   // BUG 4 REGRESSION (bug-hunt batch): cancelling the "Text box" dialog

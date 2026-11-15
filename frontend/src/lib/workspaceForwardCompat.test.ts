@@ -96,6 +96,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxes = [{ lim: null, scale: null, step: null, fmt: null, label: "R3", color: null }];
     v.yAxisOf = { [Object.keys(v.seriesStyles)[0] ?? "x0"]: 3 };
   },
+  "Annotation.dot": (ws) => editView(ws, (v) => { v.annotations = [...v.annotations, { id: "t", x: 1, y: 2, text: "note", dot: false }]; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -201,6 +202,7 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/\.seriesStyles\.[^.[\]]+$/, "SeriesStyle"],
   [/^\$\.savedPlotSpecs\[\]\.spec\.display$/, "DisplayBlock"],
   [/^\$\.plotRecipes\[\]\.visual$/, "RecipeVisual"],
+  [/\.annotations\[\]$/, "Annotation"], // view, decor, recipe decorations, export overrides
 ];
 
 /** Fields that existed in v0.34.0 but the frozen 0.34 file happens not to use
@@ -224,7 +226,7 @@ function paths(v: unknown, p = "$", out = new Set<string>()): Set<string> {
 }
 
 /** Why a new path is allowed, or null: the classified field it belongs to. */
-function classify(path: string): string | null {
+function classify(path: string, old: ReadonlySet<string>): string | null {
   const segs = path.split(/(?=\.)/); // keep the dots: "$", ".a", ".b[]", ...
   for (let i = segs.length - 1; i >= 1; i--) {
     const container = segs.slice(0, i).join("");
@@ -232,7 +234,12 @@ function classify(path: string): string | null {
     for (const [rx, type] of CONTAINERS) {
       if (!rx.test(container)) continue;
       const cls = CLASSIFICATIONS[type][field];
-      return cls ? `${type}.${field}=${cls}` : `UNCLASSIFIED ${type}.${field}`;
+      if (!cls) return `UNCLASSIFIED ${type}.${field}`;
+      // (Only when 0.34 itself wrote that field.) A new key BELOW a field 0.34 already wrote (annotations[].frame.x,
+      // shapes[].y ...) is that field's new sub-field, not the field itself:
+      // it must be classified, never credited to the ancestor.
+      if (i < segs.length - 1 && cls === "v034" && old.has(`${container}.${field}`)) return `UNCLASSIFIED sub-key of ${type}.${field} (${segs.slice(i + 1).join("")})`;
+      return `${type}.${field}=${cls}`;
     }
   }
   return null;
@@ -248,7 +255,7 @@ describe("kitchen sink: no new key path escapes the classification maps", () => 
     const classified: string[] = [];
     for (const p of head) {
       if (old034.has(p) || p in KNOWN_034_PATHS) continue;
-      const why = classify(p);
+      const why = classify(p, old034);
       if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
       else classified.push(why);
     }
@@ -256,5 +263,26 @@ describe("kitchen sink: no new key path escapes the classification maps", () => 
     // Sanity: the walk saw the gated fields the edits added.
     expect(classified).toContain("DisplayBlock.ramp=gated");
     expect(classified).toContain("Dataset.linkedCurves=gated");
+    expect(classified).toContain("Annotation.dot=gated");
+  });
+});
+
+describe("kitchen sink: the classifier itself", () => {
+  it("credits an annotation sub-field to Annotation, wherever the list lives", () => {
+    for (const root of ["$.plotWindows[].view", "$.plotRecipes[].visual.decorations", "$.figureDocs[].overrides"]) {
+      expect(classify(`${root}.annotations[].dot`, new Set())).toBe("Annotation.dot=gated");
+    }
+  });
+
+  it("refuses to credit a new key below a field 0.34 wrote to that ancestor", () => {
+    const old = new Set(["$.plotWindows[].view.shapes"]);
+    expect(classify("$.plotWindows[].view.shapes[].dash2", old)).toMatch(/^UNCLASSIFIED sub-key of PlotView\.shapes/);
+    expect(classify("$.plotWindows[].view.shapes[].dash2", new Set())).toBe("PlotView.shapes=v034");
+  });
+
+  it("a gated annotation dot is reported only for dot:false", () => {
+    const doc = (a: object) => ({ pages: [{ view: { seriesStyles: {}, yFmt: {}, annotations: [a] } }] });
+    expect(featuresV034WouldDrop(doc({ id: "a", x: 1, y: 1, text: "t", dot: false }))).toEqual(["Annotation.dot"]);
+    expect(featuresV034WouldDrop(doc({ id: "a", x: 1, y: 1, text: "t" }))).toEqual([]);
   });
 });

@@ -160,6 +160,7 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       ref_lines: refLines,
       region_shades: regionShades,
       x_lim: finiteLim(st.xLim),
+      annotation_size_px: annotations.some((a) => a.size) ? (true as const) : undefined,
       x_reversed: st.xReversed || undefined, // matplotlib invert_xaxis (calc/figure_overrides.py)
       y_lim: finiteLim(st.yLim),
       y2_lim: finiteLim(st.y2Lim),

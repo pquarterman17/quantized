@@ -21,6 +21,11 @@ export interface FigureOverrides {
   x_lim?: [number | null, number | null];
   /** x drawn high-to-low (`PlotView.xReversed`): matplotlib invert_xaxis. */
   x_reversed?: boolean;
+  /** `true`: each annotation `size` is in screen px (the canvas unit), so the
+   *  export draws it at `size * 0.75` pt. Absent = the legacy reading (the
+   *  number is points), which a stored document made before this flag keeps.
+   *  `calc.figure_overrides._apply_overrides`. */
+  annotation_size_px?: true;
   y_lim?: [number | null, number | null];
   /** Fixed secondary (right) Y-axis range — the twinx counterpart of
    *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`

@@ -226,6 +226,18 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     useFigureDialog.setState({ open: null });
   });
 
+  it("a 1-2 px jitter between press and release is not a drag: the legend stays put", () => {
+    useApp.setState({ legendXY: null, history: [] });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 51, clientY: 51 });
+    fireEvent.mouseUp(document, { clientX: 51, clientY: 51 });
+    expect(useApp.getState().legendXY).toBeNull();
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
   it("double-click on the content body's empty space opens legend formatting too", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     fireEvent.doubleClick(container.querySelector(".qzk-legend-content") as HTMLElement);

@@ -213,7 +213,7 @@ export function decorFigure(): FigureDocument {
       legendPos: "se",
       annotations: [
         { id: "ann-1", x: 1, y: 0.5, text: "onset" },
-        { id: "ann-2", x: 4, y: 2.5, text: "plateau" },
+        { id: "ann-2", x: 4, y: 2.5, text: "plateau", dot: false },
       ],
       shapes: [
         { id: "shape-1", kind: "arrow", x1: 1, y1: 1, x2: 3, y2: 2 },

@@ -14,6 +14,7 @@ import { legendNonCurves } from "../../lib/legendCurves";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
+import { openFigureDialog } from "../../store/figureDialogs";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import ColorScaleChip from "./ColorScaleChip";
 import LegendSample from "./LegendSample";
@@ -324,6 +325,8 @@ export default function PlotLegend({
             const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
             const onY2 = (y2Keys ?? []).includes(menu.channel);
             return [
+              { label: "Legend formatting…", run: () => openFigureDialog({ kind: "legend" }) },
+              { separator: true },
               {
                 label: "Rename…",
                 run: () => setEditing({ channel: menu.channel, value: seriesLabels[menu.channel] ?? "" }),

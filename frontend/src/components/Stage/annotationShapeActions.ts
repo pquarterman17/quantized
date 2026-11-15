@@ -20,6 +20,7 @@ import type { ContextAction } from "../../lib/contextActions";
 import type { Annotation } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askAnnotationText } from "../../store/annotationTextDialog";
+import { asOneEditStep } from "../../store/undoStep";
 
 /** The corner-handle drag's step size for the object menu's Size +/− entries
  *  (a discrete click, unlike the drag's continuous px-to-size mapping). */
@@ -117,8 +118,31 @@ export function createAnnotationFromDialog(opts: CreateAnnotationFromDialogOptio
   });
 }
 
+/** Copy an annotation in place, with its look (anchor dot, frame, size, anchor,
+ *  y2 axis) kept, as ONE undo step. Returns the new id. */
+export function duplicateAnnotation(a: Annotation): string {
+  return asOneEditStep(useApp.getState, "duplicate annotation", () => {
+    const s = useApp.getState();
+    const id = s.addAnnotation(a.x, a.y, a.text);
+    const patch: Parameters<typeof s.updateAnnotation>[1] = {};
+    if (a.dot !== undefined) patch.dot = a.dot;
+    if (a.frame) patch.frame = { ...a.frame };
+    if (a.size) patch.size = a.size;
+    if (a.anchor) patch.anchor = a.anchor;
+    if (Object.keys(patch).length) s.updateAnnotation(id, patch);
+    return id;
+  });
+}
+
 export const annotationEditActions: ContextAction<AnnotationActionTarget>[] = [
   { id: "annotation.editText", label: "Edit text…", run: (t) => editAnnotationText(t.id) },
+  // Audit 6 M: the anchor dot is opt-out per label (absent = shown).
+  {
+    id: "annotation.dotToggle",
+    label: "Show anchor dot",
+    checked: (t) => getAnnotation(t.id)?.dot !== false,
+    run: (t) => useApp.getState().updateAnnotation(t.id, { dot: getAnnotation(t.id)?.dot === false }),
+  },
   // MAIN #21: flip between "data" (moves with zoom/pan) and "page"
   // (canvas-fraction, resize-stable) anchoring, converting x/y IN PLACE from
   // the plugin's precomputed `conv` so the label doesn't jump on the toggle.

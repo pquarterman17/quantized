@@ -434,7 +434,7 @@ export function projectExportSpec(spec: FigureSpec, figure: FigureDocument): Can
         position: overrides?.legend?.show ? position : null,
         title: overrides?.legend?.title ?? null,
       },
-      annotations: (overrides?.annotations ?? []).map((a) => ({ x: a.x, y: a.y, text: a.text })),
+      annotations: (overrides?.annotations ?? []).map((a) => ({ x: a.x, y: a.y, text: a.text, dot: a.dot !== false })),
       shapes: (overrides?.shapes ?? []).map((s) => ({ kind: s.kind, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 })),
       refLines: (overrides?.ref_lines ?? []).map((r) => ({ axis: r.axis, value: r.value })),
       regionShades: (overrides?.region_shades ?? []).map((r) => ({

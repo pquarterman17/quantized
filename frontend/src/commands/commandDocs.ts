@@ -214,6 +214,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "layer contents curves add remove reorder rebind plot dataset book",
   },
   // ── commands/plotStyleCommands.ts ──
+  "legend-format": { description: "Show or hide the legend, pick its corner, rename its entries.", keywords: "legend labels entries position corner" },
   "color-gradient": { description: "Spread a colormap across the graph's curves.", keywords: "color colour colormap ramp increment" },
   // ── commands/plotCommands.ts ──
   "link-x-axis": {
