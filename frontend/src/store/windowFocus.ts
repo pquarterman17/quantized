@@ -4,7 +4,7 @@
 // importer changed. Only TYPE imports cross back into useApp (no runtime cycle).
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
-import { dedupeWindowTitle, defaultPlotView, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
+import { dedupeWindowTitle, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
 import { cascadeLayout, reboundWindowTitle, tileLayout } from "../lib/plotWindows";
 import { plotIntentStageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
@@ -12,7 +12,7 @@ import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { plotWindowDatasetId, syncPlotWindow } from "./windowDocuments";
-import { datasetViewDefaults, mainWindow as createMainWindow } from "./windowDefaults";
+import { datasetViewDefaults, mainWindow as createMainWindow, newGraphView } from "./windowDefaults";
 import { windowHasUserEdits } from "./windowUserEdits";
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
@@ -225,12 +225,11 @@ export function retargetPassiveRebind(
     return;
   }
   const title = titleBase !== undefined ? dedupeAgainstDisplayed(s, titleBase) : undefined;
-  // Seeded with the dataset's own defaults (error columns, technique axes):
-  // the caller's rebind is then a re-activation of the same id, which by
-  // design leaves the view alone. An import's dataset is not in the store
-  // yet; `addDataset` applies the same defaults itself.
-  const ds = s.datasets.find((d) => d.id === datasetId);
-  const seed = ds ? { ...defaultPlotView(), ...datasetViewDefaults(ds) } : undefined;
+  // A NEW graph: the default template's chrome under the dataset's own
+  // defaults (error columns, technique axes). The caller's rebind is then a
+  // re-activation of the same id, which by design leaves the view alone. An
+  // import's dataset is not in the store yet; `addDataset` binds it itself.
+  const seed = newGraphView(s.datasets.find((d) => d.id === datasetId));
   s.focusWindow(s.createWindow(datasetId, seed, title));
   // Say why a window appeared (live check): the styled graph was kept.
   if (!focused.pinned) toast(`"${displayedWindowTitle(focused, s.datasets)}" keeps its styling — opened in a new window`, "info");

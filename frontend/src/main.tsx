@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
+import { warmDefaultGraphTemplate } from "./commands/plotCommands";
 import { spatialPanelsOf } from "./lib/composition";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { connectLifecycle } from "./lib/lifecycle";
@@ -15,6 +16,7 @@ import { warmSaveModules } from "./store/workspaceIOLazy";
 import "./styles/index.css";
 
 connectLifecycle();
+void warmDefaultGraphTemplate(); // gap audit 5 #1: its chunk loads only when a default is set
 
 // ── Visual-verification seam (tools/visual) ─────────────────────────────────
 // When loaded with `?harness`, expose the store (plus the two MDI helpers

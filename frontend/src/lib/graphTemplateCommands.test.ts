@@ -1,8 +1,9 @@
 // Figures-audit B2: Stage graph templates + Copy/Paste Format (style only,
 // never data) — between two plain CSV datasets, i.e. "generic" data.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { loadDefaultGraphTemplateName } from "./defaultGraphTemplate";
 import { loadGraphTemplates, saveGraphTemplate } from "./figuredoc";
 import { sanitizeGraphFormat } from "./graphFormat";
 import {
@@ -11,11 +12,13 @@ import {
   pasteStageFormat,
   resetCopiedFormatForTests,
   saveStageGraphTemplate,
+  setStageGraphAsDefault,
 } from "./graphTemplateCommands";
 import { defaultPlotView } from "./plotview";
 import type { Dataset } from "./types";
 import { askParams } from "../store/paramDialog";
 import { useApp } from "../store/useApp";
+import { newGraphView, setNewGraphStyler } from "../store/windowDefaults";
 
 vi.mock("../store/paramDialog", () => ({ askParams: vi.fn() }));
 
@@ -100,5 +103,31 @@ describe("Stage graph templates", () => {
     await applyStageGraphTemplate(s);
     expect(askParams).not.toHaveBeenCalled();
     expect(s().status).toMatch(/no saved templates/);
+  });
+});
+
+// Gap audit 5 #1: Plot ▸ "Set as Default for New Graphs…".
+describe("Set as Default for New Graphs", () => {
+  afterEach(() => setNewGraphStyler(null));
+
+  it("saves this graph's style as a template and makes it the default for new graphs", async () => {
+    styleThenSwitch();
+    vi.mocked(askParams).mockResolvedValueOnce({ name: "House" });
+    await setStageGraphAsDefault(s);
+    expect(vi.mocked(askParams).mock.calls[0][1][0]).toMatchObject({ default: "Default graph" });
+    expect(loadGraphTemplates().map((t) => t.name)).toContain("House");
+    expect(loadDefaultGraphTemplateName()).toBe("House");
+    expect(newGraphView(csv("c", ["X", "Y"])).seriesStyles[0]).toEqual({ color: "#ff0000", width: 3 });
+    expect(s().status).toMatch(/new graphs open with it/);
+  });
+
+  it("does nothing on Cancel, or without a plotted dataset", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce(null);
+    await setStageGraphAsDefault(s);
+    expect(loadDefaultGraphTemplateName()).toBeNull();
+    useApp.setState({ activeId: null });
+    await setStageGraphAsDefault(s);
+    expect(askParams).toHaveBeenCalledTimes(1);
+    expect(loadGraphTemplates()).toEqual([]);
   });
 });

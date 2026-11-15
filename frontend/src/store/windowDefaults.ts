@@ -6,6 +6,7 @@ import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaul
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
+import type { NewGraphStyler } from "../lib/defaultGraphTemplate";
 import { createPlotWindowDocument } from "./windowDocuments";
 
 export interface DatasetViewDefaultsOptions {
@@ -25,13 +26,21 @@ export const SWITCH_DECORATIONS = ["refLines", "regionShades", "annotations", "s
 export const SWITCH_DESCRIPTIONS = ["plotTitle", "legendTitle", "statMode"] as const;
 type SwitchDecorations = Pick<PlotView, (typeof SWITCH_DECORATIONS)[number] | (typeof SWITCH_DESCRIPTIONS)[number]>;
 
+/** The default graph template (gap audit 5 #1), installed by the LAZY
+ *  `lib/defaultGraphTemplate.ts` once its preference is read. null = none, and
+ *  also before that chunk loads: a graph opened in that instant is plain (fail
+ *  closed, never a half-applied template). */
+let styler: NewGraphStyler | null = null;
+export const setNewGraphStyler = (next: NewGraphStyler | null): void => void (styler = next);
+
 /** What a genuine dataset switch drops from `view`: ref lines, region shades,
  *  data-anchored annotations/shapes (page-anchored ones are not tied to the
  *  data and stay), non-default tick formats and the `SWITCH_DESCRIPTIONS`.
  *  Only the fields that change, so an undecorated view keeps every reference
- *  ({} = nothing to drop). */
+ *  ({} = nothing to drop). Tick formats go back to the default graph
+ *  template's, when one is set (what an untouched graph shows). */
 export function switchDecorationReset(view: SwitchDecorations): Partial<PlotView> {
-  const blank = defaultPlotView() as unknown as Record<string, unknown>;
+  const blank = { ...defaultPlotView(), ...styler?.chrome() } as unknown as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const k of [...SWITCH_DECORATIONS, ...SWITCH_DESCRIPTIONS]) {
     const v: unknown = view[k];
@@ -40,6 +49,15 @@ export function switchDecorationReset(view: SwitchDecorations): Partial<PlotView
     if (JSON.stringify(next) !== JSON.stringify(v)) out[k] = next;
   }
   return out as Partial<PlotView>;
+}
+
+/** The view a NEW graph of `dataset` opens with: the default template's
+ *  chrome under its fresh binding. Only the app's own new-graph paths seed
+ *  with it (an import or Library open that opens a window, Plot in New
+ *  Window, a drop on empty canvas, Quick Plot); a recovered Origin graph, a
+ *  saved figure, a recipe and a `.dwk` restore keep building their own. */
+export function newGraphView(dataset?: Dataset, memory?: TechniqueViewMemoryMap): PlotView {
+  return { ...defaultPlotView(), ...styler?.chrome(), ...datasetViewDefaults(dataset, undefined, memory) };
 }
 
 export function datasetViewDefaults(
@@ -54,7 +72,7 @@ export function datasetViewDefaults(
   const seriesStyles: PlotView["seriesStyles"] = {};
   if (dataset?.data.metadata?.default_trace === "Scatter")
     dataset.data.labels.forEach((_, i) => (seriesStyles[i] = { marker: true, width: 0 }));
-  return {
+  const out: Partial<PlotView> = {
     // Figures-audit #8: a text first column (Sample,Value,SD) plots as its
     // category labels, not as codes against a 1..N row index.
     xKey: dataset ? textAxisFallbackChannel(dataset) : null,
@@ -105,6 +123,11 @@ export function datasetViewDefaults(
       ? { ...remembered, seriesStyles: { ...seriesStyles, ...remembered.seriesStyles } }
       : isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {}),
   };
+  // The default graph template's per-position series styles sit UNDER the
+  // dataset's own (the hint, technique memory): what a fresh binding's
+  // unstyled series look like. Origin apply branches replace `seriesStyles`.
+  if (styler && dataset) out.seriesStyles = { ...styler.seriesStyles(dataset, out), ...out.seriesStyles };
+  return out;
 }
 
 /** The error layer plus the book's own-X rule: a Y that belongs to a

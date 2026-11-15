@@ -21,7 +21,7 @@ import { isDefaultWindowTitle } from "../lib/plotWindows";
 import { defaultPlotView, snapshotView, type PlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
-import { datasetViewDefaults } from "./windowDefaults";
+import { datasetViewDefaults, newGraphView } from "./windowDefaults";
 import { plotWindowDatasetId, plotWindowView } from "./windowDocuments";
 
 /** View fields that are not a user edit: `showGrid` is seeded from a
@@ -42,10 +42,11 @@ const sortedJson = (value: unknown): string =>
   );
 
 /** True when `view` differs, in any user-editable field, from the view a
- *  fresh bind to `dataset` produces. */
+ *  fresh bind to `dataset` produces -- with or without the default graph
+ *  template's chrome (gap audit 5 #1: a new graph is not an edited one). */
 export function viewHasUserEdits(view: PlotView, dataset: Dataset | undefined): boolean {
-  const fresh = { ...defaultPlotView(), ...datasetViewDefaults(dataset) };
-  return VIEW_KEYS.some((k) => !NOT_EDITS.has(k) && sortedJson(view[k]) !== sortedJson(fresh[k]));
+  const fresh = [{ ...defaultPlotView(), ...datasetViewDefaults(dataset) }, newGraphView(dataset)];
+  return fresh.every((f) => VIEW_KEYS.some((k) => !NOT_EDITS.has(k) && sortedJson(view[k]) !== sortedJson(f[k])));
 }
 
 /** The view a window shows right now: the live singleton fields for the

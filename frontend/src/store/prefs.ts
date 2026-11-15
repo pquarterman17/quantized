@@ -237,6 +237,14 @@ export function syncPrefs(s: AppState): void {
   }
 }
 
+// ── Default graph template (gap audit 5 #1) ────────────────────────────────
+// The NAME of the saved graph template (`qz.graphTemplates`) every new graph
+// opens with; absent = none. Store-independent, like the blobs below. All of
+// the code that applies it is LAZY (lib/defaultGraphTemplate.ts): the boot
+// loads that chunk only when a default is set (commands/plotCommands.ts's
+// `warmDefaultGraphTemplate`, beside the graph-format commands' own loader).
+export const DEFAULT_GRAPH_TEMPLATE_KEY = "qz.defaultGraphTemplate";
+
 // ── Plot toolbar display prefs (GUI_INTERACTION_PLAN #7) ───────────────────
 // A tiny, store-INDEPENDENT localStorage blob for toolbar-only UI state
 // (currently: whether the named-group captions are shown). Deliberately NOT
