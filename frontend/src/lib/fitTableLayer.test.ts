@@ -19,8 +19,8 @@ describe("number format", () => {
     expect(valueWithError(2.5e6, 1.1e4)).toBe("(2.500 ± 0.011)e6");
   });
   it("prints a value alone (no ±) without a usable error, a dash for a missing number", () => {
-    expect(valueWithError(0.123456, null)).toBe("0.1235");
-    expect(valueWithError(0.5, 0)).toBe("0.5");
+    expect(valueWithError(0.123456, null)).toBe("0.1235 (no error)");
+    expect(valueWithError(0.5, 0)).toBe("0.5 (no error)");
     expect(valueWithError(Number.NaN, 1)).toBe("–");
     expect(plain(undefined)).toBe("–");
     expect(plain(1.5e-7)).toBe("1.500e-7");
@@ -32,7 +32,7 @@ describe("tables", () => {
 
   it("single fit: parameters ± errors, then only the chosen statistics", () => {
     expect(singleFitTable(["A", "tau"], result, DEFAULT_WANT)).toEqual([
-      ["Parameter", "Value"], ["A", "2.500 ± 0.050"], ["tau", "0.12"], ["R²", "0.99877"], ["Reduced χ²", "1.234"],
+      ["Parameter", "Value"], ["A", "2.500 ± 0.050"], ["tau", "0.12 (no error)"], ["R²", "0.99877"], ["Reduced χ²", "1.234"],
     ]);
     const all = singleFitTable(["A", "tau"], result, { r2: false, chiSqRed: false, chiSq: true, n: true });
     expect(all.slice(-2)).toEqual([["χ²", "12.35"], ["N", "12"]]);
@@ -47,8 +47,9 @@ describe("tables", () => {
       ],
     }, DEFAULT_WANT);
     expect(rows).toEqual([
+      ["Shared parameter", "Value"],
+      ["k", "0.500 ± 0.020"],
       ["Series", "A", "R²"],
-      ["Shared", "k = 0.500 ± 0.020"],
       ["s1", "2.00 ± 0.10", "0.99"],
       ["s2", "3.00 ± 0.20", "0.98"],
       ["Reduced χ²", "1.1"],
@@ -61,6 +62,24 @@ describe("tables", () => {
       { name: "b", params: [], errors: [], R2: undefined, chiSqRed: undefined },
     ], DEFAULT_WANT);
     expect(rows).toEqual([["Input", "tau", "R²", "Reduced χ²"], ["a", "1.50 ± 0.10", "0.9", "2"], ["b", "–", "–", "–"]]);
+  });
+});
+
+describe("number format edge cases (L1, M7)", () => {
+  it("never prints an undetermined or held parameter as an exact number", () => {
+    for (const e of [Number.NaN, Infinity, 0, null]) expect(valueWithError(5, e)).toBe("5 (no error)");
+  });
+  it("takes the exponent from the larger of value and error, and keeps two significant figures", () => {
+    expect(valueWithError(1e-4, 1)).toBe("0.0 ± 1.0");
+    expect(valueWithError(12.3, 123)).toBe("10 ± 120");
+    expect(valueWithError(1, 1e-25)).toBe("1 ± 1.0e-25");
+  });
+  it("a global fit whose parameters are all shared has no empty series block (L2)", () => {
+    const rows = globalFitTable({
+      paramNames: ["a", "b"], sharedIdx: [0, 1], chiSqRed: 1, nTotal: 10,
+      members: [{ label: "s1", params: [1, 2], errors: [0.1, 0.2], R2: 1, chiSq: 1 }, { label: "s2", params: [1, 2], errors: [0.1, 0.2], R2: 1, chiSq: 1 }],
+    }, { r2: false, chiSqRed: true, chiSq: false, n: false });
+    expect(rows).toEqual([["Shared parameter", "Value"], ["a", "1.00 ± 0.10"], ["b", "2.00 ± 0.20"], ["Reduced χ²", "1"]]);
   });
 });
 

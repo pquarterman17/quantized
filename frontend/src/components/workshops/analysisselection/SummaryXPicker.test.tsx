@@ -26,6 +26,12 @@ describe("SummaryXPicker", () => {
     expect(options).toEqual(["Input order (1, 2, …)", "Number in the name", "Metadata: Temperature", "Parameter: Field"]);
   });
 
+  it("a stored choice the inputs no longer offer stays visible, not shown as Input order (M1)", () => {
+    render(<SummaryXPicker choice={{ source: { kind: "meta", path: ["Temperature"] }, sort: false }} onChange={() => undefined} metaFields={[]} />);
+    const select = screen.getByLabelText("summary X from") as HTMLSelectElement;
+    expect(select.selectedOptions[0]!.textContent).toBe("(not in these inputs) Temperature");
+  });
+
   it("the folder-run dialog answers map to the same choice", () => {
     expect(xChoiceFromParams({ xFrom: "Metadata field", xName: "Temperature", xSort: true }))
       .toEqual({ source: { kind: "meta", path: ["Temperature"] }, sort: true });

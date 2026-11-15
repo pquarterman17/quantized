@@ -10,15 +10,17 @@
 import { useState } from "react";
 
 import { DEFAULT_WANT, fitTableLayer, fitToCaps, TABLE_LIMIT, type FitTableWant } from "../../../lib/fitTableLayer";
-import { addLayer, nextLayerId, patchLayer } from "../../../store/graphLayerEdit";
+import { addLayer, layersOf, nextLayerId, patchLayer } from "../../../store/graphLayerEdit";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 
-// The table this control last added, per fit source, so "Update table" finds
-// it again after the panel re-renders or reopens (a deleted layer is simply
-// no longer found).
-const lastLayer = new Map<string, string>();
+// The table this control last added, per fit source: which graph window and
+// layer, and the exact rows it wrote. "Update table" finds it again after the
+// panel re-renders or reopens, acts only on that window's layer (a duplicated
+// window's copy shares the layer id but is not it), and refuses when the rows
+// no longer equal what was written (the user edited the table).
+const lastLayer = new Map<string, { windowId: string; layerId: string; rows: string }>();
 
 interface Props {
   /** Identifies what the table is of (kind + dataset), for "Update table". */
@@ -34,10 +36,11 @@ const LABEL: Record<keyof FitTableWant, string> = { r2: "R²", chiSqRed: "χ² (
 export default function FitTableControls({ sourceKey, build, stats = ["r2", "chiSqRed", "chiSq", "n"] }: Props) {
   const setStatus = useApp((s) => s.setStatus);
   const layers = useApp((s) => s.layers);
+  const focusedWindowId = useApp((s) => s.focusedWindowId);
   const [want, setWant] = useState<FitTableWant>(DEFAULT_WANT);
   // A layer deleted since is no longer found.
   const prior = lastLayer.get(sourceKey);
-  const existing = prior !== undefined && layers.some((l) => l.id === prior && l.kind === "table");
+  const existing = prior !== undefined && prior.windowId === (focusedWindowId ?? "") && layers.some((l) => l.id === prior.layerId && l.kind === "table");
 
   const cells = () => {
     const { rows, cut } = fitToCaps(build(want));
@@ -47,14 +50,21 @@ export default function FitTableControls({ sourceKey, build, stats = ["r2", "chi
     const { rows, note } = cells();
     const id = nextLayerId();
     if (addLayer(fitTableLayer(id, rows))) {
-      lastLayer.set(sourceKey, id);
+      lastLayer.set(sourceKey, { windowId: focusedWindowId ?? "", layerId: id, rows: JSON.stringify(fitToCaps(rows).rows) });
       setStatus(`added a results table to the graph${note} (Undo removes). It is a snapshot: a new fit needs Update table.`);
     }
   };
   const update = () => {
     if (!prior) return;
+    const current = layersOf(prior.windowId).find((l) => l.id === prior.layerId);
+    if (!current || current.kind !== "table") return;
+    if (JSON.stringify(current.rows) !== prior.rows) {
+      setStatus("the results table was edited since it was added, so it was not overwritten: delete it or Add a new table");
+      return;
+    }
     const { rows, note } = cells();
-    patchLayer(prior, { rows }, "update fit results table");
+    lastLayer.set(sourceKey, { ...prior, rows: JSON.stringify(rows) });
+    patchLayer(prior.layerId, { rows }, "update fit results table", prior.windowId);
     setStatus(`updated the results table on the graph${note}`);
   };
 

@@ -254,7 +254,12 @@ export function useTemplates(): TemplatesState {
               data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
             });
           }
-          toast(`batch cancelled — kept ${rows.length} completed file${rows.length === 1 ? "" : "s"}`, "info");
+          const blank = rows.length ? templateSummaryX(rows, xChoice).missing : [];
+          toast(
+            `batch cancelled — kept ${rows.length} completed file${rows.length === 1 ? "" : "s"}`
+              + (blank.length ? `; X left blank for ${blank.length}: ${blank.join("; ")}` : ""),
+            blank.length ? "danger" : "info",
+          );
         }
       } finally {
         setPipelineRunning(false);

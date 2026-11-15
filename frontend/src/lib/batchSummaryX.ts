@@ -7,8 +7,8 @@
 // SOURCES, all existing readers: a metadata field (`metaValue` +
 // `parseQuantity`, as batch integration's trend does: "300 K" is 300 with
 // unit K), a user-parameter row (`metadata.label_rows`, `userParamRows`; the
-// number is `firstNumber`'s, as the gradient's "Number in legend"), or the
-// first number in the input's name (`firstNumber`).
+// number is parsed like a metadata value: a comma or a range is refused), or the
+// first number in the input name (a sign counts only after a separator).
 //
 // FAIL CLOSED. An input with no value for the chosen source gets a BLANK X
 // (NaN), is listed in `missing` with the reason (the caller reports it), and
@@ -16,7 +16,6 @@
 // Sorting by X is the user's choice (`sort`); blank-X rows go last, and the
 // sort is stable so equal X keep their input order.
 
-import { firstNumber } from "./firstNumber";
 import { parseQuantity } from "./metadataCleanup";
 import { isPresent, keysAcross, metaValue, pathLabel, type MetaPath } from "./metadataKeys";
 import { userParamRows } from "./userParams";
@@ -62,12 +61,30 @@ function readMeta(i: SummaryXInput, path: MetaPath): Read {
   const v = metaValue(i.metadata, path);
   if (!isPresent(v)) return { why: `no ${pathLabel(path)}` };
   const q = parseQuantity(v);
-  return "error" in q ? { why: `${pathLabel(path)} "${String(v)}" ${q.error}` } : q;
+  if ("error" in q) return { why: `${pathLabel(path)} "${String(v)}" ${q.error}` };
+  if (q.unit) return q;
+  // Metadata cleanup writes `T = 300` with `T_unit = "mK"` beside it.
+  const last = path[path.length - 1]!;
+  const sibling = metaValue(i.metadata, [...path.slice(0, -1), `${last}_unit`]);
+  return typeof sibling === "string" && sibling.trim() ? { n: q.n, unit: sibling.trim() } : q;
 }
 
+const NAME_NUMBER = /(\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/i;
+
+/** The first number in a name. A sign counts only when it does not follow a
+ *  letter or digit ("Py-10K" is 10, "MvsH_-10K" is -10), and a range
+ *  ("10-20K") is refused rather than read as its first end. */
 function readName(i: SummaryXInput): Read {
-  const n = firstNumber(i.name);
-  return n === null ? { why: "no number in its name" } : { n, unit: "" };
+  const m = NAME_NUMBER.exec(i.name);
+  if (!m) return { why: "no number in its name" };
+  const rest = i.name.slice(m.index + m[0].length);
+  const range = /^\s*[-–]\s*[\d.]+/.exec(rest);
+  if (range) return { why: `"${m[0]}${range[0]}" is a range` };
+  const before = i.name[m.index - 1];
+  const glued = /[A-Za-z0-9]/.test(i.name[m.index - 2] ?? "");
+  const n = Number(m[0]);
+  if (!Number.isFinite(n)) return { why: "no number in its name" };
+  return { n: before === "-" && !glued ? -n : n, unit: "" };
 }
 
 function readParam(i: SummaryXInput, name: string): Read {
@@ -75,17 +92,14 @@ function readParam(i: SummaryXInput, name: string): Read {
   const row = userParamRows({ metadata: i.metadata ?? {}, labels: i.labels }).find((r) => r.name === name);
   const cells = (row?.cells ?? []).map((c) => c.trim()).filter(Boolean);
   if (cells.length === 0) return { why: `no value for parameter "${name}"` };
-  const reads: ({ n: number; unit: string } | null)[] = cells.map((c) => {
-    const n = firstNumber(c);
-    if (n === null) return null;
-    const q = parseQuantity(c);
-    return { n, unit: "unit" in q ? q.unit : "" };
-  });
-  const bad = reads.indexOf(null);
-  if (bad >= 0) return { why: `parameter "${name}" is not a number ("${cells[bad]}")` };
-  const first = reads[0]!;
-  // One summary row, several channels: the value must not depend on which.
-  if (reads.some((r) => r!.n !== first.n)) return { why: `parameter "${name}" differs between columns` };
+  // parseQuantity is the authority: a comma ("1,5 K") or a range ("10-20 K")
+  // is refused, never read as its first number.
+  const reads = cells.map((c) => ({ c, q: parseQuantity(c) }));
+  for (const r of reads) if ("error" in r.q) return { why: `parameter "${name}" "${r.c}" ${r.q.error}` };
+  const qs = reads.map((r) => r.q as { n: number; unit: string });
+  const first = qs[0]!;
+  // One summary row, several channels: the value and unit must not depend on which.
+  if (qs.some((r) => r.n !== first.n || r.unit !== first.unit)) return { why: `parameter "${name}" differs between columns` };
   return first;
 }
 
@@ -105,18 +119,32 @@ export function summaryX(inputs: readonly SummaryXInput[], choice: SummaryXChoic
     xs = inputs.map((_, k) => k + 1);
   } else {
     const reads = inputs.map((i) => (s.kind === "meta" ? readMeta(i, s.path) : s.kind === "name" ? readName(i) : readParam(i, s.name)));
-    // Values must share one unit: the most common one is the column's, and a
-    // row in another unit is left blank (never converted by guess).
+    // Values must share one unit. A bare number is never given another row's
+    // unit, a minority unit is never converted by guess, and a tie is decided
+    // by nobody: every row that has a value goes blank and is reported.
     const units = reads.flatMap((r) => ("n" in r && r.unit ? [r.unit] : []));
+    const distinct = units.filter((u, k) => units.indexOf(u) === k);
     const votes = (u: string) => units.filter((x) => x === u).length;
-    xUnit = units.reduce((best, u) => (votes(u) > votes(best) ? u : best), units[0] ?? "");
+    const top = Math.max(0, ...distinct.map(votes));
+    const winners = distinct.filter((u) => votes(u) === top);
+    const tie = winners.length > 1;
+    xUnit = tie ? "" : (winners[0] ?? "");
     xs = reads.map((r, k) => {
+      const name = inputs[k]!.name;
       if ("why" in r) {
-        missing.push(`${inputs[k]!.name}: ${r.why}`);
+        missing.push(`${name}: ${r.why}`);
+        return Number.NaN;
+      }
+      if (tie) {
+        missing.push(`${name}: units disagree (${distinct.join(", ")})`);
+        return Number.NaN;
+      }
+      if (xUnit && !r.unit) {
+        missing.push(`${name}: the value has no unit; the others are ${xUnit}`);
         return Number.NaN;
       }
       if (r.unit && r.unit !== xUnit) {
-        missing.push(`${inputs[k]!.name}: unit ${r.unit} differs from ${xUnit}`);
+        missing.push(`${name}: unit ${r.unit} differs from ${xUnit}`);
         return Number.NaN;
       }
       return r.n;
@@ -153,6 +181,8 @@ export function paramNamesOf(inputs: readonly { data: { metadata: Record<string,
 
 /** The part of a summary worksheet's metadata that records the X choice. */
 export function summaryXMeta(r: SummaryXResult): Record<string, unknown> {
+  // The default (input position) keeps each tool's own X column name.
+  if (r.how.startsWith("input order")) return {};
   return {
     x_column_name: r.xName,
     x_column_unit: r.xUnit,

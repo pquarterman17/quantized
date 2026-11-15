@@ -57,3 +57,23 @@ export function batchSummaryData(
     },
   };
 }
+
+/** `rows` in Library order, not run order: the batch starts with the active
+ *  worksheet, so the run order is not the samples' order. */
+export function libraryOrder(rows: readonly AnalysisBatchRow[], datasetIds: readonly string[]): AnalysisBatchRow[] {
+  const position = new Map(datasetIds.map((id, i) => [id, i]));
+  return [...rows].sort((a, b) => (position.get(a.datasetId) ?? Infinity) - (position.get(b.datasetId) ?? Infinity));
+}
+
+/** The graph results table's inputs from the summary's row values (Levels,
+ *  Completed, N, R², reduced χ², RMSE, then value and SE per parameter). A
+ *  failed input keeps its row, with no numbers. */
+export function batchTableInputs(rows: readonly AnalysisBatchRow[], nParams: number) {
+  return rows.map((r) => ({
+    name: r.name,
+    params: Array.from({ length: nParams }, (_, j) => r.values[6 + 2 * j]),
+    errors: Array.from({ length: nParams }, (_, j) => r.values[7 + 2 * j]),
+    R2: r.values[3],
+    chiSqRed: r.values[4],
+  }));
+}

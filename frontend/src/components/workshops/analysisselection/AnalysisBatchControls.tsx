@@ -33,7 +33,7 @@ interface Props {
    *  builder. */
   onSummarySheet?: (rows: readonly AnalysisBatchRow[], x: SummaryXChoice) => void;
   /** Extra controls under a finished run, given its rows (e.g. a results table for the graph). */
-  afterRun?: (rows: readonly AnalysisBatchRow[]) => ReactNode;
+  afterRun?: (rows: readonly AnalysisBatchRow[], x: SummaryXChoice) => ReactNode;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -237,7 +237,7 @@ export default function AnalysisBatchControls({
           </Button>
         </>)}
       </div>
-      {afterRun && lastRows && !running && lastRows.some((row) => row.status === "completed") && afterRun(lastRows)}
+      {afterRun && lastRows && !running && lastRows.some((row) => row.status === "completed") && afterRun(lastRows, xChoice)}
     </div>}
   </section>;
 }

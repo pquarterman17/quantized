@@ -12,11 +12,14 @@ import FitTableControls from "./FitTableControls";
 
 const fit = (tau: number) => ({ params: [2, tau], errors: [0.1, 0.01], R2: 0.99, chiSqRed: 1.1, chiSq: 5, nPoints: 9 });
 
+let key = 0;
+let sourceKey = "single:t0";
 function mount(tau: number) {
-  return render(<FitTableControls sourceKey="single:t" build={(want) => singleFitTable(["A", "tau"], fit(tau), want)} />);
+  return render(<FitTableControls sourceKey={sourceKey} build={(want) => singleFitTable(["A", "tau"], fit(tau), want)} />);
 }
 
 beforeEach(() => {
+  sourceKey = `single:t${++key}`;
   useApp.setState({ layers: [], history: [], future: [] });
 });
 
@@ -60,5 +63,31 @@ describe("FitTableControls", () => {
     expect(useApp.getState().history.length).toBe(before + 1);
     useApp.getState().undo();
     expect((useApp.getState().layers[0] as { rows: string[][] }).rows[2]).toEqual(["tau", "0.500 ± 0.010"]);
+  });
+
+  it("refuses to overwrite a table the user edited (M6)", () => {
+    const first = mount(0.5);
+    fireEvent.click(screen.getByText("Results table on graph"));
+    fireEvent.click(screen.getByRole("button", { name: "Add results table to graph" }));
+    const [layer] = useApp.getState().layers;
+    useApp.setState({ layers: [{ ...layer!, rows: [["My note", "edited"]] } as typeof layer & object] });
+    first.unmount();
+    mount(0.75);
+    fireEvent.click(screen.getByText("Results table on graph"));
+    fireEvent.click(screen.getByRole("button", { name: "Update table" }));
+    expect((useApp.getState().layers[0] as { rows: string[][] }).rows).toEqual([["My note", "edited"]]);
+    expect(useApp.getState().status).toContain("was edited");
+  });
+
+  it("does not offer Update in another window that carries a copy of the layer id (M6)", () => {
+    useApp.setState({ focusedWindowId: "w1" });
+    const first = mount(0.5);
+    fireEvent.click(screen.getByText("Results table on graph"));
+    fireEvent.click(screen.getByRole("button", { name: "Add results table to graph" }));
+    first.unmount();
+    useApp.setState({ focusedWindowId: "w2" }); // a duplicated window shares the layer id
+    mount(0.75);
+    fireEvent.click(screen.getByText("Results table on graph"));
+    expect(screen.queryByRole("button", { name: "Update table" })).toBeNull();
   });
 });

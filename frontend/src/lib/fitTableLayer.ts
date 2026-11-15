@@ -23,18 +23,30 @@ const DASH = "–";
 const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const wide = (a: number) => a !== 0 && (a < 1e-3 || a >= 1e5);
 
-/** "value ± error" with matching decimals (see the module header). */
+/** "value ± error" with matching decimals (see the module header). A value
+ *  with no usable error is marked "(no error)": a held (fixed) parameter and
+ *  one the data could not determine both reach here, and neither may read as
+ *  an exact number. */
 export function valueWithError(v: unknown, e: unknown): string {
   if (!fin(v)) return DASH;
-  if (!fin(e) || e <= 0) return plain(v, 4);
-  const mag = wide(Math.abs(v)) ? Math.floor(Math.log10(Math.abs(v))) : 0;
+  if (!fin(e) || e <= 0) return `${plain(v, 4)} (no error)`;
+  // One exponent for the pair, from the larger of the two.
+  const top = Math.max(Math.abs(v), e);
+  const mag = wide(top) ? Math.floor(Math.log10(top)) : 0;
   const s = 10 ** mag;
   const ve = v / s;
   const ee = e / s;
   // Two significant figures of the error set the decimals of both.
-  const dec = Math.max(0, 1 - Math.floor(Math.log10(ee)));
-  const err = ee.toFixed(Math.min(dec, 20));
-  const out = `${ve.toFixed(Math.min(dec, 20))} ± ${err}`;
+  const dec = 1 - Math.floor(Math.log10(ee));
+  // So small an error against the value that no decimals can show both.
+  if (dec > 20) return `${plain(v, 4)} ± ${e.toExponential(1)}`;
+  let out: string;
+  if (dec >= 0) out = `${ve.toFixed(dec)} ± ${ee.toFixed(dec)}`;
+  else {
+    // An error of 100 or more: round both to its second significant figure.
+    const unit = 10 ** -dec;
+    out = `${Math.round(ve / unit) * unit} ± ${Math.round(ee / unit) * unit}`;
+  }
   return mag === 0 ? out : `(${out})e${mag}`;
 }
 
@@ -87,18 +99,24 @@ export interface GlobalTableInput {
   nTotal: number;
 }
 
-/** A global fit: one row per series (a column per parameter, a shared one
- *  printed on its own first row), then the chosen statistics. */
+/** A global fit: the shared parameters in their own Parameter / Value block,
+ *  then one row per series (a column per own parameter), then the chosen
+ *  statistics. A series row with nothing to show is left out. */
 export function globalFitTable(g: GlobalTableInput, want: FitTableWant): string[][] {
   const own = g.paramNames.map((_, j) => j).filter((j) => !g.sharedIdx.includes(j));
-  const rows: string[][] = [["Series", ...own.map((j) => g.paramNames[j]!), ...(want.r2 ? ["R²"] : []), ...(want.chiSq ? ["χ²"] : [])]];
-  if (g.sharedIdx.length > 0 && g.members[0]) {
-    const m = g.members[0];
-    rows.push(["Shared", ...g.sharedIdx.map((j) => `${g.paramNames[j]} = ${valueWithError(m.params[j], m.errors[j])}`)]);
+  const rows: string[][] = [];
+  const first = g.members[0];
+  if (g.sharedIdx.length > 0 && first) {
+    rows.push(["Shared parameter", "Value"]);
+    for (const j of g.sharedIdx) rows.push([g.paramNames[j] ?? `p${j}`, valueWithError(first.params[j], first.errors[j])]);
   }
-  for (const m of g.members) {
-    rows.push([m.label, ...own.map((j) => valueWithError(m.params[j], m.errors[j])),
-      ...(want.r2 ? [plain(m.R2, 5)] : []), ...(want.chiSq ? [plain(m.chiSq)] : [])]);
+  const head = ["Series", ...own.map((j) => g.paramNames[j]!), ...(want.r2 ? ["R²"] : []), ...(want.chiSq ? ["χ²"] : [])];
+  if (head.length > 1) {
+    rows.push(head);
+    for (const m of g.members) {
+      rows.push([m.label, ...own.map((j) => valueWithError(m.params[j], m.errors[j])),
+        ...(want.r2 ? [plain(m.R2, 5)] : []), ...(want.chiSq ? [plain(m.chiSq)] : [])]);
+    }
   }
   if (want.chiSqRed) rows.push(["Reduced χ²", plain(g.chiSqRed)]);
   if (want.n) rows.push(["N", plain(g.nTotal, 6)]);

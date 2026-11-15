@@ -38,6 +38,11 @@ export default function SummaryXPicker({ choice, onChange, metaFields = [], para
       ]),
   ];
   const value = typed && (s.kind === "meta" || s.kind === "param") ? `${s.kind}:` : code(s);
+  // A choice the current inputs no longer offer stays visible (and says so),
+  // instead of the select showing "Input order" while the summary uses it.
+  if (!options.some((o) => o.value === value)) {
+    options.push({ value, label: `(not in these inputs) ${s.kind === "meta" ? s.path.join(" › ") : s.kind === "param" ? s.name : s.kind}` });
+  }
   const pick = (v: string) => {
     let source: SummaryXSource = { kind: "index" };
     if (v === "name") source = { kind: "name" };

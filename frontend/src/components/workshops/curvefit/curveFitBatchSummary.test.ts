@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { summaryX } from "../../../lib/batchSummaryX";
 import type { AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
-import { batchColumns, batchSummaryData, fitSummaryValues } from "./curveFitBatchSummary";
+import { batchColumns, batchSummaryData, batchTableInputs, fitSummaryValues, libraryOrder } from "./curveFitBatchSummary";
 
 describe("Curve Fit batch summary", () => {
   it("has a value and SE column per parameter after the statistics", () => {
@@ -50,5 +50,17 @@ describe("Curve Fit batch summary", () => {
     // The rows travel with their X: run b's tau (2) is first, and the text columns follow.
     expect(sorted.values[0]![6]).toBe(2);
     expect((sorted.metadata!.text_columns as { Worksheet: string[] }).Worksheet).toEqual(["run b", "run a", "run c"]);
+  });
+
+  it("the graph table's inputs are read from the summary values, in the given order, failed inputs kept (L3)", () => {
+    const rows: AnalysisBatchRow[] = [
+      { datasetId: "b", name: "b", rows: 5, status: "completed", values: [1, 1, 5, 0.9, 1.5, 0.1, 7, 0.5, 8, 0.6], warning: null },
+      { datasetId: "a", name: "a", rows: 5, status: "failed", values: [], warning: "x" },
+    ];
+    expect(libraryOrder(rows, ["a", "b"]).map((r) => r.name)).toEqual(["a", "b"]);
+    expect(batchTableInputs(rows, 2)).toEqual([
+      { name: "b", params: [7, 8], errors: [0.5, 0.6], R2: 0.9, chiSqRed: 1.5 },
+      { name: "a", params: [undefined, undefined], errors: [undefined, undefined], R2: undefined, chiSqRed: undefined },
+    ]);
   });
 });
