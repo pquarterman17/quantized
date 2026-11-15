@@ -12,16 +12,26 @@ from collections.abc import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.optimize import brentq
 from scipy.special import voigt_profile
 
 __all__ = [
     "AREA_G",
     "AREA_L",
+    "doniach_sunjic",
+    "doniach_sunjic_fwhm",
+    "fano",
+    "fano_fwhm",
     "gaussian",
     "lorentzian",
+    "pearson_vii",
+    "pearson_vii_area",
     "pseudo_voigt",
     "pseudo_voigt_area",
+    "split_gaussian",
+    "split_lorentzian",
     "split_pearson_vii",
+    "split_pseudo_voigt",
     "tch_pseudo_voigt",
     "voigt",
     "voigt_area",
@@ -156,3 +166,165 @@ def tch_pseudo_voigt(x: NDArray[np.float64], params: Params) -> NDArray[np.float
     gauss = np.exp(-4.0 * _LN2 * u**2)
     result = height * (eta * lorentz + (1.0 - eta) * gauss) + bg
     return np.asarray(result, dtype=float)
+
+
+# ── shapes of the mixed-shape peak model (gap audit 4 G5; new capability) ────
+#
+# Every profile below takes its PEAK-HEIGHT parameter ``height`` as its value
+# AT ``x0`` (the convention of every shape above). For the split shapes and
+# Pearson VII that is also the maximum; for Fano/BWF and Doniach-Sunjic the
+# maximum lies off ``x0`` (each docstring gives where). Areas are closed forms
+# where the integral is finite; Fano/BWF (inv_q != 0) and Doniach-Sunjic
+# (alpha > 0) have tails that do not integrate, so they have no area.
+
+
+def _split(x: NDArray[np.float64], x0: float, fwhm_left: float,
+           fwhm_right: float) -> NDArray[np.float64]:
+    """(x - x0)/w with w = fwhm_left below x0 and fwhm_right at or above it."""
+    if fwhm_left <= 0 or fwhm_right <= 0:
+        raise ValueError("fwhm_left and fwhm_right must be positive")
+    xv = np.asarray(x, dtype=float)
+    return np.asarray((xv - x0) / np.where(xv < x0, fwhm_left, fwhm_right), dtype=float)
+
+
+def split_gaussian(x: NDArray[np.float64], x0: float, fwhm_left: float, fwhm_right: float,
+                   height: float) -> NDArray[np.float64]:
+    """Asymmetric (bi-)Gaussian: a Gaussian of FWHM ``fwhm_left`` below x0 and
+    ``fwhm_right`` above. FWHM = (fwhm_left + fwhm_right)/2; area =
+    H*AREA_G*(fwhm_left + fwhm_right)/2. Equal widths = :func:`gaussian`."""
+    u = _split(x, x0, fwhm_left, fwhm_right)
+    return np.asarray(height * np.exp(-4.0 * _LN2 * u**2), dtype=float)
+
+
+def split_lorentzian(x: NDArray[np.float64], x0: float, fwhm_left: float, fwhm_right: float,
+                     height: float) -> NDArray[np.float64]:
+    """Asymmetric Lorentzian, split like :func:`split_gaussian`; area =
+    H*AREA_L*(fwhm_left + fwhm_right)/2."""
+    u = _split(x, x0, fwhm_left, fwhm_right)
+    return np.asarray(height * (1.0 / (1.0 + 4.0 * u**2)), dtype=float)
+
+
+def split_pseudo_voigt(x: NDArray[np.float64], x0: float, fwhm_left: float, fwhm_right: float,
+                       height: float, eta: float) -> NDArray[np.float64]:
+    """Asymmetric pseudo-Voigt: each side H*(eta*L + (1-eta)*G) of its own FWHM,
+    one eta. FWHM = (fwhm_left + fwhm_right)/2; area = that FWHM times
+    H*(eta*AREA_L + (1-eta)*AREA_G)."""
+    if not 0.0 <= eta <= 1.0:
+        raise ValueError("eta must be in [0, 1]")
+    u = _split(x, x0, fwhm_left, fwhm_right)
+    lorentz = 1.0 / (1.0 + 4.0 * u**2)
+    gauss = np.exp(-4.0 * _LN2 * u**2)
+    return np.asarray(height * (eta * lorentz + (1.0 - eta) * gauss), dtype=float)
+
+
+def pearson_vii(x: NDArray[np.float64], x0: float, fwhm: float, height: float,
+                m: float) -> NDArray[np.float64]:
+    """Pearson VII: H*(1 + 4(2^(1/m) - 1)((x-x0)/fwhm)^2)^(-m). ``fwhm`` is the
+    exact FWHM; m = 1 is the Lorentzian, m -> inf the Gaussian."""
+    if fwhm <= 0:
+        raise ValueError("fwhm must be positive")
+    if m < 0.5:
+        raise ValueError("the Pearson VII exponent m must be >= 0.5")
+    u = (np.asarray(x, dtype=float) - x0) / fwhm
+    k = math.expm1(_LN2 / m)  # 2^(1/m) - 1 without cancellation at large m
+    # exp(-m log1p(.)): at large m, 1 + 4k u^2 rounds to 1 and a plain power
+    # would flatten the profile.
+    return np.asarray(height * np.exp(-m * np.log1p(4.0 * k * u**2)), dtype=float)
+
+
+def pearson_vii_area(height: float, fwhm: float, m: float) -> float:
+    """H*fwhm*sqrt(pi)*Gamma(m - 1/2) / (2*sqrt(2^(1/m) - 1)*Gamma(m)); infinite
+    at m = 1/2 (returned as inf)."""
+    if m <= 0.5:
+        return math.inf
+    k = math.expm1(_LN2 / m)  # 2^(1/m) - 1 without cancellation at large m
+    if m > 1e4:  # lgamma's difference cancels: Gamma(m - 1/2)/Gamma(m) series
+        ratio = (1.0 + 3.0 / (8.0 * m) + 25.0 / (128.0 * m * m)) / math.sqrt(m)
+    else:
+        ratio = math.exp(math.lgamma(m - 0.5) - math.lgamma(m))
+    return height * fwhm * math.sqrt(math.pi) * ratio / (2.0 * math.sqrt(k))
+
+
+def fano(x: NDArray[np.float64], x0: float, fwhm: float, height: float,
+         inv_q: float) -> NDArray[np.float64]:
+    """Breit-Wigner-Fano: H*(1 + s*u)^2 / (1 + u^2), u = 2(x - x0)/fwhm,
+    s = ``inv_q`` = 1/q. s = 0 is the Lorentzian of FWHM ``fwhm``. The maximum
+    H*(1 + s^2) lies at x0 + s*fwhm/2; far from x0 the profile tends to H*s^2,
+    so it has no finite area unless s = 0."""
+    if fwhm <= 0:
+        raise ValueError("fwhm must be positive")
+    u = 2.0 * (np.asarray(x, dtype=float) - x0) / fwhm
+    return np.asarray(height * (1.0 + inv_q * u) ** 2 / (1.0 + u**2), dtype=float)
+
+
+def fano_fwhm(fwhm: float, inv_q: float) -> float | None:
+    """Full width at half the maximum H*(1 + s^2), closed form (the two roots of
+    (1 + s u)^2 = (1 + s^2)(1 + u^2)/2): fwhm*sqrt(s^2 + a^2)/|a| with
+    a = (s^2 - 1)/2. Defined only for |s| < 1: otherwise the asymptote H*s^2
+    is at or above half the maximum and the peak has no half-maximum width."""
+    a = 0.5 * (inv_q**2 - 1.0)
+    if a >= 0:
+        return None
+    return fwhm * math.sqrt(inv_q**2 + a**2) / abs(a)
+
+
+def doniach_sunjic(x: NDArray[np.float64], x0: float, fwhm: float, height: float,
+                   alpha: float) -> NDArray[np.float64]:
+    """Doniach-Sunjic (1970), scaled so its value at x0 is H:
+
+        H * cos(pi*alpha/2 + (1 - alpha)*atan(u)) / (cos(pi*alpha/2) * (1 + u^2)^((1-alpha)/2))
+
+    with u = 2(x0 - x)/fwhm: the asymmetric tail runs toward HIGHER x (the
+    binding-energy axis convention of XPS). alpha = 0 is the Lorentzian of
+    FWHM ``fwhm``; 0 <= alpha < 1. The maximum lies at
+    x0 + (fwhm/2)*tan(pi*alpha/(2(2 - alpha))); the high-x tail decays as
+    |x|^-(1-alpha), so for alpha > 0 the area is infinite."""
+    if fwhm <= 0:
+        raise ValueError("fwhm must be positive")
+    if not 0.0 <= alpha < 1.0:
+        raise ValueError("alpha must be in [0, 1)")
+    u = 2.0 * (x0 - np.asarray(x, dtype=float)) / fwhm
+    beta = 1.0 - alpha
+    phi0 = 0.5 * math.pi * alpha
+    num = np.cos(phi0 + beta * np.arctan(u))
+    return np.asarray(height * num / (math.cos(phi0) * (1.0 + u**2) ** (0.5 * beta)), dtype=float)
+
+
+def doniach_sunjic_fwhm(fwhm: float, alpha: float) -> float | None:
+    """Full width at half maximum of :func:`doniach_sunjic`. With u = tan(t) the
+    profile is g(t) = cos(phi0 + beta*t)*cos(t)^beta, increasing below
+    t* = -pi*alpha/(2(2 - alpha)) (its maximum) and decreasing above, and 0 at
+    t = +-pi/2; the two half-maximum crossings are found by bracketed root
+    finding (brentq) on each side. Exactly ``fwhm`` at alpha = 0.
+
+    Each side is solved in its distance v from +-pi/2 (t = -pi/2 + v below,
+    t = pi/2 - v above), so cos(t) = sin(v) is exactly 0 at the bracket end -
+    cos(-pi/2) is 6e-17 in floating point, and raised to a small beta (alpha
+    near 1) that is not small at all - and tan(t) = -+1/tan(v) keeps full
+    relative precision however close the crossing gets to +-pi/2 (the width
+    diverges as alpha -> 1: ~1e7 x fwhm at 0.95, ~1e30 at 0.99). When v
+    underflows (alpha within ~1e-3 of 1 and beyond) the FWHM is None ("not
+    resolvable"), never an error."""
+    beta, phi0 = 1.0 - alpha, 0.5 * math.pi * alpha
+    half_pi = 0.5 * math.pi
+    t_max = -phi0 / (2.0 - alpha)
+
+    def g_low(v: float) -> float:  # t = -pi/2 + v
+        return float(math.cos(phi0 + beta * (v - half_pi)) * math.sin(v) ** beta)
+
+    def g_high(v: float) -> float:  # t = pi/2 - v
+        return float(math.cos(phi0 + beta * (half_pi - v)) * math.sin(v) ** beta)
+
+    half = 0.5 * g_low(t_max + half_pi)
+    s_min = math.log(1e-300)  # solve in s = ln v: v spans hundreds of decades
+    try:
+        if g_low(math.exp(s_min)) >= half or g_high(math.exp(s_min)) >= half:
+            return None  # the crossing lies closer to +-pi/2 than doubles reach
+        vl = math.exp(float(brentq(lambda s: g_low(math.exp(s)) - half, s_min,
+                                   math.log(t_max + half_pi), xtol=1e-14, rtol=1e-15)))
+        vh = math.exp(float(brentq(lambda s: g_high(math.exp(s)) - half, s_min,
+                                   math.log(half_pi - t_max), xtol=1e-14, rtol=1e-15)))
+    except (ValueError, RuntimeError):
+        return None
+    w = 0.5 * fwhm * (1.0 / math.tan(vh) + 1.0 / math.tan(vl))
+    return w if math.isfinite(w) else None

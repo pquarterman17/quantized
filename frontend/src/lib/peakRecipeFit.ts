@@ -37,7 +37,13 @@
 
 export const FIT_ENGINES = ["model", "classic"] as const;
 export type FitEngine = (typeof FIT_ENGINES)[number];
-export const MODEL_SHAPE_IDS = ["gaussian", "lorentzian", "pseudo_voigt", "voigt"] as const;
+export const MODEL_SHAPE_IDS = [
+  "gaussian", "lorentzian", "pseudo_voigt", "voigt", "split_gaussian", "split_lorentzian",
+  "split_pseudo_voigt", "pearson_vii", "fano", "doniach_sunjic",
+] as const;
+/** How a tied parameter follows its target (calc/peak_model.py's header). */
+export const TIE_OPS = ["equal", "offset", "ratio", "area_ratio"] as const;
+export type TieOp = (typeof TIE_OPS)[number];
 export type ModelShape = (typeof MODEL_SHAPE_IDS)[number];
 export const MODEL_BACKGROUND_IDS = ["none", "constant", "linear", "quadratic"] as const;
 export type ModelBackground = (typeof MODEL_BACKGROUND_IDS)[number];
@@ -49,6 +55,9 @@ export interface ParamEdit {
   min?: number | null;
   max?: number | null;
   tie?: string | null;
+  tieOp?: TieOp;
+  tieCoef?: number;
+  tieCoefVary?: boolean;
 }
 
 export interface PeakRecipeFit {
@@ -73,8 +82,8 @@ export const DEFAULT_FIT: PeakRecipeFit = {
 /** Large enough for any real pattern, small enough that a hostile file cannot
  *  make the wizard allocate a million-row table. */
 export const MAX_RECIPE_PEAKS = 500;
-const NAME_RE = /^(?:p(0|[1-9]\d*)\.(center|height|fwhm|eta|fwhm_g|fwhm_l)|bg\.c([0-2]))$/;
-const WIDTHS = new Set(["fwhm", "fwhm_g", "fwhm_l"]);
+const NAME_RE = /^(?:p(0|[1-9]\d*)\.(center|height|fwhm|eta|fwhm_g|fwhm_l|fwhm_left|fwhm_right|m|inv_q|alpha)|bg\.c([0-2]))$/;
+const WIDTHS = new Set(["fwhm", "fwhm_g", "fwhm_l", "fwhm_left", "fwhm_right"]);
 
 /** Tie compatibility class: the backend joins only parameters of one kind
  *  (the three widths are one kind; each background order is its own). */
@@ -146,6 +155,18 @@ function parseEdit(name: string, raw: unknown, warn: Warn): ParamEdit {
     }
     out.tie = t as string | null;
   }
+  if ("tieOp" in raw) {
+    if (!oneOf(raw.tieOp, TIE_OPS)) fail(`${at}.tieOp`, `not one of ${TIE_OPS.join(" / ")}`);
+    out.tieOp = raw.tieOp;
+  }
+  if ("tieCoef" in raw) {
+    if (!finite(raw.tieCoef)) fail(`${at}.tieCoef`, "not a finite number");
+    out.tieCoef = raw.tieCoef;
+  }
+  if ("tieCoefVary" in raw) {
+    if (typeof raw.tieCoefVary !== "boolean") fail(`${at}.tieCoefVary`, "not true/false");
+    out.tieCoefVary = raw.tieCoefVary;
+  }
   return out;
 }
 
@@ -201,6 +222,16 @@ function remapName(name: string, map: (i: number) => number | null): string | nu
   return to === null || to >= MAX_RECIPE_PEAKS ? null : `p${to}.${m[2]}`;
 }
 
+/** Withdraw an edit's tie with its operation and coefficient: an orphaned
+ *  `tieOp` would otherwise turn the NEXT tie (a seed's plain copy, Share
+ *  FWHM) into a ratio or offset nobody chose. */
+export function dropTie(e: ParamEdit): void {
+  delete e.tie;
+  delete e.tieOp;
+  delete e.tieCoef;
+  delete e.tieCoefVary;
+}
+
 /** Keep every edit with its peak across a change of the included-peak list.
  *  `map(oldIndex)` is the peak's new index, or null when it left the model;
  *  its edits go, and an edit's tie to a peak that left is withdrawn (the seed
@@ -213,7 +244,7 @@ export function remapFitPeaks(fit: PeakRecipeFit, map: (i: number) => number | n
     const next: ParamEdit = { ...edit };
     if (typeof edit.tie === "string") {
       const tie = remapName(edit.tie, map);
-      if (tie === null) delete next.tie;
+      if (tie === null) dropTie(next);
       else next.tie = tie;
     }
     params[to] = next;
@@ -264,7 +295,7 @@ export function extractPeak(fit: PeakRecipeFit, k: number, ids: readonly number[
     const next: ParamEdit = { ...edit };
     if (typeof edit.tie === "string") {
       const ref = toRef(edit.tie);
-      if (ref === null) delete next.tie;
+      if (ref === null) dropTie(next);
       else next.tie = ref;
     }
     params[m[1]] = next;
@@ -292,7 +323,7 @@ export function insertPeak(fit: PeakRecipeFit, k: number, slice: PeakSlice, ids:
     const next: ParamEdit = { ...edit };
     if (typeof edit.tie === "string") {
       const tie = fromRef(edit.tie);
-      if (tie === null) delete next.tie;
+      if (tie === null) dropTie(next);
       else next.tie = tie;
     }
     params[`p${k}.${field}`] = next;

@@ -5626,6 +5626,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transform/sigop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sigop
+         * @description Median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT / Reduce XY.
+         */
+        post: operations["sigop_api_transform_sigop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vacuum/gas-flow": {
         parameters: {
             query?: never;
@@ -9718,7 +9738,7 @@ export interface components {
             /** Parameters */
             parameters: components["schemas"]["PeakModelParameter"][];
             /** Shapes */
-            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt")[];
+            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt" | "split_gaussian" | "split_lorentzian" | "split_pseudo_voigt" | "pearson_vii" | "fano" | "doniach_sunjic")[];
             /** X */
             x: (number | null)[];
             /** X Max */
@@ -9795,8 +9815,10 @@ export interface components {
         };
         /**
          * PeakModelParameter
-         * @description ``p{i}.{center|height|fwhm|eta|fwhm_g|fwhm_l}`` or ``bg.c{k}``: start
-         *     ``value``, ``vary``, optional bounds and an identity ``tie``.
+         * @description ``p{i}.{field}`` (fields by shape: calc/peak_model_shapes.py) or
+         *     ``bg.c{k}``: start ``value``, ``vary``, optional bounds and a ``tie``
+         *     (``tie_op`` equal / offset / ratio / area_ratio with coefficient
+         *     ``tie_coef``, fitted when ``tie_coef_vary``; calc/peak_model.py).
          */
         PeakModelParameter: {
             /** Max */
@@ -9807,6 +9829,15 @@ export interface components {
             name: string;
             /** Tie */
             tie?: string | null;
+            /** Tie Coef */
+            tie_coef?: number | null;
+            /**
+             * Tie Coef Vary
+             * @default false
+             */
+            tie_coef_vary?: boolean;
+            /** Tie Op */
+            tie_op?: ("equal" | "offset" | "ratio" | "area_ratio") | null;
             /** Value */
             value: number;
             /**
@@ -9825,6 +9856,17 @@ export interface components {
             stderr: number | null;
             /** Tie */
             tie: string | null;
+            /** Tie Coef */
+            tie_coef?: number | null;
+            /** Tie Coef Stderr */
+            tie_coef_stderr?: number | null;
+            /**
+             * Tie Coef Vary
+             * @default false
+             */
+            tie_coef_vary?: boolean;
+            /** Tie Op */
+            tie_op?: string | null;
             /** Value */
             value: number | null;
             /** Vary */
@@ -10808,6 +10850,38 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** SigopRequest */
+        SigopRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+            /** Channels */
+            channels?: number[];
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Method */
+            method: string;
+        };
+        /** SigopResponse */
+        SigopResponse: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Flagged */
+            flagged: {
+                [key: string]: number[];
+            };
+            /** Rows In */
+            rows_in: number;
+            /** Rows Out */
+            rows_out: number;
+            /** Warnings */
+            warnings: string[];
         };
         /** SimsBackground */
         SimsBackground: {
@@ -21266,6 +21340,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResampleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sigop_api_transform_sigop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SigopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigopResponse"];
                 };
             };
             /** @description Validation Error */

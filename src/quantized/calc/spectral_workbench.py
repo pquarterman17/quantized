@@ -184,7 +184,7 @@ def spectral_workbench(
             raise ValueError(f"unsupported FFT window {effective_window!r}")
         if detrend not in {"mean", "linear", "none"}:
             raise ValueError(f"unsupported detrend mode {detrend!r}")
-        if output_type not in {"magnitude", "psd", "phase"}:
+        if output_type not in {"magnitude", "psd", "phase", "magnitude+phase"}:
             raise ValueError(f"unsupported FFT output type {output_type!r}")
         if sided not in {"one", "two"}:
             raise ValueError(f"unsupported sided mode {sided!r}")
@@ -199,31 +199,37 @@ def spectral_workbench(
         if not np.isfinite(overlap) or overlap < 0 or overlap >= 1:
             raise ValueError("Welch overlap must be at least 0 and less than 1")
         columns: list[NDArray[np.float64]] = []
+        labels: list[str] = []
+        units: list[str] = []
         freq: NDArray[np.float64] | None = None
-        key = {"magnitude": "magnitude", "psd": "psd", "phase": "phase"}[output_type]
-        for col in range(values.shape[1]):
-            out = fft_spectral(
-                x,
-                values[:, col],
-                window=effective_window,
-                output_type=output_type,
-                sided=sided,
-                detrend=detrend,
-                zero_pad=zero_pad,
-                segment_len=segment_len,
-                overlap=overlap,
-            )
-            freq = np.asarray(out["freq"], dtype=float)
-            columns.append(np.asarray(out[key], dtype=float))
+        nfft_used: int | None = None
+        # "magnitude+phase" writes both from ONE pass over the same record, so
+        # the two columns (and the one provenance block below) cannot disagree;
+        # it is what Inverse FFT reads.
+        kinds = ["magnitude", "phase"] if output_type == "magnitude+phase" else [output_type]
+        names = {"magnitude": "Magnitude", "psd": "PSD", "phase": "Phase"}
+        for col, channel in enumerate(channels):
+            for kind in kinds:
+                out = fft_spectral(
+                    x,
+                    values[:, col],
+                    window=effective_window,
+                    output_type=kind,
+                    sided=sided,
+                    detrend=detrend,
+                    zero_pad=zero_pad,
+                    segment_len=segment_len,
+                    overlap=overlap,
+                )
+                freq = np.asarray(out["freq"], dtype=float)
+                nfft_used = int(out["nfft"]) if "nfft" in out else None
+                columns.append(np.asarray(out[kind], dtype=float))
+                labels.append(f"{ds.labels[channel]} · {names[kind]}")
+                unit = "deg" if kind == "phase" else ds.units[channel]
+                if kind == "psd":
+                    unit = _psd_unit(ds.units[channel], xu)
+                units.append(unit)
         assert freq is not None
-        suffix = {"magnitude": "Magnitude", "psd": "PSD", "phase": "Phase"}[output_type]
-        labels = [f"{ds.labels[c]} · {suffix}" for c in channels]
-        units = []
-        for channel in channels:
-            unit = "deg" if output_type == "phase" else ds.units[channel]
-            if output_type == "psd":
-                unit = _psd_unit(ds.units[channel], xu)
-            units.append(unit)
         fft_params = {
             **common,
             "outputType": output_type,
@@ -233,6 +239,12 @@ def spectral_workbench(
             "zeroPad": zero_pad,
             "segmentLen": segment_len,
             "overlap": overlap,
+            # Rows transformed, so Inverse FFT can undo the amplitude scale
+            # (|Y|/sum(window)) and crop a zero-padded record back.
+            "recordLength": int(x.size),
+            # Transform length (can be odd with zero padding) so Inverse FFT
+            # needs no guess.
+            **({"nfft": nfft_used} if nfft_used is not None else {}),
         }
         return DataStruct.create(
             freq,

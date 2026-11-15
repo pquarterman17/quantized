@@ -1,7 +1,8 @@
 import { Select } from "../../primitives";
 import type { SignalOperation } from "./signalProcessingModel";
+import { SIGOP_FILTER_OPTIONS, type SigopFilterMethod } from "./sigopModel";
 
-const OPTIONS: { value: SignalOperation; label: string }[] = [
+const OPTIONS: { value: SignalOperation | SigopFilterMethod; label: string }[] = [
   { value: "smooth", label: "Smooth" },
   { value: "normalize-range", label: "Normalize · 0–1" },
   { value: "normalize-peak", label: "Normalize · peak = 1" },
@@ -16,15 +17,16 @@ const OPTIONS: { value: SignalOperation; label: string }[] = [
   { value: "fft", label: "Spectrum · FFT / PSD / phase" },
   { value: "filter", label: "Filter · frequency domain" },
   { value: "correlation", label: "Cross-correlation" },
+  ...SIGOP_FILTER_OPTIONS,
 ];
 
 export default function SignalOperationPicker({ value, onChange }: {
-  value: SignalOperation;
-  onChange: (operation: SignalOperation) => void;
+  value: SignalOperation | SigopFilterMethod;
+  onChange: (operation: SignalOperation | SigopFilterMethod) => void;
 }) {
   return (
     <label className="qz-signal-field">Operation
-      <Select value={value} onChange={(event) => onChange(event.target.value as SignalOperation)} options={OPTIONS} />
+      <Select value={value} onChange={(event) => onChange(event.target.value as SignalOperation | SigopFilterMethod)} options={OPTIONS} />
     </label>
   );
 }
