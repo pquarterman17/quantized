@@ -31,3 +31,13 @@ Candidate directions, cheapest first:
    The only real GPU option; a large change against the uPlot-based
    interactive design and the screen≡export parity contract, so it needs its
    own design review before any work.
+
+## Native vector clipboard: flip to default-on (TODO, waiting on a smoke test)
+
+Gap-4 G14 added a Windows-native "Copy figure" clipboard write
+(`src/quantized/desktop_bridge_clipboard.py`: SVG + PNG + DIB). It is opt-in
+behind `QZ_WIN_CLIPBOARD=1` only because it has never run on real Windows +
+Office. **TODO:** once the owner smoke test in `docs/desktop.md` passes, make
+it default-on whenever `sys.platform == "win32"` and pywin32 imports, keep
+`QZ_WIN_CLIPBOARD=0` as the kill switch, and update that doc and the module
+doc. Record the Office build tested here.

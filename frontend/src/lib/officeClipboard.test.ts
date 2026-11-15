@@ -8,7 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { copyOfficeGraphicAsync, type OfficeGraphicCopy } from "./officeClipboard";
+import { copyOfficeGraphicAsync, copyOfficeGraphicFormats, type OfficeGraphicCopy } from "./officeClipboard";
 
 class FakeClipboardItem {
   static svgAdvertised = false;
@@ -206,5 +206,38 @@ describe("copyOfficeGraphicAsync — cancellation", () => {
     expect(await copying).toBe(false);
     expect(state.landed).toBeNull();
     expect(writes).toHaveLength(1);
+  });
+});
+
+// gap-4 G14: the caller tells the user which format landed, so the report must
+// match what is on the clipboard — never "vector" when the SVG fell away.
+describe("copyOfficeGraphicFormats — reports exactly what landed", () => {
+  it("SVG advertised and rendered: reports the SVG with the PNG and HTML", async () => {
+    const { state } = installClipboard({ svg: true });
+    const formats = await copyOfficeGraphicFormats(source({ svg: Promise.resolve(SVG) }));
+    expect(formats?.slice().sort()).toEqual(["image/png", "image/svg+xml", "text/html"]);
+    expect(formats?.slice().sort()).toEqual(Object.keys(state.landed!).sort());
+  });
+
+  it("SVG render failed: the retry's report has no SVG", async () => {
+    const { state } = installClipboard({ svg: true });
+    const formats = await copyOfficeGraphicFormats(source({ svg: Promise.reject(new Error("500")) }));
+    expect(formats).toEqual(["image/png", "text/html"]);
+    expect(Object.keys(state.landed!).sort()).toEqual(formats);
+  });
+
+  it("browser without SVG support: PNG + HTML only, even when an SVG was supplied", async () => {
+    installClipboard({ svg: false });
+    expect(await copyOfficeGraphicFormats(source({ svg: Promise.resolve(SVG) }))).toEqual(["image/png", "text/html"]);
+  });
+
+  it("PNG-only last resort reports just the PNG", async () => {
+    installClipboard({ refuse: (n) => n < 3 });
+    expect(await copyOfficeGraphicFormats(source())).toEqual(["image/png"]);
+  });
+
+  it("nothing copied reports null", async () => {
+    installClipboard({ refuse: () => true });
+    expect(await copyOfficeGraphicFormats(source())).toBeNull();
   });
 });

@@ -26,19 +26,27 @@
 // and publication overrides that the live PlotView singleton cannot
 // represent at all) and only falls back to the live-view builder when no
 // canonical document applies.
+//
+// gap-4 G14: under `qz --desktop` on Windows the SAME renders go to the
+// native clipboard instead (lib/desktopClipboard.ts: SVG as the registered
+// "image/svg+xml" format Microsoft 365 pastes as vector, plus PNG and a DIB),
+// whatever the embedded browser's clipboard allows. Either way the success
+// message names the format that actually landed ("vector" only when an SVG
+// did) and any failure is reported, never a silent no-op.
 
 import { renderFigureBlob, type FigureSpec } from "./api/figures";
 import { clipboardImageSupported, clipboardSvgSupported, copySvgAsync } from "./clipboard";
-import { copySvgWanted, figurePointCount } from "./copySvgBudget";
+import { COPY_SVG_MAX_POINTS, copySvgWanted, figurePointCount } from "./copySvgBudget";
+import { copyFigureNative, describeCopiedFormats, nativeClipboardReady } from "./desktopClipboard";
 import { exportActive, type StoreGet } from "./exportActive";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
-import { copyOfficeGraphicAsync } from "./officeClipboard";
+import { copyOfficeGraphicFormats } from "./officeClipboard";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import { copyStatFigure } from "./statFigureCommands";
-import { activeStatExporter } from "./statStageBridge";
+import { activeStatExporter, renderStatFigureBlob } from "./statStageBridge";
 import { toast } from "../store/toasts";
 import type { Dataset } from "./types";
 
@@ -86,6 +94,8 @@ async function pickCopySpec(
  *  rule only — "Export figure…" writes an SVG FILE with editable text, since
  *  a file is something the user may open in Inkscape/Illustrator to edit. */
 export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
+  // Cached at startup (lib/desktopClipboard.ts): no bridge await in the click.
+  if (nativeClipboardReady()) return runNativeCopy(s, { svgRequired: true });
   if (!clipboardSvgSupported()) {
     const msg = "this browser can't put SVG on the clipboard — use Export figure…";
     s().setStatus(msg);
@@ -112,12 +122,65 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
       const ok = await copySvgAsync(renderFigureBlob({ ...spec, svg_text_as_paths: true }, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
+      return "as vector (SVG only)";
     },
-    { verb: "copy", past: "copied (vector)" },
+    { verb: "copy", past: "copied" },
+  );
+}
+
+/** The spec "Copy figure" renders, at the publication defaults. */
+function rasterCopySpec(s: StoreGet, ds: Dataset, stem: string): Promise<FigureSpec | null> {
+  return pickCopySpec(s, ds, stem, {
+    fmt: COPY_FIGURE_FMT,
+    style: COPY_FIGURE_STYLE,
+    dpi: COPY_FIGURE_DPI,
+    title: s().plotTitle,
+    xLabel: s().xAxisLabel,
+    yLabel: s().yAxisLabel,
+  });
+}
+
+/** gap-4 G14: the desktop shell's native clipboard (Windows). Both renders
+ *  come from the export renderer. "Copy figure" mirrors the browser copy: the
+ *  SVG only under the point budget, stat mode PNG only, and the message says
+ *  which went. "Copy figure (vector)" (`svgRequired`) mirrors the browser
+ *  vector copy instead: the SVG is always rendered (stat mode: the stat
+ *  renderer's own SVG), and a missing SVG fails the copy rather than landing
+ *  a PNG under an explicit vector request. */
+async function runNativeCopy(s: StoreGet, { svgRequired }: { svgRequired: boolean }): Promise<void> {
+  await exportActive(
+    s,
+    async (stem, ds, signal) => {
+      const stat = activeStatExporter(s());
+      let png: Promise<Blob | null>;
+      let svg: Promise<Blob | null> | null = null;
+      if (stat) {
+        const out = { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal };
+        png = renderStatFigureBlob(stat, "png", out);
+        // One stat render at a time: the stage exporter is not re-entrant.
+        if (svgRequired) svg = png.then(() => renderStatFigureBlob(stat, "svg", out, true));
+      } else {
+        const spec = await rasterCopySpec(s, ds, stem);
+        if (!spec) return false;
+        png = renderFigureBlob(spec, signal);
+        if (svgRequired || figurePointCount(spec) <= COPY_SVG_MAX_POINTS) {
+          svg = renderFigureBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal);
+        }
+      }
+      s().setStatus("rendering figure for the clipboard…");
+      try {
+        return describeCopiedFormats(await copyFigureNative(png, svg, signal, { requireSvg: svgRequired }));
+      } finally {
+        s().setStatus("");
+      }
+    },
+    { verb: "copy", past: "copied" },
   );
 }
 
 export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
+  // Cached at startup (lib/desktopClipboard.ts): no bridge await in the click.
+  if (nativeClipboardReady()) return runNativeCopy(s, { svgRequired: false });
   // Check capability BEFORE rendering: on a browser without the async
   // clipboard image API (Firefox, any insecure context) the render would be
   // pure waste and the failure would arrive seconds later for no clear reason.
@@ -133,15 +196,11 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
     async (stem, ds, signal) => {
       // Stat mode: the stat renderer's own PNG (lib/statFigureCommands.ts).
       const stat = activeStatExporter(s());
-      if (stat) return copyStatFigure(stat, "png", { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal }, stem);
-      const spec = await pickCopySpec(s, ds, stem, {
-        fmt: COPY_FIGURE_FMT,
-        style: COPY_FIGURE_STYLE,
-        dpi: COPY_FIGURE_DPI,
-        title: s().plotTitle,
-        xLabel: s().xAxisLabel,
-        yLabel: s().yAxisLabel,
-      });
+      if (stat) {
+        await copyStatFigure(stat, "png", { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal }, stem);
+        return describeCopiedFormats(["png"]);
+      }
+      const spec = await rasterCopySpec(s, ds, stem);
       if (!spec) return false;
       // Progress feedback: a large multi-panel render is not instant, and a
       // silent pause reads as a broken button.
@@ -157,12 +216,13 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
       const svg = copySvgWanted(figurePointCount(spec))
         ? renderFigureBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal)
         : null;
-      const ok = await copyOfficeGraphicAsync(
+      const formats = await copyOfficeGraphicFormats(
         { png, svg, pngDpi: COPY_FIGURE_DPI, alt: spec.title || stem },
         signal,
       );
       s().setStatus("");
-      if (!ok) throw new Error("clipboard write refused");
+      if (!formats) throw new Error("clipboard write refused");
+      return describeCopiedFormats(formats);
     },
     { verb: "copy", past: "copied" },
   );

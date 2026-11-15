@@ -26,9 +26,9 @@ vi.mock("../../../lib/clipboard", () => ({
   clipboardSvgSupported: vi.fn(() => true),
 }));
 vi.mock("../../../lib/officeClipboard", () => ({
-  copyOfficeGraphicAsync: vi.fn(async (source: { png: Promise<Blob>; svg: Promise<Blob> | null }) => {
+  copyOfficeGraphicFormats: vi.fn(async (source: { png: Promise<Blob>; svg: Promise<Blob> | null }) => {
     await Promise.all([source.png, source.svg]);
-    return true;
+    return ["image/png", "text/html"];
   }),
 }));
 

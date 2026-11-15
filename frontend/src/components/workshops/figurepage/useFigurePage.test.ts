@@ -1,11 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage, renderFigurePageBlob } from "../../../lib/api";
 import { clipboardImageSupported, clipboardSvgSupported } from "../../../lib/clipboard";
+import { primeNativeClipboard } from "../../../lib/desktopClipboard";
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
-import { copyOfficeGraphicAsync } from "../../../lib/officeClipboard";
+import { copyOfficeGraphicFormats } from "../../../lib/officeClipboard";
 import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
@@ -27,7 +28,7 @@ vi.mock("../../../lib/clipboard", () => ({
   clipboardSvgSupported: vi.fn(() => true),
 }));
 vi.mock("../../../lib/officeClipboard", () => ({
-  copyOfficeGraphicAsync: vi.fn().mockResolvedValue(true),
+  copyOfficeGraphicFormats: vi.fn().mockResolvedValue(["image/png", "text/html"]),
 }));
 
 const askConfirm = vi.fn();
@@ -995,7 +996,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
     askConfirm.mockReset();
     vi.mocked(clipboardImageSupported).mockReturnValue(true);
     vi.mocked(clipboardSvgSupported).mockReturnValue(true);
-    vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(true);
+    vi.mocked(copyOfficeGraphicFormats).mockResolvedValue(["image/png", "text/html", "image/svg+xml"]);
     useApp.setState({ editableFigures: [], pages: [], pageDocSeed: null, figurePageOpen: false });
   });
 
@@ -1068,11 +1069,11 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyOfficeGraphicAsync).toHaveBeenCalledTimes(1);
+      expect(copyOfficeGraphicFormats).toHaveBeenCalledTimes(1);
       // The renders are handed over still PENDING so the clipboard write
       // stays inside the user gesture — resolve them to inspect what was
       // actually rendered.
-      const source = vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0];
+      const source = vi.mocked(copyOfficeGraphicFormats).mock.calls[0][0];
       await expect(source.png).resolves.toBeInstanceOf(Blob);
       await expect(source.svg).resolves.toBeInstanceOf(Blob);
       expect(source.pngDpi).toBe(300);
@@ -1083,11 +1084,12 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       // The optional raw-SVG representation: glyphs as outlines.
       expect(svg.fmt).toBe("svg");
       expect(svg.svg_text_as_paths).toBe(true);
-      expect(useApp.getState().status).toBe("figure page copied to clipboard");
+      expect(useApp.getState().status).toBe("figure page copied to clipboard as vector (SVG) + PNG");
     });
 
     it("skips the page SVG render when the browser does not advertise raw SVG", async () => {
       vi.mocked(clipboardSvgSupported).mockReturnValue(false);
+      vi.mocked(copyOfficeGraphicFormats).mockResolvedValue(["image/png", "text/html"]);
       const { result } = renderHook(() => useFigurePage());
       act(() => result.current.assign(0, result.current.windowSources[0]));
       vi.mocked(renderFigurePageBlob).mockClear();
@@ -1095,8 +1097,8 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
         await result.current.copyNow();
       });
       expect(vi.mocked(renderFigurePageBlob).mock.calls.map((call) => call[0].fmt)).toEqual(["png"]);
-      expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].svg).toBeNull();
-      expect(useApp.getState().status).toBe("figure page copied to clipboard");
+      expect(vi.mocked(copyOfficeGraphicFormats).mock.calls[0][0].svg).toBeNull();
+      expect(useApp.getState().status).toBe("figure page copied to clipboard as a 300-DPI PNG (not vector)");
     });
 
     it("checks clipboard capability BEFORE doing any render work", async () => {
@@ -1107,7 +1109,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
+      expect(copyOfficeGraphicFormats).not.toHaveBeenCalled();
       expect(renderFigurePageBlob).not.toHaveBeenCalled();
       expect(useApp.getState().status).toMatch(/clipboard image unavailable/);
     });
@@ -1121,7 +1123,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
+      expect(copyOfficeGraphicFormats).not.toHaveBeenCalled();
       expect(useApp.getState().status).toMatch(/panel's source is missing/);
     });
 
@@ -1130,8 +1132,59 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
+      expect(copyOfficeGraphicFormats).not.toHaveBeenCalled();
       expect(useApp.getState().status).toBe("assign at least one panel to copy a figure page");
+    });
+
+    // gap-4 G14 (L4): the page copy names the format and uses the native
+    // Windows clipboard when the startup probe enabled it.
+    describe("native desktop clipboard (pywebview bridge mocked)", () => {
+      const g = globalThis as { pywebview?: unknown };
+      let calls: [string, string][] = [];
+      async function installBridge(result: Record<string, unknown>) {
+        calls = [];
+        g.pywebview = {
+          api: {
+            clipboard_probe: async () => ({ available: true }),
+            copy_figure_clipboard: async (png: string, svg: string) => {
+              calls.push([png, svg]);
+              return result;
+            },
+          },
+        };
+        await primeNativeClipboard();
+      }
+      afterEach(async () => {
+        delete g.pywebview;
+        await primeNativeClipboard();
+      });
+
+      it("routes the page's PNG + SVG renders to the bridge and says vector", async () => {
+        vi.mocked(clipboardImageSupported).mockReturnValue(false); // the browser path could not copy at all
+        await installBridge({ ok: true, formats: ["svg", "png", "dib"] });
+        const { result } = renderHook(() => useFigurePage());
+        act(() => result.current.assign(0, result.current.windowSources[0]));
+        vi.mocked(renderFigurePageBlob).mockClear();
+        await act(async () => {
+          await result.current.copyNow();
+        });
+        expect(copyOfficeGraphicFormats).not.toHaveBeenCalled();
+        expect(vi.mocked(renderFigurePageBlob).mock.calls.map((c) => c[0].fmt)).toEqual(["png", "svg"]);
+        expect(calls).toHaveLength(1);
+        expect(calls[0][1]).not.toBe("");
+        expect(useApp.getState().status).toBe("figure page copied to clipboard as vector (SVG) + PNG");
+      });
+
+      it("a bridge refusal is reported with its reason, never as a copy", async () => {
+        await installBridge({ ok: false, error: "clipboard write failed: busy" });
+        const { result } = renderHook(() => useFigurePage());
+        act(() => result.current.assign(0, result.current.windowSources[0]));
+        await act(async () => {
+          await result.current.copyNow();
+        });
+        expect(useApp.getState().status).toBe("copy failed: clipboard write failed: busy");
+        expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+      });
     });
   });
 });
@@ -1328,9 +1381,9 @@ describe("figure page export/copy cancel (P3.4)", () => {
       rendering = signal;
       return hangUntilAborted(signal);
     });
-    vi.mocked(copyOfficeGraphicAsync).mockImplementationOnce(async (source) => {
+    vi.mocked(copyOfficeGraphicFormats).mockImplementationOnce(async (source) => {
       await Promise.allSettled([source.png, source.svg]);
-      return false;
+      return null;
     });
     const { result } = renderHook(() => useFigurePage());
     act(() => result.current.assign(0, result.current.windowSources[0]));
@@ -1345,7 +1398,7 @@ describe("figure page export/copy cancel (P3.4)", () => {
       await p;
     });
     expect(rendering?.aborted).toBe(true);
-    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][1]?.aborted).toBe(true);
+    expect(vi.mocked(copyOfficeGraphicFormats).mock.calls[0][1]?.aborted).toBe(true);
     expect(useApp.getState().status).toBe("copy cancelled");
     expect(useToasts.getState().toasts).toEqual([]);
     expect(usePendingOps.getState().ops).toEqual([]);

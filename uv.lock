@@ -2838,6 +2838,7 @@ client = [
 ]
 desktop = [
     { name = "pywebview" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
 ]
 office = [
     { name = "python-docx" },
@@ -2885,6 +2886,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "python-pptx", marker = "extra == 'office'", specifier = ">=1.0" },
     { name = "pywebview", marker = "extra == 'desktop'", specifier = ">=5.1" },
+    { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'desktop'" },
     { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'origin-com'" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "statsmodels", marker = "extra == 'stats'", specifier = ">=0.14" },
