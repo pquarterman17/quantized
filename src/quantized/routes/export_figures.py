@@ -42,6 +42,7 @@ from quantized.calc.plotting import (
     validate_y2_subset,
 )
 from quantized.calc.render_lock import acquire_render_lock
+from quantized.calc.tick_hint import HINT_MAX
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
 from quantized.routes import export_figures_multi_y as multi_y  # Y3+ axes (gap audit 4 G11)
@@ -132,10 +133,11 @@ class FigureRequest(
     y2_step: float | None = None
     # Audit 6 lane L: the increments the focused canvas DREW on automatic
     # axes, a hint the export takes only when it fits the laid-out axes
-    # (calc.tick_hint); a typed `*_step` wins.
-    x_step_hint: float | None = None
-    y_step_hint: float | None = None
-    y2_step_hint: float | None = None
+    # (calc.tick_hint); a typed `*_step` wins. Positive, finite and below
+    # HINT_MAX, or 422 (review N4).
+    x_step_hint: float | None = Field(None, gt=0, lt=HINT_MAX, allow_inf_nan=False)
+    y_step_hint: float | None = Field(None, gt=0, lt=HINT_MAX, allow_inf_nan=False)
+    y2_step_hint: float | None = Field(None, gt=0, lt=HINT_MAX, allow_inf_nan=False)
     # GUI_INTERACTION #12 Slice 5: an optional categorical column that
     # splits every `y_keys` channel into one series per (channel, group
     # level) instead of one series per channel -- the Graph Builder "group"

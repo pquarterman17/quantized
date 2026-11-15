@@ -291,6 +291,7 @@ def apply_tick_steps(
     y_step: float | None,
     x_scale: str,
     y_scale: str,
+    labels: tuple[str, str] = ("X", "Y"),
 ) -> None:
     """Apply saved major-tick increments to linear axes, and to a log axis'
     sub-decade arithmetic ticks.
@@ -302,12 +303,14 @@ def apply_tick_steps(
     ``MultipleLocator`` anchors ticks at integer multiples of the step, the
     same convention as the interactive ``fixedLinearAxisSplits`` helper.
     """
-    def apply_one(axis: Any, limits: tuple[float, float], step: float | None, scale: str) -> None:
+    def apply_one(
+        axis: Any, limits: tuple[float, float], step: float | None, scale: str, label: str
+    ) -> None:
         if step is None or not math.isfinite(step) or step <= 0:
             return
         if isinstance(step, TickHint):  # the screen's increment, only if it fits
             if scale == "linear":
-                axis.set_major_locator(HintLocator(step))
+                axis.set_major_locator(HintLocator(step, label))
             return
         if scale == "log":
             if hasattr(axis.get_major_locator(), "step"):  # figure_log_ticks.LogMajorLocator
@@ -319,6 +322,6 @@ def apply_tick_steps(
         axis.set_major_locator(MultipleLocator(float(step)))
 
     if x_scale in ("linear", "log"):
-        apply_one(ax.xaxis, ax.get_xlim(), x_step, x_scale)
+        apply_one(ax.xaxis, ax.get_xlim(), x_step, x_scale, labels[0])
     if y_scale in ("linear", "log"):
-        apply_one(ax.yaxis, ax.get_ylim(), y_step, y_scale)
+        apply_one(ax.yaxis, ax.get_ylim(), y_step, y_scale, labels[1])

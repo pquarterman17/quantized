@@ -17,6 +17,8 @@ import type { FigureSpec } from "../../../lib/api/figures";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
+import type { LiveTickSteps } from "../../../lib/liveTickSteps";
+import { withLiveTickHints } from "../../../lib/liveTickStepsSpec";
 import type { DataStruct, Dataset, DefaultTrace } from "../../../lib/types";
 import type { ExcludedDisplay } from "../../../store/useApp";
 
@@ -68,6 +70,7 @@ export function computeCanonicalReadiness(
   excludedDisplay?: ExcludedDisplay,
   defaultTrace?: DefaultTrace,
   defaultLineWidth?: number,
+  tickHints?: LiveTickSteps | null, // the focused canvas' own (canonicalSession.sessionTickHints)
 ): CanonicalReadiness | null {
   if (!document) return null;
   if (document.data.mode !== "frozen" && document.bindings.datasetId !== null && !dataset) {
@@ -89,12 +92,12 @@ export function computeCanonicalReadiness(
     // caller's source for it. The preview must show the dashes that
     // window's Stage export will emit.
     const mode = excludedDisplay ?? "hide";
-    const built = buildFigureSpecFromDocument(document, dataset, "preview", {
+    const built = withLiveTickHints(buildFigureSpecFromDocument(document, dataset, "preview", {
       autoSeriesStyles,
       greyExcluded: ghosterFor(mode),
       defaultTrace,
       defaultLineWidth,
-    });
+    }), tickHints);
     // A frozen document renders its own snapshot and never prunes, so only a
     // live one has a masked wire dataset worth keeping stable.
     const spec = dataset && document.data.mode !== "frozen"

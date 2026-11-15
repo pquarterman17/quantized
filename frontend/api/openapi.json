@@ -6130,6 +6130,8 @@
           "x_step_hint": {
             "anyOf": [
               {
+                "exclusiveMaximum": 1e+300,
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
@@ -6205,6 +6207,8 @@
           "y2_step_hint": {
             "anyOf": [
               {
+                "exclusiveMaximum": 1e+300,
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
@@ -6301,6 +6305,8 @@
           "y_step_hint": {
             "anyOf": [
               {
+                "exclusiveMaximum": 1e+300,
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {

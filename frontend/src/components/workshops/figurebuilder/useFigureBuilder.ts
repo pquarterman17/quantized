@@ -16,7 +16,7 @@ import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canoni
 import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { canonicalSeriesOps } from "./canonicalSeriesOps";
-import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted } from "./canonicalSession";
+import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted, sessionTickHints } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
 import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
@@ -139,11 +139,12 @@ export function useFigureBuilder() {
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
     : null;
   const cyclesStyles = useApp(selectSessionCyclesSeriesStyles); // P3.3 -- see that selector's doc
+  const tickHints = sessionTickHints(useApp.getState()); // read at render: publishing re-renders nothing
   // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a pure
   // function of document + dataset + the app's excluded-rows mode) -- this hook just memoizes the call.
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(
-    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth),
-    [canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth],
+    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints),
+    [canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints?.x, tickHints?.y, tickHints?.y2], // eslint-disable-line react-hooks/exhaustive-deps -- the values, not the published object
   );
   const canonicalData = canonicalReadiness?.state === "missing-source" ? null : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {
@@ -386,7 +387,7 @@ export function useFigureBuilder() {
    *  live state. */
   const exportNow = (): Promise<void> =>
     exportPreviewFigure({
-      canonicalDocument, canonicalReadiness, canonicalDataset, spec, legacyState, frozenData, active, fmt, dpi, autoSeriesStyles: cyclesStyles, setStatus,
+      canonicalDocument, canonicalReadiness, canonicalDataset, spec, legacyState, frozenData, active, fmt, dpi, autoSeriesStyles: cyclesStyles, tickHints: sessionTickHints(useApp.getState()), setStatus,
     });
 
   return {

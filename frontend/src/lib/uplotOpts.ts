@@ -192,14 +192,15 @@ function stripNegZero(formatted: string): string {
 }
 
 const autoNumberFormatCache = new Map<number, Intl.NumberFormat>();
-function autoNumberFormat(maxFrac: number, pad: boolean): Intl.NumberFormat {
+/** `d`: `decimalsForIncrement`'s 0..20. */
+function autoNumberFormat(d: number, pad: boolean): Intl.NumberFormat {
   // A linear axis shows one decimal count (audit 6 P3): "0.0090" beside "0.0095", as Origin pads --
   // up to 5 decimals: a finer increment (where matplotlib turns to an offset) keeps labels unpadded.
-  const d = Math.max(0, Math.min(20, maxFrac)), min = pad && d <= 5 ? d : 0;
-  let nf = autoNumberFormatCache.get(d + 21 * min);
+  const min = pad && d <= 5 ? d : 0, key = d + 21 * min;
+  let nf = autoNumberFormatCache.get(key);
   if (!nf) {
     nf = new Intl.NumberFormat(undefined, { minimumFractionDigits: min, maximumFractionDigits: d });
-    autoNumberFormatCache.set(d + 21 * min, nf);
+    autoNumberFormatCache.set(key, nf);
   }
   return nf;
 }

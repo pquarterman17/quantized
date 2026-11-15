@@ -24,6 +24,9 @@ def flat_render_kwargs(req: Any, resolved: _ResolvedFigure, dpi: int) -> dict[st
     preview's lacked ``error_spans``, ``width_in``/``height_in`` and
     ``transparent`` (publication-figures audit #4): a preview at the preset
     size with no error bars beside an export at the page size with them."""
+    overrides = request_overrides(req)
+    x_fmt = _x_tick_fmt(req.x_fmt, resolved)
+    y_fmt, y2_fmt = _tick_fmt(req.y_fmt), _tick_fmt(req.y2_fmt)
     return dict(
         title=req.title,
         x_label=resolved.x_label,
@@ -40,16 +43,30 @@ def flat_render_kwargs(req: Any, resolved: _ResolvedFigure, dpi: int) -> dict[st
         dpi=dpi,
         transparent=req.transparent,
         greyscale=req.greyscale,
-        overrides=request_overrides(req),
-        x_fmt=_x_tick_fmt(req.x_fmt, resolved),
-        y_fmt=_tick_fmt(req.y_fmt),
-        x_step=step_or_hint(req.x_step, getattr(req, "x_step_hint", None)),
-        y_step=step_or_hint(req.y_step, getattr(req, "y_step_hint", None)),
+        overrides=overrides,
+        x_fmt=x_fmt,
+        y_fmt=y_fmt,
+        x_step=step_or_hint(req.x_step, _hint(req, "x", x_fmt, overrides)),
+        y_step=step_or_hint(req.y_step, _hint(req, "y", y_fmt, overrides)),
         y2_mask=resolved.y2_mask,
         y2_label=resolved.y2_label,
         y2_scale=req.y2_scale,
-        y2_fmt=_tick_fmt(req.y2_fmt),
-        y2_step=step_or_hint(req.y2_step, getattr(req, "y2_step_hint", None)),
+        y2_fmt=y2_fmt,
+        y2_step=step_or_hint(req.y2_step, _hint(req, "y2", y2_fmt, overrides)),
         extra_y=multi_y.extra_y_kwargs(req, len(resolved.series)),
         svg_text_as_paths=req.svg_text_as_paths,
     )
+
+
+def _hint(
+    req: Any, axis: str, fmt: dict[str, Any] | None, overrides: dict[str, Any] | None
+) -> float | None:
+    """The request's ``<axis>_step_hint``, dropped where the client never
+    sends one -- a date axis, or X under X breaks, whose own locator would
+    take it as a typed step (review N7)."""
+    if (fmt or {}).get("mode") in ("date", "time", "datetime"):
+        return None
+    if axis == "x" and (overrides or {}).get("x_breaks"):
+        return None
+    hint: float | None = getattr(req, f"{axis}_step_hint", None)
+    return hint

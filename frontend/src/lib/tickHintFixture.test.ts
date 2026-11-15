@@ -8,8 +8,11 @@
 // (`tests/test_tick_hint_fixture.py`) renders each request at its size and
 // checks every axis against `expect`:
 //   "screen": the export draws the canvas' majors (the hint fit the axes);
-//   "auto":   the hint did not fit, matplotlib's AutoLocator placed the
-//             ticks, and the render warned "ticks re-spaced".
+//   "auto":   the hint did not fit, matplotlib placed the ticks (on X with
+//             at least three, the screen's own X rule) and the render warned
+//             "ticks re-spaced".
+// "default style at 3.4x2.6 in" is a custom small size at the default fonts;
+// the real aps preset (smaller fonts) keeps the screen's ticks.
 //
 // Regenerate only after a DELIBERATE rule change:
 //   TICK_HINT_FIXTURE_WRITE=1 npx vitest run src/lib/tickHintFixture.test.ts
@@ -34,6 +37,7 @@ import "./uplotPaths";
 import { createFigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { publishLiveTickSteps } from "./liveTickSteps";
+import { readLiveTickSteps, withLiveTickHints } from "./liveTickStepsSpec";
 import { liveTicksPlugin } from "./liveTicksPlugin";
 import { buildColumns, composeDisplayPayload, effectiveChannels } from "./plotdata";
 import { defaultPlotView, type PlotView } from "./plotview";
@@ -48,8 +52,10 @@ interface Case {
   name: string;
   /** Canvas size, CSS px. */
   canvas: [number, number];
-  /** Export size, inches. */
-  size: [number, number];
+  /** Export size, inches; null keeps the style preset's own size. */
+  size: [number, number] | null;
+  /** The export's style preset (default "default"). */
+  style?: string;
   view: Partial<PlotView>;
   expect: Partial<Record<Axis, "screen" | "auto">>;
 }
@@ -72,9 +78,10 @@ const CASES: Case[] = [
   { name: "same size: 432x288 px canvas, 6x4 in export", canvas: [432, 288], size: [6, 4], view: {}, expect: { x: "screen", y: "screen" } },
   { name: "small zoomed canvas, default 6x4 in export: the screen's sparser X kept", canvas: [330, 260], size: [6, 4], view: ZOOM, expect: { x: "screen", y: "screen" } },
   { name: "zoomed, default 6x4 in export", canvas: [1000, 640], size: [6, 4], view: ZOOM, expect: { x: "screen", y: "screen" } },
-  { name: "zoomed, aps 3.4x2.6 in export: X re-spaced", canvas: [1000, 640], size: [3.4, 2.6], view: ZOOM, expect: { x: "auto", y: "screen" } },
+  { name: "zoomed, default style at 3.4x2.6 in: X re-spaced", canvas: [1000, 640], size: [3.4, 2.6], view: ZOOM, expect: { x: "auto", y: "screen" } },
   { name: "2-Y, default 6x4 in export", canvas: [1000, 640], size: [6, 4], view: { yKeys: [0, 1], y2Keys: [1] }, expect: { x: "screen", y: "screen", y2: "screen" } },
-  { name: "2-Y, aps 3.4x2.6 in export: X re-spaced", canvas: [1000, 640], size: [3.4, 2.6], view: { yKeys: [0, 1], y2Keys: [1] }, expect: { x: "auto", y: "screen", y2: "screen" } },
+  { name: "2-Y, default style at 3.4x2.6 in: X re-spaced to at least 3 ticks", canvas: [1000, 640], size: [3.4, 2.6], view: { yKeys: [0, 1], y2Keys: [1] }, expect: { x: "auto", y: "screen", y2: "screen" } },
+  { name: "2-Y, the aps style preset at its own size: the screen's ticks kept", canvas: [1000, 640], size: null, style: "aps", view: { yKeys: [0, 1], y2Keys: [1] }, expect: { x: "screen", y: "screen", y2: "screen" } },
 ];
 
 const view = (c: Case): PlotView => ({ ...defaultPlotView(), yKeys: [0], ...c.view });
@@ -100,7 +107,7 @@ async function canvas(c: Case): Promise<Partial<Record<Axis, number[]>>> {
     width: c.canvas[0], height: c.canvas[1], tool: "zoom", onReadout: vi.fn(), xScale: "linear", yScale: "linear",
     xLim: lim(v.xLim), yLim: lim(v.yLim), hidden: payload.series.map(() => false),
   });
-  useApp.setState({ activeId: DS.id });
+  useApp.setState({ activeId: DS.id, focusedWindowId: "w1" });
   opts.plugins = [...(opts.plugins ?? []), liveTicksPlugin()];
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -122,7 +129,9 @@ async function fresh() {
   for (const c of CASES) {
     const ticks = await canvas(c);
     const doc = createFigureDocument({ id: "w1", name: "M(T)", datasetId: DS.id, view: view(c) });
-    const request = { ...buildFigureSpecFromDocument(doc, DS, "mt", { fmt: "svg" }), width_in: c.size[0], height_in: c.size[1] };
+    // The hints Stage Export / Copy and the window's Publication preview add (liveTickSteps.test.ts).
+    const spec = withLiveTickHints(buildFigureSpecFromDocument(doc, DS, "mt", { fmt: "svg", style: c.style ?? "default" }), readLiveTickSteps("w1"));
+    const request = c.size ? { ...spec, width_in: c.size[0], height_in: c.size[1] } : spec;
     cases.push({ name: c.name, request, canvas: ticks, expect: c.expect });
   }
   return { cases };
@@ -131,7 +140,7 @@ async function fresh() {
 describe("screen == export ticks through the hint (shared wire fixture)", () => {
   it("every request carries the canvas' drawn increments as hints, never as typed steps", async () => {
     for (const c of (await fresh()).cases) {
-      const r = c.request as Record<string, unknown>;
+      const r = c.request as unknown as Record<string, unknown>;
       expect([r.x_step ?? null, r.y_step ?? null, r.y2_step ?? null], c.name).toEqual([null, null, null]);
       expect(r.x_step_hint, c.name).toBeCloseTo(c.canvas.x![1] - c.canvas.x![0], 9);
       expect(r.y_step_hint, c.name).toBeCloseTo(c.canvas.y![1] - c.canvas.y![0], 9);

@@ -1,33 +1,44 @@
 """matplotlib half of the tick hint (``calc.tick_hint``): a major locator
 that takes the screen's increment when it fits the laid-out axes and falls
-back to AutoLocator otherwise.
+back to matplotlib's own spacing otherwise.
 
 The decision is made in ``tick_values``, which matplotlib calls at draw time,
 after the layout engine has sized the axes, so the Y2 slot, titles and a
 colorbar are accounted for. A layout pass can ask more than once at
-different sizes; the warning follows the LAST decision (a later acceptance
-retracts an earlier rejection's note).
+different sizes; the warning follows each locator's LAST decision, keyed by
+the locator itself (``figure_warnings.set_keyed_figure_warning``), so one
+axis' acceptance never retracts another's warning (review N3).
+
+The fallback is AutoLocator's on Y and Y2. On X it also asks for at least
+three ticks (``MaxNLocator(min_n_ticks=3)``), the screen's own X rule
+(``frontend/src/lib/uplotRightPad.ts``'s ``xTickSpace``): a short X axis
+otherwise kept only two labels where three or more fit (review N5).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from matplotlib.ticker import AutoLocator, Locator, MultipleLocator
+from matplotlib.ticker import AutoLocator, Locator, MaxNLocator, MultipleLocator
 
-from quantized.calc.figure_warnings import note_figure_warning, retract_figure_warning
+from quantized.calc.figure_warnings import set_keyed_figure_warning
 from quantized.calc.tick_hint import hint_fits
 
 __all__ = ["HintLocator"]
 
 
 class HintLocator(Locator):
-    """``MultipleLocator(hint)`` when :func:`hint_fits`, else AutoLocator."""
+    """``MultipleLocator(hint)`` when :func:`hint_fits`, else matplotlib's
+    spacing. ``label`` ("X", "Y", "Y2") names the axis in the warning."""
 
-    def __init__(self, hint: float) -> None:
+    def __init__(self, hint: float, label: str) -> None:
         self.hint = float(hint)
+        self.label = label
         self._multiple = MultipleLocator(self.hint)
-        self._auto = AutoLocator()
+        self._auto: Locator = (
+            MaxNLocator("auto", steps=[1, 2, 2.5, 5, 10], min_n_ticks=3)
+            if label == "X" else AutoLocator()
+        )
         self.accepted: bool | None = None
 
     def set_axis(self, axis: Any) -> None:
@@ -43,14 +54,12 @@ class HintLocator(Locator):
 
     def tick_values(self, vmin: float, vmax: float) -> Any:
         space = self.axis.get_tick_space() if self.axis is not None else 9
-        self.accepted = hint_fits(abs(float(vmax) - float(vmin)), self.hint, space)
-        name = str(getattr(self.axis, "axis_name", "")).upper()
+        self.accepted = hint_fits(float(vmin), float(vmax), self.hint, space)
         note = (
-            f"{name} ticks re-spaced for the export size: the screen's "
-            f"increment {self.hint:g} would crowd this axis"
+            f"{self.label} ticks re-spaced for the export size: the screen's "
+            f"increment {self.hint:g} does not fit this {self.label} axis"
         )
+        set_keyed_figure_warning(self, None if self.accepted else note)
         if self.accepted:
-            retract_figure_warning(note)
             return self._multiple.tick_values(vmin, vmax)
-        note_figure_warning(note)
         return self._auto.tick_values(vmin, vmax)

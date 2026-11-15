@@ -26,9 +26,23 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-__all__ = ["collect_figure_warnings", "note_figure_warning", "retract_figure_warning"]
+__all__ = [
+    "collect_figure_warnings",
+    "note_figure_warning",
+    "set_keyed_figure_warning",
+]
 
-_SINK: ContextVar[list[str] | None] = ContextVar("figure_warnings", default=None)
+
+class _Sink(list[str]):
+    """The collected messages, plus each keyed decision's current message
+    (:func:`set_keyed_figure_warning`)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.keyed: dict[object, str] = {}
+
+
+_SINK: ContextVar[_Sink | None] = ContextVar("figure_warnings", default=None)
 
 
 @contextmanager
@@ -36,7 +50,7 @@ def collect_figure_warnings() -> Iterator[list[str]]:
     """Collect every :func:`note_figure_warning` raised inside the block into
     the yielded list (in order, de-duplicated). Nests: an inner collector
     sees only its own block's notes."""
-    sink: list[str] = []
+    sink = _Sink()
     token = _SINK.set(sink)
     try:
         yield sink
@@ -51,9 +65,19 @@ def note_figure_warning(message: str) -> None:
         sink.append(message)
 
 
-def retract_figure_warning(message: str) -> None:
-    """Drop ``message`` from the active collector, if there: a decision a
-    later layout pass reversed (``calc.figure_tick_hint``)."""
+def set_keyed_figure_warning(key: object, message: str | None) -> None:
+    """Set (or, with None, clear) the warning one decision-maker currently
+    stands by -- a decision a later layout pass can reverse
+    (``calc.figure_tick_hint``). Identity-based (review N3): clearing ``key``
+    removes its message only when no other key still holds the same text, so
+    one axis' acceptance never retracts another axis' warning."""
     sink = _SINK.get()
-    if sink is not None and message in sink:
-        sink.remove(message)
+    if sink is None:
+        return
+    old = sink.keyed.pop(key, None)
+    if message is not None:
+        sink.keyed[key] = message
+        if message not in sink:
+            sink.append(message)
+    if old is not None and old != message and old in sink and old not in sink.keyed.values():
+        sink.remove(old)

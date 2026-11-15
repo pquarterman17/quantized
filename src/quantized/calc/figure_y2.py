@@ -174,7 +174,7 @@ def draw_secondary_axes(
     apply_error_bars(ax2, xv, series, error_spans, artists, series_styles)
     resolved_y_scale = resolve_axis_scale(y_scale, False)
     apply_axis_scale(ax2, "y", resolved_y_scale)
-    apply_tick_steps(ax2, None, y_step, "linear", resolved_y_scale)
+    apply_tick_steps(ax2, None, y_step, "linear", resolved_y_scale, ("X", "Y2"))
     apply_tick_formats(ax2, None, y_fmt)
     if y_label:
         ax2.set_ylabel(y_label)

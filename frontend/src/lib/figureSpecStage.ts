@@ -22,6 +22,7 @@ import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
+import { readLiveTickSteps, withLiveTickHints } from "./liveTickStepsSpec";
 import { withLiveLegendCorner } from "./liveLegendCorner";
 
 /** Stage copy/export entry point (F2.5b). Every Stage command that renders
@@ -76,7 +77,7 @@ export function buildStageFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extra: { transparent?: boolean; onDroppedOverlays?: (labels: string[]) => void } = {},
+  extra: { transparent?: boolean; onDroppedOverlays?: (labels: string[]) => void; noTickHints?: boolean } = {},
 ): FigureSpec {
   const st = s();
   const empty = emptyGraphReason(ds);
@@ -138,7 +139,7 @@ export function buildStageFigureSpec(
   // markers / Step), read like `autoSeriesStyles` from the live store.
   const defaultTrace = st.defaultTrace;
   const defaultLineWidth = st.defaultLineWidth; // and its line width (`exportLineWidth`)
-  const spec = canRouteThroughDocument
+  const built = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
         style: o.style,
@@ -156,6 +157,11 @@ export function buildStageFigureSpec(
         defaultLineWidth,
       }, view)
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan }, view);
+  // The increments THIS window's canvas drew ride as hints (lib/liveTickStepsSpec.ts) -- on the
+  // document route of a live document only: the fallback may race a refocus, a frozen one draws its snapshot.
+  // `noTickHints`: a report snapshot renders later, at its own size (review N1).
+  const live = canRouteThroughDocument && document.data.mode !== "frozen" && !extra.noTickHints;
+  const spec = withLiveTickHints(built, live ? readLiveTickSteps(focused?.id) : null);
   // The fit / baseline / peak overlays the canvas splices on after its plotted
   // channels (lib/figureSpecOverlays.ts), decided from `view`. Not on a frozen document: it renders
   // its own snapshot, not the rows the overlay was computed on.

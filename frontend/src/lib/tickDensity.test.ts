@@ -91,14 +91,17 @@ async function bare(c: Case): Promise<number[]> {
     width: isX ? c.length : 100, height: isX ? 100 : c.length, padding: [0, 0, 0, 0], legend: { show: false },
     scales: { x: { time: false, range: (isX ? c.lim : [0, 1]) as uPlot.Range.MinMax }, y: { range: (isX ? [0, 1] : c.lim) as uPlot.Range.MinMax } },
     axes: [
-      { size: 0, font: `${c.font}px mono`, ...(isX ? { space, values: tickFormatter(undefined, "linear") } : { show: false }) },
+      { size: isX ? 50 : 0, font: `${c.font}px mono`, ...(isX ? { space, values: tickFormatter(undefined, "linear") } : { show: false }) },
       { size: 0, font: `${c.font}px mono`, ...(isX ? { show: false } : { space }) },
     ],
     series: [{}, {}],
   };
   const u = mount(opts, [[c.lim[0], c.lim[1]], [0, 1]] as uPlot.AlignedData);
   await new Promise((r) => setTimeout(r, 0));
-  u.redraw(false, true); // a second pass: the X label floor reads the strings drawn
+  // Later passes, as every Stage redraw gives: the X label floor reads the strings drawn last.
+  // (uPlot recomputes ticks only when a scale or the size changes: nudge the size and set it back.)
+  for (const d of [1, 0]) u.setSize({ width: (opts.width as number) + d, height: opts.height as number });
+  await new Promise((r) => setTimeout(r, 0));
   return majors(u, isX ? 0 : 1, c.axis);
 }
 
@@ -108,6 +111,23 @@ describe("the main axes' tick density: matplotlib's AutoLocator", () => {
     const got = await bare(c);
     expect(got.length, c.name).toBe(c.ticks.length);
     got.forEach((v, k) => expect(v, c.name).toBeCloseTo(c.ticks[k], 12));
+  });
+
+  it("a real uPlot X keeps three ticks where its labels leave room (review N7)", async () => {
+    const x = (lim: [number, number], length: number) => bare({ name: "x", axis: "x", lim, length, font: 12, step: 0, ticks: [] });
+    // matplotlib's 4 bins pick 1 here (1.0, 2.0); the screen backs off to 0.5.
+    expect(await x([0.4, 2.6], 160)).toEqual([0.5, 1, 1.5, 2, 2.5]);
+  });
+
+  it("documents where the label floor keeps a narrow X at two ticks (review L1)", async () => {
+    // The 150 px window of the review's row E, X 2..298 K at 12 px: a 50 step
+    // is 25 px apart, but "100" plus its two-character gap needs 36 px, so
+    // the labels' own room wins and only 100, 200 fit. Three ticks appear
+    // once a 50 step clears that floor: 36 * 296 / 50 = 213.1 px of plot.
+    const x = (length: number) => bare({ name: "x", axis: "x", lim: [2, 298], length, font: 12, step: 0, ticks: [] });
+    expect(await x(150)).toEqual([100, 200]);
+    expect(await x(213)).toEqual([100, 200]);
+    expect(await x(214)).toEqual([50, 100, 150, 200, 250]);
   });
 
   it("the 640 px MPMS M(T) canvas draws 5-10 Y majors, at the rule's increment", async () => {

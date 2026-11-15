@@ -21,7 +21,6 @@
 // since BUG-016 round 5 (review F9 measured this module one line under the
 // 500-line ceiling); the split is routing there, building here.
 
-import { withLiveTickHints } from "./liveTickStepsSpec";
 import {
   resolveSecondaryAxis,
   secondaryAxisFromView,
@@ -431,8 +430,8 @@ function buildFigureSpecForView(
   const facet = st.facetKey != null ? { col: st.facetKey, yKeys: st.yKeys } : undefined;
   // A document whose publication styles are explicitly `null` asked for
   // matplotlib's own styling, so it keeps the preset's line width too.
-  const traced = withCanvasLineWidth( // the drawn ticks ride as hints (lib/liveTickStepsSpec)
-    withDefaultTrace(withLiveTickHints(spec, extras.liveDataset?.id), o.defaultTrace, st.seriesStyles),
+  const traced = withCanvasLineWidth(
+    withDefaultTrace(spec, o.defaultTrace, st.seriesStyles),
     extras.publicationSeriesStyles === null ? undefined : canvasLineWidth(st.plotTemplate, o.defaultLineWidth),
   );
   return o.greyExcluded && extras.liveDataset ? o.greyExcluded(traced, data, dropped, facet) : traced;

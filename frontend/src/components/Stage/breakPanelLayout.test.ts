@@ -22,6 +22,9 @@ describe("breakPlotWidths", () => {
   });
 });
 
+/** U+2007 FIGURE SPACE: as wide as a digit, so the inward shift holds in any tabular font. */
+const F = "\u2007";
+
 describe("seamXValues", () => {
   // A fake panel 100 px wide over x in [0, 10]: 1 data unit = 10 px.
   const u = {
@@ -37,12 +40,12 @@ describe("seamXValues", () => {
 
   it("aligns a label ON the seam edge inward instead of blanking it (audit 6 review H1)", () => {
     const vals = seamXValues(base, { left: true, right: true }, 10, 4);
-    expect(vals(u, [0, 5, 10], 0, 50, 5)).toEqual(["   0.0", "5.0", "10.0    "]);
+    expect(vals(u, [0, 5, 10], 0, 50, 5)).toEqual([`${F.repeat(3)}0.0`, "5.0", `10.0${F.repeat(4)}`]);
   });
 
   it("leaves an outer edge's label alone", () => {
     const vals = seamXValues(base, { left: false, right: true }, 10, 4);
-    expect(vals(u, [0, 5, 10], 0, 50, 5)).toEqual(["0.0", "5.0", "10.0    "]);
+    expect(vals(u, [0, 5, 10], 0, 50, 5)).toEqual(["0.0", "5.0", `10.0${F.repeat(4)}`]);
   });
 });
 
@@ -57,8 +60,8 @@ describe("the break's own limits stay labelled with padded auto labels (audit 6 
   it("draws 2.0 left of the seam and 3.0 right of it", () => {
     const left = seamXValues(auto, { left: false, right: true }, 12, SEAM_PAD)(panel(0, 2), [0, 0.5, 1, 1.5, 2], 0, 50, 0.5);
     expect(left.map((s) => (s == null ? s : String(s).trim()))).toEqual(["0.0", "0.5", "1.0", "1.5", "2.0"]);
-    expect(left[4]).toBe("2.0   "); // its glyphs end on the edge
+    expect(left[4]).toBe(`2.0${F.repeat(3)}`); // its glyphs end on the edge (review N8: figure spaces)
     const right = seamXValues(auto, { left: true, right: false }, 12, SEAM_PAD)(panel(3, 5), [3, 3.5, 4, 4.5, 5], 0, 50, 0.5);
-    expect(right[0]).toBe("   3.0");
+    expect(right[0]).toBe(`${F.repeat(3)}3.0`);
   });
 });

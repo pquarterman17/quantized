@@ -58,7 +58,9 @@ export function yTitleKey(p: BreakPanel, seriesLabels: Record<number, string>): 
  *  per character, the monospace rule `lib/uplotRightPad.ts` uses. The break's
  *  own limit, ON the seam edge, is drawn aligned inward instead (audit 6 review
  *  H1: padded decimals made "2" a "2.0", too wide to centre there): uPlot
- *  centres every label, so as many spaces as it has characters on the seam
+ *  centres every label, so as many FIGURE SPACES (U+2007, digit-wide even in
+ *  a proportional font with tabular figures; the tick font is `--font-mono`
+ *  today) as it has characters on the seam
  *  side put its glyphs wholly inside the plot area. */
 export function seamXValues(base: XValues, seams: { left: boolean; right: boolean }, fontPx: number, pad: number): XValues {
   return (u, splits, axisIdx, space, incr) => {
@@ -74,7 +76,7 @@ export function seamXValues(base: XValues, seams: { left: boolean; right: boolea
       const left = seams.left && at - half < lo - pad;
       const right = seams.right && at + half > hi + pad;
       if (!left && !right) return s;
-      const fill = " ".repeat(String(s).length);
+      const fill = "\u2007".repeat(String(s).length);
       if (left !== right && Math.abs(at - (left ? lo : hi)) <= 1) return left ? fill + s : s + fill;
       return null;
     });
