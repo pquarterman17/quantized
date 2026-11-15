@@ -165,7 +165,7 @@ describe("hidden columns never join a selection, a Find or a cursor range", () =
     const bar = await screen.findByRole("search", { name: "Find and replace" });
     fireEvent.click(within(bar).getByLabelText("Match whole cell"));
     fireEvent.change(within(bar).getByLabelText("Find"), { target: { value: "21" } }); // only in hidden Field
-    expect(within(bar).getByText("0 matches (1 more in hidden columns)")).toBeTruthy();
+    expect(within(bar).getByText("0 matches (1 more in hidden column)")).toBeTruthy();
     fireEvent.change(within(bar).getByLabelText("Replace with"), { target: { value: "0" } });
     expect((within(bar).getByRole("button", { name: "Replace all" }) as HTMLButtonElement).disabled).toBe(true);
     expect(ds().data.values[1][1]).toBe(21);
@@ -202,7 +202,7 @@ describe("hidden columns never join a selection, a Find or a cursor range", () =
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Copy/ }));
     });
-    expect(st().status).toMatch(/includes 1 hidden columns/);
+    expect(st().status).toMatch(/includes 1 hidden column/);
   });
 });
 

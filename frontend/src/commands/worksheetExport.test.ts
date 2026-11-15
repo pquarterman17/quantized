@@ -58,7 +58,7 @@ describe("runExportWorksheet", () => {
     vi.mocked(askParams).mockResolvedValue(answer("CSV (comma-separated)"));
     await runExportWorksheet(useApp.getState);
     expect(vi.mocked(exportWorksheetTable).mock.calls[0][0].sheets[0].columns.map((c) => c.name)).toContain("R"); // the hidden column is exported
-    expect(useApp.getState().status).toBe('exported "a" as CSV (includes 1 hidden columns)');
+    expect(useApp.getState().status).toBe('exported "a" as CSV (includes 1 hidden column)');
     useApp.setState({ datasets: [sheet("a")], status: "" });
     await runExportWorksheet(useApp.getState);
     expect(useApp.getState().status).toBe('exported "a" as CSV');

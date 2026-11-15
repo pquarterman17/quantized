@@ -420,7 +420,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
         .filter((r) => !excluded.has(r));
       const { headers, data } = worksheetTsvTable(source, rows); // text + date columns too (audit #6)
       void copyText(tableToTSV(headers, data)).then((ok) =>
-        setStatus(ok ? `copied ${rows.length} rows to clipboard${source.hiddenCols?.length ? ` (includes ${source.hiddenCols.length} hidden columns)` : ""}` : "clipboard unavailable"),
+        setStatus(ok ? `copied ${rows.length} rows to clipboard${source.hiddenCols?.length ? ` (includes ${source.hiddenCols.length} hidden column${source.hiddenCols.length === 1 ? "" : "s"})` : ""}` : "clipboard unavailable"),
       );
     };
     if (resolvePendingEdit(useApp.getState, ds, "copying rows", apply)) return;

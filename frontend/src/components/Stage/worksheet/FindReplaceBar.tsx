@@ -168,7 +168,7 @@ export default function FindReplaceBar({ ds, order, writableCols, selection, rep
       <label className="qzk-field-lbl" style={{ margin: 0 }}>
         <input type="checkbox" aria-label="Replace inside numbers (edits digits)" checked={insideNumbers} onChange={(e) => setInsideNumbers(e.target.checked)} /> Replace inside numbers (edits digits)
       </label>
-      <span className="qzk-ds-meta" aria-live="polite">{query || wholeCell ? plural(hits.length, "match") : ""}{inHidden > 0 ? ` (${inHidden} more in hidden columns)` : ""}</span>
+      <span className="qzk-ds-meta" aria-live="polite">{query || wholeCell ? plural(hits.length, "match") : ""}{inHidden > 0 ? ` (${inHidden} more in hidden column${inHidden === 1 ? "" : "s"})` : ""}</span>
       <button className="qz-btn qz-sm" aria-label="Find previous" disabled={!hits.length} onClick={() => step(-1)}>↑</button>
       <button className="qz-btn qz-sm" aria-label="Find next" disabled={!hits.length} onClick={() => step(1)}>↓</button>
       {replace && (

@@ -85,7 +85,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       }
     }
     const what = sheets.length === 1 ? `"${sheets[0].name}"` : `${sheets.length} worksheets`;
-    const msg = `exported ${what} as ${fmt.toUpperCase()}${hiddenN ? ` (includes ${hiddenN} hidden columns)` : ""}`;
+    const msg = `exported ${what} as ${fmt.toUpperCase()}${hiddenN ? ` (includes ${hiddenN} hidden column${hiddenN === 1 ? "" : "s"})` : ""}`;
     s().setStatus(msg);
     toast(msg, "ok");
   } catch (e) {
