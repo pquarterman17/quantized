@@ -336,7 +336,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onAutofitCol={view.autofitCol}
         modelingTypeOf={(col) => channelModelingType(ds, col)}
         channelTypes={ds.channelTypes}
-        onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
+        onChangeChannelType={isRederived(ds) ? undefined : (col, t) => useApp.getState().setChannelType(ds.id, col, t)}
         readOnly={isRederived(ds) && editRefusalNotice(ds)}
         reveal={(rowRevealFirst ? reveal.target : cursor.reveal) ?? reveal.target}
         cursor={cursor.grid}
