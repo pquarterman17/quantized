@@ -155,6 +155,9 @@ export function buildStageFigureSpec(
         greyExcluded: o.greyExcluded,
         defaultTrace,
         defaultLineWidth,
+        // The canvas draws the store's live overlays, appended below; the
+        // document's saved copy of them (lib/figureOverlays) would draw twice.
+        analysisOverlays: false,
       }, view)
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan }, view);
   // An automatic tick increment marks the ticks the canvas drew (lib/liveTickSteps.ts).

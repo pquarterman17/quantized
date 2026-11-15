@@ -61,7 +61,10 @@ export function arrangedWindowsPatch(s: AppState, kind: "tile" | "cascade"): Par
 /** Shared "make `id` the live focus" tail for closeWindow/focusWindow/
  *  minimizeWindow/restoreWindow: hydrate `view` onto the singleton fields
  *  and clear transient tool state (item 4), over the caller's `extra`. */
-export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string | null, view: PlotView): Partial<AppState> {
+export function _focusHandoff(
+  extra: Partial<AppState>, id: string, datasetId: string | null, view: PlotView,
+  overlaySeed: Partial<AppState> = {}, // the target document's saved overlays (store/windowOverlays)
+): Partial<AppState> {
   return {
     ...extra,
     focusedWindowId: id,
@@ -72,6 +75,7 @@ export function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: s
     ...(datasetId ? { librarySelection: null } : {}),
     ...hydrateView(view),
     ...focusTransientReset(),
+    ...overlaySeed,
   };
 }
 /** A brand-new sole main window — the ≥1-window invariant's default: one

@@ -10,6 +10,9 @@ import { errKeysFromBindings, type ErrorBinding } from "../lib/errorRoles";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import { reboundWindowTitle } from "../lib/plotWindows";
 import type { Dataset } from "../lib/types";
+import { snapshotView } from "../lib/plotview";
+import type { AppState } from "./useApp";
+import { overlaysNow } from "./windowOverlaysLazy";
 
 const figureIdForWindow = (windowId: string): string => `figure-${windowId}`;
 
@@ -115,6 +118,8 @@ export function createPlotWindowDocument(
     axisBreaks: options.resetAxisBreaks ? undefined : previous?.plot.axisBreaks,
     output: previous?.output,
     publication: previous?.publication,
+    // Row-aligned to the bound dataset (lib/figureOverlays.ts): kept only while it stays bound.
+    overlays: previous?.bindings.datasetId === datasetId ? previous?.overlays : undefined,
   });
 }
 
@@ -156,6 +161,14 @@ export function syncPlotWindow(
     view: figureDocumentToPlotView(document),
     document,
   };
+}
+
+/** The focused window committed: its live view (`syncPlotWindow`) and the
+ *  analysis overlays its canvas draws (store/windowOverlays), into its document. */
+export function commitFocusedWindow(w: PlotWindow, s: AppState): PlotWindow {
+  const synced = syncPlotWindow(w, snapshotView(s));
+  const fold = overlaysNow()?.foldLiveOverlays;
+  return fold && synced.kind === "plot" && synced.document ? { ...synced, document: fold(synced.document, s) } : synced;
 }
 
 /** Replace a plot window's canonical document and regenerate every legacy

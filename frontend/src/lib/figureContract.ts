@@ -234,6 +234,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "series.styles",
     "P2.3: each plotted series' whole-decade offset, read at render time from its canonical series style (SeriesStyle.logOffset, lib/logOffset.ts) -- not a second copy of it. Nothing here is stored on the document.",
   ),
+  analysis_overlays: derived(
+    "overlays",
+    "Gap audit 6 lane K: which appended series are analysis overlays (fit, band, baseline, peaks), set by lib/figureSpecOverlays when it appends them, so they never feed an auto Y title. Nothing here is stored on the document.",
+  ),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   axis_label_styles: derived("axes.labelStyles"),
   axis_label_offsets: derived("axes.labelOffsets"),

@@ -18,38 +18,59 @@
 // the send also checks the built figure carries it (`specCarriesFit`).
 
 import type { FigureSpec } from "../lib/api/figures";
-import { fitBands } from "../lib/api/fitStats";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "../lib/overlaySpecShape";
 import { fitDrawBinding, fitDrawRefusal } from "../lib/fitDrawBinding";
-import { fullPlottedX } from "../lib/fitselectionActions";
-import type { Dataset, FitOverlay, FitSpec } from "../lib/types";
+import { evaluateSavedFit } from "../lib/savedFitCurve";
+import type { Dataset, FitOverlay, OverlayBinding } from "../lib/types";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { useApp } from "./useApp";
 
-/** `spec`'s model evaluated at every finite row of X `xKey`, or an error message. */
-async function evaluateFit(ds: Dataset, spec: FitSpec, params: number[], xKey: number | null): Promise<(number | null)[] | string> {
-  const xs = fullPlottedX(ds.data, xKey);
-  const finite = xs.flatMap((value, index) => Number.isFinite(value) ? [{ value, index }] : []);
-  if (!finite.length) return "the saved X channel has no finite values";
-  try {
-    const evaluated = await fitBands({
-      model: spec.model,
-      params,
-      covar: null,
-      x: finite.map((entry) => entry.value),
-      // Only yFit is read (covar null -> no bands), so the counts are nominal.
-      n_points: spec.nPoints ?? finite.length,
-      n_free: spec.nFree ?? params.length,
-    });
-    if (!Array.isArray(evaluated.yFit) || evaluated.yFit.length !== finite.length ||
-        !evaluated.yFit.every((value) => value === null || (typeof value === "number" && Number.isFinite(value)))) {
-      return "model evaluation returned the wrong number of fitted values";
-    }
-    const y: (number | null)[] = Array.from({ length: xs.length }, () => null);
-    finite.forEach((entry, index) => { y[entry.index] = evaluated.yFit[index] ?? null; });
-    return y;
-  } catch (error) {
-    return error instanceof Error ? error.message : "model evaluation failed";
+/** The saved fit of result `id` on `prepared`'s plot (I4): "none" (not a fit
+ *  result), "fail" (the fit is missing / broken / changed mid-load), "refused"
+ *  (not the X/Y it was fitted on: re-fit), or the curve to draw. ONE gate for
+ *  Open plot, Send to report and Build source figure (the saved figure keeps it). */
+export type ResultFitCurve =
+  | { kind: "none" }
+  | { kind: "fail" | "refused"; why: string }
+  | { kind: "drawn"; binding: OverlayBinding; y: (number | null)[] };
+
+export async function resultFitCurve(id: string, prepared: PreparedAnalysisResultPlot): Promise<ResultFitCurve> {
+  const state = useApp.getState();
+  const result = state.analysisResults.find((item) => item.id === id);
+  const fitDatasetId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
+  if (!fitDatasetId) return { kind: "none" };
+  const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
+  const fitSpec = fitDataset?.fitSpec;
+  if (!fitDataset || !fitSpec) return { kind: "fail", why: "the saved fit is missing" };
+  const params = fitSpec.params;
+  if (!params?.length) return { kind: "fail", why: "the saved fit has no parameter values" };
+  const binding = fitDrawBinding(fitDataset, prepared, fitSpec);
+  if (!binding) return { kind: "refused", why: fitDrawRefusal(fitSpec) };
+  const evaluated = await evaluateSavedFit(fitDataset, fitSpec, params, binding.xKey);
+  if (typeof evaluated === "string") return { kind: "fail", why: evaluated };
+  const now = useApp.getState();
+  const current = now.analysisResults.find((item) => item.id === id);
+  const currentDataset = now.datasets.find((item) => item.id === fitDataset.id);
+  if (current?.settingsRef?.field !== "fitSpec" || current.settingsRef.datasetId !== fitDataset.id ||
+      currentDataset?.fitSpec !== fitSpec || currentDataset.data !== fitDataset.data ||
+      // A re-designation / role edit in flight changes where the fit may be drawn.
+      currentDataset.columnDesignations !== fitDataset.columnDesignations ||
+      currentDataset.channelRoles !== fitDataset.channelRoles) {
+    return { kind: "fail", why: "the fit changed while its curve was loading" };
+  }
+  return { kind: "drawn", binding, y: evaluated };
+}
+
+/** Build source figure: draw the result's fit (through the SAME gate), so the
+ *  editable figure the Quick Figure Builder then creates keeps it -- a new
+ *  figure folds in the overlays drawn for its dataset (store/quickFigureCreate).
+ *  A refusal builds the figure without it and says why. */
+export async function drawResultFitForFigure(id: string, prepared: PreparedAnalysisResultPlot): Promise<void> {
+  const curve = await resultFitCurve(id, prepared);
+  if (curve.kind === "drawn") {
+    useApp.setState({ fitOverlay: { datasetId: prepared.dataset.id, binding: curve.binding, y: curve.y } });
+  } else if (curve.kind !== "none") {
+    useApp.getState().setStatus(`the figure is built without the fit: ${curve.why}`);
   }
 }
 
@@ -61,39 +82,16 @@ export async function openResultPlot(
 ): Promise<(PreparedAnalysisResultPlot & { fit: FitOverlay | null }) | null> {
   const prepared = await resolveAnalysisResultPlot(id, bindingIndex);
   if (!prepared) return null;
-  const state = useApp.getState();
-  const result = state.analysisResults.find((item) => item.id === id);
-  const fitDatasetId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
-  const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
-  const fitSpec = fitDataset?.fitSpec;
+  const curve = await resultFitCurve(id, prepared);
   const fail = (why: string) => { useApp.getState().setStatus(`can't ${purpose === "report" ? "send" : "open"} fitted plot: ${why}`); return null; };
-  if (fitDatasetId && (!fitDataset || !fitSpec)) return fail("the saved fit is missing");
-  const params = fitSpec?.params;
-  if (fitSpec && !params?.length) return fail("the saved fit has no parameter values");
-  const binding = fitDataset && fitSpec ? fitDrawBinding(fitDataset, prepared, fitSpec) : null;
-  const refused = fitSpec && !binding ? fitDrawRefusal(fitSpec) : null;
+  if (curve.kind === "fail") return fail(curve.why);
+  const refused = curve.kind === "refused" ? curve.why : null;
   if (refused && purpose === "report") return fail(refused); // refused by the gate: nothing changed
-  let fitY: (number | null)[] | null = null;
-  if (fitDataset && fitSpec && params && binding) {
-    const evaluated = await evaluateFit(fitDataset, fitSpec, params, binding.xKey);
-    if (typeof evaluated === "string") return fail(evaluated);
-    const now = useApp.getState();
-    const current = now.analysisResults.find((item) => item.id === id);
-    const currentDataset = now.datasets.find((item) => item.id === fitDataset.id);
-    if (current?.settingsRef?.field !== "fitSpec" || current.settingsRef.datasetId !== fitDataset.id ||
-        currentDataset?.fitSpec !== fitSpec || currentDataset.data !== fitDataset.data ||
-        // A re-designation / role edit in flight changes where the fit may be drawn.
-        currentDataset.columnDesignations !== fitDataset.columnDesignations ||
-        currentDataset.channelRoles !== fitDataset.channelRoles) {
-      return fail("the fit changed while its curve was loading");
-    }
-    fitY = evaluated;
-  }
   const apply = useApp.getState();
   apply.setActive(prepared.dataset.id);
   if (prepared.xChannel !== undefined) apply.setXKey(prepared.xChannel);
   apply.setYKeys(prepared.channels);
-  const drawn = fitY && binding ? { datasetId: prepared.dataset.id, binding, y: fitY } : null;
+  const drawn = curve.kind === "drawn" ? { datasetId: prepared.dataset.id, binding: curve.binding, y: curve.y } : null;
   useApp.setState((s) => ({
     stageTab: "plot",
     fitOverlay: drawn,

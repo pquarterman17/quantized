@@ -98,6 +98,7 @@ export function sanitizeDocumentBackedPlotWindows(
         axisBreaks: document.plot.axisBreaks,
         output: document.output,
         publication: document.publication,
+        overlays: document.overlays,
       });
     }
     usedDocumentIds.add(document.id);

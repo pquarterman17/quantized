@@ -12,3 +12,10 @@ Never hand-edit this file to "fix" a failing test — a failure against it is
 a migration-compatibility question for a human, the same discipline as
 `__fixtures__/workspace/README.md` and the root `CLAUDE.md`'s golden-parity
 notes. See `figureDocumentMigration.test.ts` for the load-path assertions.
+
+`v2-overlays.json` (gap audit 5, lane C) is a schema-exact v2 document with
+the optional `overlays` section: a fit with a two-edge band and peak markers,
+row-aligned to the 3-row loop `figureDocumentMigration.test.ts` defines. Its
+`rows` value is `lib/dataFingerprint.ts`'s hash of that loop; a hash change
+would orphan every saved fit, so the test fails rather than the fixture being
+regenerated.

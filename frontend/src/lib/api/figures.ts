@@ -200,11 +200,11 @@ export interface FigureSpec {
    *  The backend lays the series out one x block each
    *  (`calc.plot_waterfall_x`), as the canvas does. Same omissions. */
   waterfall_x_offsets?: number[];
-  /** Per-series whole-DECADE offsets aligned to `y_keys` (audit P2.3): the
-   *  backend draws series i at y · 10^k with " ×10^k" in its legend, exactly
-   *  as the canvas does (`lib/logOffset.ts`). Omitted when nothing is offset,
-   *  with a waterfall, and for the `group_col`/`facets` shapes. */
+  /** Per-series whole-DECADE offsets aligned to `y_keys` (audit P2.3): the backend draws
+   *  series i at y · 10^k with " ×10^k" in its legend, exactly as the canvas does
+   *  (`lib/logOffset.ts`). Omitted when nothing is offset, with a waterfall, and for group_col/facets. */
   log_offsets?: number[];
+  analysis_overlays?: boolean[]; // per y_keys: an analysis overlay (lib/figureSpecOverlays), never in an auto Y title
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
   /** Axis-title Format (`PlotView.axisLabelStyles`); size in CSS px, read as points. */

@@ -8,6 +8,7 @@
 import { displayedWindowTitle, snapshotView, type PlotWindow } from "../lib/plotview";
 import { updateFigureDocumentFromPlotView, type FigureDocument } from "../lib/figureDocument";
 import type { AppState } from "./useApp";
+import { overlaysNow } from "./windowOverlaysLazy";
 
 /** Return the canonical document with the focused facade folded into it.
  *
@@ -22,11 +23,12 @@ import type { AppState } from "./useApp";
  *  sentinel; an explicit title is returned verbatim. */
 export function liveWindowDocument(state: AppState, window: PlotWindow): FigureDocument | null {
   if (window.kind !== "plot" || !window.document) return null;
-  return window.id === state.focusedWindowId
-    ? updateFigureDocumentFromPlotView(window.document, {
-        view: snapshotView(state),
-        name: displayedWindowTitle(window, state.datasets),
-        datasetId: window.datasetId,
-      })
-    : structuredClone(window.document);
+  if (window.id !== state.focusedWindowId) return structuredClone(window.document);
+  const live = updateFigureDocumentFromPlotView(window.document, {
+    view: snapshotView(state),
+    name: displayedWindowTitle(window, state.datasets),
+    datasetId: window.datasetId,
+  });
+  // Gap audit 5 lane C: and the overlays its canvas draws (store/windowOverlays).
+  return overlaysNow()?.foldLiveOverlays(live, state) ?? live;
 }

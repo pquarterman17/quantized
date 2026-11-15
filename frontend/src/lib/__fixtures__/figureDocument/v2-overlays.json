@@ -1,0 +1,40 @@
+{
+  "schema": "quantized.figure",
+  "version": 2,
+  "id": "fig-fit-1",
+  "name": "Hysteresis with tanh fit",
+  "bindings": {
+    "datasetId": "loop-a",
+    "xKey": null,
+    "yKeys": [0],
+    "y2Keys": null,
+    "groupKey": null,
+    "facetKey": null,
+    "errors": []
+  },
+  "data": { "mode": "live" },
+  "plot": {
+    "mark": "line",
+    "view": { "yScale": "linear", "xScale": "linear", "plotTitle": "M vs H" },
+    "axisBreaks": { "x": [], "y": [], "y2": [] }
+  },
+  "output": {
+    "format": "pdf",
+    "stylePreset": "default",
+    "dpi": 300,
+    "transparent": false,
+    "filename": null
+  },
+  "overlays": {
+    "rows": "2e5d5110f8f878b1",
+    "fit": {
+      "binding": { "yKey": 0, "xKey": null },
+      "y": [-2.05, 0, 2.05],
+      "band": [
+        { "label": "95% CI low", "y": [-2.2, -0.1, 1.9], "legend": "95% confidence band" },
+        { "label": "95% CI high", "y": [-1.9, 0.1, 2.2], "legend": "" }
+      ]
+    },
+    "peaks": { "binding": { "yKey": -1, "xKey": null }, "y": [null, 0.05, null] }
+  }
+}

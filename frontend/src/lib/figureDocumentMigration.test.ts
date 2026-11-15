@@ -9,11 +9,14 @@
 import { describe, expect, it } from "vitest";
 
 import v1 from "./__fixtures__/figureDocument/v1.json";
+import v2Overlays from "./__fixtures__/figureDocument/v2-overlays.json";
 import {
   FIGURE_DOCUMENT_VERSION,
   sanitizeFigureDocument,
   serializeFigureDocument,
 } from "./figureDocument";
+import { liveOverlaysFromDocument, overlaysMatchData } from "./figureOverlays";
+import type { DataStruct } from "./types";
 
 describe("figureDocument migration — frozen v1 fixture", () => {
   it("parses without throwing and migrates to the current version", () => {
@@ -62,5 +65,43 @@ describe("figureDocument migration — frozen v1 fixture", () => {
   it("a future version this build does not understand is rejected outright", () => {
     const future = { ...(v1 as Record<string, unknown>), version: FIGURE_DOCUMENT_VERSION + 1 };
     expect(sanitizeFigureDocument(future)).toBeNull();
+  });
+
+  it("no overlay section is invented for a v1 document (gap audit 5 lane C)", () => {
+    expect(sanitizeFigureDocument(v1)).not.toHaveProperty("overlays");
+  });
+});
+
+// Gap audit 5 lane C: a saved figure keeps its fit / baseline / peak curves.
+describe("figureDocument migration — frozen v2 fixture with analysis overlays", () => {
+  /** The rows `v2-overlays.json`'s section was saved against. Its `rows` hash is
+   *  FROZEN: a change to lib/dataFingerprint would orphan every saved fit. */
+  const LOOP: DataStruct = { time: [-1000, 0, 1000], values: [[-2.1], [0.05], [2.2]], labels: ["M"], units: ["emu"], metadata: {} };
+
+  it("loads the fit (with its band) and the peak markers verbatim", () => {
+    const doc = sanitizeFigureDocument(v2Overlays)!;
+    expect(doc.overlays?.fit?.y).toEqual([-2.05, 0, 2.05]);
+    expect(doc.overlays?.fit?.band?.map((edge) => edge.label)).toEqual(["95% CI low", "95% CI high"]);
+    expect(doc.overlays?.peaks).toEqual({ binding: { yKey: -1, xKey: null }, y: [null, 0.05, null] });
+    expect(doc.overlays?.baseline).toBeUndefined();
+  });
+
+  it("its rows hash still matches the data it was saved against", () => {
+    const doc = sanitizeFigureDocument(v2Overlays)!;
+    expect(overlaysMatchData(doc.overlays!, LOOP)).toBe(true);
+  });
+
+  it("re-saving then reloading is idempotent", () => {
+    const once = serializeFigureDocument(sanitizeFigureDocument(v2Overlays)!);
+    expect(serializeFigureDocument(sanitizeFigureDocument(JSON.parse(once))!)).toBe(once);
+  });
+
+  it("a malformed section never breaks the load and is never drawn", () => {
+    const broken = { ...(v2Overlays as Record<string, unknown>), overlays: { rows: "2e5d5110f8f878b1", fit: { binding: {}, y: "nope" } } };
+    const doc = sanitizeFigureDocument(broken);
+    expect(doc?.name).toBe("Hysteresis with tanh fit");
+    // The eager load path only shape-checks it; the curves are validated where drawn.
+    expect(liveOverlaysFromDocument(doc!.overlays, "loop-a", LOOP)).toEqual({});
+    expect(sanitizeFigureDocument({ ...(v2Overlays as Record<string, unknown>), overlays: "nope" })).not.toHaveProperty("overlays");
   });
 });

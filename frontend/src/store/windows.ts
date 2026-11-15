@@ -31,11 +31,15 @@ import {
 import { fitNewWindowGeometry, newWindowGeometry, reboundWindowTitle } from "../lib/plotWindows";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
-import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
+import { commitFocusedWindow, createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults } from "./windowDefaults";
 import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
+import { overlaysNow } from "./windowOverlaysLazy";
+
+/** A window taking focus: its document's saved overlays back on the canvas (lane C). */
+const seedOf = (w: PlotWindow, s: AppState) => overlaysNow()?.windowOverlaySeed(w, s);
 
 // Moved-out helpers + the slice contract (store-size ratchet), re-exported so no importer changed.
 export { analysisResultReset, datasetViewDefaults, focusedRebindPatch, focusTransientReset, focusWindowShowing, mainWindow, maxZ, nextWindowId, retargetPassiveRebind } from "./windowFocus";
@@ -267,6 +271,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),
+          seedOf(next, s),
         );
       })),
     // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
@@ -293,11 +298,11 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         }
         const raised = maxZ(s.plotWindows) + 1;
         const plotWindows = s.plotWindows.map((w) => {
-          if (w.id === s.focusedWindowId) return syncPlotWindow(w, snapshotView(s));
+          if (w.id === s.focusedWindowId) return commitFocusedWindow(w, s);
           if (w.id === id) return { ...w, z: raised };
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target));
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), seedOf(target, s));
       }),
     duplicateWindow: (id) => {
       const s = get();
@@ -394,7 +399,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const plotWindows = s.plotWindows.map((w) =>
           w.id === id
             ? {
-                ...(id === s.focusedWindowId ? syncPlotWindow(w, snapshotView(s)) : w),
+                ...(id === s.focusedWindowId ? commitFocusedWindow(w, s) : w),
                 winState: "minimized" as WinState,
               }
             : w,
@@ -412,6 +417,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),
+          seedOf(next, s),
         );
       })),
     // Restore + focus a minimized window in one step — clicking a strip entry
@@ -437,10 +443,10 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const raised = maxZ(s.plotWindows) + 1;
         const plotWindows = s.plotWindows.map((w) => {
           if (w.id === id) return { ...w, winState: "normal" as WinState, z: raised };
-          if (w.id === s.focusedWindowId) return syncPlotWindow(w, snapshotView(s));
+          if (w.id === s.focusedWindowId) return commitFocusedWindow(w, s);
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target));
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), seedOf(target, s));
       })),
     // Origin habit: double-clicking a window's title BAR (not its editable
     // title text — that renames, see `renameWindow`) toggles normal<->
@@ -484,7 +490,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const s = get();
       if (s.focusedWindowId === null) return s.plotWindows;
       return s.plotWindows.map((w) =>
-        w.id === s.focusedWindowId ? syncPlotWindow(w, snapshotView(s)) : w,
+        w.id === s.focusedWindowId ? commitFocusedWindow(w, s) : w,
       );
     },
   };

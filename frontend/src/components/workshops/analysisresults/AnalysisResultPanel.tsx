@@ -222,8 +222,11 @@ export default function AnalysisResultPanel() {
     if (busy) return;
     setBusy("figure");
     try {
-      const prepared = await loadActions()
-        .then((m) => m.resolveAnalysisResultPlot(result.id, index, true), () => { onLoadFailure(); return null; });
+      const prepared = await loadActions().then(async (m) => {
+        const plot = await m.resolveAnalysisResultPlot(result.id, index, true);
+        if (plot) await m.drawResultFitForFigure(result.id, plot); // the figure keeps the fit (gap audit 5 lane C)
+        return plot;
+      }, () => { onLoadFailure(); return null; });
       if (prepared && openQuickFigureBuilder(prepared.dataset.id, mappingForResult(prepared.dataset, prepared.channels, prepared.xChannel))) close();
     } finally { setBusy(null); }
   };

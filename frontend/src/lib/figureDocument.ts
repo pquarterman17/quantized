@@ -12,6 +12,7 @@ import { sanitizeFigureOverrides } from "./figureOverridesSanitize";
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import { PLOT_MARKS, type PlotMark } from "./plotMarks";
 import { sanitizeFigureEncoding, type FigureEncoding } from "./figureEncoding";
+import type { FigureOverlays } from "./figureOverlays";
 import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
 import {
   decodeCell,
@@ -91,6 +92,11 @@ export interface FigureDocumentV2 extends Omit<FigureDocumentV1, "version"> {
   version: typeof FIGURE_DOCUMENT_VERSION;
   /** Absent on migrated v1 documents, preserving canonical-only render derivation. */
   publication?: FigurePublicationState;
+  /** Gap audit 5 lane C: the fit / baseline / peak curves this figure draws
+   *  (lib/figureOverlays.ts). ABSENT when there are none, so a document without
+   *  any serializes exactly as before the field existed (no version bump: an
+   *  older build drops the section and still opens the figure). */
+  overlays?: FigureOverlays;
 }
 
 export type FigureDocument = FigureDocumentV2;
@@ -110,6 +116,7 @@ export interface CreateFigureDocumentInput {
   data?: FigureDataState;
   output?: Partial<FigureOutputSettings>;
   publication?: FigurePublicationState;
+  overlays?: FigureOverlays;
 }
 
 const DEFAULT_OUTPUT: FigureOutputSettings = {
@@ -203,6 +210,7 @@ export function createFigureDocument(input: CreateFigureDocumentInput): FigureDo
       filename: input.output?.filename ?? DEFAULT_OUTPUT.filename,
     },
     ...(input.publication === undefined ? {} : { publication: clone(input.publication) }),
+    ...(input.overlays === undefined ? {} : { overlays: clone(input.overlays) }),
   };
 }
 
@@ -245,6 +253,7 @@ export function updateFigureDocumentFromPlotView(
 ): FigureDocument {
   // The legacy facade can edit only symmetric Y errors. Preserve richer X and
   // asymmetric roles while replacing the projection it can actually control.
+  const sameDataset = input.datasetId === undefined || input.datasetId === document.bindings.datasetId;
   const richErrors = document.bindings.errors.filter(
     (binding) => binding.axis !== "y" || binding.side !== "both",
   );
@@ -269,13 +278,13 @@ export function updateFigureDocumentFromPlotView(
     errors: [...richErrors, ...legacyErrorBindings(input.view.errKeys)],
     // P1.4: channel indices of the BOUND dataset, so they survive every facade
     // commit except a rebind to a different one (like facetKey's own reset).
-    encoding: input.datasetId === undefined || input.datasetId === document.bindings.datasetId
-      ? document.bindings.encoding
-      : undefined,
+    encoding: sameDataset ? document.bindings.encoding : undefined,
     data: document.data,
     axisBreaks: document.plot.axisBreaks,
     output: document.output,
     publication: document.publication,
+    // Row-aligned to the BOUND dataset: a rebind drops them (as `encoding`).
+    overlays: sameDataset ? document.overlays : undefined,
   });
 }
 
@@ -421,6 +430,9 @@ export function sanitizeFigureDocument(value: unknown): FigureDocument | null {
   const migratedPublication = value.version === FIGURE_DOCUMENT_VERSION
     ? publicationState(value.publication)
     : undefined;
+  // Shape-checked only: the curves are validated where they are drawn
+  // (lib/figureOverlays.liveOverlaysFromDocument), which keeps that code lazy.
+  const overlays = isObject(value.overlays) ? clone(value.overlays) as unknown as FigureOverlays : undefined;
   return {
     schema: FIGURE_DOCUMENT_SCHEMA,
     version: FIGURE_DOCUMENT_VERSION,
@@ -445,6 +457,7 @@ export function sanitizeFigureDocument(value: unknown): FigureDocument | null {
         : DEFAULT_OUTPUT.filename,
     },
     ...(migratedPublication === undefined ? {} : { publication: migratedPublication }),
+    ...(overlays === undefined ? {} : { overlays }),
   };
 }
 

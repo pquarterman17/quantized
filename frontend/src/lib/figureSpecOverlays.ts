@@ -262,6 +262,9 @@ function appendOverlays(
     },
     y_keys: [...keys, ...lineKeys],
     series_styles: [...(spec.series_styles ?? keys.map(() => null)), ...styles],
+    // Lane K: the overlays never feed the automatic Y title (the canvas titles
+    // its axis from the plotted channels alone).
+    analysis_overlays: [...(spec.analysis_overlays ?? keys.map(() => false)), ...present.map(() => true)],
     ...(spec.error_spans ? { error_spans: pad(spec.error_spans, null) } : {}),
     ...(spec.waterfall_offsets ? { waterfall_offsets: pad(spec.waterfall_offsets, 0) } : {}),
     ...(spec.waterfall_x_offsets ? { waterfall_x_offsets: pad(spec.waterfall_x_offsets, 0) } : {}),

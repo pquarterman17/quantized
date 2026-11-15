@@ -1,25 +1,15 @@
 // The ONE builder that turns the live on-screen plot state into a backend
-// FigureSpec — extracted from exportFigureCommand.ts (MAIN_PLAN #35) so that
-// "Export figure…" and "Copy figure" render through the SAME publication path
-// instead of drifting apart.
-//
-// That shared path is the whole point of #35. Copy previously composited the
-// uPlot canvas at screen resolution, so a pasted figure and an exported one
-// disagreed on fonts, line widths, tick formats, limits, legend placement and
-// multi-panel layout. Both now build this spec and post it to
-// /api/export/figure; only the output verb differs (download vs clipboard).
+// FigureSpec (MAIN_PLAN #35): "Export figure…" and "Copy figure" both build this
+// spec and post it to /api/export/figure, so a pasted figure and an exported one
+// agree on fonts, line widths, ticks, limits, legend and multi-panel layout.
 // Do NOT add a third rendering implementation — extend this one.
 //
-// F2.5b (FIGURE_AUTHORING_WORKFLOW_PLAN): `buildFigureSpec` derives from the
-// live `PlotView` singleton, which structurally cannot represent grouping,
-// axis breaks, or publication overrides/series styles — PlotView has no
-// fields for them. `buildStageFigureSpec` is Stage copy/export's entry
-// point: it prefers the FOCUSED window's canonical `FigureDocument` (which
-// carries all three, via `buildFigureSpecFromDocument`) and falls back to
-// `buildFigureSpec` only when no canonical document applies — see its own
-// doc for the exact fallback conditions. It LIVES in lib/figureSpecStage.ts
-// since BUG-016 round 5 (review F9 measured this module one line under the
-// 500-line ceiling); the split is routing there, building here.
+// F2.5b: `buildFigureSpec` derives from the live `PlotView` singleton, which
+// cannot represent grouping, axis breaks or publication overrides/series styles;
+// `buildFigureSpecFromDocument` renders a canonical `FigureDocument`, which
+// carries all three (and, gap audit 5 lane C, its saved analysis overlays).
+// Which of the two a Stage command gets is decided in lib/figureSpecStage.ts
+// (BUG-016 round 5: routing there, building here).
 
 import {
   resolveSecondaryAxis,
@@ -65,6 +55,7 @@ import { waterfallWire } from "./waterfallWire";
 import { rampView } from "./seriesRampImpl";
 import { axisFmtParam } from "./types";
 import { exportExtraYAxes } from "./multiYWire";
+import { withDocumentOverlays } from "./figureDocumentOverlaySpec";
 
 /** The render-time choices a caller supplies. Everything else about the spec
  *  is derived from live view state, so the two callers cannot diverge on it. */
@@ -129,6 +120,11 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
   waterfallSpan?: number | null;
   /** The X twin (`readLiveWaterfallSpan(id, "xSpan")`): the X step's x-span. */
   waterfallXSpan?: number | null;
+  /** The document's saved fit / baseline / peaks (lib/figureDocumentOverlaySpec).
+   *  `false` = left off: the Stage export appends the canvas' live ones itself. */
+  analysisOverlays?: false;
+  /** Saved overlays this figure cannot carry (stale rows, refused placement). */
+  onDroppedOverlays?: (labels: string[]) => void;
 }
 
 /** Resolve the data that a canonical document is allowed to render. A frozen
@@ -457,7 +453,7 @@ export function buildFigureSpecFromDocument(
   // `null` is an explicit "use this export's stem" override; only omitted
   // (`undefined`) inherits the saved document filename.
   const filename = overrides.filename === undefined ? document.output.filename : overrides.filename;
-  return buildFigureSpecForView(
+  const spec = buildFigureSpecForView(
     view,
     resolved.data,
     resolved.channelRoles,
@@ -495,4 +491,8 @@ export function buildFigureSpecFromDocument(
       encoding: document.bindings.encoding, // P1.4
     },
   );
+  return overrides.analysisOverlays === false ? spec : withDocumentOverlays(spec, document, dataset, resolved.data, view, {
+    defaultTrace: overrides.defaultTrace, defaultLineWidth: overrides.defaultLineWidth,
+    greyed: Boolean(overrides.greyExcluded), onDropped: overrides.onDroppedOverlays,
+  });
 }

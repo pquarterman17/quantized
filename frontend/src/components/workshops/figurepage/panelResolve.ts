@@ -46,6 +46,7 @@ import { type PagePanelSpec } from "../../../lib/api";
 import type { FigurePageSpec } from "../../../lib/api/figurePage";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
+import { savedOverlaysDroppedNotice } from "../../../lib/figureDocumentOverlaySpec";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument, type ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import type { PanelSource } from "../../../lib/figurepageActions";
@@ -88,6 +89,10 @@ export function resolveSlotFigureId(
   const documentId = win && win.kind === "plot" ? win.document?.id : undefined;
   return documentId && editableFigures.some((figure) => figure.id === documentId) ? documentId : null;
 }
+
+/** A panel's saved fit / baseline / peaks it cannot carry, on the status line (fail closed, said). */
+const droppedNote = (name: string) => (labels: string[]) =>
+  useApp.getState().setStatus(`Figure page: ${savedOverlaysDroppedNotice(name, labels)}`);
 
 /** x_breaks / margins / page_pad are single-figure-only (the page composer rejects them
  *  with a 422) — strip them from a saved override bag, keeping everything
@@ -142,7 +147,7 @@ export async function panelFigure(
     // grouped+secondary-axis combination) — any such failure is exactly a
     // "this source can no longer render" case, same as a dead window/figdoc.
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
       return pagePanelSpec(spec);
     } catch {
       return null;
@@ -166,7 +171,7 @@ export async function panelFigure(
       : undefined;
     if (!dataset) return null;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
       return pagePanelSpec(spec);
     } catch {
       return null;
@@ -194,7 +199,7 @@ export async function panelFigure(
       : undefined;
   if (document.data.mode === "live" && !dataset) return null;
   try {
-    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
+    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
     return pagePanelSpec(spec);
   } catch {
     return null;
@@ -280,6 +285,11 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
           s.facetKey,
           win.document.publication?.seriesStyles,
           win.document.bindings.encoding,
+          // Gap audit 5 lane C: `windowsForSave` folds the canvas' overlays into
+          // the focused window's document (store/windowOverlays), so they render.
+          s.fitOverlay,
+          s.baselineOverlay,
+          s.peakOverlay,
         );
       } else {
         parts.push(
@@ -359,7 +369,7 @@ export async function buildPageSpecFromDocument(
     }
     let figure: FigureSpec;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name) });
       figure = pagePanelSpec(spec);
     } catch (e) {
       throw new Error(

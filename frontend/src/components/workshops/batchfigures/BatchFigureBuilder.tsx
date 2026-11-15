@@ -21,6 +21,7 @@ import {
   preflightBatchFigure,
   type BatchFigureRow,
 } from "../../../store/batchFigureBuild";
+import { batchSavedFitOverlays } from "../../../store/batchFigureFits";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { nextPageDocumentId } from "../../../store/pageDocuments";
@@ -196,8 +197,9 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
     setProgress({ done: 0, total: includedIds.size, current: null });
     // Give the progress state a paint before constructing the documents.
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-    if (abort.signal.aborted) return;
     const state = latestState;
+    const overlays /* each dataset's saved fit, onto its figure */ = abort.signal.aborted ? undefined : await batchSavedFitOverlays(rows, includedIds, state, abort.signal);
+    if (abort.signal.aborted) return;
     const artifacts = buildBatchFigureArtifacts({
       recipe: recipeChoice.recipe,
       rows,
@@ -209,7 +211,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
       pageName,
       columns,
       nextFigureId,
-      nextPageId: nextPageDocumentId,
+      nextPageId: nextPageDocumentId, overlays,
     });
     if (abort.signal.aborted) return;
     if (artifacts.figures.length === 0) {

@@ -77,6 +77,7 @@ from quantized.routes.export_figures_labels import (
 from quantized.routes.export_figures_polar import PolarFields, refuse_polar, render_polar_request
 from quantized.routes.export_figures_render import flat_render_kwargs as _flat_render_kwargs
 from quantized.routes.export_figures_schema import (
+    ANALYSIS_OVERLAYS_DOC,
     LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
     SVG_TEXT_AS_PATHS_DOC,
@@ -238,6 +239,7 @@ class FigureRequest(
         default=None, description=WATERFALL_X_OFFSETS_DOC
     )
     log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
+    analysis_overlays: list[bool] | None = Field(default=None, description=ANALYSIS_OVERLAYS_DOC)
     svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
@@ -343,8 +345,9 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         series_names(plot_series, legends), legends, req.log_offsets
     )
     x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
-    y_label = solo_axis_label(req.y_label, names, plot_series, 0)
-    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1)
+    overlays = req.analysis_overlays  # never in an auto title (lane K)
+    y_label = solo_axis_label(req.y_label, names, plot_series, 0, overlays)
+    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1, overlays)
     series: list[tuple[str, Any]] = apply_waterfall_offsets(
         [(name, s.values) for name, s in zip(names, plot_series, strict=True)],
         req.waterfall_offsets,

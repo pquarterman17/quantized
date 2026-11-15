@@ -29,6 +29,7 @@ import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import { useApp } from "./useApp";
 
 export { resolveAnalysisResultPlot } from "./analysisResultPlotResolve";
+export { drawResultFitForFigure } from "./analysisResultPlotOpen";
 export type { PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 export { copyAnalysisInlineTables, exportAnalysisInlineTables, sendAnalysisInlineTableToReport } from "./analysisResultInlineTableActions";
 

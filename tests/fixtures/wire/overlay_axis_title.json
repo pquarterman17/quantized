@@ -1,0 +1,393 @@
+{
+  "about": "Gap audit 6 lane K: a fitted graph's auto Y title on screen (`title`) and the Stage export request (`request`, overlays marked by `analysis_overlays`). Legs: frontend/src/lib/overlayAxisTitleFixture.test.ts and tests/test_export_overlay_axis_title.py.",
+  "cases": [
+    {
+      "name": "one channel, fit with its band",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              9,
+              9.9,
+              9.5,
+              10.3
+            ],
+            [
+              6,
+              5.5,
+              6.1,
+              5.8,
+              6.4
+            ],
+            [
+              3.5,
+              3.1,
+              3.6,
+              3.3,
+              3.9
+            ],
+            [
+              2,
+              1.8,
+              2.1,
+              1.8,
+              2.4
+            ]
+          ],
+          "labels": [
+            "signal",
+            "reference",
+            "fit",
+            "95% CI low",
+            "95% CI high"
+          ],
+          "units": [
+            "V",
+            "V",
+            "",
+            "",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          2,
+          3,
+          4
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "fit",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "95% confidence band",
+            "line": "dashed",
+            "width": 1,
+            "fill": {
+              "vs": 4
+            }
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "",
+            "line": "dashed",
+            "width": 1
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "decay",
+        "analysis_overlays": [
+          false,
+          true,
+          true,
+          true
+        ]
+      },
+      "title": "signal (V)"
+    },
+    {
+      "name": "one channel, fit, baseline and peaks",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              9,
+              9.9,
+              9.5,
+              10.3,
+              1,
+              10
+            ],
+            [
+              6,
+              5.5,
+              6.1,
+              5.8,
+              6.4,
+              1,
+              null
+            ],
+            [
+              3.5,
+              3.1,
+              3.6,
+              3.3,
+              3.9,
+              1,
+              null
+            ],
+            [
+              2,
+              1.8,
+              2.1,
+              1.8,
+              2.4,
+              1,
+              null
+            ]
+          ],
+          "labels": [
+            "signal",
+            "reference",
+            "fit",
+            "95% CI low",
+            "95% CI high",
+            "baseline",
+            "peaks"
+          ],
+          "units": [
+            "V",
+            "V",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "fit",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "95% confidence band",
+            "line": "dashed",
+            "width": 1,
+            "fill": {
+              "vs": 4
+            }
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "",
+            "line": "dashed",
+            "width": 1
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "baseline",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "peaks",
+            "line": "none",
+            "marker": true,
+            "marker_size": 8
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "decay",
+        "analysis_overlays": [
+          false,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "title": "signal (V)"
+    },
+    {
+      "name": "two channels sharing a unit, with a fit",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              9,
+              9.9,
+              9.5,
+              10.3
+            ],
+            [
+              6,
+              5.5,
+              6.1,
+              5.8,
+              6.4
+            ],
+            [
+              3.5,
+              3.1,
+              3.6,
+              3.3,
+              3.9
+            ],
+            [
+              2,
+              1.8,
+              2.1,
+              1.8,
+              2.4
+            ]
+          ],
+          "labels": [
+            "signal",
+            "reference",
+            "fit",
+            "95% CI low",
+            "95% CI high"
+          ],
+          "units": [
+            "V",
+            "V",
+            "",
+            "",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "fit",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "95% confidence band",
+            "line": "dashed",
+            "width": 1,
+            "fill": {
+              "vs": 4
+            }
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "",
+            "line": "dashed",
+            "width": 1
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "decay",
+        "analysis_overlays": [
+          false,
+          false,
+          true,
+          true,
+          true
+        ]
+      },
+      "title": "signal, reference (V)"
+    }
+  ]
+}
