@@ -97,6 +97,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxisOf = { [Object.keys(v.seriesStyles)[0] ?? "x0"]: 3 };
   },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
+  "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
+  "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },
