@@ -10,7 +10,7 @@ import { useState } from "react";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { compareModels, type CompareResult } from "../../../lib/api/fitStats";
 import { candidateGuesses, type CustomFitModel } from "../../../lib/fitmodels";
-import { selectedFitData } from "../../../lib/fitselection";
+import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 /** Picker values of saved custom equation models carry this prefix. */
@@ -45,7 +45,7 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
     try {
       const ds = await resolveDataset(active.id);
       const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
-      if (!d) throw new Error("select a dataset to compare models on");
+      if (!d) throw new Error(fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) ?? "select a dataset to compare models on");
       const pairs = dropGapRows(d.x, d.y);
       const models = picked.filter((v) => !v.startsWith(CUSTOM_PREFIX));
       const equations = picked

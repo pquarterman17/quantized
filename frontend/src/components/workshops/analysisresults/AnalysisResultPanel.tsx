@@ -345,7 +345,7 @@ export default function AnalysisResultPanel() {
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
           {tab === "figures" && <AnalysisResultFigures result={result}
             disabled={figureDisabledReason !== undefined} disabledReason={figureDisabledReason}
-            onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
+            onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onRefit={isFit ? editFit : undefined} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
           {tab === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}

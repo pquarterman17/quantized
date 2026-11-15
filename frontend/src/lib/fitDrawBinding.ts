@@ -6,6 +6,14 @@
 import { curveX } from "./perSeriesX";
 import type { Dataset, FitSpec, OverlayBinding } from "./types";
 
+/** Why `fitDrawBinding` refused `spec`, as a status suffix / card note (I4):
+ *  the gate and the result card say the same thing. */
+export function fitDrawRefusal(spec: Pick<FitSpec, "xKey">): string {
+  return spec.xKey === undefined
+    ? "the saved fit never recorded its X; use Edit / Re-fit first"
+    : "the saved fit does not match the plot's X/Y channels; use Edit / Re-fit first";
+}
+
 /** Where the fit is drawn on the resolved plot (`channels[0]` against
  *  `xChannel`) -- the X and Y it was computed on -- or null when that plot is
  *  not them (refused: re-fit). */

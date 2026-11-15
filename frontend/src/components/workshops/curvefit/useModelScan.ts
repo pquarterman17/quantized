@@ -19,7 +19,7 @@ import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
-import { selectedFitData } from "../../../lib/fitselection";
+import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
 
 /** The completed job's result payload — same shape as the synchronous
  *  POST /api/fitting/scan (lib/api.ts's ScanResponse). */
@@ -71,7 +71,7 @@ export function useModelScan(): ModelScanState {
       if (!ds) return;
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!d) return;
+      if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
       const pairs = dropGapRows(d.x, d.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to scan");
       if (!pairs.complete) {

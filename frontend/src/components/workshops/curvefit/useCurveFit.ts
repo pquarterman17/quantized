@@ -12,7 +12,7 @@ import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMod
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
-import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
+import { fitStepParams, selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { activeCorrectionNames, fitSpecFrom } from "../../../lib/fitselectionActions";
 import { bindFitRowIdentity } from "../../../lib/fitRowIdentity";
@@ -299,7 +299,7 @@ export function useCurveFit(): CurveFitState {
       const runXKey = runSelection?.xKey ?? state.xKey;
       const runYKeys = runSelection?.yKeys ?? state.yKeys;
       const localXy = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
-      if (!localXy) return;
+      if (!localXy) return throwFitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder);
       const fitXKey = localXy.xKey; // recorded X = the one the points came from (the Y's own X)
       const pairs = dropGapRows(localXy.x, localXy.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
