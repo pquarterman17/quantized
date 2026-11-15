@@ -3660,6 +3660,9 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/smartFoldersSanitize.ts",
     "/lib/recentLabels.ts",
     "/store/windowOpenGuard.ts",
+    // SLICE 28 (2026-11-15): the core commands' descriptions and keywords.
+    // Only the full list (appCommands.ts, loaded after mount) merges them in.
+    "/commands/commandDocs.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -22,6 +22,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withCommandDocs } from "./commandDocs";
 import { buildFileCommands, runLazy } from "./fileCommands";
 import { runExportConsolidated } from "./fileCommandsLazy";
 import { runAction } from "../store/commands";
@@ -79,7 +80,7 @@ vi.mock("./packProjectCommands", () => ({ runPackProject: vi.fn() }));
 
 describe("File menu — Pack Project command", () => {
   it("has a description and an ellipsis-terminated label (every registered command needs a description)", () => {
-    const cmd = buildFileCommands(useApp.getState).find((c) => c.id === "pack-project");
+    const cmd = withCommandDocs(buildFileCommands(useApp.getState)).find((c) => c.id === "pack-project");
     expect(cmd).toBeDefined();
     expect(cmd?.description).toBeTruthy();
     expect(cmd?.label.endsWith("…")).toBe(true);

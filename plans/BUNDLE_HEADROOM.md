@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-14, after slice 27):** three pieces left the
+**Current state (2026-11-15, after slice 28):** the core command list's
+help copy (descriptions and ⌘K keywords) left the startup chunk for the
+full command list App loads right after mount. Main `964352e5` measured
+**815,231 B**; after, **802,210 B** (**−13,021 B**). The pin is UNMOVED at
+816,042 B: the 13,832 B of headroom is for the features queued behind this
+slice. See "Slice 28".
+
+**Previous state (2026-11-14, after slice 27):** three pieces left the
 startup chunk: the tool-dock plugins (pan, cursor readout, measure, region
 statistics, integrate, FWHM), warmed once the plot toolbar mounts; the
 overlay half of horizontal bars, a startup chunk; and the `.dwk` figure-doc
@@ -3457,6 +3464,69 @@ not a diet slice).
 **Pin:** lowered to `measured + 6,000`, the slice-24/25/26 form, for the same
 queued wave of feature branches. When the wave has merged, lower it to
 `measured + 1,024`.
+
+### Slice 28 — the core commands' help copy on demand, pin UNMOVED — **DONE (2026-11-15)**
+
+**Measured net eager delta −13,021 B — pin unchanged at 816,042 B**
+
+Exact bytes, `npm ci`, `node_modules/.vite` wiped, `npx tsc -b --force`,
+`npm run build` (entry chunk + Rolldown runtime):
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `964352e5` (parent) | 815,231 | — |
+| this slice | 802,210 | **−13,021** |
+
+#### How it was found
+
+The slice-26/27 method (a throwaway plugin dumping `getModuleInfo()`
+import edges, the sourcemap profile, bytes each eager module alone keeps
+reachable) found no remaining click-only subtree worth a seam: what is left
+either runs at startup or is a synchronous store action. The largest
+startup-unused bytes were the string fields slice 27 named: the 115 core
+commands (File, View/Edit/Help, Data, Plot, Insert) carried ~12.4 kB of
+`description` and `keywords` text in `commands/*Commands.ts`.
+
+#### The move
+
+Only three surfaces read that copy: the menus' item tooltips (the menu
+model, `appMenuModel.ts`, is lazy), the ⌘K palette (lazy since slice 26)
+and Help (lazy). The copy moved verbatim (by a TypeScript-AST codemod,
+checked string-for-string) into `commands/commandDocs.ts`, keyed by command
+id. `buildAppActions` (`appCommands.ts`, the full list App already loads in
+a mount effect to add the Analyze group) merges it back with
+`withCommandDocs`, so the list the menus, palette and Help read once it lands
+is the same as before: dumped before and after, the full list is identical
+field for field (key order aside), and the core list differs only by the
+missing copy. `buildCoreActions`, the list App paints with, has none.
+
+The one observable difference is the window between first paint and the
+full list's arrival (the same mount-effect fetch that already brings the
+whole Analyze menu): a menu opened inside it shows core items without a
+tooltip, and a palette query inside it matches labels but not keywords.
+Both surfaces are themselves lazy chunks fetched in the same window. If the
+full-list chunk fails to load, the existing "Could not load the Analyze
+commands" toast fires and core tooltips stay absent along with Analyze.
+
+#### Guards and tests
+
+- `architecture.test.ts`: `DRAGGED_OUT` entry for `commands/commandDocs.ts`.
+- `commands/commandDocs.test.ts`: exactly one entry per core command and
+  none without one; no core command still carries its own description or
+  keywords (one home for the copy); the full list carries every entry; the
+  merge keeps other fields and ignores `Object.prototype` names.
+- The suites that pinned copy through a per-domain builder
+  (`dataCommands.statsText`, `figureBuilderCommand`, `fileCommands`) read it
+  through `withCommandDocs`, as the app does. `helpContent.test.ts` and
+  `tooltipSentenceAudit.test.ts` (which scans `commands/` sources) cover the
+  table unchanged.
+
+#### Candidates still not taken
+
+Slice 27's list less this one: the other lazy-only declarations (~3.3 kB),
+the async store actions' bodies (~3.5 kB), `uplotShapes`+`shapeHit`, the
+plot-window gesture, and the published-command copy of
+`useWindowCommands.ts` (same shape as this slice, smaller).
 
 ## What this does NOT change
 
