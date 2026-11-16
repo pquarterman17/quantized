@@ -17,7 +17,7 @@ import { effectiveDesignations } from "./columnmeta";
 import { bookDefaultHiddenChannels } from "./errorbars";
 import { originCurveSeriesStyle } from "./originCurveText";
 import { resolveFigureDataset } from "./originFigureEntries";
-import { figureChannelSelection, figureStatState } from "./originFigureSelection";
+import { figureChannelSelection, figurePolarState, figureStatState } from "./originFigureSelection";
 import { buildOverlayDataset } from "./originOverlayFigure";
 import { ownXSeries } from "./ownXSeries";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
@@ -128,14 +128,22 @@ describe("plot-corpus frontend mirror (shared cases)", () => {
       kind = kindOf(fig.curves ?? []);
     } else if (stat.statMode) {
       via = "stat";
-      kind = "histogram";
-      drawn = [{ x: null, y: fig.curves?.[0]?.y ?? "" }];
+      kind = stat.statPicks?.mode ?? "";
+      // a histogram of the first curve; else one box / violin / strip per plotted channel
+      drawn = kind === "histogram"
+        ? [{ x: null, y: fig.curves?.[0]?.y ?? "" }]
+        : (sel?.yKeys ?? []).map((k) => ({ x: null, y: letters[k] }));
     } else if (sel) {
       via = "selection";
       const x = sel.xKey === null ? xName : letters[sel.xKey];
       drawn = sel.yKeys.map((k) => ({ x, y: letters[k] }));
       const ys = new Set(drawn.map((d) => d.y));
       kind = kindOf((fig.curves ?? []).filter((cv) => cv.book === ds.data.metadata.origin_book && ys.has(cv.y)));
+      // the polar view / size- or colour-by-column markers, read off the real rules
+      const styles = sel.yKeys.map((k) => sel.styles[k]);
+      if (figurePolarState(fig).polarMode) kind = "polar";
+      else if (styles.length > 0 && styles.every((st) => typeof st?.sizeBy === "number")) kind = "bubble";
+      else if (styles.length > 0 && styles.every((st) => typeof st?.colorBy === "number")) kind = "color_mapped";
     } else {
       via = "default";
       kind = "default";

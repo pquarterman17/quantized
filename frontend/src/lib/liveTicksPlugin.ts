@@ -1,6 +1,6 @@
 // The focused stage canvas' publisher for `lib/liveTickSteps.ts`: after each
 // draw, the increment of the ticks uPlot drew on x, y and y2, keyed by the
-// active dataset (the focused stage always shows it). Cleared when the plot
+// focused plot window (the focused stage always draws it). Cleared when the plot
 // is destroyed, so a closed or rebuilt plot leaves no stale increments.
 
 import type uPlot from "uplot";
@@ -14,14 +14,9 @@ export function liveTicksPlugin(): uPlot.Plugin {
   return {
     hooks: {
       draw: (u: uPlot) => {
-        const axes = u.axes as DrawnAxis[];
-        const at = (scale: string) => axes.find((a) => (a.scale ?? "") === scale);
-        publishLiveTickSteps({
-          datasetId: useApp.getState().activeId,
-          x: drawnIncrement(axes[0]?._splits),
-          y: drawnIncrement((at("y") ?? axes[1])?._splits),
-          y2: drawnIncrement(at("y2")?._splits),
-        });
+        // uPlot's axis defaults name the scales: "x" on the first, "y" on the second.
+        const at = (k: string) => drawnIncrement((u.axes as DrawnAxis[]).find((a) => a.scale === k)?._splits);
+        publishLiveTickSteps({ windowId: useApp.getState().focusedWindowId, x: at("x"), y: at("y"), y2: at("y2") });
       },
       destroy: () => publishLiveTickSteps(null),
     },

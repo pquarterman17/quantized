@@ -1,36 +1,33 @@
-// The major tick increment the focused canvas actually DREW on each axis, so
-// an export with an automatic increment marks the same ticks the screen
-// shows (figures integration: the screen read 2, 4, ... where the export's
-// matplotlib AutoLocator chose 2.5, 5, ...). The two locators are different
-// algorithms sized to different pixel lengths, so neither can recompute the
-// other's choice; the canvas' pick travels instead, as the existing
-// `x_step` / `y_step` / `y2_step` (a typed increment already did), and the
-// backend's MultipleLocator places the ticks (`calc.figure_ticks`).
+// The major tick increment the focused canvas actually DREW on each axis,
+// offered to an export as a hint (`x_step_hint` / `y_step_hint` /
+// `y2_step_hint`). 0.34.0 copied it into `x_step` / `y_step` (figures
+// integration: the screen read 2, 4, ... where the export's AutoLocator chose
+// 2.5, 5, ...), which crowded short export axes; the backend now takes the
+// hint only when it fits the laid-out axes (`calc.tick_hint`).
 //
 // Module-scope seam like `lib/waterfallOffset.publishLiveWaterfallSpan`: the
 // focused stage's canvas publishes (`lib/liveTicksPlugin.ts`), the export
-// reads at command time, keyed by dataset so a refocus race never carries
-// one plot's ticks onto another. Not store state -- publishing must cause no
-// re-render. Applying them to an export spec is export-only and lives in the
-// lazy export path (`lib/liveTickStepsSpec.ts`).
+// reads at command time, keyed by the plot WINDOW that drew them, so neither a
+// refocus race nor another figure of the same dataset ever carries them.
+// Not store state -- publishing must cause no
+// re-render. Turning them into hints is export-only and lives in the lazy
+// export path (`lib/liveTickStepsSpec.ts`).
 
 export interface LiveTickSteps {
-  datasetId: string | null;
+  /** The plot window the canvas drew (the focused one). */
+  windowId: string | null;
   x?: number;
   y?: number;
   y2?: number;
 }
 
-let live: LiveTickSteps | null = null;
+/** The last published increments (read through `liveTickStepsSpec.readLiveTickSteps`, which
+ *  lives on the lazy export path so the startup bundle carries only this publish half). */
+export let liveTickSteps: LiveTickSteps | null = null;
 
 /** Publish (or clear, with null) the increments the focused canvas drew. */
 export function publishLiveTickSteps(v: LiveTickSteps | null): void {
-  live = v;
-}
-
-/** The focused canvas' increments for `datasetId`, or null. */
-export function readLiveTickSteps(datasetId: string): LiveTickSteps | null {
-  return live && live.datasetId === datasetId ? live : null;
+  liveTickSteps = v;
 }
 
 /** The smallest positive gap between drawn ticks (a broken axis' splits

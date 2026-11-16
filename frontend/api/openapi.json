@@ -6142,6 +6142,19 @@
             ],
             "title": "X Step"
           },
+          "x_step_hint": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1e+300,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Step Hint"
+          },
           "y2_fmt": {
             "anyOf": [
               {
@@ -6205,6 +6218,19 @@
               }
             ],
             "title": "Y2 Step"
+          },
+          "y2_step_hint": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1e+300,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y2 Step Hint"
           },
           "y_axes": {
             "anyOf": [
@@ -6290,6 +6316,19 @@
               }
             ],
             "title": "Y Step"
+          },
+          "y_step_hint": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1e+300,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Step Hint"
           }
         },
         "title": "FigureRequest",

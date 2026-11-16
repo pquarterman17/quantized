@@ -149,6 +149,32 @@ def _text_x(v: dict[str, Any], tables: Sequence[Mapping[str, Any]]) -> dict[str,
     return v
 
 
+def _map_verdict(
+    c: Mapping[str, Any], fig: Mapping[str, Any] | None, tables: Sequence[Mapping[str, Any]],
+    why: str,
+) -> dict[str, Any]:
+    """An Origin heatmap / contour / ternary plot vs the figure's decoded
+    ``map`` / ``ternary`` binding (``opju_map_plots``). Origin's ref names the
+    matrix (``[Mat]MSheet1!1``) or the Z column, its X dataset the Y column of
+    an XYZ / ternary plot; the X is the book's X-designated column."""
+    spec = dict((fig or {}).get("map") or (fig or {}).get("ternary") or {})
+    want = {"book": c["book"], "y": c["y"], "x": c["x"]}
+    if not spec:
+        reason = "map_plot_not_decoded" if (fig or {}).get("map_plot_not_decoded") else why
+        return verdict("omitted", origin=want, reason=reason or "no_map_binding_decoded")
+    if spec.get("book") != c["book"]:
+        return verdict("wrong", origin=want, quantized=spec, field="book")
+    z = spec.get("z") or spec.get("c")
+    if z is None:  # a matrix: the ref names the matrix object, nothing more
+        return verdict("match", origin=want, quantized=spec)
+    table = next((t for t in tables if t["id"] == c["book"]), None)
+    xs = [k for k, col in ((table or {}).get("columns") or {}).items()
+          if col.get("designation") == "X"]
+    got = (spec.get("x") or spec.get("a"), spec.get("y") or spec.get("b"), z)
+    ok = got[2] == c["y"] and got[1] == c["x"] and xs[:1] == [got[0]]
+    return verdict("match" if ok else "wrong", origin={**want, "book_x": xs[:1]}, quantized=spec)
+
+
 def score_specimen(spec_dir: Path, generated: Path | None) -> dict[str, Any]:
     """The full verdict tree for one ``<corpus>/<type>/<family>/`` specimen."""
     oracle = _load(spec_dir / "oracle.json")
@@ -207,11 +233,13 @@ def score_specimen(spec_dir: Path, generated: Path | None) -> dict[str, Any]:
         mine = [c for c in ocurves if c["layer"] == li]
         decoded = list((fig or {}).get("curves") or [])
         curve_v, phantoms = classify_curves(mine, decoded, sheet_ids, why)
+        if ptype in XYZ_TYPES:  # one map / ternary binding, not XY curves
+            curve_v = [_map_verdict(c, fig, tables, why) for c in mine if not c.get("error_bar")]
         styles = []
         for v, c in zip(curve_v, [c for c in mine if not c.get("error_bar")], strict=True):
             req = requested[plain_pos] if plain_pos < len(requested) else None
             plain_pos += 1
-            dec = decoded[v["decoded_index"]] if v["status"] in ("match", "wrong") else None
+            dec = decoded[v["decoded_index"]] if "decoded_index" in v else None
             styles.append(compare_styles(c["plot"], req, dec, why if dec is None else ""))
         drawn = (
             drawn_curves(fig, candidates) if fig is not None
@@ -221,7 +249,10 @@ def score_specimen(spec_dir: Path, generated: Path | None) -> dict[str, Any]:
             mine, drawn["curves"], sheet_ids,
             "figure_not_drawn" if drawn["via"] == "none" else "not_in_drawn_view",
         )
-        if ptype in XYZ_TYPES:
+        mapped = ptype in XYZ_TYPES and all(v["status"] == "match" for v in curve_v)
+        if mapped:  # the apply opens the Map tab / ternary on that binding
+            drawn_v, drawn_ph = list(curve_v), []
+        elif ptype in XYZ_TYPES:
             drawn_v, drawn_ph = [verdict(
                 "omitted",
                 reason="figure_not_drawn" if drawn["via"] == "none"
@@ -230,6 +261,8 @@ def score_specimen(spec_dir: Path, generated: Path | None) -> dict[str, Any]:
             )], []
         drawn_v = [_text_x(v, tables) for v in drawn_v]
         kind = str(drawn["kind"])
+        if mapped and fig is not None:
+            kind = "ternary" if fig.get("ternary") else str(fig["map"]["kind"])
         pt = (
             verdict("omitted", origin=ptype, reason=why) if fig is None
             else score_plot_type(ptype, [c["plot_type"] for c in mine], kind)

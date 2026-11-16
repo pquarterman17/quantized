@@ -243,7 +243,7 @@ export default function PlotViewport(props: PlotViewportProps) {
       opts.plugins = [...(opts.plugins ?? []), decimatePlugin(() => fullData)];
     }
     // The focused stage (the one recording view history) publishes the tick
-    // increments it draws, so an export marks the same ticks (lib/liveTickSteps.ts).
+    // increments it draws, offered to an export as a hint (lib/liveTickSteps.ts).
     if (args.onViewChange) opts.plugins = [...(opts.plugins ?? []), liveTicksPlugin()];
     const plot = new uPlot(opts, plotData, host);
     plotRef.current = plot;

@@ -26,11 +26,28 @@ only leaves curves out (or adds a note); a miss draws what ``main`` drew.
 Real corpus (359 ``.opju``): 4 graph pages in 2 files carry ``OffsetSta``
 (``cleaned_data.opju`` Graph2/3/5, ``template.opju`` IAST); none carries a
 polar, waterfall, bubble or colour-map template name.
+
+**Polar (plan item 7).** A one-layer ``Polar`` page whose curves all plot
+against one (book, X) and whose X (theta) axis runs 0 -> 360 is KEPT and
+tagged ``coordinates: "polar"``: the frontend opens the XY stage's polar view
+(theta = X in degrees, r = Y), Origin's Polar template layout (``polar/polar``
+specimen: Origin C ``GraphLayer::GetCoordinateType()`` = 1 = FRAME_COOR_POLAR,
+X 0..360, plot ``(A "theta", B "r")``). Any other polar page is omitted as
+before. Origin 2026b COM over the real corpus (348 of 359 ``.opju`` loaded):
+all 7,536 graph layers read FRAME_COOR_CART, so no real polar (or ternary)
+layer is missed by the template signal.
+
+**Decoded marker columns.** When every curve of a bubble / colour-mapped page
+carries its size / colour column (``opju_plot_kinds.apply_marker_modifiers``)
+the figure says ``marker_scale_not_decoded`` instead (quantized draws the
+column with its own size range / colormap; Origin's scale and palette are not
+decoded); so does any figure with such a curve on a page naming no template.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from quantized.io.origin_project.opju_column_fixed import record_prefix
@@ -39,13 +56,21 @@ from quantized.io.origin_project.opju_figure_curves import opju_pages
 
 __all__ = [
     "LAYER_KIND_NOT_DECODED",
+    "COORDINATES",
     "MARKER_ENCODING_NOT_DECODED",
+    "MARKER_SCALE_NOT_DECODED",
     "apply_layer_kinds",
     "page_layer_kind",
 ]
 
 LAYER_KIND_NOT_DECODED = "layer_kind_not_decoded"
 MARKER_ENCODING_NOT_DECODED = "marker_encoding_not_decoded"
+# The size / colour column IS decoded (``opju_plot_kinds.apply_marker_modifiers``);
+# Origin's size scale and colour map are not -- quantized draws the column with
+# its own size range / colormap.
+MARKER_SCALE_NOT_DECODED = "marker_scale_not_decoded"
+COORDINATES = "coordinates"  # "polar": the frontend opens the polar view
+_ENCODED_BY = {"bubble": "sizeBy", "color_mapped": "colorBy"}
 _SCAN = (55, 80)  # record offsets searched for the template name (61 / 63 seen)
 _KINDS = (
     (re.compile(rb"(?i)polar"), "polar"),
@@ -56,9 +81,12 @@ _KINDS = (
 _OMIT = frozenset({"polar", "offset_stack"})
 
 
-def page_layer_kind(b: bytes, off: int, name: str) -> str | None:
+def page_layer_kind(
+    b: bytes, off: int, name: str, kinds: Sequence[tuple[re.Pattern[bytes], str]] = _KINDS
+) -> str | None:
     """The undecoded layer kind the graph page at ``off`` (window ``name``)
-    was made as, from its template name; ``None`` when none is named."""
+    was made as, from its template name; ``None`` when none is named.
+    ``kinds``: the (pattern, kind) table, first hit wins."""
     p = b.find(name.encode("utf-8"), off, off + 16 + len(name.encode("utf-8")))
     if p < 0:
         return None
@@ -66,7 +94,7 @@ def page_layer_kind(b: bytes, off: int, name: str) -> str | None:
     if got is None:
         return None
     buf, lit = got
-    for pat, kind in _KINDS:
+    for pat, kind in kinds:
         m = pat.search(buf, *_SCAN)
         if m and all(lit[m.start() : m.end()]):
             return kind
@@ -85,14 +113,24 @@ def apply_layer_kinds(figs: list[dict[str, Any]], b: bytes) -> list[dict[str, An
     for off, name in opju_pages(b):
         if name in names and name not in kinds and (kind := page_layer_kind(b, off, name)):
             kinds[name] = kind
-    if not kinds:
-        return figs
+    layers: dict[str, int] = {}
+    for f in figs:
+        layers[str(f.get("name") or "")] = layers.get(str(f.get("name") or ""), 0) + 1
     out: list[dict[str, Any]] = []
     for fig in figs:
-        kind = kinds.get(str(fig.get("name") or ""))
+        name = str(fig.get("name") or "")
+        kind = kinds.get(name)
         curves = list(fig.get("curves") or [])
-        if kind is None or not curves:
+        if kind in _ENCODED_BY and curves and all(c.get(_ENCODED_BY[kind]) for c in curves):
+            # every curve's size / colour column decoded: only the scale is not
+            out.append({**fig, MARKER_SCALE_NOT_DECODED: kind})
+        elif kind is None and any(c.get("sizeBy") or c.get("colorBy") for c in curves):
+            out.append({**fig, MARKER_SCALE_NOT_DECODED: "column"})
+        elif kind is None or not curves:
             out.append(fig)
+        elif kind == "polar" and layers[name] == 1 and _degree_circle(fig) and _one_block(curves):
+            # Origin's Polar template: theta = X in degrees, r = Y (module docstring)
+            out.append({**fig, COORDINATES: "polar"})
         elif kind in _OMIT:
             notes = list(fig.get("curve_sheet_omitted") or [])
             notes += [
@@ -118,3 +156,19 @@ def apply_layer_kinds(figs: list[dict[str, Any]], b: bytes) -> list[dict[str, An
         else:
             out.append({**fig, MARKER_ENCODING_NOT_DECODED: kind})
     return out
+
+
+def _one_block(curves: list[dict[str, Any]]) -> bool:
+    """Every curve plots against one (book, X): the frontend's single-dataset
+    apply, the one that opens the polar view (several blocks apply as an XY
+    overlay, which has none)."""
+    return len({(str(c.get("book")), str(c.get("x"))) for c in curves}) == 1
+
+
+def _degree_circle(fig: dict[str, Any]) -> bool:
+    """The layer's X (theta) axis runs 0 -> 360: a whole circle in degrees,
+    the only polar layout proven (``polar/polar`` specimen)."""
+    try:
+        return float(fig.get("x_from")) == 0.0 and float(fig.get("x_to")) == 360.0  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False

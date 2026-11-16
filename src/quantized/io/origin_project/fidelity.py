@@ -114,7 +114,9 @@ def _source_resolves(fig: dict[str, Any], sources: tuple[str, ...]) -> bool:
 
 
 def _filter_reason(fig: dict[str, Any], sources: tuple[str, ...]) -> str | None:
-    if fig.get("curves") or fig.get("curve_sheet_omitted") or _source_resolves(fig, sources):
+    if fig.get("curves") or fig.get("map") or fig.get("ternary") or fig.get("curve_sheet_omitted"):
+        return None
+    if _source_resolves(fig, sources):
         # A layer whose curves were left out for their sheet is a real user
         # graph: it stays, and its fidelity says why it has no curves.
         return None
@@ -132,6 +134,8 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
         recovered.append("saved_graph_preview")
     if fig.get("curves"):
         recovered.extend(("curve_bindings", "curve_order"))
+    if fig.get("map") or fig.get("ternary"):  # opju_map_plots
+        recovered.append("map_binding")
     if fig.get("x_title") is not None or fig.get("y_title") is not None:
         recovered.append("axis_titles")
     if fig.get("legend_labels"):
@@ -166,7 +170,7 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
     if not fig.get("saved_preview"):
         omissions.append("saved_graph_preview")
     curves = fig.get("curves")
-    if not curves:
+    if not curves and not (fig.get("map") or fig.get("ternary")):
         omissions.append("exact_curve_bindings")
     elif isinstance(curves, list):
         if any(not isinstance(c, dict) or not c.get("style") for c in curves):
@@ -187,6 +191,12 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         # bubble / colour-mapped scatter: X/Y drawn, size/colour map not
         # (`opju_layer_kind`)
         omissions.append("marker_encoding_not_decoded")
+    for note in (
+        "histogram_bins_not_decoded", "box_marks_not_decoded", "marker_scale_not_decoded",
+        "map_scale_not_decoded", "map_plot_not_decoded",  # opju_map_plots
+    ):
+        if fig.get(note):  # drawn with quantized's own bins / box marks (`opju_stat_plots`)
+            omissions.append(note)
     out: FigureFidelity = {
         # No current decoder proves every visual property, so "exact" is
         # deliberately reserved for a future preview/oracle comparison gate.

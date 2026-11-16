@@ -15,6 +15,7 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
+export { figureMapState, queueFigureTernary } from "./originFigureMap";
 import type { StatPicks } from "./plotviewSanitize";
 import { statColRefs, type StatCols } from "./statPicks";
 import type {
@@ -116,22 +117,54 @@ export function figureSelectionState(
     : { xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {} };
 }
 /** The Stat Stage view for a figure whose every curve is an Origin
- *  histogram (`OriginCurve.plotType`): a histogram of the curve's column. `{}`
- *  for any other figure. (Column and bar curves stay on the XY stage, drawn
- *  as bars by their series style — `originCurveSeriesStyle`.) */
+ *  histogram, box, violin or strip plot of one kind (`OriginCurve.plotType`):
+ *  a histogram of the first curve's column, or one box / violin / strip per
+ *  plotted column (no group column: the stage's per-plotted-channel fallback,
+ *  the channels `figureChannelSelection` picks). `{}` for any other figure.
+ *  (Column and bar curves stay on the XY stage, drawn as bars by their series
+ *  style — `originCurveSeriesStyle`.) */
 export function figureStatState(
   figure: OriginFigure,
   ds: Dataset | undefined,
 ): { statMode?: true; statPicks?: StatPicks } {
   const curves = figure.curves ?? [];
-  if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== "histogram")) return {};
+  const mode = curves[0]?.plotType;
+  if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== mode)) return {};
+  if (mode !== "histogram" && mode !== "box" && mode !== "violin" && mode !== "strip") return {};
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
   const y = curves[0].y;
   const value = y === String(meta.x_column_name ?? "") ? -1 : letters.indexOf(y);
   if (value === -1 && y !== String(meta.x_column_name ?? "")) return {};
   const cols: StatCols = { group: null, group2: null, value, facet: null, color: null };
-  return { statMode: true, statPicks: { mode: "histogram", cols: statColRefs(ds, cols) } };
+  return { statMode: true, statPicks: { mode, cols: statColRefs(ds, cols) } };
+}
+
+/** An Origin Polar layer (`OriginFigure.coordinates`, theta = X in degrees,
+ *  r = Y) opens the XY stage's polar view; `{}` for any other figure. */
+export function figurePolarState(figure: OriginFigure): { polarMode?: true } {
+  return figure.coordinates === "polar" && (figure.curves ?? []).length > 0 ? { polarMode: true } : {};
+}
+
+/** `style` plus a bubble's size column / a colour-mapped scatter's colour
+ *  column (`OriginCurve.sizeBy` / `colorBy`, column names of the curve's own
+ *  sheet) as dataset channels. A column the dataset does not hold is left
+ *  out: the curve then draws as the plain scatter it was before. */
+function withMarkerColumns(
+  style: SeriesStyle | null,
+  curve: OriginCurve,
+  letters: string[],
+): SeriesStyle | null {
+  const size = curve.sizeBy ? letters.indexOf(curve.sizeBy) : -1;
+  const color = curve.colorBy ? letters.indexOf(curve.colorBy) : -1;
+  if (size < 0 && color < 0) return style;
+  const out: SeriesStyle = { ...(style ?? {}), marker: true };
+  if (size >= 0) {
+    out.sizeBy = size;
+    delete out.markerSize;
+  }
+  if (color >= 0) out.colorBy = color;
+  return out;
 }
 
 /** Channel selection for a figure's decoded curves on its resolved dataset:
@@ -221,7 +254,7 @@ export function figureChannelSelection(
       : ds.data.time.some(Number.isFinite);
     if (requireMaterializedData && xCellsExist && !xHasData) continue;
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
-    const st = originCurveSeriesStyle(curve);
+    const st = withMarkerColumns(originCurveSeriesStyle(curve), curve, letters);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (curve.x && curve.x !== xLetter) {
       if (requestedX >= 0) xKey = requestedX; // plot against a non-default x channel

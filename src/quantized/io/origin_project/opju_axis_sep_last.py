@@ -1,4 +1,5 @@
-"""``.opju`` axis-record separator: the LAST byte's ``0x08`` bit (third pass).
+"""``.opju`` axis-record separator variants: the LAST byte's ``0x08`` bit
+(third pass) and a category layer's END separator ending ``02`` (fourth).
 
 The real-form axis record (``opju_axis_real_form``) splits its X span, the
 layer-geometry payload and its Y span with ``8x <id> <plen> 00 <flag> 01``.
@@ -28,10 +29,23 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["SEP_LAST_FLAG8"]
+__all__ = ["SEP_END_02", "SEP_LAST_FLAG8"]
 
 # Same lead and 5th-byte flag set as ``opju_axis_real_form._SEP_WIDE``; only
 # the last byte widens, to ``01`` or ``09``.
 SEP_LAST_FLAG8 = re.compile(
     rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0][\x01\x09]", re.DOTALL
+)
+
+# The END separator of a category-axis layer (box / violin / strip and the
+# box-family real files) ends in ``02``, not ``01``: ``80 35 08 00 00 02``
+# after an ordinary ``80 04 07 00 00 01`` first separator. Measured
+# 2026-11-15 on the plot corpus: all 30 box / violin / strip specimens whose
+# layer did not decode carry it, and the pass decodes every one to Origin's
+# own ``layer.x/y.from/to`` (oracle.json); real corpus: 50 layers, all equal
+# to COM. Admitted ONLY on the end separator, after a first separator ending
+# ``01`` (the fourth, retry-only pass, after ``SEP_LAST_FLAG8``): records
+# with ``02`` on BOTH separators (workbook-embedded graphs) stay undecoded.
+SEP_END_02 = re.compile(
+    rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0]\x02", re.DOTALL
 )

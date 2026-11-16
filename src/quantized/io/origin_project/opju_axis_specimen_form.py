@@ -31,7 +31,7 @@ from quantized.io.origin_project.opju_axis_real_form import (
     _Y_TRANSITION,
     _decode_compact,
     _decode_raw8,
-    real_form_bare_pair,
+    _real_fills,
 )
 
 __all__ = ["parse_hybrid_record"]
@@ -234,3 +234,26 @@ def parse_hybrid_record(
     if ypair is None:
         return None
     return (*xpair, *ypair, type_byte, x_log)
+
+
+def real_form_bare_pair(b: bytes, start: int, end: int) -> tuple[float, float] | None:
+    """``(from, to)`` from two REAL-FORM value tokens exactly filling
+    ``[start, end)`` — the "hybrid" axis record (§13.2 #13): a specimen-form
+    skeleton (``_Y_TRANSITION`` marker + ``7b 40`` X-scale filler) whose X/Y
+    span nevertheless stores real-corpus RLE/tagged value tokens, produced when
+    a plotted graph is later customized (``layer.plotN.*`` edits) instead of
+    ranged. An optional 1-2 byte leading flag (``0x81..0x8f``) precedes the
+    first value; try each skip and accept only a UNIQUE two-token exact fill
+    (fail-closed on ambiguity — never guessed). The tokens themselves are the
+    same oracle-validated ``_real_rle``/``_real_tagged`` used by the real form,
+    so a hit reproduces Origin's own range (verified: symbol_kinds.opju X span
+    ``89 c3 33 03 eb 3f 9a c2 99 02 18 40`` -> (0.85, 6.15), matching COM)."""
+    accepted: set[tuple[float, float]] = set()
+    for skip in (0, 1, 2):
+        if start + skip > end:
+            continue
+        fills = _real_fills(b, start + skip, end, 2, bare=False)
+        pairs = {(f[0], f[1]) for f in fills}
+        if len(pairs) == 1:
+            accepted |= pairs
+    return accepted.pop() if len(accepted) == 1 else None

@@ -292,7 +292,8 @@ async function sendActivePlot(s: StoreGet, requirement?: SendRequirement): Promi
       };
       // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
       const picked = await chooseExcludedRows(
-        (greyExcluded) => buildStageFigureSpec(s, ds, stem, { ...renderOpts, greyExcluded }),
+        // No tick hints (review N1): the block re-renders later, at the report's size.
+        (greyExcluded) => buildStageFigureSpec(s, ds, stem, { ...renderOpts, greyExcluded }, { noTickHints: true }),
         excludedChoiceMatters,
         s().excludedDisplay,
       );

@@ -333,16 +333,77 @@ None open.
          `Table1..`, `Figure 3 and 4 amplitude` 68) and 35 books of 5
          graph-only projects (all loose, kept by the fail-closed rule:
          `BD_*_all`, `RSOS_*_all`, `F72_...TB_Product`).
-   - [ ] **Box, violin and strip: no graph layer recovered on 33 / 33**
-         (re-measured 2026-11-15, unchanged). Column, bar, stacked column/bar
-         and floating column: not recovered for {clean, descending_x,
-         huge_tiny, masked_rows, nan_gaps, noisy}; histogram for {huge_tiny}
-         only (masked_rows now recovered), but 10 / 11 histograms decode no
-         curve bindings (`no_curve_bindings_decoded`). Anchor `box/clean`.
-   - [ ] **Plot type: 0 decoded on `.opju`** (203, 207, 213, 215, 216, 206,
-         219 all draw the default line view); `.opju` sets no `plotType`.
-         Scorecard: 174 / 233 specimens omit plot type; the 43 matches are
-         the default line view on line-like types.
+   - [x] ~~**Box, violin and strip: no graph layer recovered on 33 / 33**~~
+         FIXED 2026-11-15 (`fix/plot-category-import`). Cause: a category
+         layer's axis record ENDS with `8x 35 08 00 00 02` (`02`, not `01`);
+         a fourth, retry-only real-form pass admits `02` on the end separator
+         only (`opju_axis_sep_last.SEP_END_02`; `02` on both separators --
+         59 workbook-embedded records -- stays undecoded). Curves: Origin
+         plots these with no X column (`xof` = `_A`, record X id 0), so a
+         206 / 219 curve is kept from its Y alone (`x == ""`, `plotType`)
+         and box / violin / strip is told by the page template
+         (`opju_stat_plots`; `Box`/`BOX+DATA+`/`gBox` -> box, `Violin*` ->
+         violin, `ColumnSca` -> strip, anything else -> omitted
+         `box_kind_not_decoded`). The frontend opens the Stat Stage in that
+         mode, one box per plotted column (`figureStatState`; scorer mirror
+         `frontend_view.stat_view`, pinned by 3 new shared cases). Record
+         byte 76 = Origin's `GetPlotType()` on every plot of all 231 built
+         specimens. Scorer vs main `2f171d56`: box / violin / strip 0 -> 30
+         specimens with curves, plot type and axes match; axes 870 -> 1,050
+         match, curves 229 -> 301, drawn 262 -> 331, plot type 50 -> 85;
+         0 new wrong / phantom. Real corpus vs main (359 `.opju`, COM
+         `layer.x/y.from/to`, `GetPlotType()`, `range -w`, `xof` on all 10
+         changed files): 50 new layers, 50 / 50 axes equal to Origin; 547
+         newly drawn curves, 547 / 547 Origin's Y with no X and type 206 /
+         219; 0 main curves lost. PNG review: every box-kind page is a box
+         chart (some with data / half-violin overlays).
+   - [ ] **Box / violin / strip residue.** `huge_tiny` (3 specimens) layer
+         still not recovered. Real corpus: grouped (indexed) box charts and
+         box curves whose X field does not decode are omitted
+         (`stat_plot_x_not_decoded`, e.g. `fig04_box_raw_penguins` Graph9
+         column A); `MergeGrap` / user templates naming no kind (FedPB
+         `BoxplotCiteseer`/`BoxplotPubMed`, SOP_meas Graph80) omit
+         (`box_kind_not_decoded`); `soil deep` Graph1 (Violin) curve records
+         do not reconstruct; a box layer on a multi-layer page is omitted
+         (`stat_layer_in_multi_layer_page`, SOP_meas Graph41 etc.); a
+         rowless curve on sheet N with no sheet X (`x_sheet_unproven`,
+         Degree-of-impact Graph10 / 4A) is omitted although it needs no X.
+         Origin's box statistics (whisker rule, mean marker, data overlay)
+         are not decoded: quantized draws its own default box marks, and
+         every drawn box-family figure says so (`box_marks_not_decoded`
+         fidelity omission). Overlays are not told from the template:
+         SOP_meas Graph78 (template `BOX`) has distribution curves.
+   - [ ] **Histogram residue.** 1-column histograms now open the Stat
+         Stage histogram of that column (3 specimens; real corpus SOP_meas
+         Graph37/38/42/45); BIN WIDTH / START are NOT decoded -- quantized
+         uses its default bin rule, Origin its own (no COM readback found;
+         decode the record's bin fields against a by-construction oracle);
+         each drawn histogram says so (`histogram_bins_not_decoded`).
+         Several-column histogram layers stay omitted
+         (`histogram_of_several_columns`, 8 specimens; the Stat Stage bins
+         one column: creation gap #15). `huge_tiny` not recovered. A
+         1-row histogram (`single_point`) opens a stage that cannot bin one
+         value.
+   - [ ] **Column / bar layers not recovered** for {clean, descending_x,
+         huge_tiny, masked_rows, nan_gaps, noisy} (column, bar, stacked
+         column / bar, floating column): a different record mechanism from
+         the box family's `02` end separator. Anchor `column/clean`.
+   - [x] ~~**Plot type: 0 decoded on `.opju`**~~ PARTLY FIXED 2026-11-15:
+         record byte 76 sets `plotType` for 206 (box / violin / strip), 219
+         (histogram) and 203 (column) curves. A 203 curve keeps
+         `plotType: column` (bars from zero at each X on the XY stage) only
+         when it is its layer's ONLY column series: Origin draws several side
+         by side, quantized's bars would overlap. Scorer: column
+         `duplicates` / `single_point` plot type match; real corpus: 67
+         curves in 22 files now draw as bars, COM: 67 / 67 are
+         `GetPlotType()` 203, the only 203 of their layer, same X.
+   - [ ] **Plot type residue.** Multi-series column layers (8 specimens,
+         e.g. `column/clean`) need side-by-side grouped bars (no XY-stage
+         renderer; the Stat bar mode summarises per column, #14); stacked
+         column 213, horizontal bar 215 / 216 and floating column 207 stay
+         undrawn as bars (fail closed: they draw by line style as before;
+         #10-#12 creation gaps). The `.opj` reader's own `column` / `bar`
+         mapping still overlaps multi-series bars.
    - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
          plots against the text categories; quantized draws against the row
          index. The same 5 specimens hold the only category-family omitted
@@ -350,27 +411,108 @@ None open.
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
    multi-panel. Measured by the item 2 scorer (2026-11-15).
-   - [ ] **Bubble / colour-mapped: the size / colour encoding is not
-         decoded.** Since 2026-11-15 the X/Y bind (7 + 7 specimens) and the
-         figure carries `marker_encoding_not_decoded` (`opju_layer_kind`,
-         from the page's template name `bubble` / `colormapp`); the scorer
-         still counts these 14 plot types "drawn as scatter" (Origin's own
-         `GetPlotType()` reads 201 for them). Book: decode the size / colour
-         modifier column. Anchor `bubble/clean`.
-   - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
-         (axes match on all 4 specimens incl. polar), but no curve binding
-         decodes (`no_curve_bindings_decoded`; matrix: graph page unattributed,
-         id table empty) so quantized draws Y and Z as lines against X.**
-         Heatmap (matrix): no layer recovered. Matrix cells import exactly
-         (800 / 800).
-   - [ ] **Polar and offset-stacked (waterfall) layers are not rebuilt.**
-         Since 2026-11-15 their curves are LEFT OUT
-         (`layer_kind_not_decoded`, `opju_layer_kind`, from the page's
-         template name `Polar` / `OffsetSta` -- a sufficient, not necessary,
-         signal) rather than drawn as Cartesian / un-offset lines. Real
-         corpus: 4 pages in 2 files carry `OffsetSta`, none with a decoded
-         curve, so 0 real-file curves are hidden vs main (8 + 1 specimens). Book: decode the
-         layer's coordinate system and offset (axes 6 / 6 match already).
+   - [x] ~~**Bubble / colour-mapped: the size / colour encoding is not
+         decoded.**~~ FIXED 2026-11-15 (`fix/plot-specialised-import`). A
+         curve token carries a plot-modifier block
+         (`SYSTEM 03 00 ce 02 01 d0 02 06 <n>` + `"<desig>|<dataset>"`
+         strings); `<desig>` is Origin C `COLDESIG_*` (9 SIZE, 18
+         EDGE_COLOR). Oracle: Origin C `DataPlot::GetModifiers` over COM on
+         every specimen and the whole real corpus (348 / 359 `.opju`
+         loaded): bubble 9 -> C 7 / 7, colour-mapped 18 -> C 7 / 7; real
+         18-entries 20 / 21 equal Origin's (the 21st names a book the plot no
+         longer uses). Mode from the record + Plot Details trees: symbol size
+         u16 @25 = 101 = size from the column; edge colour u32 @306 =
+         `0x00400065` = colour MAP (without the `0x40` flag it is Origin's
+         colour INDEX mode, `Analysed and Plotted Graph`). `opju_plot_kinds.
+         apply_marker_modifiers` sets `sizeBy` / `colorBy` (a column of the
+         curve's own sheet; the bogus 0.2 pt `symbolSize` of a bubble is
+         dropped); the frontend maps them to `SeriesStyle.sizeBy` /
+         `colorBy` (`originFigureSelection.withMarkerColumns`, lazy chunk),
+         and the figure says `marker_scale_not_decoded` instead of
+         `marker_encoding_not_decoded`. Scorer vs main `c40ed030`: plot type
+         123 match / 14 wrong -> 138 / 0 (14 bubble + colour-mapped, +1
+         polar below), 0 new wrong / phantom. Real corpus: 0 files change
+         (every real modifier fails closed).
+   - [ ] **Marker residue.** Origin's bubble size scale (`Scale` 24.0,
+         `SizeUnit`) and colormap (a 10-level rainbow, `ColorMap` levels)
+         are not decoded: quantized draws its own size range / viridis
+         (`marker_scale_not_decoded`; also #18 bubble axis padding). Real
+         corpus colour modifiers stay plain scatter: `SOP_meas` SHAP plots
+         (edge colour flag `0x48`, 18 curves), `YbMnBi2` (`0x40` with another
+         low byte; 18 + 19 fill colour), `Analysed and Plotted Graph` (index
+         colours: needs a categorical-colour mapping, not `colorBy`). Prove
+         each mode with Plot Details trees (`l7s/qz_fmt.c` pattern) before
+         reading it. Other modifiers seen (COM): 32 plot-label form, 37 / 38
+         line style / width, 39 / 40 / 44 / 62 / 83 bar-width / pattern /
+         grouping, 53 matrix heatmap, 13 / 14 vector XYXY ends (plot 218,
+         `30流场` / `50流场`, not reported by `GetModifiers`).
+   - [x] ~~**Heatmap / contour / ternary bindings.**~~ FIXED 2026-11-15
+         (`fix/plot-matrix-import`, `opju_map_plots`). A map plot's token
+         names a dataset the XY id table leaves out: a matrix object's own
+         column record (code 0, no short name, flags 01/60; one per book page)
+         for 105 heatmap / 226 contour / 220 image, or a Z column (code 5,
+         flags 00/60; offset 35 = its Y, whose 35 = its X) for 243 XYZ contour
+         and for a scatter on a `Ternary`-template page (A, B, C = X, Y, Z).
+         Oracle (Origin C `GetRangeString` / `GetPlotType` /
+         `GetCoordinateType` over COM): specimens `[Mat]MSheet1!1`,
+         `[XYZ]Sheet1!(A,B,C)`, `[Tern]Sheet1!(A,B,C)` coor 2 -- each equal to
+         the chain. The figure gets `map` / `ternary` only when that plot is
+         the layer's only token (fail closed: `map_plot_not_decoded`, and a
+         map plot type is never drawn as an XY line); a matrix-only project
+         now has an id table, so its graph pages are named. Frontend (lazy,
+         `lib/originFigureMap.ts`): a matrix map opens the Map tab on the
+         matrix (contour lines on for contour), an XYZ contour only when the
+         Map tab's default picks equal Origin's (X, Y, Z), a ternary opens the
+         ternary workshop with A, B, C explicit (`lib/ternaryPending.ts`; #17
+         is the from-scratch default). Scorer vs main `76b6c73e`: curves 310
+         -> 313, drawn 340 -> 343, plot type 138 -> 141 (contour_matrix,
+         contour_xyz, ternary), 0 new wrong / phantom. Real corpus (359
+         `.opju`): 2 files change, 5 plots gain a map, all COM-equal:
+         `fig05_heatmap_flights` Graph1 226 contour of MBook1, `Fig3_c` Graph2
+         105 heatmap of MBook2, Graph3-5 of MBook1; axes 0.5..12.5 / 0.5..30.5
+         exact both ways, linear (Plot Details `ScaleType` 0), colour limits
+         104..622 / -4..4 = the matrices' own Z extent, which is what the Map
+         tab's auto limits draw (`map_scale_not_decoded`: not read from the
+         file).
+   - [ ] **Map residue (2026-11-15, COM-measured).** (a) Colour scale not
+         decoded: Plot Details `ColorMap` Min / Max / ScaleType / MajorLevels
+         sit ~560 bytes after the map token (`80 08 <min f64> 83 02 <max>
+         85 09 <increment> <levels>` on the heatmap specimen), outside the
+         519-byte curve record; the specimen's -0.42..1 is Origin's rounded
+         range, not the data's -0.416..0.99997. (b) The `heatmap_matrix`
+         specimen's layer is not recovered: its axis span is bare 8-byte
+         literals (-0.0263..1.0263) after a `89 11` / `80 11` sparse header
+         that the Y-span start scan does not authenticate. (c) 8 plots in the
+         4 `jiahehu2000` `.opju` (Matrix01 heatmap + Matrix02 colour-bar
+         layer, panel anchors with an `84 01 07` separator) stay unrecovered;
+         their heatmap Y axis is REVERSED (COM `y.from` 5.5 -> `y.to` 0.5),
+         which the Map tab cannot draw, so they need that first. (d) 41
+         heatmap plots on virtual matrices (worksheet ranges, `VM*`, e.g.
+         `SOP_meas` SHAP, `Supplemetary_Fig_10`) and 2 XYZ contours on loose
+         `[??]` datasets (`30流场` / `50流场`, now `map_plot_not_decoded`) are
+         not bound; neither is the virtual-matrix 226 contour (`pedotpss`).
+         (e) A ternary workshop already open on the same dataset keeps its
+         picks (the A, B, C hand-off is taken when it re-derives them).
+   - [x] ~~**Polar layers are not rebuilt.**~~ FIXED 2026-11-15
+         (`fix/plot-specialised-import`). A one-layer `Polar`-template page
+         whose curves share one (book, X) and whose theta axis runs 0..360 is
+         kept and tagged `coordinates: "polar"`; the apply opens
+         `polarMode` (`figurePolarState`). Oracle: `GraphLayer::
+         GetCoordinateType()` = 1 (polar) on the specimen, plot `(A "theta",
+         B "r")`. The template signal misses nothing real: COM over 348 / 359
+         real `.opju`, all 7,536 graph layers are Cartesian (0 polar, 0
+         ternary). Scorer: polar curves / plot type / colour / width omitted
+         -> match. Any other polar page stays omitted
+         (`layer_kind_not_decoded`).
+   - [ ] **Offset-stacked (waterfall) layers stay omitted**
+         (`layer_kind_not_decoded`): quantized cannot draw them yet (#13 /
+         cloud), so the curves are left out rather than drawn un-offset
+         (8 specimens; 4 real pages in 2 files, none with a decoded curve).
+   - [ ] **Vector XYXY (218): 14 real plots**; the 13 / 14 modifiers above
+         name the end columns. (Real-corpus map census, COM `GetPlotType()`:
+         105 heatmap 53 = 12 matrix (4 shipped, 8 `jiahehu2000`) + 41 virtual
+         matrix; 226 contour 2 = 1 matrix (shipped) + 1 virtual; 243 XYZ
+         contour 2 (loose datasets); 0 ternary layers.)
 8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them

@@ -353,10 +353,15 @@ export function runOriginFigureApply(
     ...libs.figureSelectionState(selection),
     // An all-histogram figure opens on the Stat Stage's histogram.
     ...libs.figureStatState(fig, ds),
+    ...libs.figurePolarState(fig),
+    // A heatmap / contour opens the Map tab on its matrix / XYZ columns.
+    ...libs.figureMapState(fig, ds),
     hiddenChannels: ds
       ? originHiddenChannels(ds.data).filter((key) => selection ? !selection.yKeys.includes(key) : true)
       : [],
   });
+  // A ternary figure opens the ternary workshop on Origin's A, B, C columns.
+  libs.queueFigureTernary(fig, ds);
   if (Object.values(get().seriesStyles).some((st) => st?.bars === "horizontal")) {
     // The plot turns on its side (lib/uplotOrient): say what that switches off.
     toast(`${fig.name}: horizontal bars — pan, region and analysis tools and dragging lines, labels or shapes are off on this turned plot`, "info");
