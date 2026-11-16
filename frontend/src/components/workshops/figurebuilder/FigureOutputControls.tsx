@@ -8,7 +8,7 @@
 import { useEffect, useId, useState } from "react";
 
 import { FIGURE_FORMATS, FIGURE_STYLE_DPI, RASTER_FORMATS } from "./figureOutputConstants";
-import { presetOptions } from "./figurePresets";
+import { presetOptions } from "../../../lib/figurePresets";
 import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";

@@ -32,7 +32,8 @@ import { stampReportTransformProvenance } from "./reportTransformProvenance";
 import { cancelled, exportActive, stemFromName, type StoreGet } from "./exportActive";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
-import { FIGURE_STYLES, GREYSCALE_FIELD } from "./exportFigureCommand";
+import { GREYSCALE_FIELD } from "./exportFigureCommand";
+import { PRESET_ORDER, presetLabels } from "./figurePresets";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
@@ -118,7 +119,8 @@ function sendToReportFields(
       label: "Style",
       type: "select",
       default: "default",
-      options: FIGURE_STYLES,
+      options: [...PRESET_ORDER],
+      optionLabels: presetLabels(),
       hint: "Publication preset, as in Export figure…",
     },
     GREYSCALE_FIELD,

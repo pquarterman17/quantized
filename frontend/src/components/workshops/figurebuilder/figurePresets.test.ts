@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { FIGURE_STYLE_DPI, FIGURE_STYLE_SIZE_CM, FIGURE_STYLES } from "./figureOutputConstants";
-import { PRESET_ORDER, presetLabel, presetOptions } from "./figurePresets";
+import { FIGURE_STYLE_DPI, FIGURE_STYLES } from "./figureOutputConstants";
 import { previewDpiFor, rulerSteps, specWidthIn } from "./previewSizing";
+import { FIGURE_STYLE_SIZE_CM, PRESET_ORDER, presetLabel, presetLabels, presetOptions } from "../../../lib/figurePresets";
 
 // The frontend mirrors of the calibrated preset table must match the backend
 // source exactly (they are display-only, but a wrong size on a label or a
@@ -36,6 +36,8 @@ describe("figure preset mirrors (UX-H)", () => {
     const ids = presetOptions("default").map((o) => o.value);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of FIGURE_STYLES) expect(ids).toContain(id);
+    expect(presetLabels(["aps"])).toEqual({ aps: "APS · single column · 8.6 × 6.5 cm" });
+    expect(presetOptions("aps", FIGURE_STYLES).map((o) => o.value)).toEqual(FIGURE_STYLES); // a narrower id list
   });
 
   it("keeps an unknown preset visible under its own id", () => {

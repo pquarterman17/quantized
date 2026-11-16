@@ -9,7 +9,7 @@
 
 import type { FigureSpec } from "../../../lib/api/figures";
 import { fromInches, toInches } from "../../../lib/pageGeometry";
-import { FIGURE_STYLE_SIZE_CM } from "./figureOutputConstants";
+import { FIGURE_STYLE_SIZE_CM } from "../../../lib/figurePresets";
 
 /** CSS reference pixels per inch: "100 %" shows the figure at this scale. */
 export const CSS_PX_PER_IN = 96;

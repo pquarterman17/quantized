@@ -56,7 +56,7 @@ export function ParamFieldRow({
       {f.type === "select" && (
         <select {...a11y} value={String(value)} onChange={(e) => onChange(e.target.value)}>
           {(f.options ?? []).map((o) => (
-            <option key={o}>{o}</option>
+            <option key={o} value={o}>{f.optionLabels?.[o] ?? o}</option>
           ))}
         </select>
       )}

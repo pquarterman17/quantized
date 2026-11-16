@@ -174,12 +174,19 @@ describe("Publication Preview command", () => {
     expect(quick.run).not.toHaveBeenCalled();
   });
 
-  it.each([["statMode"], ["polarMode"], ["stackMode"]])(
+  it.each([
+    ["statMode", { statMode: true }],
+    ["polarMode", { polarMode: true }],
+    ["stackMode", { stackMode: true }],
+    // The Stage staggers a waterfall by the live canvas' measured span.
+    ["waterfall", { waterfall: 0.2 }],
+    ["waterfallDx", { waterfallDx: 0.1 }],
+  ])(
     "Export figure… keeps the quick dialog for a view the preview cannot draw (%s)",
-    async (mode) => {
+    async (_mode, view) => {
       const called = quickCalled();
       const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
-      useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, [mode]: true });
+      useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, ...view });
       runExportFigure();
       await called;
       expect(beginFigurePublicationEdit).not.toHaveBeenCalled();

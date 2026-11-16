@@ -104,14 +104,19 @@ function openPublicationPreview(s: StoreGet): void {
  *  preview, with its large true-size preview. A view that preview cannot draw
  *  (stat, polar, a per-channel stack, a spatial page) keeps the quick dialog,
  *  which exports those — as does no dataset at all (it refuses with a reason).
+ *  So does a waterfall: the Stage export staggers by the span the live canvas
+ *  measured (lib/waterfallOffset's seam; a zoomed, server-thinned canvas
+ *  differs from the full data), which the document-built preview cannot see,
+ *  so preview and file could disagree.
  *  Exported so other "Export" buttons (Graph Builder) open the same view. */
 export function runExportFigureView(s: StoreGet): void {
   const st = s();
   const stack = st.stackMode && st.composition === null && st.facetKey === null;
+  const waterfall = st.waterfall !== 0 || st.waterfallDx !== 0;
   if (st.figurePublicationSession) {
     st.setFigureBuilderOpen(true);
     st.setStatus("the export view is already open — finish or cancel it to export another figure");
-  } else if (!st.datasets.some((d) => d.id === st.activeId) || st.statMode || st.polarMode || stack || st.composition?.kind === "spatial") {
+  } else if (!st.datasets.some((d) => d.id === st.activeId) || st.statMode || st.polarMode || stack || waterfall || st.composition?.kind === "spatial") {
     runQuickExport(s);
   } else openPublicationPreview(s);
 }

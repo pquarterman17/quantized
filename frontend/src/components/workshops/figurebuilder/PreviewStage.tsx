@@ -12,7 +12,7 @@
 
 import { useState, type ComponentProps, type CSSProperties } from "react";
 
-import { formatSizeCm } from "./figurePresets";
+import { formatSizeCm } from "../../../lib/figurePresets";
 import PreviewOverlay from "./PreviewOverlay";
 import PreviewWarnings from "./PreviewWarnings";
 import { renderedSizeCm, rulerSteps, trueSizeCssPx } from "./previewSizing";
