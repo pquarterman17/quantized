@@ -21,8 +21,10 @@ import {
 } from "../../../lib/importwizard";
 import type { ImportDecimal } from "../../../lib/importTypes";
 import type { ImportColumnRole } from "../../../lib/types";
+import { useWizardHandoff } from "../../../lib/importFailureToast";
 import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
@@ -48,6 +50,22 @@ export default function ImportWizardPanel() {
   useEffect(() => {
     if (w.imported) setOpen(false);
   }, [w.imported, setOpen]);
+
+  // A failed import's "Open import wizard" hands its file over: take it (clear
+  // first, so a re-open does not replay it) and preview it as if just picked.
+  const handedFile = useWizardHandoff((s) => s.file);
+  // A wizard already holding a file has work in it (edited settings): ask first.
+  const { pickFile, file: current } = w;
+  useEffect(() => {
+    if (!handedFile) return;
+    useWizardHandoff.setState({ file: null });
+    const take = () => {
+      setPickedFilter("");
+      void pickFile(handedFile);
+    };
+    if (!current) return take();
+    void askConfirm("Replace the file in the wizard?", `The wizard has ${current.name} open; this would switch to ${handedFile.name} and drop its settings.`, "Replace").then((ok) => ok && take(), () => undefined);
+  }, [handedFile, pickFile, current]);
 
   function onFileChosen(e: React.ChangeEvent<HTMLInputElement>): void {
     const f = e.target.files?.[0];

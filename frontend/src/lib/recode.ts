@@ -169,17 +169,3 @@ export function computeRecodeAppend(
 }
 
 export * from "./recodeMappings";
-
-/** A saved, re-applicable recode recipe (J2 item 3). Session-scoped (see
- *  store/recode.ts's header for why this doesn't round-trip `.dwk` yet) --
- *  `sourceLevels` is kept for DISPLAY only ("built from: Pass, Fail, Retry");
- *  `resolveRecodeMapping` (lib/recodeMappings.ts) always checks the live TARGET's levels, never
- *  this snapshot, so a saved mapping degrades honestly even if its original
- *  source column has since changed. */
-export interface SavedRecodeMapping {
-  id: string;
-  name: string;
-  mapping: RecodeMapping;
-  sourceLevels: string[];
-  createdAt: string;
-}

@@ -38,10 +38,11 @@ def main(argv=None):
     # 1. Import peak "run 1" .csv
     data = qz.load(args.inputs[0])
     raw = data  # the uncorrected base that corrections start from
+    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import
 
     # 2. Corrections → peak
-    # Error-column bindings set in the app are not recorded; pass error_bindings=[...] to match them.
-    data = qz.apply_corrections(raw, {"yOff": -2, "yScale": 0.5})
+    # Error-column roles changed by hand in the app are not recorded; this uses the roles seeded on import.
+    data = qz.apply_corrections(raw, {"yOff": -2, "yScale": 0.5}, error_bindings=roles)
 
     # 3. Y axis log
     # display setting only; there is no data to re-run

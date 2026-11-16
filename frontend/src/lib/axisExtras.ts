@@ -55,6 +55,14 @@ function divided(values: TickValues | undefined, d: number): TickValues {
   return (u, splits, axisIdx, space, incr) => inner(u, splits.map((v) => v / d), axisIdx, space, incr);
 }
 
+/** Wrap the numeric labels in `prefix` / `suffix` (blank labels stay blank). */
+function affixed(values: TickValues | undefined, prefix: string, suffix: string): TickValues {
+  const wrap = (l: string | number | null): string | number | null => (l == null || l === "" ? l : `${prefix}${l}${suffix}`);
+  if (typeof values !== "function") return (_u, splits) => splits.map((v) => (v == null ? null : wrap(String(v))));
+  const inner = values as ValuesFn;
+  return (u, splits, axisIdx, space, incr) => inner(u, splits, axisIdx, space, incr).map(wrap);
+}
+
 interface Extra {
   idx: number;
   fmt: AxisFormat;
@@ -96,6 +104,8 @@ export function applyAxisExtras(
     const breaks = activeBreaks(idx, fmt.breaks, scale, ctx);
     if (breaks && ctx) applyAxisBreaks(axis, idx, breaks, ctx);
     if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) axis.values = divided(axis.values, fmt.divide);
+    // After divide-by and before custom labels: the number carries the affix, a typed label stays literal.
+    if (fmt.prefix || fmt.suffix) axis.values = affixed(axis.values, fmt.prefix ?? "", fmt.suffix ?? "");
     if (fmt.size && fmt.size > 0 && typeof axis.font === "string") {
       axis.font = axis.font.replace(/[\d.]+px/, `${Math.round((fmt.size * 96) / 72)}px`);
     }

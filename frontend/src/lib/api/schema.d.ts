@@ -9119,6 +9119,11 @@ export interface components {
             /** Dpi */
             dpi?: number | null;
             /**
+             * Drop Lines
+             * @default false
+             */
+            drop_lines?: boolean;
+            /**
              * Equal Aspect
              * @default false
              */
@@ -9189,6 +9194,11 @@ export interface components {
              * @default 30
              */
             view_elev?: number;
+            /**
+             * View Zoom
+             * @default 1
+             */
+            view_zoom?: number;
             /** Width In */
             width_in?: number | null;
             /**
@@ -12201,6 +12211,8 @@ export interface components {
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
             /** Offset */
             offset?: number | null;
+            /** Prefix */
+            prefix?: string | null;
             /** Prob */
             prob?: ("fraction" | "percent") | null;
             /** Reverse */
@@ -12209,6 +12221,8 @@ export interface components {
             rotate?: number | null;
             /** Size */
             size?: number | null;
+            /** Suffix */
+            suffix?: string | null;
             /** Ticks */
             ticks?: ("in" | "out" | "both") | null;
             top?: components["schemas"]["TopAxisSpec"] | null;

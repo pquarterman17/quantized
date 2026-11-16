@@ -274,7 +274,7 @@ function ImportingTab() {
     <div className="qzk-help-list">
       <div className="qzk-help-detail" style={{ marginBottom: 6 }}>
         Import via File ▸ Import data…, or drag a file onto the window. Any
-        delimited text file also works through the Import Wizard's guided
+        delimited text file also works through the Import wizard's
         preview.
       </div>
       {formatsByCategory().map(([category, formats]) => (

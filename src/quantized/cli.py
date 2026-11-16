@@ -22,6 +22,12 @@
                         writes DIR/convert-report.json (quantized.cli_convert).
                         HDF5/NeXus, .mat, .ibw, images and other imported
                         files convert to csv/xlsx, every dataset in them
+    qz run RECIPE.json FILES... --out DIR [--format csv|xlsx|dwk]
+                        [--figures pdf|svg|png] [--background FILE]
+                        re-run an analysis template saved in the app on new
+                        files, headless; refuses a recipe with a step it
+                        cannot replay exactly (quantized.cli_run,
+                        docs/headless-recipes.md)
 
 If the requested port is busy and ``--port`` was NOT given explicitly, qz
 falls back to a free ephemeral port automatically (the main app is often
@@ -49,6 +55,7 @@ import uvicorn
 
 from quantized import __version__
 from quantized.auth import ensure_launch_token, launch_url
+from quantized.heavy_import import heavy_imports
 from quantized.server_launch import _open_when_healthy, _resolve_port, _run_desktop, _run_dev
 
 # Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
@@ -59,12 +66,17 @@ _WEB_DIR = Path(__file__).parent / "web"
 
 def main(argv: list[str] | None = None) -> None:
     """Dispatch: ``qz plugin ...`` / ``qz upload-cache ...`` / ``qz convert
-    ...`` to their CLIs, else launch the server."""
+    ...`` / ``qz run ...`` to their CLIs, else launch the server."""
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "convert":
         from quantized.cli_convert import convert_command
 
         sys.exit(convert_command(args[1:]))
+    if args and args[0] == "run":
+        with heavy_imports("quantized.cli_run"):
+            from quantized.cli_run import run_command
+
+        sys.exit(run_command(args[1:]))
     if args and args[0] == "plugin":
         _plugin_command(args[1:])
         return

@@ -8325,6 +8325,11 @@
             ],
             "title": "Dpi"
           },
+          "drop_lines": {
+            "default": false,
+            "title": "Drop Lines",
+            "type": "boolean"
+          },
           "equal_aspect": {
             "default": false,
             "title": "Equal Aspect",
@@ -8444,6 +8449,13 @@
           "view_elev": {
             "default": 30.0,
             "title": "View Elev",
+            "type": "number"
+          },
+          "view_zoom": {
+            "default": 1.0,
+            "maximum": 3.0,
+            "minimum": 0.5,
+            "title": "View Zoom",
             "type": "number"
           },
           "width_in": {
@@ -16335,6 +16347,18 @@
             ],
             "title": "Offset"
           },
+          "prefix": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
           "prob": {
             "anyOf": [
               {
@@ -16386,6 +16410,18 @@
               }
             ],
             "title": "Size"
+          },
+          "suffix": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix"
           },
           "ticks": {
             "anyOf": [

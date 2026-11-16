@@ -79,6 +79,11 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "AxisFormat.rotate": (ws) => editFmt(ws, { rotate: 45 }),
   "AxisFormat.offset": (ws) => editFmt(ws, { offset: 5 }),
   "AxisFormat.grid": (ws) => editFmt(ws, { grid: { major: true, minor: false } }),
+  "Workspace.savedRecodeMappings": (ws) => {
+    ws.savedRecodeMappings = [{ id: "r1", name: "m", mapping: { groups: [{ newLabel: "P", from: ["a"] }] }, sourceLevels: ["a"], createdAt: "2026-11-16T00:00:00Z" }];
+  },
+  "AxisFormat.prefix": (ws) => editFmt(ws, { prefix: "$" }),
+  "AxisFormat.suffix": (ws) => editFmt(ws, { suffix: " K" }),
   "AxisFormat.top": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, top: { kind: "reciprocal" } } as View["xFmt"]; }),
   "AxisFormat.base=2": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, base: "2" }; }),
   "ExportSeriesStyle.marker_fill": (ws) => editExport(ws, { marker_fill: "hollow" }),
@@ -109,10 +114,10 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "Annotation.dot": (ws) => editView(ws, (v) => { v.annotations = [...v.annotations, { id: "t", x: 1, y: 2, text: "note", dot: false }]; }),
   "MapViewState.view3d": (ws) => {
-    ws.mapViews = { a: { ...DEFAULT_MAP_VIEW, view3d: { kind: "surface", elev: 40, azim: 25, zLabel: "Z", zUnit: "u", style: "nature", title: "T" } } };
+    ws.mapViews = { a: { ...DEFAULT_MAP_VIEW, view3d: { kind: "surface", elev: 40, azim: 25, zLabel: "Z", zUnit: "u", style: "nature", title: "T", zoom: 1.5, dropLines: true } } };
   },
   "RecipeMapView.view3d": (ws) => {
-    ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" } };
+    ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", zoom: 1, dropLines: false } };
   },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
@@ -292,6 +297,7 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/\.overrides\.(margins|page_pad)$/, "OverrideBox"],
   [/^\$\.mapViews\.[^.[\]]+$/, "MapViewState"],
   [/^\$\.plotRecipes\[\]\.map$/, "RecipeMapView"],
+  [/^\$$/, "Workspace"], // top-level keys added after 0.34 (a saved Recode mapping list)
 ];
 
 /** Fields that existed in v0.34.0 but the frozen 0.34 file happens not to use

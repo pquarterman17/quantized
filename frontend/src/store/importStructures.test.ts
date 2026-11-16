@@ -84,6 +84,8 @@ describe("CIF import path", () => {
     const ids = await useApp.getState().importFiles([new File(["x"], "bad.cif")]);
     expect(ids).toEqual([]);
     expect(useCrystalStructures.getState().presets).toEqual([]);
-    expect(toastMsgs().some((m) => m.includes("has no unit cell"))).toBe(true);
+    // UX-C: a plain-language danger toast; the backend's text is on the status line.
+    expect(toastMsgs().some((m) => m.includes("bad.cif"))).toBe(true);
+    expect(useApp.getState().status).toContain("has no unit cell");
   });
 });
