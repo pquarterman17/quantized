@@ -128,8 +128,11 @@ describe("plot-corpus frontend mirror (shared cases)", () => {
       kind = kindOf(fig.curves ?? []);
     } else if (stat.statMode) {
       via = "stat";
-      kind = "histogram";
-      drawn = [{ x: null, y: fig.curves?.[0]?.y ?? "" }];
+      kind = stat.statPicks?.mode ?? "";
+      // a histogram of the first curve; else one box / violin / strip per plotted channel
+      drawn = kind === "histogram"
+        ? [{ x: null, y: fig.curves?.[0]?.y ?? "" }]
+        : (sel?.yKeys ?? []).map((k) => ({ x: null, y: letters[k] }));
     } else if (sel) {
       via = "selection";
       const x = sel.xKey === null ? xName : letters[sel.xKey];
