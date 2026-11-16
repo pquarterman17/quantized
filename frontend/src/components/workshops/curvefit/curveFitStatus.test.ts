@@ -10,6 +10,7 @@ describe("Curve Fit header status (UX-F)", () => {
     expect(curveFitStatus({ ...base, hasData: false }).text).toBe("Select a dataset to fit");
     expect(curveFitStatus(base).text).toBe("Not fitted yet");
     expect(curveFitStatus({ ...base, busy: true }).text).toBe("Fitting…");
+    expect(curveFitStatus({ ...base, busy: true, guessing: true }).text).toBe("Guessing start values…");
     expect(curveFitStatus({ ...base, error: "boom" })).toEqual({ text: "Failed — see the message below", tone: "danger" });
     expect(curveFitStatus({ ...base, result: fit, guessOnly: true }).text).toBe("Start values guessed — press Fit");
     expect(curveFitStatus({ ...base, byLevels: 3, byBusy: true }).text).toBe("Fitting 3 levels…");
@@ -17,7 +18,7 @@ describe("Curve Fit header status (UX-F)", () => {
   });
 
   it("shows the headline statistics of a finished fit", () => {
-    expect(curveFitStatus({ ...base, result: fit })).toEqual({ text: "R² 0.99871 · χ²ᵣ 1.02", tone: "ok" });
+    expect(curveFitStatus({ ...base, result: fit })).toEqual({ text: "R² 0.99871 · χ²/dof 1.02", tone: "ok" });
   });
 
   it("flags a stale or non-converged fit", () => {

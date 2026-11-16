@@ -113,6 +113,15 @@ export function dockToolWindow(id: string): void {
   publish();
 }
 
+/** "Toggle inspector" while a window is docked: float that window so the
+ *  Inspector it replaced shows again (rather than flip a collapse flag the
+ *  docked column ignores). True when there was a docked window to float. */
+export function floatDockedWindow(): boolean {
+  const owner = snapshot.owner;
+  if (owner) undockToolWindow(owner);
+  return owner !== null;
+}
+
 /** View ▸ "Reset window positions": forget every float choice, so every
  *  dock-capable window docks again (open ones claim the column now). */
 export function resetToolDockFloats(): void {
@@ -154,8 +163,15 @@ export function resetToolDockForTests(): void {
 }
 
 /** The CSS width of the docked column: the owner's width, but never so wide
- *  that the stage drops below DOCK_STAGE_MIN beside the Library (its live --lw),
- *  and never narrower than DOCK_MIN_WIDTH. */
-export function dockColumnWidth(width: number): string {
-  return `min(${width}px, max(${DOCK_MIN_WIDTH}px, calc(100vw - var(--lw, 210px) - ${DOCK_STAGE_MIN}px)))`;
+ *  that the stage drops below DOCK_STAGE_MIN beside the Library (its live --lw,
+ *  or nothing while it is collapsed), and never narrower than DOCK_MIN_WIDTH. */
+export function dockColumnWidth(width: number, libraryCollapsed = false): string {
+  const library = libraryCollapsed ? "0px" : "var(--lw, 210px)";
+  return `min(${width}px, max(${DOCK_MIN_WIDTH}px, calc(100vw - ${library} - ${DOCK_STAGE_MIN}px)))`;
+}
+
+/** dockColumnWidth in px, for a `viewport`-wide window beside a `library`-px
+ *  Library (0 when collapsed). */
+export function dockColumnPx(width: number, viewport: number, library: number): number {
+  return Math.min(width, Math.max(DOCK_MIN_WIDTH, viewport - library - DOCK_STAGE_MIN));
 }

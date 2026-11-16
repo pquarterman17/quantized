@@ -159,9 +159,11 @@ export default function CurveFitResults(p: Props) {
           >
             {p.cornerBusy ? "Bootstrapping…" : "Corner plot…"}
           </Button>
+          {/* Destructive, so set apart at the row's end and styled as such. */}
           <Button
             size="sm"
-            variant="ghost"
+            variant="danger"
+            className="qz-cf-remove"
             title="Delete this fit, its saved recipe and Library result, and its curve in this window (other figures keep their saved copy; closing the window keeps them; Undo restores)"
             onClick={p.onRemoveFit}
           >
@@ -173,7 +175,7 @@ export default function CurveFitResults(p: Props) {
       {/* The residuals come straight after the parameters: the most important
           result after them (UX-F). */}
       {done && active && fitData && (
-        <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} autoOpen={p.residualsOpen ?? false} />
+        <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} autoOpen={p.residualsOpen ?? false} inView={p.residualsOpen ?? true} />
       )}
 
       {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}

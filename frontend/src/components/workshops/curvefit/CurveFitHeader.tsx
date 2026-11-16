@@ -32,7 +32,7 @@ const TONE_COLOR: Record<FitStatusTone, string> = {
 };
 
 /** One tab's panel: hidden, never unmounted, once shown -- a running batch or
- *  an open report survives a switch. A `lazy` panel renders nothing until its
+ *  an open report survives a tab switch. A `lazy` panel renders nothing until its
  *  tab is first shown, so its lazy chunks load only then. */
 export function CurveFitTabPanel({ id, tab, lazy = false, children }: { id: CurveFitTab; tab: CurveFitTab; lazy?: boolean; children: ReactNode }) {
   const [seen, setSeen] = useState(tab === id);
@@ -75,7 +75,8 @@ export interface CurveFitHeaderProps {
   /** The registry-model fit bar; absent in modes that carry their own. */
   fit?: {
     disabled: boolean;
-    busy: boolean;
+    /** A fit (not an auto-guess) is running: the button says so. */
+    fitting: boolean;
     onGuess: () => void;
     onFit: () => void;
     status: { text: string; tone: FitStatusTone };
@@ -97,7 +98,7 @@ export default function CurveFitHeader({ modelPicker, fit }: CurveFitHeaderProps
             title="Fit the model to the selected data (the result opens in the Results tab)"
             onClick={fit.onFit}
           >
-            {fit.busy ? "Fitting…" : "Fit"}
+            {fit.fitting ? "Fitting…" : "Fit"}
           </Button>
           <Button size="sm" variant="ghost" disabled={fit.disabled} title="Fill the start values from the data without fitting" onClick={fit.onGuess}>
             Auto-guess
@@ -109,7 +110,7 @@ export default function CurveFitHeader({ modelPicker, fit }: CurveFitHeaderProps
       )}
       {fit && (
         // Roving tablist, AUTOMATIC activation: every panel stays mounted (a
-        // running batch or an open report survives a switch), so it is cheap.
+        // running batch or an open report survives a tab switch), so it is cheap.
         <div className="qz-cf-tabs" role="tablist" aria-label="Curve Fit sections" onKeyDown={(e) => onTabListKeyDown(e, true)}>
           {CURVE_FIT_TABS.map((t) => (
             <button

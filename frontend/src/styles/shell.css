@@ -1371,12 +1371,16 @@ details[open] > summary.qzk-field-lbl::before { content: "▾"; }
 .qzk-wizard-step.qzk-active { border-color: var(--accent); color: var(--text); }
 .qzk-wizard-num { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-wizard-step.qzk-active .qzk-wizard-num { color: var(--accent); }
-/* UX-F: the five step chips stay on ONE line. An inactive chip may shrink, its
-   label ellipsized (the full label is the chip's tooltip); the active one
-   never does. */
+/* UX-F: the five step chips stay on ONE line. An inactive chip shows only its
+   number (its label stays in the DOM as its accessible name, and is its
+   tooltip); the active one shows number and label and never shrinks. */
 .qzk-wizard-steps { flex-wrap: nowrap; min-width: 0; }
 .qzk-wizard-step { display: inline-block; flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qzk-wizard-step.qzk-active { flex-shrink: 0; }
+.qzk-wizard-step:not(.qzk-active) { font-size: 0; }
+.qzk-wizard-step:not(.qzk-active) .qzk-wizard-num { font-size: var(--type-label); }
+/* Curve Fit's "Remove fit": destructive, so set apart at the end of its row. */
+.qz-btn.qz-cf-remove { margin-left: auto; color: var(--danger); background: transparent; }
 /* Docked, the window has the column's full height: its peak tables show at
    least 8 rows instead of 5 (read by the tables' inline max-height). */
 .qzk-win-docked { --qz-peak-table-h: calc(9 * var(--row-h) + 12px); }

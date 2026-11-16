@@ -5,31 +5,33 @@
 // finding 4). Shared by Curve Fit and the Peak analyzer; while a window is
 // docked itself its x is unused (store/toolDock.ts).
 
-import { DOCK_MIN_WIDTH, DOCK_STAGE_MIN, dockWidthWithout } from "../../store/toolDock";
+import { dockColumnPx, dockWidthWithout } from "../../store/toolDock";
 
 const GAP = 16;
-// styles/spacing.css --rw / --lw fallbacks, read once: they are fixed tokens
-// (the Library's --lw changes only by a drag, and only bounds a clamp here).
-let tokens: { rw: number; lw: number } | null = null;
-function sideTokens(): { rw: number; lw: number } {
-  if (!tokens) {
-    const css = getComputedStyle(document.documentElement);
-    const px = (name: string, dflt: number) => {
-      const v = parseFloat(css.getPropertyValue(name));
-      return Number.isFinite(v) && v > 0 ? v : dflt;
-    };
-    tokens = { rw: px("--rw", 296), lw: px("--lw", 210) };
+
+// The Inspector's width, styles/spacing.css --rw: a fixed token, read once.
+let rwCache: number | null = null;
+function inspectorWidth(): number {
+  if (rwCache === null) {
+    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rw"));
+    rwCache = Number.isFinite(v) && v > 0 ? v : 296;
   }
-  return tokens;
+  return rwCache;
+}
+
+/** The Library's live width: 0 while collapsed, else the --lw the Library
+ *  pref / resize grip writes inline on <html> (a cheap read, no style pass). */
+export function libraryWidth(): number {
+  if (document.querySelector(".qzk-main")?.classList.contains("lc")) return 0;
+  const v = parseFloat(document.documentElement.style.getPropertyValue("--lw"));
+  return Number.isFinite(v) && v > 0 ? v : 210;
 }
 
 /** The side column's width once window `self` floats. */
 function sideColumnWidth(self: string | undefined): number {
-  const { rw, lw } = sideTokens();
   const docked = dockWidthWithout(self);
-  // Same clamp as dockColumnWidth (store/toolDock.ts), in px.
-  if (docked !== null) return Math.min(docked, Math.max(DOCK_MIN_WIDTH, window.innerWidth - lw - DOCK_STAGE_MIN));
-  return document.querySelector(".qzk-main")?.classList.contains("rc") ? 0 : rw;
+  if (docked !== null) return dockColumnPx(docked, window.innerWidth, libraryWidth());
+  return document.querySelector(".qzk-main")?.classList.contains("rc") ? 0 : inspectorWidth();
 }
 
 export function floatingX(width: number, self?: string): number {

@@ -2,10 +2,11 @@
 // Inspector) instead of floating over it. The claim registry, the persisted
 // float choice, and ToolWindow's dock / float affordances.
 
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { buildUiCommands } from "../commands/uiCommands";
 import ToolWindow from "../components/overlays/ToolWindow";
 import {
   TOOL_DOCK_KEY,
@@ -16,6 +17,7 @@ import {
   toolDockSnapshot,
   undockToolWindow,
 } from "./toolDock";
+import { toggleInspector } from "./inspectorToggle";
 import { useApp } from "./useApp";
 
 beforeEach(() => {
@@ -66,6 +68,28 @@ describe("tool dock registry", () => {
     off();
   });
 
+  it("Toggle inspector while docked floats the window and shows the Inspector", () => {
+    const toggle = buildUiCommands(useApp.getState).find((a) => a.id === "right")!;
+    const checked = () => (typeof toggle.checked === "function" ? toggle.checked() : toggle.checked);
+    useApp.setState({ rightCollapsed: false });
+    const off = registerDockable("a", 340);
+    // The docked window replaces the Inspector: the menu item is not checked.
+    expect(checked()).toBe(false);
+    toggle.run();
+    expect(toolDockSnapshot().owner).toBeNull();
+    expect(useApp.getState().rightCollapsed).toBe(false);
+    expect(checked()).toBe(true);
+    // With nothing docked it is the plain collapse toggle again.
+    toggle.run();
+    expect(useApp.getState().rightCollapsed).toBe(true);
+    // Docked over a collapsed Inspector: one toggle floats AND expands.
+    dockToolWindow("a");
+    toggleInspector();
+    expect(toolDockSnapshot().owner).toBeNull();
+    expect(useApp.getState().rightCollapsed).toBe(false);
+    off();
+  });
+
   it("an unreadable stored choice is ignored, not fatal", () => {
     localStorage.setItem(TOOL_DOCK_KEY, "{not json");
     resetToolDockForTests();
@@ -105,6 +129,17 @@ describe("ToolWindow docking", () => {
     expect(useApp.getState().toolWindowLayout.cf).toMatchObject({ width: 340, collapsed: false });
     expect(screen.getByRole("button", { name: "Collapse" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Dock Curve Fit in the side panel" }));
+    expect(frame()).toHaveAttribute("data-docked");
+  });
+
+  it("double-clicking the title bar floats and re-docks", () => {
+    renderDockable();
+    const bar = screen.getByRole("group", { name: "Curve Fit title bar" });
+    fireEvent.doubleClick(bar);
+    expect(frame()).not.toHaveAttribute("data-docked");
+    // Floated other than by a drag, it lands left of the side column.
+    expect(useApp.getState().toolWindowLayout.cf?.x).toBe(window.innerWidth - 296 - 340 - 16);
+    fireEvent.doubleClick(bar);
     expect(frame()).toHaveAttribute("data-docked");
   });
 

@@ -237,7 +237,7 @@ export default function App() {
   }, []);
 
   const mainCls = `qzk-main${leftCollapsed ? " lc" : ""}${rightCollapsed ? " rc" : ""}${dock.owner ? " tooldock" : ""}`;
-  const mainStyle = dock.owner ? ({ "--dock-w": dockColumnWidth(dock.width) } as CSSProperties) : undefined;
+  const mainStyle = dock.owner ? ({ "--dock-w": dockColumnWidth(dock.width, leftCollapsed) } as CSSProperties) : undefined;
 
   return (
     <div className="qzk-app" {...appRootFocusProps}>

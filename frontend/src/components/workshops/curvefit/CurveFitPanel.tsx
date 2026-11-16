@@ -10,8 +10,9 @@
 // start values, By), Results (the fit, residual plots open, then the deeper
 // result tools) and Advanced (batch, templates, compare, ODR, scan, bumps).
 // Fit switches to Results, so the outcome and the Fit button are both in view
-// without scrolling. Every tab stays mounted (hidden), so a running batch or an
-// open report survives a switch.
+// without scrolling. Every tab stays mounted (hidden) once shown, so a running
+// batch or an open report survives a TAB switch -- not a switch into Global
+// fit or a custom equation, which replaces the whole body.
 //
 // Closing the window only HIDES it: the fit, its curve, its recipe (so auto
 // re-fit) and its Library result stay, and reopening shows the result again
@@ -118,6 +119,7 @@ export default function CurveFitPanel() {
   const byActive = byLevels.length > 0;
   // Reopening on a fit shows it; otherwise start at Setup. Fit switches here.
   const [tab, setTab] = useState<CurveFitTab>(() => (result && !guessOnly) || active?.fitSpec?.params?.length ? "results" : "setup");
+  const [runKind, setRunKind] = useState<"guess" | "fit">("fit"); // what `busy` is doing
 
   const fitParams = (
     <FitParamsSection rows={paramInputs} setRow={setParamRow} reset={resetParamRows} />
@@ -263,16 +265,17 @@ export default function CurveFitPanel() {
   }
 
   const status = curveFitStatus({
-    hasData: active != null, busy, error, result, guessOnly, stale: resultStale, byLevels: byActive ? byLevels.length : 0, byBusy,
+    hasData: active != null, busy, guessing: runKind === "guess", error, result, guessOnly, stale: resultStale, byLevels: byActive ? byLevels.length : 0, byBusy,
   });
   const header = (
     <CurveFitHeader
       modelPicker={modelPicker}
       fit={{
         disabled: !active || busy,
-        busy,
-        onGuess: () => void run("guess"),
+        fitting: busy && runKind === "fit",
+        onGuess: () => (setRunKind("guess"), void run("guess")),
         onFit: () => {
+          setRunKind("fit");
           setTab("results");
           void run("fit");
         },
