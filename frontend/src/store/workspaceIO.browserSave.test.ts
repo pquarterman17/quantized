@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { commitOpened, hasSaveHandle, resetBrowserFile } from "../lib/browserFileHandle";
+import { checkHandle, commitOpened, defaultSaveName, hasSaveHandle, resetBrowserFile, saveAsPicked } from "../lib/browserFileHandle";
 import { saveBlob } from "../lib/download";
 import { useApp } from "./useApp";
 import { useToasts } from "./toasts";
@@ -321,8 +321,29 @@ describe("the kept file belongs to one document", () => {
     useApp.getState().addDataset(dataset("unrelated.dat"));
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledTimes(2);
+    expect(picker.mock.calls[1][0].suggestedName).toBe("workspace.dwk"); // not A's file name
     expect(one.content).toBe(projectA);
     expect(two.content).toContain("unrelated.dat");
+  });
+
+  it("a name learned from an Open is not suggested for a different document (Remove all, undo)", async () => {
+    const picker = installPicker([new FakeFile(), "x.dwk"], [new FakeFile(), "y.dwk"]);
+    commitOpened("Opened.dwk"); // as replaceWorkspace does right after loadWorkspace
+    expect(defaultSaveName()).toBe("Opened.dwk");
+    useApp.getState().clearAll();
+    expect(defaultSaveName()).toBe("workspace.dwk");
+    useApp.getState().undo(); // back to the epoch Opened.dwk was learned under
+    expect(defaultSaveName()).toBe("Opened.dwk");
+    await useApp.getState().saveWorkspaceToFile();
+    expect(picker.mock.calls[0][0].suggestedName).toBe("Opened.dwk");
+  });
+
+  it("Save As arms the handle under the epoch the content was serialized under", async () => {
+    installPicker([new FakeFile(), "x.dwk"]);
+    const was = useApp.getState().docEpoch;
+    useApp.getState().loadWorkspace(wsWith("restored.dat")); // a restore lands after serializing
+    await saveAsPicked("{}", null, was);
+    expect(await checkHandle()).toMatchObject({ kind: "stale" });
   });
 
   it("Remove all in a session with no datasets still starts a new document", async () => {
@@ -362,6 +383,7 @@ describe("the kept file belongs to one document", () => {
     expect(names()).toEqual(["first.dat"]);
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledTimes(2);
+    expect(picker.mock.calls[1][0].suggestedName).not.toBe("B.dwk"); // that file belongs to the other document
     expect(opened.content).toContain("b.dat");
     expect(opened.content).not.toContain("first.dat");
   });

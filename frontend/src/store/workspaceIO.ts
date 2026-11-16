@@ -339,7 +339,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // otherwise the download, named after the opened/saved file.
   const browser = await import("./browserSave");
   const name = get().currentProject?.name ?? null;
-  if (!hasDesktopShell() && (await browser.browserSaveAs(content, name, browserReport(get)))) return; // desktop (a failed native write): plain download, never the browser picker
+  if (!hasDesktopShell() && (await browser.browserSaveAs(content, name, browserReport(get), state.docEpoch))) return; // desktop (a failed native write): plain download, never the browser picker
   browser.browserDownload(content, name);
   const msg = savedMsg(all.length);
   get().setStatus(msg);

@@ -59,7 +59,9 @@ interface Held {
   epoch: number;
 }
 let held: Held | null = null;
-let openedName: string | null = null;
+/** A name worth suggesting, valid only for the document (`epoch`) it was learned under. */
+let openedName: { name: string; epoch: number } | null = null;
+const liveEpoch = (): number => useApp.getState().docEpoch;
 
 const picker = (): PickerWindow["showSaveFilePicker"] => (window as unknown as PickerWindow).showSaveFilePicker;
 const stampOf = (f: File): string => `${f.lastModified}:${f.size}`;
@@ -75,7 +77,8 @@ export const hasSaveHandle = (): boolean => held !== null;
 /** The file name a Save As / download should offer: the kept handle's own name,
  *  else the opened workspace's, else the project's, else `workspace.dwk`. */
 export function defaultSaveName(projectName?: string | null): string {
-  const base = held?.handle.name ?? openedName ?? projectName ?? "workspace";
+  const named = openedName && openedName.epoch === liveEpoch() ? openedName.name : null;
+  const base = held?.handle.name ?? named ?? projectName ?? "workspace";
   return /\.(dwk|json)$/i.test(base) ? base : `${base}.dwk`;
 }
 
@@ -84,7 +87,7 @@ export function defaultSaveName(projectName?: string | null): string {
  *  next download / Save As suggestion. */
 export function commitOpened(name?: string): void {
   held = null;
-  openedName = name ?? null;
+  openedName = name ? { name, epoch: liveEpoch() } : null; // called right after loadWorkspace: the NEW epoch
 }
 
 /** Forget the kept file and the opened name (a new document has none). */
@@ -113,18 +116,18 @@ async function writeThrough(handle: FsHandle, content: string): Promise<string |
 function keep(handle: FsHandle, stamp: string | null, epoch: number, was: Held | null): BrowserSave {
   if (held === was) {
     held = stamp === null ? null : { handle, stamp, epoch };
-    if (stamp === null) openedName = handle.name;
+    if (stamp === null) openedName = { name: handle.name, epoch };
   }
   return stamp === null ? { kind: "saved", name: handle.name, unverified: true } : { kind: "saved", name: handle.name };
 }
 
 /** Save As: ask the user for a file, write it, keep the handle. */
-export async function saveAsPicked(content: string, projectName?: string | null): Promise<BrowserSave> {
+export async function saveAsPicked(content: string, projectName?: string | null, docEpoch?: number): Promise<BrowserSave> {
   const pick = picker();
   if (!pick) return { kind: "failed", reason: "this browser cannot pick a save location" };
   let handle: FsHandle;
   const was = held;
-  const epoch = useApp.getState().docEpoch;
+  const epoch = docEpoch ?? liveEpoch(); // the epoch the CONTENT was serialized under, when the caller knows it
   try {
     handle = await pick({
       suggestedName: defaultSaveName(projectName),
@@ -150,7 +153,7 @@ export async function checkHandle(): Promise<Extract<BrowserSave, { kind: "stale
   const { handle } = cur;
   const drop = (reason: string, keepName = true): { kind: "stale"; reason: string } => {
     held = null;
-    if (keepName) openedName = handle.name; // the next download / suggestion keeps the user's name
+    if (keepName) openedName = { name: handle.name, epoch: cur.epoch }; // the next download / suggestion keeps the user's name
     return { kind: "stale", reason };
   };
   // A different document (Open, restore, Remove all, or an undo across one): never write it

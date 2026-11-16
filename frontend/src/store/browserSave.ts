@@ -48,12 +48,12 @@ function report(r: BrowserSave, io: Report): boolean {
 let picking = false;
 
 /** Save As in a browser tab: the picker where there is one. false = download. */
-export async function browserSaveAs(content: string, projectName: string | null, io: Report): Promise<boolean> {
+export async function browserSaveAs(content: string, projectName: string | null, io: Report, docEpoch?: number): Promise<boolean> {
   if (!canPickSaveFile()) return false;
   if (picking) return true; // a picker is already open: ignore the repeat
   picking = true;
   try {
-    const r = await saveAsPicked(content, projectName);
+    const r = await saveAsPicked(content, projectName, docEpoch);
     // A refused picker (the gesture expired while the workspace serialized) must
     // still save: fall through to the download rather than lose the save.
     return r.kind === "failed" && /user activation|gesture/i.test(r.reason) ? false : report(r, io);
