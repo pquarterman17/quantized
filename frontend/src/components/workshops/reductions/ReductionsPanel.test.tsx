@@ -79,7 +79,7 @@ describe("Analyze-menu command registry entries (MAIN_PLAN #11)", () => {
   // Reductions moved from appCommands.ts to commands/analysisCommands.ts
   // when that module was decomposed by menu domain (2026-07-17).
   const overlaysSrc = Object.values(
-    import.meta.glob("../../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),
+    import.meta.glob("../../../AppOverlayPanels.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
 
   it("registers Williamson-Hall in the Analyze group", () => {
@@ -117,7 +117,7 @@ describe("Analyze-menu command registry entries (MAIN_PLAN #11)", () => {
     expect(useApp.getState().reductionsMethod).toBe("reflectivity-fft");
   });
 
-  it("AppOverlays.tsx mounts the panel behind reductionsOpen", () => {
+  it("AppOverlayPanels.tsx mounts the panel behind reductionsOpen", () => {
     expect(overlaysSrc).toContain("<ReductionsPanel />");
     expect(overlaysSrc).toContain("reductionsOpen");
   });
