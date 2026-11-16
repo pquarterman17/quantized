@@ -794,3 +794,15 @@ def test_real_filesystem_two_spellings_of_one_file_collapse(tmp_path: Path) -> N
     assert len(manifest["sources"]) == 1
     row = manifest["sources"][0]
     assert sorted(row["original_path_variants"]) == sorted({spelling_a, spelling_b})
+
+
+def test_stat_verdict_treats_an_mtime_one_ulp_apart_as_unchanged() -> None:
+    """A baseline derived from ``st_mtime_ns`` (``ns / 1e9``) can differ from the
+    probe's ``st_mtime`` float in its last bit; that is not a changed file."""
+    probe = 1_731_000_000.123456
+    derived = probe + 2.4e-7  # about one ulp at this magnitude
+    assert derived != probe
+    verdict = manifest_module._stat_verdict
+    assert verdict({"mtime": derived, "size": 5}, {"mtime": probe, "size": 5}) == "unchanged"
+    assert verdict({"mtime": probe - 1.0, "size": 5}, {"mtime": probe, "size": 5}) == "changed"
+    assert verdict({"mtime": "bad", "size": 5}, {"mtime": probe, "size": 5}) == "changed"

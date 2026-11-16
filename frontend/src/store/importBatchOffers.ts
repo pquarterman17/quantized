@@ -58,23 +58,31 @@ import type { AppState } from "./useApp";
 
 type SliceGet = () => AppState;
 
+/** "Field (Oe)|Moment (emu)": a dataset's column labels and units, the shape
+ *  test UX8-C's generic batch offer compares. */
+function columnShape(d: { data: { labels: readonly string[]; units: readonly string[] } }): string {
+  return JSON.stringify([d.data.labels, d.data.units]);
+}
+
 /** PLOT_WORKFLOW_PLAN item 4: when a batch import's successfully-created
  *  datasets all resolve to the SAME non-generic technique, offer ONE overlay
  *  plot instead of leaving N separate ones — offer, never force (declining
  *  or letting the toast time out is exactly today's per-file behavior, the
  *  batch datasets stay in the Library regardless). Two files that both
  *  happen to be "generic" are not knowably similar (the plan's mixed-batch
- *  rule), so `generic` never qualifies even when it's the only tag present.
+ *  rule), so `generic` qualifies only when every dataset has the same column
+ *  labels and units and came from its own file (UX8-C).
  *
- *  Counts by DATASET id rather than by file, but that's equivalent for
- *  every batch that can actually pass this gate: the only import that turns
- *  one file into several datasets is an Origin multi-book project, and item
- *  1 stamps Origin imports `generic` unconditionally — so a book-expansion
- *  batch always fails the non-generic check before the file/dataset count
- *  distinction would matter. */
+ *  Counts by DATASET id rather than by file. For a NON-generic technique
+ *  that is equivalent: the only import that turns one file into several
+ *  datasets is an Origin multi-book project, and item 1 stamps Origin
+ *  imports `generic` unconditionally. The generic same-shape path (UX8-C)
+ *  therefore needs `files` (the files that landed) to equal the dataset
+ *  count, so a single project's same-shape books never qualify. */
 export function batchOverlayOffer(
   get: SliceGet,
   createdIds: readonly string[],
+  files: number = createdIds.length,
 ): { technique: Technique; ids: string[] } | null {
   if (createdIds.length < 2) return null;
   const idSet = new Set(createdIds);
@@ -83,8 +91,24 @@ export function batchOverlayOffer(
   const techniques = new Set(datasets.map((d) => techniqueOf(d)));
   if (techniques.size !== 1) return null;
   const [technique] = techniques;
-  if (technique === "generic") return null;
+  // UX8-C: ten `Field (Oe), Moment (emu)` CSVs ARE knowably similar even when
+  // no technique is detected: identical column labels and units qualify --
+  // one dataset per FILE only, so an Origin project's book fan-out (one
+  // file, several same-shape books, all `generic`) still never does.
+  if (technique === "generic" && (files !== datasets.length || new Set(datasets.map(columnShape)).size !== 1)) return null;
   return { technique, ids: datasets.map((d) => d.id) };
+}
+
+/** The "Create folder <prefix>" toast action for a batch folder offer. */
+function folderAction(
+  get: SliceGet,
+  offer: { prefix: string; ids: string[] },
+  targetFolderId: string | undefined,
+): { label: string; onClick: () => void } {
+  return {
+    label: `Create folder "${offer.prefix}"`,
+    onClick: () => createFolderForBatch(get, offer.prefix, offer.ids, targetFolderId),
+  };
 }
 
 /** Present the ONE batch-outcome toast for a just-finished import (`added`
@@ -105,25 +129,26 @@ export async function presentBatchOutcome(
   targetFolderId: string | undefined,
   opts: { suppressFolderOffer?: boolean } = {},
 ): Promise<void> {
-  const offer = batchOverlayOffer(get, createdIds);
+  const offer = batchOverlayOffer(get, createdIds, added);
   // If BOTH the overlay and folder offers would qualify, the overlay wins
   // (L0.46 — never stack two action toasts for one batch); the offer toast
   // states "imported" itself, so it replaces (not supplements) any other
   // toast below.
-  const folderOffer = offer || opts.suppressFolderOffer ? null : batchFolderOffer(get, createdIds, added);
+  const folderOffer = opts.suppressFolderOffer ? null : batchFolderOffer(get, createdIds, added);
   if (offer) {
-    toast(`${offer.ids.length} ${offer.technique} files imported — overlay in one plot?`, "ok", {
+    const kind = offer.technique === "generic" ? "" : `${offer.technique} `;
+    // UX8-C: still ONE toast (L0.46), but a batch that also qualifies for
+    // the folder offer gets it as a second action rather than losing it.
+    toast(`${offer.ids.length} ${kind}files imported — overlay in one plot?`, "ok", {
       action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },
+      ...(folderOffer ? { actions: [folderAction(get, folderOffer, targetFolderId)] } : {}),
       ttlMs: TOAST_ACTION_TTL,
     });
     return;
   }
   if (folderOffer) {
     toast(`${folderOffer.ids.length} files imported — create folder "${folderOffer.prefix}"?`, "ok", {
-      action: {
-        label: `Create folder "${folderOffer.prefix}"`,
-        onClick: () => createFolderForBatch(get, folderOffer.prefix, folderOffer.ids, targetFolderId),
-      },
+      action: folderAction(get, folderOffer, targetFolderId),
       ttlMs: TOAST_ACTION_TTL,
     });
     return;

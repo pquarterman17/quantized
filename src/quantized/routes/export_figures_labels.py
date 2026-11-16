@@ -30,7 +30,13 @@ from quantized.calc.figure_labels import series_display_name, shared_axis_title
 from quantized.calc.plot_log_offsets import log_offset_decades, log_offset_suffix
 from quantized.calc.plotting import PlotSeries
 
-__all__ = ["derived_axis_label", "series_legends", "series_names", "solo_axis_label"]
+__all__ = [
+    "derived_axis_label",
+    "legend_unit_on_axis",
+    "series_legends",
+    "series_names",
+    "solo_axis_label",
+]
 
 
 def series_legends(
@@ -61,13 +67,39 @@ def series_legends(
     return out
 
 
+def legend_unit_on_axis(
+    metadata: Mapping[str, Any] | None, series: Sequence[PlotSeries]
+) -> bool:
+    """UX8-C: the dataset's display-only flag that its legend omits the unit.
+
+    The frontend's linked-graph assembly (``lib/linkedCurves.ts``) sets
+    ``metadata["legend_unit_on_axis"] = True`` when every curve shares one
+    unit; the on-screen legend then reads "MH_010K", not "MH_010K (emu)"
+    (``lib/legendUnitOnAxis.ts``), because the Y title carries the unit. The
+    data's units are untouched. Only a literal ``True`` counts, and only while
+    every exported ``series`` really shares one non-empty unit: the flag can
+    outlive its curves (a duplicated graph keeps the metadata, then gains a
+    column in another unit), exactly the re-check the screen makes."""
+    if metadata is None or metadata.get("legend_unit_on_axis") is not True:
+        return False
+    units = {s.unit for s in series}
+    return len(units) == 1 and next(iter(units)) != ""
+
+
 def series_names(
     series: Sequence[PlotSeries],
     legends: Sequence[str | None],
+    *,
+    unit_on_axis: bool = False,
 ) -> list[str]:
-    """The legend text for every resolved series, in display order."""
+    """The legend text for every resolved series, in display order.
+
+    ``unit_on_axis`` (``legend_unit_on_axis``) drops the unit from an
+    UN-renamed series' derived name; a rename is still used verbatim."""
     return [
-        series_display_name(s.label, s.unit, legends[i] if i < len(legends) else None)
+        series_display_name(
+            s.label, "" if unit_on_axis else s.unit, legends[i] if i < len(legends) else None
+        )
         for i, s in enumerate(series)
     ]
 

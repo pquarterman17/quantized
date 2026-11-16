@@ -2,7 +2,7 @@
 // Library quick picks' "Panel: side by side/stacked/grid" render one
 // `PanelCell` per dataset in a CSS grid shaped by `lib/panelwindow.
 // panelGridShape` (reusing multipanel's sqrt-balanced tiling for "grid");
-// "Overlay in one plot" renders a single `PanelOverlayWindow` instead. A
+// "Panel: overlay (separate scales)" renders a single `PanelOverlayWindow` instead. A
 // dataset id that no longer resolves (removed since the window opened —
 // `store/panels.ts`'s pruning already dropped it from `win.panel.datasetIds`,
 // but this guards a stale/mid-render read too) is simply skipped, never
@@ -10,7 +10,9 @@
 //
 // Sibling panels join the window-PRIVATE sync group (`lib/panelwindow.
 // panelSyncKey`, keyed off this window's own id) so x-zoom/cursor link
-// across them by default — distinct from the cross-WINDOW link groups
+// across them by default — but only when every cell plots the same X
+// quantity and unit (`panelsShareX`, UX8-C): unrelated panels keep their own
+// X ranges — distinct from the cross-WINDOW link groups
 // (item 13), which stay XY-plot-only and are irrelevant to a composite
 // window (it has no single `linkGroup` of its own in v1).
 //
@@ -21,7 +23,7 @@
 // a stale id sits between two live cells mid-render (see the file-header
 // comment above on why a stale id can transiently survive one render).
 
-import { panelGridShape, panelSyncKey } from "../../lib/panelwindow";
+import { panelGridShape, panelsShareX, panelSyncKey } from "../../lib/panelwindow";
 import type { PanelLayout, PlotWindow } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import PanelCell from "./PanelCell";
@@ -56,6 +58,7 @@ export default function PanelPlotWindow({ win, datasets }: PanelPlotWindowProps)
   }
 
   const { rows, cols } = panelGridShape(layout, resolved.length);
+  const syncKey = panelsShareX(resolved) ? panelSyncKey(win.id) : undefined;
   return (
     <div
       className="qzk-panel-grid"
@@ -65,7 +68,7 @@ export default function PanelPlotWindow({ win, datasets }: PanelPlotWindowProps)
         <PanelCell
           key={ds.id}
           dataset={ds}
-          syncKey={panelSyncKey(win.id)}
+          syncKey={syncKey}
           windowId={win.id}
           index={ids.indexOf(ds.id)}
         />

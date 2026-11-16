@@ -29,6 +29,7 @@ from quantized.io.origin_project.preview import decimate_with_alignment
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._datasetcache import cache_dataset
 from quantized.routes._errors import CALC_ERRORS_IO
+from quantized.routes._liveimport import live_import_response
 from quantized.routes._originfigures import origin_figures_and_fidelity
 from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
 from quantized.routes._plainimport import plain_import_payload
@@ -49,6 +50,11 @@ class ImportRequest(BaseModel):
     # by tooling that reads every book's data immediately after import (e.g.
     # tools/visual/origin_figures.mjs) and has no fetch-on-activate flow.
     full_books: bool = False
+    # The source watch's re-read (routes/_liveimport.py): one consistent byte
+    # snapshot, 409 when the file changed during the read, baseline headers.
+    live: bool = False
+    # Live only: cut a text file's unterminated last line (still being written).
+    hold_partial: bool = True
 
 
 def _allowed_roots() -> tuple[str, ...]:
@@ -375,6 +381,10 @@ def import_file(req: ImportRequest) -> Response:
         safe_path = granted
     if not os.path.isfile(safe_path):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
+    if req.live:
+        return live_import_response(
+            Path(safe_path), hold_partial=req.hold_partial, parse=_import_with_books
+        )
     try:
         payload, handle = _import_with_books(Path(safe_path), full_books=req.full_books)
     except CALC_ERRORS_IO as exc:

@@ -406,24 +406,74 @@ describe("toggleSelected", () => {
 });
 
 describe("selectRange", () => {
-  it("selects forward from the active anchor in library order", () => {
+  // UX8-C review: with no recorded anchor the LAST selected row (d3 of the
+  // seeded d2+d3) anchors, before the plotted activeId (d2).
+  it("selects forward from the anchor (no anchor recorded: the last selected row) in library order", () => {
     const before = snapshot();
     act().selectRange("ob");
     expect(changedSince(before)).toEqual(["librarySelection", "selectedIds"]);
-    expect(act().selectedIds).toEqual(["d2", "d3", "ob"]);
+    expect(act().selectedIds).toEqual(["d3", "ob"]);
     expect(act().activeId).toBe("d2");
     expectNoSideNotices();
   });
 
   it("selects backward from the anchor", () => {
     act().selectRange("d1");
-    expect(act().selectedIds).toEqual(["d1", "d2"]);
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
   });
 
   it("with no active dataset the clicked row is its own anchor", () => {
     useApp.setState({ activeId: null });
     act().selectRange("d3");
     expect(act().selectedIds).toEqual(["d3"]);
+  });
+
+  // UX8-C: Tree mode's plain click is `selectIds([id])`, which never moves
+  // activeId — the range must anchor on THAT row, not on the plotted one.
+  it("anchors on the last plain (selectIds) or Ctrl (toggleSelected) click, not activeId", () => {
+    act().selectIds(["d1"]);
+    act().selectRange("ob");
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3", "ob"]);
+    expect(act().activeId).toBe("d2");
+    act().selectRange("d3"); // a second Shift-click re-ranges from the same anchor
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
+    act().toggleSelected("ob");
+    act().selectRange("d2");
+    expect(act().selectedIds).toEqual(["d2", "d3", "ob"]);
+  });
+
+  // Review repro: click A, Ctrl-click B, C, then C again. C is deselected
+  // but still the anchor (Finder); falling back to activeId ranged from the
+  // PLOTTED row instead.
+  it("a Ctrl-deselected anchor is still the anchor", () => {
+    act().selectIds(["d1"]);
+    act().toggleSelected("d3");
+    act().toggleSelected("ob");
+    act().toggleSelected("ob");
+    expect(act().selectedIds).toEqual(["d1", "d3"]);
+    act().selectRange("d3");
+    expect(act().selectedIds).toEqual(["d3", "ob"]);
+    expect(act().activeId).toBe("d2");
+  });
+
+  // The anchor is trusted only while its gesture's selection is still the
+  // selection: another path (a window focus, an import, an undo) that
+  // replaces it makes the last selected row the anchor, else activeId.
+  it("an anchor whose selection another path replaced yields to the last selected row, else activeId", () => {
+    act().selectIds(["d1"]);
+    useApp.setState({ selectedIds: ["d1", "d3"] });
+    act().selectRange("ob");
+    expect(act().selectedIds).toEqual(["d3", "ob"]);
+    act().selectIds(["d1"]);
+    useApp.setState({ selectedIds: [] });
+    act().selectRange("d1");
+    expect(act().selectedIds).toEqual(["d1", "d2"]);
+  });
+
+  it("a view's shown order is de-duplicated", () => {
+    act().selectIds(["d1"]);
+    act().selectRange("d3", ["d1", "d2", "d2", "d3"]);
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
   });
 
   it("an unknown id selects just that id and still exits the tree selection", () => {
@@ -443,6 +493,15 @@ describe("selectIds", () => {
     expect(act().selectedIds).toEqual(["d3", "d1"]);
     expect(act().activeId).toBe("d2");
     expectNoSideNotices();
+  });
+
+  it("a one-row selection (Tree mode's plain click) becomes the Shift anchor (UX8-C)", () => {
+    const before = snapshot();
+    act().selectIds(["d1"]);
+    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds"]);
+    act().selectRange("d3");
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
+    expect(act().activeId).toBe("d2");
   });
 
   it("an all-unknown list empties the selection but keeps the tree selection", () => {
