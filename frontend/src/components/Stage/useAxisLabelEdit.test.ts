@@ -43,8 +43,15 @@ describe("useAxisLabelEdit", () => {
     act(() => italic.run());
     expect(useApp.getState().axisLabelStyles.y?.italic).toBe(true);
     // A size preset sets the size.
-    const px18 = size.find((i) => "label" in i && i.label === "18 px") as { run: () => void };
-    act(() => px18.run());
-    expect(useApp.getState().axisLabelStyles.y?.size).toBe(18);
+    // Presets are pt (the Axis dialog's unit); the stored size is px (pt x 4/3).
+    const pt12 = size.find((i) => "label" in i && i.label === "12 pt") as { run: () => void };
+    act(() => pt12.run());
+    expect(useApp.getState().axisLabelStyles.y?.size).toBe(16);
+    // ... and a dialog-entered 11 pt (14.6667 px) checks the 11 pt preset.
+    useApp.setState({ axisLabelStyles: { y: { size: 14.6667 } } });
+    act(() => result.current.bridge.onContextMenu("y", 100, 200));
+    const size2 = sub(sub(result.current.menu!.items, "Format"), "Size");
+    const checked = size2.filter((i) => "checked" in i && i.checked).map((i) => ("label" in i ? i.label : ""));
+    expect(checked).toEqual(["11 pt"]);
   });
 });

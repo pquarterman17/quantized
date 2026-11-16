@@ -1,4 +1,4 @@
-// Peak Analyzer step ④ for the mixed-shape model engine (audit P2.4 slice 2):
+// Peak analyzer step ④ for the mixed-shape model engine (audit P2.4 slice 2):
 // run / cancel `/api/peaks/model-fit` over the wizard's fitted x-range, show
 // the backend's ASCII error detail verbatim, then the result and a preview.
 // "Start from fit" copies the fitted values into the step-③ start values.

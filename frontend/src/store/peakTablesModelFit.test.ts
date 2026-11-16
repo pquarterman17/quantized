@@ -1,4 +1,4 @@
-// A Peak Analyzer model-fit table in the store (audit P2.1 uncertainties):
+// A Peak analyzer model-fit table in the store (audit P2.1 uncertainties):
 // `publishBuiltPeakTable`'s refusal and undo contract, and the manual-edit
 // contract ("an edit clears the uncertainty of each field it changes") now
 // exercised with REAL non-null errors instead of the always-null legacy ones.

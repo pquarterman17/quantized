@@ -64,7 +64,7 @@ const TABS = [
 export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
-  // A docked Curve Fit / Peak Analyzer: the stage reflows to its left.
+  // A docked Curve Fit / Peak analyzer: the stage reflows to its left.
   const cellRef = useRef<HTMLElement | null>(null);
   const dockPad = useRightDockClearance(cellRef);
   // A snapshot window always carries its frozen bundle (sanitizePlotWindows

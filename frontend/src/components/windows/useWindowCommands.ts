@@ -110,7 +110,7 @@ export function snapshotToNewWindow(): void {
   useApp.getState().createSnapshotWindow(freezePlotSnapshot(live));
 }
 
-/** Open Worksheet in Window / Open Map in Window (item 17 — full MDI): float
+/** Open worksheet in window / Open map in window (item 17 — full MDI): float
  *  the ACTIVE dataset's worksheet / 2-D map as a document window — the same
  *  component the stage tab mounts, live-bound to the dataset. A no-op without
  *  an active dataset. The new window is created on top and "focused" (=
@@ -249,13 +249,13 @@ export function useWindowCommands(): void {
       {
         id: "window-worksheet",
         group: "Window",
-        label: "Open Worksheet in Window",
+        label: "Open worksheet in window",
         run: () => openDocumentWindow("worksheet"),
       },
       {
         id: "window-map",
         group: "Window",
-        label: "Open Map in Window",
+        label: "Open map in window",
         run: () => openDocumentWindow("map"),
       },
       { id: "window-tile", group: "Window", label: "Tile windows", run: tileWindows },

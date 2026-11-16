@@ -1,4 +1,4 @@
-// Peak Analyzer — the mixed-shape model fit engine (audit P2.4 slice 2):
+// Peak analyzer — the mixed-shape model fit engine (audit P2.4 slice 2):
 // per-peak shapes, background, the editable parameter table, the
 // `/api/peaks/model-fit` round trip and its plot overlays. usePeakWizard owns
 // the working data and the candidates; this hook owns everything about the

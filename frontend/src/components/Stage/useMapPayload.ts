@@ -31,7 +31,7 @@ export function useMapPayload(
   keys: readonly [number, number, number],
   method: string,
   res: number,
-  setStatus: (status: string) => void,
+  setStatus: (status: string, tone?: "ok" | "danger") => void,
 ): { payload: MapPayload | null; fresh: boolean; error: string | null } {
   const [loaded, setLoaded] = useState<Loaded>({ payload: null, active: null, keys: null, method: "", res: 0 });
   useEffect(() => {
@@ -53,7 +53,7 @@ export function useMapPayload(
         if (cancelled || (err as { status?: unknown } | null)?.status !== 422) return;
         const error = err instanceof Error ? err.message : String(err);
         setLoaded({ payload: null, error, active, keys, method, res });
-        setStatus(`Map: ${error}`);
+        setStatus(`Map: ${error}`, "danger");
       });
     return () => {
       cancelled = true;

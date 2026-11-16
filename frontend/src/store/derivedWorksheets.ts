@@ -111,14 +111,14 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
     createDerivedWorksheet: async (sourceId, params, pipelineLabel) => {
       const source = get().datasets.find((d) => d.id === sourceId);
       if (!source) {
-        get().setStatus("Can't create a derived worksheet: source dataset not found.");
+        get().setStatus("Can't create a derived worksheet: source dataset not found.", "danger");
         return null;
       }
       // P1-1 review fix: never derive from a still-pending (lazy, downsampled
       // preview) source — the user derives from what they SEE, and a preview
       // is not that.
       if (source.pending) {
-        get().setStatus("Can't create a derived worksheet: source data hasn't fully loaded yet.");
+        get().setStatus("Can't create a derived worksheet: source data hasn't fully loaded yet.", "danger");
         return null;
       }
       const newId = nextDatasetId();
@@ -129,7 +129,7 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         to: recalcNodes.dataset(newId),
       });
       if (reason) {
-        get().setStatus(`Can't create a derived worksheet: ${reason}`);
+        get().setStatus(`Can't create a derived worksheet: ${reason}`, "danger");
         return null;
       }
       try {
@@ -163,7 +163,7 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         );
         return newDs.id;
       } catch (e) {
-        get().setStatus(`create derived worksheet failed: ${e instanceof Error ? e.message : "error"}`);
+        get().setStatus(`create derived worksheet failed: ${e instanceof Error ? e.message : "error"}`, "danger");
         return null;
       }
     },

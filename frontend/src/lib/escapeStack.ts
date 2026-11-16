@@ -390,7 +390,7 @@ function onKeyDown(event: KeyboardEvent): void {
       // for the rest of the propagation path, so a window-bubble consumer
       // registered after the dispatcher — `usePeakWizard`'s marker-edit pause
       // was the one in the tree until R11 — still acted on it: measured, one
-      // Escape with a live drag and the Peak Analyzer at step ② cancelled the drag AND
+      // Escape with a live drag and the Peak analyzer at step ② cancelled the drag AND
       // paused the marker edit. Two actions, one key.
       event.preventDefault();
       // Nothing below may run for this key, and a walk armed by an earlier

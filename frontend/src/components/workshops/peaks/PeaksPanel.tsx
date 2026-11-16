@@ -4,7 +4,7 @@
 // background) or each independently, then show the fitted parameters + R².
 // "→ Report" lands the fitted peak table as a #36 report sheet in the library.
 //
-// Fitted tables are durable on the dataset; Peak Analyzer model-fit tables
+// Fitted tables are durable on the dataset; Peak analyzer model-fit tables
 // additionally show their standard errors through PeakValueCell.
 
 import { useState } from "react";
@@ -34,7 +34,7 @@ import PeakAnalysisInputs from "./PeakAnalysisInputs";
 const NO_FITTED_PEAKS: FittedPeak[] = [];
 // Opened on demand only: its chunk loads on the first "Batch integrate…".
 const BatchIntegrateWindow = lazyRegion(() => import("./BatchIntegrateWindow"), "Batch integrate");
-// Lazy for the same reason the Peak Analyzer's step ② loads it lazily
+// Lazy for the same reason the Peak analyzer's step ② loads it lazily
 // (peakwizard/StepFindAdvanced.tsx): the disclosure is rarely opened, and a
 // STATIC import here would make the module — shared with that lazy step — a
 // preload of this panel, i.e. one more chunk name in the entry's manifest
@@ -159,7 +159,7 @@ export default function PeaksPanel() {
   // the header metrics read the DURABLE table, never `fitResult` — the local
   // copy usePeakManualEdits re-derives from the table only after an async
   // resolve. Reading the copy let a hand edit of FWHM or height, or a table
-  // published from the Peak Analyzer, show the OLD value beside the NEW row's
+  // published from the Peak analyzer, show the OLD value beside the NEW row's
   // error for that interval. `fitResult` still drives what the table cannot:
   // the unpublished-fit case, and the row selection (whose reset is keyed on
   // that array's identity).
@@ -339,7 +339,7 @@ export default function PeaksPanel() {
                   : modelFit && peakTable?.provenance.ssr != null
                     ? "R² undefined" // an unedited model fit (SSR clears with R² on any edit)
                     : "fit metrics cleared by manual changes"}
-            {modelFit && " · Peak Analyzer model fit"}
+            {modelFit && " · Peak analyzer model fit"}
             {manualEditCount(shown) > 0 && ` · ${manualEditCount(shown)} edited by hand`}
             {metrics?.rmse != null && ` · RMSE = ${fmtNum(metrics.rmse)}`}
             {excludedCount > 0 && ` · ${excludedCount} excluded`}

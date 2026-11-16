@@ -1,4 +1,4 @@
-// Pure helpers for the Peak Analyzer wizard's marker placement (M3 review
+// Pure helpers for the Peak analyzer wizard's marker placement (M3 review
 // finding, round 3 of UX-R6's "Label peaks" review — same latent bug as
 // usePeaks.ts's L1/L2, a third call site). No React/store import — used by
 // components/workshops/peakwizard/usePeakWizard.ts.

@@ -48,7 +48,7 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
         (e: unknown) => {
           const name = get().datasets.find((d) => d.id === id)?.name ?? id;
           const msg = `couldn't load re-import: ${e instanceof Error ? e.message : "error"}`;
-          get().setStatus(`re-import failed: ${msg}`);
+          get().setStatus(`re-import failed: ${msg}`, "danger");
           toast(`re-import "${name}" failed: ${msg} — the dataset is unchanged`, "danger");
         },
       ),

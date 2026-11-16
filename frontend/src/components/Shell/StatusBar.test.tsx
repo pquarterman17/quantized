@@ -9,6 +9,7 @@ import { runExportFigureCommand } from "../../lib/exportFigureCommand";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { trackJob } from "../../store/pendingOpActions";
 import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
+import { makeDemoDataset } from "../../lib/demo";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../../lib/api/figures", () => ({ exportFigure: vi.fn() }));
@@ -390,6 +391,18 @@ describe("StatusBar dot tone on failure (UX-Q)", () => {
     // A direct write (no setStatus) must not inherit the stale red.
     act(() => useApp.getState().setStatus("boom", "danger"));
     act(() => useApp.setState({ status: "later" }));
+    expect(dot()).toHaveClass("qz-ok");
+  });
+
+  it("clears when a dataset is added or a workspace is loaded, even if no new status is written", () => {
+    render(<StatusBar />);
+    act(() => useApp.getState().setStatus("import failed", "danger"));
+    expect(dot()).toHaveClass("qz-danger");
+    act(() => useApp.getState().addDataset({ id: "ok1", name: "ok1.dat", data: makeDemoDataset() }));
+    expect(dot()).toHaveClass("qz-ok");
+    act(() => useApp.getState().setStatus("export failed", "danger"));
+    expect(dot()).toHaveClass("qz-danger");
+    act(() => useApp.getState().loadWorkspace({ datasets: [] } as unknown as Parameters<ReturnType<typeof useApp.getState>["loadWorkspace"]>[0]));
     expect(dot()).toHaveClass("qz-ok");
   });
 

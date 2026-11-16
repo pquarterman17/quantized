@@ -1,4 +1,4 @@
-// Peak Analyzer step ② ▸ Advanced: the Peaks panel's detector settings reach
+// Peak analyzer step ② ▸ Advanced: the Peaks panel's detector settings reach
 // the wizard's find AND its saved recipe, so a batch run honours them.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -51,7 +51,7 @@ beforeEach(() => {
 
 const candidateRows = () => document.querySelectorAll("table.qz-table tbody tr");
 
-describe("Peak Analyzer step ② ▸ Advanced", () => {
+describe("Peak analyzer step ② ▸ Advanced", () => {
   it("'Find again' sends the edited Advanced fields with the recipe's own thresholds, and the saved recipe carries them", async () => {
     render(<PeakWizardPanel />);
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));

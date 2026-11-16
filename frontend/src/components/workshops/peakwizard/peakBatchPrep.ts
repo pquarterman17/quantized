@@ -1,4 +1,4 @@
-// Peak Analyzer batch — the CLIENT half of "run a saved recipe over many
+// Peak analyzer batch — the CLIENT half of "run a saved recipe over many
 // datasets" (audit P2.4 slice 4).
 //
 // THE SPLIT. The recipe's range cut, baseline, peak find and parameter-table

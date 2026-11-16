@@ -4,7 +4,7 @@
 // noise, and an "err" column. The Origin user picks the built-in ExpDec1,
 // holds y0, weights by the error column, fits, reads the report (Origin's
 // parameter table + ANOVA), turns on the confidence band, then batch-fits
-// three worksheets and runs the Peak Analyzer wizard on two Gaussian peaks.
+// three worksheets and runs the Peak analyzer wizard on two Gaussian peaks.
 // Assertions are on fitted VALUES and on store state, not on mock calls.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -127,13 +127,13 @@ test.describe("Origin journey: fitting and peaks", () => {
     await expect(batch.getByText(/Failed|Error/)).toHaveCount(0);
   });
 
-  test("Peak Analyzer wizard fits two Gaussian peaks", async ({ page }) => {
+  test("Peak analyzer wizard fits two Gaussian peaks", async ({ page }) => {
     test.setTimeout(60_000);
     await gotoApp(page);
     await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("two-peaks.csv"));
     await waitForDatasetCount(page, 1);
-    await runPaletteCommand(page, "Peak Analyzer");
-    const pa = page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
+    await runPaletteCommand(page, "Peak analyzer");
+    const pa = page.locator(".qzk-win").filter({ has: page.getByText("Peak analyzer", { exact: true }) });
     await expect(pa).toBeVisible();
     const next = pa.getByRole("button", { name: "Next →" });
 

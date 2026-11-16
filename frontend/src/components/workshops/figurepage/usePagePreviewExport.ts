@@ -228,12 +228,12 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
         // buildSpec() already set the specific `error` state (visible in the
         // preview pane); mirror it on the status bar too so Export's failure
         // reads the same as the preview's, not a generic non-sequitur.
-        setStatus("cannot export: a panel's source is missing - see the highlighted slot, then clear or reassign it");
+        setStatus("cannot export: a panel's source is missing - see the highlighted slot, then clear or reassign it", "danger");
         return;
       }
       setStatus(`exported figure_page.${fmt}`);
     } catch (e) {
-      setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+      setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`, "danger");
     }
   }
 
@@ -270,7 +270,7 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
       return;
     }
     if (!spec) {
-      setStatus("cannot copy: a panel's source is missing - see the highlighted slot, then clear or reassign it");
+      setStatus("cannot copy: a panel's source is missing - see the highlighted slot, then clear or reassign it", "danger");
       return;
     }
     setStatus("rendering figure page for the clipboard…");

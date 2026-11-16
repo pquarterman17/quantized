@@ -1,4 +1,4 @@
-// Peak Analyzer wizard (#31) — the five step bodies. Presentational: every
+// Peak analyzer wizard (#31) — the five step bodies. Presentational: every
 // piece of state lives in usePeakWizard (passed down as `w`), so Back/Next
 // never loses edits and each component stays small. The panel keys these by
 // the recipe revision, so applying a saved recipe re-seeds the local fields.

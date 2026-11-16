@@ -109,13 +109,13 @@ export async function duplicateAnalysisResult(id: string, now = new Date().toISO
   }
   const outputRef = current?.outputs.length === 1 ? current.outputs[0] : null;
   if (!current || !outputRef) {
-    initial.setStatus(`can't duplicate ${current?.name ?? "result"}: one output worksheet is required`);
+    initial.setStatus(`can't duplicate ${current?.name ?? "result"}: one output worksheet is required`, "danger");
     return null;
   }
   try {
     await initial.resolveDataset(outputRef.datasetId);
   } catch (error) {
-    useApp.getState().setStatus(`can't duplicate ${current.name}: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
+    useApp.getState().setStatus(`can't duplicate ${current.name}: ${error instanceof Error ? error.message : "worksheet loading failed"}`, "danger");
     return null;
   }
   const state = useApp.getState();
@@ -125,7 +125,7 @@ export async function duplicateAnalysisResult(id: string, now = new Date().toISO
     ? state.datasets.find((dataset) => dataset.id === outputRef.datasetId)
     : null;
   if (!liveResult || !output) {
-    state.setStatus("can't duplicate analysis result: its output changed while loading");
+    state.setStatus("can't duplicate analysis result: its output changed while loading", "danger");
     return null;
   }
   const outputCopyId = nextDatasetId();
@@ -170,7 +170,7 @@ export function freezeAnalysisResult(id: string): string | null {
   const outputId = result?.outputs.length === 1 ? result.outputs[0].datasetId : null;
   const output = outputId ? state.datasets.find((dataset) => dataset.id === outputId) : null;
   if (!result || !output?.derivedFrom) {
-    state.setStatus(`can't freeze ${result?.name ?? "result"}: one linked output worksheet is required`);
+    state.setStatus(`can't freeze ${result?.name ?? "result"}: one linked output worksheet is required`, "danger");
     return null;
   }
   const frozenId = state.freezeCopy(output.id);
@@ -199,7 +199,7 @@ export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: n
   const { fit, dataset } = opened;
   const st = useApp.getState();
   if (fit && (st.polarMode || st.statMode)) {
-    st.setStatus("can't send fitted plot: a polar or stat view's figure cannot carry the fit; show it as a plain plot first");
+    st.setStatus("can't send fitted plot: a polar or stat view's figure cannot carry the fit; show it as a plain plot first", "danger");
     return false;
   }
   const requirement = fit
@@ -214,7 +214,7 @@ export async function sendAnalysisResultPlotToReport(id: string, bindingIndex: n
     // True only when a figure block was really added (not cancelled, refused or a duplicate click).
     return await import("../commands/plotCommands").then((module) => module.sendFigureToReport(useApp.getState, requirement));
   } catch (error) {
-    useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`);
+    useApp.getState().setStatus(`can't send result figure to report: ${error instanceof Error ? error.message : "report tools failed to load"}`, "danger");
     return false;
   }
 }
@@ -230,7 +230,7 @@ export async function exportAnalysisResultTable(id: string, datasetId: string): 
   try {
     await initial.resolveDataset(datasetId);
   } catch (error) {
-    useApp.getState().setStatus(`can't export ${result.name}: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
+    useApp.getState().setStatus(`can't export ${result.name}: ${error instanceof Error ? error.message : "worksheet loading failed"}`, "danger");
     return false;
   }
   const state = useApp.getState();
@@ -238,12 +238,12 @@ export async function exportAnalysisResultTable(id: string, datasetId: string): 
   const stillOwned = current?.tableRefs?.some((table) => table.datasetId === datasetId)
     || current?.outputs.some((output) => output.datasetId === datasetId);
   if (!current || !stillOwned) {
-    state.setStatus("can't export result table: its result changed while loading");
+    state.setStatus("can't export result table: its result changed while loading", "danger");
     return false;
   }
   const dataset = state.datasets.find((item) => item.id === datasetId);
   if (!dataset) {
-    state.setStatus(`can't export ${current.name}: its table worksheet is missing`);
+    state.setStatus(`can't export ${current.name}: its table worksheet is missing`, "danger");
     return false;
   }
   const filename = stemFromName(`${current.name}-${dataset.name}`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "analysis-result";
@@ -260,7 +260,7 @@ export function exportAnalysisPeakTable(id: string): boolean {
   const sourceId = result?.settingsRef?.field === "peakTable" ? result.settingsRef.datasetId : null;
   const dataset = sourceId ? state.datasets.find((item) => item.id === sourceId) : null;
   if (!result || !dataset?.peakTable) {
-    state.setStatus(`can't export ${result?.name ?? "peak result"}: its fitted peak table is missing`);
+    state.setStatus(`can't export ${result?.name ?? "peak result"}: its fitted peak table is missing`, "danger");
     return false;
   }
   const filename = stemFromName(`${result.name}-peaks`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "peak-analysis";
@@ -277,7 +277,7 @@ export async function exportAnalysisFitTable(id: string): Promise<boolean> {
   const dataset = sourceId ? state.datasets.find((item) => item.id === sourceId) : null;
   const spec = dataset?.fitSpec;
   if (!result || !dataset || !spec) {
-    state.setStatus(`can't export ${result?.name ?? "fit result"}: its saved fit is missing`);
+    state.setStatus(`can't export ${result?.name ?? "fit result"}: its saved fit is missing`, "danger");
     return false;
   }
   let names: string[] = [];
@@ -290,7 +290,7 @@ export async function exportAnalysisFitTable(id: string): Promise<boolean> {
   const liveResult = current.analysisResults.find((item) => item.id === id);
   const liveDataset = current.datasets.find((item) => item.id === sourceId);
   if (liveResult?.settingsRef?.field !== "fitSpec" || liveDataset?.fitSpec !== spec) {
-    current.setStatus("can't export fit parameters: the fit changed while model metadata was loading");
+    current.setStatus("can't export fit parameters: the fit changed while model metadata was loading", "danger");
     return false;
   }
   const filename = stemFromName(`${result.name}-parameters`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "curve-fit";
@@ -328,7 +328,7 @@ export async function recalculateFitAnalysisResult(
     const source = state.datasets.find((dataset) => dataset.id === sourceId);
     const spec = source?.fitSpec;
     if (liveResult?.settingsRef?.field !== "fitSpec" || liveResult.settingsRef.datasetId !== sourceId || !source || !spec) {
-      state.setStatus(`can't recalculate ${result.name}: its source or saved fit is missing`);
+      state.setStatus(`can't recalculate ${result.name}: its source or saved fit is missing`, "danger");
       return false;
     }
     if (spec.xKey === undefined || spec.yKey === undefined) {
@@ -359,7 +359,7 @@ export async function recalculateFitAnalysisResult(
     const currentSource = current.datasets.find((dataset) => dataset.id === sourceId);
     if (currentResult?.settingsRef?.field !== "fitSpec" || currentResult.settingsRef.datasetId !== sourceId ||
         currentSource !== source) {
-      current.setStatus(`can't apply recalculation: ${result.name} changed while fitting`);
+      current.setStatus(`can't apply recalculation: ${result.name} changed while fitting`, "danger");
       return false;
     }
     const overlayWasVisible = current.fitOverlay?.datasetId === sourceId;
@@ -381,7 +381,7 @@ export async function recalculateFitAnalysisResult(
       : `recalculated ${result.name}`);
     return true;
   } catch (error) {
-    useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`);
+    useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`, "danger");
     return false;
   } finally {
     recalculatingFits.delete(sourceId);
@@ -399,7 +399,7 @@ export async function recalculateAnalysisResult(id: string): Promise<boolean> {
   const output = state.datasets.find((dataset) => dataset.id === result.outputs[0]?.datasetId);
   const sourceId = result.sources[0]?.datasetId;
   if (!output?.derivedFrom || !sourceId || !state.datasets.some((dataset) => dataset.id === sourceId)) {
-    state.setStatus(`can't recalculate ${result.name}: its source or output worksheet is missing`);
+    state.setStatus(`can't recalculate ${result.name}: its source or output worksheet is missing`, "danger");
     return false;
   }
   if (recalculatingOutputs.has(output.id)) {
@@ -422,7 +422,7 @@ export async function recalculateAnalysisResult(id: string): Promise<boolean> {
     }));
     return true;
   } catch (error) {
-    useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`);
+    useApp.getState().setStatus(`couldn't recalculate ${result.name}: ${error instanceof Error ? error.message : "unknown error"}`, "danger");
     return false;
   } finally {
     recalculatingOutputs.delete(output.id);

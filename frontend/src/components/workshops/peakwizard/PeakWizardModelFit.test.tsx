@@ -1,4 +1,4 @@
-// The Peak Analyzer's mixed-shape model engine, driven through the panel
+// The Peak analyzer's mixed-shape model engine, driven through the panel
 // (audit P2.4 slice 2): per-peak shapes, background, the parameter table
 // (vary / min / max / tie), share-FWHM, the request that reaches the backend
 // (real postJSON over a stubbed fetch), result rendering (null-error reasons,
@@ -86,7 +86,7 @@ async function fitWith(res: PeakModelFitResponse | { detail: string }, status = 
   fireEvent.click(screen.getByRole("button", { name: "Fit" }));
 }
 
-describe("Peak Analyzer — model engine setup (step 3)", () => {
+describe("Peak analyzer — model engine setup (step 3)", () => {
   it("seeds from the found peaks and sends the edited table to /api/peaks/model-fit", async () => {
     await findTwoPeaks();
     step("Model");
@@ -224,7 +224,7 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
   });
 });
 
-describe("Peak Analyzer — model fit results (step 4)", () => {
+describe("Peak analyzer — model fit results (step 4)", () => {
   it("renders derived values ± errors, reasons for missing errors, SSR (never χ²) and warnings", async () => {
     await findTwoPeaks();
     await fitWith(modelFitResponse());

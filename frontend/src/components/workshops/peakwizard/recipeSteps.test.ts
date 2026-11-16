@@ -1,4 +1,4 @@
-// Peak Analyzer step ① (audit #19): beside None / ALS / rolling ball /
+// Peak analyzer step ① (audit #19): beside None / ALS / rolling ball /
 // modpoly, the recipe runs the Baseline workshop's SNIP, anchor points,
 // Shirley and polynomial methods on the SAME endpoints, and the anchor
 // method anchors each dataset on its own data at the recipe's X positions.

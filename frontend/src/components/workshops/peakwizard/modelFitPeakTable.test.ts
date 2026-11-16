@@ -1,4 +1,4 @@
-// The Peak Analyzer's model fit -> the durable PeakTable (audit P2.1
+// The Peak analyzer's model fit -> the durable PeakTable (audit P2.1
 // "Per-peak fit uncertainties"): values and standard errors land in the `*Err`
 // columns, a missing error stays null (never 0, never NaN) with its reason,
 // shapes / eta / Voigt widths are kept, provenance names the producer, and the

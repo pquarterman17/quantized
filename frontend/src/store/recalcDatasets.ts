@@ -182,7 +182,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
   if (failed.size > 0) {
     const n = order.length;
     const why = [...failed].map(([id, reason]) => `${nameOf(id)}: ${reason}`).join("; ");
-    get().setStatus(`recalculated ${n - failed.size} of ${n} dataset${plural(n)} — ${why}`);
+    get().setStatus(`recalculated ${n - failed.size} of ${n} dataset${plural(n)} — ${why}`, "danger");
   }
 }
 

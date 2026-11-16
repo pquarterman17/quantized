@@ -376,7 +376,7 @@ async function runReimport(
     // failures: the operation's whole purpose is to overwrite data the user
     // already has, so "failed" alone leaves them unsure whether they still
     // have it.
-    get().setStatus(`re-import failed: ${msg}`);
+    get().setStatus(`re-import failed: ${msg}`, "danger");
     toast(`re-import "${ds.name}" failed: ${msg} — the dataset is unchanged`, "danger");
   }
 }

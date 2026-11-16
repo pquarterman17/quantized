@@ -44,7 +44,7 @@ export function deferOriginFigureApply(
     .catch((error: unknown) => {
       if (applySeq !== requestSeq) return;
       const message = error instanceof Error ? error.message : "source book fetch failed";
-      get().setStatus(`couldn't apply Origin figure — ${message}`);
+      get().setStatus(`couldn't apply Origin figure — ${message}`, "danger");
       toast(`couldn't apply Origin figure — ${message}`, "danger");
     });
   return true;
@@ -75,7 +75,7 @@ export function deferOriginApplyLibs(get: GetApp, id: string, opts?: ApplyOpts):
     .catch((error: unknown) => {
       if (applySeq !== requestSeq) return;
       const message = error instanceof Error ? error.message : "figure tools failed to load";
-      get().setStatus(`couldn't apply Origin figure — ${message}`);
+      get().setStatus(`couldn't apply Origin figure — ${message}`, "danger");
       toast(`couldn't apply Origin figure — ${message}`, "danger");
     });
 }

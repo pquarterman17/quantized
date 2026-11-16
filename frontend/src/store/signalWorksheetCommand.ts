@@ -33,7 +33,7 @@ export async function createSignalWorksheetFromApp(
       useApp.getState().setStatus("signal processing cancelled — nothing was created");
       return null;
     }
-    useApp.getState().setStatus(`create signal worksheet failed: ${error instanceof Error ? error.message : "error"}`);
+    useApp.getState().setStatus(`create signal worksheet failed: ${error instanceof Error ? error.message : "error"}`, "danger");
     return null;
   }
 }

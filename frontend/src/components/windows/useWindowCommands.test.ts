@@ -143,7 +143,7 @@ describe("useWindowCommands — published registry entries", () => {
     expect(useApp.getState().plotWindows).toHaveLength(1);
   });
 
-  it("'Open Worksheet in Window' (item 17) creates + raises a worksheet window on the ACTIVE dataset — focus stays on the plot window, stage switches to Plot", () => {
+  it("'Open worksheet in window' (item 17) creates + raises a worksheet window on the ACTIVE dataset — focus stays on the plot window, stage switches to Plot", () => {
     useApp.setState({ stageTab: "worksheet" });
     renderHook(() => useWindowCommands());
     act(() => action("window-worksheet").run());
@@ -171,7 +171,7 @@ describe("useWindowCommands — published registry entries", () => {
     expect(windows[0].geometry.x).not.toBe(windows[1].geometry.x);
   });
 
-  it("'Open Map in Window' (item 17) does the same with kind:'map'", () => {
+  it("'Open map in window' (item 17) does the same with kind:'map'", () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-map").run());
     const s = useApp.getState();

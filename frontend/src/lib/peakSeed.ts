@@ -1,4 +1,4 @@
-// Peak Analyzer "add a peak here" (audit P2.4 slice 3, direct add): seed a
+// Peak analyzer "add a peak here" (audit P2.4 slice 3, direct add): seed a
 // new candidate's centre / height / FWHM from the data AROUND the x the user
 // clicked or typed, instead of the flat "nearest point, 2 % of the range"
 // guess the wizard used before. Pure.

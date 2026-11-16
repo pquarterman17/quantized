@@ -1,4 +1,4 @@
-// Peak Analyzer, audit P2.4 slice 3, end to end against the REAL backend on
+// Peak analyzer, audit P2.4 slice 3, end to end against the REAL backend on
 // the two-peak fixture (fixtures/two-peaks.csv: a Gaussian at 36 deg, FWHM
 // 0.4, and a Lorentzian at 44 deg, FWHM 0.6, on a sloped background):
 //
@@ -13,7 +13,7 @@
 //
 // The plot's x scale is pinned with the store's `setXLim` so a data x maps to
 // a known pixel (uPlot uses a fixed range verbatim), and the target lands in
-// the left half of the plot, clear of the Peak Analyzer's tool window.
+// the left half of the plot, clear of the Peak analyzer's tool window.
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -58,9 +58,9 @@ async function pixelAt(page: Page, lim: [number, number], x: number, yFrac = 0.5
   return { x: b.x + ((x - lim[0]) / (lim[1] - lim[0])) * b.width, y: b.y + b.height * yFrac };
 }
 
-const wizard = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
+const wizard = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Peak analyzer", { exact: true }) });
 
-test.describe("Peak Analyzer — Fit this range + direct add", () => {
+test.describe("Peak analyzer — Fit this range + direct add", () => {
   test("Peak Fitting ▸ Fit this range opens the analyzer on the brushed range with its peak found", async ({ page }) => {
     const lim: [number, number] = [40, 50];
     await loadPinned(page, lim);
@@ -109,7 +109,7 @@ test.describe("Peak Analyzer — Fit this range + direct add", () => {
   test("delete a peak from the model table, add it back by clicking the plot, and fit both", async ({ page }) => {
     const lim: [number, number] = [42, 52];
     await loadPinned(page, lim);
-    await runPaletteCommand(page, "Peak Analyzer");
+    await runPaletteCommand(page, "Peak analyzer");
     const panel = wizard(page);
     await expect(panel).toBeVisible();
 

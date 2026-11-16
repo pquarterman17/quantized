@@ -1,4 +1,4 @@
-// Peak Analyzer step ③ for the mixed-shape model engine (audit P2.4 slice 2):
+// Peak analyzer step ③ for the mixed-shape model engine (audit P2.4 slice 2):
 // the engine choice, one shape per included peak, the background, the
 // "share FWHM" convenience and the parameter table. The classic engine keeps
 // its original controls in steps.tsx's StepModel.

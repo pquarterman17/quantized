@@ -359,7 +359,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({ history: s.history.slice(0, s.history.findIndex((e) => e.seq === step) + 1 || s.history.length) }));
     const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get(), win: get().focusedWindowId });
     set((s) => ({
-      datasets: [...s.datasets, ds],
+      datasets: [...s.datasets, ds], statusDanger: null, // new data supersedes a stale failure marker (UX-Q)
       activeId: ds.id,
       selectedIds: [ds.id], // a fresh import is the sole selection
       // L0.25 coherence (retrospective-audit fix): a fresh dataset selection

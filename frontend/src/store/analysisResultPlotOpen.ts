@@ -66,7 +66,7 @@ export async function openResultPlot(
   const fitDatasetId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
   const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
   const fitSpec = fitDataset?.fitSpec;
-  const fail = (why: string) => { useApp.getState().setStatus(`can't ${purpose === "report" ? "send" : "open"} fitted plot: ${why}`); return null; };
+  const fail = (why: string) => { useApp.getState().setStatus(`can't ${purpose === "report" ? "send" : "open"} fitted plot: ${why}`, "danger"); return null; };
   if (fitDatasetId && (!fitDataset || !fitSpec)) return fail("the saved fit is missing");
   const params = fitSpec?.params;
   if (fitSpec && !params?.length) return fail("the saved fit has no parameter values");

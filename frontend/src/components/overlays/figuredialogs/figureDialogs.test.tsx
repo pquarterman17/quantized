@@ -77,7 +77,7 @@ describe("Axis dialog model (#6)", () => {
   it("edits the axis title size in pt (like Label size) while storing px, losslessly", () => {
     const view = { ...defaultPlotView(), axisLabelStyles: { y: { size: 14.5 } } };
     const d = axisDraft(view, "y");
-    expect(d.titleSize).toBe("10.875");
+    expect(d.titleSize).toBe("10.88");
     expect(axisPatch(view, "y", d).axisLabelStyles?.y?.size).toBe(14.5);
   });
 

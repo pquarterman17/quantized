@@ -15,7 +15,7 @@
 // The physics is untouched: the fit itself is still the backend's, and nothing
 // in this hook computes a number the calc layer does not (CLAUDE.md's
 // golden-parity rule). Per-peak UNCERTAINTIES are carried in the peak table
-// (filled since 2026-09-26 when the Peak Analyzer's model fit published it)
+// (filled since 2026-09-26 when the Peak analyzer's model fit published it)
 // but NOT passed on — `calc.reductions.williamson_hall` takes no weights, so
 // feeding it any would be new, ungoldened numerics. The caption says so when
 // the loaded table has them. See P2.1's plan entry.
@@ -121,7 +121,7 @@ export function useWilliamsonHall(): WilliamsonHallState {
     // measurement of these rows, and that re-fitting is the one fix.
     if (!peakTableMatchesData(table, active))
       return `this dataset has changed since the fit — re-fit the peaks in the ${
-        table.provenance.producer === "model_fit" ? "Peak Analyzer and publish again" : "Peaks workshop"}`;
+        table.provenance.producer === "model_fit" ? "Peak analyzer and publish again" : "Peaks workshop"}`;
     if (!peakTableXIsDegrees(table))
       return `fit on ${table.provenance.xLabel || "a non-2θ axis"} (${table.provenance.xUnit || "no unit recorded"}), not 2θ in degrees`;
     return null;
@@ -201,7 +201,7 @@ export function useWilliamsonHall(): WilliamsonHallState {
     const edited = manualEditCount(included);
     setFittedSource(
       `${included.length} fitted peak${included.length === 1 ? "" : "s"} from ${datasetName || "the active dataset"}` +
-        ` · ${model} (${producer === "model_fit" ? "Peak Analyzer model fit" : method})` +
+        ` · ${model} (${producer === "model_fit" ? "Peak analyzer model fit" : method})` +
         (excluded > 0 ? ` · ${excluded} excluded` : "") +
         (edited > 0 ? ` · ${edited} edited by hand` : "") +
         // Honest about what the reduction does with the errors: nothing yet.

@@ -104,7 +104,7 @@ export interface PlotMenuContext {
    *  (lib/plotRangeSelection), or null — the entry is then disabled with
    *  `NO_RANGE_REASON` as its tooltip. */
   peakRange: PlotRange | null;
-  /** Open the Peak Analyzer on `peakRange` with its peaks found. */
+  /** Open the Peak analyzer on `peakRange` with its peaks found. */
   fitPeakRange: () => void;
 
   /** UX-R6 manual annotation entry point: place a new text annotation at the
@@ -361,7 +361,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
         label: "Fit this range",
         run: ctx.fitPeakRange,
         disabled: !r,
-        title: r ? `Peak Analyzer on ${fmtNum(r.lo)} – ${fmtNum(r.hi)} (the ${r.source})` : NO_RANGE_REASON,
+        title: r ? `Peak analyzer on ${fmtNum(r.lo)} – ${fmtNum(r.hi)} (the ${r.source})` : NO_RANGE_REASON,
       },
     ],
   });

@@ -83,7 +83,7 @@ export function openWorkspaceCommand(
       void withOp(label, () => parseWorkspaceFile(file, currentViewport()))
         .then(dispatch)
         .catch((e: unknown) =>
-          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
+          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),
         );
     }, ".dwk,.json");
 
@@ -125,11 +125,11 @@ export function openWorkspaceCommand(
         )
           .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
           .catch((e: unknown) =>
-            s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
+            s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),
           );
       })
       .catch((e: unknown) =>
-        s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
+        s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),
       );
   };
 }

@@ -142,7 +142,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
   const [fitOverlay, peakOverlay, baselineOverlay, derivOverlay] = useStageOverlays();
-  // Peak-workshop click-on-plot editing — Peak Analyzer or the simpler Peaks
+  // Peak-workshop click-on-plot editing — Peak analyzer or the simpler Peaks
   // panel owns this legacy-named bridge while its edit mode is live.
   const peakWizardEdit = useApp((s) => s.peakWizardEdit);
   // Anchor-point baseline editing (GOTO #2) — non-null only while the
