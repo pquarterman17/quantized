@@ -6208,7 +6208,7 @@ export interface components {
             italic?: boolean | null;
             /**
              * Size
-             * @description Font size: the screen's CSS px, read as points (the annotation `size` rule).
+             * @description Font size in points (the Stage sends canvas px x 0.75, as for an annotation).
              */
             size?: number | null;
         };

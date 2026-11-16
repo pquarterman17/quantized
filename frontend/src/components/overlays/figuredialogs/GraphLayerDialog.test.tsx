@@ -73,7 +73,7 @@ describe("Insert ▸ Inset graph", () => {
     fireEvent.change(screen.getByLabelText("Draw as"), { target: { value: "linesymbol" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     const l: InsetLayer = only("inset");
-    expect(l.curves).toMatchObject([{ datasetId: "dmdh", xKey: null, yKey: 0 }]);
+    expect(l.curves).toMatchObject([{ datasetId: "loop", yKey: 0 }, { datasetId: "loop", yKey: 1 }, { datasetId: "dmdh", xKey: null, yKey: 0 }]);
     expect(l.at[0]).toBeCloseTo(0.1);
     expect(l.x).toEqual({ lim: [-60, 60], scale: "linear", label: "H (Oe)", step: null });
     expect(l.y.scale).toBe("log");
@@ -99,6 +99,25 @@ describe("Insert ▸ Inset graph", () => {
     expect(screen.getByText(/X axis: give both From and To/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(JSON.stringify(st().layers)).toBe(before);
+  });
+});
+
+describe("Insert ▸ Inset graph: starting curves", () => {
+  const draftCurves = () => {
+    const open = useFigureDialog.getState().open;
+    return open?.kind === "graphLayer" ? (open.draft as InsetLayer).curves : null;
+  };
+
+  it("starts with the active graph's visible curves, not empty", () => {
+    insertGraphLayer("inset");
+    expect(draftCurves()).toMatchObject([{ datasetId: "loop", xKey: null, yKey: 0 }, { datasetId: "loop", xKey: null, yKey: 1 }]);
+  });
+
+  it("skips a hidden curve", () => {
+    useApp.setState({ hiddenChannels: [0] });
+    insertGraphLayer("inset");
+    expect(draftCurves()).toMatchObject([{ datasetId: "loop", yKey: 1 }]);
+    useApp.setState({ hiddenChannels: [] });
   });
 });
 

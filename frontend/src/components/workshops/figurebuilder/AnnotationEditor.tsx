@@ -77,7 +77,7 @@ export default function AnnotationEditor({
             onValue={(y) => y === undefined ? undefined : updateAnnotation(index, { y })}
           />
           <PropertyNumberField
-            label="font size"
+            label="font size (pt)"
             ariaLabel={`annotation ${index + 1} font size`}
             value={annotation.size}
             min={1}
