@@ -73,12 +73,13 @@ export default function CurveFitResults(p: Props) {
   const names = params.map((_, i) => p.paramNames[i] ?? `p${i}`);
   const done = result && !guessOnly;
 
+  const setStatus = useApp((s) => s.setStatus);
   const view = done && active ? fitResultView(resultInput(active, modelName, names, result, fitData)) : null;
   const copy = async (md: boolean) => {
     if (!active || !result) return;
     const input = resultInput(active, modelName, names, result, fitData);
     const ok = await copyText(md ? fitResultMarkdown(input) : fitResultTsv(input));
-    useApp.getState().setStatus(ok ? `copied the fit results (${md ? "Markdown" : "TSV, paste into Excel"})` : "clipboard unavailable");
+    setStatus(ok ? `copied the fit results (${md ? "Markdown" : "TSV, paste into Excel"})` : "clipboard unavailable");
   };
 
   return (

@@ -157,7 +157,7 @@ export default function CurveFitPanel() {
     ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: customLabel(m) })),
   ];
   // Grouped by Origin category, with aliases spelled out (lib/fitModelCatalog).
-  const modelGroups = groupFitModels(models);
+  const modelGroups = groupFitModels(models, modelName);
   const modelOptions = [...modelGroups.flatMap((g) => g.options), ...customOptions];
   // Deleting (or renaming) the loaded model — here, in the Recipe Library, or
   // anywhere else that writes the library — orphans the picker value: fall

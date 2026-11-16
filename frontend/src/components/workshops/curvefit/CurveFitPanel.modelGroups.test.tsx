@@ -40,7 +40,8 @@ describe("CurveFitPanel — the model list is grouped by Origin category (re-aud
     });
     render(<CurveFitPanel />);
     const picker = await screen.findByRole("combobox", { name: "Model" });
-    await screen.findByRole("option", { name: "Exponential Decay (= ExpDec1)" });
+    await screen.findByRole("option", { name: "ExpDec1 (= Exponential Decay)" });
+    expect(screen.queryByRole("option", { name: /^Exponential Decay/ })).toBeNull(); // listed once
     const groups = [...picker.querySelectorAll("optgroup")].map((g) => g.label);
     expect(groups).toEqual(["Polynomial", "Exponential", "Custom equations"]);
     expect((picker as HTMLSelectElement).value).toBe("Linear");
