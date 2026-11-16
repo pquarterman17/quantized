@@ -91,6 +91,11 @@ export interface ProbedProvenance {
 
 export type SourceChangeVerdict = "unchanged" | "changed" | "unknown";
 
+/** Two mtimes (epoch s) closer than this are the same instant: a value derived from
+ *  `st_mtime_ns` can differ from the probe's `st_mtime` float in its last bit, and an
+ *  exact compare read that as "changed" (portable/manifest.py mirrors this). */
+export const MTIME_EPSILON_S = 1e-6;
+
 /** Shared by `sourceChangeVerdict` and `guardVerdict` (below) — the
  *  size/mtime-only comparison both fall back to once checksum comparison is
  *  off the table, for whatever reason each function has for putting it
@@ -101,7 +106,7 @@ function statVerdict(recorded: RecordedProvenance, probed: ProbedProvenance): So
   const haveMtime = recorded.mtime !== undefined && probed.mtime != null;
   if (!haveSize && !haveMtime) return "unknown";
   if (haveSize && recorded.size !== probed.size) return "changed";
-  if (haveMtime && recorded.mtime !== probed.mtime) return "changed";
+  if (haveMtime && !(Math.abs(recorded.mtime! - probed.mtime!) <= MTIME_EPSILON_S)) return "changed";
   return "unchanged";
 }
 

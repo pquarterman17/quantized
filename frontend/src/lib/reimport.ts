@@ -7,6 +7,7 @@
 
 import { fetchBookData } from "./api";
 import { columnMetaList } from "./columnmeta";
+import { ROW_INDEXED_SIDECARS } from "./rowSidecars";
 import { isLazyBookEntry, isPrimaryBookMarker } from "./types";
 import { freshSheet, sheetNameOf } from "./workbookSheets";
 import type { BookSource, DataStruct, Dataset, LazyBookEntry, PrimaryBookMarker } from "./types";
@@ -73,6 +74,104 @@ export async function resolveFreshData(ds: Dataset, fresh: DataStruct): Promise<
  *  preview->full-swap precedents. */
 export function reimportShapeChanged(ds: Dataset, fresh: DataStruct): boolean {
   return fresh.time.length !== ds.data.time.length || reimportColumnsChanged(ds, fresh);
+}
+
+/** Are `a`'s first `upTo` rows, over its first `cols` columns, the same as `b`'s (NaN equals NaN)? */
+export function rowsArePrefix(a: DataStruct, b: DataStruct, cols: number, upTo = a.time.length): boolean {
+  if (b.time.length < upTo) return false;
+  const same = (x: number | undefined, y: number | undefined): boolean => x === y || (x !== x && y !== y);
+  for (let r = 0; r < upTo; r++) {
+    if (!same(a.time[r], b.time[r])) return false;
+    for (let c = 0; c < cols; c++) if (!same(a.values[r]?.[c], b.values[r]?.[c])) return false;
+  }
+  return true;
+}
+
+/** The base (file) columns of `ds`: its labels minus formula columns. */
+export const reimportBaseCols = (ds: Dataset): number => Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
+
+const matchCache = new WeakMap<DataStruct, { base: DataStruct; same: boolean }>();
+
+/** The user-editable `metadata` a header or text edit writes: the X column's name and unit, the
+ *  categorical levels, and the row-indexed text sidecars. */
+const EDITABLE_META = ["x_column_long", "x_column_name", "x_column_unit", ...ROW_INDEXED_SIDECARS];
+
+/** `cat_levels` of the base columns only: a formula output (e.g. Recode) has levels of its own. */
+const baseLevels = (d: DataStruct, cols: number): [string, string[]][] =>
+  Object.entries(d.cat_levels ?? {}).filter(([k]) => Number(k) < cols).sort(([a], [b]) => Number(a) - Number(b));
+
+/** `order` (a `level_order`, presentation only) kept on `data` for each channel whose levels it
+ *  still permutes exactly; the rest dropped. How the live watch keeps a user's level order
+ *  across a re-read, like the view -- never a reason to call the worksheet edited. */
+export function withLevelOrder(data: DataStruct, order: DataStruct["level_order"]): DataStruct {
+  const kept = Object.entries(order ?? {}).filter(([k, o]) => {
+    const n = data.cat_levels?.[Number(k)]?.length;
+    return n !== undefined && o.length === n && [...o].sort((a, b) => a - b).every((c, i) => c === i);
+  });
+  const { level_order: _drop, ...rest } = data;
+  return kept.length ? { ...rest, level_order: Object.fromEntries(kept) } : rest;
+}
+
+const sameJson = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/** Does worksheet `ds` still hold exactly what the file gave it, `base` (the source watch's
+ *  last install)? Decided on everything EXCEPT the formula columns, because other features
+ *  rewrite `data` without being an edit: a fit()/fitval() refresh, sheet() and other formula
+ *  columns, a background-subtraction recalc (with corrections the file's rows are `ds.raw`,
+ *  which a recalc never writes -- and a corrected sheet refuses edits). Compared: the base
+ *  columns' values, labels, units and categorical levels (a level rename is an edit; the level
+ *  ORDER is presentation, carried over by `withLevelOrder`), and the user-editable metadata
+ *  (EDITABLE_META), so a
+ *  header, unit or text edit is an edit too. Identity first; the rest once per new data
+ *  object (cached), not per poll. */
+export function holdsFileRows(ds: Dataset, base: DataStruct): boolean {
+  const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+  if (own === base) return true;
+  const hit = matchCache.get(own);
+  if (hit && hit.base === base) return hit.same;
+  const same = own.time.length === base.time.length && untouchedPrefix(ds, base);
+  matchCache.set(own, { base, same });
+  return same;
+}
+
+/** Are `ds`'s file rows and headers an UNTOUCHED prefix of `file` (same headers, its first
+ *  rows)? True for a worksheet that simply holds OLDER file data -- e.g. an undo past a step
+ *  that added a formula column -- as opposed to one the user edited. */
+export function untouchedPrefix(ds: Dataset, file: DataStruct): boolean {
+  const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+  const cols = reimportBaseCols(ds);
+  // Text sidecars hold one array per column, so an older prefix is compared row by row.
+  const sidecarsPrefix = ROW_INDEXED_SIDECARS.every((k) => {
+    const a = own.metadata?.[k] as Record<string, unknown[]> | undefined;
+    const b = file.metadata?.[k] as Record<string, unknown[]> | undefined;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return sameJson(a, b);
+    return sameJson(Object.keys(a).sort(), Object.keys(b).sort()) && Object.keys(a).every((c) => Array.isArray(a[c]) && Array.isArray(b[c]) && sameJson(a[c], b[c].slice(0, a[c].length)));
+  });
+  return (
+    own.time.length <= file.time.length &&
+    rowsArePrefix(own, file, cols) &&
+    sameJson(own.labels.slice(0, cols), file.labels.slice(0, cols)) &&
+    sameJson(own.units.slice(0, cols), file.units.slice(0, cols)) &&
+    sameJson(baseLevels(own, cols), baseLevels(file, cols)) &&
+    EDITABLE_META.filter((k) => !(ROW_INDEXED_SIDECARS as readonly string[]).includes(k)).every((k) => sameJson(own.metadata?.[k], file.metadata?.[k])) &&
+    sidecarsPrefix
+  );
+}
+
+/** Does `fresh` only ADD rows to what `ds` holds, row for row (so row-indexed state -- excluded
+ *  rows, the view -- still points at the same rows)? True when the worksheet's own file rows
+ *  (`ds.raw` when corrections are applied) are a prefix of `fresh`, or -- for a worksheet edited
+ *  here -- when `base`, the rows the source watch last installed, is a prefix of `fresh` and the
+ *  worksheet still has exactly as many rows (only cells were edited: rows inserted or deleted
+ *  here would shift every index after them). `skipLast`: the last row may differ (a read after a
+ *  long pause can take a writer's half-flushed line). Base columns only. */
+export function reimportIsAppend(ds: Dataset, fresh: DataStruct, base?: DataStruct, skipLast = false): boolean {
+  const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+  const cols = reimportBaseCols(ds);
+  const upTo = (d: DataStruct): number => Math.max(0, d.time.length - (skipLast ? 1 : 0));
+  if (fresh.time.length < own.time.length) return false;
+  if (rowsArePrefix(own, fresh, cols, upTo(own))) return true;
+  return !!base && base.time.length === own.time.length && rowsArePrefix(base, fresh, cols, upTo(base));
 }
 
 /** The COLUMN half of `reimportShapeChanged` alone. Every column-indexed

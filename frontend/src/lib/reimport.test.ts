@@ -7,7 +7,7 @@ vi.mock("./api", () => ({
   fetchBookData: (...args: unknown[]) => fetchBookData(...args),
 }));
 
-const { datasetBookId, findBook, reimportColumnsChanged, reimportShapeChanged, resolveFreshData } =
+const { datasetBookId, findBook, holdsFileRows, reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } =
   await import("./reimport");
 
 function ds(over: Partial<Dataset> = {}): Dataset {
@@ -258,5 +258,37 @@ describe("resolveFreshData", () => {
       ],
     });
     await expect(resolveFreshData(bookDs, fresh)).rejects.toThrow(/book source/);
+  });
+});
+
+describe("reimportIsAppend", () => {
+  const fresh = (vals: number[]): DataStruct => ({ time: vals.map((_, i) => i), values: vals.map((v) => [v]), labels: ["m"], units: [""], metadata: {} });
+  it("a file that only gained rows is an append; a changed or shorter one is not", () => {
+    expect(reimportIsAppend(ds(), fresh([10, 20, 30, 40]))).toBe(true);
+    expect(reimportIsAppend(ds(), fresh([10, 21, 30, 40]))).toBe(false);
+    expect(reimportIsAppend(ds(), fresh([10, 20]))).toBe(false);
+  });
+  it("compares against `base` (the rows last read) so a hand-edited cell is not a reshape", () => {
+    const edited = ds({ data: { ...ds().data, values: [[10], [999], [30]] } });
+    expect(reimportIsAppend(edited, fresh([10, 20, 30, 40]))).toBe(false);
+    expect(reimportIsAppend(edited, fresh([10, 20, 30, 40]), ds().data)).toBe(true);
+  });
+  it("a row deleted here is not an append, even against `base`; a changed LAST row is with skipLast", () => {
+    const deleted = ds({ data: { ...ds().data, time: [0, 1], values: [[10], [30]] } });
+    expect(reimportIsAppend(deleted, fresh([10, 20, 30, 40]), ds().data)).toBe(false);
+    expect(reimportIsAppend(ds(), fresh([10, 20, 33, 40]))).toBe(false);
+    expect(reimportIsAppend(ds(), fresh([10, 20, 33, 40]), undefined, true)).toBe(true);
+  });
+});
+
+describe("holdsFileRows", () => {
+  const file: DataStruct = { time: [0, 1], values: [[0], [1]], labels: ["G"], units: [""], metadata: {}, cat_levels: { 0: ["A", "B"] } };
+  it("a renamed level is an edit; a formula output's own levels (Recode) and the level order are not", () => {
+    expect(holdsFileRows(ds({ data: { ...file, cat_levels: { 0: ["Alpha", "B"] } } }), file)).toBe(false);
+    const withRecode = ds({
+      data: { ...file, labels: ["G", "R"], units: ["", ""], values: [[0, 1], [1, 0]], cat_levels: { 0: ["A", "B"], 1: ["x", "y"] }, level_order: { 0: [1, 0] } },
+      formulas: [{ name: "R", expr: "recode", deps: [] } as never],
+    });
+    expect(holdsFileRows(withRecode, file)).toBe(true);
   });
 });
