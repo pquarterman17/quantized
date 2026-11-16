@@ -7,13 +7,17 @@
 
 import { useEffect } from "react";
 
-import { selectSessionLiveDrifted } from "./canonicalSession";
+import { selectSessionExportStale } from "./canonicalSession";
+import { figurePublicationEdited } from "../../../store/figureUnsavedEdits";
 import { rebaseFigurePublicationOnLive } from "../../../store/publicationRebase";
 import { useApp } from "../../../store/useApp";
 
 export function useLiveRebase(): void {
-  const drifted = useApp(selectSessionLiveDrifted);
+  const stale = useApp(selectSessionExportStale);
+  // Also keyed on "has edits": undoing the preview's edits makes a rebase
+  // lossless again, and it should then happen without another plot change.
+  const edited = useApp((s) => figurePublicationEdited(s.figurePublicationSession));
   useEffect(() => {
-    if (drifted) rebaseFigurePublicationOnLive();
-  }, [drifted]);
+    if (stale && !edited) rebaseFigurePublicationOnLive();
+  }, [stale, edited]);
 }

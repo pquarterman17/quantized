@@ -20,7 +20,6 @@ interface FigureBody {
   fmt?: string;
   filename?: string;
   series_styles?: ({ color?: string; width?: number; line?: string; marker?: boolean; marker_size?: number } | null)[];
-  overrides?: { legend?: { loc?: string } } & Record<string, unknown>;
 }
 
 const MIME = { pdf: "application/pdf", svg: "image/svg+xml", png: "image/png" } as const;
@@ -153,18 +152,12 @@ test("ordered scatter survives Publication Preview save/reopen and real PDF/SVG/
   const reopenedBuilder = page.locator(".qzk-win").filter({ has: page.getByText(/^Publication preview —/) });
   const reopenedPdf = await exportFormat(page, reopenedBuilder, "pdf");
   expectSignature("pdf", reopenedPdf.bytes);
-  // UX-H: reopened in a FOCUSED window, the session pins the auto legend to the
-  // corner that window's Stage drew it in, exactly as the Stage's own export
-  // does (lib/liveLegendCorner); the detached first draft had no Stage beside
-  // it. Everything else round-trips unchanged.
-  const unpinned = (body: FigureBody) => ({ ...body, overrides: { ...body.overrides, legend: { ...body.overrides?.legend, loc: "auto" } } });
-  expect(firstPdf.body.overrides?.legend?.loc).toBe("auto");
-  expect(unpinned(reopenedPdf.body)).toEqual(unpinned(firstPdf.body));
+  expect(reopenedPdf.body).toEqual(firstPdf.body);
 
   for (const fmt of ["svg", "png"] as const) {
     const out = await exportFormat(page, reopenedBuilder, fmt);
     expectSignature(fmt, out.bytes);
-    expect(out.body).toMatchObject({ ...reopenedPdf.body, fmt });
+    expect(out.body).toMatchObject({ ...firstPdf.body, fmt });
   }
 });
 

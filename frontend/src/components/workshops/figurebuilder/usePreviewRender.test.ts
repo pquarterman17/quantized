@@ -127,26 +127,4 @@ describe("usePreviewRender resolution (UX-H)", () => {
     expect(sent[0].dpi).not.toBe(600);
     expect(result.current.previewDpi).toBe(sent[0].dpi);
   });
-
-  it("pins the Stage's auto-legend corner only when asked (a session on the focused window)", async () => {
-    const sent: Record<string, unknown>[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (_path: string, init: RequestInit) => {
-      sent.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-      return hitmapResponse(`img${sent.length}`);
-    }));
-    const stage = document.createElement("div");
-    stage.className = "qzk-stage";
-    stage.dataset.lc = "ne";
-    stage.innerHTML = '<div class="qzk-legend auto"></div>';
-    document.body.append(stage);
-    const spec = { dataset, overrides: { legend: { loc: "auto" } } } as unknown as FigureSpec;
-    const { result, rerender } = renderHook(({ pin }) => usePreviewRender(spec, true, pin), { initialProps: { pin: false } });
-    await waitFor(() => expect(result.current.preview).toBe("data:image/png;base64,img1"));
-    rerender({ pin: true });
-    await waitFor(() => expect(result.current.preview).toBe("data:image/png;base64,img2"));
-    stage.remove();
-    const loc = (s: Record<string, unknown>) => (s.overrides as { legend: { loc: string } }).legend.loc;
-    expect(loc(sent[0])).toBe("auto");
-    expect(loc(sent[1])).not.toBe("auto");
-  });
 });

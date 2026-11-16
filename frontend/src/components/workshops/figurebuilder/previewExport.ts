@@ -10,7 +10,6 @@
 import { exportFigure, type FigureSpec } from "../../../lib/api/figures";
 import type { CanonicalReadiness } from "./canonicalReadiness";
 import { buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
-import { withLiveLegendCorner } from "../../../lib/liveLegendCorner";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
@@ -79,19 +78,15 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
         signal.throwIfAborted();
         const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
-        // A session on the focused window pins the Stage's auto-legend
-        // corner, as the Stage's own export does (lib/liveLegendCorner).
-        const { figurePublicationSession: session, focusedWindowId } = useApp.getState();
-        const pinLegend = session?.target === "window" && session.windowId === focusedWindowId ? withLiveLegendCorner : (s: FigureSpec) => s;
         // An overlay the figure cannot carry is reported, never dropped
         // silently (lib/overlayDropNotice — the quick dialog's own notice).
         const drops = overlayDropTracker();
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         const picked = await chooseExcludedRows(
-          (greyExcluded) => drops.build((onDroppedOverlays) => pinLegend(withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
+          (greyExcluded) => drops.build((onDroppedOverlays) => withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
             autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
             defaultLineWidth: useApp.getState().defaultLineWidth, staleFits: useApp.getState().staleFits, onDroppedOverlays,
-          }), deps.tickHints))),
+          }), deps.tickHints)),
           excludedChoiceMatters,
           useApp.getState().excludedDisplay,
         );

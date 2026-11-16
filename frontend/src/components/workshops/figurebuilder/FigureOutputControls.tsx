@@ -7,11 +7,11 @@
 
 import { useEffect, useId, useState } from "react";
 
-import { FIGURE_FORMATS, FIGURE_STYLE_SIZE_CM, RASTER_FORMATS } from "./figureOutputConstants";
-import { formatSizeCm, presetOptions } from "./figurePresets";
+import { FIGURE_FORMATS, FIGURE_STYLE_DPI, RASTER_FORMATS } from "./figureOutputConstants";
+import { presetOptions } from "./figurePresets";
 import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
-import { Select } from "../../primitives";
+import { Button, Select } from "../../primitives";
 import { toInches } from "../../../lib/pageGeometry";
 
 /** The control's left-to-right order: the vector formats a journal wants
@@ -31,7 +31,7 @@ export default function FigureOutputControls({
   setStyle: (next: string, keepDpi?: boolean) => void;
   dpi: number;
   setDpi: (next: number) => void;
-  /** The rendered figure's physical size (null before the first preview). */
+  /** The rendered figure's physical size (null until a settled preview). */
   sizeCm?: { widthCm: number; heightCm: number } | null;
 }) {
   const id = useId();
@@ -51,9 +51,7 @@ export default function FigureOutputControls({
     setDpiText(committedDpiText);
   }, [committedDpiText]);
 
-  // A page size (Page setup / the Page & canvas group) overrides the preset's.
-  const preset = FIGURE_STYLE_SIZE_CM[style];
-  const custom = sizeCm && preset && (Math.abs(sizeCm.widthCm - preset[0]) > 0.05 || Math.abs(sizeCm.heightCm - preset[1]) > 0.05);
+  const presetDpi = FIGURE_STYLE_DPI[style];
   const px = sizeCm ? [Math.round(toInches(sizeCm.widthCm, "cm") * dpi), Math.round(toInches(sizeCm.heightCm, "cm") * dpi)] : null;
 
   return (
@@ -72,9 +70,6 @@ export default function FigureOutputControls({
         value={style}
         onChange={(e) => setStyle(e.target.value, dpiTyped)}
       />
-      {custom && sizeCm && (
-        <span style={NOTE}>Page size {formatSizeCm(sizeCm.widthCm, sizeCm.heightCm)} overrides the preset's size.</span>
-      )}
       {raster ? (
         <>
           <label className="qzk-field-lbl" htmlFor={`${id}-dpi`}>Resolution (dpi)</label>
@@ -98,6 +93,12 @@ export default function FigureOutputControls({
             />
             {px && <output aria-label="Raster size" style={MONO}>{px[0]} × {px[1]} px</output>}
           </div>
+          {/* A typed DPI outlives preset changes; this puts the preset's back. */}
+          {dpiTyped && presetDpi !== undefined && presetDpi !== dpi && (
+            <Button size="sm" onClick={() => { setDpiTyped(false); setDpi(presetDpi); }}>
+              Use the preset's {presetDpi} dpi
+            </Button>
+          )}
         </>
       ) : (
         <span style={NOTE}>Vector: lines and text stay sharp at any size.</span>

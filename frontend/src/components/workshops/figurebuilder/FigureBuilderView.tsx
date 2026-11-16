@@ -33,6 +33,9 @@ const LEGACY_WIDTH = 600;
 /** A remembered explicit height below this would squeeze the preview pane. */
 const MIN_HEIGHT = 560;
 const SETTINGS_WIDTH = 260;
+/** Why Export is off for a draft whose plot moved on under its own edits. */
+const STALE_EXPORT =
+  "the plot changed after this preview opened, and the preview has edits of its own — Cancel and reopen to export the plot as it is now";
 
 /** Wide enough for a >= 600 px preview at 1440 px, never wider than the
  *  viewport allows beside the Library. */
@@ -54,9 +57,8 @@ export default function FigureBuilderView() {
     : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
   const detachedCanonical = f.publicationTarget === "new-editable";
-  const exportDisabledReason = f.canonical && !f.canExport
-    ? (f.error ?? (f.canonicalReadiness === "ready" ? f.applyBlockedReason : null) ?? "figure is not ready to export")
-    : null;
+  const exportDisabledReason = !f.canonical || f.canExport ? null
+    : f.error ?? (f.exportStale ? STALE_EXPORT : "figure is not ready to export");
   const onClose = () => (f.canonical ? void cancelPublicationPreview() : setOpen(false));
   const sizeCm = f.hitmap && f.previewDpi ? renderedSizeCm(f.hitmap.width, f.hitmap.height, f.previewDpi) : null;
   useLiveRebase();
@@ -97,7 +99,7 @@ export default function FigureBuilderView() {
                 ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; Cancel discards them.`
                 : "Settings here affect saved and exported output; they do not change the editable Stage plot."}
             </div>
-            <FigureOutputControls fmt={f.fmt} setFmt={f.setFmt} style={f.style} setStyle={f.setStyle} dpi={f.dpi} setDpi={f.setDpi} sizeCm={sizeCm} />
+            <FigureOutputControls fmt={f.fmt} setFmt={f.setFmt} style={f.style} setStyle={f.setStyle} dpi={f.dpi} setDpi={f.setDpi} sizeCm={f.busy ? null : sizeCm} />
             {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
                 via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>

@@ -55,53 +55,71 @@ let demoCounter = 0;
 // that file's header for the extraction note).
 const replaceHalf = () => import("../lib/openWorkspaceReplace");
 
+// Body lives in lib/exportFigureCommand (store-size ratchet offset for
+// MAIN_PLAN #16's Append workspace command — see that file's doc).
+// Bundle: click-only — dynamic import keeps lib/exportFigureCommand
+// (and the figureSpec transport builder behind it) off the eager path.
+// runLazy (F5) — see that function's own doc.
+function runQuickExport(s: StoreGet): void {
+  void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand"))
+    .then((m) => m.runExportFigureCommand(s), onLoadFailure);
+}
+function openPublicationPreview(s: StoreGet): void {
+  if (s().figurePublicationSession) {
+    s().setStatus("finish or cancel the current Publication Preview before opening another");
+    return;
+  }
+  if (s().beginFigurePublicationEdit()) return;
+  // F2.1e: no focused plot window. With no active dataset either, this
+  // degrades exactly as before -- the legacy FigureBuilderView opens
+  // with nothing to show ("Select a dataset to preview a figure.").
+  // With an active dataset, open the SAME detached canonical session
+  // Graph Builder's openInFigureBuilder uses
+  // (beginDetachedFigurePublicationEdit), synthesized from the active
+  // dataset + the live on-screen view (snapshotView mirrors channels,
+  // scales, styles, decor) rather than the old legacy-mode preview --
+  // so Apply now creates a new editable figure instead of being a dead
+  // end.
+  const state = s();
+  const active = state.datasets.find((dataset) => dataset.id === state.activeId);
+  if (!active) {
+    s().setStatus("no plot window is focused — previewing the active dataset; Apply is unavailable in this mode");
+    s().setFigureBuilderOpen(true);
+    return;
+  }
+  const draft = createFigureDocument({
+    id: `figure-preview-${active.id}`,
+    name: active.name,
+    datasetId: active.id,
+    view: snapshotView(state),
+  });
+  if (s().beginDetachedFigurePublicationEdit(draft)) {
+    s().setStatus(
+      `no plot window is focused — previewing "${active.name}"; Apply will save it as a new editable figure`,
+    );
+  }
+}
+
+/** Plot ▸ Export figure… (UX-H): the one export view — the Publication
+ *  preview, with its large true-size preview. A view that preview cannot draw
+ *  (stat, polar, a per-channel stack, a spatial page) keeps the quick dialog,
+ *  which exports those — as does no dataset at all (it refuses with a reason).
+ *  Exported so other "Export" buttons (Graph Builder) open the same view. */
+export function runExportFigureView(s: StoreGet): void {
+  const st = s();
+  const stack = st.stackMode && st.composition === null && st.facetKey === null;
+  if (st.figurePublicationSession) {
+    st.setFigureBuilderOpen(true);
+    st.setStatus("the export view is already open — finish or cancel it to export another figure");
+  } else if (!st.datasets.some((d) => d.id === st.activeId) || st.statMode || st.polarMode || stack || st.composition?.kind === "spatial") {
+    runQuickExport(s);
+  } else openPublicationPreview(s);
+}
+
 /** Build the File-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
  *  once. */
 export function buildFileCommands(s: StoreGet): Action[] {
-  // Body lives in lib/exportFigureCommand (store-size ratchet offset for
-  // MAIN_PLAN #16's Append workspace command — see that file's doc).
-  // Bundle: click-only — dynamic import keeps lib/exportFigureCommand
-  // (and the figureSpec transport builder behind it) off the eager path.
-  // runLazy (F5) — see that function's own doc.
-  const runQuickExport = () =>
-    void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand"))
-      .then((m) => m.runExportFigureCommand(s), onLoadFailure);
-  const openPublicationPreview = () => {
-    if (s().figurePublicationSession) {
-      s().setStatus("finish or cancel the current Publication Preview before opening another");
-      return;
-    }
-    if (s().beginFigurePublicationEdit()) return;
-    // F2.1e: no focused plot window. With no active dataset either, this
-    // degrades exactly as before -- the legacy FigureBuilderView opens
-    // with nothing to show ("Select a dataset to preview a figure.").
-    // With an active dataset, open the SAME detached canonical session
-    // Graph Builder's openInFigureBuilder uses
-    // (beginDetachedFigurePublicationEdit), synthesized from the active
-    // dataset + the live on-screen view (snapshotView mirrors channels,
-    // scales, styles, decor) rather than the old legacy-mode preview --
-    // so Apply now creates a new editable figure instead of being a dead
-    // end.
-    const state = s();
-    const active = state.datasets.find((dataset) => dataset.id === state.activeId);
-    if (!active) {
-      s().setStatus("no plot window is focused — previewing the active dataset; Apply is unavailable in this mode");
-      s().setFigureBuilderOpen(true);
-      return;
-    }
-    const draft = createFigureDocument({
-      id: `figure-preview-${active.id}`,
-      name: active.name,
-      datasetId: active.id,
-      view: snapshotView(state),
-    });
-    if (s().beginDetachedFigurePublicationEdit(draft)) {
-      s().setStatus(
-        `no plot window is focused — previewing "${active.name}"; Apply will save it as a new editable figure`,
-      );
-    }
-  };
   return [
     {
       id: "new-workbook",
@@ -343,7 +361,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Publication preview…",
       // Legacy names stay searchable — the F0.1 rename must not orphan
       // "figure builder" muscle memory in the palette or Help.
-      run: openPublicationPreview,
+      run: () => openPublicationPreview(s),
     },
     {
       id: "figure-page",
@@ -359,20 +377,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Export figure…",
-      // UX-H: the one export view — the Publication preview, with its large
-      // true-size preview. A view that preview cannot draw (stat, polar, a
-      // per-channel stack, a spatial page) keeps the dialog, which exports
-      // those — as does no dataset at all (it refuses with a reason).
-      run: () => {
-        const st = s();
-        const stack = st.stackMode && st.composition === null && st.facetKey === null;
-        if (st.figurePublicationSession) {
-          st.setFigureBuilderOpen(true);
-          st.setStatus("the export view is already open — finish or cancel it to export another figure");
-        } else if (!st.datasets.some((d) => d.id === st.activeId) || st.statMode || st.polarMode || stack || st.composition?.kind === "spatial") {
-          runQuickExport();
-        } else openPublicationPreview();
-      },
+      run: () => runExportFigureView(s),
     },
     {
       id: "export-figure-quick",
@@ -380,7 +385,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Export figure (quick dialog)…",
       // The pre-UX-H dialog, kept as the power-user path (no preview).
-      run: runQuickExport,
+      run: () => runQuickExport(s),
     },
     {
       id: "export-origin",

@@ -164,3 +164,15 @@ export function sessionTickHints(state: Pick<AppState, "figurePublicationSession
   if (session === null || session.target !== "window" || session.windowId !== state.focusedWindowId) return null;
   return windowTickHints(state.editableFigures, session.windowId, session.draft); // none for a frozen or saved figure
 }
+
+/** UX-H: the export view's draft is a stale snapshot of its TARGET window —
+ *  that window's live document has moved on since the session began. Unlike
+ *  `selectSessionLiveDrifted` (Apply's question) focus is not an input: a
+ *  stale draft stays stale when another window takes focus. Only a `window`
+ *  session can be stale; a `library` or `new-editable` draft IS the document
+ *  it exports. Returns a boolean, so an unchanged answer re-renders nothing. */
+export function selectSessionExportStale(state: AppState): boolean {
+  const session = state.figurePublicationSession;
+  if (session === null || session.target !== "window") return false;
+  return sessionLiveDrifted(session, state.plotWindows, false, state);
+}

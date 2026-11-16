@@ -1,8 +1,9 @@
 // The export view's action row (UX-H review item 5), under the preview:
 // Close (Cancel while there are unpublished figure edits), the secondary
 // "Apply to plot" and ONE filled primary, the format-aware "Export PDF…",
-// bottom-right. The preview column is sticky, so this row stays in reach
-// however long the settings column runs.
+// bottom-right. The preview column is sticky (top) and this row sticks to
+// the bottom of the window's scroller, so it stays in reach however long the
+// settings column runs and however short the window is resized.
 
 import { Button } from "../../primitives";
 
@@ -23,7 +24,14 @@ export default function ExportFooter({
   onClose: () => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 8, borderTop: "1px solid var(--border-soft)" }}>
+    <div
+      style={{
+        display: "flex", flexDirection: "column", gap: 6, paddingTop: 8, borderTop: "1px solid var(--border-soft)",
+        // The scroller (.qzk-win-body) has `--pad-lg` bottom padding: stick
+        // past it and add it back inside, so the row sits flush and opaque.
+        position: "sticky", bottom: "calc(var(--pad-lg) * -1)", paddingBottom: "var(--pad-lg)", background: "var(--surface-2)",
+      }}
+    >
       {canonical && applyBlockedReason && (
         <div role="alert" className="qzk-msg" style={{ color: "var(--danger)", fontSize: "var(--font-size-sm)" }}>
           {applyBlockedReason}

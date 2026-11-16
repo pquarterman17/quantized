@@ -227,7 +227,9 @@ describe("Publication Preview role cues", () => {
     expect(row.querySelectorAll(".qz-primary")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Export PNG…" })).toHaveClass("qz-primary");
     // The row sits with the (sticky) preview, not at the end of the settings.
-    expect(row.closest("[style*='sticky']")).toContainElement(screen.getByTestId("figure-preview-pane"));
+    expect(screen.getByTestId("figure-preview-pane").closest("[style*='sticky']")).toContainElement(row);
+    // ...and itself sticks to the window's bottom edge, so a short window cannot hide it.
+    expect(row.closest("[style*='sticky']")).not.toBe(screen.getByTestId("figure-preview-pane").closest("[style*='sticky']"));
   });
 
   it("says Close, not Cancel, when nothing would be discarded", () => {
@@ -241,13 +243,12 @@ describe("Publication Preview role cues", () => {
   });
 
   it("disables Export with the drift reason when the plot changed under preview edits", () => {
-    const reason = "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes";
     vi.mocked(useFigureBuilder).mockReturnValue({
-      ...figureState, canonical: true, canonicalReadiness: "ready", canExport: false, applyBlockedReason: reason,
+      ...figureState, canonical: true, canonicalReadiness: "ready", canExport: false, exportStale: true,
     } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
     expect(screen.getByRole("button", { name: "Export PNG…" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Export PNG…" }).closest("span")).toHaveAttribute("title", reason);
+    expect(screen.getByRole("button", { name: "Export PNG…" }).closest("span")?.getAttribute("title")).toMatch(/^the plot changed after this preview opened/);
   });
 
   // F2.3b: the view builds a `series` prop for PropertyPanels only once

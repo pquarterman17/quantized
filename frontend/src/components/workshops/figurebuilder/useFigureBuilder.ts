@@ -16,7 +16,7 @@ import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canoni
 import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { canonicalSeriesOps } from "./canonicalSeriesOps";
-import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted, sessionTickHints } from "./canonicalSession";
+import { selectSessionCyclesSeriesStyles, selectSessionExportStale, selectSessionLiveDrifted, sessionTickHints } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
 import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
@@ -33,7 +33,7 @@ import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisScale, DataStruct, RefLine, Shape } from "../../../lib/types";
-import { figurePublicationDirty } from "../../../store/figureUnsavedEdits";
+import { figurePublicationDirty, figurePublicationEdited } from "../../../store/figureUnsavedEdits";
 import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -305,7 +305,7 @@ export function useFigureBuilder() {
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
   // Debounced PNG preview + hit-map — see usePreviewRender's module doc.
-  const { preview, hitmap, error, busy, previewDpi } = usePreviewRender(spec, canonical, publicationSession?.target === "window" && publicationSession.windowId === focusedWindowId);
+  const { preview, hitmap, error, busy, previewDpi } = usePreviewRender(spec, canonical);
   // A window-target session outlives its target window closing/unfocusing
   // (windows.ts's closeWindow clears the common case, but a session can still
   // be left pointing at a background window — applyFigurePublicationEdit's
@@ -321,10 +321,10 @@ export function useFigureBuilder() {
   // stay a real subscription, never a `useApp.getState()` read — the live
   // document derives from view SINGLETONS this hook selects on none of; see
   // canonicalSession.ts's selectSessionLiveDrifted for what that let through.
-  const liveDrifted = useApp(selectSessionLiveDrifted);
+  const liveDrifted = useApp(selectSessionLiveDrifted), exportStale = useApp(selectSessionExportStale); // UX-H: never export a stale snapshot
   const canApply = !targetBlocked && !publicationSession?.staleBaseline && !liveDrifted && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
-      publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
+      figurePublicationEdited(publicationSession) // UX-H: output-only choices (format/preset/DPI) are not edits
     )
   );
   const applyBlockedReason = targetBlocked
@@ -409,7 +409,7 @@ export function useFigureBuilder() {
       ? error
       : canonicalReadiness.error,
     canonicalReadiness: canonicalReadiness?.state ?? null,
-    canExport: !canonical || (canonicalReadiness?.state === "ready" && !liveDrifted), // never a stale snapshot (UX-H)
+    canExport: !canonical || (canonicalReadiness?.state === "ready" && !exportStale), exportStale,
     busy,
     exportNow,
     overrides: activeOverrides,
