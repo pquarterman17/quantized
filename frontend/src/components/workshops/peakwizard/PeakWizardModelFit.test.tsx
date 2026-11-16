@@ -292,6 +292,10 @@ describe("Peak analyzer — model fit results (step 4)", () => {
     const next = await screen.findByRole("button", { name: /Next/ });
     await waitFor(() => expect(next).toBeDisabled());
     expect(next).toHaveAttribute("title", "peak fit running…");
+    // The step chips are gated by the same rule: no way out but the fit's own step.
+    const chip = screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }).closest("button")!;
+    expect(chip).toBeDisabled();
+    expect(chip).toHaveAttribute("title", "peak fit running…");
   });
 
   it("shows the backend's ASCII error detail", async () => {

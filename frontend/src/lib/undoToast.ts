@@ -11,13 +11,14 @@
 // and points at Edit ▸ Undo / the Trash rather than guessing.
 
 import { TOAST_ACTION_TTL, toast, type ToastKind } from "../store/toasts";
+import { scrubDatasetsFromTrash } from "../store/removeDatasets";
 import { useApp } from "../store/useApp";
 
 /** Show `msg` with an Undo action for the history entry now on top of the
  *  stack (`topSeq`, defaulting to it now). Call AFTER the destructive action
- *  has recorded its entry; a caller that loads this module lazily captures
+ *  has recorded its entry; `onUndone` runs after a successful Undo; a caller that loads this module lazily captures
  *  `topSeq` first, synchronously. */
-export function toastWithUndo(msg: string, kind: ToastKind = "info", topSeq = useApp.getState().history.at(-1)?.seq): void {
+export function toastWithUndo(msg: string, kind: ToastKind = "info", topSeq = useApp.getState().history.at(-1)?.seq, onUndone?: () => void): void {
   if (topSeq === undefined) {
     toast(msg, kind); // nothing recorded, so nothing an Undo could restore
     return;
@@ -33,6 +34,11 @@ export function toastWithUndo(msg: string, kind: ToastKind = "info", topSeq = us
           return;
         }
         s.undo();
+        // Trash sits outside history: the removal sent a copy there, and the
+        // dataset is live again — leave no second copy to "Restore" later
+        // (a Redo removes it again, recoverable by Undo, not via Trash).
+        useApp.setState((st) => scrubDatasetsFromTrash(st, st.datasets.map((d) => d.id)));
+        onUndone?.();
       },
     },
   });

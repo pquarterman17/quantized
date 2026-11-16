@@ -42,7 +42,9 @@ import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
 import { runCancellable } from "../store/pendingOpActions";
-import { closeProjectLock } from "../store/projectLockLifecycle";
+import type { ProjectIdentity } from "../store/project";
+import { useProjectLock } from "../store/projectLock";
+import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
 import { toastWithUndo } from "../lib/undoToast";
 import type {
@@ -196,7 +198,22 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
   // Re-check at commit time: an import may have started while the
   // confirmation dialog was open.
   if (rejectIfImportRunning()) return;
+  const project = s().currentProject;
   s().clearAll();
   closeProjectLock(); // after the clear: a throwing clear keeps the loaded project's lock
-  toastWithUndo("removed all datasets", "ok");
+  toastWithUndo("removed all datasets", "ok", undefined, project ? () => reattachProject(s, project) : undefined);
+}
+
+/** Undo of Remove all gives the workspace back; this gives it its project back
+ *  too, the way an open does: identity + a synchronous read-only reservation,
+ *  then a REAL lock acquisition. If another instance took the project in the
+ *  meantime the acquisition fails closed — the work is restored but read-only,
+ *  and the user is told. Skipped if the user opened another project since. */
+function reattachProject(s: StoreGet, project: ProjectIdentity): void {
+  if (s().currentProject !== null) return;
+  reserveProjectLock(project.path);
+  s().setCurrentProject(project);
+  void useProjectLock.getState().openProject(project.path).then((r) => {
+    if (r.readOnly) toast(`"${project.name}": another instance has this project open — restored read-only`, "info");
+  });
 }

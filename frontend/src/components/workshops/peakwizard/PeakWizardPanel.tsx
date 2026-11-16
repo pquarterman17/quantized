@@ -26,6 +26,7 @@ import {
 import { PEAK_WIZARD_WINDOW_ID } from "./usePeakCandidates";
 import { usePeakWizard, WIZARD_STEPS } from "./usePeakWizard";
 import PeakBatchView from "./PeakBatchView";
+import { fitRunningBlock } from "./peakNavGate";
 
 export default function PeakWizardPanel() {
   const setOpen = useApp((s) => s.setPeakWizardOpen);
@@ -60,7 +61,7 @@ export default function PeakWizardPanel() {
       : "no peaks to fit — find or add at least one peak first";
   // Step ② -> ③ and ③ -> ④ (a model-table "×" can delete the last peak in ③).
   // Step ④ -> ⑤ while the fit is still running would leave on a stale result.
-  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : w.step === 3 && w.model.busy ? "peak fit running…" : null;
+  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : fitRunningBlock(w);
 
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,
@@ -98,8 +99,8 @@ export default function PeakWizardPanel() {
               <button
                 key={label}
                 className={`qzk-wizard-step${i === w.step ? " qzk-active" : ""}`}
-                disabled={(i === 2 || i === 3) && noPeaks}
-                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : undefined}
+                disabled={((i === 2 || i === 3) && noPeaks) || fitRunningBlock(w, i) !== null}
+                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : (fitRunningBlock(w, i) ?? undefined)}
                 onClick={() => w.setStep(i)}
               >
                 <span className="qzk-wizard-num">{i + 1}</span> {label}
