@@ -35,6 +35,7 @@ import {
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, canvasGroupCol, groupSplitChannelMap } from "../../lib/plotGroupSplit";
 import { applyLogOffsets } from "../../lib/logOffset";
+import { legendUnitOnAxis } from "../../lib/legendUnitOnAxis";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
@@ -238,7 +239,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const displayPayload = useMemo(
     () =>
       payload
-        ? composeDisplayPayload(applyLogOffsets(payload, plotted, p.seriesStyles, offsetsApply), {
+        ? legendUnitOnAxis(composeDisplayPayload(applyLogOffsets(payload, plotted, p.seriesStyles, offsetsApply), {
             id: activeId ?? null,
             waterfall,
             dropped,
@@ -248,7 +249,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
             peakOverlay: scaledPeakOverlay,
             derivOverlay: scaledDerivOverlay,
             selection,
-          })
+          }), p.active?.data) // UX8-C: a shared-unit graph's legend omits the unit
         : null,
     // `offsetsKey` stands in for `p.seriesStyles` (finding 8: this O(rows)
     // memo must not recompose on a colour/marker-only edit) -- see its doc.

@@ -66,13 +66,14 @@ function curveLabels(curves: readonly LinkedCurve[], byId: ReadonlyMap<string, D
   return curves.map((c) => curveLabel(c, byId.get(c.datasetId), (ds) => ds.name));
 }
 
-/** The one unit every curve's source column shares, else null. When there is
- *  one, the graph's columns carry no unit, so a legend reads "MH_010K" rather
- *  than "MH_010K (emu)": the unit belongs to the Y title ("Moment (emu)",
- *  `linkedGraphYTitle`), and each column's Comment keeps it. */
-function sharedUnit(units: readonly (string | undefined)[]): string | null {
+/** Whether every curve's source column has one and the same non-empty unit.
+ *  The columns keep that unit (worksheet, CSV, fits); the graph is only
+ *  FLAGGED (`legend_unit_on_axis`) so its on-screen legend reads "MH_010K"
+ *  rather than "MH_010K (emu)" -- the unit is on the Y title ("Moment (emu)",
+ *  `linkedGraphYTitle`). See lib/legendUnitOnAxis.ts. */
+function oneSharedUnit(units: readonly (string | undefined)[]): boolean {
   const known = units.filter((u): u is string => u !== undefined);
-  return known.length > 0 && known[0] !== "" && known.every((u) => u === known[0]) ? known[0] : null;
+  return known.length > 0 && known[0] !== "" && known.every((u) => u === known[0]);
 }
 
 /** The graph's DataStruct for `curves` over the CURRENT `datasets`. `previous`
@@ -130,24 +131,19 @@ export function assembleLinkedCurves(
   const names = curves.map((_, i) => `c${i}`);
   const declared = previous?.metadata?.error_roles;
   const units = curves.map((c, i) => src(i)?.units[c.yKey]);
-  const shared = sharedUnit(units);
-  const quantity = (i: number): string => {
-    const label = src(i)?.labels[curves[i].yKey];
-    if (label === undefined) return "(missing)";
-    return shared ? `${label} (${shared})` : label;
-  };
   return {
     time,
     values,
     labels: curveLabels(curves, byId),
-    units: units.map((u) => (shared ? "" : (u ?? ""))),
+    units: units.map((u) => u ?? ""),
     metadata: {
       source_format: "linked-graph",
       x_column_name: xName || "x",
       x_column_long: xName,
       x_column_unit: xUnit,
       origin_column_names: names,
-      column_comments: Object.fromEntries(curves.map((_, i) => [names[i], quantity(i)])),
+      column_comments: Object.fromEntries(curves.map((c, i) => [names[i], src(i)?.labels[c.yKey] ?? "(missing)"])),
+      ...(oneSharedUnit(units) ? { legend_unit_on_axis: true } : {}),
       ...(declared !== undefined ? { error_roles: declared } : {}),
     },
   };

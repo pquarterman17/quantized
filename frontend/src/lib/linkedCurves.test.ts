@@ -31,14 +31,14 @@ describe("assembleLinkedCurves", () => {
     expect(out.values.map((r) => r[0])).toEqual([1, -1, 1, 0, NaN, NaN]);
     expect(out.values.map((r) => r[1])).toEqual([NaN, NaN, NaN, NaN, 7, 8]);
     expect(out.labels).toEqual(["loop: M", "scan"]);
-    // The source quantity; one shared unit moves off the columns (UX8-C).
-    expect(out.metadata.column_comments).toEqual({ c0: "M (emu)", c1: "M (emu)" });
-    expect(out.units).toEqual(["", ""]);
+    expect(out.metadata.column_comments).toEqual({ c0: "M", c1: "M" }); // the source quantity
+    expect(out.units).toEqual(["emu", "emu"]); // units stay on the data (UX8-C)
+    expect(out.metadata.legend_unit_on_axis).toBe(true); // display-only legend flag
     expect([out.metadata.x_column_long, out.metadata.x_column_unit]).toEqual(["H (emu) / T (K)", ""]);
   });
 
   // UX8-C: the overlay legend read "MH_010K.csv (emu)" ten times.
-  it("names a curve by its source's file stem, and drops one shared unit from every column", () => {
+  it("names a curve by its source's file stem, and flags (never strips) one shared unit", () => {
     const named = (id: string, name: string, unit: string): Dataset => ({
       id,
       name,
@@ -49,11 +49,14 @@ describe("assembleLinkedCurves", () => {
     const b = named("b", "MH_040K.csv", "emu");
     const out = assembleLinkedCurves([curve("a"), curve("b")], [a, b]);
     expect(out.labels).toEqual(["MH_010K", "MH_040K"]);
-    expect(out.units).toEqual(["", ""]);
+    expect(out.units).toEqual(["emu", "emu"]);
+    expect(out.metadata.legend_unit_on_axis).toBe(true);
     expect(linkedGraphYTitle([curve("a"), curve("b")], [a, b])).toBe("Moment (emu)");
     // Mixed units keep each column's own unit (and the legend shows it).
     const c = named("c", "RT.csv", "ohm");
-    expect(assembleLinkedCurves([curve("a"), curve("c")], [a, c]).units).toEqual(["emu", "ohm"]);
+    const mixed = assembleLinkedCurves([curve("a"), curve("c")], [a, c]);
+    expect(mixed.units).toEqual(["emu", "ohm"]);
+    expect(mixed.metadata.legend_unit_on_axis).toBeUndefined();
     // Two stems that would collide keep their full names (labels stay unique),
     // and a decimal in a name is not an extension.
     const d = named("d", "MH_010K.txt", "emu");

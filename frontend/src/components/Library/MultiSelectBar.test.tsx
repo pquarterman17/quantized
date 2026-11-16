@@ -59,7 +59,8 @@ describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
     const graph = s.datasets.find((d) => d.linkedCurves)!;
     expect(graph.linkedCurves!.map((c) => c.datasetId)).toEqual(["a", "b"]);
     expect(graph.data.labels).toEqual(["a", "b"]); // "a.dat" -> "a"
-    expect(graph.data.units).toEqual(["", ""]); // no "(emu)" on each legend entry
+    expect(graph.data.units).toEqual(["emu", "emu"]); // the data keeps its unit
+    expect(graph.data.metadata.legend_unit_on_axis).toBe(true); // the legend omits it
     expect(s.yAxisLabel).toBe("m (emu)");
     expect(s.activeId).toBe(graph.id);
     expect(s.plotWindows.some((w) => w.kind === "panel")).toBe(false);

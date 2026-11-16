@@ -17,7 +17,7 @@ type Store = {
     selectedIds: string[];
     activeId: string | null;
     yAxisLabel: string;
-    datasets: { id: string; name: string; linkedCurves?: unknown[]; data: { labels: string[] } }[];
+    datasets: { id: string; name: string; linkedCurves?: unknown[]; data: { labels: string[]; units: string[] } }[];
   };
 };
 const store = (page: Page) => page.evaluate(() => {
@@ -26,7 +26,7 @@ const store = (page: Page) => page.evaluate(() => {
   return {
     selected: s.selectedIds.length,
     yTitle: s.yAxisLabel,
-    graph: graph ? { id: graph.id, labels: graph.data.labels, active: s.activeId === graph.id } : null,
+    graph: graph ? { id: graph.id, labels: graph.data.labels, units: graph.data.units, active: s.activeId === graph.id } : null,
   };
 });
 
@@ -81,11 +81,12 @@ test("ten same-shape files: batch offer, Shift-range of 10, Plot = one graph wit
   await expect(bar.getByText("10 selected")).toBeVisible();
 
   // (3)+(4) the bar's Plot lands ONE live graph: legend by file stem, no
-  // per-entry unit, and the unit on the Y title.
+  // per-entry unit on screen, the unit on the Y title -- and still on the data.
   await bar.getByRole("button", { name: "Plot" }).click();
   await expect.poll(async () => (await store(page)).graph?.active ?? false).toBe(true);
   const { graph, yTitle } = await store(page);
   expect(graph!.labels).toEqual(TEMPS.map((t) => name(t).replace(".csv", "")));
+  expect(graph!.units).toEqual(TEMPS.map(() => "emu"));
   expect(yTitle).toBe("Moment (emu)");
   const legend = page.locator(".qzk-legend .qzk-legend-label");
   await expect(legend).toHaveCount(10);
