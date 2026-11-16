@@ -19,6 +19,8 @@ from typing import Any
 
 from matplotlib.ticker import ScalarFormatter
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = [
     "AutoTickFormatter",
     "auto_multiplier_allowed",
@@ -74,7 +76,8 @@ def auto_multiplier_allowed(fmt: Mapping[str, Any] | None) -> bool:
 def _mantissa(x: float, n: int, incr: float) -> str:
     """``x`` in units of ``10**n``, at the decimals ``incr`` needs there."""
     # Imported lazily: figure_ticks imports this module.
-    from quantized.calc.figure_ticks import _decimals_for_increment, _pow10
+    with heavy_imports("quantized.calc.figure_ticks"):
+        from quantized.calc.figure_ticks import _decimals_for_increment, _pow10
 
     k = _pow10(n)
     return f"{x / k:.{min(20, _decimals_for_increment(incr / k))}f}"
