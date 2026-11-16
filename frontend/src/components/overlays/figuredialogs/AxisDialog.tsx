@@ -172,6 +172,8 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {select("mode", "Number format", MODES)}
       {text("digits", "Digits", "2")}
       {text("divide", "Divide by", "1")}
+      {text("prefix", "Label prefix", "none, e.g. $")}
+      {text("suffix", "Label suffix", "none, e.g. K, %")}
       {text("size", "Label size (pt)")}
       {current === "x" && text("rotate", "Rotation (°)", "0")}
       {text("titleSize", "Title size (pt)")}

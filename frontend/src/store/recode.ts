@@ -3,8 +3,8 @@
 // store/fitYByX.ts precedent — rather than composed into useApp.ts: that
 // store sits close to its size-ratchet pin (architecture.test.ts's
 // STORE_PINS, shared across every lane landing this sprint week), and none
-// of THIS panel's own open/draft-mapping/saved-mappings state needs to
-// round-trip `.dwk` today (see the SAVED MAPPINGS note below for why not).
+// of THIS panel's own open/draft-mapping state needs to round-trip `.dwk`
+// (the saved mappings do: see the SAVED MAPPINGS note below).
 // Mutations to a dataset's `formulas` go through `useApp.getState()`
 // directly (recordHistory + set), the same "standalone store, direct
 // useApp.getState() calls" shape store/relink.ts already uses.
@@ -18,18 +18,12 @@
 // `f.recode` branch that computes it instead of compiling `f.expr`.
 //
 // SAVED MAPPINGS (J2 item 3: "saveable and re-applicable to another
-// column/dataset") are SESSION-ONLY for this slice — lost on reload. Not a
-// convenience choice: `lib/workspace.ts` sits at 595/600 of its own
-// architecture.test.ts pin (5 lines of headroom), and the established
-// pattern for a NEW persisted list (WorkspaceState field + LoadedWorkspace
-// field + WorkspaceDoc field + serializer default + parseWorkspace sanitize
-// call — see that file's TS_MODULE_PINS comment history, e.g. the
-// `quickPlotTemplates` hook-in) costs 4-5 lines there alone. Deferred, named
-// home: the next slice that earns workspace.ts headroom (an extraction, not
-// a bump) should wire `savedRecodeMappings` in exactly that shape.
-// RecodePanel.tsx's Save control + the saved-mapping list both visibly
-// disclose the session-only limitation in the UI (adversarial review P1) —
-// don't remove that disclosure without landing real persistence first.
+// column/dataset") live in the app store (`savedRecodeMappings`, riding
+// store/sampleProfiles.ts's slice), NOT here: they round-trip `.dwk`
+// (lib/workspace.ts parses them with lib/recodeMappings.ts's
+// `sanitizeSavedRecodeMappings`; gap audit 5 lane J, L5), are undoable, and
+// are forward-compat gated (lib/workspaceForwardCompat.ts) because v0.34.0
+// drops the field. This store only runs the save / delete / apply actions.
 //
 // CLOSED (Sol audit P1-3, DEFECT B — was BOOKED, not fixed, per the prior
 // note below): the non-modal RecodePanel keeps `channel` as a plain index
@@ -86,7 +80,6 @@ interface RecodeState {
   openLetter: string | null;
   mapping: RecodeMapping;
   newColumnName: string;
-  savedMappings: SavedRecodeMapping[];
 
   /** Open the workshop on `channel` of `datasetId` — refuses (toast, stays
    *  closed) when the column isn't categorical, mirroring every other
@@ -139,7 +132,6 @@ export const useRecode = create<RecodeState>((set, get) => ({
   openLetter: null,
   mapping: { groups: [] },
   newColumnName: "",
-  savedMappings: [],
 
   openRecode: (datasetId, channel) => {
     const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
@@ -288,12 +280,13 @@ export const useRecode = create<RecodeState>((set, get) => ({
       sourceLevels: [...levels],
       createdAt: new Date().toISOString(),
     };
-    set((s) => ({ savedMappings: [...s.savedMappings, entry] }));
+    useApp.getState().setSavedRecodeMappings((list) => [...list, entry], `Save recode mapping "${nm}"`);
     toast(`saved recode mapping "${nm}"`, "ok");
   },
-  deleteMapping: (id) => set((s) => ({ savedMappings: s.savedMappings.filter((m) => m.id !== id) })),
+  deleteMapping: (id) =>
+    useApp.getState().setSavedRecodeMappings((list) => (list.some((m) => m.id === id) ? list.filter((m) => m.id !== id) : list), "Delete recode mapping"),
   applySavedMapping: (id) => {
-    const saved = get().savedMappings.find((m) => m.id === id);
+    const saved = useApp.getState().savedRecodeMappings.find((m) => m.id === id);
     const { datasetId, channel } = get();
     const ds = datasetId != null ? useApp.getState().datasets.find((d) => d.id === datasetId) : undefined;
     const levels = ds && channel != null ? categoricalLevels(ds.data, channel) : null;

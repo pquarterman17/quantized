@@ -8,6 +8,20 @@
 
 import type { RecodeMapping } from "./recode";
 
+/** A saved, re-applicable recode recipe (J2 item 3). Persisted in the
+ *  `.dwk` (`savedRecodeMappings`, sanitized by `sanitizeSavedRecodeMappings`) --
+ *  `sourceLevels` is kept for DISPLAY only ("built from: Pass, Fail, Retry");
+ *  `resolveRecodeMapping` (lib/recodeMappings.ts) always checks the live TARGET's levels, never
+ *  this snapshot, so a saved mapping degrades honestly even if its original
+ *  source column has since changed. */
+export interface SavedRecodeMapping {
+  id: string;
+  name: string;
+  mapping: RecodeMapping;
+  sourceLevels: string[];
+  createdAt: string;
+}
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -113,4 +127,48 @@ export function resolveRecodeChannel(
     ok: false,
     reason: `can't commit recode: "${openLabel}" is ambiguous now (${matches.length} columns share that name) — reopen Recode on the column you want`,
   };
+}
+
+const MAX_SAVED_MAPPINGS = 200;
+const MAX_GROUPS = 500;
+const MAX_LEVELS = 5000;
+const MAX_TEXT = 200;
+
+const strings = (v: unknown, max: number): string[] | null =>
+  Array.isArray(v) && v.length <= max && v.every((x) => typeof x === "string" && x.length <= MAX_TEXT) ? (v as string[]) : null;
+
+/** Load-time sanitizer for the `.dwk` `savedRecodeMappings` list (the
+ *  `sanitizeSavedSampleProfiles` convention): a malformed entry is dropped,
+ *  never repaired or thrown on. A mapping whose group is malformed is refused
+ *  whole -- a half-read recipe would silently recode the wrong levels. Duplicate
+ *  ids keep the first; at most {@link MAX_SAVED_MAPPINGS} are kept. */
+export function sanitizeSavedRecodeMappings(raw: unknown): SavedRecodeMapping[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: SavedRecodeMapping[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const m = e.mapping as { groups?: unknown } | null | undefined;
+    const groups = m && Array.isArray(m.groups) && m.groups.length <= MAX_GROUPS ? m.groups : null;
+    const levels = strings(e.sourceLevels, MAX_LEVELS);
+    if (typeof e.id !== "string" || !e.id || e.id.length > 64 || seen.has(e.id) || typeof e.name !== "string" || !e.name.trim() || !groups || !levels) continue;
+    const clean: RecodeMapping["groups"] = [];
+    for (const g of groups as { newLabel?: unknown; from?: unknown }[]) {
+      const from = g && typeof g === "object" ? strings(g.from, MAX_LEVELS) : null;
+      if (!from || typeof g.newLabel !== "string" || g.newLabel.length > MAX_TEXT) break;
+      clean.push({ newLabel: g.newLabel, from: [...from] });
+    }
+    if (clean.length !== groups.length) continue;
+    seen.add(e.id);
+    out.push({
+      id: e.id,
+      name: e.name.trim().slice(0, 120),
+      mapping: { groups: clean },
+      sourceLevels: [...levels],
+      createdAt: typeof e.createdAt === "string" ? e.createdAt.slice(0, 40) : "",
+    });
+    if (out.length >= MAX_SAVED_MAPPINGS) break;
+  }
+  return out;
 }

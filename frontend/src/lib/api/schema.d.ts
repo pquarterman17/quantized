@@ -11998,6 +11998,8 @@ export interface components {
             mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
             /** Offset */
             offset?: number | null;
+            /** Prefix */
+            prefix?: string | null;
             /** Prob */
             prob?: ("fraction" | "percent") | null;
             /** Reverse */
@@ -12006,6 +12008,8 @@ export interface components {
             rotate?: number | null;
             /** Size */
             size?: number | null;
+            /** Suffix */
+            suffix?: string | null;
             /** Ticks */
             ticks?: ("in" | "out" | "both") | null;
             top?: components["schemas"]["TopAxisSpec"] | null;

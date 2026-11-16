@@ -38,6 +38,11 @@ export interface AxisFormat {
   /** explicit major tick positions, with an optional label for each (a blank
    *  or missing label keeps the number); */
   custom?: CustomTicks;
+  /** text before / after every NUMERIC tick label ("$", " K", "%"); a
+   *  custom-text label (`custom.labels`) stays literal. Screen
+   *  (`lib/axisExtras.ts`) and export (`calc/axis_extras.py`). */
+  prefix?: string;
+  suffix?: string;
   /** the axis drawn crossing the OTHER axis at this value (Origin's "axis
    *  position at", e.g. Y at X = 0), clamped to the frame when off view. */
   cross?: number;
@@ -102,6 +107,8 @@ export interface TopAxis {
 }
 
 export const MAX_AXIS_BREAKS = 4;
+/** Longest tick-label prefix / suffix. */
+export const MAX_AFFIX = 12;
 
 /** `raw` as a valid break list -- finite `[lo, hi]` pairs with `lo < hi`,
  *  sorted and non-overlapping, at most `MAX_AXIS_BREAKS` -- or `undefined`
@@ -120,7 +127,7 @@ export function normalizeBreaks(raw: unknown): [number, number][] | undefined {
 /** `fmt` with only its VALID Axis-dialog extras kept -- a file/template
  *  value is untrusted, and the renderer and export assume these shapes. */
 export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
-  const { mode, digits, divide, minor, ticks, size, base, rotate, offset } = fmt;
+  const { mode, digits, divide, minor, ticks, size, base, rotate, offset, prefix, suffix } = fmt;
   const breaks = normalizeBreaks(fmt.breaks);
   const custom = normalizeCustomTicks(fmt.custom);
   const pos = (v: unknown, max: number): v is number => typeof v === "number" && v > 0 && v <= max;
@@ -136,6 +143,8 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     ...(pos(size, 72) ? { size } : {}),
     ...(base === "e" || base === "2" ? { base } : {}),
     ...(fmt.prob === "fraction" || fmt.prob === "percent" ? { prob: fmt.prob } : {}),
+    ...(typeof prefix === "string" && prefix ? { prefix: prefix.slice(0, MAX_AFFIX) } : {}),
+    ...(typeof suffix === "string" && suffix ? { suffix: suffix.slice(0, MAX_AFFIX) } : {}),
     ...(custom ? { custom } : {}),
     ...(fin(fmt.cross) ? { cross: fmt.cross } : {}),
     ...(breaks ? { breaks } : {}),
@@ -162,18 +171,19 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
 /** The format a Y2 axis with none of its own inherits from the primary Y
  *  axis: its number format and tick look, but not what belongs to the Y
  *  axis itself -- the breaks and custom ticks (in Y's units), the
- *  probability scale, reverse, offset, crossing and grid. */
+ *  probability scale, reverse, offset, crossing, grid and the
+ *  label prefix / suffix (Y's units). */
 export function inheritedAxisFormat(fmt: AxisFormat): AxisFormat {
-  if (!fmt.breaks && !fmt.reverse && !fmt.offset && !fmt.grid && !fmt.top && !fmt.prob && !fmt.custom && fmt.cross === undefined) return fmt;
-  const { breaks: _b, reverse: _r, offset: _o, grid: _g, top: _t, prob: _p, custom: _c, cross: _x, ...rest } = fmt;
-  void [_b, _r, _o, _g, _t, _p, _c, _x];
+  if (!fmt.breaks && !fmt.reverse && !fmt.offset && !fmt.grid && !fmt.top && !fmt.prob && !fmt.custom && fmt.cross === undefined && !fmt.prefix && !fmt.suffix) return fmt;
+  const { breaks: _b, reverse: _r, offset: _o, grid: _g, top: _t, prob: _p, custom: _c, cross: _x, prefix: _pf, suffix: _sf, ...rest } = fmt;
+  void [_b, _r, _o, _g, _t, _p, _c, _x, _pf, _sf];
   return rest;
 }
 
 /** True when `fmt` carries any Axis-dialog extra (figures-audit #6). */
 export function hasAxisExtras(fmt: AxisFormat | null | undefined): boolean {
   return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length
-    || !!fmt.reverse || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top || !!fmt.prob || !!fmt.custom || fmt.cross !== undefined);
+    || !!fmt.reverse || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top || !!fmt.prob || !!fmt.custom || fmt.cross !== undefined || !!fmt.prefix || !!fmt.suffix);
 }
 
 /** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`

@@ -16037,6 +16037,18 @@
             ],
             "title": "Offset"
           },
+          "prefix": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
           "prob": {
             "anyOf": [
               {
@@ -16088,6 +16100,18 @@
               }
             ],
             "title": "Size"
+          },
+          "suffix": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix"
           },
           "ticks": {
             "anyOf": [

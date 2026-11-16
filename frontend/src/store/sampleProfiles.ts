@@ -9,7 +9,13 @@
 // A saved profile is NEVER applied by technique, filename or similarity: its
 // only consumer loads one into the form when the user picks it, and even then
 // it only fills the form — no dataset's existing normalization is touched.
+//
+// Gap audit 5 lane J: the Recode workshop's saved mappings ride this slice
+// (the same "named saved preset, project-scoped" class; useApp.ts has no room
+// for a slice of its own). Same rules: round-trips `.dwk`, undoable, never
+// applied automatically (store/recode.ts applies one only when picked).
 
+import type { SavedRecodeMapping } from "../lib/recode";
 import type { SavedSampleProfile } from "../lib/sampleGeometry";
 import type { AppState } from "./useApp";
 
@@ -21,6 +27,9 @@ export interface SampleProfilesSlice {
   /** Replace the saved list with `update(current)` as ONE undoable step
    *  labelled `label`; returning the same array is a no-op (no history). */
   setSavedSampleProfiles: (update: (list: SavedSampleProfile[]) => SavedSampleProfile[], label: string) => void;
+  savedRecodeMappings: SavedRecodeMapping[];
+  /** As `setSavedSampleProfiles`, for the saved Recode mappings. */
+  setSavedRecodeMappings: (update: (list: SavedRecodeMapping[]) => SavedRecodeMapping[], label: string) => void;
 }
 
 export function createSampleProfilesSlice(set: SliceSet, get: SliceGet): SampleProfilesSlice {
@@ -31,6 +40,13 @@ export function createSampleProfilesSlice(set: SliceSet, get: SliceGet): SampleP
       if (next === get().savedSampleProfiles) return;
       get().recordHistory(label);
       set({ savedSampleProfiles: next });
+    },
+    savedRecodeMappings: [],
+    setSavedRecodeMappings: (update, label) => {
+      const next = update(get().savedRecodeMappings);
+      if (next === get().savedRecodeMappings) return;
+      get().recordHistory(label);
+      set({ savedRecodeMappings: next });
     },
   };
 }

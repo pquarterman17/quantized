@@ -22,7 +22,7 @@ export default function RecodePanel() {
   const channel = useRecode((s) => s.channel);
   const mapping = useRecode((s) => s.mapping); // subscribed so a preview recompute below is reactive
   const newColumnName = useRecode((s) => s.newColumnName);
-  const savedMappings = useRecode((s) => s.savedMappings);
+  const savedMappings = useApp((s) => s.savedRecodeMappings);
   const setNewColumnName = useRecode((s) => s.setNewColumnName);
   const applyFindReplace = useRecode((s) => s.applyFindReplace);
   const commitRecode = useRecode((s) => s.commitRecode);
@@ -96,43 +96,35 @@ export default function RecodePanel() {
       </div>
 
       <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-        {/* Adversarial review P1: "Save mapping" must not read as durable
-            storage when it isn't yet — session-only, lost on reload/close
-            (see store/recode.ts's header for why). The comment/plan-doc
-            deferral doesn't reach the user; this line does. */}
         <div className="qzk-helptext" style={{ color: "var(--text-faint)", marginBottom: 6 }}>
-          Saved mappings last for this browser session only — they don't
-          persist with the project yet, and are lost on reload.
+          Saved mappings are stored in the project file, so they come back when you reopen it.
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input
             className="qz-input"
             style={{ flex: 1 }}
-            placeholder="save this mapping as… (this session only)"
-            title="Saved for this session only — not yet persisted with the project"
+            placeholder="save this mapping as…"
+            title="Save this mapping with the project, to reuse on another column"
             value={saveName}
             onChange={(e) => setSaveName(e.target.value)}
           />
           <Button
             size="sm"
-            title="Saved for this session only — not yet persisted with the project"
+            title="Save this mapping with the project, to reuse on another column"
             onClick={() => {
               saveMapping(saveName);
               setSaveName("");
             }}
             disabled={!saveName.trim()}
           >
-            Save mapping (session only)
+            Save mapping
           </Button>
         </div>
         {savedMappings.length > 0 && (
           <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
             {savedMappings.map((m) => (
               <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                <span title={`built from: ${m.sourceLevels.join(", ")} — this session only`}>
-                  {m.name}{" "}
-                  <span style={{ color: "var(--text-faint)", fontSize: "0.9em" }}>(session only)</span>
-                </span>
+                <span title={`built from: ${m.sourceLevels.join(", ")}`}>{m.name}</span>
                 <span style={{ display: "flex", gap: 4 }}>
                   <Button size="sm" onClick={() => applySavedMapping(m.id)}>
                     Apply

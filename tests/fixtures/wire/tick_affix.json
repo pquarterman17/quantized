@@ -1,0 +1,11 @@
+{
+  "_doc": "Tick-label prefix / suffix (gap audit 5 lane J, L3): screen (lib/axisExtras.ts) and export (calc/axis_extras.py) must draw the same label for each split. `custom.labels` stay literal; a blank label stays blank.",
+  "cases": [
+    {"name": "dollar prefix", "fmt": {"mode": "fixed", "digits": 0, "prefix": "$"}, "splits": [0, 1000, 2000], "labels": ["$0", "$1000", "$2000"]},
+    {"name": "kelvin suffix", "fmt": {"mode": "fixed", "digits": 1, "suffix": " K"}, "splits": [100, 200, 300], "labels": ["100.0 K", "200.0 K", "300.0 K"]},
+    {"name": "percent suffix", "fmt": {"mode": "fixed", "digits": 0, "suffix": "%"}, "splits": [0, 25, 50], "labels": ["0%", "25%", "50%"]},
+    {"name": "both and a negative", "fmt": {"mode": "fixed", "digits": 0, "prefix": "~", "suffix": "%"}, "splits": [-1, 0, 1], "labels": ["~-1%", "~0%", "~1%"]},
+    {"name": "wraps the divided number", "fmt": {"mode": "fixed", "digits": 0, "divide": 1000, "prefix": "$", "suffix": "k"}, "splits": [1000, 2000, 3000], "labels": ["$1k", "$2k", "$3k"]},
+    {"name": "custom text stays literal", "fmt": {"mode": "fixed", "digits": 0, "suffix": "K", "custom": {"at": [0, 10], "labels": ["RT", ""]}}, "splits": [0, 10], "labels": ["RT", "10K"]}
+  ]
+}
