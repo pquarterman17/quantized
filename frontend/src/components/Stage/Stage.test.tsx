@@ -35,14 +35,15 @@ vi.mock("./EmptyProjectStage", async (importOriginal) => {
 // c0 repeat like grid axes); `ds(2)` is an ordinary 1-D sweep.
 const ds = (nChannels: number): Dataset => {
   const gridded = nChannels >= 3;
-  const time = gridded ? [0, 0, 1, 1] : [0, 1, 2, 3];
+  // 3 x 3 grid: UX-D requires the repeating axes to tile a cross product
+  const time = gridded ? [0, 0, 0, 1, 1, 1, 2, 2, 2] : [0, 1, 2, 3];
   return {
     id: "d1",
     name: "d.dat",
     data: {
       time,
       values: time.map((t, r) =>
-        Array.from({ length: nChannels }, (_, c) => (gridded && c === 0 ? r % 2 : 10 * r + c + t)),
+        Array.from({ length: nChannels }, (_, c) => (gridded && c === 0 ? r % 3 : 10 * r + c + t)),
       ),
       labels: Array.from({ length: nChannels }, (_, i) => `c${i}`),
       units: Array(nChannels).fill(""),

@@ -225,6 +225,21 @@ describe("map columns + tab gating (figures-audit #13)", () => {
     expect(canRenderMap(sweep)).toBe(false);
   });
 
+  it("does not offer a map for an instrument sweep whose step-valued status columns merely repeat (MPMS M(T))", () => {
+    // Real mpms_mvst.dat: Range(2), Motor Current(37), Motor Temp(8), Temp. Status(3)
+    // all repeat, but their pairs fill a sliver of the cross product -- not a grid.
+    const n = 300;
+    const i = Array.from({ length: n }, (_, k) => k);
+    const d: DataStruct = {
+      time: i.map((k) => 1000 + k * 1.37),
+      values: i.map((k) => [Math.sin(k / 9), k < 150 ? 0 : 1, Math.floor(k / 8) * 0.5, Math.floor(k / 40), Math.floor(k / 100)]),
+      labels: ["Moment", "Range", "Motor Current", "Motor Temp.", "Temp. Status"],
+      units: ["", "", "", "", ""],
+      metadata: {},
+    };
+    expect(canRenderMap(d)).toBe(false);
+  });
+
   it("never guesses scattered XYZ: ordinary 3-column magnetometry data gets no Map tab", () => {
     const n = 40;
     const mk = (time: number[], a: number[], b: number[]): DataStruct => ({

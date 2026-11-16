@@ -57,12 +57,41 @@ export function canRenderMap(data: DataStruct | null | undefined): boolean {
   if (data.labels.length + 1 < 3 || data.values.length < 4) return false;
   const cached = mappableCache.get(data);
   if (cached !== undefined) return cached;
-  let gridAxes = repeats(data.time) ? 1 : 0;
-  for (let c = 0; c < data.labels.length && gridAxes < 2; c++) {
-    if (repeats(data.values.map((row) => row[c]))) gridAxes++;
+  // Repeating columns are only CANDIDATE axes: an instrument file is full of
+  // step-valued status/range/setpoint columns that repeat without being a
+  // grid (a 38-column MPMS M(T) sweep qualified on that alone). Two candidates
+  // form a grid only when their value pairs cover most of the cross product.
+  const cand: (number | null | undefined)[][] = [];
+  if (repeats(data.time)) cand.push(data.time);
+  for (let c = 0; c < data.labels.length && cand.length < 8; c++) {
+    const col = data.values.map((row) => row[c]);
+    if (repeats(col)) cand.push(col);
+  }
+  let grid = false;
+  for (let a = 0; a < cand.length && !grid; a++) {
+    for (let b = a + 1; b < cand.length && !grid; b++) grid = formsGrid(cand[a], cand[b]);
   }
   // Scattered XYZ is opt-in (Plot > Contour from scattered XYZ), never guessed.
-  const ok = gridAxes >= 2 || data.metadata["scatteredXYZ"] === true;
+  const ok = grid || data.metadata["scatteredXYZ"] === true;
   mappableCache.set(data, ok);
   return ok;
+}
+
+/** Do two repeating columns tile a grid? Each needs >=3 levels and the distinct
+ *  (a, b) pairs must fill >=80 % of levels(a) x levels(b). */
+function formsGrid(a: (number | null | undefined)[], b: (number | null | undefined)[]): boolean {
+  // levels-allowlist: counts distinct numeric axis values to test grid
+  // coverage -- not a column's category levels (same as `repeats`).
+  const la = new Set<number>();
+  const lb = new Set<number>();
+  const pairs = new Set<string>();
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    la.add(x);
+    lb.add(y);
+    pairs.add(`${x}|${y}`);
+  }
+  return la.size >= 3 && lb.size >= 3 && pairs.size >= 0.8 * la.size * lb.size;
 }

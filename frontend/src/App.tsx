@@ -48,6 +48,10 @@ const Inspector = lazyRegion(
   <aside className="qzk-inspector" />,
 );
 
+// UX-D: window-wide file drop. Lazy so its listeners cost the eager bundle
+// ~nothing; they attach milliseconds after first paint.
+const WindowFileDrop = lazyRegion(() => import("./components/Shell/WindowFileDrop"), "File drop");
+
 // The full curated list (adds the Analyze group); loaded once, right after mount.
 const fullCommands = onDemand(() => import("./appCommands"));
 
@@ -251,6 +255,7 @@ export default function App() {
       <StatusBar />
       <CommandPalette actions={actions} />
       <AppOverlays />
+      <WindowFileDrop />
     </div>
   );
 }
