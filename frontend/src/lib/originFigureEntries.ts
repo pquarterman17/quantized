@@ -26,6 +26,10 @@ export function resolveFigureDataset(figure: OriginFigure, candidates: Dataset[]
     );
     if (hit) return hit.id;
   }
+  // A heatmap / contour / ternary names its matrix or worksheet exactly too.
+  const mapBook = figure.map?.book ?? figure.ternary?.book;
+  const mapHit = mapBook && candidates.find((c) => String((c.data.metadata ?? {}).origin_book ?? "") === mapBook);
+  if (mapHit) return mapHit.id;
   const hint = (figure.source_hint ?? "").trim().toLowerCase();
   if (!hint) return null;
   for (const c of candidates) {

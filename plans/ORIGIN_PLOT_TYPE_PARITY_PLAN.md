@@ -446,12 +446,53 @@ None open.
          line style / width, 39 / 40 / 44 / 62 / 83 bar-width / pattern /
          grouping, 53 matrix heatmap, 13 / 14 vector XYXY ends (plot 218,
          `30流场` / `50流场`, not reported by `GetModifiers`).
-   - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
-         (axes match on all 4 specimens incl. polar), but no curve binding
-         decodes (`no_curve_bindings_decoded`; matrix: graph page unattributed,
-         id table empty) so quantized draws Y and Z as lines against X.**
-         Heatmap (matrix): no layer recovered. Matrix cells import exactly
-         (800 / 800).
+   - [x] ~~**Heatmap / contour / ternary bindings.**~~ FIXED 2026-11-15
+         (`fix/plot-matrix-import`, `opju_map_plots`). A map plot's token
+         names a dataset the XY id table leaves out: a matrix object's own
+         column record (code 0, no short name, flags 01/60; one per book page)
+         for 105 heatmap / 226 contour / 220 image, or a Z column (code 5,
+         flags 00/60; offset 35 = its Y, whose 35 = its X) for 243 XYZ contour
+         and for a scatter on a `Ternary`-template page (A, B, C = X, Y, Z).
+         Oracle (Origin C `GetRangeString` / `GetPlotType` /
+         `GetCoordinateType` over COM): specimens `[Mat]MSheet1!1`,
+         `[XYZ]Sheet1!(A,B,C)`, `[Tern]Sheet1!(A,B,C)` coor 2 -- each equal to
+         the chain. The figure gets `map` / `ternary` only when that plot is
+         the layer's only token (fail closed: `map_plot_not_decoded`, and a
+         map plot type is never drawn as an XY line); a matrix-only project
+         now has an id table, so its graph pages are named. Frontend (lazy,
+         `lib/originFigureMap.ts`): a matrix map opens the Map tab on the
+         matrix (contour lines on for contour), an XYZ contour only when the
+         Map tab's default picks equal Origin's (X, Y, Z), a ternary opens the
+         ternary workshop with A, B, C explicit (`lib/ternaryPending.ts`; #17
+         is the from-scratch default). Scorer vs main `76b6c73e`: curves 310
+         -> 313, drawn 340 -> 343, plot type 138 -> 141 (contour_matrix,
+         contour_xyz, ternary), 0 new wrong / phantom. Real corpus (359
+         `.opju`): 2 files change, 5 plots gain a map, all COM-equal:
+         `fig05_heatmap_flights` Graph1 226 contour of MBook1, `Fig3_c` Graph2
+         105 heatmap of MBook2, Graph3-5 of MBook1; axes 0.5..12.5 / 0.5..30.5
+         exact both ways, linear (Plot Details `ScaleType` 0), colour limits
+         104..622 / -4..4 = the matrices' own Z extent, which is what the Map
+         tab's auto limits draw (`map_scale_not_decoded`: not read from the
+         file).
+   - [ ] **Map residue (2026-11-15, COM-measured).** (a) Colour scale not
+         decoded: Plot Details `ColorMap` Min / Max / ScaleType / MajorLevels
+         sit ~560 bytes after the map token (`80 08 <min f64> 83 02 <max>
+         85 09 <increment> <levels>` on the heatmap specimen), outside the
+         519-byte curve record; the specimen's -0.42..1 is Origin's rounded
+         range, not the data's -0.416..0.99997. (b) The `heatmap_matrix`
+         specimen's layer is not recovered: its axis span is bare 8-byte
+         literals (-0.0263..1.0263) after a `89 11` / `80 11` sparse header
+         that the Y-span start scan does not authenticate. (c) 8 plots in the
+         4 `jiahehu2000` `.opju` (Matrix01 heatmap + Matrix02 colour-bar
+         layer, panel anchors with an `84 01 07` separator) stay unrecovered;
+         their heatmap Y axis is REVERSED (COM `y.from` 5.5 -> `y.to` 0.5),
+         which the Map tab cannot draw, so they need that first. (d) 41
+         heatmap plots on virtual matrices (worksheet ranges, `VM*`, e.g.
+         `SOP_meas` SHAP, `Supplemetary_Fig_10`) and 2 XYZ contours on loose
+         `[??]` datasets (`30流场` / `50流场`, now `map_plot_not_decoded`) are
+         not bound; neither is the virtual-matrix 226 contour (`pedotpss`).
+         (e) A ternary workshop already open on the same dataset keeps its
+         picks (the A, B, C hand-off is taken when it re-derives them).
    - [x] ~~**Polar layers are not rebuilt.**~~ FIXED 2026-11-15
          (`fix/plot-specialised-import`). A one-layer `Polar`-template page
          whose curves share one (book, X) and whose theta axis runs 0..360 is
@@ -467,18 +508,11 @@ None open.
          (`layer_kind_not_decoded`): quantized cannot draw them yet (#13 /
          cloud), so the curves are left out rather than drawn un-offset
          (8 specimens; 4 real pages in 2 files, none with a decoded curve).
-   - [ ] **Ternary, contour, heatmap residue (2026-11-15 survey).** Real
-         corpus (COM `GetPlotType()`): 53 heatmap (105) plots, 2 XYZ
-         contour (243), 2 matrix contour (226), 0 ternary layers -- heatmap
-         is the one with real value. All need the layer / binding decode
-         first (`no_curve_bindings_decoded`; heatmap: no layer recovered),
-         then a map-tab apply. Ternary: Origin's plot is the Z dataset over
-         range `(A,B,C)` (`Tern_C`), axes A, B, C in column order -- map
-         explicitly (#17 default picks reorder them). Vector XYXY (218): 14
-         real plots; the 13 / 14 modifiers above name the end columns.
-8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
-   their `oracle.json`, PNG and `.truth.json`, plus the generator command that
-   rebuilds them; add realdata tests that score them
+   - [ ] **Vector XYXY (218): 14 real plots**; the 13 / 14 modifiers above
+         name the end columns. (Real-corpus map census, COM `GetPlotType()`:
+         105 heatmap 53 = 12 matrix (4 shipped, 8 `jiahehu2000`) + 41 virtual
+         matrix; 226 contour 2 = 1 matrix (shipped) + 1 virtual; 243 XYZ
+         contour 2 (loose datasets); 0 ternary layers.)
 
 ### Creation gaps found by check 2 (cloud items, owner decision 2026-11-15)
 
@@ -538,6 +572,14 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
 
 ## Completed
 
+- ~~**#8 Commit the specimens + ratchet**~~ (2026-11-15) — 233 specimens
+  (231 `.opju` + PNG + `oracle.json`, 2 refused; 28 MB) committed to private
+  `test-data/origin/generated/` with README + regenerate command.
+  `tests/test_plot_corpus_import_floor.py` (realdata, ~3 s) scores them and
+  asserts 0 wrong / 0 phantom in every check and match counts equal to the
+  pins in `tests/fixtures/plot_corpus/import_floor.json` (curves 313, drawn
+  343, values 808, column_meta 1709, plot_type 141, axes 1098, styles 414,
+  error_bars 12); a rise fails the test until the pin is raised.
 - ~~**#2 Check 1 — Origin → quantized import scorer**~~ (2026-11-15).
   `tools/plot_corpus/score_import.py` imports every specimen through the
   import route's own composition (`read_origin_project_all` →

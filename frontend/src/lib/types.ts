@@ -211,7 +211,7 @@ export interface OriginFigure {
   y_log: boolean;
   source_hint?: string;
   n_curves: number;
-  coordinates?: "polar"; // Origin Polar layer: theta = X in degrees, r = Y (opju_layer_kind.py)
+  coordinates?: "polar"; map?: import("./originMapSpec").OriginMapSpec; ternary?: import("./originMapSpec").OriginTernarySpec;
   annotations: string[];
   /** Positioned floating text (Origin Text objects) at DATA coordinates —
    *  the text box's top-left corner, multi-line text "\n"-joined. Only

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { exportTernaryFigure } from "../../../lib/api/figures";
 import { stemFromName } from "../../../lib/exportActive";
 import { analysisData } from "../../../lib/rowstate";
+import { takeTernaryPicks } from "../../../lib/ternaryPending";
 import { useActiveDataset } from "../../../store/useApp";
 import { columnOptions, defaultPicks, type AuxColumn } from "./auxColumns";
 import { exportAuxFigure } from "./auxFigureExport";
@@ -51,7 +52,9 @@ export function useTernary(): TernaryState {
   // columns, so re-derive the picks whenever the active dataset changes.
   useEffect(() => {
     if (!data) return;
-    const [a, b, c] = defaultPicks(data, 3);
+    // An applied Origin ternary figure names its A, B, C columns (lib/ternaryPending).
+    const req = takeTernaryPicks(activeId);
+    const [a, b, c] = req ? [req.a, req.b, req.c] : defaultPicks(data, 3);
     setPicks({ a, b, c, colorBy: null });
     setTitle(activeName);
     // The dataset's identity and name are the reset triggers; `data` is

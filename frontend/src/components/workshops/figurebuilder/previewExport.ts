@@ -14,6 +14,8 @@ import type { FigureDocument } from "../../../lib/figureDocument";
 import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
+import type { LiveTickSteps } from "../../../lib/liveTickSteps";
+import { withLiveTickHints } from "../../../lib/liveTickStepsSpec";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { runCancellable } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
@@ -38,6 +40,8 @@ export interface PreviewExportDeps {
    *  canvas) shows. Sourced from
    *  `canonicalSession.selectSessionCyclesSeriesStyles`. */
   autoSeriesStyles: boolean;
+  /** The focused canvas' increments, for a session on that window (canonicalSession.sessionTickHints). */
+  tickHints?: LiveTickSteps | null;
   setStatus: (status: string) => void;
 }
 
@@ -68,10 +72,10 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         const picked = await chooseExcludedRows(
-          (greyExcluded) => buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
+          (greyExcluded) => withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
             autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
             defaultLineWidth: useApp.getState().defaultLineWidth,
-          }),
+          }), deps.tickHints),
           excludedChoiceMatters,
           useApp.getState().excludedDisplay,
         );
