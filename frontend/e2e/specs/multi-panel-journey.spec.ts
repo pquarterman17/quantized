@@ -11,7 +11,7 @@
 // of them:
 //
 //   1. `store/panels.ts`'s `createPanelWindow` (the Library's "Panel: side by
-//      side/stacked/grid" and "Overlay in one plot" multi-select quick picks,
+//      side/stacked/grid" and "Panel: overlay" multi-select quick picks,
 //      MAIN_PLAN #19) opens ONE `kind:"panel"` WINDOW that composites several
 //      datasets' own sub-plots inside it. It has no PageDocument, no Save/
 //      reopen of its own, and no `/api/export/figure-page` wire — it is a

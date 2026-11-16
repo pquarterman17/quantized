@@ -577,8 +577,8 @@ body {
 
 /* Multi-select action bar (sub-item 3) — appears only while >=2 rows are
    selected ("N selected · Plot · Move · Tag · Export · Clear"). */
-.qzk-multiselect-bar { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-soft); }
-.qzk-multiselect-count { flex: 1; min-width: 0; font-size: var(--font-size-sm); font-weight: var(--weight-semibold); color: var(--accent); }
+.qzk-multiselect-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-soft); }
+.qzk-multiselect-count { flex: 1 0 auto; white-space: nowrap; font-size: var(--font-size-sm); font-weight: var(--weight-semibold); color: var(--accent); }
 
 /* Folder-path caption (sub-item 2) — a filtered/search/smart-folder result
    row's "Folder › Subfolder" location, since the flat list can't show it via

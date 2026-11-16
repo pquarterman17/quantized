@@ -49,14 +49,20 @@ describe("MultiSelectBar visibility", () => {
 });
 
 describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
-  it("Plot opens an overlay panel window over the selection and focuses it", () => {
-    const before = useApp.getState().plotWindows.length;
+  // UX8-C: Plot is "Overlay in one plot" -- a live graph with a legend, not
+  // the legend-less composite panel window it used to open.
+  it("Plot lands ONE live graph over the selection: legend by file stem, unit on the Y title", async () => {
     render(<MultiSelectBar />);
     fireEvent.click(screen.getByText("Plot"));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
     const s = useApp.getState();
-    expect(s.plotWindows).toHaveLength(before + 1);
-    const win = s.plotWindows.find((w) => w.kind === "panel")!;
-    expect(win.panel).toEqual({ datasetIds: ["a", "b"], layout: "overlay" });
+    const graph = s.datasets.find((d) => d.linkedCurves)!;
+    expect(graph.linkedCurves!.map((c) => c.datasetId)).toEqual(["a", "b"]);
+    expect(graph.data.labels).toEqual(["a", "b"]); // "a.dat" -> "a"
+    expect(graph.data.units).toEqual(["", ""]); // no "(emu)" on each legend entry
+    expect(s.yAxisLabel).toBe("m (emu)");
+    expect(s.activeId).toBe(graph.id);
+    expect(s.plotWindows.some((w) => w.kind === "panel")).toBe(false);
   });
 
   it("Move prompts a folder pick, then moves every selected id there", async () => {

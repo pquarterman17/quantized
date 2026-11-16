@@ -1,5 +1,5 @@
 // Multi-dataset panel/overlay composite windows (MAIN_PLAN #19 v1): the
-// Library's "Panel: side by side/stacked/grid" and "Overlay in one plot"
+// Library's "Panel: side by side/stacked/grid" and "Panel: overlay (separate scales)"
 // quick picks (>=2 selected rows) each open ONE new `kind:"panel"` window
 // binding every selected dataset id + the picked layout. Composed into the
 // ONE useApp store instance exactly like ./windows/./history/./reductions/

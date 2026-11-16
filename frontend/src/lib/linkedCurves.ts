@@ -39,13 +39,40 @@ function xQuantity(ds: Dataset, xKey: number | null): [string, string] {
   return [ds.data.labels[xKey] ?? `col ${xKey + 1}`, ds.data.units[xKey] ?? ""];
 }
 
+/** A dataset name without its data-file extension ("MH_010K.csv" ->
+ *  "MH_010K"). Only a known extension counts, so "Sample 1.5" and "S1.MT"
+ *  keep their whole names. */
+const DATA_EXT = /\.(csv|tsv|txt|dat|asc|prn|xy|xye|xrdml|raw|ras|brml|uxd|spc|jdx|dx|xls|xlsx|ods|json|opj|opju|nxs|h5|hdf5)$/i;
+function stem(name: string): string {
+  return name.replace(DATA_EXT, "");
+}
+
 /** A curve's legend text: derived from the source's CURRENT name when the
- *  curve carries `labelFrom` (so a rename follows), else the stored label. */
-function curveLabel(c: LinkedCurve, ds: Dataset | undefined): string {
+ *  curve carries `labelFrom` (so a rename follows), else the stored label.
+ *  `name` is the source name as the legend shows it (UX8-C: the stem). */
+function curveLabel(c: LinkedCurve, ds: Dataset | undefined, name: (ds: Dataset) => string): string {
   if (!ds || !c.labelFrom) return c.label;
-  if (c.labelFrom === "name") return ds.name;
+  if (c.labelFrom === "name") return name(ds);
   const col = ds.data.labels[c.yKey];
-  return col === undefined ? c.label : `${ds.name}: ${col}`;
+  return col === undefined ? c.label : `${name(ds)}: ${col}`;
+}
+
+/** Every curve's legend text. UX8-C: a source name loses its file extension
+ *  ("MH_010K", not "MH_010K.csv"), unless two curves would then read the
+ *  same, when they keep the full names (a column label must stay unique). */
+function curveLabels(curves: readonly LinkedCurve[], byId: ReadonlyMap<string, Dataset>): string[] {
+  const short = curves.map((c) => curveLabel(c, byId.get(c.datasetId), (ds) => stem(ds.name)));
+  if (new Set(short).size === short.length) return short;
+  return curves.map((c) => curveLabel(c, byId.get(c.datasetId), (ds) => ds.name));
+}
+
+/** The one unit every curve's source column shares, else null. When there is
+ *  one, the graph's columns carry no unit, so a legend reads "MH_010K" rather
+ *  than "MH_010K (emu)": the unit belongs to the Y title ("Moment (emu)",
+ *  `linkedGraphYTitle`), and each column's Comment keeps it. */
+function sharedUnit(units: readonly (string | undefined)[]): string | null {
+  const known = units.filter((u): u is string => u !== undefined);
+  return known.length > 0 && known[0] !== "" && known.every((u) => u === known[0]) ? known[0] : null;
 }
 
 /** The graph's DataStruct for `curves` over the CURRENT `datasets`. `previous`
@@ -102,18 +129,25 @@ export function assembleLinkedCurves(
   const src = (i: number) => (curveBlock[i] < 0 ? undefined : byId.get(curves[i].datasetId)!.data);
   const names = curves.map((_, i) => `c${i}`);
   const declared = previous?.metadata?.error_roles;
+  const units = curves.map((c, i) => src(i)?.units[c.yKey]);
+  const shared = sharedUnit(units);
+  const quantity = (i: number): string => {
+    const label = src(i)?.labels[curves[i].yKey];
+    if (label === undefined) return "(missing)";
+    return shared ? `${label} (${shared})` : label;
+  };
   return {
     time,
     values,
-    labels: curves.map((c) => curveLabel(c, byId.get(c.datasetId))),
-    units: curves.map((c, i) => src(i)?.units[c.yKey] ?? ""),
+    labels: curveLabels(curves, byId),
+    units: units.map((u) => (shared ? "" : (u ?? ""))),
     metadata: {
       source_format: "linked-graph",
       x_column_name: xName || "x",
       x_column_long: xName,
       x_column_unit: xUnit,
       origin_column_names: names,
-      column_comments: Object.fromEntries(curves.map((c, i) => [names[i], src(i)?.labels[c.yKey] ?? "(missing)"])),
+      column_comments: Object.fromEntries(curves.map((_, i) => [names[i], quantity(i)])),
       ...(declared !== undefined ? { error_roles: declared } : {}),
     },
   };

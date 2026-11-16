@@ -212,10 +212,13 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "panel-row": { description: "Arrange selected datasets in one horizontal row of aligned panels." },
   "panel-column": { description: "Arrange selected datasets in one vertical column of aligned panels." },
   "panel-grid": { description: "Arrange selected datasets in a compact grid of panels." },
-  "panel-overlay": { description: "Draw selected datasets together in one shared plot." },
+  "panel-overlay": {
+    description: "Draw selected datasets in one composite window on a shared X axis, a separate Y scale per unit, without a legend.",
+    keywords: "overlay separate scales composite panel",
+  },
   "plot-selected-together": {
     description: "Plot two or more selected Library datasets in one live graph, one curve per dataset; it follows edits to its sources.",
-    keywords: "combine merge overlay library selection",
+    keywords: "plot selected together combine merge overlay library selection legend",
   },
   "layer-contents": {
     description: "List the current graph's curves: add from any dataset, remove, reorder, or re-bind a curve to another X/Y.",

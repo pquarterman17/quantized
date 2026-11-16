@@ -161,7 +161,7 @@ const SWITCH_KEYS = [
   "activeId", "composition", "errKeys", "facetKey", "fwhmResult", "gadgetBusy", "gadgetCursorResult",
   "gadgetCursors", "gadgetDerivResult", "gadgetError", "gadgetFftPreview", "gadgetIntegrateResult",
   "gadgetStatsResult", "groupKey", "hiddenChannels", "integral", "librarySelection", "plotWindows",
-  "qfitBusy", "qfitError", "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "seriesLabels",
+  "qfitBusy", "qfitError", "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "selectionAnchorId", "seriesLabels",
   "seriesOrder", "seriesStyles", "stageTab", "worksheetId", "xKey", "xLim", "xStep", "y2AxisLabel",
   "y2Keys", "y2Lim", "y2Scale", "y2Step", "yAxes", "yAxisOf", "yKeys", "yLim", "yStep",
 ];
@@ -170,7 +170,7 @@ const REACTIVATE_KEYS = [
   "composition", "fwhmResult", "gadgetBusy", "gadgetCursorResult", "gadgetCursors",
   "gadgetDerivResult", "gadgetError", "gadgetFftPreview", "gadgetIntegrateResult",
   "gadgetStatsResult", "integral", "librarySelection", "plotWindows", "qfitBusy", "qfitError",
-  "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "stageTab", "worksheetId",
+  "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "selectionAnchorId", "stageTab", "worksheetId",
 ];
 // An unknown id: everything a switch writes except the stage tab (no dataset to route on).
 const UNKNOWN_KEYS = SWITCH_KEYS.filter((k) => k !== "stageTab");
@@ -188,7 +188,7 @@ const FOCUS_HANDOFF_KEYS = [
 ];
 const withKeys = (base: string[], extra: string[]): string[] => [...base, ...extra].sort();
 // The worksheet-intent path for an Origin book.
-const WORKSHEET_INTENT_KEYS = ["librarySelection", "selectedIds", "stageTab", "worksheetId"];
+const WORKSHEET_INTENT_KEYS = ["librarySelection", "selectedIds", "selectionAnchorId", "stageTab", "worksheetId"];
 
 describe("initial state (moves with the slice)", () => {
   it("nothing is active, selected or overridden", () => {
@@ -388,7 +388,7 @@ describe("toggleSelected", () => {
   it("adds an unselected row and exits the tree selection; the active dataset stays", () => {
     const before = snapshot();
     act().toggleSelected("d1");
-    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds"]);
+    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds", "selectionAnchorId"]);
     expect(act().selectedIds).toEqual(["d2", "d3", "d1"]);
     expect(act().activeId).toBe("d2");
     expect(kicks).toEqual([]);
@@ -399,7 +399,7 @@ describe("toggleSelected", () => {
     useApp.setState({ librarySelection: null });
     const before = snapshot();
     act().toggleSelected("d3");
-    expect(changedSince(before)).toEqual(["selectedIds"]);
+    expect(changedSince(before)).toEqual(["selectedIds", "selectionAnchorId"]);
     expect(act().selectedIds).toEqual(["d2"]);
     expectNoSideNotices();
   });
@@ -426,6 +426,38 @@ describe("selectRange", () => {
     expect(act().selectedIds).toEqual(["d3"]);
   });
 
+  // UX8-C: Tree mode's plain click is `selectIds([id])`, which never moves
+  // activeId — the range must anchor on THAT row, not on the plotted one.
+  it("anchors on the last plain (selectIds) or Ctrl (toggleSelected) click, not activeId", () => {
+    act().selectIds(["d1"]);
+    act().selectRange("ob");
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3", "ob"]);
+    expect(act().activeId).toBe("d2");
+    act().selectRange("d3"); // a second Shift-click re-ranges from the same anchor
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
+    act().toggleSelected("ob");
+    act().selectRange("d2");
+    expect(act().selectedIds).toEqual(["d2", "d3", "ob"]);
+  });
+
+  it("an anchor no longer selected yields to the one selected row, else activeId", () => {
+    act().selectIds(["d3"]);
+    // Another path (a window focus, an import) collapses the selection
+    // without writing the anchor: the row the user SEES selected wins.
+    useApp.setState({ selectedIds: ["ob"] });
+    act().selectRange("d2");
+    expect(act().selectedIds).toEqual(["d2", "d3", "ob"]);
+    useApp.setState({ selectedIds: [], selectionAnchorId: "gone" });
+    act().selectRange("d1");
+    expect(act().selectedIds).toEqual(["d1", "d2"]);
+  });
+
+  it("a view's shown order is de-duplicated", () => {
+    act().selectIds(["d1"]);
+    act().selectRange("d3", ["d1", "d2", "d2", "d3"]);
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
+  });
+
   it("an unknown id selects just that id and still exits the tree selection", () => {
     const before = snapshot();
     act().selectRange("nope");
@@ -443,6 +475,14 @@ describe("selectIds", () => {
     expect(act().selectedIds).toEqual(["d3", "d1"]);
     expect(act().activeId).toBe("d2");
     expectNoSideNotices();
+  });
+
+  it("a one-row selection (Tree mode's plain click) becomes the Shift anchor (UX8-C)", () => {
+    const before = snapshot();
+    act().selectIds(["d1"]);
+    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds", "selectionAnchorId"]);
+    expect(act().selectionAnchorId).toBe("d1");
+    expect(act().activeId).toBe("d2");
   });
 
   it("an all-unknown list empties the selection but keeps the tree selection", () => {

@@ -2,10 +2,11 @@
 // "N selected · Plot · Move · Tag · Export · Combine · Clear", shown at the
 // top of the Library panel whenever >=2 rows are selected. Every action
 // reuses an EXISTING bulk operation — nothing here is a new primitive:
-//   - Plot    -> createPanelWindow(ids, "overlay") + focusWindow, the SAME
-//                "Overlay in one plot" quick pick DatasetRow's context menu
-//                already offers for a multi-selection
-//                (lib/contextActions.ts's datasetMultiSelectActions).
+//   - Plot    -> plotSelectedTogether(ids) (UX8-C): ONE live graph with a
+//                legend, the SAME "Overlay in one plot" the row menu and the
+//                palette run. The composite panel window it used to open
+//                (no legend, a concatenated Y title) stays reachable as
+//                "Panel: overlay (separate scales)".
 //   - Move    -> a minimal folder-picker prompt (askParams select, same
 //                pattern folderOps.runTemplateOnFolder already uses), then
 //                moveDatasetsToFolder (ONE undo entry) — the same store
@@ -29,6 +30,7 @@
 //                bulk-select already use, just emptied).
 
 import { childFolders } from "../../lib/foldertree";
+import { plotSelectedTogether } from "../../lib/plotSelectedTogether";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -42,10 +44,7 @@ export default function MultiSelectBar() {
   const n = selectedIds.length;
   if (n < 2) return null;
 
-  const onPlot = () => {
-    const s = useApp.getState();
-    s.focusWindow(s.createPanelWindow([...selectedIds], "overlay"));
-  };
+  const onPlot = () => void plotSelectedTogether([...selectedIds]);
 
   const onMove = async () => {
     const folders = useApp.getState().folders;
@@ -99,7 +98,7 @@ export default function MultiSelectBar() {
   return (
     <div className="qzk-multiselect-bar">
       <span className="qzk-multiselect-count">{n} selected</span>
-      <button className="qz-btn" onClick={onPlot}>
+      <button className="qz-btn" onClick={onPlot} title="Overlay the selection in one graph, with a legend">
         Plot
       </button>
       <button className="qz-btn" onClick={() => void onMove()}>

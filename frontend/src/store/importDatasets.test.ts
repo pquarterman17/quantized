@@ -975,14 +975,25 @@ describe("batch-import overlay offer (PLOT_WORKFLOW_PLAN #4)", () => {
     expect(toastMsgs()).toContain("imported 2 files");
   });
 
-  it("no offer for an all-generic batch (two unknowns aren't knowably similar)", async () => {
+  it("no offer for an all-generic batch whose column shapes differ (not knowably similar)", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload())
+      .mockResolvedValueOnce({ ...payload(), labels: ["R"], units: ["ohm"] });
+    await useApp.getState().importFiles(files("a.csv", "b.csv"));
+
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(toastMsgs()).toContain("imported 2 files");
+  });
+
+  // UX8-C: ten `Field (Oe), Moment (emu)` CSVs got no offer at all.
+  it("offers the overlay for an all-generic batch with identical column labels and units", async () => {
     vi.mocked(uploadFile)
       .mockResolvedValueOnce(payload())
       .mockResolvedValueOnce(payload());
     await useApp.getState().importFiles(files("a.csv", "b.csv"));
 
-    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
-    expect(toastMsgs()).toContain("imported 2 files");
+    const withAction = useToasts.getState().toasts.find((t) => t.action);
+    expect(withAction?.msg).toBe("2 files imported — overlay in one plot?");
   });
 
   it("the append-as-one command does not trigger the offer", async () => {
@@ -1107,11 +1118,13 @@ describe("L0.46 — batch folder suggestion (never creates without the click)", 
   beforeEach(() => {
     // A shared prefix batch must NOT also qualify for the overlay offer, or
     // the overlay wins and this offer never appears — keep every dataset
-    // "generic" (no technique) here. Explicit reset: the previous describe
-    // block's tests set librarySelection/workbooks, and the file's top-level
-    // beforeEach doesn't touch either (only datasets/folders/activeId/
-    // selectedIds/toasts).
-    vi.mocked(uploadFile).mockResolvedValue(payload());
+    // "generic" (no technique) AND give each its own column name (UX8-C: a
+    // generic batch with one column shape qualifies for the overlay).
+    // Explicit reset: the previous describe block's tests set
+    // librarySelection/workbooks, and the file's top-level beforeEach doesn't
+    // touch either (only datasets/folders/activeId/selectedIds/toasts).
+    let n = 0;
+    vi.mocked(uploadFile).mockImplementation(async () => ({ ...payload(), labels: [`M${++n}`] }));
     useApp.setState({ librarySelection: null, workbooks: [] });
   });
 

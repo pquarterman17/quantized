@@ -64,6 +64,40 @@ describe("batchOverlayOffer", () => {
   });
 });
 
+// UX8-C: ten `Field (Oe), Moment (emu)` CSVs got no offer at all.
+describe("batchOverlayOffer — generic files with one column shape", () => {
+  const mh = (id: string, labels = ["Field", "Moment"], units = ["Oe", "emu"]): Dataset => ({
+    id,
+    name: `${id}.csv`,
+    data: { time: [0, 1], values: [[1, 2], [3, 4]], labels, units, metadata: {} },
+  });
+
+  it("offers an overlay when every generic dataset has the same labels and units", () => {
+    useApp.setState({ datasets: [mh("a"), mh("b"), mh("c")] });
+    expect(batchOverlayOffer(useApp.getState, ["a", "b", "c"])).toEqual({ technique: "generic", ids: ["a", "b", "c"] });
+  });
+
+  it("never offers for one file fanned out into several same-shape datasets (an Origin project)", () => {
+    useApp.setState({ datasets: [mh("a"), mh("b"), mh("c")] });
+    expect(batchOverlayOffer(useApp.getState, ["a", "b", "c"], 1)).toBeNull();
+  });
+
+  it("never offers when a label or a unit differs", () => {
+    useApp.setState({ datasets: [mh("a"), mh("b", ["Field", "M"])] });
+    expect(batchOverlayOffer(useApp.getState, ["a", "b"])).toBeNull();
+    useApp.setState({ datasets: [mh("a"), mh("b", ["Field", "Moment"], ["T", "emu"])] });
+    expect(batchOverlayOffer(useApp.getState, ["a", "b"])).toBeNull();
+  });
+
+  it("the toast does not call the files 'generic'", async () => {
+    useApp.setState({ datasets: [mh("a"), mh("b")] });
+    await presentBatchOutcome(useApp.getState, 2, ["a", "b"], undefined);
+    const [t] = useToasts.getState().toasts;
+    expect(t.msg).toBe("2 files imported — overlay in one plot?");
+    expect(t.action?.label).toBe("Overlay");
+  });
+});
+
 describe("presentBatchOutcome — L0.46 precedence", () => {
   it("the overlay offer wins and the recipe suggestion never fires", async () => {
     useApp.setState({ datasets: [ds("a", "xrd.powder"), ds("b", "xrd.powder")] });
