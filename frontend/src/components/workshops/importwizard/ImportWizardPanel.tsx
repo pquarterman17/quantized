@@ -64,7 +64,7 @@ export default function ImportWizardPanel() {
       void pickFile(handedFile);
     };
     if (!current) return take();
-    void askConfirm("Replace the file in the wizard?", `The wizard has ${current.name} open; this would switch to ${handedFile.name} and drop its settings.`, "Replace").then((ok) => ok && take());
+    void askConfirm("Replace the file in the wizard?", `The wizard has ${current.name} open; this would switch to ${handedFile.name} and drop its settings.`, "Replace").then((ok) => ok && take(), () => undefined);
   }, [handedFile, pickFile, current]);
 
   function onFileChosen(e: React.ChangeEvent<HTMLInputElement>): void {

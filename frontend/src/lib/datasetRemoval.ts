@@ -15,11 +15,11 @@ import { useApp } from "../store/useApp";
 /** Announce a removal with an Undo (lib/undoToast, loaded on demand to keep it
  *  out of the eager bundle). The history entry is captured NOW, synchronously;
  *  if the chunk fails to load the plain toast still shows. */
-export function toastRemoved(msg: string, kind: ToastKind = "info"): void {
+export function toastRemoved(msg: string, since: number | undefined, kind: ToastKind = "info"): void {
   // Captured NOW (synchronously): the lazy chunk must not re-read it after the load.
   const h = useApp.getState().history;
   const t = h.at(-1);
-  const top = t?.label === "remove datasets" ? { seq: t.seq, label: t.label, depth: h.length } : undefined;
+  const top = t?.label === "remove datasets" && t.seq !== since ? { seq: t.seq, label: t.label, depth: h.length } : undefined;
   void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, top), () => toast(msg, kind));
 }
 
@@ -34,10 +34,11 @@ export function requestDatasetRemoval(ids: readonly string[]): void {
   const n = live.length;
   const doRemove = () => {
     const st = useApp.getState();
+    const since = st.history.at(-1)?.seq; // an entry this removal did not record is not ours to undo
     st.removeDatasets(live);
     const msg = `removed ${n} dataset${plural(n)}`;
     st.setStatus(msg);
-    toastRemoved(msg);
+    toastRemoved(msg, since);
   };
   if (s.confirmRemove) {
     void askParams(`Remove ${n} dataset${plural(n)}?`, [], { confirmLabel: "Remove" }).then((ok) => {

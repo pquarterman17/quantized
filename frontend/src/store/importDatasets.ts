@@ -478,7 +478,7 @@ async function runImport<T>(
   if (structures.length > 0) presentStructures(structures);
   if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId, { suppressFolderOffer });
   // UX-C: plain-language failure toast (lazy chunk; a failed load must not swallow the failure).
-  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, failed: failedN, total: items.length })).catch(() => toast(summary, "danger"));
+  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, failed: failedN, total: items.length }), () => toast(summary, "danger"));
   notifyParserNotes(noted);
   return createdIds;
 }

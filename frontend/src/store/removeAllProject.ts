@@ -26,7 +26,9 @@
 import { readOnlyOpenReason } from "../lib/openWorkspaceReplace";
 import type { ProjectIdentity } from "./project";
 import { useProjectLock } from "./projectLock";
+import { isCurrentProjectLockOperation } from "./projectLockEpoch";
 import { closeProjectLockAwaitable, reserveProjectLock } from "./projectLockLifecycle";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "./projectLockPaths";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -50,6 +52,18 @@ const ordinalCount = (h: readonly { label: string }[]): number => h.filter((e) =
 export function beginRemoveAll(): void {
   suspended = true;
   watch();
+}
+
+/** A clear that threw recorded nothing: stop ignoring undo/redo. */
+export function cancelRemoveAll(): void {
+  suspended = false;
+}
+
+/** Another (named) project is open or mid-open. The browser's autosave slot
+ *  holds a synthetic lock path for the whole session — that is not a project. */
+function otherProjectOpen(): boolean {
+  const path = useProjectLock.getState().path;
+  return useApp.getState().currentProject !== null || (path !== null && path !== BROWSER_AUTOSAVE_LOCK_PATH);
 }
 
 /** Call right AFTER the Remove all took effect: remember the project that was
@@ -83,15 +97,14 @@ function watch(): void {
  *  anything), or null: another project is open (or opening) and would receive
  *  this one's data. */
 export function removeAllUndoBlock(): string | null {
-  const s = useApp.getState();
-  return s.currentProject !== null || useProjectLock.getState().path !== null
+  return otherProjectOpen()
     ? "another project is open now — undo would put this one's data into it"
     : null;
 }
 
 function attach(r: Removed): void {
   const s = useApp.getState();
-  if (s.currentProject !== null || useProjectLock.getState().path !== null) {
+  if (otherProjectOpen()) {
     // Moved on (Edit > Undo / Ctrl+Z cannot be refused up front): the data was
     // just restored into the OTHER project's workspace — put it straight back.
     suspended = true;
@@ -100,12 +113,17 @@ function attach(r: Removed): void {
     toast("Can't undo Remove all — another project is open and would receive this one's data.", "info");
     return;
   }
-  reserveProjectLock(r.project.path);
+  const reservation = reserveProjectLock(r.project.path);
   s.setCurrentProject(r.project);
   s.markProjectDirty(); // see the header: not byte-identical to the saved file
-  void r.released.then(() => useProjectLock.getState().openProject(r.project.path)).then((res) => {
-    if (res.readOnly) toast(`"${r.project.name}": ${readOnlyOpenReason(res.status)}`, "info");
-  });
+  // A Redo / second Remove all / other open before the release lands supersedes
+  // this reservation: then acquire nothing (it would leak a lock on a closed project).
+  void r.released
+    .then(() => (isCurrentProjectLockOperation(reservation) ? useProjectLock.getState().openProject(r.project.path) : null))
+    .then((res) => {
+      if (res?.readOnly) toast(`"${r.project.name}": ${readOnlyOpenReason(res.status)}`, "info");
+    })
+    .catch(() => undefined); // openProject itself never throws; a failed release is already best-effort
 }
 
 function detach(r: Removed): void {

@@ -42,7 +42,7 @@ import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
 import { runCancellable } from "../store/pendingOpActions";
-import { beginRemoveAll, rememberRemovedProject, removeAllUndoBlock } from "../store/removeAllProject";
+import { beginRemoveAll, cancelRemoveAll, rememberRemovedProject, removeAllUndoBlock } from "../store/removeAllProject";
 import { closeProjectLockAwaitable } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
 import { historyTop, toastWithUndo } from "../lib/undoToast";
@@ -199,7 +199,12 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
   if (rejectIfImportRunning()) return;
   const project = s().currentProject;
   beginRemoveAll();
-  s().clearAll();
+  try {
+    s().clearAll();
+  } catch (e) {
+    cancelRemoveAll();
+    throw e;
+  }
   const released = closeProjectLockAwaitable(); // after the clear: a throwing clear keeps the loaded project's lock
   // The project follows this entry's undo/redo from here (store/removeAllProject).
   rememberRemovedProject(project, released);

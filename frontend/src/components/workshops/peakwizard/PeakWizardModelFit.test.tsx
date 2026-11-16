@@ -286,8 +286,7 @@ describe("Peak analyzer — model fit results (step 4)", () => {
   it("Next is disabled, with the reason, while the fit is running", async () => {
     await findTwoPeaks();
     vi.stubGlobal("fetch", () => new Promise<Response>(() => {})); // a fit that never returns
-    step("Fit & review");
-    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    step("Fit & review"); // entering the step starts the fit (UX-I), which never returns here
     const next = await screen.findByRole("button", { name: /Next/ });
     await waitFor(() => expect(next).toBeDisabled());
     expect(next).toHaveAttribute("title", "fitting — wait for it to finish, or cancel it");

@@ -111,6 +111,17 @@ describe("Remove all follows the history entry, however undo/redo is driven", ()
   });
 });
 
+describe("browser build (no named project; the autosave slot's synthetic lock path is set)", () => {
+  it("Undo of Remove all is not refused as 'another project is open'", async () => {
+    useApp.getState().setCurrentProject(null);
+    useProjectLock.setState({ path: "qz://browser-autosave-session" });
+    await runRemoveAll(() => useApp.getState());
+    await undoClick();
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a"]);
+    expect(useToasts.getState().toasts.some((t) => /Can't undo/.test(t.msg))).toBe(false);
+  });
+});
+
 describe("Undo and the Trash", () => {
   it("a dataset restored by Undo leaves the Trash (no duplicate to Restore later)", async () => {
     const { requestDatasetRemoval } = await import("../lib/datasetRemoval");

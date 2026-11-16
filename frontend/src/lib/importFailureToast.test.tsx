@@ -83,6 +83,11 @@ describe("toastImportFailure", () => {
     cleanup();
     useToasts.setState({ toasts: [] });
     render(<Toaster />);
+    act(() => toastImportFailure("x.csv", "x.csv: bad numeric value at line 404"));
+    expect(screen.getByRole("alert")).toHaveTextContent("couldn't be parsed");
+    cleanup();
+    useToasts.setState({ toasts: [] });
+    render(<Toaster />);
     act(() => toastImportFailure("x.csv", "x.csv: header row not found"));
     expect(screen.getByRole("button", { name: "Open import wizard" })).toBeInTheDocument();
   });

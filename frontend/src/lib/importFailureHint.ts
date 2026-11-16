@@ -58,8 +58,8 @@ export function failureKind(error: string, name = ""): FailureKind {
   // file called "permission_slip.dat" would read as a permission failure.
   const message = name && error.startsWith(`${name}: `) ? error.slice(name.length + 2) : error;
   if (connectionHint(message)) return "server";
-  if (/\b(file|path|directory)\b[^:]{0,40}\bnot found|no such file|enoent|\b404\b|does not exist/i.test(message)) return "missing";
-  if (/permission denied|eacces|forbidden|\b403\b|access is denied/i.test(message)) return "denied";
+  if (/\b(file|path|directory)\b[^:]{0,40}\bnot found|no such file|enoent|\b(http|status)[ :]*404\b|404 not found/i.test(message)) return "missing";
+  if (/permission denied|eacces|\b(http|status)[ :]*403\b|403 forbidden|access is denied/i.test(message)) return "denied";
   if (/internal server error|\bhttp 5\d\d\b|\b5\d\d (error|server)/i.test(message)) return "servererror";
   return /no parser registered/i.test(message) ? "unrecognised" : "parse";
 }

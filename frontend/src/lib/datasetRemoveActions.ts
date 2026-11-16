@@ -18,8 +18,9 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     destructive: true,
     confirm: (t) => ({ title: `Remove "${t.dataset.name}"?`, confirmLabel: "Remove" }),
     run: (t) => {
+      const since = useApp.getState().history.at(-1)?.seq;
       useApp.getState().removeDataset(t.dataset.id);
-      toastRemoved(`removed ${t.dataset.name}`);
+      toastRemoved(`removed ${t.dataset.name}`, since);
     },
   },
   {
@@ -30,8 +31,9 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     confirm: (t) => ({ title: `Remove ${t.selectedIds.length} datasets?`, confirmLabel: "Remove" }),
     run: (t) => {
       const n = t.selectedIds.length;
+      const since = useApp.getState().history.at(-1)?.seq;
       useApp.getState().removeSelected();
-      toastRemoved(`removed ${n} datasets`);
+      toastRemoved(`removed ${n} datasets`, since);
     },
   },
   // P3.7: the explicit, warned Trash BYPASS — "Remove" above stays the
