@@ -20,6 +20,7 @@ import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { innerTabIndex, spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
+import * as GLYPHS from "../../lib/glyphs";
 import { lazyRegion } from "../../lib/lazyRegion";
 
 /** The saved-preview ToolWindow renders only after the "▣" button is clicked,
@@ -41,7 +42,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   /** L0.25 (PR #139 review) — set by LibraryTree only: single click SELECTS
    *  (librarySelection, visible highlight), double-click/Enter opens;
    *  right-click selects. Unset (flat FiguresSection): the established
-   *  click-applies behavior is unchanged. The ⊞/▤/G/▣ buttons keep their
+   *  click-applies behavior is unchanged. The ⊞/⊟/G/▣ buttons keep their
    *  one-click actions in both modes — they're commands, not the row. */
   treeMode?: boolean;
   /** LibraryTree's treeitem semantics + roving tab stop (U5); the action
@@ -164,7 +165,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
               aria-label="Open in a new graph window"
               onClick={() => openAndRemember({ newWindow: true })}
             >
-              ⊞
+              {GLYPHS.newWindow}
             </button>}
           {resolved && sourceResolution.sources.map((source) => (
             <button

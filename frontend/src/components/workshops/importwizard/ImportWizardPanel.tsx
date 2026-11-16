@@ -129,7 +129,7 @@ export default function ImportWizardPanel() {
       </div>
 
       {!w.file ? (
-        <div className="qzk-ds-meta" style={faint}>
+        <div className="qzk-helptext" style={faint}>
           Pick a delimited text file to preview and import under adjustable settings — delimiter,
           header/units lines, and per-column name / unit / role.
         </div>

@@ -72,7 +72,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   if (kind === "none") pickers = null;
   else if (!t.active) {
     pickers = (
-      <div className="qzk-ds-meta" style={{ ...faint, marginTop: 8 }}>
+      <div className="qzk-helptext" style={{ ...faint, marginTop: 8 }}>
         Select a dataset to analyze.
       </div>
     );

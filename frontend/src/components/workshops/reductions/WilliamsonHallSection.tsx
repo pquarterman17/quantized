@@ -162,7 +162,7 @@ export default function WilliamsonHallSection() {
       </Button>
 
       {!canCompute && !error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
           Enter at least 2 peaks (0 &lt; 2θ &lt; 180, FWHM &gt; 0).
         </div>
       )}

@@ -80,7 +80,7 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         </div>
       )}
       {r && m.stale && (
-        <div className="qzk-ds-meta" style={{ color: "var(--warn)", marginTop: 6 }}>
+        <div className="qzk-helptext" style={{ color: "var(--warn)", marginTop: 6 }}>
           The parameters changed since this fit — its curves are off the plot and it cannot be
           integrated or reported until you Re-fit.
         </div>

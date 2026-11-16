@@ -50,7 +50,7 @@ export function TetragonalDistortionCard() {
           Calculate
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Leave c relaxed blank for a cubic bulk reference (c relaxed = a relaxed).
       </div>
       {resultLine(card.result)}
@@ -82,7 +82,7 @@ export function PoissonStrainCard() {
           Calculate
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Biaxial strain with a free surface: ε⊥ = −2ν/(1−ν)·ε∥ (dimensionless; 0.01 = 1 %).
       </div>
       {resultLine(card.result)}
@@ -118,7 +118,7 @@ export function AtomicDensityCard() {
           Calculate
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Orthogonal cell (angles 90°); Z is atoms, not formula units, per cell.
       </div>
       {resultLine(card.result)}

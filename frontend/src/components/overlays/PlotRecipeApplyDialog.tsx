@@ -82,7 +82,7 @@ function PanelRebindRow({ issue, datasets }: { issue: RecipePanelIssue; datasets
   return (
     <li style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
       <span style={{ flex: 1 }}>{name}</span>
-      <select
+      <select className="qz-select"
         aria-label={name}
         value=""
         title="Pick the dataset or column this panel should use instead"

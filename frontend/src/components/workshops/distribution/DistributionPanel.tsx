@@ -44,7 +44,7 @@ export default function DistributionPanel() {
   return (
     <ToolWindow id="distribution" title="Distribution" width={380} onClose={() => setOpen(false)}>
       {!d.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to profile.
         </div>
       ) : (

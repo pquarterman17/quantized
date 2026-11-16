@@ -55,7 +55,7 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
     <>
       <EngineSelect w={w} />
       {peaks.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 8 }}>
+        <div className="qzk-helptext" style={{ ...faint, marginTop: 8 }}>
           Find or add peaks (step 2) to build the model.
         </div>
       ) : (
@@ -128,7 +128,7 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
           <ModelParamTable model={m} />
           <SetupProblems problems={m.problems} />
           {/* Wraps: .qzk-ds-meta alone is one ellipsized line (re-audit #16). */}
-          <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6, whiteSpace: "normal" }}>
+          <div className="qzk-helptext" style={{ ...faint, marginTop: 6, whiteSpace: "normal" }}>
             Seeded from the detected peaks; your edits save with the recipe. Blank min/max = open
             (widths stay positive, η in [0, 1]).
           </div>

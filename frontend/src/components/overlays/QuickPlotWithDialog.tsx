@@ -80,7 +80,7 @@ export default function QuickPlotWithDialog() {
           onKeyDown={onDialogKey}
         >
           <h2 id={titleId}>Quick Plot With…</h2>
-          <p className="qzk-ds-meta">The source worksheet was removed.</p>
+          <p className="qzk-helptext">The source worksheet was removed.</p>
           <div className="qz-btn-row"><Button onClick={close}>Close</Button></div>
         </div>
       </div>

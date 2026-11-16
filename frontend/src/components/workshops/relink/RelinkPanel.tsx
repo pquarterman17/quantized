@@ -104,7 +104,7 @@ export default function RelinkPanel() {
           : `${candidateCount} dataset${candidateCount === 1 ? "" : "s"} carry a source. Point one file's ` +
             `old folder at its new location — for a single moved file, use its own containing folder as the old root.`}
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 4 }}>
+      <div className="qzk-helptext" style={{ marginTop: 4 }}>
         Files under the old location will be looked up under the new location; nothing changes until you
         choose Relink.
       </div>
@@ -144,7 +144,7 @@ export default function RelinkPanel() {
           <button
             type="button"
             className="qzk-ds-meta"
-            style={{ textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            style={{ textAlign: "left", background: "none", border: "none", padding: 0 }}
             onClick={() => void browseNewRoot()}
             disabled={busy}
           >
@@ -174,7 +174,7 @@ export default function RelinkPanel() {
       )}
 
       {bridgeAvailable && preview.length > 0 && !newRootConsented && (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--accent)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 8, color: "var(--accent)" }}>
           New folder was typed, not chosen with Browse… — matches above are unverified (size/date only,
           no content check). Use Browse… and Preview again to verify content.
         </div>

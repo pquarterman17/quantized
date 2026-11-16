@@ -88,7 +88,7 @@ function CombineSection() {
 
       <TransformWarningList warnings={m.warnings} />
       {m.previewOnly && m.warnings.length > 0 && (
-        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
           Counted on the loaded preview; the full data is checked again when you combine.
         </div>
       )}
@@ -111,7 +111,7 @@ function CombineSection() {
       </Button>
 
       {m.idA === m.idB && (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 8, color: "var(--text-faint)" }}>
           Pick two different datasets.
         </div>
       )}

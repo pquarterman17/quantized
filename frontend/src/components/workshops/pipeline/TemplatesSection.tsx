@@ -174,7 +174,7 @@ export default function TemplatesSection() {
       {t.templates.length > 0 && picked && (
         <div style={{ marginTop: 4 }}>
           <SummaryXPicker typed choice={xChoice} onChange={setXChoice} disabled={pipelineRunning} />
-          <div className="qzk-ds-meta" style={{ whiteSpace: "normal" }}>Batch puts this on the summary worksheet X; a file without it is left blank and reported.</div>
+          <div className="qzk-helptext" style={{ whiteSpace: "normal" }}>Batch puts this on the summary worksheet X; a file without it is left blank and reported.</div>
         </div>
       )}
       {recipe && (recipe.description || recipe.expects) && (

@@ -39,7 +39,7 @@ export default function FftThicknessSection() {
 
   if (!active) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
         Select an XRD dataset (2θ vs intensity) first.
       </div>
     );

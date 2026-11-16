@@ -77,7 +77,7 @@ export default function FitTableControls({ sourceKey, build, stats = ["r2", "chi
             <Checkbox key={k} checked={want[k]} onChange={(v) => setWant((w) => ({ ...w, [k]: v }))}>{LABEL[k]}</Checkbox>
           ))}
         </div>
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", whiteSpace: "normal" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)", whiteSpace: "normal" }}>
           Parameters ± errors go in a table on the current graph (move or resize it there). It is a snapshot of this fit:
           re-running the fit does not change it, so press Update table afterwards.
         </div>

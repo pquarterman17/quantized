@@ -56,6 +56,7 @@
 // cannot come back.
 
 import type { LibraryNodeKind } from "../../lib/libraryHierarchy";
+import * as GLYPHS from "../../lib/glyphs";
 
 /** Every Library node kind, in tree-hierarchy order. A literal list (rather
  *  than `Object.keys`) so the test can prove the map is complete AND that
@@ -78,25 +79,25 @@ export const LIBRARY_NODE_KINDS = [
  * | kind               | glyph | code point | silhouette                        |
  * |--------------------|-------|------------|-----------------------------------|
  * | folder             | ▰     | U+25B0     | solid slanted bar — the only solid slab and the only slanted form; a folder tab. Adopted from TilePreview, which already drew folders this way. |
- * | workbook           | ▤     | U+25A4     | the ONE box, ruled: a bound book of sheets. Unchanged — it was never ambiguous on its own, only against ▦/▥. |
+ * | workbook           | ⊟     | U+229F     | a squared minus: a bound book of sheets. Moved off ▤ (UX-G2) — ▤ is the TitleBar Library toggle. |
  * | worksheet          | ≡     | U+2261     | free-standing rules, no box: the rows of one sheet. The lightest mark in the set, deliberately — a worksheet is by far the most numerous row in an imported Origin project. |
  * | analysis-result    | ⌬     | U+232C     | a linked analysis record: distinct from its worksheet output. |
  * | origin-figure      | ⌁     | U+2301     | a zigzag trace: a plotted graph recovered from Origin. Unchanged. |
  * | editable-figure    | ◇     | U+25C7     | outline diamond: a live figure document you can still edit. Unchanged. |
  * | publication-figure | ◆     | U+25C6     | solid diamond: the same family, set for publication. Replaces the old ◉/❄ pair, which swapped the TYPE mark to say "frozen" and so left a frozen publication figure with no type mark at all — frozen-ness is now its own ❄ status mark beside the name. |
- * | page               | ▭     | U+25AD     | a wide empty rectangle: the blank canvas a figure page lays panels onto. |
+ * | page               | ▢     | U+25A2     | a rounded empty square (▭ is the Rectangle shape tool): the blank canvas a figure page lays panels onto. |
  * | report             | ¶     | U+00B6     | a pilcrow: prose bound to a worksheet. |
  */
 export const LIBRARY_NODE_GLYPH: Record<LibraryNodeKind, string> = {
-  folder: "▰",
-  workbook: "▤",
-  worksheet: "≡",
-  "analysis-result": "⌬",
-  "origin-figure": "⌁",
-  "editable-figure": "◇",
-  "publication-figure": "◆",
-  page: "▭",
-  report: "¶",
+  folder: GLYPHS.nodeFolder,
+  workbook: GLYPHS.nodeWorkbook,
+  worksheet: GLYPHS.nodeWorksheet,
+  "analysis-result": GLYPHS.nodeAnalysisResult,
+  "origin-figure": GLYPHS.nodeOriginFigure,
+  "editable-figure": GLYPHS.nodeEditableFigure,
+  "publication-figure": GLYPHS.nodePublicationFigure,
+  page: GLYPHS.nodePage,
+  report: GLYPHS.nodeReport,
 };
 
 /** Node kind -> its plain-language name, used as the type mark's `title`
@@ -121,5 +122,5 @@ export const LIBRARY_NODE_LABEL: Record<LibraryNodeKind, string> = {
  *  is frozen rather than re-read from the worksheet. A STATUS, not a type —
  *  which is the whole point: the old code swapped ◉ for ❄ and lost the type.
  *  Kept here so the injectivity test can see it. */
-export const FROZEN_MARK = "❄";
+export const FROZEN_MARK = GLYPHS.frozen;
 export const FROZEN_TITLE = "Frozen data — not re-read from the worksheet";

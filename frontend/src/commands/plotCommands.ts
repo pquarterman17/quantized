@@ -233,7 +233,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => s().setStatMode(!s().statMode),
     },
     {
-      // Figures audit #19: the toolbar's ⊕ sits in the View group, which is
+      // Figures audit #19: the toolbar's inset button sits in the View group, which is
       // the first to fold into "⋯" on a narrow window — so the magnifier
       // inset needs a menu/palette entry point of its own.
       id: "inset-mode",

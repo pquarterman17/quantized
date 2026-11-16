@@ -97,7 +97,7 @@ export default function ApplyRecipeSection({
         {steps.length === 1 ? "" : "s"}: {steps.map((s) => s.label).join(" → ") || "none"}
       </div>
       {!recipe.expects && (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Saved without an expected input: columns cannot be checked or rebound; steps read them by position.
         </div>
       )}

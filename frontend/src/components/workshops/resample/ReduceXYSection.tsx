@@ -34,7 +34,7 @@ export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
   const channels = picked ? picked.filter((c) => available.includes(c)) : available;
   const params = useMemo(() => sigopParamsFromForm(method, form, channels), [method, form, channels]);
   const run = useSigopRun(active, params);
-  if (!active) return <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Select a dataset to reduce.</div>;
+  if (!active) return <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Select a dataset to reduce.</div>;
 
   const source = analysisData(active) ?? active.data;
   const problem = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : run.error;

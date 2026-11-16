@@ -40,7 +40,7 @@ export default function HysteresisPanel() {
     }}>
       <AnalysisInputReview toolId="hysteresis" singleY supportsBatch />
       {!active && (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select an M-H dataset.
         </div>
       )}

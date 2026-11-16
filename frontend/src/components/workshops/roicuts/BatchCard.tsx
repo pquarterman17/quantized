@@ -78,7 +78,7 @@ export default function BatchCard({ roi }: { roi: RoiCutsState }) {
 
   return (
     <Card title="Batch across datasets">
-      {!roi.boxRect && <div className="qzk-ds-meta">Draw or type a box first (Box card, above).</div>}
+      {!roi.boxRect && <div className="qzk-helptext">Draw or type a box first (Box card, above).</div>}
       <div className="qzk-ds-meta">
         {roi.selectedIds.length} dataset{roi.selectedIds.length === 1 ? "" : "s"} selected in the Library.
       </div>

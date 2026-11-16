@@ -54,7 +54,7 @@ export default function DetectedPeakActions(props: Props) {
         </Button>
       </div>
       {editing && (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)", marginTop: 4 }}>
           Click the plot to add a peak; click a peak marker to remove it. Press Esc to stop.
         </div>
       )}

@@ -33,7 +33,7 @@ export default function BatchCompatibilityReview({ rows, includedIds, busy, done
                 <td><Badge tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Badge></td>
                 <td>
                   <div>{row.summary}</div>
-                  {row.status === "partial" && !includedIds.has(row.datasetId) && <div className="qzk-ds-meta">Check Build to explicitly accept a partial figure.</div>}
+                  {row.status === "partial" && !includedIds.has(row.datasetId) && <div className="qzk-helptext">Check Build to explicitly accept a partial figure.</div>}
                   {row.unmatched.length > 0 && <div className="qzk-ds-meta" title={row.unmatched.join("; ")}>Missing: {row.unmatched.join("; ")}</div>}
                   {row.warnings.length > 0 && <div className="qzk-ds-meta" title={row.warnings.join("; ")}>Warnings: {row.warnings.join("; ")}</div>}
                 </td>
