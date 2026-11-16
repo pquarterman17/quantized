@@ -228,7 +228,6 @@ export default function ToolWindow({
     if (frame && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
   }, []);
 
-
   const onTitleDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     if (docked) {
