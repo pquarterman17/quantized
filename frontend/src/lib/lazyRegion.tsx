@@ -51,6 +51,8 @@ import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 
+import { useConnection } from "./lifecycle";
+
 /** Marks "the loader's own promise rejected" without touching the rejected
  *  value itself — mutating a caught error (a `Symbol` property write) would
  *  throw on a frozen/non-extensible one (e.g. `Object.freeze(new Error())`),
@@ -90,6 +92,8 @@ function isLoadFailure(error: unknown): error is LoadFailure {
 
 interface CatchProps {
   label: string;
+  /** A floating tool panel (`AppOverlayPanels`' lazyPanel): see `toolText`. */
+  tool: boolean;
   onRetry: () => void;
   children: ReactNode;
 }
@@ -117,12 +121,12 @@ class Catch extends Component<CatchProps, CatchState> {
   render(): ReactNode {
     if (this.state.failed) {
       return (
-        <div className="qzk-lazy-fail" role="alert">
+        <div className={`qzk-lazy-fail${this.props.tool ? " tool" : ""}`} role="alert" title={this.props.label}>
           {/* `data-live-region` (R12, lib/modalInert.ts): a load failure
               raised while a dialog is open — the dialog it would have opened
               over another one, say — is still announced; the Retry beside it
               stays inert with the rest of the background until that closes. */}
-          <span data-live-region="">⚠ {this.props.label} failed to load.</span>
+          <span data-live-region="">⚠ {this.props.tool ? toolText() : `${this.props.label} failed to load.`}</span>
           <button type="button" onClick={this.props.onRetry}>
             ↻ Retry
           </button>
@@ -131,6 +135,13 @@ class Catch extends Component<CatchProps, CatchState> {
     }
     return this.props.children;
   }
+}
+
+/** A tool panel's failure card (UX audit 8 #9): no component name (the label
+ *  stays in the console and the card's tooltip), and the likely cause when the
+ *  server's socket is down -- a chunk fetch fails exactly then. */
+function toolText(): string {
+  return `This tool couldn't load${useConnection.getState().connected ? "" : " (server unreachable)"}.`;
 }
 
 /** A region that can also be LOADED before it is mounted (bundle diet slice
@@ -156,6 +167,7 @@ export function lazyRegion<P extends object>(
   load: () => Promise<{ default: ComponentType<P> }>,
   label: string,
   fallback: ReactNode | ((props: P) => ReactNode) = null,
+  tool = false,
 ): PreloadableRegion<P> {
   const taggedLoad = taggedLoader(load);
   // Written only by a SUCCESSFUL resolution, read only by a fresh mount's
@@ -189,7 +201,7 @@ export function lazyRegion<P extends object>(
       setAttempt((a) => a + 1);
     };
     return (
-      <Catch key={attempt} label={label} onRetry={retry}>
+      <Catch key={attempt} label={label} tool={tool} onRetry={retry}>
         <Suspense fallback={typeof fallback === "function" ? fallback(props) : fallback}>
           <Comp {...props} />
         </Suspense>

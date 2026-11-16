@@ -88,3 +88,14 @@ describe("shapes (MAIN #27)", () => {
     expect(useApp.getState().drawShapeKind).toBeNull();
   });
 });
+
+describe("shape undo labels name the shape (UX audit 8 #9)", () => {
+  it("an arrow is 'arrow', not 'shape', for add / edit / delete", () => {
+    const labels = () => useApp.getState().history.map((h) => h.label);
+    const id = useApp.getState().addShape({ kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1 });
+    useApp.getState().updateShape(id, { x2: 2 });
+    useApp.getState().removeShape(id);
+    useApp.getState().addShape({ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 });
+    expect(labels().slice(-4)).toEqual(["add arrow", "edit arrow", "delete arrow", "add rectangle"]);
+  });
+});

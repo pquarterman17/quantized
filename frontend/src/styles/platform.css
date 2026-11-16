@@ -429,11 +429,61 @@
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow);
   padding: 6px 14px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* prose, not numbers (UX audit 8 #9) */
   font-size: var(--font-size-sm);
   color: var(--text);
   cursor: default;
   animation: qzk-toast-in 140ms ease;
+}
+/* A toast that wraps is a rectangle with a × in its corner: a pill outline
+   around three lines became an ellipse crowding the text. */
+.qzk-toast.rect {
+  position: relative;
+  border-radius: var(--radius-md);
+  padding: 8px 30px 8px 12px;
+  line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px; /* the message is one flex item, so the buttons wrap below it */
+}
+.qzk-toast.rect .qzk-toast-action {
+  margin: 0;
+}
+.qzk-toast-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  line-height: 20px;
+}
+.qzk-toast-close::before {
+  content: "×";
+  font-size: 15px;
+}
+.qzk-toast-close:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+/* In the one-line chip row (both side panels collapsed) a toast is a 1px-
+   padded nowrap chip inside an overflow-hidden strip: a corner × 20px tall
+   would overflow it and be clipped, so it sits inline at the chip's end. */
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast.rect,
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-toast.rect {
+  flex-wrap: nowrap;
+  padding: 1px 4px 1px 12px;
+}
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-close,
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-toast-close {
+  position: static;
+  flex: none;
 }
 .qzk-toast.ok {
   border-color: color-mix(in srgb, var(--ok) 55%, var(--glass-border));
@@ -471,6 +521,27 @@
   animation: none;
 }
 
+/* ── lost-server banner (Shell/ConnectionBanner.tsx, UX audit 8 #9): fixed, so
+   it never shifts the app grid; just under the menu bar. ── */
+.qzk-conn-banner {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--text);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--glass-border));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+
 /* ── lazy-region error boundary fallback (UX-003) — a failed chunk fetch
    degrades just this region instead of the whole app, and offers a retry
    that actually re-fetches (see lib/lazyRegion.tsx). ── */
@@ -487,6 +558,19 @@
   background: color-mix(in srgb, var(--danger) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--glass-border));
   border-radius: var(--radius);
+}
+/* A tool panel's card floats where its window would have opened: in flow it
+   became a row of the app grid and pushed the status bar into the stage. */
+.qzk-lazy-fail.tool {
+  position: fixed;
+  top: 116px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-tool-base);
+  margin: 0;
+  max-width: min(420px, calc(100vw - 32px));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-1));
+  box-shadow: var(--shadow);
 }
 .qzk-lazy-fail button {
   padding: 3px 10px;

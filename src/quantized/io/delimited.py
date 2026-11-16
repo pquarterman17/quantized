@@ -108,18 +108,22 @@ def _numeric_column(
 ) -> bool:
     """A data column holds NUMBERS: more than a tenth of its rows parse, and
     they are most of its non-empty cells (a missing-value spelling such as
-    "n/a" counts as empty). A text column with the odd
-    number-looking cell ("r1, r2, 7, r4") is text -- it used to become a
-    mostly-NaN numeric channel and lose its text."""
+    "n/a" counts as empty; so does "NaN", which once made ``NaN / / 0,5`` a
+    categorical [0, nan, 1]). A text column with the odd number-looking cell
+    ("r1, r2, 7, r4") is text, not a mostly-NaN numeric channel."""
     n_num = int(np.count_nonzero(~np.isnan(values)))
     if n_num / max(n_rows, 1) <= 0.1:
         return False
     if n_num == n_rows:
         return True  # every row parsed: no need to look at the text
-    n_filled = sum(
-        1 for row in tokens if c < len(row) and row[c].strip().lower() not in layout._MISSING_TOKENS
-    )
+    cells = (row[c].strip() for row in tokens if c < len(row))
+    n_filled = sum(1 for t in cells if t.lower() not in layout._MISSING_TOKENS and not _nan_word(t))
     return 2 * n_num > n_filled
+
+
+def _nan_word(cell: str) -> bool:
+    """A NaN spelling ("nan", "-NaN"): a missing value, not text."""
+    return layout._is_numeric_like(cell) and not layout._is_numeric(cell)
 
 
 def _sample_width(tokens: Sequence[Sequence[str]], data_start: int) -> int:

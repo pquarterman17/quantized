@@ -10,15 +10,15 @@
 // state lives in useImportWizard; the raw-lines + resolved-columns grid is
 // PreviewTable, the error-role assignment table is ErrorRolesEditor.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DECIMAL_OPTIONS,
   defaultFilterName,
   defaultGlob,
   DELIMITER_OPTIONS,
-  parseLineField,
 } from "../../../lib/importwizard";
+import { highlightDelimiter, inWizard, countLines, lineIndex, lineLabel, rawLines, RAW_LINE_LIMIT } from "../../../lib/importRawLines";
 import type { ImportDecimal } from "../../../lib/importTypes";
 import type { ImportColumnRole } from "../../../lib/types";
 import { useWizardHandoff } from "../../../lib/importFailureToast";
@@ -33,6 +33,7 @@ import ErrorBindingSuggestions from "./ErrorBindingSuggestions";
 import MetadataPreview from "./MetadataPreview";
 import CategoricalProblems from "./CategoricalProblems";
 import PreviewTable from "./PreviewTable";
+import RawLines, { NO_LINE_ROLES } from "./RawLines";
 import { useImportWizard } from "./useImportWizard";
 
 export default function ImportWizardPanel() {
@@ -41,6 +42,14 @@ export default function ImportWizardPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pickedFilter, setPickedFilter] = useState("");
   const faint = { color: "var(--text-faint)" } as const;
+  // The file's own lines, for when the preview request failed (UX audit 8 #7:
+  // the wizard used to show only the error, exactly when the lines mattered).
+  const { text } = w;
+  const fallback = useMemo(() => {
+    if (!text) return null;
+    const lines = rawLines(text);
+    return { lines, more: lines.length < RAW_LINE_LIMIT ? 0 : countLines(text) - lines.length };
+  }, [text]);
 
   // Close automatically on a successful import — this is a one-shot action,
   // not a workspace to linger in, and ToolWindow's own close path (used by
@@ -164,19 +173,20 @@ export default function ImportWizardPanel() {
             <label className="qzk-field">
               <span>Data start line</span>
               <NumberField
-                value={w.settings?.data_start_line ?? 0}
-                onChange={(v) => w.patchSettings({ data_start_line: parseLineField(v) ?? 0 })}
+                // Every line field is 1-based, like the raw-lines gutter; the wire stays 0-based.
+                value={lineLabel(w.settings?.data_start_line ?? 0)}
+                onChange={(v) => w.patchSettings({ data_start_line: lineIndex(v) ?? 0 })}
                 width={56}
               />
             </label>
             <label className="qzk-field" title="The row that names the columns (the Long Name row of an Origin ASCII export); choosing a row re-reads the column names from it">
               <span>Header line</span>
               <NumberField
-                value={w.settings?.header_line ?? ""}
+                value={lineLabel(w.settings?.header_line)}
                 // `column_names: null`: the guessed names were read from the OLD
                 // header row and outrank `header_line` while set, so picking a
                 // row by hand did nothing to the names.
-                onChange={(v) => w.patchSettings({ header_line: parseLineField(v), column_names: null })}
+                onChange={(v) => w.patchSettings({ header_line: lineIndex(v), column_names: null })}
                 placeholder="none"
                 width={56}
               />
@@ -184,8 +194,8 @@ export default function ImportWizardPanel() {
             <label className="qzk-field" title="The row that gives each column's unit (the Units row of an Origin ASCII export); any other row above the data start, such as an Origin Comments row, is kept as a comment in the dataset's metadata">
               <span>Units line</span>
               <NumberField
-                value={w.settings?.units_line ?? ""}
-                onChange={(v) => w.patchSettings({ units_line: parseLineField(v) })}
+                value={lineLabel(w.settings?.units_line)}
+                onChange={(v) => w.patchSettings({ units_line: lineIndex(v) })}
                 placeholder="none"
                 width={56}
               />
@@ -193,8 +203,8 @@ export default function ImportWizardPanel() {
             <label className="qzk-field" title="Per-column cells that override the legend label (P1.6)">
               <span>Label line</span>
               <NumberField
-                value={w.settings?.label_line ?? ""}
-                onChange={(v) => w.patchSettings({ label_line: parseLineField(v) })}
+                value={lineLabel(w.settings?.label_line)}
+                onChange={(v) => w.patchSettings({ label_line: lineIndex(v) })}
                 placeholder="none"
                 width={56}
               />
@@ -203,7 +213,7 @@ export default function ImportWizardPanel() {
 
           {w.error && (
             <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginBottom: 8 }}>
-              {w.error}
+              {inWizard(w.error)}
             </div>
           )}
 
@@ -217,6 +227,17 @@ export default function ImportWizardPanel() {
             <div className="qzk-ds-meta" style={faint}>
               Loading preview…
             </div>
+          )}
+
+          {/* Also when the guess itself failed (server down): no settings yet, so
+              no line roles, but the lines are still the file's own. */}
+          {!w.preview && fallback && (
+            <RawLines
+              lines={fallback.lines}
+              roles={w.settings ?? NO_LINE_ROLES}
+              delimiter={highlightDelimiter(null, w.settings?.delimiter, fallback.lines)}
+              more={fallback.more}
+            />
           )}
 
           {w.preview && (

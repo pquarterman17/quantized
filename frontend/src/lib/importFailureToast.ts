@@ -30,8 +30,21 @@ export function importFailureHeadline(name: string, technical: string): string {
       // A binary container's own message is the format-specific advice: keep it visible.
       return isBinaryName(name)
         ? `Couldn't read ${name} — ${technical.replace(`${name}: `, "")}`
-        : `Couldn't read ${name} — the file couldn't be parsed.`;
+        : `Couldn't read ${name} — ${parseReason(technical)}.`;
   }
+}
+
+/** The backend's parse failure in plain words (UX audit 8 #7): the reasons a
+ *  text file most often fails get named in the headline, not behind Details. */
+function parseReason(technical: string): string {
+  if (/file empty or only comments|\bfile is empty\b/i.test(technical)) return "the file is empty";
+  if (/no data rows: the file holds only a header/i.test(technical)) return "it has a header but no data rows";
+  // Ambiguous by definition: '1,500' may be 1.5 or 1500, so the headline must
+  // not assert either reading (a wrong "Comma" scales the data 1000x).
+  if (/could be a decimal or a thousands separator/i.test(technical)) {
+    return "its commas could be decimals or thousands separators — pick the decimal separator in the import wizard";
+  }
+  return "the file couldn't be parsed";
 }
 
 export function toastImportFailure(
@@ -76,5 +89,8 @@ export function toastImportFailure(
   const landed = batch && batch.total > 1
     ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed, showing the last` : ""}.`
     : "";
-  toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2 });
+  toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2, group: FAILURE_GROUP });
 }
+
+/** Three failures fold into one toast (Toaster.tsx), not a tall column. */
+const FAILURE_GROUP = { key: "import-failure", summary: (n: number) => `${n} files couldn't be read` };

@@ -44,7 +44,9 @@ describe("AppOverlays panel family survives a failed chunk fetch (UX-003)", () =
       useApp.getState().setShortcutsOpen(true);
     });
 
-    expect(await screen.findByText("⚠ ShortcutsDialog failed to load.")).toBeInTheDocument();
+    expect(await screen.findByText("⚠ This tool couldn't load (server unreachable).")).toBeInTheDocument();
+    // No component name in the card (UX audit 8 #9); it stays in the tooltip.
+    expect(screen.getByRole("alert")).toHaveAttribute("title", "ShortcutsDialog");
     // WhatIsThis is its own lazy chunk: wait for it rather than assume it
     // resolved before the failing panel did. A 300 ms delay on its import
     // made the old synchronous getByText fail exactly as the 2026-10-01
@@ -58,7 +60,7 @@ describe("AppOverlays panel family survives a failed chunk fetch (UX-003)", () =
     });
 
     expect(await screen.findByText("real shortcuts dialog")).toBeInTheDocument();
-    expect(screen.queryByText(/failed to load/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load/)).not.toBeInTheDocument();
     // The sibling overlay, opened before the retry, is still there and
     // still its own live component — untouched by the failing panel's
     // whole load/fail/retry cycle.

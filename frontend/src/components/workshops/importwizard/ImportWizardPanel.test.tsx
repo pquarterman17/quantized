@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataStruct, ImportFilterWire, ImportPreviewResponse, ImportSettingsWire } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useWizardHandoff } from "../../../lib/importFailureToast";
+import { HttpError } from "../../../lib/api/http";
 import ParamDialog from "../../overlays/ParamDialog";
 import ImportWizardPanel from "./ImportWizardPanel";
 
@@ -423,7 +424,8 @@ describe("ImportWizardPanel", () => {
         { index: 1, name: "Kerr", unit: "emu", role: "y" },
       ],
     });
-    fireEvent.change(screen.getByLabelText(/Header line/), { target: { value: "0" } });
+    // The line fields are 1-based like the raw-lines gutter: line 1 is index 0.
+    fireEvent.change(screen.getByLabelText(/Header line/), { target: { value: "1" } });
     await waitFor(() => expect(screen.getByDisplayValue("Kerr")).toBeInTheDocument());
     const sent = importPreviewMock.mock.calls.at(-1)![1] as ImportSettingsWire;
     expect(sent.header_line).toBe(0);
@@ -442,8 +444,8 @@ describe("ImportWizardPanel", () => {
     importPreviewMock.mockResolvedValue({ ...PREVIEW, label_line: 0 });
 
     const field = screen.getByLabelText(/Label line/) as HTMLInputElement;
-    fireEvent.change(field, { target: { value: "0" } });
-    expect(field).toHaveValue("0");
+    fireEvent.change(field, { target: { value: "1" } }); // 1-based: index 0
+    expect(field).toHaveValue("1");
 
     // Wait on the OBSERVABLE state the edit produces (the highlighted label
     // row once the re-preview lands), not on the mock call itself.
@@ -592,5 +594,32 @@ describe("ImportWizardPanel — hand-off from a failed import (UX-C)", () => {
     expect(confirmMock).toHaveBeenCalled();
     expect(screen.getByText("run1.dat")).toBeInTheDocument();
     expect(screen.queryByText("other.dat")).toBeNull();
+  });
+});
+
+describe("ImportWizardPanel — a failed preview still shows the file (UX audit 8 #7)", () => {
+  const EU = "T;R\n2,000;3,500\n4,000;5,500\n";
+  const AMBIGUOUS =
+    "Column 'T' in eu.csv writes numbers like '2,000', where the comma could be a decimal or a thousands " +
+    "separator ('1,500' is 1.5 or 1500); pick the decimal separator (Point or Comma) in the Import Wizard.";
+
+  it("renders the raw lines from the file text, numbered from 1, with the delimiter highlighted, when the preview 422s", async () => {
+    importGuessMock.mockResolvedValue({ ...SETTINGS, header_line: 0, units_line: null, data_start_line: 1, column_names: ["T", "R"] });
+    importPreviewMock.mockRejectedValue(new HttpError(422, AMBIGUOUS));
+    render(<ImportWizardPanel />);
+    pickFile(EU);
+    await waitFor(() => expect(screen.getByText(/pick the decimal separator/)).toBeInTheDocument());
+    const rows = [...document.querySelectorAll<HTMLElement>("[data-raw-line]")];
+    expect(rows.map((r) => r.lastElementChild?.textContent)).toEqual(["T;R", "2,000;3,500", "4,000;5,500"]);
+    expect(rows.map((r) => r.firstElementChild?.textContent)).toEqual(["1", "2", "3"]);
+    // The guessed delimiter is the ';' (its commas are decimals), one per row.
+    for (const r of rows) expect([...r.querySelectorAll("[data-delim]")].map((d) => d.textContent)).toEqual([";"]);
+    expect(rows[0]).toHaveAttribute("title", "header line");
+    // The error no longer sends the user to the wizard they are in.
+    expect(screen.queryByText(/in the Import Wizard/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+    // The line fields share the gutter's base: header on line 1, data from line 2.
+    expect(screen.getByLabelText(/Header line/)).toHaveValue("1");
+    expect(screen.getByLabelText(/Data start line/)).toHaveValue("2");
   });
 });

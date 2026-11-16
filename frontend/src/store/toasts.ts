@@ -31,6 +31,16 @@ export interface Toast {
   /** Several choices (the late-restore prompt's Append / Replace / Discard);
    *  rendered after `action`, each dismissing like it. */
   actions?: ToastAction[];
+  /** Toasts of one kind of event (an import failure) that the Toaster folds
+   *  into one "3 files couldn't be read · Show" toast once more than two are
+   *  up (UX audit 8 #9: three failures stacked into a tall column). */
+  group?: ToastGroup;
+}
+
+export interface ToastGroup {
+  key: string;
+  /** The folded toast's text for `n` members. */
+  summary: (n: number) => string;
 }
 
 /** Optional extras beyond message + kind. `ttlMs` overrides the default
@@ -41,6 +51,7 @@ export interface ToastOptions {
   action?: ToastAction;
   actions?: ToastAction[];
   ttlMs?: number;
+  group?: ToastGroup;
 }
 
 interface ToastsState {
@@ -139,7 +150,7 @@ export const useToasts = create<ToastsState>((set) => ({
       lastErrorAt = Date.now();
     }
     set((s) => ({
-      toasts: [...s.toasts, { id, msg, kind, action: opts?.action, actions: opts?.actions }].slice(-MAX),
+      toasts: [...s.toasts, { id, msg, kind, action: opts?.action, actions: opts?.actions, group: opts?.group }].slice(-MAX),
     }));
     // An action toast lives long enough to act on even when the caller does not
     // say so (BUG-009's Re-import offer relies on this: importing the constant

@@ -61,7 +61,15 @@ export interface ShapesSlice {
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+/** The word an undo label uses for a shape: an arrow is "arrow" (UX audit 8
+ *  #9: "Undid add shape" for an arrow told the user nothing). */
+const SHAPE_NOUN: Record<Shape["kind"], string> = { arrow: "arrow", line: "line", rect: "rectangle", ellipse: "ellipse" };
+
 export function createShapesSlice(set: SliceSet, get: SliceGet): ShapesSlice {
+  const noun = (id: string): string => {
+    const kind = get().shapes.find((sh) => sh.id === id)?.kind;
+    return kind ? SHAPE_NOUN[kind] : "shape";
+  };
   return {
     shapes: [],
     drawShapeKind: null,
@@ -70,16 +78,16 @@ export function createShapesSlice(set: SliceSet, get: SliceGet): ShapesSlice {
     setSelectedShapeId: (selectedShapeId) => set({ selectedShapeId }),
     addShape: (shape) => {
       const id = nextPlotObjectId("shape");
-      get().recordHistory("add shape");
+      get().recordHistory(`add ${SHAPE_NOUN[shape.kind] ?? "shape"}`);
       set((s) => ({ shapes: [...s.shapes, { ...shape, id }] }));
       return id;
     },
     updateShape: (id, patch) => {
-      get().recordHistory("edit shape");
+      get().recordHistory(`edit ${noun(id)}`);
       set((s) => ({ shapes: s.shapes.map((sh) => (sh.id === id ? { ...sh, ...patch } : sh)) }));
     },
     removeShape: (id) => {
-      get().recordHistory("delete shape");
+      get().recordHistory(`delete ${noun(id)}`);
       set((s) => ({ shapes: s.shapes.filter((sh) => sh.id !== id) }));
     },
     clearShapes: () => {
