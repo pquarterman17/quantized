@@ -361,9 +361,10 @@ export default function PlotViewport(props: PlotViewportProps) {
   // Display-only edits patch the live instance (after the create effect: see useLivePaint).
   useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
+  // A non-monotonic-x line is drawn by the region-decor chunk too (lib/uplotLoopLine.ts).
   const decor = plotDecorNeeds(
     [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
-    displayPayload, args.annotations, startupOverlayCount({ r: args.refLines, s: args.regionShades, errorBars, errorSpans, colorByColumns }), args.seriesStyles, args.exchangeXY,
+    displayPayload, args.annotations, startupOverlayCount({ r: args.refLines, s: args.regionShades, errorBars, errorSpans, colorByColumns, l: xAscending ? null : displayPayload?.series }), args.seriesStyles, args.exchangeXY,
   );
   useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 
