@@ -364,13 +364,24 @@ export interface FlatLibraryNode {
 }
 
 /** Flatten visible rows without rebuilding ownership. Expansion uses canonical
- * keys, so equal entity ids in different kinds cannot collide. */
+ * keys, so equal entity ids in different kinds cannot collide.
+ *
+ * `collapseSingleSheet` (UX8-I): a workbook whose ONLY child is one worksheet
+ * renders as that worksheet's single row (book = sheet) -- the common CSV
+ * import -- lifted to the workbook's depth and parent. A workbook with any
+ * other child (a second sheet, a graph) keeps its header row. */
 export function flattenLibraryHierarchy(
   hierarchy: LibraryHierarchy,
   expandedKeys: ReadonlySet<LibraryNodeKey>,
+  collapseSingleSheet = false,
 ): FlatLibraryNode[] {
   const rows: FlatLibraryNode[] = [];
   const visit = (nodes: readonly LibraryNode[]) => nodes.forEach((node) => {
+    if (collapseSingleSheet && node.kind === "workbook" && node.children.length === 1 && node.children[0].kind === "worksheet") {
+      const sheet = node.children[0];
+      rows.push({ node: { ...sheet, depth: node.depth, parentKey: node.parentKey }, hasChildren: false, expanded: false });
+      return;
+    }
     const hasChildren = node.children.length > 0;
     const expanded = hasChildren && expandedKeys.has(node.key);
     rows.push({ node, hasChildren, expanded });
