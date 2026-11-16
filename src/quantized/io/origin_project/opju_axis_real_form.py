@@ -91,6 +91,7 @@ from quantized.io.origin_project.opju_axis_scale_flags import (
     _real_x_log_flag,
     _real_y_log_flag,
 )
+from quantized.io.origin_project.opju_axis_sep_last import SEP_LAST_FLAG8
 from quantized.io.origin_project.opju_axis_zero_slot import UnprovenSlot, resolve_elided
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
@@ -365,8 +366,15 @@ def _parse_real_record(
     validated through 2026-07-04 parses byte-identically), then retried
     with the wide ``[80|81]`` lead that Hc2's Graph8/Graph12-family records
     need -- a record only ever reaches the wide pass after failing the
-    strict one, so the retry can add parses but never change one."""
-    passes = ((_SEP_STRICT, None, False), (_SEP_WIDE, None, True), (_SEP_WIDE, _SEP_END_02, True))
+    strict one, so the retry can add parses but never change one (same for
+    the third, last-byte ``09`` pass: ``opju_axis_sep_last``, and the fourth,
+    end-separator ``02`` pass: ``_SEP_END_02``)."""
+    passes = (
+        (_SEP_STRICT, None, False),
+        (_SEP_WIDE, None, True),
+        (SEP_LAST_FLAG8, None, True),
+        (_SEP_WIDE, _SEP_END_02, True),
+    )
     for sep_re, end_re, every in passes:
         try:
             got = _parse_real_record_sep(b, p, window_end, sep_re, every=every, end_re=end_re)

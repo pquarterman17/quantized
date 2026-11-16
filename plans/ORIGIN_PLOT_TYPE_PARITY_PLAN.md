@@ -247,20 +247,68 @@ None open.
          IS recovered the axes are exact: 870 / 870 from/to/log match, 0
          wrong. Scorecard: 114 of 233 specimens still carry an omitted
          curves cell, 93 an omitted axes cell.
-   - [ ] **double_y: layer exists but is not recovered on 7 / 8 specimens**
-         (clean, descending_x, masked_rows, nan_gaps, negative, noisy,
-         unicode_names; reason `graph_layer_not_recovered` without the
-         `graphs_not_recovered` page report, so a different mechanism from the
-         bullet above). Curves and axes omitted on all 7. Anchor
-         `double_y/clean`.
-   - [ ] **area/multi_x draws Y against the wrong X** (the only `wrong` cell
-         in the import scorecard: `MultiX` Y=B bound to X=C, Origin X=A).
-         The decoded binding is right; the drawn view picks C. Anchor
-         `area/multi_x`.
-   - [ ] **No quantized mapping for step, area, stacked area, waterfall
-         (offset lines)** even once bindings decode: `OriginCurve.style` has
-         only line / scatter / line+symbol, and there is no dash field (the
-         139 planted dashes cannot be represented).
+         **Why, for the 4 line / scatter / line+symbol families (2026-11-15):**
+         the axis record is a byte-COMPRESSED stream, and these records hold
+         a tagged token whose payload packs MORE than one double, which the
+         per-value token reader (``8T nn``, ``nn <= 8``) cannot split.
+         `duplicates` / `multi_x`: X span ``89 10 <16 bytes>`` = the raw
+         doubles -0.28 and 9.28 (Origin's from/to) in one token.
+         `huge_tiny`: the same X shape, and Y ``82 0d <13 bytes>`` = the top
+         5 bytes of -1e12 then all 8 of 1.1e13, with a step token tagged
+         ``80`` (outside ``81..8f``). `log_range`: X decodes (``89 08``,
+         one double), Y's from (1e-6) is a ``00`` control byte + an 8-byte
+         literal after the ``08 01`` log flag, which the bare retry refuses.
+         Real corpus: 126 of the 792 still-undecoded length-prefixed layer
+         anchors (26 files; 61 in `Figure 3 and 4 amplitude`) open with such
+         a packed X token. Book: decode the stream's control byte (the
+         low nibble is not the zero-byte count: 0.25 and 3.25 both elide 6
+         zero bytes as ``85`` / ``83``) before splitting packed payloads --
+         a 13-byte payload has several 2-value splits, so fail closed until
+         the rule is known.
+   - [x] ~~**double_y: layer exists but is not recovered on 7 / 8
+         specimens**~~ FIXED 2026-11-15 (`fix/plot-xy-import`). Cause: the
+         second (right-axis) layer closes its axis-record separator with
+         ``09`` instead of ``01`` (``01 | 0x08``), so no separator pass
+         matched. New `opju_axis_sep_last` admits ``09`` in a THIRD pass, so
+         every record that parsed before is byte-identical. Scorer: double_y
+         layer 2 recovered on 8 / 8 (log_range's layer 1 is the packed-token
+         gap above): curves 229 -> 237, drawn 263 -> 271, axes 870 -> 918,
+         plot type +8 match, 0 wrong / 0 phantom. Real corpus vs main (359
+         `.opju`): 709 layers in 28 files recovered (673 the coincident 2nd
+         layer of a 2-layer page; the bit also marks panel layers, e.g.
+         `SOP_meas`), 0 existing figures or books changed. Origin 2026b COM
+         on all 709: `layer.x/y.from/to` 2,836 / 2,836 exact, `x/y.type`
+         1,418 / 1,418, all 720 decoded curves are plots Origin draws on
+         that layer with the same Y and X (`%Z` / `xof`); 871 Origin plots
+         on them stay omitted (error bars and undecoded tokens).
+   - [x] ~~**area/multi_x draws Y against the wrong X**~~ FIXED 2026-11-15:
+         a SCORER defect, not an app one. The real apply's first branch
+         (`buildOverlayDataset`) draws any figure whose curves span >= 2
+         (book, X) blocks -- including one book's X,Y,X,Y sheet -- as an
+         overlay, each Y against its own X; the mirror
+         (`frontend_view.py`) modelled only `figureChannelSelection`'s
+         single `xKey`. Mirror gained the overlay branch, pinned by two
+         shared cases (pytest + vitest through `buildOverlayDataset`) and an
+         end-to-end `applyOriginFigure` test
+         (`store/originApplyMultiX.test.ts`). Scorer: drawn wrong 1 -> 0, no
+         other cell moved. Real files were never affected.
+   - [x] ~~**No quantized mapping for step and area**~~ FIXED 2026-11-15
+         (`opju_plot_kinds`): curve record byte 76 ``0xcc`` (plot 204) ->
+         `plotType: "area"` (drawn `fill: "under"`, Origin fills to Y = 0:
+         `area/negative` PNG), a line record with connect byte 11 ->
+         `plotType: "step"` (`step: "post"`); latent symbols not drawn.
+         Specimens: 30 / 30 area records ``0xcc``, 27 / 27 step records
+         byte 17 = 11, no other type carries either. Scorer: plot type 30
+         omitted -> match (16 area + 14 step specimens' layers), 0 wrong.
+         Real corpus: 0 of the decoded curve records carry either byte, so
+         no real file changes.
+   - [ ] **No quantized mapping for stacked area (214) or offset lines
+         (waterfall)**: quantized cannot draw them from scratch yet (#13), so
+         they stay the default line view (fail closed). There is also no
+         dash field (the 139 planted dashes cannot be represented).
+   - [ ] **The scorer does not model the double-Y apply**: each layer is
+         scored on its own; `doubleYPartner` puts layer 2 on the y2 axis,
+         which no cell checks yet.
 6. **Category/statistics family import parity** — column, horizontal bar,
    stacked column/bar, floating column, histogram, box, violin, strip, and
    wiring `.opj`/`.opju` column/bar/histogram to the bar/stat renderers.

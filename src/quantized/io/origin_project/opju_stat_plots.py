@@ -24,7 +24,9 @@ is a SUFFICIENT signal: a template naming none of the three (a merged graph,
 of one kind is not drawn on the Stat Stage, so its row-less curves are
 omitted again (``x_not_a_column``), never drawn against the sheet's X, and
 so are those of a page with more than one decoded layer (the frontend applies
-such a page panel by panel on the XY stage): ``stat_layer_in_multi_layer_page``.
+such a page panel by panel on the XY stage): ``stat_layer_in_multi_layer_page``,
+and of a layer plotting several books (applied as an XY overlay):
+``stat_layer_of_several_books``.
 **Column plots (203).** A curve whose record is Origin's column plot carries
 ``plotType`` ``"column"``: the frontend draws it as bars from zero at each X
 (``originCurveSeriesStyle``), Origin's figure for ONE column series. Origin
@@ -46,18 +48,20 @@ from typing import Any
 from quantized.io.origin_project.opju_curve_sheets import without_captions, without_positions
 from quantized.io.origin_project.opju_figure_curves import opju_pages
 from quantized.io.origin_project.opju_layer_kind import page_layer_kind
-from quantized.io.origin_project.opju_plot_gates import X_NOT_A_COLUMN as _X_NOT_A_COLUMN
+from quantized.io.origin_project.opju_plot_kinds import X_NOT_A_COLUMN as _X_NOT_A_COLUMN
 
 __all__ = [
     "BOX_KIND_NOT_DECODED",
     "HISTOGRAM_OF_SEVERAL_COLUMNS",
     "STAT_LAYER_IN_PANELS",
+    "STAT_LAYER_OF_SEVERAL_BOOKS",
     "apply_stat_kinds",
 ]
 
 BOX_KIND_NOT_DECODED = "box_kind_not_decoded"
 STAT_LAYER_IN_PANELS = "stat_layer_in_multi_layer_page"
 HISTOGRAM_OF_SEVERAL_COLUMNS = "histogram_of_several_columns"
+STAT_LAYER_OF_SEVERAL_BOOKS = "stat_layer_of_several_books"
 _BOX_FAMILY = "box"  # provisional plotType of a 206 curve until the page names it
 _BOX_KINDS = (
     (re.compile(rb"(?i)violin"), "violin"),
@@ -104,6 +108,9 @@ def apply_stat_kinds(figs: list[dict[str, Any]], b: bytes) -> list[dict[str, Any
             kind, reason = None, STAT_LAYER_IN_PANELS
         elif len(rowless) != len(curves):
             kind, reason = None, _X_NOT_A_COLUMN
+        elif len({str(c.get("book")) for c in curves}) > 1:
+            # curves of several books apply as an XY overlay, not a Stat Stage
+            kind, reason = None, STAT_LAYER_OF_SEVERAL_BOOKS
         elif kind == "histogram" and len(curves) > 1:
             # the Stat Stage bins one column; Origin bins each (plan item 15)
             kind, reason = None, HISTOGRAM_OF_SEVERAL_COLUMNS

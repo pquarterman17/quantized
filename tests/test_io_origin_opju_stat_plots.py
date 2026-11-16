@@ -18,10 +18,10 @@ import pytest
 from quantized.io.origin_project import drop_empty_library_books, read_origin_project_all
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.import_manifest import origin_figures_and_fidelity
-from quantized.io.origin_project.opju_plot_gates import (
-    PLOT_TYPE_OFF,
+from quantized.io.origin_project.opju_plot_gates import PLOT_TYPE_OFF
+from quantized.io.origin_project.opju_plot_kinds import (
     X_NOT_A_COLUMN,
-    mark_column,
+    apply_plot_kind,
     mark_rowless,
     rowless_kind,
     stat_x_reason,
@@ -30,6 +30,7 @@ from quantized.io.origin_project.opju_stat_plots import (
     BOX_KIND_NOT_DECODED,
     HISTOGRAM_OF_SEVERAL_COLUMNS,
     STAT_LAYER_IN_PANELS,
+    STAT_LAYER_OF_SEVERAL_BOOKS,
     apply_stat_kinds,
 )
 from test_io_origin_figures_opju import _real_form_tagged_and_rle
@@ -101,12 +102,15 @@ def test_stat_plot_with_an_x_is_omitted() -> None:
 
 def test_column_record_marks_the_column_plot_type() -> None:
     curve: dict[str, str | float] = {"book": "B", "x": "A", "y": "C"}
-    mark_column(curve, _rec(203))
+    apply_plot_kind(curve, _rec(203))
     assert curve["plotType"] == "column"
     for code in (200, 213, 215, 207):
         other: dict[str, str | float] = {"y": "C"}
-        mark_column(other, _rec(code))
+        apply_plot_kind(other, _rec(code))
         assert "plotType" not in other
+    boxed: dict[str, str | float] = {"x": "A", "y": "C", "style": "line"}
+    apply_plot_kind(boxed, _rec(206), "box")
+    assert boxed == {"x": "", "y": "C", "plotType": "box"}
 
 
 def test_only_a_single_column_series_keeps_its_bars() -> None:
@@ -180,6 +184,14 @@ def test_multi_layer_and_unnamed_pages_omit() -> None:
     assert out[0]["curves"] == [] and out[2]["curves"] == []
     assert out[1] is figs[1]
     assert out[0]["curve_sheet_omitted"][0]["reason"] == STAT_LAYER_IN_PANELS
+
+
+def test_rowless_curves_of_several_books_omit() -> None:
+    other = {**_box("B", "box"), "book": "Bk2"}
+    figs = [{"name": "G", "curves": [_box("B", "box"), other]}]
+    (out,) = apply_stat_kinds(figs, _MAGIC)
+    assert out["curves"] == []
+    assert {n["reason"] for n in out["curve_sheet_omitted"]} == {STAT_LAYER_OF_SEVERAL_BOOKS}
 
 
 # ── realdata anchors (Origin 2026b COM, 2026-11-15) ───────────────────────────

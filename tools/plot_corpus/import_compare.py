@@ -309,8 +309,8 @@ def drawn_kind(curves: Sequence[Mapping[str, Any]]) -> str:
     """What the frontend draws for a figure's decoded curves
     (``lib/originFigureSelection.ts`` + ``lib/originCurveText.ts``):
     ``histogram`` / ``box`` / ``violin`` / ``strip`` when every curve is that
-    Origin plot (``figureStatState``),
-    ``column``/``bar`` for bar plot types (``originCurveSeriesStyle``), else the
+    Origin plot (``figureStatState``), ``column``/``bar``/``area``/``step``
+    for those plot types (``originCurveSeriesStyle``), else the
     decoded line style; ``default`` = no decoded curve or style (the dataset's
     default line view); ``mixed`` when curves disagree."""
     if not curves:
@@ -320,7 +320,7 @@ def drawn_kind(curves: Sequence[Mapping[str, Any]]) -> str:
             return mode
     kinds = {
         str(c.get("plotType"))
-        if c.get("plotType") in ("column", "bar")
+        if c.get("plotType") in ("column", "bar", "area", "step")
         else str(c.get("style") or "default")
         for c in curves
     }

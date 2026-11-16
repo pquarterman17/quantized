@@ -6,6 +6,9 @@ the four frontend rules involved, line for line:
 
 * ``lib/originFigureEntries.ts::resolveFigureDataset`` -- which imported
   dataset a figure opens on;
+* ``lib/originOverlayFigure.ts::buildOverlayDataset`` -- the apply's FIRST
+  branch: curves on >= 2 (book, X column) blocks (cross-book, or one book's
+  X,Y,X,Y multi-X sheet) draw as an overlay, each Y against its own X;
 * ``lib/originFigureSelection.ts::figureChannelSelection`` -- decoded curves
   -> ``xKey``/``yKeys`` (``null`` when nothing maps);
 * ``lib/originFigureSelection.ts::figureStatState`` -- an all-histogram /
@@ -32,6 +35,7 @@ from import_compare import drawn_kind
 
 __all__ = [
     "channel_selection",
+    "overlay_curves",
     "default_view",
     "drawn_curves",
     "resolve_dataset",
@@ -79,6 +83,47 @@ def resolve_dataset(
         if hint in str(c.get("name") or "").lower():
             return i
     return None
+
+
+def _channel_of(meta: Mapping[str, Any], letter: str) -> int:
+    """``channelOf``: the designated-X letter -> -2 (``.time``), else the
+    value-channel index, or -1."""
+    if letter and letter == str(meta.get("x_column_name") or ""):
+        return -2
+    letters = _letters(meta) or []
+    return letters.index(letter) if letter in letters else -1
+
+
+def overlay_curves(
+    figure: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]] | None:
+    """The curves ``buildOverlayDataset`` binds (``[{book, x, y, curve}]``,
+    in curve order), or ``None`` when the figure is not an overlay: fewer
+    than 2 bound curves or fewer than 2 distinct (book, X channel) blocks
+    (``assembleOverlay``)."""
+    bound: list[dict[str, Any]] = []
+    for curve in figure.get("curves") or []:
+        ds = next(
+            (c for c in candidates
+             if str(c["metadata"].get("origin_book") or "") == curve.get("book")),
+            None,
+        )
+        if ds is None:
+            continue
+        meta = ds["metadata"]
+        y = str(curve.get("y") or "")
+        if _channel_of(meta, y) == -1:
+            continue
+        cx = str(curve.get("x") or "")
+        x_ch = _channel_of(meta, cx) if cx else -2
+        if cx and x_ch == -1:
+            continue
+        x = str(meta.get("x_column_name") or "") if x_ch == -2 else (_letters(meta) or [])[x_ch]
+        bound.append({"book": str(meta.get("origin_book") or ""), "x": x, "y": y,
+                      "block": (id(ds), x_ch), "curve": curve})
+    if len(bound) < 2 or len({b["block"] for b in bound}) < 2:
+        return None
+    return bound
 
 
 def channel_selection(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -174,13 +219,19 @@ def drawn_curves(
 ) -> dict[str, Any]:
     """``{"dataset", "via", "kind", "curves": [{book, x, y}]}`` for one figure.
 
-    ``via``: ``selection`` (decoded curves mapped), ``stat`` (Stat stage),
+    ``via``: ``overlay`` (curves on >= 2 (book, X) blocks, each Y against
+    its own X), ``selection`` (decoded curves mapped), ``stat`` (Stat stage),
     ``default`` (no decoded curve mapped: the dataset default view) or
     ``none`` (no dataset resolved: nothing drawn). ``kind`` is what that view
     draws (``import_compare.drawn_kind`` of the curves the selection mapped;
     ``default`` for the default view, ``none`` when nothing is drawn).
     """
     i = resolve_dataset(figure, candidates)
+    overlay = overlay_curves(figure, candidates)
+    if i is not None and overlay is not None:
+        return {"dataset": overlay[0]["book"], "via": "overlay",
+                "kind": drawn_kind([b["curve"] for b in overlay]),
+                "curves": [{"book": b["book"], "x": b["x"], "y": b["y"]} for b in overlay]}
     if i is None:
         return {"dataset": None, "via": "none", "kind": "none", "curves": []}
     ds = candidates[i]

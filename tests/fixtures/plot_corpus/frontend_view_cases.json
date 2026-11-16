@@ -49,6 +49,26 @@
       "drawn": [{"x": "C", "y": "D"}]
     },
     {
+      "name": "curves on two X columns of one book draw as an overlay, each Y on its own X",
+      "dataset": "multi_x",
+      "figure": {"source_hint": "MultiX", "curves": [{"book": "MultiX", "x": "A", "y": "B", "style": "line"}, {"book": "MultiX", "x": "C", "y": "D", "style": "line"}]},
+      "selection": {"xKey": 1, "yKeys": [0, 2]},
+      "stat": false,
+      "kind": "line",
+      "via": "overlay",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "C", "y": "D"}]
+    },
+    {
+      "name": "curves sharing one X column are no overlay",
+      "dataset": "multi_x",
+      "figure": {"source_hint": "MultiX", "curves": [{"book": "MultiX", "x": "A", "y": "B", "style": "line"}, {"book": "MultiX", "x": "A", "y": "D", "style": "line"}]},
+      "selection": {"xKey": null, "yKeys": [0, 2]},
+      "stat": false,
+      "kind": "line",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "D"}]
+    },
+    {
       "name": "no decoded curve: default view, nearest-preceding X, X column hidden",
       "dataset": "multi_x",
       "figure": {"source_hint": "MultiX", "curves": []},
@@ -103,6 +123,26 @@
       "kind": "column",
       "via": "selection",
       "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "area plot type fills under the line",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "area", "color": "#FF0000", "lineWidth": 2}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "area",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "step plot type draws a post step",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "C", "plotType": "step", "lineWidth": 2}]},
+      "selection": {"xKey": null, "yKeys": [1]},
+      "stat": false,
+      "kind": "step",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "C"}]
     },
     {
       "name": "horizontal bar plot type",
