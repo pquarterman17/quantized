@@ -142,8 +142,11 @@ def draw_marked_series(
     ``size_by`` on top of :func:`draw_series` (bars / the plain line). An
     analysis overlay's artist is tagged so it never drives the autoscale
     (``calc.figure_overlay_scale``)."""
+    host = getattr(ax, "real", ax)  # a turned plot's real Axes holds the artists
+    before = len(host.collections)
     artist, color = _draw_marked(ax, xv, yv, label, kw, spec, bars=bars)
-    tag_overlay(artist, spec)
+    for drawn in [artist, *host.collections[before:]]:  # the line, and any size-by scatter
+        tag_overlay(drawn, spec)
     return artist, color
 
 

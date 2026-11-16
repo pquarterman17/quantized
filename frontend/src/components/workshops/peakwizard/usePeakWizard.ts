@@ -230,10 +230,14 @@ export function usePeakWizard(): PeakWizardState {
 
   // ① starts from SNIP on a log-Y or decaying trace (./usePeakDefaults); the
   // automatic finds below wait until that is decided.
-  const applyAutoBaseline = useCallback((method: PeakBaselineMethod) =>
-    setRecipe((r) => ({ ...r, baseline: { ...r.baseline, method } })), []);
+  const applyAutoBaseline = useCallback((method: PeakBaselineMethod) => {
+    setRecipe((r) => ({ ...r, baseline: { ...r.baseline, method } }));
+    setFitResult(null); // as any recipe change: results made under the old method are stale
+    setIntegrateResult(null);
+  }, []);
   const auto = useAutoBaseline({
-    activeId: active?.id ?? null, y: segment?.y ?? null, yLog, method: recipe.baseline.method, apply: applyAutoBaseline,
+    activeId: active?.id ?? null, x: segment?.x ?? null, y: segment?.y ?? null, step, yLog,
+    method: recipe.baseline.method, apply: applyAutoBaseline,
   });
   baselineTouched.current = auto.touched;
   const { baseline, baselineBusy, baselineError } = usePeakBaseline(

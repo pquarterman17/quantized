@@ -15,24 +15,37 @@ const xrd = xs.map((i) => 15 + 70 * Math.exp(-i / 120) + (i % 60 === 30 ? 400 : 
 
 describe("decays", () => {
   it("sees a decaying background through its peaks", () => {
-    expect(decays(xrd)).toBe(true);
+    expect(decays(xs, xrd)).toBe(true);
   });
   it("rejects a flat, a rising or a too-short trace", () => {
-    expect(decays(xs.map((i) => 20 + (i % 60 === 30 ? 400 : 0)))).toBe(false);
-    expect(decays(xs.map((i) => 50 + i))).toBe(false);
-    expect(decays(xrd.slice(0, 10))).toBe(false);
+    expect(decays(xs, xs.map((i) => 20 + (i % 60 === 30 ? 400 : 0)))).toBe(false);
+    expect(decays(xs, xs.map((i) => 50 + i))).toBe(false);
+    expect(decays(xs.slice(0, 10), xrd.slice(0, 10))).toBe(false);
   });
   it("rejects a trace that dips and recovers, or ends at or below zero", () => {
-    expect(decays(xs.map((i) => (i < 250 ? 100 - i / 5 : 50 + (i - 250))))).toBe(false);
-    expect(decays(xs.map((i) => 100 - i / 2))).toBe(false); // last chunk's median is negative
+    expect(decays(xs, xs.map((i) => (i < 250 ? 100 - i / 5 : 50 + (i - 250))))).toBe(false);
+    expect(decays(xs, xs.map((i) => 100 - i / 2))).toBe(false); // last chunk's median is negative
+  });
+  it("reads a descending-X scan in X order", () => {
+    const desc = [...xs].reverse();
+    // Recorded high X first: the rows rise, but with X the trace decays.
+    expect(decays(desc, [...xrd].reverse())).toBe(true);
+    // ...and rows that fall while X falls rise with X: no decay.
+    expect(decays(desc, xrd)).toBe(false);
+  });
+  it("never calls a non-monotonic X (a hysteresis loop) decaying", () => {
+    const loop = [...xs, ...[...xs].reverse()]; // sweep up, then back down
+    const falling = loop.map((_, i) => 1000 / (i + 10)); // falls in row order
+    expect(decays(loop, falling)).toBe(false);
+    expect(decays(xs.map(() => 3), xrd)).toBe(false); // a constant X
   });
 });
 
 describe("suggestedBaseline", () => {
   it("SNIP on a log-Y plot or a decaying trace, none otherwise", () => {
-    expect(suggestedBaseline(xs.map(() => 5), true)).toBe("snip");
-    expect(suggestedBaseline(xrd, false)).toBe("snip");
-    expect(suggestedBaseline(xs.map(() => 5), false)).toBeNull();
+    expect(suggestedBaseline(xs, xs.map(() => 5), true)).toBe("snip");
+    expect(suggestedBaseline(xs, xrd, false)).toBe("snip");
+    expect(suggestedBaseline(xs, xs.map(() => 5), false)).toBeNull();
   });
 });
 

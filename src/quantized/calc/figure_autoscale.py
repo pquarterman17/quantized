@@ -241,12 +241,14 @@ def mask_nonpositive(ax: Any, axis: str) -> None:
             line.set_xdata(masked) if axis == "x" else line.set_ydata(masked)
 
 
-def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+def _values(
+    axes: list[Any], i: int, *, value_axis: bool = False
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Point coordinates and error-bar end coordinates (index ``i``: 0 = the
-    real x coordinate) across ``axes``, finite only. Analysis overlays count
-    only when no data series is drawn on these axes
-    (:mod:`quantized.calc.figure_overlay_scale`, the canvas'
-    ``lib/overlayAutoscale.ts``)."""
+    real x coordinate) across ``axes``, finite only. For the VALUE (logical Y)
+    axis, ``value_axis``, analysis overlays count only when no data series is
+    drawn on these axes (:mod:`quantized.calc.figure_overlay_scale`, the
+    canvas' ``lib/overlayAutoscale.ts``, which rules Y scales only)."""
     pts: list[NDArray[np.float64]] = []
     ends: list[NDArray[np.float64]] = []
     over: list[NDArray[np.float64]] = []
@@ -294,7 +296,7 @@ def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.fl
         return np.asarray(v[np.isfinite(v)], dtype=float)
 
     # An overlay alone on its axes still ranges them, as on the canvas.
-    return cat(pts if data_drawn else pts + over), cat(ends)
+    return cat(pts if data_drawn and value_axis else pts + over), cat(ends)
 
 
 def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
@@ -307,7 +309,7 @@ def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
     axes = _axes_of(ax, axis)
     if any(not (a.lines or a.collections) for a in axes):
         return  # a shared panel not drawn yet: its own call (the last) rules all
-    pts, ends = _values(axes, 0 if axis == "x" else 1)
+    pts, ends = _values(axes, 0 if axis == "x" else 1, value_axis=logical == "y")
     get_lim = ax.get_xlim if axis == "x" else ax.get_ylim
     set_lim = ax.set_xlim if axis == "x" else ax.set_ylim
     if scale == "log":

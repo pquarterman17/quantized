@@ -353,6 +353,223 @@
         56,
         99
       ]
+    },
+    {
+      "name": "Y2: a baseline below the Y1 data leaves both axes on their data",
+      "request": {
+        "dataset": {
+          "time": [
+            5,
+            15,
+            25,
+            35,
+            45,
+            55
+          ],
+          "values": [
+            [
+              60,
+              1000,
+              -40
+            ],
+            [
+              72,
+              1400,
+              -30
+            ],
+            [
+              95,
+              2000,
+              -20
+            ],
+            [
+              70,
+              1500,
+              -10
+            ],
+            [
+              64,
+              1200,
+              0
+            ],
+            [
+              61,
+              1100,
+              10
+            ]
+          ],
+          "labels": [
+            "I",
+            "T",
+            "baseline"
+          ],
+          "units": [
+            "cps",
+            "K",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          1
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "baseline",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "scan",
+        "analysis_overlays": [
+          false,
+          false,
+          true
+        ]
+      },
+      "want": [
+        56,
+        99
+      ],
+      "want_y2": [
+        900,
+        2100
+      ]
+    },
+    {
+      "name": "X breaks: the shared Y of the panels stays on the data",
+      "request": {
+        "dataset": {
+          "time": [
+            5,
+            15,
+            25,
+            35,
+            45,
+            55
+          ],
+          "values": [
+            [
+              60,
+              -40
+            ],
+            [
+              72,
+              -30
+            ],
+            [
+              95,
+              -20
+            ],
+            [
+              70,
+              -10
+            ],
+            [
+              64,
+              0
+            ],
+            [
+              61,
+              10
+            ]
+          ],
+          "labels": [
+            "I",
+            "baseline"
+          ],
+          "units": [
+            "cps",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "baseline",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          },
+          "x_breaks": [
+            [
+              20,
+              30
+            ]
+          ]
+        },
+        "transparent": false,
+        "filename": "scan",
+        "analysis_overlays": [
+          false,
+          true
+        ]
+      },
+      "want": [
+        58,
+        74
+      ]
     }
   ]
 }

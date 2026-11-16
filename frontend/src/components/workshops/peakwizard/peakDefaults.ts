@@ -34,21 +34,30 @@ function median(v: number[]): number {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
-/** Does the trace decay from its start to its end? Medians of five equal
- *  chunks (peaks barely move a median) never rise by more than 5 % and the
- *  last is at most two thirds of the first. */
-export function decays(y: readonly number[]): boolean {
-  const v = y.filter(Number.isFinite);
-  if (v.length < 20) return false;
+/** Does the trace decay as X increases? Read in X order: an ascending scan
+ *  as is, a descending one reversed, and a non-monotonic X (a hysteresis
+ *  loop, a swept-back scan) never -- "decays" means nothing there. Medians
+ *  of five equal chunks (peaks barely move a median) never rise by more than
+ *  5 % and the last is at most two thirds of the first. */
+export function decays(x: readonly number[], y: readonly number[]): boolean {
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    if (Number.isFinite(x[i]) && Number.isFinite(y[i])) pairs.push([x[i]!, y[i]!]);
+  }
+  if (pairs.length < 20) return false;
+  const up = pairs.every((p, i) => i === 0 || p[0] >= pairs[i - 1]![0]);
+  const down = pairs.every((p, i) => i === 0 || p[0] <= pairs[i - 1]![0]);
+  if (up === down) return false; // non-monotonic (or a constant X)
+  const v = (up ? pairs : [...pairs].reverse()).map((p) => p[1]);
   const k = v.length / 5;
   const m = [0, 1, 2, 3, 4].map((i) => median(v.slice(Math.round(i * k), Math.round((i + 1) * k))));
   if (!(m[4]! > 0)) return false;
-  return m.every((x, i) => i === 0 || x <= m[i - 1]! * 1.05) && m[4]! * 1.5 <= m[0]!;
+  return m.every((val, i) => i === 0 || val <= m[i - 1]! * 1.05) && m[4]! * 1.5 <= m[0]!;
 }
 
 /** The step-① baseline to start from on this trace, or null to keep "none". */
-export function suggestedBaseline(y: readonly number[], yLog: boolean): PeakBaselineMethod | null {
-  return yLog || decays(y) ? "snip" : null;
+export function suggestedBaseline(x: readonly number[], y: readonly number[], yLog: boolean): PeakBaselineMethod | null {
+  return yLog || decays(x, y) ? "snip" : null;
 }
 
 /** Step ③'s background rule: with a baseline subtracted and no background

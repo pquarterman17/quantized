@@ -49,7 +49,7 @@ def test_the_drawn_overlay_artist_is_tagged() -> None:
 
 def test_an_overlay_beside_data_is_not_scanned_and_does_not_range() -> None:
     ax = _axes((DATA, None), (DIVE, OVERLAY))
-    pts, _ends = _values([ax], 1)
+    pts, _ends = _values([ax], 1, value_axis=True)
     assert sorted(pts.tolist()) == sorted(DATA.tolist())
     shared_autoscale(ax, "y", "linear")
     assert ax.get_ylim()[0] > DATA.min() - 10
@@ -57,7 +57,7 @@ def test_an_overlay_beside_data_is_not_scanned_and_does_not_range() -> None:
 
 def test_an_overlay_alone_on_its_axes_still_ranges_them() -> None:
     ax = _axes((DIVE, OVERLAY))
-    pts, _ends = _values([ax], 1)
+    pts, _ends = _values([ax], 1, value_axis=True)
     assert sorted(pts.tolist()) == sorted(DIVE.tolist())
 
 
@@ -65,3 +65,24 @@ def test_the_y_break_extent_leaves_the_overlay_out_too() -> None:
     ax = _axes((DATA, None), (DIVE, OVERLAY))
     pts = _series_values(ax)
     assert (float(pts.min()), float(pts.max())) == (60.0, 95.0)
+
+
+def test_x_is_never_ruled_by_overlays() -> None:
+    """The canvas rule is for Y scales; the X scan keeps every series."""
+    ax = Figure().subplots()
+    draw_marked_series(ax, X, DATA, "data", {"linewidth": 1.0}, None)
+    draw_marked_series(ax, X + 10.0, DIVE, "fit", {"linewidth": 1.0}, OVERLAY)
+    pts, _ends = _values([ax], 0)
+    assert pts.max() == 14.0
+    pts_y, _ = _values([ax], 1, value_axis=True)
+    assert pts_y.min() == 60.0
+
+
+def test_a_size_by_overlay_scatter_is_tagged_too() -> None:
+    ax = Figure().subplots()
+    draw_marked_series(ax, X, DATA, "data", {"linewidth": 1.0}, None)
+    spec = {**OVERLAY, "marker": True, "size_by": [1.0, 2.0, 3.0, 4.0]}
+    draw_marked_series(ax, X, DIVE, "peaks", {"linewidth": 1.0, "marker": "o"}, spec)
+    assert ax.collections and all(is_overlay(c) for c in ax.collections)
+    pts, _ends = _values([ax], 1, value_axis=True)
+    assert pts.min() == 60.0

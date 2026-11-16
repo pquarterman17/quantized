@@ -7,9 +7,13 @@
 // their axis' auto range whenever a data series is drawn on that axis. Each
 // case puts an overlay BELOW the data -- the audit's fitted linear background
 // diving through zero, which dragged a log axis to 1e-3 -- and hand-states the
-// view of the data alone. The canvas half asserts a REAL uPlot instance lands
-// there; the request half pins the exact Stage export request (overlays marked
-// by `analysis_overlays`); the backend half
+// view of the data alone, on Y1 and (with a Y2 channel) on Y2. The canvas
+// half asserts a REAL uPlot instance lands there -- or, for an X-break view,
+// the break panels' shared Y range (`breakPayloads` + `sharedYDomain` padded by
+// uPlot's `rangeNum`, as Stage/breakPanelRender does; those panels draw no
+// overlays at all); the request half pins the exact Stage export request
+// (overlays marked by `analysis_overlays`; an X-break view adds the
+// `x_breaks` override `figureSpec` emits); the backend half
 // (`tests/test_export_overlay_autoscale.py`) asserts the exported axes land on
 // the same view: screen range == export range.
 //
@@ -37,6 +41,8 @@ import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { createFigureDocument } from "./figureDocument";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import { breakPayloads } from "./facet";
+import { sharedYDomain } from "./facetDomains";
 import { buildColumns, composeDisplayPayload, effectiveChannels } from "./plotdata";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { BaselineOverlay, Dataset, FitOverlay } from "./types";
@@ -55,11 +61,18 @@ const ON_0 = { yKey: 0, xKey: null };
 interface Case {
   name: string;
   y: number[];
+  /** A second channel drawn on Y2. */
+  y2?: number[];
   yScale: "log" | "linear";
   fit: FitOverlay | null;
   baseline: BaselineOverlay | null;
+  /** X breaks: the view splits into side-by-side panels sharing one Y. */
+  xBreaks?: [number, number][];
   want: Lim;
+  wantY2?: Lim;
 }
+
+const FLAT6 = [60, 72, 95, 70, 64, 61];
 
 const CASES: Case[] = [
   {
@@ -89,17 +102,41 @@ const CASES: Case[] = [
     baseline: null,
     want: [56, 99],
   },
+  {
+    name: "Y2: a baseline below the Y1 data leaves both axes on their data",
+    y: FLAT6, y2: [1000, 1400, 2000, 1500, 1200, 1100], yScale: "linear",
+    fit: null,
+    baseline: { datasetId: "d1", binding: ON_0, y: [-40, -30, -20, -10, 0, 10] },
+    want: [56, 99],
+    wantY2: [900, 2100],
+  },
+  {
+    name: "X breaks: the shared Y of the panels stays on the data",
+    y: FLAT6, yScale: "linear",
+    fit: null,
+    baseline: { datasetId: "d1", binding: ON_0, y: [-40, -30, -20, -10, 0, 10] },
+    xBreaks: [[20, 30]],
+    want: [58, 74], // the 25° row (95) falls in the break: neither side draws it
+  },
 ];
 
 function dataset(c: Case): Dataset {
   return {
     id: "d1",
     name: "scan",
-    data: { time: X.slice(0, c.y.length), values: c.y.map((v) => [v]), labels: ["I"], units: ["cps"], metadata: {} },
+    data: {
+      time: X.slice(0, c.y.length),
+      values: c.y.map((v, r) => (c.y2 ? [v, c.y2[r]!] : [v])),
+      labels: c.y2 ? ["I", "T"] : ["I"],
+      units: c.y2 ? ["cps", "K"] : ["cps"],
+      metadata: {},
+    },
   };
 }
 
-const viewOf = (c: Case): PlotView => ({ ...defaultPlotView(), yKeys: [0], yScale: c.yScale });
+const viewOf = (c: Case): PlotView => ({
+  ...defaultPlotView(), yScale: c.yScale, ...(c.y2 ? { yKeys: [0, 1], y2Keys: [1] } : { yKeys: [0] }),
+});
 
 const live: uPlot[] = [];
 afterEach(() => {
@@ -127,6 +164,13 @@ async function canvas(c: Case): Promise<uPlot> {
   return u;
 }
 
+/** The X-break view's shared Y, as Stage/breakPanelRender ranges it. */
+function breakY(c: Case): Lim {
+  const ds = dataset(c);
+  const lim = sharedYDomain(breakPayloads(ds.data, null, [0], c.xBreaks!))!;
+  return uPlot.rangeNum(lim[0], lim[1], 0.1, true) as Lim;
+}
+
 /** The request the Stage export sends for the same view and overlays. */
 function request(c: Case): FigureSpec {
   const view = viewOf(c);
@@ -138,16 +182,27 @@ function request(c: Case): FigureSpec {
     autoSeriesStyles: false, defaultTrace: "Line", defaultLineWidth: 1.5, excludedDisplay: "hide",
     fitOverlay: c.fit, baselineOverlay: c.baseline, peakOverlay: null,
   })) as unknown as StoreGet;
-  return buildStageFigureSpec(get, dataset(c), "scan", { fmt: "svg", style: "default", dpi: 100, title: "", xLabel: "", yLabel: "" });
+  const spec = buildStageFigureSpec(get, dataset(c), "scan", { fmt: "svg", style: "default", dpi: 100, title: "", xLabel: "", yLabel: "" });
+  return c.xBreaks ? { ...spec, overrides: { ...spec.overrides, x_breaks: c.xBreaks } } : spec;
 }
 
-const built = CASES.map((c) => ({ name: c.name, request: request(c), want: c.want }));
+const built = CASES.map((c) => ({ name: c.name, request: request(c), want: c.want, ...(c.wantY2 ? { want_y2: c.wantY2 } : {}) }));
 
 describe("overlay autoscale: screen == export (shared wire fixture)", () => {
   it.each(CASES)("canvas: $name", async (c) => {
-    const u = await canvas(c);
-    expect(u.scales.y.min).toBeCloseTo(c.want[0], 10);
-    expect(u.scales.y.max).toBeCloseTo(c.want[1], 10);
+    if (c.xBreaks) {
+      const [lo, hi] = breakY(c);
+      expect(lo).toBeCloseTo(c.want[0], 10);
+      expect(hi).toBeCloseTo(c.want[1], 10);
+    } else {
+      const u = await canvas(c);
+      expect(u.scales.y.min).toBeCloseTo(c.want[0], 10);
+      expect(u.scales.y.max).toBeCloseTo(c.want[1], 10);
+      if (c.wantY2) {
+        expect(u.scales.y2.min).toBeCloseTo(c.wantY2[0], 10);
+        expect(u.scales.y2.max).toBeCloseTo(c.wantY2[1], 10);
+      }
+    }
     // The case is live: some overlay reaches below the view the data gives.
     const overlayMin = Math.min(
       ...[c.fit?.y ?? [], ...(c.fit?.band ?? []).map((e) => e.y), c.baseline?.y ?? []]

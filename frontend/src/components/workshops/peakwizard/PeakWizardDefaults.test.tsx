@@ -131,6 +131,19 @@ describe("step ① baseline default", () => {
     expect(screen.queryByText(/was chosen because/)).not.toBeInTheDocument();
   });
 
+  it("a dataset switched to on a later step keeps the method its peaks and fit were made with", async () => {
+    stubFetch();
+    open(decaying);
+    await waitFor(() => expect(useApp.getState().baselineOverlay?.datasetId).toBe("d1"));
+    step("Find peaks");
+    await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
+    act(() => useApp.setState({ datasets: [decaying, { ...flat, id: "d2" }], activeId: "d2" }));
+    await act(async () => {});
+    step("Range & baseline");
+    expect(baselineSelect()).toHaveValue("snip");
+    expect(screen.queryByText(/was chosen because/)).not.toBeInTheDocument(); // kept, not chosen for d2
+  });
+
   it("Fit this range, asked before the panel opens, finds on the auto-baselined trace", async () => {
     stubFetch();
     requestPeakFitRange("d1", 0, 19.9); // the whole trace, asked before the panel mounts
