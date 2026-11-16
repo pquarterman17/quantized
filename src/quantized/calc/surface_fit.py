@@ -83,8 +83,14 @@ def surface_auto_guess(
 
     # Generic fallback for any other model.
     out = np.ones(mdl.n_params, dtype=float)
-    defaults = [z_rng, (float(xa.min()) + float(xa.max())) / 2, x_rng / 4,
-                (float(ya.min()) + float(ya.max())) / 2, y_rng / 4, z_min]
+    defaults = [
+        z_rng,
+        (float(xa.min()) + float(xa.max())) / 2,
+        x_rng / 4,
+        (float(ya.min()) + float(ya.max())) / 2,
+        y_rng / 4,
+        z_min,
+    ]
     for i, val in enumerate(defaults[: mdl.n_params]):
         out[i] = val
     return out
@@ -182,15 +188,19 @@ def surface_fit(
     lower: Sequence[float] | None = None,
     upper: Sequence[float] | None = None,
     max_iter: int = 10000,
+    linear: bool = False,
 ) -> dict[str, Any]:
     """Fit ``model`` to scattered ``(x, y, z)``.
 
     ``p0`` is the initial guess; when omitted it is derived via
     :func:`surface_auto_guess`. ``lower``/``upper`` bound each parameter
-    (defaults ``-inf``/``+inf``). Returns a dict with ``params``,
+    (defaults ``-inf``/``+inf``); ``lower == upper`` holds that parameter fixed
+    (excluded from the fit and the degrees of freedom), ``lower > upper`` is an
+    error. ``linear=True`` solves the linear models (plane, paraboloid, poly2d)
+    exactly by least squares when nothing is bounded or held. Returns a dict with ``params``,
     ``param_names``, ``errors`` (1-sigma, NaN if the Hessian is singular),
     ``residuals``, ``z_fit``, ``r2``, ``rmse``, ``chi_sq_red``, ``model_name``,
-    ``n_points``, ``n_free``, ``exit_flag``.
+    ``n_points``, ``n_free`` (fitted parameters), ``fixed``, ``exit_flag``.
     """
     mdl = get_surface_model(model) if isinstance(model, str) else model
     xa = np.asarray(x, dtype=float).ravel()
@@ -207,46 +217,77 @@ def surface_fit(
         raise ValueError(f"p0 must have {n_p} elements for {mdl.name!r}, got {p0_arr.size}")
     lb = _bounds(lower, n_p, -np.inf, "lower")
     ub = _bounds(upper, n_p, np.inf, "upper")
+    crossed = np.flatnonzero(lb > ub)
+    if crossed.size:
+        names = ", ".join(mdl.param_names[k] for k in crossed)
+        raise ValueError(f"lower bound is above the upper bound for {names}")
+    # lower == upper holds a parameter at that value (not fitted, no error).
+    fixed = lb == ub
+    free = np.flatnonzero(~fixed)
+    n_f = int(free.size)
 
-    p0_arr = np.clip(p0_arr, lb, ub)
+    if (
+        linear
+        and n_f == n_p
+        and mdl.name in _LINEAR_DESIGN
+        and np.isinf(lb).all()
+        and np.isinf(ub).all()
+    ):
+        p_opt, errors_lin, ok = _linear_solve(mdl.name, xa, ya, za)
+        res_success = ok
+        p_free_opt = np.empty(0)
+        cost = None
+    else:
+        p0_arr = np.clip(p0_arr, lb, ub)
+        lbf, ubf = lb[free], ub[free]
 
-    def to_free(pb: NDArray[np.float64]) -> NDArray[np.float64]:
-        out = np.empty(n_p, dtype=float)
-        for k in range(n_p):
-            out[k] = _bound_to_free(float(pb[k]), float(lb[k]), float(ub[k]))
-        return out
+        def expand(pf: NDArray[np.float64]) -> NDArray[np.float64]:
+            full = np.where(fixed, lb, p0_arr)
+            for j, k in enumerate(free):
+                full[k] = _free_to_bound(float(pf[j]), float(lbf[j]), float(ubf[j]))
+            return full
 
-    def from_free(pf: NDArray[np.float64]) -> NDArray[np.float64]:
-        out = np.empty(n_p, dtype=float)
-        for k in range(n_p):
-            out[k] = _free_to_bound(float(pf[k]), float(lb[k]), float(ub[k]))
-        return out
+        def cost(p_free: NDArray[np.float64]) -> float:
+            resid = za - mdl.func(expand(p_free), xa, ya).ravel()
+            return float(np.sum(resid**2))
 
-    def cost(p_free: NDArray[np.float64]) -> float:
-        p_full = from_free(p_free)
-        resid = za - mdl.func(p_full, xa, ya).ravel()
-        return float(np.sum(resid**2))
-
-    p_free0 = to_free(p0_arr)
-    res = minimize(
-        cost,
-        p_free0,
-        method="Nelder-Mead",
-        options={"xatol": 1e-10, "fatol": 1e-12, "maxiter": max_iter, "maxfev": max_iter * 2},
-    )
-    p_free_opt = np.asarray(res.x, dtype=float)
-    p_opt = from_free(p_free_opt)
+        p_free0 = np.array(
+            [_bound_to_free(float(p0_arr[k]), float(lb[k]), float(ub[k])) for k in free]
+        )
+        if n_f:
+            res = minimize(
+                cost,
+                p_free0,
+                method="Nelder-Mead",
+                options={
+                    "xatol": 1e-10,
+                    "fatol": 1e-12,
+                    "maxiter": max_iter,
+                    "maxfev": max_iter * 2,
+                },
+            )
+            p_free_opt = np.asarray(res.x, dtype=float)
+            res_success = bool(res.success)
+        else:
+            p_free_opt, res_success = p_free0, True
+        p_opt = expand(p_free_opt)
+        errors_lin = None
     z_fit = np.asarray(mdl.func(p_opt, xa, ya).ravel(), dtype=float)
     residuals = za - z_fit
 
     ss_res = float(np.sum(residuals**2))
     ss_tot = float(np.sum((za - za.mean()) ** 2))
     r2 = 1 - ss_res / max(ss_tot, _EPS)
-    dof = n_pts - n_p
+    dof = n_pts - n_f
     chi_sq_red = ss_res / max(dof, 1)
     rmse = float(np.sqrt(ss_res / n_pts))
 
-    errors = _param_errors(cost, p_free_opt, lb, ub, dof, chi_sq_red, n_p)
+    if errors_lin is not None:
+        errors = errors_lin * (np.sqrt(chi_sq_red) if dof > 0 else np.nan)
+    else:
+        errors = np.full(n_p, np.nan, dtype=float)
+        if n_f:
+            errors[free] = _param_errors(cost, p_free_opt, lb[free], ub[free], dof, chi_sq_red, n_f)
 
     return {
         "params": p_opt,
@@ -259,9 +300,33 @@ def surface_fit(
         "chi_sq_red": chi_sq_red,
         "model_name": mdl.name,
         "n_points": int(n_pts),
-        "n_free": int(n_p),
-        "exit_flag": 1 if res.success else 0,
+        "n_free": n_f,
+        "fixed": [bool(f) for f in fixed],
+        "exit_flag": 1 if res_success else 0,
     }
+
+
+_LINEAR_DESIGN = {"Plane", "Paraboloid", "Polynomial 2D"}
+
+
+def _linear_solve(
+    name: str, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64], bool]:
+    """Exact least squares for the linear surface models (parameter order as
+    in the catalog). Returns ``(params, unit-variance standard errors, ok)``."""
+    one = np.ones_like(x)
+    cols = {
+        "Plane": [x, y, one],
+        "Paraboloid": [x**2, y**2, x * y, x, y, one],
+        "Polynomial 2D": [one, x, y, x**2, x * y, y**2],
+    }[name]
+    amat = np.column_stack(cols)
+    coef, *_ = np.linalg.lstsq(amat, z, rcond=None)
+    try:
+        se = np.sqrt(np.diag(np.linalg.inv(amat.T @ amat)))
+    except np.linalg.LinAlgError:
+        se = np.full(amat.shape[1], np.nan)
+    return np.asarray(coef, dtype=float), np.asarray(se, dtype=float), True
 
 
 def _param_errors(

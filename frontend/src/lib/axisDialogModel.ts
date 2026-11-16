@@ -8,7 +8,8 @@
 //   increment        xStep / yStep / y2Step (major tick step)
 //   format, digits   xFmt / yFmt / y2Fmt (the existing tick-label format)
 //   minor, ticks,    the same AxisFormat's figures-audit #6 extras
-//   divide, size
+//   divide, size,    (prefix / suffix: text around each numeric tick label)
+//   prefix, suffix
 //   breakFrom/To     the same AxisFormat's `breaks[0]` (Y and Y2 only: a
 //                    linear axis with that stretch elided, lib/axisBreaks.ts)
 //   titleSize        axisLabelStyles[axis].size (the axis title font, stored in px,
@@ -23,7 +24,7 @@
 
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
-import { inheritedAxisFormat, MAX_CUSTOM_TICKS, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
+import { cleanAffix, inheritedAxisFormat, MAX_CUSTOM_TICKS, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
 import { topAxisProblem, topRangeProblem } from "./axisTop";
 import { drawableOn, inProbDomain } from "./axisScales";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
@@ -44,6 +45,9 @@ export interface AxisDraft {
   minor: string;
   ticks: "out" | "in" | "both";
   divide: string;
+  /** Text before / after every numeric tick label ("$", " K", "%"). */
+  prefix: string;
+  suffix: string;
   size: string;
   titleSize: string;
   /** The elided stretch of a broken Y / Y2 axis; both blank = no break. */
@@ -118,6 +122,8 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     minor: str(fmt.minor),
     ticks: fmt.ticks ?? "out",
     divide: str(fmt.divide),
+    prefix: fmt.prefix ?? "",
+    suffix: fmt.suffix ?? "",
     size: str(fmt.size),
     titleSize: pxToPtStr(view.axisLabelStyles[axis]?.size),
     breakFrom: axis === "x" ? "" : str(fmt.breaks?.[0]?.[0]),
@@ -293,6 +299,8 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     mode: d.mode,
     digits: num(d.digits) ?? base.digits,
     ...(div !== null && div !== 1 ? { divide: div } : {}),
+    ...(cleanAffix(d.prefix) ? { prefix: cleanAffix(d.prefix) } : {}),
+    ...(cleanAffix(d.suffix) ? { suffix: cleanAffix(d.suffix) } : {}),
     ...(minor ? { minor } : {}),
     ...(d.ticks !== "out" ? { ticks: d.ticks } : {}),
     ...(size !== null ? { size } : {}),

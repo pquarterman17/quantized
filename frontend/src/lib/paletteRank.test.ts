@@ -33,7 +33,13 @@ interface Row {
 // The three failures that started this (2026-11): "fit" ranked Film thickness
 // (FFT) first, "export pdf" found nothing, "error bar" returned Ternary diagram.
 const BENCHMARK: Row[] = [
-  { q: "fit", first: "curvefit", top3: ["curvefit", "fit-y-by-x", "panel-fit"] },
+  // Fitting tools before layout: "Multi-panel fit (letterbox)" is a layout command, so the
+  // surface / ellipse fits may outrank it on a bare "fit" (lane I).
+  { q: "fit", first: "curvefit", top3: ["curvefit", "fit-y-by-x"] },
+  { q: "surface fit", first: "surface-fit" },
+  { q: "ellipse fit", first: "ellipse-fit" },
+  { q: "tauc", first: "optical-gap" },
+  { q: "band gap", first: "optical-gap" },
   { q: "fitting", first: "curvefit" },
   { q: "export pdf", first: "export-pdf", top3: ["export-pdf", "export-figure"] },
   { q: "pdf", first: "export-pdf", top3: ["export-figure"] },

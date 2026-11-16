@@ -23,11 +23,7 @@ import type { LibrarySelection } from "../store/libraryPanel";
 import { deserializeRois } from "../store/roisCodec";
 import { sanitizeMapViews, type MapViewMap } from "./mapView";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
-import {
-  librarySelectionLiveIds,
-  parseLibrarySelection,
-  parseWorkbookLastChild,
-} from "./workspaceLibraryPanel";
+import { librarySelectionLiveIds, parseLibrarySelection, parseWorkbookLastChild } from "./workspaceLibraryPanel";
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
@@ -35,6 +31,7 @@ import type { SmartFolder } from "./smartfolders";
 import { sanitizeSmartFolders } from "./smartFoldersSanitize";
 import { sanitizeCollections, type Collection } from "./collections";
 import { sanitizeSavedSampleProfiles, type SavedSampleProfile } from "./sampleGeometry";
+import { sanitizeSavedRecodeMappings, type SavedRecodeMapping } from "./recodeMappings";
 import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
@@ -161,6 +158,7 @@ export interface WorkspaceState {
   /** MAIN_PLAN #42 — explicitly saved, named sample profiles (store/sampleProfiles.ts).
    *  Additive-optional: absent = none; written only when non-empty (lib/workspaceSerialize.ts). */
   savedSampleProfiles?: SavedSampleProfile[];
+  savedRecodeMappings?: SavedRecodeMapping[]; // gap audit 5 lane J — named Recode mappings; additive-optional, absent = none
   visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
   /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
   plotRecipes?: PlotRecipe[];
@@ -227,6 +225,7 @@ export interface LoadedWorkspace {
   expandedWorkbookIds: string[];
   collections: Collection[]; // PR L — always populated
   savedSampleProfiles: SavedSampleProfile[]; // MAIN_PLAN #42 — always populated (sanitizeSavedSampleProfiles)
+  savedRecodeMappings?: SavedRecodeMapping[]; // gap audit 5 lane J — parseWorkspace always populates; optional only for hand-built fixtures
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
   plotRecipes: PlotRecipe[]; // P1.3 — always populated
   /** Were `plotRecipes` and `quickPlotTemplates` read from this file WHOLE?
@@ -472,6 +471,7 @@ export function parseWorkspace(
     expandedWorkbookIds,
     collections,
     savedSampleProfiles: sanitizeSavedSampleProfiles(o.savedSampleProfiles),
+    savedRecodeMappings: sanitizeSavedRecodeMappings(o.savedRecodeMappings),
     visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
     plotRecipes,
     recipeSourcesComplete,

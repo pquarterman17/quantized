@@ -4640,6 +4640,42 @@
         "title": "DoubleLayerRequest",
         "type": "object"
       },
+      "EllipseRequest": {
+        "properties": {
+          "curve_points": {
+            "default": 200,
+            "maximum": 2000.0,
+            "minimum": 8.0,
+            "title": "Curve Points",
+            "type": "integer"
+          },
+          "geometric": {
+            "default": true,
+            "title": "Geometric",
+            "type": "boolean"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "EllipseRequest",
+        "type": "object"
+      },
       "EquationFitRequest": {
         "properties": {
           "calc_errors": {
@@ -15586,6 +15622,150 @@
         "title": "SubtractBgRequest",
         "type": "object"
       },
+      "SurfaceFitRequest": {
+        "properties": {
+          "level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Level",
+            "type": "number"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "max_iter": {
+            "default": 10000,
+            "maximum": 200000.0,
+            "minimum": 1.0,
+            "title": "Max Iter",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "z": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Z",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z",
+          "model"
+        ],
+        "title": "SurfaceFitRequest",
+        "type": "object"
+      },
+      "SurfaceXYZ": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "z": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Z",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z",
+          "model"
+        ],
+        "title": "SurfaceXYZ",
+        "type": "object"
+      },
       "TTestRequest": {
         "properties": {
           "alpha": {
@@ -15721,6 +15901,124 @@
           "alpha"
         ],
         "title": "TafelRequest",
+        "type": "object"
+      },
+      "TaucRequest": {
+        "description": "Spectrum + optional conversions. ``x`` is photon energy (eV) or\nwavelength (nm); ``y`` is alpha (1/cm), or transmittance when\n``signal='transmittance'`` (then ``thickness_nm`` is required).",
+        "properties": {
+          "e_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "E Max"
+          },
+          "e_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "E Min"
+          },
+          "kind": {
+            "default": "direct",
+            "enum": [
+              "direct",
+              "direct-forbidden",
+              "indirect",
+              "indirect-forbidden"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Level",
+            "type": "number"
+          },
+          "percent": {
+            "default": false,
+            "title": "Percent",
+            "type": "boolean"
+          },
+          "reflectance": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reflectance"
+          },
+          "signal": {
+            "default": "alpha",
+            "enum": [
+              "alpha",
+              "absorbance",
+              "transmittance"
+            ],
+            "title": "Signal",
+            "type": "string"
+          },
+          "thickness_nm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thickness Nm"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_unit": {
+            "default": "eV",
+            "enum": [
+              "eV",
+              "meV",
+              "cm-1",
+              "nm",
+              "A",
+              "um"
+            ],
+            "title": "X Unit",
+            "type": "string"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "TaucRequest",
         "type": "object"
       },
       "TernaryFigureRequest": {
@@ -16037,6 +16335,18 @@
             ],
             "title": "Offset"
           },
+          "prefix": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
           "prob": {
             "anyOf": [
               {
@@ -16088,6 +16398,18 @@
               }
             ],
             "title": "Size"
+          },
+          "suffix": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix"
           },
           "ticks": {
             "anyOf": [
@@ -19888,6 +20210,50 @@
         ]
       }
     },
+    "/api/fit-implicit/ellipse": {
+      "post": {
+        "description": "Direct algebraic ellipse fit, refined to orthogonal distance.",
+        "operationId": "ellipse_api_fit_implicit_ellipse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EllipseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ellipse Api Fit Implicit Ellipse Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ellipse",
+        "tags": [
+          "fit-implicit"
+        ]
+      }
+    },
     "/api/fitting/autoguess": {
       "post": {
         "description": "Initial-parameter guess for ``model`` given (x, y).",
@@ -22053,6 +22419,50 @@
         "summary": "Subtract Hysteresis Bg",
         "tags": [
           "magnetometry"
+        ]
+      }
+    },
+    "/api/optical-gap/tauc": {
+      "post": {
+        "description": "Tauc transform and linear-edge fit -> optical band gap Eg (eV).",
+        "operationId": "tauc_api_optical_gap_tauc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaucRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Tauc Api Optical Gap Tauc Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tauc",
+        "tags": [
+          "optical-gap"
         ]
       }
     },
@@ -27691,6 +28101,121 @@
         "summary": "Material Presets",
         "tags": [
           "superconductor"
+        ]
+      }
+    },
+    "/api/surface-fit/fit": {
+      "post": {
+        "description": "Fit ``model`` to (x, y, z); non-finite triples are dropped.",
+        "operationId": "fit_api_surface_fit_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurfaceFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Api Surface Fit Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit",
+        "tags": [
+          "surface-fit"
+        ]
+      }
+    },
+    "/api/surface-fit/guess": {
+      "post": {
+        "description": "Heuristic starting parameters for ``model`` on this data.",
+        "operationId": "guess_api_surface_fit_guess_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurfaceXYZ"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Guess Api Surface Fit Guess Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Guess",
+        "tags": [
+          "surface-fit"
+        ]
+      }
+    },
+    "/api/surface-fit/models": {
+      "get": {
+        "description": "The surface model catalog (name, parameter names, formula text).",
+        "operationId": "models_api_surface_fit_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Models Api Surface Fit Models Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Models",
+        "tags": [
+          "surface-fit"
         ]
       }
     },

@@ -111,7 +111,8 @@ describe("WorksheetPane column context menu — Recode entry (J2)", () => {
 
   beforeEach(() => {
     useApp.setState({ datasets: [withCategorical], activeId: "cat1" });
-    useRecode.setState({ open: false, datasetId: null, channel: null, mapping: { groups: [] }, newColumnName: "", savedMappings: [] });
+    useRecode.setState({ open: false, datasetId: null, channel: null, mapping: { groups: [] }, newColumnName: "" });
+  useApp.setState({ savedRecodeMappings: [] });
   });
 
   const headerFor = (label: string) =>

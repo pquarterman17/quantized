@@ -16,7 +16,7 @@ export const ANALYSIS_CATEGORIES = [
 ] as const;
 
 export type AnalysisCategory = (typeof ANALYSIS_CATEGORIES)[number];
-type Requirement = "none" | "dataset" | "continuous" | "two-continuous" | "variability" | "map";
+type Requirement = "none" | "dataset" | "continuous" | "two-continuous" | "three-continuous" | "variability" | "map";
 
 interface AnalysisToolMetadata {
   category: AnalysisCategory;
@@ -32,6 +32,9 @@ const GENERAL_RECOMMENDED: readonly Technique[] = ["generic", "transport", "spec
  * authority, so the Analysis Center cannot drift into a second tool registry. */
 export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadata>> = {
   curvefit: { category: "Fit", requiredInputs: "one numeric response and an x axis", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
+  "surface-fit": { category: "Fit", requiredInputs: "X, Y and Z columns: a map or a long-form XYZ table", requirement: "three-continuous" },
+  "optical-gap": { category: "Fit", requiredInputs: "an energy or wavelength column and an absorption or transmittance column", requirement: "continuous", recommendedFor: ["spectroscopy"] },
+  "ellipse-fit": { category: "Fit", requiredInputs: "two columns of points tracing an ellipse", requirement: "two-continuous" },
   hysteresis: { category: "Magnetometry", requiredInputs: "a magnetometry field sweep and response", requirement: "continuous", techniques: ["magnetometry.mvsh", "magnetometry.mvst"], recommendedFor: ["magnetometry.mvsh", "magnetometry.mvst"] },
   magtools: { category: "Magnetometry", requiredInputs: "magnetometry data and sample or unit context", requirement: "continuous", techniques: ["magnetometry.mvsh", "magnetometry.mvst"], recommendedFor: ["magnetometry.mvsh", "magnetometry.mvst"] },
   peaks: { category: "Peaks & baseline", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: ["xrd.powder", "spectroscopy"] },
@@ -103,6 +106,7 @@ function compatibility(meta: AnalysisToolMetadata, dataset: Dataset | undefined)
   if (size.rows < 2) return { available: false, reason: "At least two data rows are required." };
   if (meta.requirement !== "dataset" && size.rows < 3) return { available: false, reason: "At least three data rows are required." };
   if (meta.requirement === "continuous" && size.numericResponses < 1) return { available: false, reason: "No numeric response column is available." };
+  if (meta.requirement === "three-continuous" && size.numericColumns < 3) return { available: false, reason: "At least three numeric columns (X, Y and Z) are required." };
   if (meta.requirement === "two-continuous" && size.numericColumns < 2) return { available: false, reason: "At least two numeric columns are required." };
   if (meta.requirement === "variability" && (size.numericColumns < 1 || size.columns < 3)) {
     return { available: false, reason: "Choose data with one numeric response and two factor columns." };
