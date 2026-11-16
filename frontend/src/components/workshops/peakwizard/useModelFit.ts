@@ -327,7 +327,9 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
         bgAtCenter: peakBackgrounds(res, segment.x, baselineOn ? baseline : null),
       });
       publish(res, active, segment);
-      setStatus(`fitted ${peaks.length} peak${plural(peaks.length)}`);
+      // The status must match the result: a fit that stopped unconverged is not "fitted".
+      if (res.success) setStatus(`fitted ${peaks.length} peak${plural(peaks.length)}`);
+      else setStatus(`Peak fit ${/time limit/.test(res.message) ? "stopped at time limit" : "stopped"} — not converged`, "warn");
     } catch (e) {
       if (seq.current !== id) return;
       setError(e instanceof Error ? e.message : "model fit failed");

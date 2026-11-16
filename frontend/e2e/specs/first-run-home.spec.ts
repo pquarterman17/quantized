@@ -12,7 +12,8 @@ test("Home can open a local 2-D example directly in the map view @core", async (
   await gotoApp(page);
 
   await expect(page.getByText("Start here", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Guided import for unfamiliar files…" })).toBeVisible();
+  // one name everywhere: the Home panel AND the empty stage both offer it
+  await expect(page.getByRole("button", { name: "Import wizard…" }).first()).toBeVisible();
   await page.getByRole("button", { name: "2-D", exact: true }).click();
 
   await waitForDatasetCount(page, 1);

@@ -266,6 +266,37 @@ describe("Peak analyzer — model fit results (step 4)", () => {
     expect(screen.getAllByTitle(/stopped without converging/).length).toBeGreaterThan(0);
   });
 
+  it("an unconverged fit sets a warn status, not \"fitted N peaks\" (UX-C)", async () => {
+    await findTwoPeaks();
+    await fitWith(modelFitResponse({ success: false, message: "stopped at the 10 s time limit", warnings: [] }));
+    await waitFor(() => expect(useApp.getState().statusWarn).not.toBeNull());
+    const s = useApp.getState();
+    expect(s.status).toBe("Peak fit stopped at time limit — not converged");
+    expect(s.statusWarn).toBe(s.status);
+    expect(s.status).not.toMatch(/fitted/);
+  });
+
+  it("a converged fit still says fitted, with no warn marker", async () => {
+    await findTwoPeaks();
+    await fitWith(modelFitResponse());
+    await waitFor(() => expect(useApp.getState().status).toBe("fitted 2 peaks"));
+    expect(useApp.getState().statusWarn).toBeNull();
+  });
+
+  it("Next is disabled, with the reason, while the fit is running", async () => {
+    await findTwoPeaks();
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {})); // a fit that never returns
+    step("Fit & review"); // entering the step starts the fit (UX-I), which never returns here
+    const next = await screen.findByRole("button", { name: /Next/ });
+    await waitFor(() => expect(next).toBeDisabled());
+    expect(next).toHaveAttribute("title", "fitting — wait for it to finish, or cancel it");
+    // The step chips are gated by the same rule: no way out but the fit's own step.
+    const chip = screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }).closest("button")!;
+    expect(chip).toBeDisabled();
+    expect(chip).toHaveAttribute("title", "fitting — wait for it to finish, or cancel it");
+    expect(screen.getByRole("button", { name: /Back/ })).toBeDisabled();
+  });
+
   it("shows the backend's ASCII error detail", async () => {
     await findTwoPeaks();
     const detail = "p0.center: start value 9 is outside [0, 5.9]";
