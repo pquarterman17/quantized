@@ -18,6 +18,15 @@
   --surface-2: oklch(0.24 0.008 280);
   --surface-3: oklch(0.29 0.009 280);
 
+  /* Form controls (UX8-I): one place decides how an input / secondary button
+     and a primary button are filled, so the light theme can differ. Dark keeps
+     the elevated fill and the soft-accent primary. */
+  --control-bg: var(--surface-3);
+  --primary-bg: var(--accent-soft);
+  --primary-bg-hover: color-mix(in oklab, var(--accent-soft), var(--accent) 16%);
+  --primary-border: var(--accent);
+  --primary-fg: var(--accent-text);
+
   --border-soft: oklch(0.28 0.01 280);
   --border: oklch(0.34 0.01 280);
   --border-strong: oklch(0.56 0.012 280); /* >=3:1 on surfaces 0-3 (WCAG 1.4.11) */
@@ -77,6 +86,16 @@
   --surface-1: oklch(0.93 0.004 280);
   --surface-2: oklch(0.87 0.005 280);
   --surface-3: oklch(0.82 0.006 280);
+
+  /* UX8-I: mid-grey fills on a grey surface read as DISABLED (Search models,
+     Copy, Import data). Inputs and secondary buttons take the lightest
+     surface plus the strong outline; the primary action is a solid accent
+     fill with near-white text. */
+  --control-bg: var(--surface-0);
+  --primary-bg: var(--accent);
+  --primary-bg-hover: oklch(0.5 0.18 295);
+  --primary-border: var(--accent);
+  --primary-fg: oklch(0.99 0.003 280);
 
   /* light borders were 1.13-1.17:1 against their surface (cards vanished) */
   --border-soft: oklch(0.83 0.005 280);

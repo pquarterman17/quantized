@@ -110,6 +110,24 @@ describe("token contrast (WCAG)", () => {
     expect(ratio(LIGHT, "--surface-2", "--surface-1")).toBeGreaterThanOrEqual(1.15);
   });
 
+  // UX8-I: light controls were mid-grey on grey (read as disabled). Inputs and
+  // secondary buttons sit on surface-0 (--control-bg) and the primary is a solid
+  // accent fill.
+  it("light: --control-bg is the lightest surface, with AA text and a 3:1 outline on it", () => {
+    expect(CSS).toMatch(/\[data-theme="light"\] \{[\s\S]*?--control-bg: var\(--surface-0\)/);
+    expect(ratio(LIGHT, "--text", "--surface-0")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(LIGHT, "--text-dim", "--surface-0")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(LIGHT, "--text-faint", "--surface-0")).toBeGreaterThanOrEqual(4.5); // placeholder
+    expect(ratio(LIGHT, "--border-strong", "--surface-0")).toBeGreaterThanOrEqual(3);
+  });
+  it("light: the primary button text is AA on its fill, rest and hover", () => {
+    expect(ratio(LIGHT, "--primary-fg", "--accent")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(LIGHT, "--primary-fg", "--primary-bg-hover")).toBeGreaterThanOrEqual(4.5);
+  });
+  it("light: the primary fill stands off the surface it sits on (>= 3:1)", () => {
+    for (const s of SURFACES_0_3) expect(ratio(LIGHT, "--accent", s), s).toBeGreaterThanOrEqual(3);
+  });
+
   it("every dark accent scheme keeps its accent-text AA on surface-1", () => {
     for (const scheme of ["violet", "teal", "ocean", "amber", "rose"]) {
       const t = { ...DARK, ...tokensIn(block(`[data-theme="dark"][data-accent="${scheme}"]`)) };
