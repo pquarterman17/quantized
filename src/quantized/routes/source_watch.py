@@ -207,6 +207,9 @@ async def stat_sources(req: SourceStatRequest) -> SourceStatResponse:
     loop = asyncio.get_running_loop()
     deadline = loop.time() + ANSWER_TIMEOUT_S
     futures: list[Future[SourceStat] | None] = [None] * len(req.paths)
+    # One asyncio wrapper per stat for this request: re-wrapping on every pass would pile
+    # done-callbacks onto a hung stat's future, one more per pass and per poll.
+    wrapped: dict[int, asyncio.Future[SourceStat]] = {}
     while True:
         futures = [
             f if f is not None else _submit(p) for p, f in zip(req.paths, futures, strict=True)
@@ -216,7 +219,10 @@ async def stat_sources(req: SourceStatRequest) -> SourceStatResponse:
         if remaining <= 0 or (not running and all(f is not None for f in futures)):
             break
         if running:
-            waits = {asyncio.wrap_future(f) for f in running.values()}
+            for key, fut in running.items():
+                if key not in wrapped:
+                    wrapped[key] = asyncio.wrap_future(fut)
+            waits = {wrapped[key] for key in running}
             await asyncio.wait(waits, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
         else:  # every slot of a volume is held by another request's stats
             await asyncio.sleep(min(_RETRY_S, remaining))

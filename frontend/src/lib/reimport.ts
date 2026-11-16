@@ -75,21 +75,34 @@ export function reimportShapeChanged(ds: Dataset, fresh: DataStruct): boolean {
   return fresh.time.length !== ds.data.time.length || reimportColumnsChanged(ds, fresh);
 }
 
-/** Are the file rows `ds` was last filled with an untouched PREFIX of `fresh` (the file only
- *  gained rows)? `base` is those rows when the caller knows them (the source watch passes the
- *  generation it installed, so a hand-edited CELL does not make a growing file a reshape);
- *  else the file's own rows `ds` holds -- `ds.raw` when corrections are applied. Base columns
- *  only, so row-indexed state (excluded rows, the view) stays valid only for a genuine append. */
-export function reimportIsAppend(ds: Dataset, fresh: DataStruct, base?: DataStruct): boolean {
-  const old = base ?? (ds.corrections && ds.raw ? ds.raw : ds.data);
-  const cols = Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
-  if (fresh.time.length < old.time.length) return false;
-  const same = (a: number, b: number): boolean => a === b || (a !== a && b !== b);
-  for (let r = 0; r < old.time.length; r++) {
-    if (!same(old.time[r], fresh.time[r])) return false;
-    for (let c = 0; c < cols; c++) if (!same(old.values[r]?.[c], fresh.values[r]?.[c])) return false;
+/** Are `a`'s first `upTo` rows, over its first `cols` columns, the same as `b`'s (NaN equals NaN)? */
+export function rowsArePrefix(a: DataStruct, b: DataStruct, cols: number, upTo = a.time.length): boolean {
+  if (b.time.length < upTo) return false;
+  const same = (x: number | undefined, y: number | undefined): boolean => x === y || (x !== x && y !== y);
+  for (let r = 0; r < upTo; r++) {
+    if (!same(a.time[r], b.time[r])) return false;
+    for (let c = 0; c < cols; c++) if (!same(a.values[r]?.[c], b.values[r]?.[c])) return false;
   }
   return true;
+}
+
+/** The base (file) columns of `ds`: its labels minus formula columns. */
+export const reimportBaseCols = (ds: Dataset): number => Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
+
+/** Does `fresh` only ADD rows to what `ds` holds, row for row (so row-indexed state -- excluded
+ *  rows, the view -- still points at the same rows)? True when the worksheet's own file rows
+ *  (`ds.raw` when corrections are applied) are a prefix of `fresh`, or -- for a worksheet edited
+ *  here -- when `base`, the rows the source watch last installed, is a prefix of `fresh` and the
+ *  worksheet still has exactly as many rows (only cells were edited: rows inserted or deleted
+ *  here would shift every index after them). `skipLast`: the last row may differ (a read after a
+ *  long pause can take a writer's half-flushed line). Base columns only. */
+export function reimportIsAppend(ds: Dataset, fresh: DataStruct, base?: DataStruct, skipLast = false): boolean {
+  const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+  const cols = reimportBaseCols(ds);
+  const upTo = (d: DataStruct): number => Math.max(0, d.time.length - (skipLast ? 1 : 0));
+  if (fresh.time.length < own.time.length) return false;
+  if (rowsArePrefix(own, fresh, cols, upTo(own))) return true;
+  return !!base && base.time.length === own.time.length && rowsArePrefix(base, fresh, cols, upTo(base));
 }
 
 /** The COLUMN half of `reimportShapeChanged` alone. Every column-indexed

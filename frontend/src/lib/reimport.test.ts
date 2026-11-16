@@ -273,4 +273,10 @@ describe("reimportIsAppend", () => {
     expect(reimportIsAppend(edited, fresh([10, 20, 30, 40]))).toBe(false);
     expect(reimportIsAppend(edited, fresh([10, 20, 30, 40]), ds().data)).toBe(true);
   });
+  it("a row deleted here is not an append, even against `base`; a changed LAST row is with skipLast", () => {
+    const deleted = ds({ data: { ...ds().data, time: [0, 1], values: [[10], [30]] } });
+    expect(reimportIsAppend(deleted, fresh([10, 20, 30, 40]), ds().data)).toBe(false);
+    expect(reimportIsAppend(ds(), fresh([10, 20, 33, 40]))).toBe(false);
+    expect(reimportIsAppend(ds(), fresh([10, 20, 33, 40]), undefined, true)).toBe(true);
+  });
 });

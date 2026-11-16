@@ -32,9 +32,14 @@
 //    (`mtime` = the desktop probe's float, `size`, `checksum`), so Relink and
 //    Pack keep comparing like with like. The first look compares the file's
 //    stamp with that baseline; without a match the file is read once.
-//  * The toggle is per worksheet and per SESSION: never saved in the project, so
-//    opening a project never starts overwriting data from a file that changed
-//    while it was closed. It needs a source PATH, which a browser upload lacks.
+//  * The toggle is per worksheet and per SESSION: never saved in the project, and
+//    opening, reverting or clearing a project (a new `docEpoch`) ends every watch,
+//    so a project never starts being overwritten by a file that changed while it
+//    was closed. It needs a source PATH, which a browser upload lacks.
+//  * A read that keeps failing is reported once and then tried once per new file
+//    state; reads refused because the file changed during them are retried, and
+//    reported once after MAX_STALE_READS in a row. A read that lands after the
+//    toggle went off writes nothing.
 //
 // Lazy: reached only from the Library row menu registry
 // (lib/datasetContextActions.ts) through lib/sourceWatchMenu.ts's dynamic import.
@@ -44,6 +49,7 @@ import type { DataStruct, Dataset } from "./types";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import type { ImportCache, LiveOpts, LiveReimport } from "../store/reimportLive";
+import { MTIME_EPSILON_S } from "./relink";
 import { canAutoUpdate, watchedIds, type CanAutoUpdate } from "./sourceWatchMenu";
 
 export { canAutoUpdate, type CanAutoUpdate };
@@ -61,6 +67,8 @@ export const STAT_TIMEOUT_MS = 10_000;
  *  file without a final newline is not starved. A row read this way and then completed by the
  *  writer is corrected quietly at the next read (the append test leaves that row out). */
 export const STABLE_PARTIAL_POLLS = 15;
+/** Consecutive reads refused because the file changed during them, before that is reported. */
+export const MAX_STALE_READS = 5;
 /** Consecutive `pending` answers before a file is reported unreachable. */
 export const PENDING_POLLS = 3;
 /** Backoff after a failed stat: the poll interval doubles per failure, up to 2**this. */
@@ -77,9 +85,11 @@ interface Entry {
   applied: string | null;
   /** A differing stamp seen, waiting to settle. */
   pending: string | null;
-  /** The stamp whose read failed MAX_ATTEMPTS times: not retried until it changes. */
+  /** The stamp whose read last failed for good: not retried until it changes. */
   failedStamp: string | null;
+  /** Consecutive failed reads (reset only by a successful one), and reads refused as stale. */
   attempts: number;
+  stale: number;
   /** The stamp of the previous poll, and how many polls in a row have seen the current one. */
   last: string | null;
   same: number;
@@ -92,6 +102,8 @@ interface Entry {
   base: DataStruct | null;
   /** The worksheet no longer holds `installed` (edit, undo or redo). */
   diverged: boolean;
+  /** The document (`docEpoch`) the watch was turned on in: opening a project ends it. */
+  epoch: number;
   /** The last read held back an unfinished last line. */
   held: boolean;
   phase: WatchPhase;
@@ -105,6 +117,8 @@ export interface WatchDeps {
   notify(message: string, kind: "ok" | "info" | "danger"): void;
   visible(): boolean;
   now(): number;
+  /** The open document's identity (`docEpoch`): a project opened or reverted ends every watch. */
+  epoch(): number;
   /** Mirrored with the watched ids (the eager menu's check mark), when given. */
   watched?: Set<string>;
 }
@@ -124,7 +138,7 @@ function matchesBaseline(ds: Dataset | undefined, stamp: string): boolean {
   const [ns, size] = stamp.split(":");
   const { mtime, size: recorded } = ds?.source ?? {};
   if (mtime === undefined || recorded === undefined) return false;
-  return Math.abs(Number(ns) / 1e9 - mtime) <= 1e-6 && Number(size) === recorded;
+  return Math.abs(Number(ns) / 1e9 - mtime) <= MTIME_EPSILON_S && Number(size) === recorded;
 }
 
 export interface Watcher {
@@ -161,7 +175,13 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
   const settle = (e: Entry): void => {
     e.pending = null;
     e.waited = 0;
-    e.attempts = 0;
+  };
+  /** Forget what was installed in worksheets that are gone or no longer hold it (no leak). */
+  const prune = (): void => {
+    for (const [key, known] of remembered) {
+      const ds = deps.dataset(key.split("\0")[0]);
+      if (!ds || ds.data !== known.installed) remembered.delete(key);
+    }
   };
 
   function schedule(): void {
@@ -197,19 +217,21 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
   }
 
   async function read(e: Entry, shared: ImportCache, hold: boolean, stamp: string): Promise<void> {
+    const failing = e.phase === "error";
     e.phase = "updating";
-    const r = await deps.reimport(e.id, shared, { hold, installed: e.installed, base: e.base });
+    const wanted = (): boolean => entries.get(e.id) === e; // turned off (or re-enabled) meanwhile?
+    const r = await deps.reimport(e.id, shared, { hold, installed: e.installed, base: e.base, wanted });
+    if (!wanted()) return;
     if (r.ok) {
       const after = deps.dataset(e.id);
       e.applied = r.stamp;
       e.installed = after?.data ?? r.data;
       e.base = after?.corrections && after.raw ? after.raw : e.installed;
-      // A read that did not hold may have taken a writer's pause mid-line as a row: the next
-      // read compares only the rows before it, so completing that row is still an append.
-      if (!hold && e.base && e.base.time.length > 0) e.base = { ...e.base, time: e.base.time.slice(0, -1), values: e.base.values.slice(0, -1) };
       e.diverged = false;
       e.held = r.held;
       e.failedStamp = null;
+      e.attempts = 0;
+      e.stale = 0;
       settle(e);
       e.phase = "watching";
       if (after) remembered.set(`${e.id}\0${e.path}`, { applied: e.applied, installed: e.installed, base: e.base, held: e.held });
@@ -217,11 +239,11 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       deps.status(`auto-updated "${nameOf(e)}" — ${r.rows} rows at ${clock()}${tail}`);
     } else if (r.stale) {
       e.phase = "waiting"; // the file or the worksheet moved during the read: next poll
+      if (++e.stale === MAX_STALE_READS) deps.notify(`Auto-update of "${nameOf(e)}": the file changed during each of the last ${MAX_STALE_READS} reads (it is written faster than it can be read) — still trying.`, "info");
     } else if (++e.attempts >= MAX_ATTEMPTS) {
-      e.failedStamp = stamp;
-      e.attempts = 0;
+      e.failedStamp = stamp; // after MAX_ATTEMPTS failures in a row, each new file state gets one try
+      if (!failing) deps.notify(`Auto-update of "${nameOf(e)}" failed: ${r.error} — the worksheet is unchanged; it will try again when the file changes.`, "danger");
       e.phase = "error";
-      deps.notify(`Auto-update of "${nameOf(e)}" failed: ${r.error} — the worksheet is unchanged; it will try again when the file changes.`, "danger");
     } else {
       e.phase = "waiting";
     }
@@ -251,15 +273,15 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       settle(e);
       // A held last line is read in full once the file has held still -- unless the worksheet
       // diverged: that waits for a real change of the file.
-      if (e.held && !e.diverged && e.same >= STABLE_PARTIAL_POLLS) await read(e, shared, false, stamp);
+      if (e.held && !e.diverged && e.same >= STABLE_PARTIAL_POLLS && stamp !== e.failedStamp) await read(e, shared, false, stamp);
       return;
     }
     if (stamp === e.failedStamp) return;
     e.waited = e.pending === null ? 1 : e.waited + 1;
     e.pending = stamp;
     if (e.same < 2 && e.waited < MAX_WAIT_POLLS) {
-      e.phase = "waiting";
-      deps.status(`auto-update: "${nameOf(e)}" changed — waiting for the file to settle…`);
+      if (e.phase !== "error") e.phase = "waiting";
+      deps.status(e.applied === "" ? `auto-update: checking "${nameOf(e)}" against its file…` : `auto-update: "${nameOf(e)}" changed — waiting for the file to settle…`);
       return;
     }
     await read(e, shared, e.same < STABLE_PARTIAL_POLLS, stamp);
@@ -270,14 +292,23 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
     busy = true;
     try {
       if (!deps.visible()) return; // paused while hidden; the visibility handler polls on return
+      const epoch = deps.epoch();
       for (const e of [...entries.values()]) {
         const ds = deps.dataset(e.id);
+        if (e.epoch !== epoch) {
+          // Opening, reverting or clearing the project ends the watch: a project never starts
+          // being overwritten by the file just because it was reopened.
+          entries.delete(e.id);
+          deps.status(`auto-update stopped: a project was opened — turn it on again to watch "${ds?.name ?? e.id}"`);
+          continue;
+        }
         if (ds && ds.importedAt === e.importedAt && ds.source?.path !== e.path) {
           deps.status(`auto-update stopped for "${ds.name}": its source file changed (relinked) — turn auto-update on again to watch the new file`, true);
         }
         if (!ds || ds.source?.path !== e.path || ds.importedAt !== e.importedAt) entries.delete(e.id);
       }
       sync();
+      prune();
       if (entries.size === 0) return;
       const paths = [...new Set([...entries.values()].map((e) => e.path))];
       let stats: SourceStat[];
@@ -315,8 +346,9 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
         const known = remembered.get(`${id}\0${path}`);
         const mine = known && known.installed === ds.data ? known : null; // the very data installed here
         entries.set(id, {
-          id, path, importedAt: ds.importedAt, applied: mine?.applied ?? null, pending: null, failedStamp: null, attempts: 0,
-          last: null, same: 0, waited: 0, silent: 0, installed: mine?.installed ?? null, base: mine?.base ?? null, diverged: false, held: mine?.held ?? false, phase: "watching",
+          id, path, importedAt: ds.importedAt, applied: mine?.applied ?? null, pending: null, failedStamp: null, attempts: 0, stale: 0,
+          last: null, same: 0, waited: 0, silent: 0, installed: mine?.installed ?? null, base: mine?.base ?? null,
+          diverged: false, held: mine?.held ?? false, epoch: deps.epoch(), phase: "watching",
         });
         deps.status(`auto-update on for "${ds.name}" — checking its file every ${Math.round(pollMs / 1000)} s`);
         sync();
@@ -327,6 +359,7 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
     disable(id) {
       if (entries.delete(id)) deps.status(`auto-update off for "${deps.dataset(id)?.name ?? id}"`);
       sync();
+      prune();
     },
     has: (id) => entries.has(id),
     phase: (id) => entries.get(id)?.phase ?? null,
@@ -371,6 +404,7 @@ function realWatcher(): Watcher {
     notify: (m, kind) => toast(m, kind),
     visible: () => typeof document === "undefined" || document.visibilityState !== "hidden",
     now: () => Date.now(),
+    epoch: () => useApp.getState().docEpoch,
     watched: watchedIds,
   });
   // Back from hidden: poll at once instead of waiting out the interval.

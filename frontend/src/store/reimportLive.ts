@@ -11,7 +11,9 @@
 //
 // A file that only GAINED rows under the same columns is not a reshape
 // (`computeReimportMerge`'s `grow`, compared against `base` = the rows the
-// watcher last installed, so a hand-edited cell does not count as a reshape):
+// watcher last installed, so a hand-edited cell does not count as a reshape;
+// their LAST row may differ -- a read after a long pause can take a writer's
+// half-flushed line, and its completion changes no row index):
 // plot styles, hidden series, axis choices and excluded rows survive a growing
 // measurement.
 //
@@ -46,7 +48,7 @@ import { HttpError } from "../lib/api/http";
 import type { DataStruct, Dataset } from "../lib/types";
 import type { HistoryEntry } from "./history";
 import { toast } from "./toasts";
-import { reimportIsAppend, resolveFreshData } from "../lib/reimport";
+import { reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
 import type { AppState } from "./useApp";
 
@@ -63,6 +65,8 @@ export interface LiveOpts {
   installed: DataStruct | null;
   /** The file rows of that generation (the append test's base); null: the worksheet's own. */
   base: DataStruct | null;
+  /** Still wanted when the read lands? (false: the toggle went off meanwhile -- write nothing) */
+  wanted: () => boolean;
 }
 
 export type LiveReimport =
@@ -90,16 +94,20 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
     shared.set(key, pending);
     const read = await pending;
     const freshRaw = await resolveFreshData(ds, read.data);
-    const merge = await computeReimportMerge(get, ds, freshRaw, { base: opts.base ?? undefined });
+    const diverged = opts.installed !== null && ds.data !== opts.installed;
+    const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+    // Nothing new: the worksheet already holds exactly the file's rows (a first read adopts them
+    // as the installed generation), or a held read is a prefix of them (the file's unterminated
+    // last line was read earlier, by the import or a read that did not hold: never shrink).
+    const sameRows = freshRaw.time.length === own.time.length || (read.held && freshRaw.time.length < own.time.length);
+    const nothingNew = !diverged && sameRows && !reimportColumnsChanged(ds, freshRaw) && rowsArePrefix(freshRaw, own, reimportBaseCols(ds));
+    const merge = nothingNew ? null : await computeReimportMerge(get, ds, freshRaw, { base: opts.base ?? undefined, skipLast: true });
     // Anything awaited above may have let the user (or a project switch) change this worksheet;
     // a store update replaces the dataset object, so identity is the whole-worksheet check.
     if (get().datasets.find((d) => d.id === id) !== ds) return { ok: false, stale: true, error: "the worksheet changed while its file was being read" };
-    const diverged = opts.installed !== null && ds.data !== opts.installed;
-    const own = ds.corrections && ds.raw ? ds.raw : ds.data;
-    if (opts.installed === null && !merge.shapeChanged && freshRaw.time.length === own.time.length && reimportIsAppend(ds, freshRaw)) {
-      // First read, and the worksheet already holds exactly the file's rows: adopt them as the
-      // installed generation (no step, nothing rewritten but the source baseline).
-      stampSource(set, id, ds, read);
+    if (!opts.wanted()) return { ok: false, stale: false, error: "auto-update was turned off" };
+    if (!merge) {
+      stampSource(set, id, ds, read); // nothing rewritten but the source baseline
       return { ok: true, rows: own.time.length, reshaped: false, labelled: false, stamp: read.stamp, held: read.held, data: ds.data };
     }
     const label = diverged

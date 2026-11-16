@@ -161,3 +161,16 @@ def test_without_live_the_import_route_is_unchanged(tmp_path: Path) -> None:
     f.write_bytes(HEAD + b"3,3")
     resp = client.post("/api/parsers/import", json={"path": str(f)})
     assert resp.status_code == 200 and "x-live-held" not in resp.headers
+
+
+def test_a_short_complete_first_line_is_not_mistaken_for_none(tmp_path: Path) -> None:
+    f = tmp_path / "tiny.csv"
+    f.write_bytes(b"1\n2.5")  # "1\n" is a complete line, two bytes long
+    assert _live(f)[0] != 409
+
+
+def test_a_file_no_parser_claims_is_a_422_not_a_500(tmp_path: Path) -> None:
+    f = tmp_path / "blob.spc"  # .spc with neither format's marker: "no parser"
+    f.write_bytes(b"\x00\x00not an spc file\n")
+    status, body, _ = _live(f)
+    assert status == 422, body

@@ -128,11 +128,11 @@ export interface ReimportMerge {
  *  above: the caller decides what "validation failed" means for it (a single
  *  reimport's catch-all toast below, or one row of `store/reimportAll.ts`'s
  *  per-source problem report). */
-export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw: DataStruct, grow?: { base?: DataStruct }): Promise<ReimportMerge> {
+export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw: DataStruct, grow?: { base?: DataStruct; skipLast?: boolean }): Promise<ReimportMerge> {
   // `grow` (the live source watch, store/reimportLive.ts): a file whose last-read rows (`base`) are an
   // untouched prefix of the new ones, same columns, is not a reshape -- view, styles, excluded rows stay.
   const columnsChanged = reimportColumnsChanged(ds, freshRaw);
-  const shapeChanged = grow && !columnsChanged && reimportIsAppend(ds, freshRaw, grow.base) ? false : reimportShapeChanged(ds, freshRaw);
+  const shapeChanged = grow && !columnsChanged && reimportIsAppend(ds, freshRaw, grow.base, grow.skipLast) ? false : reimportShapeChanged(ds, freshRaw);
   let newData = freshRaw;
   if (ds.corrections) {
     const bg = ds.bgRef && ds.bgRef.datasetId !== ds.id ? await get().resolveDataset(ds.bgRef.datasetId) : undefined;

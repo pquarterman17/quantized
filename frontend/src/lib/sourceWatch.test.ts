@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import type { SourceStat } from "./api/sourceWatch";
-import { canAutoUpdate, createWatcher, MAX_ATTEMPTS, MAX_WAIT_POLLS, PENDING_POLLS, type WatchDeps } from "./sourceWatch";
+import { canAutoUpdate, createWatcher, MAX_ATTEMPTS, MAX_STALE_READS, MAX_WAIT_POLLS, PENDING_POLLS, STABLE_PARTIAL_POLLS, type WatchDeps } from "./sourceWatch";
 import type { Dataset } from "./types";
 import type { LiveReimport } from "../store/reimportLive";
 
@@ -27,14 +27,14 @@ const stamp = (ms: number, size: number): string => `${BigInt(ms) * 1_000_000n}:
 const ok = (ms: number, size: number): SourceStat => ({ path: PATH, state: "ok", stamp: stamp(ms, size) });
 const OLD = ok(IMPORTED - 3_600_000, 100);
 
-let state: { dataset: Dataset | undefined; visible: boolean; next: SourceStat | Error };
+let state: { dataset: Dataset | undefined; visible: boolean; next: SourceStat | Error; epoch: number };
 let reimport: Mock<WatchDeps["reimport"]>;
 let status: Mock<WatchDeps["status"]>;
 let notify: Mock<WatchDeps["notify"]>;
 let deps: WatchDeps;
 
 beforeEach(() => {
-  state = { dataset: ds(), visible: true, next: OLD };
+  state = { dataset: ds(), visible: true, next: OLD, epoch: 1 };
   reimport = vi.fn<WatchDeps["reimport"]>(async (): Promise<LiveReimport> => {
     const st = state.next as SourceStat;
     return { ok: true, rows: 7, reshaped: false, labelled: false, stamp: st.stamp!, held: false, data: state.dataset!.data };
@@ -52,6 +52,7 @@ beforeEach(() => {
     notify,
     visible: () => state.visible,
     now: () => 0,
+    epoch: () => state.epoch,
   };
 });
 const watcher = () => {
@@ -70,7 +71,7 @@ describe("debounce", () => {
     expect(w.phase("d1")).toBe("waiting");
     await w.tick();
     expect(reimport).toHaveBeenCalledTimes(1);
-    expect(reimport).toHaveBeenCalledWith("d1", expect.any(Map), { hold: true, installed: null, base: null });
+    expect(reimport).toHaveBeenCalledWith("d1", expect.any(Map), expect.objectContaining({ hold: true, installed: null, base: null }));
     await w.tick();
     expect(reimport).toHaveBeenCalledTimes(1);
   });
@@ -165,6 +166,30 @@ describe("files that cannot be read", () => {
     expect(w.phase("d1")).toBe("error");
   });
 
+  it("a held tail whose full read keeps failing is given up on, not retried every poll", async () => {
+    const w = watcher();
+    await w.tick();
+    state.next = ok(IMPORTED + 60_000, 150);
+    reimport.mockResolvedValueOnce({ ok: true, rows: 6, reshaped: false, labelled: false, stamp: state.next.stamp!, held: true, data: state.dataset!.data });
+    await w.tick();
+    await w.tick(); // held read
+    reimport.mockResolvedValue({ ok: false, stale: false, error: "bad last row" });
+    for (let i = 0; i < STABLE_PARTIAL_POLLS + MAX_ATTEMPTS * 3; i++) await w.tick();
+    expect(reimport).toHaveBeenCalledTimes(1 + MAX_ATTEMPTS);
+    expect(notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads refused because the file keeps changing during them are reported once, and retried", async () => {
+    reimport.mockResolvedValue({ ok: false, stale: true, error: "the file changed while it was being read" });
+    const w = watcher();
+    await w.tick();
+    state.next = ok(IMPORTED + 60_000, 150);
+    for (let i = 0; i < MAX_STALE_READS + 4; i++) await w.tick();
+    expect(reimport.mock.calls.length).toBeGreaterThan(MAX_STALE_READS);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0][0]).toMatch(/changed during each/);
+  });
+
   it("a backend that cannot be reached is reported once", async () => {
     const w = watcher();
     state.next = new Error("down");
@@ -202,6 +227,18 @@ describe("the toggle", () => {
     await w.tick();
     expect(w.has("d1")).toBe(false);
     expect(status).toHaveBeenLastCalledWith(expect.stringMatching(/relinked/), true);
+  });
+
+  it("opening (or reverting) a project ends the watch", async () => {
+    const w = watcher();
+    await w.tick();
+    state.epoch = 2;
+    state.next = ok(IMPORTED + 60_000, 150);
+    await w.tick();
+    await w.tick();
+    expect(w.has("d1")).toBe(false);
+    expect(reimport).not.toHaveBeenCalled();
+    expect(status).toHaveBeenLastCalledWith(expect.stringMatching(/project was opened/));
   });
 
   it("keeps the eager menu's watched set in step", () => {

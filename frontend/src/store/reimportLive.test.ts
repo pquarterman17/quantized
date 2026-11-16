@@ -72,6 +72,7 @@ beforeEach(() => {
       notify: () => {},
       visible: () => true,
       now: () => 0,
+      epoch: () => app().docEpoch,
     },
     { timers: false },
   );
@@ -186,7 +187,20 @@ describe("a worksheet that differs from its file (F1 b, c)", () => {
     expect(live().data.time).toHaveLength(6);
     expect(app().history.at(-1)?.label).toBe("Auto-update replaced your edits");
     expect(app().future).toHaveLength(1);
-    expect(app().future[0].snapshot.datasets[0].data.time).toHaveLength(6); // it held the installed rows: rebased
+    // The worksheet (4 edited rows) no longer lines up with the rows last installed (5), so this
+    // is not treated as an append: the redo entry keeps the generation it recorded.
+    expect(app().future[0].snapshot.datasets[0].data.time).toHaveLength(5);
+  });
+
+  it("rows deleted here are not an append: row-indexed state is not carried onto other rows", async () => {
+    await installed();
+    const ds = live();
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, time: ds.data.time.slice(1), values: ds.data.values.slice(1) } }] });
+    file = { n: 5 };
+    await settle();
+    expect(live().data.time).toHaveLength(5);
+    expect(live().excludedRows).toBeUndefined(); // the reshape path cleared it
+    expect(app().history.at(-1)?.label).toBe("Auto-update replaced your edits");
   });
 
   it("undoing the hand edit itself makes the worksheet match again: growth is quiet", async () => {
@@ -213,6 +227,35 @@ describe("a worksheet that differs from its file (F1 b, c)", () => {
 });
 
 describe("the read itself", () => {
+  it("turning auto-update on for a finished file without a final newline neither shrinks nor resets it", async () => {
+    file = { n: 3, data: rows(2), held: true }; // the import read all 3 rows; the live read holds the 3rd
+    await settle();
+    expect(importLive).toHaveBeenCalled();
+    expect(live().data.time).toHaveLength(3);
+    expect(live().excludedRows).toEqual([1]);
+    expect(app().history).toHaveLength(0);
+  });
+
+  it("a read that lands after auto-update was turned off writes nothing", async () => {
+    await installed();
+    let release: (r: LiveRead) => void = () => {};
+    let started: () => void = () => {};
+    const begun = new Promise<void>((r) => (started = r));
+    vi.mocked(importLive).mockImplementationOnce(() => {
+      started();
+      return new Promise((res) => (release = res));
+    });
+    file = { n: 5 };
+    await tick();
+    const reading = tick(); // the read starts and waits on the file
+    await begun;
+    w.disable("d1");
+    release(read());
+    await reading;
+    expect(live().data.time).toHaveLength(4);
+    expect(app().status).toMatch(/auto-update off/);
+  });
+
   it("records the read's baseline exactly (the probe's mtime float, size and checksum)", async () => {
     await installed();
     expect(live().source).toEqual({ kind: "path", path: PATH, mtime: 1_731_000_000.123456 + 4, size: 40, checksum: "sha256:4" });
