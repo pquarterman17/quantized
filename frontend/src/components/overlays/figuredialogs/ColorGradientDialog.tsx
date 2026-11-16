@@ -52,13 +52,14 @@ export default function ColorGradientDialog({ onClose }: { onClose: () => void }
     onClose();
   };
 
-  // UX8-I: Enter on the colormap <select> (or a checkbox) APPLIES instead of
-  // popping the list open; a button keeps its own Enter (Cancel, Remove, a
-  // segment), so it never applies behind the user's back.
+  // UX8-I: Enter on a checkbox (Reverse) APPLIES. A <select> is excluded: its
+  // native list may be open and Enter commits the highlighted option. A button
+  // keeps its own Enter (Cancel, Remove, a segment), so it never applies
+  // behind the user's back.
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== "Enter" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !active) return;
     const el = e.target as HTMLElement;
-    if (el.tagName !== "SELECT" && !(el instanceof HTMLInputElement)) return;
+    if (!(el instanceof HTMLInputElement) || el.type !== "checkbox") return;
     e.preventDefault();
     apply(draft);
   };

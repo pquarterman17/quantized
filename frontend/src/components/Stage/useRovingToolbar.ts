@@ -17,6 +17,19 @@ function reachable(bar: HTMLElement): HTMLButtonElement[] {
   return Array.from(bar.querySelectorAll<HTMLButtonElement>("button.qzk-tool-btn:not([disabled])")).filter((b) => !b.closest("[data-overflow]"));
 }
 
+/** The stop went disabled or hidden: hand tabindex 0 to the closest reachable
+ *  button in DOM order (ties go to the earlier one), not back to the start. */
+function nearestReachable(every: HTMLButtonElement[], all: HTMLButtonElement[], from: HTMLElement | null): HTMLButtonElement | undefined {
+  const at = from ? every.indexOf(from as HTMLButtonElement) : -1;
+  if (at < 0) return undefined;
+  const ok = new Set(all);
+  for (let d = 1; d < every.length; d++) {
+    if (at - d >= 0 && ok.has(every[at - d])) return every[at - d];
+    if (at + d < every.length && ok.has(every[at + d])) return every[at + d];
+  }
+  return undefined;
+}
+
 export function useRovingToolbar(barRef: RefObject<HTMLElement | null>): {
   onKeyDown: (e: KeyboardEvent) => void;
   onFocus: (e: FocusEvent) => void;
@@ -28,10 +41,10 @@ export function useRovingToolbar(barRef: RefObject<HTMLElement | null>): {
     if (!bar) return;
     const all = reachable(bar);
     if (all.length === 0) return;
-    const keep =
-      all.find((b) => b === stopRef.current) ?? all.find((b) => b.getAttribute("aria-pressed") === "true") ?? all[0];
+    const every = Array.from(bar.querySelectorAll<HTMLButtonElement>("button.qzk-tool-btn"));
+    const keep = all.find((b) => b === stopRef.current) ?? nearestReachable(every, all, stopRef.current) ?? all.find((b) => b.getAttribute("aria-pressed") === "true") ?? all[0];
     stopRef.current = keep;
-    for (const b of Array.from(bar.querySelectorAll<HTMLButtonElement>("button.qzk-tool-btn"))) b.tabIndex = b === keep ? 0 : -1;
+    for (const b of every) b.tabIndex = b === keep ? 0 : -1;
   };
   // Every render (tool picks, overflow changes, disabled flips) may change the set.
   useEffect(stamp);

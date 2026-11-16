@@ -83,7 +83,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   // their virtualization hooks must measure/scroll THIS element, not their
   // own row container.
   const panelRef = useRef<HTMLElement>(null);
-  const { hierarchy, rows: allRows } = useLibraryHierarchyModel(true);
+  const { hierarchy, rows: allRows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [contentFilter, setContentFilter] = useState<LibraryContentFilter>("all");
   const { dragging, props: dropProps } = useFileDropTarget((f) => importFiles(f));

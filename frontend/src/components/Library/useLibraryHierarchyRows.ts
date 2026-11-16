@@ -22,12 +22,8 @@ export interface LibraryHierarchyModel {
 }
 
 /** Build the hierarchy once for renderers that need both the complete model
- * and the disclosure-filtered tree rows (Details and Tree respectively).
- *
- * `collapseSingleSheet` (UX8-I): the Library panel passes true so a one-sheet
- * workbook is ONE row; the default keeps the plain workbook/sheet pair for the
- * tree harnesses and any consumer that needs workbook headers. */
-export function useLibraryHierarchyModel(collapseSingleSheet = false): LibraryHierarchyModel {
+ * and the disclosure-filtered tree rows (Details and Tree respectively). */
+export function useLibraryHierarchyModel(): LibraryHierarchyModel {
   const folders = useApp((s) => s.folders);
   const workbooks = useApp((s) => s.workbooks);
   const datasets = useApp((s) => s.datasets);
@@ -63,7 +59,7 @@ export function useLibraryHierarchyModel(collapseSingleSheet = false): LibraryHi
     return keys;
   }, [expandedFolders, expandedWorkbookIds]);
 
-  const rows = useMemo(() => flattenLibraryHierarchy(hierarchy, expandedKeys, collapseSingleSheet), [hierarchy, expandedKeys, collapseSingleSheet]);
+  const rows = useMemo(() => flattenLibraryHierarchy(hierarchy, expandedKeys), [hierarchy, expandedKeys]);
   return useMemo(() => ({ hierarchy, rows }), [hierarchy, rows]);
 }
 

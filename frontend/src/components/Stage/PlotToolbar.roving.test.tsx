@@ -40,6 +40,18 @@ describe("PlotToolbar roving tabindex", () => {
     fireEvent.keyDown(last, { key: "Home" });
     expect(document.activeElement).toBe(first);
   });
+
+  it("moves the Tab stop to the nearest enabled button when the stop becomes disabled", () => {
+    const { rerender } = render(<PlotToolbar {...props} />);
+    const bar = screen.getByRole("toolbar", { name: "Plot tools" });
+    const all = Array.from(bar.querySelectorAll<HTMLButtonElement>("button.qzk-tool-btn"));
+    const stop = all[3];
+    stop.focus();
+    expect(stops(bar)).toEqual([stop]);
+    stop.disabled = true;
+    rerender(<PlotToolbar {...props} />);
+    expect(stops(bar)).toEqual([all[2]]);
+  });
 });
 
 describe("PlotLegend chrome", () => {

@@ -291,7 +291,8 @@ export default function DatasetRow({
             {nameEl}
             <span className="qzk-ds-compact-meta" title={pendingTitle}>
               <OriginSheetChip dataset={d} />
-              {pts} pts · {ch} ch{d.pending && " · …"}
+              <span className="qzk-ds-counts">{pts} pts · {ch} ch</span>
+              {d.pending && " · …"}
             </span>
             <DatasetRowPreview dataset={d} tabIndex={innerTab} />
             {tagsEl}
