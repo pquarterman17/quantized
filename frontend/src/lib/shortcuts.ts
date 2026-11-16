@@ -58,7 +58,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ Click", desc: "Add / remove from the selection" },
       { keys: "⇧ Click", desc: "Select a range from the last clicked row" },
       { keys: "⌘ A", desc: "Select every visible dataset (Tree view)" },
-      { keys: "Double-click", desc: "Open (plot) a dataset; on its name, rename it" },
+      { keys: "Double-click", desc: "Open (plot) a dataset; on the open dataset's name, rename it (or F2)" },
       { keys: "⌃ Q", desc: "Worksheet: Set Column Values for the focused column (Ctrl only, never ⌘)" },
       { keys: "Right-click", desc: "Row menu (plot · duplicate · merge · remove…)" },
     ],
