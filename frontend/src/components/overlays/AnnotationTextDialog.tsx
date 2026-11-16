@@ -79,7 +79,7 @@ export default function AnnotationTextDialog() {
         <h2 id={titleId}>{title}</h2>
         <div className="qz-ws-row">
           <span className="k" id={textId}>Text</span>
-          <RichLabelInput value={draft} placeholder="label text" labelledBy={textId} onCommit={setDraft} live />
+          <RichLabelInput value={draft} placeholder="label text" labelledBy={textId} onCommit={setDraft} live hint />
         </div>
         <div className="qz-btn-row">
           <Button onClick={() => finish(null)}>Cancel</Button>

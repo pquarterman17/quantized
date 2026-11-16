@@ -13,12 +13,24 @@
 import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
+import { hasMarkup } from "../../lib/richtext";
 import { clampAnnotationSize } from "../../lib/uplotOverlays";
 import { useApp } from "../../store/useApp";
 import { IconButton } from "../primitives/IconButton";
 import { NumberField } from "../primitives/NumberField";
 import { Button, RichText } from "../primitives";
 import Card from "../primitives/Card";
+
+/** A number field with a visible caption (UX8-I: bare `0 / 0 / 14` boxes gave no
+ *  hint which was X, Y or the size). The field keeps its own aria-label. */
+function Captioned({ caption, children }: { caption: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 1 }}>
+      <span className="qzk-field-lbl" style={{ margin: 0 }} aria-hidden="true">{caption}</span>
+      {children}
+    </span>
+  );
+}
 
 export default function AnnotationsCard() {
   const annotations = useApp((s) => s.annotations);
@@ -45,8 +57,12 @@ export default function AnnotationsCard() {
   return (
     <Card title="Annotations" count={annotations.length || undefined} defaultOpen={false}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <NumberField value={x} width={56} placeholder="X" aria-label="New annotation X" onChange={setX} />
-        <NumberField value={y} width={56} placeholder="Y" aria-label="New annotation Y" onChange={setY} />
+        <Captioned caption="X">
+          <NumberField value={x} width={56} placeholder="X" aria-label="New annotation X" onChange={setX} />
+        </Captioned>
+        <Captioned caption="Y">
+          <NumberField value={y} width={56} placeholder="Y" aria-label="New annotation Y" onChange={setY} />
+        </Captioned>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
         <input
@@ -62,6 +78,14 @@ export default function AnnotationsCard() {
           Add
         </Button>
       </div>
+      {/* UX8-I: `T_{B}` stays literal without the dollar signs; say so, and preview it. */}
+      {hasMarkup(text) ? (
+        <div className="qzk-helptext" aria-live="polite" aria-label="Annotation preview">
+          <RichText text={text} />
+        </div>
+      ) : (
+        <div className="qzk-helptext">{"Use $…$ for sub/superscripts, e.g. $T_{B}$"}</div>
+      )}
 
       {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
        *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
@@ -85,6 +109,7 @@ export default function AnnotationsCard() {
              *  for "move this annotation": typing an exact coordinate, in
              *  place of the read-only (x, y) text every prior version showed. */}
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <Captioned caption="X">
               <NumberField
                 value={String(a.x)}
                 width={56}
@@ -95,6 +120,8 @@ export default function AnnotationsCard() {
                   if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { x: n });
                 }}
               />
+              </Captioned>
+              <Captioned caption="Y">
               <NumberField
                 value={String(a.y)}
                 width={56}
@@ -105,6 +132,8 @@ export default function AnnotationsCard() {
                   if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { y: n });
                 }}
               />
+              </Captioned>
+              <Captioned caption="Size (px)">
               <NumberField
                 value={String(a.size ?? "")}
                 width={40}
@@ -115,6 +144,7 @@ export default function AnnotationsCard() {
                   if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { size: clampAnnotationSize(n) });
                 }}
               />
+              </Captioned>
               <IconButton
                 aria-label={`Remove annotation ${i + 1}`}
                 title="Remove"
