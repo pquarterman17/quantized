@@ -116,7 +116,7 @@ from quantized.io.origin_project.curve_style_color import (
     style_fields,
 )
 from quantized.io.origin_project.opju_codec import curve_plot_style
-from quantized.io.origin_project.opju_column_fixed import fixed_column_record
+from quantized.io.origin_project.opju_column_fixed import fixed_column_record, record_code
 from quantized.io.origin_project.opju_curve_range import range_reason
 from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
 from quantized.io.origin_project.opju_curve_token import (
@@ -127,7 +127,8 @@ from quantized.io.origin_project.opju_curve_token import (
 )
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
-from quantized.io.origin_project.opju_plot_gates import error_bar_reason, withhold_step_style
+from quantized.io.origin_project.opju_plot_gates import error_bar_reason
+from quantized.io.origin_project.opju_plot_kinds import apply_plot_kind
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
@@ -139,6 +140,9 @@ _CURVE_TOKEN = re.compile(rb"\x01\x01\x01\x80([\x01\x03])", re.DOTALL)
 
 # Per-column plot-designation markers (same bytes windows_opju.py validates).
 _MARKS = {b"\x21\x51": "X", b"\x21\x61": "Y", b"\x30\x61": "Y-error"}
+# `30 61` marks any error column; record code 6 makes it X-error (Origin
+# 2026b COM `wks.col.type`, decode-plan item 72).
+_X_ERROR_CODE = 6
 
 _MAX_FIELDS = 10  # field-walk runaway backstop; real records resolve in <= 6
 # Column short-name gate: no 16-char ceiling (the old {0,15} was a corpus
@@ -254,6 +258,8 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
         for off, cid, fields in column_id_records(b, start, end):
             parsed = _parse_column_record(b, fields - 1)  # it skips one <pb> byte
             if parsed is not None:
+                if parsed[1] == "Y-error" and record_code(b, off) == _X_ERROR_CODE:
+                    parsed = (parsed[0], "X-error", None)  # `30 61` marks both
                 walked.append((book, cid, parsed))
             elif (got := fixed_column_record(b, off)) is not None:
                 fixed.append((book, cid, got))  # a non-Text&Numeric column
@@ -418,7 +424,7 @@ def extract_curves_by_id(
         style = curve_plot_style(b, m.start())
         if style:
             curve["style"] = style
-        withhold_step_style(curve, record)  # drawn as straight segments otherwise
+        apply_plot_kind(curve, record)  # area / step; step style withheld
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)

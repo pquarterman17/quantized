@@ -23,6 +23,7 @@ Origin's own answers as `oracle.json` for the import and from-scratch scorers
 | `import_compare.py` / `import_values.py` | Pure verdict logic: curves, axes, styles, plot type / values, column metadata, sheet pairing. Every item is match / wrong / phantom / omitted + reason. |
 | `frontend_view.py` | Mirror of what the frontend draws for a figure; pinned to the real frontend by `tests/fixtures/plot_corpus/frontend_view_cases.json` (pytest + vitest). |
 | `score_report.py` | Tallies, grouped wrong/phantom findings (listed first), markdown. |
+| `scorecard.py` / `scorecard_page.py` | Plan item 4: merges both scorecards into one row per (type x family) with the owning plan item; writes `scorecard.md`, `scorecard.json` and the owner review page `index.html` (Origin PNG / import render / from-scratch PNG; the import column is empty, nothing rasterises the import). |
 
 ```bash
 uv run python tools/plot_corpus/generate.py --out <gen>

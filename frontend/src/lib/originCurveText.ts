@@ -53,6 +53,14 @@ export function originCurveSeriesStyle(
     const bars = curve.plotType === "bar" ? "horizontal" : true;
     return { ...(out.color ? { color: out.color } : {}), bars };
   }
+  if (curve.plotType === "area" || curve.plotType === "step") {
+    // Origin area (plot 204): the line plus a fill down to Y = 0 (`fill:
+    // "under"`). Origin step (line.connect 7, "step horizontal"): hold each Y
+    // to the next X, then jump (`step: "post"`). Both are plain lines (plot
+    // 204 / 200): the record's latent symbol is not drawn by Origin.
+    const kind = curve.plotType === "area" ? { fill: "under" as const } : { step: "post" as const };
+    return { ...(out.color ? { color: out.color } : {}), width: out.width ?? 1.5, ...kind };
+  }
   return Object.keys(out).length > 0 ? out : null;
 }
 // A leading swatch marker Origin's own legend text carries per curve
