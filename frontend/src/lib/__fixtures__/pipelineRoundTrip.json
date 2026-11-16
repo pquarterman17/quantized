@@ -1,0 +1,469 @@
+{
+ "csv": "x,a,b\n0.0,3.0,2.0\n0.5,3.49,2.1\n1.0,3.98,2.2\n1.5,3.22,2.3\n2.0,3.71,2.4\n2.5,2.95,2.5\n3.0,3.44,2.6\n3.5,3.93,2.7\n4.0,3.17,2.8\n4.5,3.66,2.9\n5.0,2.9,3.0\n5.5,3.39,3.1\n6.0,3.88,3.2\n6.5,3.12,3.3\n7.0,3.61,3.4\n7.5,2.85,3.5\n8.0,3.34,3.6\n8.5,3.83,3.7\n9.0,3.07,3.8\n9.5,3.56,3.9\n",
+ "bgCsv": "x,bg\n0.0,0.5\n1.0,0.51\n2.0,0.52\n3.0,0.53\n4.0,0.54\n5.0,0.55\n6.0,0.56\n7.0,0.57\n8.0,0.58\n9.0,0.59\n10.0,0.6\n",
+ "app": {
+  "time": [
+   0,
+   0.5,
+   1,
+   1.5,
+   2,
+   2.5,
+   3,
+   3.5,
+   4,
+   4.5,
+   5,
+   5.5,
+   6,
+   6.5,
+   7,
+   7.5,
+   8,
+   8.5,
+   9,
+   9.5
+  ],
+  "values": [
+   [
+    5.98,
+    3.2,
+    1.8687500000000001,
+    1.0468227103725036
+   ],
+   [
+    5.9750000000000005,
+    3.1950000000000003,
+    2.3701095461658843,
+    3.173037948510591
+   ],
+   [
+    5.970000000000001,
+    3.3900000000000006,
+    2.7610619469026547,
+    5.180104730059755
+   ],
+   [
+    6.405,
+    3.5849999999999995,
+    3.2866108786610884,
+    8.271000920764658
+   ],
+   [
+    5.42,
+    3.78,
+    3.433862433862434,
+    9.463321869327075
+   ],
+   [
+    5.8549999999999995,
+    3.975,
+    3.972955974842767,
+    13.36466845152627
+   ],
+   [
+    5.85,
+    4.17,
+    4.402877697841727,
+    16.9666546976625
+   ],
+   [
+    5.845,
+    4.365,
+    4.8390607101947305,
+    20.998865076203014
+   ],
+   [
+    6.28,
+    4.56,
+    5.37719298245614,
+    26.40821155334723
+   ],
+   [
+    5.295,
+    4.755,
+    5.613564668769716,
+    29.211021590658884
+   ],
+   [
+    5.73,
+    4.95,
+    6.157575757575758,
+    35.52199736956751
+   ],
+   [
+    5.7250000000000005,
+    5.1450000000000005,
+    6.612730806608358,
+    41.33551149786614
+   ],
+   [
+    5.720000000000001,
+    5.34,
+    7.071161048689139,
+    47.6096664278782
+   ],
+   [
+    6.154999999999999,
+    5.535,
+    7.612014453477868,
+    55.46183679394491
+   ],
+   [
+    5.17,
+    5.7299999999999995,
+    7.902268760907504,
+    60.17208816943421
+   ],
+   [
+    5.6049999999999995,
+    5.925,
+    8.445991561181435,
+    68.96728533119767
+   ],
+   [
+    5.6,
+    6.12,
+    8.915032679738562,
+    77.11137576756668
+   ],
+   [
+    5.595,
+    6.315,
+    9.385985748218527,
+    85.73135323125832
+   ],
+   [
+    6.03,
+    6.51,
+    9.926267281105991,
+    96.07517630439358
+   ],
+   [
+    6.025,
+    6.505,
+    10.426210607225212,
+    106.25128008448881
+   ]
+  ],
+  "labels": [
+   "a · median(3)",
+   "b · median(3)",
+   "ratio",
+   "sq"
+  ]
+ },
+ "requests": {
+  "sigop": {
+   "dataset": {
+    "time": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2,
+     2.5,
+     3,
+     3.5,
+     4,
+     4.5,
+     5,
+     5.5,
+     6,
+     6.5,
+     7,
+     7.5,
+     8,
+     8.5,
+     9,
+     9.5
+    ],
+    "values": [
+     [
+      3,
+      2
+     ],
+     [
+      3.49,
+      2.1
+     ],
+     [
+      3.98,
+      2.2
+     ],
+     [
+      3.22,
+      2.3
+     ],
+     [
+      3.71,
+      2.4
+     ],
+     [
+      2.95,
+      2.5
+     ],
+     [
+      3.44,
+      2.6
+     ],
+     [
+      3.93,
+      2.7
+     ],
+     [
+      3.17,
+      2.8
+     ],
+     [
+      3.66,
+      2.9
+     ],
+     [
+      2.9,
+      3
+     ],
+     [
+      3.39,
+      3.1
+     ],
+     [
+      3.88,
+      3.2
+     ],
+     [
+      3.12,
+      3.3
+     ],
+     [
+      3.61,
+      3.4
+     ],
+     [
+      2.85,
+      3.5
+     ],
+     [
+      3.34,
+      3.6
+     ],
+     [
+      3.83,
+      3.7
+     ],
+     [
+      3.07,
+      3.8
+     ],
+     [
+      3.56,
+      3.9
+     ]
+    ],
+    "labels": [
+     "a",
+     "b"
+    ],
+    "units": [
+     "",
+     ""
+    ],
+    "metadata": {}
+   },
+   "method": "median",
+   "channels": [
+    0,
+    1
+   ],
+   "args": {
+    "window": 3
+   }
+  },
+  "corrections": {
+   "dataset": {
+    "time": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2,
+     2.5,
+     3,
+     3.5,
+     4,
+     4.5,
+     5,
+     5.5,
+     6,
+     6.5,
+     7,
+     7.5,
+     8,
+     8.5,
+     9,
+     9.5
+    ],
+    "values": [
+     [
+      3.49,
+      2.1
+     ],
+     [
+      3.49,
+      2.1
+     ],
+     [
+      3.49,
+      2.2
+     ],
+     [
+      3.71,
+      2.3
+     ],
+     [
+      3.22,
+      2.4
+     ],
+     [
+      3.44,
+      2.5
+     ],
+     [
+      3.44,
+      2.6
+     ],
+     [
+      3.44,
+      2.7
+     ],
+     [
+      3.66,
+      2.8
+     ],
+     [
+      3.17,
+      2.9
+     ],
+     [
+      3.39,
+      3
+     ],
+     [
+      3.39,
+      3.1
+     ],
+     [
+      3.39,
+      3.2
+     ],
+     [
+      3.61,
+      3.3
+     ],
+     [
+      3.12,
+      3.4
+     ],
+     [
+      3.34,
+      3.5
+     ],
+     [
+      3.34,
+      3.6
+     ],
+     [
+      3.34,
+      3.7
+     ],
+     [
+      3.56,
+      3.8
+     ],
+     [
+      3.56,
+      3.8
+     ]
+    ],
+    "labels": [
+     "a · median(3)",
+     "b · median(3)"
+    ],
+    "units": [
+     "",
+     ""
+    ],
+    "metadata": {
+     "sigop_of": "data.csv",
+     "sigop_method": "median",
+     "worksheet_transform": "sigop",
+     "transform_warnings": []
+    }
+   },
+   "params": {
+    "yOff": 0.5,
+    "yScale": 2
+   },
+   "bg_dataset": {
+    "time": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ],
+    "values": [
+     [
+      0.5
+     ],
+     [
+      0.51
+     ],
+     [
+      0.52
+     ],
+     [
+      0.53
+     ],
+     [
+      0.54
+     ],
+     [
+      0.55
+     ],
+     [
+      0.56
+     ],
+     [
+      0.57
+     ],
+     [
+      0.58
+     ],
+     [
+      0.59
+     ],
+     [
+      0.6
+     ]
+    ],
+    "labels": [
+     "bg"
+    ],
+    "units": [
+     ""
+    ],
+    "metadata": {}
+   },
+   "bg_interp": "linear"
+  }
+ },
+ "script": "#!/usr/bin/env python3\n\"\"\"Quantized pipeline: reproducible analysis script (5 steps).\n\nRe-runs the recorded data pipeline headless with the public quantized.api\n(pip install quantized-lab). It runs in this process: no app or server is needed,\nand the project open in the app is not changed. Steps with no quantized.api\nequivalent are kept as comments that say so.\n\nUsage: python <this file> [INPUT ...] [--out OUT] --background FILE\n  INPUT  the file(s) the pipeline imports, in order (default: the recorded names)\n  OUT    where the final data goes: .csv, .tsv or .xlsx (default pipeline_output.csv)\n  FILE   the background each background-subtraction step subtracts, in step order (1)\n\"\"\"\n\nimport argparse\nimport sys\n\nimport quantized.api as qz\n\nRECORDED_INPUTS = [\"data.csv\"]\n\n\ndef main(argv=None):\n    parser = argparse.ArgumentParser(description=\"Re-run a recorded Quantized pipeline.\")\n    parser.add_argument(\"inputs\", nargs=\"*\", help=\"input file(s), in import order\")\n    parser.add_argument(\"--out\", default=\"pipeline_output.csv\", help=\"output table (.csv/.tsv/.xlsx)\")\n    parser.add_argument(\"--background\", action=\"append\", default=[], help=\"background file, one per background-subtraction step\")\n    args = parser.parse_args(argv)\n    if hasattr(sys.stdout, \"reconfigure\"):  # labels may hold μ etc.; a cp1252 console must not crash\n        sys.stdout.reconfigure(errors=\"backslashreplace\")\n    if not args.inputs and None not in RECORDED_INPUTS:\n        args.inputs = list(RECORDED_INPUTS)\n    if len(args.inputs) != len(RECORDED_INPUTS):\n        parser.error(f\"give {len(RECORDED_INPUTS)} input file(s)\")\n    if len(args.background) != 1:\n        parser.error(\"give 1 --background file(s), one per background-subtraction step\")\n    data = None\n    formulas = []  # the formula columns (name, expression), recomputed after each correction\n\n    # 1. Import data.csv\n    data = qz.load(args.inputs[0])\n    raw = data  # the uncorrected base that corrections start from\n    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import\n\n    # 2. Median filter · data.csv\n    # rows excluded or filtered in the app are not recorded; this uses every row\n    data = qz.run_signal_op(data, \"median\", [0, 1], {\"window\": 3}).data\n    raw = data  # a new dataset: its own base\n    roles = None  # with no error-column roles, as in the app\n\n    # 3. Add column ratio\n    base = data  # the worksheet before its formula columns\n    formulas.append((\"ratio\", \"A / B + x\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 4. Corrections → data\n    # Error-column roles changed by hand in the app are not recorded; this uses the roles seeded on import.\n    # The background is read from the file given with --background, as loaded: if it was corrected in the app, correct it here first.\n    background = qz.load(args.background[0])\n    base = qz.apply_corrections(raw, {\"yOff\": 0.5, \"yScale\": 2}, bg_dataset=background, bg_interp=\"linear\", error_bindings=roles)\n    data = qz.add_formula_columns(base, formulas)  # the formula columns, recomputed\n\n    # 5. Add column sq\n    formulas.append((\"sq\", \"C^2 - sqrt(abs(A))\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    if data is None:\n        print(\"nothing to save: no step loaded data\")\n        return 1\n    qz.save_table(data, args.out, overwrite=True, protect=args.inputs + args.background)  # replaces --out, never an input\n    print(f\"saved {args.out}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+ "template": "{\n  \"name\": \"Round trip\",\n  \"outputs\": [],\n  \"steps\": [\n    {\n      \"code\": \"qz.import(\\\"data.csv\\\")\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"import\",\n      \"label\": \"Import data.csv\",\n      \"params\": {\n        \"name\": \"data.csv\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"transform\",\n      \"label\": \"Median filter · data.csv\",\n      \"params\": {\n        \"args\": {\n          \"window\": 3\n        },\n        \"channels\": [\n          0,\n          1\n        ],\n        \"method\": \"median\",\n        \"op\": \"sigop\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Add column ratio\",\n      \"params\": {\n        \"expr\": \"A / B + x\",\n        \"name\": \"ratio\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"correction\",\n      \"label\": \"Corrections → data\",\n      \"params\": {\n        \"bg\": {\n          \"datasetId\": \"bg\",\n          \"interp\": \"linear\"\n        },\n        \"params\": {\n          \"yOff\": 0.5,\n          \"yScale\": 2\n        }\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Add column sq\",\n      \"params\": {\n        \"expr\": \"C^2 - sqrt(abs(A))\",\n        \"name\": \"sq\"\n      }\n    }\n  ],\n  \"version\": 1\n}\n"
+}
