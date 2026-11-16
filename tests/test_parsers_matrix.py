@@ -65,6 +65,9 @@ _EXCLUDE_PREFIXES = (
     # (test_io_origin_opj_corpus), which state per file what must import —
     # "every file imports with rows" is not a property that corpus has.
     "origin/public/",
+    # The Origin-built plot-type corpus (PNG/oracle.json/truth files are oracle
+    # artifacts); scored by test_plot_corpus_import_floor.
+    "origin/generated/",
 )
 
 # Known-gap corpus files: relative posix path -> reason. These xfail (not
