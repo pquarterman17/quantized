@@ -41,7 +41,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   /** L0.25 (PR #139 review) — set by LibraryTree only: single click SELECTS
    *  (librarySelection, visible highlight), double-click/Enter opens;
    *  right-click selects. Unset (flat FiguresSection): the established
-   *  click-applies behavior is unchanged. The ⊞/▤/G/▣ buttons keep their
+   *  click-applies behavior is unchanged. The ⊞/⊟/G/▣ buttons keep their
    *  one-click actions in both modes — they're commands, not the row. */
   treeMode?: boolean;
   /** LibraryTree's treeitem semantics + roving tab stop (U5); the action

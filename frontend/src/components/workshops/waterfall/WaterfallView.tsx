@@ -92,7 +92,7 @@ export default function WaterfallView() {
           <label className="qzk-field">
             <span>Channel</span>
             <select
-              className="qz-input"
+              className="qz-select"
               value={w.channel}
               onChange={(e) => w.setChannel(e.target.value)}
               disabled={w.channels.length === 0}
@@ -108,7 +108,7 @@ export default function WaterfallView() {
           <label className="qzk-field">
             <span>Offset</span>
             <select
-              className="qz-input"
+              className="qz-select"
               value={w.mode}
               onChange={(e) => w.setMode(e.target.value as "add" | "mul")}
             >

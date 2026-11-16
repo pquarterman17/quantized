@@ -9,11 +9,11 @@
 .qzk-analysis-context > span { color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); }
 .qzk-analysis-context p { grid-column: 1 / -1; font-size: var(--type-small); }
 .qzk-analysis-controls { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, .3fr); gap: 10px; }
-.qzk-analysis-controls label { display: grid; gap: 5px; color: var(--text-faint); font-size: var(--type-nano); font-weight: var(--weight-semibold); text-transform: uppercase; }
+.qzk-analysis-controls label { display: grid; gap: 5px; color: var(--text-dim); font-size: var(--font-size-sm); }
 .qzk-analysis-controls input, .qzk-analysis-controls select { min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-1); color: var(--text); font: inherit; font-size: var(--type-small); text-transform: none; }
 .qzk-analysis-controls input:focus-visible, .qzk-analysis-controls select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .qzk-analysis-tabs { display: flex; gap: 2px; margin: 14px 0; overflow-x: auto; border-bottom: 1px solid var(--border); }
-.qzk-analysis-tabs button { flex: none; padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); cursor: pointer; font: inherit; }
+.qzk-analysis-tabs button { flex: none; padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); font: inherit; }
 .qzk-analysis-tabs button:hover { color: var(--text); background: var(--surface-1); }
 .qzk-analysis-tabs button.active { border-bottom-color: var(--accent); color: var(--text); }
 .qzk-analysis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); gap: 10px; }
@@ -21,7 +21,7 @@
 .qzk-analysis-tool.unavailable { background: color-mix(in srgb, var(--surface-1) 70%, var(--surface-0)); }
 .qzk-analysis-tool-head { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .qzk-analysis-tool-head > div { display: flex; flex-wrap: wrap; gap: 5px; }
-.qzk-analysis-favorite { width: 28px; height: 28px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-faint); cursor: pointer; font-size: 19px; line-height: 1; }
+.qzk-analysis-favorite { width: 28px; height: 28px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-faint); font-size: 19px; line-height: 1; }
 .qzk-analysis-favorite:hover, .qzk-analysis-favorite.active { background: var(--surface-2); color: var(--accent); }
 .qzk-analysis-tool h3, .qzk-analysis-result h3 { margin: 10px 0 6px; font-size: var(--type-body); }
 .qzk-analysis-tool > p { font-size: var(--type-small); line-height: 1.45; }
@@ -49,7 +49,7 @@
 .qzk-stats-launcher .qz-btn { flex: none; }
 .qzk-stats-current-only { display: flex; flex: none; align-items: center; gap: 7px; color: var(--text-dim); font-size: var(--type-small); }
 .qzk-stats-result { overflow: clip; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
-.qzk-stats-result > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; cursor: pointer; list-style-position: inside; }
+.qzk-stats-result > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; list-style-position: inside; }
 .qzk-stats-result > summary:hover { background: var(--surface-2); }
 .qzk-stats-result-title { display: inline-flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; vertical-align: middle; }
 .qzk-stats-result-title strong { overflow-wrap: anywhere; }

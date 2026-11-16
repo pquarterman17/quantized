@@ -51,7 +51,7 @@ export default function QuickSeriesXPanel({ data, mapping, onChange }: Props) {
         {mapping.yKeys.map((y) => (
           <li key={y}>
             <span><strong>{data.labels[y]}</strong></span>
-            <select
+            <select className="qz-select"
               aria-label={`X for ${data.labels[y]}`}
               value={currentValue(mapping, y)}
               onChange={(event) => {

@@ -16,6 +16,7 @@
 
 import { useEffect, useId, useState, useRef } from "react";
 import { flushSync } from "react-dom";
+import * as GLYPHS from "../../lib/glyphs";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
@@ -126,7 +127,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
       <div>
         <div className="qzk-menu-label">Start here</div>
         <button className="qz-btn" onClick={onImport} style={{ width: "100%" }}>
-          ⊞ Import data…
+          {GLYPHS.importData} Import data…
         </button>
         <button
           className="qzk-menu-item"

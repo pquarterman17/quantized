@@ -28,7 +28,7 @@ export default function LibraryExplorerControls({
   return (
     <div className="qzk-library-explorer-controls" aria-label="Project explorer controls">
       <select
-        className="qz-input"
+        className="qz-select"
         aria-label="Show item type"
         value={filter}
         onChange={(event) => onFilterChange(event.target.value as LibraryContentFilter)}

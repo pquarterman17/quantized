@@ -334,7 +334,7 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--surface-1, #fff);
-  cursor: pointer;
+
   margin-top: -6px;
 }
 .qz-range-slider input[type="range"]::-moz-range-thumb {
@@ -344,7 +344,7 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--surface-1, #fff);
-  cursor: pointer;
+
 }
 
 /* ── Card (collapsible inspector card) ─────────────────────────────────── */
@@ -392,7 +392,7 @@
   color: var(--text-faint);
   font: inherit;
   line-height: 1;
-  cursor: pointer;
+
 }
 .qz-card-help:hover,
 .qz-card-help:focus-visible {
@@ -658,7 +658,7 @@
 .qz-analysis-status.status-out-of-date, .qz-analysis-status.status-incomplete, .qz-analysis-status.status-source-missing { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
 .qz-analysis-missing { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--warn); font-size: 12px; }
 .qz-analysis-tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--border); }
-.qz-analysis-tabs button { appearance: none; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-dim); padding: 7px 10px; cursor: pointer; }
+.qz-analysis-tabs button { appearance: none; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-dim); padding: 7px 10px; }
 .qz-analysis-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
 .qz-analysis-tabs button:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 .qz-analysis-body { min-height: 0; overflow: auto; padding: 14px; }

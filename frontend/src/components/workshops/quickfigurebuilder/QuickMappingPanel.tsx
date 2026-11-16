@@ -82,7 +82,7 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
               onDragStart={(event) => event.dataTransfer.setData(dragType, String(channel))}
             >
               <span><strong>{label}</strong>{data.units[channel] ? ` (${data.units[channel]})` : ""}</span>
-              <select
+              <select className="qz-select"
                 aria-label={`Role for ${label}`}
                 value={roleValue(assignment)}
                 onChange={(event) => onAssign(channel, parseRole(event.target.value))}

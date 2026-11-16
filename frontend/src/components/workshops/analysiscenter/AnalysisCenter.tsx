@@ -100,7 +100,7 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
         {view !== "results" && view !== "statistics" && (
           <label>
             <span>Category</span>
-            <select value={category} onChange={(event) => setCategory(event.target.value as AnalysisCategory | "all")}>
+            <select className="qz-select" value={category} onChange={(event) => setCategory(event.target.value as AnalysisCategory | "all")}>
               <option value="all">All categories</option>
               {ANALYSIS_CATEGORIES.map((entry) => <option key={entry}>{entry}</option>)}
             </select>

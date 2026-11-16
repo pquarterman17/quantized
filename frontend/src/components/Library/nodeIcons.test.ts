@@ -77,7 +77,7 @@ const ROW_COMMAND_GLYPHS: ReadonlyArray<{
   { glyph: "▼", means: "move down (flat card only)", file: "DatasetRow.tsx" },
   { glyph: FROZEN_MARK, means: "frozen data (status, not type)", file: "ArtifactRows.tsx" },
   {
-    glyph: "▤",
+    glyph: "⊟",
     means: "open the source workbook",
     file: "FigureRow.tsx",
     refersToKind: "workbook",

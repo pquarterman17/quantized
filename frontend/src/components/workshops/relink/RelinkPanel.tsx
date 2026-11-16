@@ -144,7 +144,7 @@ export default function RelinkPanel() {
           <button
             type="button"
             className="qzk-ds-meta"
-            style={{ textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            style={{ textAlign: "left", background: "none", border: "none", padding: 0 }}
             onClick={() => void browseNewRoot()}
             disabled={busy}
           >

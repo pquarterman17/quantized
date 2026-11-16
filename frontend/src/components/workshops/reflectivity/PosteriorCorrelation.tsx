@@ -48,7 +48,7 @@ export default function PosteriorCorrelation({ posterior }: { posterior: SavedPo
   };
 
   return <details>
-    <summary className="qzk-field-lbl" style={{ cursor: "pointer" }}>
+    <summary className="qzk-field-lbl">
       Parameter correlation · {strongest ? `strongest |r| ${Math.abs(strongest.r).toFixed(2)}` : "no finite pairs"}
     </summary>
     <p className="qzk-ds-meta">
