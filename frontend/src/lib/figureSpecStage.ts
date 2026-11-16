@@ -22,7 +22,7 @@ import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
-import { withLiveTickSteps } from "./liveTickStepsSpec";
+import { windowTickHints, withLiveTickHints } from "./liveTickStepsSpec";
 import { withLiveLegendCorner } from "./liveLegendCorner";
 
 /** Stage copy/export entry point (F2.5b). Every Stage command that renders
@@ -77,7 +77,7 @@ export function buildStageFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extra: { transparent?: boolean; onDroppedOverlays?: (labels: string[]) => void } = {},
+  extra: { transparent?: boolean; onDroppedOverlays?: (labels: string[]) => void; noTickHints?: boolean } = {},
 ): FigureSpec {
   const st = s();
   const empty = emptyGraphReason(ds);
@@ -157,8 +157,11 @@ export function buildStageFigureSpec(
         defaultLineWidth,
       }, view)
     : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan }, view);
-  // An automatic tick increment marks the ticks the canvas drew (lib/liveTickSteps.ts).
-  const spec = withLiveTickSteps(built, ds.id);
+  // The increments THIS window's canvas drew ride as hints (lib/liveTickStepsSpec.ts) -- on the
+  // document route of a live, unsaved document only (windowTickHints): the fallback may race a refocus.
+  // `noTickHints`: a report snapshot renders later, at its own size (review N1).
+  const live = canRouteThroughDocument && !extra.noTickHints;
+  const spec = withLiveTickHints(built, live ? windowTickHints(st.editableFigures, focused?.id, document) : null);
   // The fit / baseline / peak overlays the canvas splices on after its plotted
   // channels (lib/figureSpecOverlays.ts), decided from `view`. Not on a frozen document: it renders
   // its own snapshot, not the rows the overlay was computed on.

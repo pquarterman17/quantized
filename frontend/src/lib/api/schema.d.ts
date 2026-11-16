@@ -8207,6 +8207,8 @@ export interface components {
             x_scale?: string | null;
             /** X Step */
             x_step?: number | null;
+            /** X Step Hint */
+            x_step_hint?: number | null;
             y2_fmt?: components["schemas"]["TickFormatSpec"] | null;
             /** Y2 Keys */
             y2_keys?: (number | string)[] | null;
@@ -8216,6 +8218,8 @@ export interface components {
             y2_scale?: string | null;
             /** Y2 Step */
             y2_step?: number | null;
+            /** Y2 Step Hint */
+            y2_step_hint?: number | null;
             /**
              * Y Axes
              * @description Y3, Y4, ... on the right, each pushed one 60 pt slot further out (Origin's multiple Y axes); null/empty = none.
@@ -8235,6 +8239,8 @@ export interface components {
             y_scale?: string | null;
             /** Y Step */
             y_step?: number | null;
+            /** Y Step Hint */
+            y_step_hint?: number | null;
         };
         /** FindPeaksRequest */
         FindPeaksRequest: {
