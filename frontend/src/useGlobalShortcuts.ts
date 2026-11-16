@@ -12,8 +12,10 @@ import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
-import { onLoadFailure, runLazy } from "./lib/runLazy";
+import { RENAME_ACTIVE_EVENT } from "./lib/renameActive";
 import { toolForKey } from "./lib/plotToolKeys";
+import { buildCoreActions } from "./appCommandsCore";
+import { runAction } from "./store/commands";
 import { loadInteractionPrefs } from "./store/prefs";
 import { useApp } from "./store/useApp";
 
@@ -25,8 +27,20 @@ function inToolWindow(t: EventTarget | null): boolean {
   return t instanceof Element && t.closest("[data-tool-window]") !== null;
 }
 
-/** Origin habits (Ctrl+R / N / J, F2): the bodies are a lazy chunk (lib/originKeys.ts). */
-const originKey = (k: string) => void runLazy("Loading…", () => import("./lib/originKeys")).then((m) => m.originKey(k), onLoadFailure);
+type AppState = ReturnType<typeof useApp.getState>;
+
+/** Reset the plot view to automatic limits; false when there was nothing to reset. */
+function rescale(s: AppState): boolean {
+  if (!s.xLim && !s.yLim && !s.y2Lim) return false;
+  s.recordView({ xLim: s.xLim, yLim: s.yLim, y2Lim: s.y2Lim }, { xLim: null, yLim: null, y2Lim: null });
+  return true;
+}
+
+/** Run a core palette command by id (Ctrl+N / Ctrl+J share the palette's path and its busy/failure handling). */
+const runCore = (id: string) => {
+  const a = buildCoreActions(useApp.getState).find((x) => x.id === id);
+  if (a) runAction(a);
+};
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
@@ -99,15 +113,18 @@ export function useGlobalShortcuts(): void {
         switch (e.key) {
           case "a":
           case "A": // autoscale / reset the plot view
-            if (!s.xLim && !s.yLim && !s.y2Lim) return; // nothing to reset
-            e.preventDefault();
-            s.recordView({ xLim: s.xLim, yLim: s.yLim, y2Lim: s.y2Lim }, { xLim: null, yLim: null, y2Lim: null });
+            if (rescale(s)) e.preventDefault();
             return;
-          case "F2": // rename the active dataset (Origin habit); Library rows listen
+          case "F2": {
+            // Rename the selected (else active) dataset, Origin's habit. Library rows answer
+            // the event (exactly one claims it); no row on screen = say so.
             if (e.shiftKey) return; // Shift+F2 is the worksheet header editor
             e.preventDefault();
-            originKey("f2");
+            const ask = { id: s.selectedIds.length === 1 ? s.selectedIds[0] : s.activeId, hit: false };
+            window.dispatchEvent(new CustomEvent(RENAME_ACTIVE_EVENT, { detail: ask }));
+            if (!ask.hit) s.setStatus("F2: show the dataset in the Library to rename it");
             return;
+          }
           case "f":
           case "F": // curve-fit workshop
             e.preventDefault();
@@ -196,27 +213,38 @@ export function useGlobalShortcuts(): void {
           // the Save As file handle (Chromium) with no dialog; Save As / a download
           // otherwise. ⇧ = Save As, always prompting (Origin's Ctrl+Shift+S).
           e.preventDefault();
-          void (e.shiftKey ? s.saveWorkspaceToFile() : s.saveWorkspace());
+          if (!e.repeat) void (e.shiftKey ? s.saveWorkspaceToFile() : s.saveWorkspace());
           break;
         // Origin habits (audit-6 lane O). Typing in a field keeps the native keys.
-        // Ctrl+R is claimed even there, because the browser would reload the tab and
-        // lose the session; Ctrl+Shift+R (hard reload) is left alone. Ctrl+N / Ctrl+Q
-        // are reserved by browsers (documented in the shortcut sheet): they work only
-        // in the desktop window / an installed app. Ctrl+Q lives in the worksheet.
+        // Ctrl+R's reload block is the capture listener below (it must work under
+        // modals too); Ctrl+Shift+R (hard reload) is left alone. Ctrl+N / Ctrl+Q are
+        // reserved by some browsers (listed in the shortcut sheet). Ctrl+Q lives in
+        // the worksheet.
         case "r":
-        case "n":
-        case "j": {
-          const typing = isEditingTarget(e.target);
-          if (e.shiftKey || (typing && e.key !== "r")) break;
-          e.preventDefault();
-          if (!typing) originKey(e.key.toLowerCase());
+          if (!e.shiftKey && !isEditingTarget(e.target)) rescale(s);
           break;
-        }
+        case "n":
+        case "j":
+          if (e.shiftKey || isEditingTarget(e.target)) break;
+          e.preventDefault();
+          runCore(e.key.toLowerCase() === "n" ? "new-workbook" : "copy-figure");
+          break;
       }
     };
     // R15: through the modal gate. While a dialog is open only `?` and
     // Ctrl/Cmd+, (which open a dialog ON TOP) reach `onKey` at all.
     return listenForAppShortcuts(onKey);
+  }, []);
+
+  // Ctrl/Cmd+R must never reload the tab and lose the session: under a modal, in a field
+  // that stops key propagation, with Caps Lock or a non-Latin layout (`code`, not `key`).
+  // Capture phase and outside the modal gate on purpose; the rescale itself stays gated.
+  useEffect(() => {
+    const noReload = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyR") e.preventDefault();
+    };
+    window.addEventListener("keydown", noReload, true);
+    return () => window.removeEventListener("keydown", noReload, true);
   }, []);
 
   // ── The three plot-tool tiers of the Escape ladder (GUI_INTERACTION #9) ──

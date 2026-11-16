@@ -5,7 +5,7 @@
 // nothing could be typed below the last row. Every check reads store state.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -66,14 +66,41 @@ describe("worksheet cell cursor", () => {
     expect(await screen.findByRole("dialog", { name: /Set Column Values/ })).toBeInTheDocument();
   });
 
+  // The dialog is a lazy chunk: preload it so "did not open" is decisive, not a race.
+  const noDialog = async () => {
+    await import("./SetColumnValuesDialog");
+    await vi.dynamicImportSettled();
+    expect(screen.queryByRole("dialog", { name: /Set Column Values/ })).toBeNull();
+  };
+
   it("Ctrl+Q does nothing while a cell is being edited", async () => {
+    await import("./SetColumnValuesDialog");
     render(<WorksheetPane datasetId="w" />);
     fireEvent.mouseDown(cellAt(0, 0));
     grid().focus();
     key("F2");
     key("q", { ctrlKey: true });
-    await new Promise((r) => setTimeout(r, 60)); // the dialog is a lazy chunk: give it time to (wrongly) appear
-    expect(screen.queryByRole("dialog", { name: /Set Column Values/ })).toBeNull();
+    await noDialog();
+  });
+
+  it("⌘Q is never bound (it quits the app on macOS): only Ctrl+Q", async () => {
+    await import("./SetColumnValuesDialog");
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, 0));
+    grid().focus();
+    key("q", { metaKey: true });
+    await noDialog();
+  });
+
+  it("Ctrl+Q honours the same read-only gate as the column menu: a re-derived sheet says why", async () => {
+    await import("./SetColumnValuesDialog");
+    useApp.setState({ datasets: [{ ...sheet(), derivedFrom: { sourceIds: ["src"], recipe: "x" } as never }] });
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, 0));
+    grid().focus();
+    key("q", { ctrlKey: true });
+    await noDialog();
+    expect(st().status).toMatch(/recomputed from its source/);
   });
 
   it("keys on a focused toolbar button stay the button's: no cursor move, no cell edit", () => {

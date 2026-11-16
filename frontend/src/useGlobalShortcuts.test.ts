@@ -211,6 +211,16 @@ describe("useGlobalShortcuts — Ctrl/Cmd+S (P1.2 box 1)", () => {
     expect(e).toBe(false); // fireEvent returns false when preventDefault() ran
   });
 
+  it("a held Ctrl+S (key repeat) saves once and still blocks the browser's Save dialog", () => {
+    const saveWorkspace = vi.fn();
+    useApp.setState({ saveWorkspace });
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    const e = fireEvent.keyDown(window, { key: "s", ctrlKey: true, repeat: true, cancelable: true });
+    expect(saveWorkspace).toHaveBeenCalledOnce();
+    expect(e).toBe(false);
+  });
+
   it("Ctrl+Shift+S is Save As: always prompts, never the quick save", () => {
     const saveWorkspace = vi.fn();
     const saveWorkspaceToFile = vi.fn();

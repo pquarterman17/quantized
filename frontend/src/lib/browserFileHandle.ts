@@ -5,7 +5,7 @@
 // later Ctrl+S overwrites THAT file. Firefox / Safari have no
 // `showSaveFilePicker`: callers fall back to the download, unchanged.
 //
-// Pure of the store (a lazy chunk; `store/browserSave.ts` is the orchestrator).
+// A lazy chunk (`store/browserSave.ts` is the orchestrator).
 //
 // FAIL CLOSED. A kept handle is only written when all three still hold:
 //   1. write permission is still granted (re-requested once, which needs the
@@ -18,6 +18,11 @@
 //      save picker, whose OS dialog makes the user confirm the replacement.
 // `createWritable` stages into a swap file and only replaces on `close()`, so
 // a failed write leaves the previous good file untouched.
+//
+// The handle belongs to ONE document: an Open / restore (`commitOpened`) and
+// "Remove all" (the store subscription below) drop it.
+
+import { useApp } from "../store/useApp";
 
 export interface FsWritable {
   write(data: string): Promise<void>;
@@ -41,7 +46,7 @@ interface PickerWindow {
 }
 
 export type BrowserSave =
-  | { kind: "saved"; name: string }
+  | { kind: "saved"; name: string; unverified?: true }
   | { kind: "cancelled" }
   | { kind: "stale"; reason: string }
   | { kind: "failed"; reason: string };
@@ -75,13 +80,22 @@ export function commitOpened(name?: string): void {
   openedName = name ?? null;
 }
 
-/** Test seam: forget everything. */
+/** Forget the kept file and the opened name (a new document has none). */
 export function resetBrowserFile(): void {
   held = null;
   openedName = null;
 }
 
-async function writeThrough(handle: FsHandle, content: string): Promise<string> {
+// "Remove all" (or removing the last dataset) starts a new document: Ctrl+S must
+// never overwrite the previous project's file with it. This module only loads
+// once a handle can exist, so the subscription is live whenever it matters.
+useApp.subscribe((s, p) => {
+  if (!s.datasets.length && p.datasets.length) resetBrowserFile();
+});
+
+/** Write and close (the swap-file replace happens at close, so a throw here left
+ *  the old file intact), then read back the stamp; null = could not verify. */
+async function writeThrough(handle: FsHandle, content: string): Promise<string | null> {
   const w = await handle.createWritable();
   try {
     await w.write(content);
@@ -90,7 +104,14 @@ async function writeThrough(handle: FsHandle, content: string): Promise<string> 
     await w.abort?.().catch(() => undefined);
     throw e;
   }
-  return stampOf(await handle.getFile());
+  return handle.getFile().then(stampOf, () => null);
+}
+
+function keep(handle: FsHandle, stamp: string | null): BrowserSave {
+  held = stamp === null ? null : { handle, stamp };
+  if (stamp !== null) return { kind: "saved", name: handle.name };
+  openedName = handle.name;
+  return { kind: "saved", name: handle.name, unverified: true };
 }
 
 /** Save As: ask the user for a file, write it, keep the handle. */
@@ -107,21 +128,23 @@ export async function saveAsPicked(content: string, projectName?: string | null)
     return errName(e) === "AbortError" ? { kind: "cancelled" } : { kind: "failed", reason: errMsg(e) };
   }
   try {
-    held = { handle, stamp: await writeThrough(handle, content) };
-    return { kind: "saved", name: handle.name };
+    return keep(handle, await writeThrough(handle, content));
   } catch (e) {
     held = null;
     return { kind: "failed", reason: errMsg(e) };
   }
 }
 
-/** Ctrl+S: overwrite the kept file if, and only if, it is still ours. */
-export async function saveInPlace(content: string): Promise<BrowserSave> {
+/** Is the kept file still safe to overwrite? null = yes. Otherwise the outcome to
+ *  report: "stale" (handle dropped, the caller re-prompts) or "failed" (handle kept,
+ *  retry). Run it BEFORE serializing, while the key press's user gesture is fresh. */
+export async function checkHandle(): Promise<Extract<BrowserSave, { kind: "stale" | "failed" }> | null> {
   const cur = held;
   if (!cur) return { kind: "stale", reason: "no file chosen yet" };
   const { handle } = cur;
-  const drop = (reason: string): BrowserSave => {
+  const drop = (reason: string): { kind: "stale"; reason: string } => {
     held = null;
+    openedName = handle.name; // the next download / suggestion keeps the user's name
     return { kind: "stale", reason };
   };
   try {
@@ -129,7 +152,8 @@ export async function saveInPlace(content: string): Promise<BrowserSave> {
     if (perm !== "granted") perm = (await handle.requestPermission?.({ mode: "readwrite" })) ?? "denied";
     if (perm !== "granted") return drop(`permission to write ${handle.name} was revoked`);
   } catch {
-    return drop(`permission to write ${handle.name} could not be confirmed`);
+    // A thrown request is usually an expired gesture: keep the handle, retry next press.
+    return { kind: "failed", reason: "the browser could not confirm write permission; press Ctrl+S again" };
   }
   let now: string;
   try {
@@ -137,10 +161,16 @@ export async function saveInPlace(content: string): Promise<BrowserSave> {
   } catch {
     return drop(`${handle.name} was moved or deleted`);
   }
-  if (now !== cur.stamp) return drop(`${handle.name} was changed outside Quantized`);
+  return now === cur.stamp ? null : drop(`${handle.name} was changed outside Quantized`);
+}
+
+/** Ctrl+S: overwrite the kept file if, and only if, it is still ours. */
+export async function saveInPlace(content: string): Promise<BrowserSave> {
+  const bad = await checkHandle();
+  if (bad) return bad;
+  const handle = (held as NonNullable<typeof held>).handle;
   try {
-    held = { handle, stamp: await writeThrough(handle, content) };
-    return { kind: "saved", name: handle.name };
+    return keep(handle, await writeThrough(handle, content));
   } catch (e) {
     return { kind: "failed", reason: errMsg(e) };
   }

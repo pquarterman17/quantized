@@ -129,13 +129,18 @@ export default function DatasetRow({
   const [tag, setTag] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // F2 (useGlobalShortcuts) renames the active dataset: only its row answers.
+  // F2 (useGlobalShortcuts) renames the selected/active dataset: the row whose id the
+  // event names claims it (once: a dataset listed twice, e.g. in a smart folder, opens one box).
   useEffect(() => {
-    if (!active) return;
-    const onF2 = () => setRename(d.name);
+    const onF2 = (ev: Event) => {
+      const ask = (ev as CustomEvent<{ id: string | null; hit: boolean }>).detail;
+      if (ask.hit || ask.id !== d.id) return;
+      ask.hit = true;
+      setRename(d.name);
+    };
     window.addEventListener(RENAME_ACTIVE_EVENT, onF2);
     return () => window.removeEventListener(RENAME_ACTIVE_EVENT, onF2);
-  }, [active, d.name]);
+  }, [d.id, d.name]);
 
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);

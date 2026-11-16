@@ -58,7 +58,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ Click", desc: "Add / remove from the selection" },
       { keys: "⇧ Click", desc: "Select a range from the anchor" },
       { keys: "Double-click", desc: "Rename a dataset" },
-      { keys: "⌘ Q", desc: "Worksheet: Set Column Values for the focused column (⌘Q quits some browsers: use the column menu there)" },
+      { keys: "⌃ Q", desc: "Worksheet: Set Column Values for the focused column (Ctrl only, never ⌘)" },
       { keys: "Right-click", desc: "Row menu (plot · duplicate · merge · remove…)" },
     ],
   },

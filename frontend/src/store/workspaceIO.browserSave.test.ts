@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { commitOpened, resetBrowserFile } from "../lib/browserFileHandle";
+import { commitOpened, hasSaveHandle, resetBrowserFile } from "../lib/browserFileHandle";
 import { saveBlob } from "../lib/download";
 import { useApp } from "./useApp";
 import { useToasts } from "./toasts";
@@ -14,18 +14,28 @@ vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
 class FakeFile {
   content = "";
   mtime = 1000;
+  pending = "";
+  writes = 0;
   permission: PermissionState = "granted";
+  requestThrows = false;
+  failWrite = false;
+  getFileThrows = false;
+  /** getFile starts throwing once a write has closed (the stamp read-back fails). */
+  getFileThrowsAfterWrite = false;
   /** Edit the file behind the app's back. */
   externalEdit(text: string): void {
     this.content = text;
     this.mtime += 5;
   }
-  pending = "";
   handle = (name: string) => ({
     name,
-    getFile: () => Promise.resolve({ lastModified: this.mtime, size: this.content.length } as File),
-    createWritable: () =>
-      Promise.resolve({
+    getFile: () => {
+      if (this.getFileThrows || (this.getFileThrowsAfterWrite && this.writes > 0)) return Promise.reject(new Error("gone"));
+      return Promise.resolve({ lastModified: this.mtime, size: this.content.length } as File);
+    },
+    createWritable: () => {
+      if (this.failWrite) return Promise.reject(new Error("disk full"));
+      return Promise.resolve({
         write: (d: string) => {
           this.pending = d;
           return Promise.resolve();
@@ -33,11 +43,13 @@ class FakeFile {
         close: () => {
           this.content = this.pending;
           this.mtime += 1;
+          this.writes += 1;
           return Promise.resolve();
         },
-      }),
+      });
+    },
     queryPermission: () => Promise.resolve(this.permission),
-    requestPermission: () => Promise.resolve(this.permission),
+    requestPermission: () => (this.requestThrows ? Promise.reject(new Error("SecurityError")) : Promise.resolve(this.permission)),
   });
 }
 
@@ -51,7 +63,9 @@ function installPicker(...files: [FakeFile, string][]): Picker {
   return picker;
 }
 
-const names = () => useApp.getState().datasets.map((d) => d.name);
+const gestureError = () => Object.assign(new Error("User activation is required to show a file picker"), { name: "SecurityError" });
+const rename = (name: string) => useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], name }] });
+const toastText = () => useToasts.getState().toasts.map((t) => t.msg).join(" | ");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -78,14 +92,30 @@ describe("browser Save in place (File System Access API)", () => {
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledOnce();
     expect(picker.mock.calls[0][0].suggestedName).toBe("workspace.dwk");
-    expect(names()).toEqual(["first.dat"]);
     expect(file.content).toContain("first.dat");
 
-    useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], name: "second.dat" }] });
+    rename("second.dat");
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledOnce();
     expect(file.content).toContain("second.dat");
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it("marks the workspace clean after a successful save", async () => {
+    installPicker([new FakeFile(), "a.dwk"]);
+    useApp.setState({ projectDirty: true });
+    await useApp.getState().saveWorkspace();
+    expect(useApp.getState().projectDirty).toBe(false);
+  });
+
+  it("writes the same serializer output: a workspace with a gated (v6) feature stays version 6", async () => {
+    const file = new FakeFile();
+    installPicker([file, "a.dwk"]);
+    await useApp.getState().saveWorkspace();
+    expect((JSON.parse(file.content) as { version: number }).version).toBeLessThan(6);
+    useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], hiddenCols: [0] }] });
+    await useApp.getState().saveWorkspace(); // in place
+    expect((JSON.parse(file.content) as { version: number }).version).toBe(6);
   });
 
   it("Save As (Ctrl+Shift+S) always asks, even with a kept handle, and keeps the new one", async () => {
@@ -96,7 +126,7 @@ describe("browser Save in place (File System Access API)", () => {
     await useApp.getState().saveWorkspaceToFile();
     expect(picker).toHaveBeenCalledTimes(2);
     expect(picker.mock.calls[1][0].suggestedName).toBe("a.dwk");
-    useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], name: "later.dat" }] });
+    rename("later.dat");
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledTimes(2);
     expect(two.content).toContain("later.dat");
@@ -104,14 +134,36 @@ describe("browser Save in place (File System Access API)", () => {
   });
 
   it("a cancelled picker neither downloads nor reports a save", async () => {
-    const picker = vi.fn().mockRejectedValue(Object.assign(new Error("x"), { name: "AbortError" }));
-    win.showSaveFilePicker = picker;
+    win.showSaveFilePicker = vi.fn().mockRejectedValue(Object.assign(new Error("x"), { name: "AbortError" }));
     await useApp.getState().saveWorkspace();
     expect(saveBlob).not.toHaveBeenCalled();
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
 
-  it("fails closed when the file was changed outside: it is not overwritten, the picker re-prompts", async () => {
+  it("two saves started together are one write (a held Ctrl+S / double press)", async () => {
+    const file = new FakeFile();
+    const picker = installPicker([file, "a.dwk"]);
+    await useApp.getState().saveWorkspace();
+    const before = file.writes;
+    await Promise.all([useApp.getState().saveWorkspace(), useApp.getState().saveWorkspace(), useApp.getState().saveWorkspace()]);
+    expect(file.writes).toBe(before + 1);
+    expect(picker).toHaveBeenCalledOnce();
+  });
+
+  it("the stamp is refreshed after each write: consecutive saves never cry 'changed outside'", async () => {
+    const file = new FakeFile();
+    const picker = installPicker([file, "a.dwk"]);
+    for (let i = 0; i < 4; i++) {
+      rename(`n${i}.dat`);
+      await useApp.getState().saveWorkspace();
+    }
+    expect(picker).toHaveBeenCalledOnce();
+    expect(file.writes).toBe(4);
+  });
+});
+
+describe("browser Save fails closed", () => {
+  it("file changed outside: not overwritten, picker re-prompts", async () => {
     const file = new FakeFile();
     const fresh = new FakeFile();
     const picker = installPicker([file, "run7.dwk"], [fresh, "run7-copy.dwk"]);
@@ -122,22 +174,101 @@ describe("browser Save in place (File System Access API)", () => {
     expect(picker).toHaveBeenCalledTimes(2);
     expect(fresh.content).toContain("first.dat");
     expect(useApp.getState().status).toContain("run7-copy.dwk");
+    expect(toastText()).toContain("changed outside Quantized");
   });
 
-  it("fails closed when write permission was revoked: nothing written, picker re-prompts", async () => {
+  it("changed outside AND the re-prompt is refused: reports it, downloads under the user's file name", async () => {
+    const file = new FakeFile();
+    win.showSaveFilePicker = vi.fn().mockResolvedValueOnce(file.handle("run7.dwk")).mockRejectedValueOnce(gestureError());
+    await useApp.getState().saveWorkspace();
+    file.externalEdit("SOMEONE ELSE'S WORK");
+    await useApp.getState().saveWorkspace();
+    expect(file.content).toBe("SOMEONE ELSE'S WORK");
+    expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("run7.dwk");
+    expect(toastText()).toContain("changed outside Quantized");
+    expect(useApp.getState().status).toMatch(/saved workspace/);
+  });
+
+  it("permission revoked: nothing written, picker re-prompts", async () => {
     const file = new FakeFile();
     const fresh = new FakeFile();
     const picker = installPicker([file, "run7.dwk"], [fresh, "other.dwk"]);
     await useApp.getState().saveWorkspace();
     const saved = file.content;
     file.permission = "denied";
-    useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], name: "after.dat" }] });
+    rename("after.dat");
     await useApp.getState().saveWorkspace();
     expect(file.content).toBe(saved);
     expect(picker).toHaveBeenCalledTimes(2);
     expect(fresh.content).toContain("after.dat");
   });
 
+  it("a permission request that throws (expired gesture) keeps the handle: no picker, no download, retry works", async () => {
+    const file = new FakeFile();
+    const picker = installPicker([file, "run7.dwk"]);
+    await useApp.getState().saveWorkspace();
+    file.permission = "prompt";
+    file.requestThrows = true;
+    await useApp.getState().saveWorkspace();
+    expect(useApp.getState().status).toMatch(/press Ctrl\+S again/);
+    expect(picker).toHaveBeenCalledOnce();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(hasSaveHandle()).toBe(true);
+    file.permission = "granted";
+    file.requestThrows = false;
+    rename("retry.dat");
+    await useApp.getState().saveWorkspace();
+    expect(file.content).toContain("retry.dat");
+  });
+
+  it("file moved or deleted: not recreated silently, picker re-prompts", async () => {
+    const file = new FakeFile();
+    const fresh = new FakeFile();
+    const picker = installPicker([file, "run7.dwk"], [fresh, "elsewhere.dwk"]);
+    await useApp.getState().saveWorkspace();
+    const writes = file.writes;
+    file.getFileThrows = true;
+    await useApp.getState().saveWorkspace();
+    expect(file.writes).toBe(writes);
+    expect(picker).toHaveBeenCalledTimes(2);
+    expect(toastText()).toContain("moved or deleted");
+  });
+
+  it("a failed write is reported, keeps the previous file and downloads nothing", async () => {
+    const file = new FakeFile();
+    installPicker([file, "run7.dwk"]);
+    await useApp.getState().saveWorkspace();
+    const saved = file.content;
+    file.failWrite = true;
+    rename("lost.dat");
+    await useApp.getState().saveWorkspace();
+    expect(file.content).toBe(saved);
+    expect(useApp.getState().status).toMatch(/save failed — disk full; the previous file was not replaced/);
+    expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it("a write that landed but cannot be verified says so and does not claim nothing changed", async () => {
+    const file = new FakeFile();
+    const fresh = new FakeFile();
+    file.getFileThrowsAfterWrite = true;
+    const picker = installPicker([file, "run7.dwk"], [fresh, "next.dwk"]);
+    await useApp.getState().saveWorkspace();
+    expect(file.content).toContain("first.dat");
+    expect(useApp.getState().status).toMatch(/saved workspace.*could not be re-read.*next save will ask where/);
+    expect(useApp.getState().status).not.toMatch(/not replaced/);
+    await useApp.getState().saveWorkspace(); // the handle was dropped: asks again
+    expect(picker).toHaveBeenCalledTimes(2);
+  });
+
+  it("Save As with a picker refused for lack of a gesture still saves, as a download", async () => {
+    win.showSaveFilePicker = vi.fn().mockRejectedValue(gestureError());
+    await useApp.getState().saveWorkspaceToFile();
+    expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("workspace.dwk");
+    expect(useApp.getState().status).toMatch(/saved workspace/);
+  });
+});
+
+describe("the kept file belongs to one document", () => {
   it("opening another workspace drops the kept handle (it names the OLD file)", async () => {
     const one = new FakeFile();
     const two = new FakeFile();
@@ -148,6 +279,21 @@ describe("browser Save in place (File System Access API)", () => {
     expect(picker).toHaveBeenCalledTimes(2);
     expect(picker.mock.calls[1][0].suggestedName).toBe("opened.dwk");
     expect(one.content).not.toContain("opened");
+  });
+
+  it("Remove all drops it: the next Ctrl+S asks instead of overwriting the old project with new work", async () => {
+    const one = new FakeFile();
+    const two = new FakeFile();
+    const picker = installPicker([one, "A.dwk"], [two, "B.dwk"]);
+    await useApp.getState().saveWorkspace();
+    const projectA = one.content;
+    useApp.getState().clearAll();
+    expect(hasSaveHandle()).toBe(false);
+    useApp.getState().addDataset({ id: "b", name: "unrelated.dat", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } });
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledTimes(2);
+    expect(one.content).toBe(projectA);
+    expect(two.content).toContain("unrelated.dat");
   });
 });
 
@@ -162,7 +308,6 @@ describe("browser Save with no File System Access API (download fallback)", () =
     await useApp.getState().saveWorkspaceToFile();
     expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("Fe3O4_series.dwk");
   });
-
 
   it("Ctrl+S downloads again each time (no handle to reuse)", async () => {
     await useApp.getState().saveWorkspace();

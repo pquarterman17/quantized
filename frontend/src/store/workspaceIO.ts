@@ -339,16 +339,17 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // otherwise the download, named after the opened/saved file.
   const browser = await import("./browserSave");
   const name = get().currentProject?.name ?? null;
-  if (await browser.browserSaveAs(content, name, browserReport(get, all.length))) return;
+  if (await browser.browserSaveAs(content, name, browserReport(get))) return;
   browser.browserDownload(content, name);
   const msg = savedMsg(all.length);
   get().setStatus(msg);
   toast(msg, "ok");
 }
 
-const browserReport = (get: SliceGet, n: number) => ({
+const browserReport = (get: SliceGet) => ({
   setStatus: (m: string) => get().setStatus(m),
-  saved: (file: string) => savedMsg(n, file),
+  saved: (file: string) => savedMsg(get().datasets.length, file),
+  clean: () => get().markProjectClean(),
 });
 
 /** "Save" (Ctrl+S) — P1.2 box 1: write straight to the CURRENT project's
@@ -368,18 +369,10 @@ const browserReport = (get: SliceGet, n: number) => ({
 export async function runSaveWorkspace(get: SliceGet): Promise<void> {
   const project = get().currentProject;
   if (!hasDesktopShell()) {
-    // Browser tab: overwrite the Save As file in place (lib/browserFileHandle.ts
-    // fails closed and re-prompts); no handle yet = Save As.
-    if ((await import("../lib/browserFileHandle")).hasSaveHandle()) {
-      const content = await serializeCurrentWorkspace(get);
-      if (content === null) return;
-      const browser = await import("./browserSave");
-      const name = get().currentProject?.name ?? null;
-      if (await browser.browserSaveInPlace(content, name, browserReport(get, get().datasets.length))) return;
-      browser.browserDownload(content, name);
-      return;
-    }
-    return runSaveWorkspaceToFile(get);
+    // Browser tab: single-flight, overwrite the Save As file in place when it is still
+    // ours (store/browserSave.ts fails closed and re-prompts); no handle yet = Save As.
+    const browser = await import("./browserSave");
+    return browser.quickSave(() => serializeCurrentWorkspace(get), () => runSaveWorkspaceToFile(get), () => get().currentProject?.name ?? null, browserReport(get));
   }
   if (project === null) return runSaveWorkspaceToFile(get);
   // PR I2 (L0.47): quick-save is the ONE write that lands on a KNOWN path

@@ -246,8 +246,11 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       hooks.onEditHeader(range.focus.col);
     } else if (k === "F2") {
       startEdit();
-    } else if (accel && !e.shiftKey && k.toLowerCase() === "q" && hooks.onSetColumnValues) {
-      hooks.onSetColumnValues(range.focus.col);
+    } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && k.toLowerCase() === "q" && hooks.onSetColumnValues) {
+      // Ctrl only, never ⌘Q (quits the app on macOS). Same gate as the column menu:
+      // a re-derived sheet has no Set Column Values, so say why instead.
+      if (readOnly) setStatus(editRefusalNotice(ds));
+      else hooks.onSetColumnValues(range.focus.col);
     } else if (k === "ContextMenu" || (k === "F10" && e.shiftKey)) {
       const box = document.getElementById(cellId(range.focus.pos, range.focus.col))?.getBoundingClientRect();
       hooks.onColumnMenu(range.focus.col, box ? box.left : 0, box ? box.bottom : 0);

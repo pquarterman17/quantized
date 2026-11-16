@@ -10,7 +10,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LoadedWorkspace } from "./workspace";
-import { defaultSaveName, resetBrowserFile } from "./browserFileHandle";
+import { defaultSaveName, hasSaveHandle, resetBrowserFile, saveAsPicked } from "./browserFileHandle";
 import { replaceWorkspace, replaceWorkspaceSafely } from "./openWorkspaceReplace";
 import { toast, useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
@@ -132,11 +132,20 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
     expect(useProjectLock.getState().status).toBe("held-by-me");
   });
 
-  it("a browser-picker open adopts the file's name for the next download and drops a kept Save handle (audit-6 lane O)", () => {
+  it("a browser-picker open adopts the file's name and drops a kept Save handle (audit-6 lane O)", async () => {
     resetBrowserFile();
-    replaceWorkspace(() => useApp.getState(), { ...emptyWorkspace(), fileName: "run9.dwk" });
-    expect(defaultSaveName()).toBe("run9.dwk");
-    resetBrowserFile();
+    const file = { name: "old.dwk", getFile: () => Promise.resolve({ lastModified: 1, size: 1 } as File), createWritable: () => Promise.resolve({ write: () => Promise.resolve(), close: () => Promise.resolve() }) };
+    (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker = () => Promise.resolve(file);
+    try {
+      await saveAsPicked("{}");
+      expect(hasSaveHandle()).toBe(true);
+      replaceWorkspace(() => useApp.getState(), { ...emptyWorkspace(), fileName: "run9.dwk" });
+      expect(hasSaveHandle()).toBe(false);
+      expect(defaultSaveName()).toBe("run9.dwk");
+    } finally {
+      delete (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker;
+      resetBrowserFile();
+    }
   });
 
   it("does nothing to the lock store for a browser-picker open (no native identity)", async () => {
