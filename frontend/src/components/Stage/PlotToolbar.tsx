@@ -58,6 +58,7 @@ import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { useToolGroupFit } from "./plotToolbarOverflow";
 import { usePublishDockClearance } from "./useDockClearance";
 import PlotToolbarGroup from "./PlotToolbarGroup";
+import { useRovingToolbar } from "./useRovingToolbar";
 
 const TURNED_OFF = { disabled: true, disabledReason: TURNED_TOOL_NOTE }; // not available on a turned plot
 
@@ -276,6 +277,7 @@ export default function PlotToolbar({
   ];
 
   const visible = useToolGroupFit(barRef, groups.length, showGroupLabels);
+  const roving = useRovingToolbar(barRef); // one Tab stop, arrows within (UX8-I)
   usePublishDockClearance(barRef); // the plot host starts below the dock (figures audit #15)
   const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g) => [
     { header: g.label },
@@ -295,7 +297,14 @@ export default function PlotToolbar({
   ];
 
   return (
-    <div ref={barRef} className="qzk-glass qzk-float-tools">
+    <div
+      ref={barRef}
+      className="qzk-glass qzk-float-tools"
+      role="toolbar"
+      aria-label="Plot tools"
+      onFocus={roving.onFocus}
+      onKeyDown={roving.onKeyDown}
+    >
       {groups.map((g, i) => (
         <Fragment key={g.label}>
           <PlotToolbarGroup label={g.label} showLabel={showGroupLabels} collapsed={i >= visible}>
