@@ -28,9 +28,23 @@ export const MODEL_FIT_TIME_LIMIT_S = 10;
 export const STRONGEST_PEAKS = 8;
 
 /** Above this many free parameters (or one per 50 points) a fit is likely to
- *  run into the time limit (62 free on a 6474-point XRD scan did). */
-const MAX_FREE = 40;
+ *  run into the time limit (62 free on a 6474-point XRD scan did). The
+ *  default find cap (lib/peakwizard DEFAULT_RECIPE) keeps the default model
+ *  under it: cap × the widest default shape's parameters (pseudo-Voigt: 4)
+ *  plus a linear background (2, when no baseline is subtracted), tested.
+ *
+ *  FOLLOW-UP (UX8-D review): the model fit's cost grows much faster than its
+ *  parameter count. On tests/fixtures/csv_xrd.csv, 12 pseudo-Voigt peaks (48
+ *  free) took 2990 evaluations (821 in the review's smaller comparison
+ *  model), 8.5 s of the 10 s budget on an idle machine; 10 pseudo-Voigt took
+ *  3.6 s and 12 Gaussian 1.7 s. Why the evaluations blow up (the eta
+ *  directions? overlapping broad peaks?) is not yet understood; the deadline
+ *  stays as it is. */
+export const MAX_FREE = 40;
 const POINTS_PER_FREE = 50;
+
+/** Free parameters per peak of each wizard shape the defaults pick. */
+export const DEFAULT_SHAPE_PARAMS = { Gaussian: 3, "Pseudo-Voigt": 4 } as const;
 
 function median(v: number[]): number {
   const s = [...v].sort((a, b) => a - b);
@@ -85,16 +99,29 @@ export function loadedRecipe(r: PeakRecipe): PeakRecipe {
   return r.fit.background === null ? { ...r, fit: { ...r.fit, background: backgroundFromDegree(r.model.bgDegree) } } : r;
 }
 
-/** XRD / Raman evidence in a name, an axis label or a unit. */
-const XRD_RAMAN = /(^|[^a-z])xrd([^a-z]|$)|x-?ray diffr|2\s*θ|2\s*-?theta|two.?theta|raman/i;
+/** The prominence floor the find actually applies, as a fraction of the
+ *  tallest peak: a 0 in the recipe is not sent, so the route's 0.02 applies,
+ *  and the sensitivity moves it (calc/peaks.py `find_peaks_robust`: high
+ *  caps it at 0.005, low raises it to at least 0.05). */
+export function prominenceFloor(find: PeakRecipe["find"]): number {
+  const p = find.min_prominence > 0 ? find.min_prominence : 0.02;
+  if (find.sensitivity === "high") return Math.min(p, 0.005);
+  if (find.sensitivity === "low") return Math.max(p, 0.05);
+  return p;
+}
+
+/** XRD / Raman evidence in a name, an axis label or a unit: "xrd" as its own
+ *  token or as pxrd / hrxrd / gixrd; "raman" as a word (never Ramanathan;
+ *  `\b` would miss "Raman_Si", "_" being a word character). */
+const XRD_RAMAN = /(^|[^a-z]|p|hr|gi)xrd([^a-z]|$)|x-?ray diffr|2\s*θ|2\s*-?theta|two.?theta|(^|[^a-z])raman([^a-z]|$)/i;
 
 /** The peak shape step ③ starts from on this dataset: pseudo-Voigt for XRD
- *  powder and spectroscopy (Raman) techniques, Gaussian otherwise. A plain
+ *  powder and Raman, Gaussian otherwise -- including the other
+ *  spectroscopies (IR, UV-Vis) the "spectroscopy" tag also covers. A plain
  *  .xy / .csv / .txt import is tagged generic, so the dataset's name and its
- *  plotted X label and unit are read for the same evidence. */
+ *  plotted X label and unit are read for the evidence. */
 export function defaultPeakShape(ds: Dataset, xKey: number | null): "Pseudo-Voigt" | "Gaussian" {
-  const t = techniqueOf(ds);
-  if (t === "xrd.powder" || t === "spectroscopy") return "Pseudo-Voigt";
+  if (techniqueOf(ds) === "xrd.powder") return "Pseudo-Voigt";
   const d = ds.data;
   const meta = d.metadata ?? {};
   const x = xKey === null

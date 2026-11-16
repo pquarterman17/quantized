@@ -110,7 +110,7 @@ export default function CurveFitHeader({ modelPicker, range, fit }: CurveFitHead
           </span>
         </div>
       )}
-      {fit && range}
+      {range}
       {fit && (
         // Roving tablist, AUTOMATIC activation: every panel stays mounted (a
         // running batch or an open report survives a tab switch), so it is cheap.

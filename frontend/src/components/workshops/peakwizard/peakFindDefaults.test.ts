@@ -3,8 +3,9 @@
 // On the audit's synthetic pattern (6 Lorentzian peaks on a decaying
 // background, Poisson counts) the old defaults -- SNR 3, no prominence floor,
 // up to 20 peaks -- marked 14 noise points at 10-27° (30-90 counts, 4
-// samples wide); 3 % of the tallest peak as a true floor and a cap of 12
-// keep the 6 real ones (measured against the real route: 20 -> 6). The
+// samples wide); 3 % of the tallest peak as a true floor keeps the 6 real
+// ones (measured against the real route: 20 -> 6). The cap keeps the default
+// model inside the fit's free-parameter budget (12 pV hit the time limit). The
 // end-to-end check on that file is e2e/specs/fit-peak-defaults.spec.ts.
 
 import { act, renderHook } from "@testing-library/react";
@@ -13,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findPeaks } from "../../../lib/api/peaks";
 import { DEFAULT_RECIPE } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
-import { defaultPeakShape } from "./peakDefaults";
+import { DEFAULT_SHAPE_PARAMS, defaultPeakShape, heavyModel, MAX_FREE, prominenceFloor } from "./peakDefaults";
 import { recipeFind } from "./recipeSteps";
 import { useAutoShape } from "./usePeakDefaults";
 
@@ -22,14 +23,30 @@ vi.mock("../../../lib/api/peaks", () => ({ findPeaks: vi.fn(async () => ({ peaks
 beforeEach(() => vi.clearAllMocks());
 
 describe("adaptive find defaults", () => {
-  it("are a 3 % prominence floor over SNR 3, at most 12 peaks", () => {
-    expect(DEFAULT_RECIPE.find).toEqual({ snr_threshold: 3, min_prominence: 0.03, max_peaks: 12, strict_prominence: true });
+  it("are a 3 % prominence floor over SNR 3, at most 9 peaks", () => {
+    expect(DEFAULT_RECIPE.find).toEqual({ snr_threshold: 3, min_prominence: 0.03, max_peaks: 9, strict_prominence: true });
+  });
+
+  it("cap the default model inside MAX_FREE: widest default shape + a linear background", () => {
+    const widest = Math.max(...Object.values(DEFAULT_SHAPE_PARAMS));
+    expect(DEFAULT_RECIPE.find.max_peaks * widest + 2).toBeLessThanOrEqual(MAX_FREE);
+    expect(heavyModel(DEFAULT_RECIPE.find.max_peaks * widest + 2, 6474)).toBe(false); // csv_xrd's points
+  });
+
+  it("state the floor the route applies (step ② note), per sensitivity and for a 0", () => {
+    const f = DEFAULT_RECIPE.find;
+    expect(prominenceFloor(f)).toBe(0.03);
+    expect(prominenceFloor({ ...f, sensitivity: "medium" })).toBe(0.03);
+    expect(prominenceFloor({ ...f, sensitivity: "high" })).toBe(0.005);
+    expect(prominenceFloor({ ...f, sensitivity: "low" })).toBe(0.05);
+    expect(prominenceFloor({ ...f, min_prominence: 0 })).toBe(0.02); // not sent: the route's default
+    expect(prominenceFloor({ ...f, min_prominence: 0.1, sensitivity: "low" })).toBe(0.1);
   });
 
   it("go on the wire as the route's strict prominence", async () => {
     await recipeFind([1, 2, 3], [4, 5, 6], DEFAULT_RECIPE.find);
     expect(findPeaks).toHaveBeenCalledWith({
-      x: [1, 2, 3], y: [4, 5, 6], snr_threshold: 3, min_prominence: 0.03, max_peaks: 12, strict_prominence: true,
+      x: [1, 2, 3], y: [4, 5, 6], snr_threshold: 3, min_prominence: 0.03, max_peaks: 9, strict_prominence: true,
     });
   });
 
@@ -49,7 +66,9 @@ const ds = (name: string, technique: string, x = "Col1", unit = ""): Dataset =>
 describe("defaultPeakShape (step ③ starts from pseudo-Voigt on XRD / Raman)", () => {
   it("reads the technique tag", () => {
     expect(defaultPeakShape(ds("scan", "xrd.powder"), null)).toBe("Pseudo-Voigt");
-    expect(defaultPeakShape(ds("spectrum", "spectroscopy"), null)).toBe("Pseudo-Voigt");
+    // Spectroscopy is IR / UV-Vis too: pseudo-Voigt only with Raman evidence.
+    expect(defaultPeakShape(ds("spectrum", "spectroscopy"), null)).toBe("Gaussian");
+    expect(defaultPeakShape(ds("spectrum", "spectroscopy", "Raman shift", "cm-1"), null)).toBe("Pseudo-Voigt");
     expect(defaultPeakShape(ds("loop", "magnetometry.mvsh"), null)).toBe("Gaussian");
   });
 
@@ -65,6 +84,14 @@ describe("defaultPeakShape (step ③ starts from pseudo-Voigt on XRD / Raman)", 
   it("is Gaussian without evidence -- 'xrd' must be a word, not a substring", () => {
     expect(defaultPeakShape(ds("MT_ZFC_FC", "generic", "Temperature", "K"), null)).toBe("Gaussian");
     expect(defaultPeakShape(ds("hexrdump", "generic"), null)).toBe("Gaussian");
+    expect(defaultPeakShape(ds("Ramanathan run 3", "generic"), null)).toBe("Gaussian");
+    expect(defaultPeakShape(ds("FTIR film", "spectroscopy", "Wavenumber", "cm-1"), null)).toBe("Gaussian");
+  });
+
+  it("knows the XRD variants (pxrd, hrxrd, gixrd)", () => {
+    for (const name of ["sample_pxrd", "HRXRD 004", "gixrd-0.5deg"]) {
+      expect(defaultPeakShape(ds(name, "generic"), null)).toBe("Pseudo-Voigt");
+    }
   });
 
   it("reads the plotted X column's label when one is picked", () => {

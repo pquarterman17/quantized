@@ -15,6 +15,7 @@ import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselin
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { magXAxis } from "../../../lib/magDataKind";
+import { armRegionPick, regionPickOwner, releaseRegionPick } from "../../../lib/regionPickOwner";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -237,14 +238,18 @@ export function useBaseline(): BaselineState {
   // when present — otherwise an x-only re-drag after an earlier box pick
   // would silently keep masking against the stale y-box.
   useEffect(() => {
-    if (!regionPicked) return;
+    if (!regionPicked || regionPickOwner() === "curvefit") return; // Curve Fit's drag, not ours
+    releaseRegionPick("baseline");
     const [xLo, xHi] = regionPicked.x;
     const [yLo, yHi] = regionPicked.yRange ?? [Number.NaN, Number.NaN];
     setParamsState((p) => ({ ...p, regionXMin: xLo, regionXMax: xHi, regionYMin: yLo, regionYMax: yHi }));
     setRegionPicked(null);
   }, [regionPicked, setRegionPicked]);
 
-  const pickRegion = (): void => setPlotTool("region");
+  const pickRegion = (): void => {
+    armRegionPick("baseline"); // only Baseline takes this drag
+    setPlotTool("region");
+  };
 
   async function compute(): Promise<void> {
     if (!active) return;

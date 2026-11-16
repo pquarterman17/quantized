@@ -5,8 +5,9 @@
 // a "—" whose tooltip says WHY (./modelFitReasons).
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
-import { fmtValueErr, roundToError, sigFigs, timesTen } from "../../../lib/fitValueFormat";
+import { sigFigs } from "../../../lib/fitValueFormat";
 import { fmtNum } from "../../../lib/format";
+import { valueErrCells } from "../../../lib/valueErrCells";
 import { DataTable } from "../../primitives/DataTable";
 import { StatusDot } from "../../primitives";
 import { derivedErrorReason, metricRows, paramErrorReason, type DerivedKey } from "./modelFitReasons";
@@ -19,21 +20,8 @@ const SHAPE_LABEL: Record<string, string> = {
   pearson_vii: "PVII", fano: "Fano", doniach_sunjic: "DS",
 };
 
-/** A value and its standard error as two display strings, by the SAME rule
- *  Curve Fit's "Value ± SE" uses (lib/fitValueFormat.ts: the error to its
- *  PDG significant figures, the value to the same decimal place, a shared
- *  ×10ⁿ), so the two analysis panels never disagree on one number (UX audit
- *  8 #5). With no usable error the value alone at four figures, as there. */
-export function valueErrCells(value: number | null, err: number | null): { value: string; error: string | null } {
-  const e = err !== null && Number.isFinite(err) ? sigFigs(err, 2) : null;
-  if (value === null || !Number.isFinite(value)) return { value: "—", error: e };
-  const r = err !== null ? roundToError(value, err) : null;
-  if (!r) return { value: sigFigs(value, 4), error: e };
-  const t = r.mag === 0 ? "" : timesTen(r.mag);
-  return { value: r.value + t, error: r.error + t };
-}
-
-/** Value over its error. `stacked` (the per-peak table) puts the error on a
+/** Value over its error (lib/valueErrCells: Curve Fit's rounding, shared by
+ *  every peak table). `stacked` (the per-peak table) puts the error on a
  *  second line, so six columns fit the docked 420 px window without a
  *  sideways scroll (fitting live check: height and area were cut off); inline
  *  (the parameter table) it is Curve Fit's one-line "2.33 ± 0.12" /
@@ -44,9 +32,7 @@ function Pm({ value, err, reason, stacked = false }: {
 }) {
   const c = valueErrCells(value, err);
   const tip = c.error !== null ? `± ${fmtNum(err)}` : (reason ?? "no error reported");
-  if (!stacked && value !== null && err !== null && roundToError(value, err)) {
-    return <span style={{ whiteSpace: "nowrap" }} title={tip}>{fmtValueErr(value, err)}</span>;
-  }
+  if (!stacked && c.inline !== null) return <span style={{ whiteSpace: "nowrap" }} title={tip}>{c.inline}</span>;
   return (
     <span style={{ whiteSpace: "nowrap", display: stacked ? "inline-flex" : undefined, flexDirection: "column", alignItems: "flex-end" }}>
       <span>{c.value}</span>{" "}

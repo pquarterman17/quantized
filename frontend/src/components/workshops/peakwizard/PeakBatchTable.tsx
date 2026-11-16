@@ -10,6 +10,7 @@
 import type { ReactNode } from "react";
 
 import { fmtNum } from "../../../lib/format";
+import { valueErrCells } from "../../../lib/valueErrCells";
 import { DERIVED, type BatchSort, type BatchTableRow, type SortKey, type ValueErr } from "./peakBatchRows";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -36,11 +37,14 @@ const COLUMNS: { key: SortKey | null; label: string }[] = [
 
 function Pm({ c }: { c: ValueErr | null }): ReactNode {
   if (!c) return <span style={faint}>—</span>;
+  // Curve Fit's value ± error rounding, as every peak table (lib/valueErrCells).
+  const cells = valueErrCells(c.value, c.err);
+  if (cells.inline !== null) return <span style={mono}>{cells.inline}</span>;
   return (
     <span style={mono}>
-      {fmtNum(c.value)}{" "}
-      {c.err !== null ? (
-        <span style={faint}>± {fmtNum(c.err)}</span>
+      {cells.value}{" "}
+      {cells.error !== null ? (
+        <span style={faint}>± {cells.error}</span>
       ) : (
         <span style={faint} title={c.reason ?? "no error reported"} data-no-error="">
           ± —

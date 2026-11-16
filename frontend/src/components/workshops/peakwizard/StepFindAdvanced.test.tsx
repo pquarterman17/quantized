@@ -69,7 +69,7 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
     expect(findMock.mock.calls[1]![0]).toEqual(
       expect.objectContaining({
         snr_threshold: 3, // the wizard's recipe defaults, not the route's 5 / 50
-        max_peaks: 12,
+        max_peaks: 9,
         min_prominence: 0.03,
         strict_prominence: true,
         max_width_deg: 0.5,
@@ -84,7 +84,7 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(loadRecipes()).toHaveLength(1));
     expect(loadRecipes()[0]!.find).toEqual(
-      expect.objectContaining({ snr_threshold: 3, max_peaks: 12, max_width_deg: 0.5, min_separation: 0.2, bg_method: "polynomial" }),
+      expect.objectContaining({ snr_threshold: 3, max_peaks: 9, max_width_deg: 0.5, min_separation: 0.2, bg_method: "polynomial" }),
     );
   });
 
@@ -105,7 +105,7 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Defaults" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Defaults" }));
     expect(findMock.mock.calls.at(-1)![0]).toEqual(
-      expect.objectContaining({ snr_threshold: 3, min_prominence: 0.03, max_peaks: 12, strict_prominence: true }),
+      expect.objectContaining({ snr_threshold: 3, min_prominence: 0.03, max_peaks: 9, strict_prominence: true }),
     );
   });
 });

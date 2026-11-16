@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitModel } from "../../../lib/api";
 import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
+import { armRegionPick } from "../../../lib/regionPickOwner";
 import type { Dataset } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
@@ -109,6 +110,7 @@ describe("Curve Fit range (UX8-D)", () => {
       useApp.getState().setPlotTool("zoom");
     });
     expect(useApp.getState().regionPicked).toBeNull(); // consumed here
+    expect(useApp.getState().plotTool).toBe("pointer"); // back to the user's tool
     expect(screen.getByTestId("cf-fit-range")).toHaveTextContent("Fit range 160 – 240 (dragged)");
     await fit();
     expect(fittedX()).toEqual(X.filter((x) => x >= 160 && x <= 240));
@@ -117,6 +119,28 @@ describe("Curve Fit range (UX8-D)", () => {
     expect(screen.queryByTestId("cf-fit-range")).toBeNull();
     await fit();
     expect(fittedX()).toEqual(X);
+  });
+
+  it("keeps following the zoom in custom-equation mode (that fit reads the same range)", async () => {
+    render(<CurveFitPanel />);
+    await screen.findAllByRole("option", { name: "Linear" });
+    fireEvent.change(screen.getByRole("combobox", { name: /model/i }), { target: { value: "custom:" } });
+    act(() => useApp.setState({ xLim: [150, 250] }));
+    expect(await screen.findByTestId("cf-fit-range")).toHaveTextContent("Fit range 150 – 250 (visible x range)");
+    act(() => useApp.setState({ xLim: null }));
+    expect(screen.queryByTestId("cf-fit-range")).toBeNull();
+    expect(useAnalysisSelection.getState().selection?.items[0]?.range).toBeNull();
+  });
+
+  it("never takes a drag the Baseline workshop armed", async () => {
+    render(<CurveFitPanel />);
+    await screen.findAllByRole("option", { name: /^Lorentzian/ });
+    fireEvent.change(screen.getByRole("combobox", { name: /model/i }), { target: { value: "Lorentzian" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Fit range: drag on plot" }));
+    act(() => armRegionPick("baseline")); // Baseline's "Fit from region" re-armed the tool
+    act(() => useApp.getState().setRegionPicked({ x: [160, 240] }));
+    expect(useApp.getState().regionPicked).toEqual({ x: [160, 240] }); // left for Baseline
+    expect(screen.queryByTestId("cf-fit-range")).toBeNull();
   });
 
   it("Cancel goes back to the tool the user had and changes nothing", async () => {

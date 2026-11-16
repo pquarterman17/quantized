@@ -15,15 +15,15 @@
 //    selected rows) or set by a fit template is left alone unless the user
 //    drags a new one.
 //
-// The Baseline workshop listens to the same rubber-band; a drag armed here
-// lands here (`armed`), and is consumed before Baseline's own effect only
-// when that panel is closed -- the two are not meant to be armed together.
+// The Baseline workshop arms the same rubber-band; each panel tags its arm
+// (lib/regionPickOwner) and takes only its own drag.
 
 import { useEffect, useMemo, useState } from "react";
 
 import type { AnalysisRangeSelection } from "../../../lib/analysisSelection";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { sigFigs } from "../../../lib/fitValueFormat";
+import { armRegionPick, regionPickOwner, releaseRegionPick } from "../../../lib/regionPickOwner";
 import type { Dataset } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
@@ -69,16 +69,24 @@ export default function FitRangeBar({ active, offer, fitted }: {
   const extent = useMemo(() => (active ? finiteExtent(fullPlottedX(active.data, xKey)) : null), [active, xKey]);
   const view = active && active.id === activeId ? zoomedRange(xLim, extent) : null;
 
-  // An armed drag lands as this dataset's range; leaving the tool disarms.
+  // An armed drag lands as this dataset's range -- only a drag armed HERE
+  // (lib/regionPickOwner: Baseline arms the same tool) -- and the plot goes
+  // back to the tool the user had; leaving the tool without a drag disarms.
   useEffect(() => {
     if (!armed) return;
-    if (regionPicked && id) {
+    if (regionPicked && id && regionPickOwner() === "curvefit") {
       const [a, b] = regionPicked.x;
       setDragged({ id, lo: Math.min(a, b), hi: Math.max(a, b) });
       setRegionPicked(null);
       setArmed(null);
-    } else if (plotTool !== "region") setArmed(null);
-  }, [armed, regionPicked, plotTool, id, setRegionPicked]);
+      setPlotTool(armed.back);
+    } else if (plotTool !== "region") {
+      releaseRegionPick("curvefit");
+      setArmed(null);
+    }
+  }, [armed, regionPicked, plotTool, id, setRegionPicked, setPlotTool]);
+  // Closing the panel mid-drag leaves no tag behind.
+  useEffect(() => () => releaseRegionPick("curvefit"), []);
 
   const mine = dragged && dragged.id === id ? dragged : null;
   const cur = item?.range ?? null;
@@ -99,6 +107,7 @@ export default function FitRangeBar({ active, offer, fitted }: {
 
   if (!active || !item) return null;
   const drag = () => {
+    armRegionPick("curvefit");
     setArmed({ back: plotTool === "region" ? "zoom" : plotTool });
     setPlotTool("region");
   };

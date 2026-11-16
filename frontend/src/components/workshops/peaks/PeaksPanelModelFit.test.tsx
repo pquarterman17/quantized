@@ -1,5 +1,6 @@
 // The Peaks workshop showing a table the Peak analyzer's model fit published
-// (audit P2.1 uncertainties): each value reads "value ± error", a null error
+// (audit P2.1 uncertainties): each value reads "value ± error" (Curve Fit's
+// rounding, lib/valueErrCells -- UX8-D), a null error
 // reads "± —" with its saved reason on hover, the header names the producer,
 // and a legacy table (no errors measured) keeps rendering bare values.
 
@@ -55,16 +56,16 @@ describe("PeaksPanel — a published model-fit table", () => {
     const rows = within(grid).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
     const cells = (r: number) => within(rows[r]).getAllByRole("cell");
-    expect(cells(0)[1]).toHaveTextContent("2.01 ± 0.004"); // centre
-    expect(cells(0)[2]).toHaveTextContent("5.2 ± 0.05"); // height
-    expect(cells(0)[3]).toHaveTextContent("0.81 ± 0.01"); // FWHM
+    expect(cells(0)[1]).toHaveTextContent("2.010 ± 0.004"); // centre
+    expect(cells(0)[2]).toHaveTextContent("5.20 ± 0.05"); // height
+    expect(cells(0)[3]).toHaveTextContent("0.810 ± 0.010"); // FWHM
     // p0's area: no error (its eta is on a bound) — a dash that says why
     const dash = cells(0)[4].querySelector("[data-no-error]");
     expect(dash).toHaveTextContent("± —");
     expect(dash?.getAttribute("title")).toMatch(/on a bound/);
     // p1's centre was fixed
     expect(cells(1)[1].querySelector("[data-no-error]")?.getAttribute("title")).toMatch(/^fixed/);
-    expect(cells(1)[4]).toHaveTextContent("1.81 ± 0.03");
+    expect(cells(1)[4]).toHaveTextContent("1.810 ± 0.030");
     expect(screen.getByText(/Peak analyzer model fit/)).toBeInTheDocument();
   });
 
@@ -83,7 +84,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     }, legacy);
     act(() => publishPeakTable("d1", published)); // same peak count as the old table
     const fresh = await screen.findByRole("table", { name: "fitted peaks" });
-    await waitFor(() => expect(within(fresh).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    await waitFor(() => expect(within(fresh).getAllByRole("cell")[1]).toHaveTextContent("2.010 ± 0.004"));
     expect(within(fresh).getAllByRole("row")[2]).toHaveTextContent("4");
   });
 
@@ -107,7 +108,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     const now = screen.getByRole("table", { name: "fitted peaks" });
     // The cells read the durable table: the new value WITH its error, never
     // the old fit's 7 beside the new row's error.
-    expect(within(now).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004");
+    expect(within(now).getAllByRole("cell")[1]).toHaveTextContent("2.010 ± 0.004");
     expect(now).not.toHaveTextContent(/\b7\b/);
   });
 
@@ -117,7 +118,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     }, null);
     show({ ...DS, peakTable: table });
     const grid = await screen.findByRole("table", { name: "fitted peaks" });
-    await waitFor(() => expect(within(grid).getAllByRole("cell")[3]).toHaveTextContent("0.81 ± 0.01"));
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[3]).toHaveTextContent("0.810 ± 0.010"));
     act(() => useApp.setState({ resolveDataset: () => new Promise<undefined>(() => {}) }));
     act(() => void editPeak("d1", table.peaks[0].id, { fwhm: 0.9 }));
     const fwhm = within(screen.getByRole("table", { name: "fitted peaks" })).getAllByRole("cell")[3];
@@ -210,7 +211,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     }, null);
     show({ ...DS, peakTable: table });
     const grid = await screen.findByRole("table", { name: "fitted peaks" });
-    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.010 ± 0.004"));
     fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
     // Wait on STATE (the report landing in the store), not on the mock.
     await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
@@ -234,7 +235,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     }, null);
     show({ ...DS, peakTable: table });
     const grid = await screen.findByRole("table", { name: "fitted peaks" });
-    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.010 ± 0.004"));
     act(() => setPeakExcluded("d1", table.peaks[0].id, true));
     // Hold the panel's refresh so its local fit copy still has BOTH peaks
     // after the store drops one: the rows are then unpaired.
@@ -277,7 +278,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     }, null);
     show({ ...xrd, peakTable: table });
     const grid = await screen.findByRole("table", { name: "fitted peaks" });
-    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.010 ± 0.004"));
     fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
     await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
     expect(vi.mocked(reportEmit).mock.calls[0][0].result).toMatchObject({ xUnit: "deg", yUnit: "cps" });

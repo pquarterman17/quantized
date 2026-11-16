@@ -13,6 +13,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select, StatusDot } from "../../primitives";
 import ModelFitStep from "./ModelFitStep";
 import ModelSetupView, { EngineSelect } from "./ModelSetupView";
+import { prominenceFloor } from "./peakDefaults";
 import StepFindAdvanced from "./StepFindAdvanced";
 import { clamped, faint, Num } from "./stepFields";
 import type { PeakWizardState } from "./usePeakWizard";
@@ -46,10 +47,11 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
         </Button>
       </div>
       {w.recipe.find.strict_prominence && (
-        // The adaptive find (UX8-D, lib/peakwizard DEFAULT_RECIPE), said plainly.
-        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
-          Peaks must clear the noise and stand out by at least {+(w.recipe.find.min_prominence * 100).toPrecision(3)} % of the
-          tallest peak (Advanced ▸ Min prominence).
+        // The adaptive find (UX8-D, lib/peakwizard DEFAULT_RECIPE), said plainly:
+        // the floor the route applies, after the sensitivity (./peakDefaults).
+        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }} data-testid="peak-find-floor">
+          Peaks must stand out by at least 4× the noise and {+(prominenceFloor(w.recipe.find) * 100).toPrecision(3)} % of the
+          tallest peak (Advanced ▸ Min prominence, Sensitivity).
         </div>
       )}
       {w.findError && (

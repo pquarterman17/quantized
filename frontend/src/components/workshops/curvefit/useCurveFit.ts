@@ -39,7 +39,7 @@ import { exportCornerPlot } from "./curveFitCornerPlot";
 import { parseFitStarts } from "./fitStarts";
 import { weightingNow, weightingOf } from "./fitWeighting";
 import { byColumnOptions } from "./byColumnOptions";
-import { fittedStatus } from "./curveFitStatus";
+import { fittedStatus, isLinearFamily } from "./curveFitStatus";
 import { followRefits } from "../../../store/curveFitRefit";
 import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
 import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
@@ -412,7 +412,7 @@ export function useCurveFit(): CurveFitState {
         publishFitAnalysisResult(ds.id);
         // Say so: the status line otherwise kept its previous message (after
         // a template, "press Fit to run it" — with the fit already done).
-        useApp.getState().setStatus(...fittedStatus(modelName, ds.name, r)); // warn-tone when poor (UX8-D)
+        useApp.getState().setStatus(...fittedStatus(modelName, ds.name, r, { linear: isLinearFamily(model?.category), weights: done.fitData?.weights })); // warn when poor (UX8-D)
         retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
