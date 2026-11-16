@@ -52,7 +52,7 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
       )}
       <StepFindAdvanced w={w} />
       {w.candidates.length > 0 && (
-        <div style={{ marginTop: 8, maxHeight: 180, overflowY: "auto" }}>
+        <div style={{ marginTop: 8, maxHeight: "var(--qz-peak-table-h, 180px)", overflowY: "auto" }}>
           <table className="qz-table">
             <thead>
               <tr>
@@ -173,7 +173,7 @@ export function StepFitReview({ w }: { w: PeakWizardState }) {
               </span>
             }
           />
-          <div style={{ marginTop: 6, maxHeight: 200, overflowY: "auto" }}>
+          <div style={{ marginTop: 6, maxHeight: "var(--qz-peak-table-h, 200px)", overflowY: "auto" }}>
             <DataTable
               columns={["#", "center", "FWHM", "height", "area"]}
               rows={r.peaks.map((p, i) => [
@@ -224,7 +224,7 @@ export function StepReport({ w }: { w: PeakWizardState }) {
         </div>
       )}
       {mode === "integrate" && w.integrateResult && (
-        <div style={{ marginTop: 8, maxHeight: 180, overflowY: "auto" }}>
+        <div style={{ marginTop: 8, maxHeight: "var(--qz-peak-table-h, 180px)", overflowY: "auto" }}>
           <DataTable
             columns={["region", "area", "%", "centroid", "FWHM"]}
             rows={w.integrateResult.peaks.map((p) => [

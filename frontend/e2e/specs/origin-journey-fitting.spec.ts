@@ -113,6 +113,8 @@ test.describe("Origin journey: fitting and peaks", () => {
     await runPaletteCommand(page, "Curve fit…");
     const panel = curveFit(page);
     await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "Linear" });
+    // Batch lives under the Advanced tab (UX-F).
+    await panel.getByRole("tab", { name: "Advanced" }).click();
     const toggle = panel.getByRole("button", { name: /Batch · 3 worksheets/ });
     await toggle.scrollIntoViewIfNeeded();
     await toggle.click();
