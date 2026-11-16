@@ -34,7 +34,7 @@ export default function TabulatePanel() {
   return (
     <ToolWindow id="tabulate" title="Tabulate" width={620} onClose={() => setOpen(false)}>
       {!t.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to summarize.
         </div>
       ) : (

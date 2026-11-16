@@ -32,7 +32,7 @@ export default function PackAttention({ flagged, include, onIncludeChange }: Pro
           </li>
         ))}
       </ul>
-      <p className="qzk-ds-meta qzk-msg">Flagged files are left out of the bundle unless you include them.</p>
+      <p className="qzk-helptext qzk-msg">Flagged files are left out of the bundle unless you include them.</p>
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <input type="checkbox" checked={include} onChange={(e) => onIncludeChange(e.target.checked)} />
         Include flagged files

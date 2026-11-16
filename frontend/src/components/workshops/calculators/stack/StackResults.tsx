@@ -88,7 +88,7 @@ export default function StackResults({ result }: { result: StackResult }) {
             </tbody>
           </table>
         </div>
-        <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+        <div className="qzk-helptext" style={{ marginTop: 6 }}>
           Q = 2π/d, as in the RSM workshop. A coherent layer shares the substrate&apos;s Qx; a relaxed one sits at
           its own. “–” means out of reach at this λ or not reachable in that geometry.
         </div>

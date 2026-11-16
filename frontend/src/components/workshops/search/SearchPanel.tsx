@@ -112,7 +112,7 @@ export default function SearchPanel() {
         onChange={setQuery}
       />
       {query.trim() === "" ? (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 8, color: "var(--text-faint)" }}>
           Searches every dataset — including columns, notes and text cells inside
           datasets you do not have open.
         </div>

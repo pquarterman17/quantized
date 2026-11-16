@@ -250,7 +250,7 @@ describe("Graph Builder step mark UI", () => {
       marks: ["scatter", "line", "step"],
     });
     render(<GraphBuilderPanel />);
-    expect(screen.getByText("▤ step")).toBeInTheDocument();
+    expect(screen.getByText("⊓ step")).toBeInTheDocument();
   });
 
   it("offers the dataset's own X in the X well only, assigned as its negative channel", () => {

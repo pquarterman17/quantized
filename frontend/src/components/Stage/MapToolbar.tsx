@@ -342,7 +342,7 @@ function Picker({
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title={title}>
       {label}
-      <select aria-label={name} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className="qz-select" aria-label={name} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => (
           <option key={String(o.v)} value={o.v}>
             {o.text}

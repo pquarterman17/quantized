@@ -92,7 +92,7 @@ function Preview({ m }: { m: MetaFactorsState }) {
       >
         {m.busy ? "Applying…" : `Apply ${rows.length} change${rows.length === 1 ? "" : "s"}`}
       </Button>
-      <div className="qzk-ds-meta" style={faint}>
+      <div className="qzk-helptext" style={faint}>
         Every original value is kept in the metadata_cleanup log; Ctrl+Z undoes the whole apply.
       </div>
     </>
@@ -106,7 +106,7 @@ export default function CleanupSection({ m }: { m: MetaFactorsState }) {
   const [trim, setTrim] = useState(true);
   const [letterCase, setLetterCase] = useState<LetterCase>("keep");
   const [units, setUnits] = useState(false);
-  if (!m.picked.length) return <div className="qzk-ds-meta" style={{ ...gap, ...faint }}>Tick at least one dataset.</div>;
+  if (!m.picked.length) return <div className="qzk-helptext" style={{ ...gap, ...faint }}>Tick at least one dataset.</div>;
 
   const tickedPaths = ticked.flatMap((id) => { const p = m.pathFromId(id); return p ? [p] : []; });
   const suggested = tickedPaths.find((p) => p.length === 1)?.[0] ?? tickedPaths[0]?.[tickedPaths[0].length - 1] ?? "";

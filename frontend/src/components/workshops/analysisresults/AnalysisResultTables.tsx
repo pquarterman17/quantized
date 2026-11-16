@@ -57,7 +57,7 @@ export default function AnalysisResultTables({ result, onOpen, onExport }: {
   if (!selected) return <p className="qz-analysis-empty">No output tables were recorded for this result.</p>;
   return <div className="qz-analysis-table-view">
     <div className="qz-analysis-subtoolbar">
-      {refs.length > 1 && <label>Table <select value={selected.datasetId} onChange={(event) => setSelectedId(event.target.value)}>
+      {refs.length > 1 && <label>Table <select className="qz-select" value={selected.datasetId} onChange={(event) => setSelectedId(event.target.value)}>
         {refs.map((ref) => <option key={ref.datasetId} value={ref.datasetId}>{ref.label}</option>)}
       </select></label>}
       <Button size="sm" disabled={!output} onClick={() => output && onOpen(output.id)}>Open worksheet</Button>

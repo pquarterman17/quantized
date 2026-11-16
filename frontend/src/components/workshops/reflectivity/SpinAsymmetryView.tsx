@@ -43,7 +43,7 @@ export default function SpinAsymmetryView() {
   const s = useSpinAsymmetry();
   return (
     <div style={{ marginTop: 12 }}>
-      <div className="qzk-ds-meta" style={{ ...faint, marginTop: 0 }}>
+      <div className="qzk-helptext" style={{ ...faint, marginTop: 0 }}>
         SA = (R++ − R−−)/(R++ + R−−) on one shared Q grid.
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", marginTop: 8, alignItems: "center" }}>

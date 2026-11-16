@@ -39,7 +39,6 @@ export default function DistributionLevelSection({ result }: { result: Distribut
           background: "none",
           border: "none",
           padding: 0,
-          cursor: "pointer",
           display: "flex",
           alignItems: "center",
           gap: 6,

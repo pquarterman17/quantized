@@ -20,7 +20,7 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
 
   if (!model) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
         Pick a model to fit globally.
       </div>
     );
@@ -123,7 +123,7 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
           {s.error}
         </div>
       )}
-      <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         Global fits run unweighted over each series' included rows.
       </div>
       <DatasetCompareResult comparison={s.comparison} />

@@ -37,7 +37,7 @@ export default function SimsPreviewPlot({ data, offsets }: { data: DataStruct; o
   const series = useMemo(() => data.labels.map((_, c) => logPairs(data, c, offsets?.[c] ?? 0)), [data, offsets]);
   const all = series.flat();
   if (!all.length) {
-    return <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>No positive values to plot on a log axis.</div>;
+    return <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>No positive values to plot on a log axis.</div>;
   }
   const xr = xExtent(data.time) ?? [0, 1];
   const [x0, x1] = xr[0] === xr[1] ? [xr[0] - 1, xr[1] + 1] : xr;

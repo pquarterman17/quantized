@@ -93,7 +93,7 @@ export default function ReflFitView({ fit, blocked = null }: { fit: ReflFitState
               Apply is unavailable: {fit.applyBlocked}.
             </div>
           )}
-          <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+          <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
             The fitted curve of channel 1 is overlaid on its dataset; the fit curves add every channel and SLD profile.
           </div>
           {liveRecord && <ReflUncertainty dream={fit.dream} record={liveRecord} />}

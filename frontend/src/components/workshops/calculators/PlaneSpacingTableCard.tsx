@@ -108,7 +108,7 @@ export default function PlaneSpacingTableCard({
           Generate
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Uses the lattice above. Max hkl is 1–10; 2θ shows “–” when λ/2d &gt; 1.
       </div>
       {resultLine(result)}

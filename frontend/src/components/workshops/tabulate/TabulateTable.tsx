@@ -22,14 +22,14 @@ export default function TabulateTable({
 }) {
   if (!statKeys.length) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 12, color: "var(--text-faint)" }}>
         Pick at least one stat to display.
       </div>
     );
   }
   if (!rows.length) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 12, color: "var(--text-faint)" }}>
         No finite rows to summarize.
       </div>
     );

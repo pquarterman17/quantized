@@ -71,7 +71,6 @@ export default function HistogramStrip({ hist, fitCurve, brushedBins, onBrush }:
                 height: `${(c / maxCount) * 100}%`,
                 minHeight: c > 0 ? 1 : 0,
                 background: brushed ? "var(--accent)" : "var(--series-1, var(--accent))",
-                cursor: "pointer",
               }}
             />
           );

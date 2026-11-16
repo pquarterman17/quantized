@@ -90,7 +90,7 @@ export default function Inspector() {
       <aside className="qzk-inspector" aria-label="Inspector">
         <section className="qzk-inspector-empty" aria-label="Nothing to inspect">
           <strong>Nothing to inspect yet</strong>
-          <p className="qzk-ds-meta">
+          <p className="qzk-helptext">
             Import data or drop files into the Library. Then click a curve, axis or legend on the plot and its
             properties appear here.
           </p>

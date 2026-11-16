@@ -118,7 +118,7 @@ export default function HysteresisBatchSection() {
         <p className="qzk-ds-meta"><strong>Trend figures</strong> · Optional. Choose an explicit sweep variable; worksheet names are never interpreted as values.</p>
         <div className="qzk-analysis-input-fields">
           <label>Series source
-            <select aria-label="Trend axis source" value={axisSource} onChange={(event) => chooseAxisSource(event.target.value)}>
+            <select className="qz-select" aria-label="Trend axis source" value={axisSource} onChange={(event) => chooseAxisSource(event.target.value)}>
               <option value="">Table only</option>
               <option value="__manual__">Enter values manually</option>
               {candidates.map((candidate) => <option key={candidate.key} value={candidate.key}>
