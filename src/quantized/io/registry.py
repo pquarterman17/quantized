@@ -48,6 +48,7 @@ __all__ = [
     "import_auto",
     "import_auto_sheets",
     "import_structure",
+    "is_line_text",
     "is_packable_data_name",
     "is_recognised_data_name",
     "is_structure_file",
@@ -295,6 +296,14 @@ def _import_via_saved_filter(path: Path) -> DataStruct:
     return parse_import(read_text(path), filt.settings)
 
 
+# Line-oriented text parsers: the only ones ``is_line_text`` lets the watch hold.
+_LINE_TEXT_PARSERS: frozenset[Parser] = frozenset({
+    import_csv, _import_qd_vsm_auto, _import_ppms_auto, import_lake_shore, import_refl1d_dat,
+    import_xrd_export, import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, import_orso,
+    import_jcamp, _import_via_saved_filter,
+})  # fmt: skip
+
+
 # ── Plugin registration (single-registration path; gap #8) ──────────────────
 # Third-party plugins (see quantized.plugins) contribute parsers THROUGH this one
 # function — the same ``_EXT_MAP`` / ``_SNIFFERS`` chokepoint the built-ins use
@@ -444,6 +453,17 @@ def resolve_parser(path: Path) -> Parser:
     if reason is not None:
         raise ValueError(f"'{path.name}': {reason}")
     raise ValueError(f"no parser registered for '{path.name}' (extension '{ext}')")
+
+
+def is_line_text(path: Path) -> bool:
+    """Does ``path`` resolve to a line-oriented TEXT parser? Only those may have
+    an unfinished last line held back by the live source watch
+    (``io/live_text.py``); a binary format is never cut at a newline byte. A plugin
+    parser is never held: its format is unknown here (it gets the stamp check only)."""
+    parser = resolve_parser(path)
+    if parser is import_sims:  # the SIMS parser also reads .xlsx workbooks
+        return path.suffix.lower() in (".csv", ".tsv", ".txt")
+    return parser in _LINE_TEXT_PARSERS
 
 
 def import_auto(path: str | Path) -> DataStruct:

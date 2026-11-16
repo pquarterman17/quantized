@@ -140,6 +140,17 @@ def _default_consented(_path: str) -> bool:
     return True
 
 
+# Two mtimes closer than this are the same instant (relink.ts's MTIME_EPSILON_S):
+# a float derived from st_mtime_ns can differ from st_mtime in the last bit.
+_MTIME_EPSILON_S = 1e-6
+
+
+def _same_mtime(a: Any, b: Any) -> bool:
+    if isinstance(a, int | float) and isinstance(b, int | float):
+        return abs(float(a) - float(b)) <= _MTIME_EPSILON_S
+    return bool(a == b)
+
+
 def _stat_verdict(recorded: Mapping[str, Any], probed: Mapping[str, Any]) -> str:
     have_size = recorded.get("size") is not None and probed.get("size") is not None
     have_mtime = recorded.get("mtime") is not None and probed.get("mtime") is not None
@@ -147,7 +158,7 @@ def _stat_verdict(recorded: Mapping[str, Any], probed: Mapping[str, Any]) -> str
         return "unknown"
     if have_size and recorded.get("size") != probed.get("size"):
         return "changed"
-    if have_mtime and recorded.get("mtime") != probed.get("mtime"):
+    if have_mtime and not _same_mtime(recorded.get("mtime"), probed.get("mtime")):
         return "changed"
     return "unchanged"
 

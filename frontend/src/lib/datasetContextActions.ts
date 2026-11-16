@@ -13,6 +13,7 @@ import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { multiSelected } from "./multiSelected";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
+import { canAutoUpdate, readSourceNow, toggleAutoUpdate, watchedIds } from "./sourceWatchMenu";
 import { useApp } from "../store/useApp";
 
 // Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
@@ -72,6 +73,25 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     label: (t) => (t.dataset.source ? "Re-import from source" : "Re-import from file…"),
     run: (t) => void useApp.getState().reimportDataset(t.dataset.id),
   },
+  // Gap audit 5 lane J: Origin's Data Connector auto-update (lib/sourceWatch.ts, lazy).
+  // Per worksheet, this session only; needs a source PATH, which a browser upload lacks.
+  {
+    id: "dataset.autoUpdate",
+    label: "Auto-update from source",
+    checked: (t) => watchedIds.has(t.dataset.id),
+    enabled: (t) => watchedIds.has(t.dataset.id) || canAutoUpdate(t.dataset).ok,
+    disabledReason: (t) => {
+      const can = canAutoUpdate(t.dataset);
+      return can.ok ? "" : can.reason;
+    },
+    run: (t) => void toggleAutoUpdate(t.dataset.id),
+  },
+  {
+    id: "dataset.autoUpdateNow",
+    label: "Read the source file now",
+    hidden: (t) => !watchedIds.has(t.dataset.id),
+    run: (t) => void readSourceNow(t.dataset.id),
+  },
   {
     id: "dataset.split",
     label: "Split by column value…",
@@ -125,7 +145,7 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       ["panelRow", "Panel: side by side", "row"],
       ["panelColumn", "Panel: stacked", "column"],
       ["panelGrid", "Panel: grid", "grid"],
-      ["overlay", "Overlay in one plot", "overlay"],
+      ["overlay", "Panel: overlay (separate scales)", "overlay"],
     ] as const
   ).map(
     ([key, label, layout]): ContextAction<DatasetActionTarget> => ({
@@ -139,14 +159,15 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       },
     }),
   ),
-  // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above (a
+  // PLOT_WORKFLOW_PLAN #3: distinct from "Panel: overlay" above (a
   // composite panel window keeping each dataset separate) — this MERGES the
   // selection into one real Library dataset via the same gate+build+land
   // sequence the Plot-menu/palette command uses (lib/plotSelectedTogether),
   // so the row menu and the menu bar can never drift apart.
   {
     id: "dataset.plotSelectedTogether",
-    label: "Plot selected together",
+    // UX8-C: named for what it does; the old name stays in the palette keywords.
+    label: "Overlay in one plot",
     hidden: (t) => !multiSelected(t),
     run: (t) => {
       void plotSelectedTogether(t.selectedIds);

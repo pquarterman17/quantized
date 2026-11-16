@@ -384,7 +384,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     // merge / panel actions stay reachable), matching the tile Delete key.
     expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
     expect(screen.getByRole("menuitem", { name: "Remove 2 selected" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Overlay in one plot" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Panel: overlay (separate scales)" })).toBeInTheDocument();
   });
 
   it("a multi-selection stage action from a tile menu returns to the Stage (owner decision)", () => {
@@ -402,7 +402,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       clientX: 20,
       clientY: 30,
     });
-    fireEvent.click(screen.getByRole("menuitem", { name: "Overlay in one plot" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Panel: overlay (separate scales)" }));
 
     expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
     expect(onClose).toHaveBeenCalledOnce();
