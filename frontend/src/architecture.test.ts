@@ -2165,8 +2165,6 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
   recipeSourcesComplete: "workspace recipe-source fidelity (P3.5); DERIVED at project load, never user-edited — there is nothing to undo TO, and restoring a stale `true` over a genuine `false` would re-certify sources the load actually lost",
 
-  selectionAnchorId: "Library Shift-click range anchor (UX8-C); transient selection gesture state, a stale id falls back to activeId",
-
   // history slice: the undo stack itself (not a field to undo INTO)
   history: "undo stack; the history system itself, not undoable data",
   future: "redo stack; the history system itself, not undoable data",

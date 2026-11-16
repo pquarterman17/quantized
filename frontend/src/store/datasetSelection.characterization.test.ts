@@ -161,7 +161,7 @@ const SWITCH_KEYS = [
   "activeId", "composition", "errKeys", "facetKey", "fwhmResult", "gadgetBusy", "gadgetCursorResult",
   "gadgetCursors", "gadgetDerivResult", "gadgetError", "gadgetFftPreview", "gadgetIntegrateResult",
   "gadgetStatsResult", "groupKey", "hiddenChannels", "integral", "librarySelection", "plotWindows",
-  "qfitBusy", "qfitError", "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "selectionAnchorId", "seriesLabels",
+  "qfitBusy", "qfitError", "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "seriesLabels",
   "seriesOrder", "seriesStyles", "stageTab", "worksheetId", "xKey", "xLim", "xStep", "y2AxisLabel",
   "y2Keys", "y2Lim", "y2Scale", "y2Step", "yAxes", "yAxisOf", "yKeys", "yLim", "yStep",
 ];
@@ -170,7 +170,7 @@ const REACTIVATE_KEYS = [
   "composition", "fwhmResult", "gadgetBusy", "gadgetCursorResult", "gadgetCursors",
   "gadgetDerivResult", "gadgetError", "gadgetFftPreview", "gadgetIntegrateResult",
   "gadgetStatsResult", "integral", "librarySelection", "plotWindows", "qfitBusy", "qfitError",
-  "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "selectionAnchorId", "stageTab", "worksheetId",
+  "qfitResult", "qfitRoi", "rsmPeaks", "selectedIds", "stageTab", "worksheetId",
 ];
 // An unknown id: everything a switch writes except the stage tab (no dataset to route on).
 const UNKNOWN_KEYS = SWITCH_KEYS.filter((k) => k !== "stageTab");
@@ -188,7 +188,7 @@ const FOCUS_HANDOFF_KEYS = [
 ];
 const withKeys = (base: string[], extra: string[]): string[] => [...base, ...extra].sort();
 // The worksheet-intent path for an Origin book.
-const WORKSHEET_INTENT_KEYS = ["librarySelection", "selectedIds", "selectionAnchorId", "stageTab", "worksheetId"];
+const WORKSHEET_INTENT_KEYS = ["librarySelection", "selectedIds", "stageTab", "worksheetId"];
 
 describe("initial state (moves with the slice)", () => {
   it("nothing is active, selected or overridden", () => {
@@ -388,7 +388,7 @@ describe("toggleSelected", () => {
   it("adds an unselected row and exits the tree selection; the active dataset stays", () => {
     const before = snapshot();
     act().toggleSelected("d1");
-    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds", "selectionAnchorId"]);
+    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds"]);
     expect(act().selectedIds).toEqual(["d2", "d3", "d1"]);
     expect(act().activeId).toBe("d2");
     expect(kicks).toEqual([]);
@@ -399,7 +399,7 @@ describe("toggleSelected", () => {
     useApp.setState({ librarySelection: null });
     const before = snapshot();
     act().toggleSelected("d3");
-    expect(changedSince(before)).toEqual(["selectedIds", "selectionAnchorId"]);
+    expect(changedSince(before)).toEqual(["selectedIds"]);
     expect(act().selectedIds).toEqual(["d2"]);
     expectNoSideNotices();
   });
@@ -456,11 +456,16 @@ describe("selectRange", () => {
     expect(act().activeId).toBe("d2");
   });
 
-  it("a dead anchor yields to the last selected row, else activeId", () => {
-    useApp.setState({ selectedIds: ["d1", "d3"], selectionAnchorId: "gone" });
+  // The anchor is trusted only while its gesture's selection is still the
+  // selection: another path (a window focus, an import, an undo) that
+  // replaces it makes the last selected row the anchor, else activeId.
+  it("an anchor whose selection another path replaced yields to the last selected row, else activeId", () => {
+    act().selectIds(["d1"]);
+    useApp.setState({ selectedIds: ["d1", "d3"] });
     act().selectRange("ob");
     expect(act().selectedIds).toEqual(["d3", "ob"]);
-    useApp.setState({ selectedIds: [], selectionAnchorId: "gone" });
+    act().selectIds(["d1"]);
+    useApp.setState({ selectedIds: [] });
     act().selectRange("d1");
     expect(act().selectedIds).toEqual(["d1", "d2"]);
   });
@@ -493,8 +498,9 @@ describe("selectIds", () => {
   it("a one-row selection (Tree mode's plain click) becomes the Shift anchor (UX8-C)", () => {
     const before = snapshot();
     act().selectIds(["d1"]);
-    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds", "selectionAnchorId"]);
-    expect(act().selectionAnchorId).toBe("d1");
+    expect(changedSince(before)).toEqual(["librarySelection", "selectedIds"]);
+    act().selectRange("d3");
+    expect(act().selectedIds).toEqual(["d1", "d2", "d3"]);
     expect(act().activeId).toBe("d2");
   });
 

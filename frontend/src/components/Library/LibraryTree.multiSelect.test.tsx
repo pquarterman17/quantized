@@ -39,7 +39,6 @@ beforeEach(() => {
     librarySelection: null,
     activeId: "m9",
     selectedIds: [],
-    selectionAnchorId: null,
   });
 });
 

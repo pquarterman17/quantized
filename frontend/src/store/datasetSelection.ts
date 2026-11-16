@@ -8,7 +8,7 @@
 //
 // WHAT THIS MODULE OWNS: which dataset is active (plotted in the focused
 // window), which rows are multi-selected, and the Worksheet tab's override —
-// the `activeId`, `selectedIds`, `selectionAnchorId` and `worksheetId` fields, declared and
+// the `activeId`, `selectedIds` and `worksheetId` fields, declared and
 // initialized HERE (an own-state slice, store/gadget.ts's shape) — plus the
 // five actions that move them: `setActive`, `activateFromLibrary`,
 // `toggleSelected`, `selectRange`, `selectIds`.
@@ -55,14 +55,6 @@ export interface DatasetSelectionSlice {
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
   // "primary"; ctrl/shift-click extend `selectedIds` without changing the plot.
   selectedIds: string[];
-  /** UX8-C: the Shift-click range anchor — the row of the last plain or
-   *  Ctrl/Cmd click (written by the selection actions here: `setActive`, a
-   *  one-row `selectIds`, `toggleSelected`). Tree mode's plain click selects
-   *  WITHOUT moving `activeId`, so anchoring on `activeId` made "click row 1,
-   *  Shift-click row 10" select one row. `selectRange` trusts it while it is
-   *  a live row of the range's order (even after a Ctrl-click deselected it,
-   *  as Finder does) — else the last selected row, else `activeId`. */
-  selectionAnchorId: string | null;
   // WORKSHEET_PLAN item 15 ("origin book click opens…"): the Worksheet tab's
   // dataset override, set by `activateFromLibrary`'s worksheet-intent path
   // instead of `activeId` — `activeId` stays the FOCUSED plot window's bound
@@ -111,12 +103,30 @@ function switchNeedsUndoEntry(s: AppState, id: string): boolean {
   return s.activeId !== id && Object.keys(switchDecorationReset(s)).some((k) => top?.[k] !== s[k as keyof AppState]);
 }
 
+/** UX8-C: the Shift-click range anchor — the row of the last plain or
+ *  Ctrl/Cmd click. Tree mode's plain click selects WITHOUT moving `activeId`,
+ *  so anchoring on `activeId` made "click row 1, Shift-click row 10" select
+ *  one row. Transient gesture state, so it lives beside the store, not in it
+ *  (no undo, no .dwk, and no extra key on every applier that calls
+ *  `setActive`). It is recorded WITH the `selectedIds` array its gesture
+ *  wrote, and trusted only while that array is still the selection: any
+ *  other path that replaces the selection (a window focus, an import, a
+ *  duplicate, an undo, a test's setState) leaves it stale, and `selectRange`
+ *  then falls back to the last selected row, else `activeId`. A Ctrl-click
+ *  that deselects the anchor row keeps it (Finder). */
+let anchor: { id: string; selection: readonly string[] } | null = null;
+function noteAnchor(id: string, selection: readonly string[]): void {
+  anchor = { id, selection };
+}
+function heldAnchor(selectedIds: readonly string[]): string | null {
+  return anchor && anchor.selection === selectedIds ? anchor.id : null;
+}
+
 export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): DatasetSelectionSlice {
   return {
     activeId: null,
     worksheetId: null,
     selectedIds: [],
-    selectionAnchorId: null,
 
     setActive: (id) => {
       // Item 14 pin opt-out: a pinned focused window never follows a passive
@@ -126,7 +136,8 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
       // `rebindWindow`'s explicit-drop path shares it verbatim.
       if (switchNeedsUndoEntry(get(), id)) get().recordHistory("switch dataset");
       retargetPassiveRebind(get(), id);
-      set((s) => ({ ...focusedRebindPatch(s, id), selectionAnchorId: id }));
+      set((s) => focusedRebindPatch(s, id));
+      noteAnchor(id, get().selectedIds); // UX8-C
       // ORIGIN_FILE_DECODE_PLAN #38: a plain click covers the common "activate
       // a lazy book" path; the render-side hooks (PlotStage/WindowCanvas/
       // MultiPanelStage/WorksheetPane) cover the rest (multi-panel siblings,
@@ -168,9 +179,9 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         set({
           worksheetId: id,
           selectedIds: [id], // plain click collapses the selection, same as setActive
-          selectionAnchorId: id,
           stageTab: "worksheet", librarySelection: null, // L0.25: also exits folder/workbook selection
         });
+        noteAnchor(id, get().selectedIds); // UX8-C
         // #38: WorksheetPane's own pending-effect covers the render-side
         // fetch once mounted; kick it here too (single-flight — harmless if
         // it's already in flight) so Library/Inspector consumers keying off
@@ -206,18 +217,22 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
     // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
     // the plotted/active dataset (the plot only follows a plain click).
     toggleSelected: (id) =>
-      set((s) => ({
-        selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id],
-        selectionAnchorId: id, // UX8-C: a Ctrl-click moves the Shift anchor (Finder/Explorer)
-        librarySelection: null, // L0.25: also exits folder/workbook selection (selectRange/setActive do the same)
-      })),
+      set((s) => {
+        const selectedIds = s.selectedIds.includes(id) ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id];
+        noteAnchor(id, selectedIds); // UX8-C: a Ctrl-click moves the Shift anchor (Finder/Explorer)
+        return {
+          selectedIds,
+          librarySelection: null, // L0.25: also exits folder/workbook selection (selectRange/setActive do the same)
+        };
+      }),
     // Shift-click: select the contiguous range from the anchor (the last
-    // plain/Ctrl-clicked row, else activeId) to `id` in library order. Neither
-    // the plot nor the anchor moves, so a second Shift-click re-ranges.
+    // plain/Ctrl-clicked row — see `heldAnchor` — else the last selected row,
+    // else activeId) to `id` in library order (or the view's `shown` order).
+    // Neither the plot nor the anchor moves, so a second Shift-click re-ranges.
     selectRange: (id, shown) =>
       set((s) => {
         const order = [...new Set(shown ?? s.datasets.map((d) => d.id))];
-        const held = s.selectionAnchorId;
+        const held = heldAnchor(s.selectedIds);
         const anchor =
           (held != null && order.includes(held) ? held : null) ??
           [...s.selectedIds].reverse().find((x) => order.includes(x)) ??
@@ -227,7 +242,9 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         const b = order.indexOf(id);
         if (a < 0 || b < 0) return { selectedIds: [id], librarySelection: null };
         const [lo, hi] = a <= b ? [a, b] : [b, a];
-        return { selectedIds: order.slice(lo, hi + 1), librarySelection: null };
+        const selectedIds = order.slice(lo, hi + 1);
+        noteAnchor(anchor, selectedIds);
+        return { selectedIds, librarySelection: null };
       }),
     // Explicit-list selection (folder "Select all" — item 8): de-duplicated and
     // clamped to live datasets; the plotted/active dataset stays put.
@@ -238,11 +255,8 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         // L0.25 coherence chokepoint (like activateFromLibrary/toggleSelected):
         // a live dataset selection displaces the tree's librarySelection.
         // UX8-C: a one-row selection (Tree mode's plain click) is the anchor.
-        return {
-          selectedIds,
-          ...(selectedIds.length > 0 ? { librarySelection: null } : {}),
-          ...(selectedIds.length === 1 ? { selectionAnchorId: selectedIds[0] } : {}),
-        };
+        if (selectedIds.length === 1) noteAnchor(selectedIds[0], selectedIds);
+        return { selectedIds, ...(selectedIds.length > 0 ? { librarySelection: null } : {}) };
       }),
   };
 }
