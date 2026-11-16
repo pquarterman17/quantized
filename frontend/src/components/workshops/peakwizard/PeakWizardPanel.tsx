@@ -129,7 +129,7 @@ export default function PeakWizardPanel() {
           <div className="qzk-peakwizard" style={{ marginTop: 10 }}>{stepBody}</div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <Button size="sm" disabled={w.step === 0} onClick={w.back}>
+            <Button size="sm" disabled={w.step === 0 || fitRunningBlock(w) !== null} title={fitRunningBlock(w) ?? undefined} onClick={w.back}>
               ← Back
             </Button>
             <span style={{ flex: 1 }} />

@@ -46,7 +46,7 @@ import type { ProjectIdentity } from "../store/project";
 import { useProjectLock } from "../store/projectLock";
 import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
-import { toastWithUndo } from "../lib/undoToast";
+import { historyTopSeq, toastWithUndo } from "../lib/undoToast";
 import type {
   exportConsolidated,
   exportHdf5,
@@ -201,7 +201,7 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
   const project = s().currentProject;
   s().clearAll();
   closeProjectLock(); // after the clear: a throwing clear keeps the loaded project's lock
-  toastWithUndo("removed all datasets", "ok", undefined, project ? () => reattachProject(s, project) : undefined);
+  toastWithUndo("removed all datasets", "ok", historyTopSeq(), project ? () => reattachProject(s, project) : undefined);
 }
 
 /** Undo of Remove all gives the workspace back; this gives it its project back
@@ -210,7 +210,8 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
  *  meantime the acquisition fails closed — the work is restored but read-only,
  *  and the user is told. Skipped if the user opened another project since. */
 function reattachProject(s: StoreGet, project: ProjectIdentity): void {
-  if (s().currentProject !== null) return;
+  // Not if the user opened another project meanwhile — nor if one is mid-open (it has reserved the lock).
+  if (s().currentProject !== null || useProjectLock.getState().path !== null) return;
   reserveProjectLock(project.path);
   s().setCurrentProject(project);
   void useProjectLock.getState().openProject(project.path).then((r) => {

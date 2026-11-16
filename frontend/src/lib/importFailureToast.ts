@@ -59,6 +59,9 @@ export function toastImportFailure(
     },
   ];
   // Whether data changed: a partly-failed batch says how much of it landed.
-  const landed = batch && batch.total > 1 ? ` Imported ${batch.added} of ${batch.total} files.` : "";
+  const failed = batch ? batch.total - batch.added : 1;
+  const landed = batch && batch.total > 1
+    ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed; this is the last` : ""}.`
+    : "";
   toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2 });
 }

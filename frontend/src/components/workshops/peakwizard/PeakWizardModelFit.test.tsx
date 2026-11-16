@@ -296,6 +296,7 @@ describe("Peak analyzer — model fit results (step 4)", () => {
     const chip = screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }).closest("button")!;
     expect(chip).toBeDisabled();
     expect(chip).toHaveAttribute("title", "peak fit running…");
+    expect(screen.getByRole("button", { name: /Back/ })).toBeDisabled();
   });
 
   it("shows the backend's ASCII error detail", async () => {

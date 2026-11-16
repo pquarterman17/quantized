@@ -1,6 +1,6 @@
 // Leaving step ④ (Fit & review) while the fit is still running would strand the
 // result on a step that no longer shows it. ONE helper gates every way out —
-// Next and the step chips — so a change to the rule is made once.
+// Next, Back and the step chips — so a change to the rule is made once.
 
 import type { PeakWizardState } from "./usePeakWizard";
 

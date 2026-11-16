@@ -15,9 +15,10 @@ import { useApp } from "../store/useApp";
 /** Announce a removal with an Undo (lib/undoToast, loaded on demand to keep it
  *  out of the eager bundle). The history entry is captured NOW, synchronously;
  *  if the chunk fails to load the plain toast still shows. */
-export function toastRemoved(msg: string, kind?: ToastKind): void {
+export function toastRemoved(msg: string, kind: ToastKind = "info"): void {
   const seq = useApp.getState().history.at(-1)?.seq;
-  void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, seq)).catch(() => toast(msg, kind));
+  // The fallback is for the chunk LOAD only; an error inside the toast must not double it.
+  void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, seq), () => toast(msg, kind));
 }
 
 /** Request removal of exactly `ids` (dead ids dropped; empty = no-op),

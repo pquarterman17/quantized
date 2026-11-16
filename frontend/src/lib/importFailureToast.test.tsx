@@ -56,6 +56,12 @@ describe("toastImportFailure", () => {
     vi.unstubAllGlobals();
   });
 
+  it("says when several files failed (the toast covers the last one)", () => {
+    render(<Toaster />);
+    act(() => toastImportFailure("c.dat", NO_PARSER, undefined, { added: 2, total: 5 }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Imported 2 of 5 files — 3 failed; this is the last.");
+  });
+
   it("offers no wizard for a binary container (its own error says what to do)", () => {
     render(<Toaster />);
     act(() => toastImportFailure("broken.opju", "broken.opju: corrupt project"));

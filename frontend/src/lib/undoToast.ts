@@ -14,11 +14,15 @@ import { TOAST_ACTION_TTL, toast, type ToastKind } from "../store/toasts";
 import { scrubDatasetsFromTrash } from "../store/removeDatasets";
 import { useApp } from "../store/useApp";
 
-/** Show `msg` with an Undo action for the history entry now on top of the
- *  stack (`topSeq`, defaulting to it now). Call AFTER the destructive action
- *  has recorded its entry; `onUndone` runs after a successful Undo; a caller that loads this module lazily captures
- *  `topSeq` first, synchronously. */
-export function toastWithUndo(msg: string, kind: ToastKind = "info", topSeq = useApp.getState().history.at(-1)?.seq, onUndone?: () => void): void {
+/** The history entry now on top of the stack. Capture it right after the
+ *  destructive action recorded its entry, and pass it to `toastWithUndo`. */
+export const historyTopSeq = (): number | undefined => useApp.getState().history.at(-1)?.seq;
+
+/** Show `msg` with an Undo action for the history entry `topSeq` (an EXPLICIT
+ *  argument, never re-read here: a caller that loads this module lazily must
+ *  have captured it synchronously, and `undefined` means nothing was
+ *  recorded, so no Undo is offered). `onUndone` runs after a successful Undo. */
+export function toastWithUndo(msg: string, kind: ToastKind, topSeq: number | undefined, onUndone?: () => void): void {
   if (topSeq === undefined) {
     toast(msg, kind); // nothing recorded, so nothing an Undo could restore
     return;
@@ -33,11 +37,13 @@ export function toastWithUndo(msg: string, kind: ToastKind = "info", topSeq = us
           toast("Can't undo that here — other edits came after it. Use Edit ▸ Undo or the Trash.", "info");
           return;
         }
+        const before = new Set(s.datasets.map((d) => d.id));
         s.undo();
         // Trash sits outside history: the removal sent a copy there, and the
-        // dataset is live again — leave no second copy to "Restore" later
-        // (a Redo removes it again, recoverable by Undo, not via Trash).
-        useApp.setState((st) => scrubDatasetsFromTrash(st, st.datasets.map((d) => d.id)));
+        // datasets this Undo brought back are live again — leave no second
+        // copy to "Restore" later (a Redo removes them again, recoverable by
+        // Undo, not via Trash).
+        useApp.setState((st) => scrubDatasetsFromTrash(st, st.datasets.map((d) => d.id).filter((id) => !before.has(id))));
         onUndone?.();
       },
     },
