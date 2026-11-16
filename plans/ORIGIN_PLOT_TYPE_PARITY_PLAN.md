@@ -513,9 +513,6 @@ None open.
          105 heatmap 53 = 12 matrix (4 shipped, 8 `jiahehu2000`) + 41 virtual
          matrix; 226 contour 2 = 1 matrix (shipped) + 1 virtual; 243 XYZ
          contour 2 (loose datasets); 0 ternary layers.)
-8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
-   their `oracle.json`, PNG and `.truth.json`, plus the generator command that
-   rebuilds them; add realdata tests that score them
 
 ### Creation gaps found by check 2 (cloud items, owner decision 2026-11-15)
 
@@ -575,6 +572,14 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
 
 ## Completed
 
+- ~~**#8 Commit the specimens + ratchet**~~ (2026-11-15) — 233 specimens
+  (231 `.opju` + PNG + `oracle.json`, 2 refused; 28 MB) committed to private
+  `test-data/origin/generated/` with README + regenerate command.
+  `tests/test_plot_corpus_import_floor.py` (realdata, ~3 s) scores them and
+  asserts 0 wrong / 0 phantom in every check and match counts equal to the
+  pins in `tests/fixtures/plot_corpus/import_floor.json` (curves 313, drawn
+  343, values 808, column_meta 1709, plot_type 141, axes 1098, styles 414,
+  error_bars 12); a rise fails the test until the pin is raised.
 - ~~**#2 Check 1 — Origin → quantized import scorer**~~ (2026-11-15).
   `tools/plot_corpus/score_import.py` imports every specimen through the
   import route's own composition (`read_origin_project_all` →
