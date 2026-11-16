@@ -93,7 +93,9 @@ test("a styled graph exports to PDF and SVG exactly as shown", async ({ page }) 
 
   // Series style: a 3 px line for "signal".
   await page.getByText("Series style", { exact: true }).click();
-  await page.getByText("signal", { exact: true }).last().click();
+  // The "signal" row of the Series style card (UX-A's selection-driven
+  // Inspector adds other "signal" text later in the DOM, some of it hidden).
+  await page.locator('details[id^="series-style-"] > summary', { hasText: "signal" }).first().click();
   const width = page.getByLabel("Line width").first();
   await width.fill("3");
   await width.press("Enter");
