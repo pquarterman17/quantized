@@ -19,7 +19,6 @@ import type uPlot from "uplot";
 
 import { axisZoneAt } from "../../lib/plotHitTest";
 import type { PlotSelection } from "../../store/plotSelection";
-import { OBJECT_CURSORS } from "./usePlotStageActions";
 
 /** How close (CSS px) a click must land to a drawn curve to select it — the
  *  curve double-click's own tolerance. */
@@ -142,7 +141,8 @@ function sideAxes(u: uPlot, o: Rect): { left: DOMRect[]; right: DOMRect[] } {
 
 /** The selection for a click at client (x, y) on `target`: a curve, an axis,
  *  the legend, null (empty plot area: clear), or undefined when the click
- *  belongs to something else (an annotation / shape / reference line, a
+ *  belongs to something else (an annotation / shape / reference line —
+ *  `ownedByObject` —, a
  *  legend's visibility toggle or buttons, the toolbar, a title, an extra Y3+
  *  axis) and the selection must stay as it is. */
 export function pickAt(
@@ -152,6 +152,9 @@ export function pickAt(
   y: number,
   plotted: readonly number[],
   hasY2: boolean,
+  /** The press was claimed by an object plugin (annotation, shape, reference
+   *  line): its own geometric hit test ran on mousedown and owns the gesture. */
+  ownedByObject = false,
 ): PlotSelection | null | undefined {
   const legend = target.closest(".qzk-legend");
   if (legend) {
@@ -164,9 +167,11 @@ export function pickAt(
   }
   const o: Rect = u.over.getBoundingClientRect();
   if (u.over.contains(target)) {
-    // An object plugin shows a move / resize cursor over what it owns, and
-    // already selected it on mousedown.
-    if (OBJECT_CURSORS.has(u.over.style.cursor)) return undefined;
+    // An annotation / shape / reference line under the press: its plugin hit-
+    // tested it by geometry on mousedown, selected it and claimed the event
+    // (preventDefault). That works for a touch tap too, which has no hover
+    // cursor to read.
+    if (ownedByObject) return undefined;
     const i = nearestCurve(u, [x - o.left, y - o.top], plotted.length, CURVE_PICK_PX);
     const channel = i != null ? plotted[i] : undefined;
     return channel !== undefined ? { kind: "series", channel } : null;

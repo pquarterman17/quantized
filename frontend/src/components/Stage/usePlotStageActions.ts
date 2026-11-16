@@ -37,7 +37,7 @@ import { useApp } from "../../store/useApp";
 // MAIN #35 (publication copy); snapshot stays as the screen grab.
 /** The cursors the on-plot object plugins set while hovering an annotation /
  *  shape (move, resize handle) or a reference line (resize). */
-export const OBJECT_CURSORS: ReadonlySet<string> = new Set(["move", "nwse-resize", "ew-resize", "ns-resize"]);
+const OBJECT_CURSORS: ReadonlySet<string> = new Set(["move", "nwse-resize", "ew-resize", "ns-resize"]);
 
 export interface PlotStageActions {
   resetView: () => void;

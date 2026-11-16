@@ -184,5 +184,34 @@ describe("PlotSelectionLayer", () => {
     act(() => useApp.setState({ y2Keys: [] }));
     expect(usePlotSelection.getState().sel).toBeNull();
   });
+
+  it("a tap on an annotation over a curve never selects the curve (the plugin's geometric hit, no hover cursor)", () => {
+    // Stand-in for annotationPlugin: a capture listener on the chart root that
+    // hit-tests by geometry on mousedown and claims the press. No cursor is
+    // ever set, as on touch.
+    plot.root.addEventListener(
+      "mousedown",
+      (e) => {
+        e.preventDefault();
+        useApp.setState({ selectedAnnotationId: "a1" });
+      },
+      true,
+    );
+    mount();
+    act(() => clickData(2, 2));
+    expect(plot.over.style.cursor).toBe("");
+    expect(usePlotSelection.getState().sel).toBeNull();
+    expect(useApp.getState().selectedAnnotationId).toBe("a1");
+  });
+
+  it("dims the halo while another tool is active", () => {
+    usePlotSelection.setState({ sel: { kind: "series", channel: 0 } });
+    const { container, rerender } = mount("zoom");
+    const halo = () => container.querySelector(".qzk-selection-halo");
+    expect(halo()).toHaveClass("qzk-selection-idle");
+    const ref = { current: plot.u as uPlot | null };
+    rerender(<PlotSelectionLayer plotRef={ref} plotted={[0, 1]} tool="pointer" />);
+    expect(halo()).not.toHaveClass("qzk-selection-idle");
+  });
 });
 

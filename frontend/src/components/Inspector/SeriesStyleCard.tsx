@@ -4,7 +4,7 @@
 // Colors are stored either as a palette-token name ("--series-3", re-themeable)
 // or a literal hex from the custom picker. Renders for any dataset (≥1 channel).
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { defaultErrKeys } from "../../lib/errorbars";
@@ -101,11 +101,29 @@ function StyleRow({
   // existing pick or the dataset's default pairing (Origin Y-error / refl dR).
   const canError = errCol != null || naturalErr != null;
 
+  // Open = opened by the user OR by the current selection (UX-A). They are
+  // tracked apart so a deselect closes only what the selection opened, never
+  // a row the user opened by hand; collapsing a selected row closes it.
+  const [userOpen, setUserOpen] = useState(false);
+  const [selOpen, setSelOpen] = useState(selected);
+  const [prevSelected, setPrevSelected] = useState(selected);
+  if (prevSelected !== selected) {
+    setPrevSelected(selected);
+    setSelOpen(selected);
+  }
+  const open = userOpen || selOpen;
+
   return (
     <details
       id={`series-style-${channel}`}
       className="qz-card"
-      open={selected || undefined}
+      open={open}
+      onToggle={(e) => {
+        const now = e.currentTarget.open;
+        if (now === open) return;
+        setUserOpen(now);
+        if (!now) setSelOpen(false);
+      }}
       aria-current={selected || undefined}
       style={{ marginBottom: 4, ...(selected ? { outline: "2px solid var(--accent)", outlineOffset: -1 } : {}) }}
     >

@@ -64,12 +64,12 @@ describe("selection-driven Inspector", () => {
     expect(useApp.getState().seriesStyles[1]?.color).toBe("--series-4");
   });
 
-  it("a new selection scrolls the Inspector back to the Selection section, then to the curve's row", () => {
+  it("a new selection scrolls only what is out of view (nearest), never the whole panel to the top", () => {
     const scroll = vi.fn();
     const proto = HTMLElement.prototype as unknown as { scrollIntoView?: unknown };
     const before = proto.scrollIntoView;
-    proto.scrollIntoView = function (this: HTMLElement) {
-      scroll(this.id || this.getAttribute("data-card-id"));
+    proto.scrollIntoView = function (this: HTMLElement, opts?: ScrollIntoViewOptions) {
+      scroll(this.id || this.tagName.toLowerCase(), opts?.block);
     };
     try {
       render(<Inspector />);
@@ -77,8 +77,9 @@ describe("selection-driven Inspector", () => {
       // jsdom has no layout, so give the panel a writable scroll offset.
       Object.defineProperty(aside, "scrollTop", { value: 300, writable: true });
       select({ kind: "series", channel: 1 });
-      expect(aside.scrollTop).toBe(0);
-      expect(scroll).toHaveBeenLastCalledWith("series-style-1");
+      expect(aside.scrollTop).toBe(300);
+      expect(scroll).toHaveBeenLastCalledWith("series-style-1", "nearest");
+      for (const [, block] of scroll.mock.calls) expect(block).toBe("nearest");
     } finally {
       proto.scrollIntoView = before;
     }

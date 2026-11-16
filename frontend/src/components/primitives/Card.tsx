@@ -32,7 +32,9 @@ export default function Card({
   const reveal = api?.reveal;
   const revealN = reveal && reveal.id === id ? reveal.n : 0;
   useEffect(() => {
-    if (revealN) ref.current?.scrollIntoView?.({ block: "nearest" });
+    // The header, not the whole card: a card taller than its scroller would
+    // align its top and push what sits above it (a Selection section) away.
+    if (revealN) ref.current?.querySelector("summary")?.scrollIntoView?.({ block: "nearest" });
   }, [revealN]);
   return (
     <details

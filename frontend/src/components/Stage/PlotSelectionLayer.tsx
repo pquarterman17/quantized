@@ -62,22 +62,30 @@ export default function PlotSelectionLayer({ plotRef, plotted, tool }: Props) {
   useEffect(() => {
     if (tool !== "pointer" || !plotRef) return;
     let down: [number, number] | null = null;
+    // The press's own event: the object plugins (annotation, shape, reference
+    // line) run their geometric hit test on it AFTER this capture listener and
+    // preventDefault() it when they own the gesture, so by the click it says
+    // whether an object was under the press — mouse, pen or touch alike.
+    let press: MouseEvent | null = null;
     // The press: a pointer (mouse, pen, touch) or a mouse event, whichever
     // carries coordinates (a touch's compatibility mousedown repeats it).
     const onDown = (e: MouseEvent) => {
       if ((e as PointerEvent).isPrimary === false || !Number.isFinite(e.clientX)) return;
       down = [e.clientX, e.clientY];
+      if (e.type === "mousedown") press = e;
     };
     const onClick = (e: MouseEvent) => {
       const from = down;
+      const owned = press?.defaultPrevented ?? false;
       down = null; // a click is measured against ITS press, never a stale one
+      press = null;
       const u = plotRef.current;
       const target = e.target instanceof Element ? e.target : null;
       const stage = u?.root?.closest(".qzk-stage");
       if (!u || !target || !stage?.contains(target)) return;
       if (from && Math.hypot(e.clientX - from[0], e.clientY - from[1]) > CLICK_SLOP) return;
       if (e.altKey && target.closest(".qzk-legend")) return; // Alt+click: the row's hide/show
-      const pick = pickAt(u, target, e.clientX, e.clientY, plotted, hasY2);
+      const pick = pickAt(u, target, e.clientX, e.clientY, plotted, hasY2, owned);
       if (pick !== undefined) selectPlotObject(pick);
     };
     document.addEventListener("pointerdown", onDown, true);
@@ -130,7 +138,14 @@ export default function PlotSelectionLayer({ plotRef, plotted, tool }: Props) {
 
   if (!sel) return null;
   return (
-    <svg ref={svgRef} className="qzk-selection-halo" data-selection={selectionKey(sel)} aria-hidden="true">
+    // Off the Pointer tool the selection stays (and stays editable in the
+    // Inspector) but can't be changed on the plot: the halo dims to say so.
+    <svg
+      ref={svgRef}
+      className={`qzk-selection-halo${tool === "pointer" ? "" : " qzk-selection-idle"}`}
+      data-selection={selectionKey(sel)}
+      aria-hidden="true"
+    >
       <defs>
         <clipPath id={clipId}>
           <rect ref={clipRef} />

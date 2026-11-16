@@ -77,16 +77,12 @@ export default function Inspector() {
             : null;
   const focusKey = plotTab ? (annotationId ? `a:${annotationId}` : shapeId ? `s:${shapeId}` : selectionKey(sel)) : "";
   const cardState = useInspectorCardState(ctx, focus, focusKey);
-  // A new selection: back to the top, where the Selection section and the
-  // hoisted card are (a tall card's own reveal would scroll the section away),
-  // then bring a selected curve's style row into view. Runs after the cards'
-  // own effects, so this is where the panel ends up.
+  // A new selection: bring a selected curve's style row into view — "nearest",
+  // so the panel moves only when the row is out of view (the hoisted card's
+  // own reveal does the same for its header). Runs after the cards' effects.
   const asideRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    const el = asideRef.current;
-    if (!el || !focusKey) return;
-    el.scrollTop = 0;
-    el.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+    if (focusKey) asideRef.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
   }, [focusKey]);
 
   if (!hasData) {

@@ -28,10 +28,9 @@ describe("pickAt", () => {
     expect(pickAt(u, over, ...at(1, 5), [0, 1], false)).toBeNull();
   });
 
-  it("leaves a click on an annotation / shape / reference line to its plugin", () => {
+  it("leaves a press an object plugin claimed (annotation / shape / reference line) to it", () => {
     const { u, over } = makeFakePlot();
-    over.style.cursor = "move";
-    expect(pickAt(u, over, ...at(2, 2), [0, 1], false)).toBeUndefined();
+    expect(pickAt(u, over, ...at(2, 2), [0, 1], false, true)).toBeUndefined();
   });
 
   it("does not pick a hidden curve", () => {
