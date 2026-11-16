@@ -123,7 +123,9 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   const fresh = await (await browser.newContext()).newPage();
   await gotoApp(fresh);
   await fresh.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await chooseFiles(fresh, () => fresh.getByText("Open workspace (.dwk)…", { exact: true }).click(), savedPath!);
+  // The menu item, not the empty-project stage's own "Open workspace" button (#719), which a
+  // fresh context also shows once it renders.
+  await chooseFiles(fresh, () => fresh.getByRole("menuitem", { name: "Open workspace (.dwk)…" }).click(), savedPath!);
   await waitForDatasetCount(fresh, 2);
   await expect.poll(async () => (await snap(fresh)).fitFor, { timeout: 15_000 }).not.toBeNull();
   expect((await snap(fresh)).band).toBeGreaterThan(0);
