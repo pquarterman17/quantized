@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Stage from "./Stage";
+import { ensureMapGate } from "../../lib/mapdata";
 import { useApp } from "../../store/useApp";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
@@ -35,7 +36,7 @@ vi.mock("./EmptyProjectStage", async (importOriginal) => {
 // c0 repeat like grid axes); `ds(2)` is an ordinary 1-D sweep.
 // UX-D: the long-form grid is 3 x 3 -- the gate needs >=3 levels per axis (a
 // 2 x 2 table is covered explicitly by the "2 x 2" test below).
-const ds = (nChannels: number): Dataset => {
+const makeDs = (nChannels: number): Dataset => {
   const gridded = nChannels >= 3;
   const time = gridded ? [0, 0, 0, 1, 1, 1, 2, 2, 2] : [0, 1, 2, 3];
   return {
@@ -52,6 +53,12 @@ const ds = (nChannels: number): Dataset => {
     },
   };
 };
+// The Map tab's grid test is a lazy, memoised gate (fail closed until it lands):
+// the shared grid dataset is warmed once so most tests see the settled state;
+// "arrives lazily" below builds a fresh one to see the transition itself.
+const WARM_GRID = makeDs(3);
+beforeAll(() => ensureMapGate(WARM_GRID.data));
+const ds = (nChannels: number): Dataset => (nChannels >= 3 ? WARM_GRID : makeDs(nChannels));
 
 beforeEach(() => {
   useApp.setState({
@@ -137,6 +144,13 @@ describe("Map tab visibility", () => {
     useApp.setState({ datasets: [ds(3)], activeId: "d1" });
     render(<Stage />);
     expect(screen.getByText("Map")).toBeInTheDocument();
+  });
+
+  it("arrives lazily for a never-seen grid dataset (absent first, then offered)", async () => {
+    useApp.setState({ datasets: [makeDs(3)], activeId: "d1" });
+    render(<Stage />);
+    expect(screen.queryByText("Map")).not.toBeInTheDocument(); // fail closed until known
+    expect(await screen.findByText("Map")).toBeInTheDocument();
   });
 
   it("is hidden for a 2 x 2 long-form table (too few levels to be a map)", () => {

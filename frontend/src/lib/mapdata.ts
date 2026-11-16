@@ -19,23 +19,45 @@ export function is2DMap(ds: DataStruct): boolean {
   return ds.metadata["is2D"] === true && ds.labels.length >= 3;
 }
 
-/** True when `col` repeats values the way a gridded axis does: at most half
- *  as many distinct finite values as rows. A swept axis (every value new) or
- *  a continuous measured signal never does. */
-export function repeats(col: (number | null | undefined)[]): boolean {
-  // levels-allowlist: counts DISTINCT values of a numeric axis to tell a
-  // gridded axis from a sweep -- not a column's category levels.
-  const seen = new Set<number>();
-  const limit = col.length / 2;
-  for (const v of col) {
-    if (typeof v !== "number" || !Number.isFinite(v)) continue;
-    seen.add(v);
-    if (seen.size > limit) return false;
-  }
-  return seen.size >= 2;
-}
+const gate = new WeakMap<DataStruct, boolean>();
+const pending = new WeakMap<DataStruct, Promise<boolean>>();
+const listeners = new Set<() => void>();
+let version = 0;
 
-const mappableCache = new WeakMap<DataStruct, boolean>();
+/** `useSyncExternalStore` plumbing: re-render when a lazy gate result lands. */
+export const subscribeMapGate = (f: () => void): (() => void) => {
+  listeners.add(f);
+  return () => void listeners.delete(f);
+};
+export const mapGateVersion = (): number => version;
+
+/** Cheap synchronous rejections shared by `canRenderMap` / `ensureMapGate`. */
+const tooSmall = (d: DataStruct): boolean => d.labels.length + 1 < 3 || d.values.length < 4;
+
+/** Resolve the grid gate for a dataset (loads the lazy engine once), memoised
+ *  per DataStruct. Resolves to `canRenderMap(data)`'s final answer. */
+export function ensureMapGate(data: DataStruct | null | undefined): Promise<boolean> {
+  if (!data || data.metadata["is2D"] === true || tooSmall(data) || data.metadata["scatteredXYZ"] === true) {
+    return Promise.resolve(canRenderMap(data));
+  }
+  const known = gate.get(data);
+  if (known !== undefined) return Promise.resolve(known);
+  let p = pending.get(data);
+  if (!p) {
+    p = import("./mapGate").then(
+      (m) => {
+        const ok = m.hasGridAxes(data);
+        gate.set(data, ok);
+        version++;
+        listeners.forEach((f) => f());
+        return ok;
+      },
+      () => false, // fail closed; a later call retries the chunk
+    );
+    pending.set(data, p);
+  }
+  return p;
+}
 
 /** Can this dataset produce a 2-D map at all? (owner request 2026-07-25)
  *
@@ -64,135 +86,18 @@ const mappableCache = new WeakMap<DataStruct, boolean>();
  *  examined, level sets are built once, and pairs that cannot qualify are never
  *  scanned (`mapGateWork` counts the scans for the perf-invariant test).
  *
+ *  The grid test itself (lib/mapGate.ts) is a LAZY chunk: `canRenderMap` is
+ *  synchronous and FAILS CLOSED -- a dataset the parser did not flag `is2D`
+ *  has no Map tab until `ensureMapGate` has resolved it (memoised per DataStruct,
+ *  so once per dataset version) and notified `subscribeMapGate` listeners.
+ *  `Stage` triggers it for the active dataset (that is the warm-up on import).
+ *  Parser-flagged 2-D maps keep the tab immediately, with no lazy wait.
+ *
  *  Deliberately capability, not history: "has a map been drawn" would be
  *  circular -- you could never reach the tab to draw the first one. */
 export function canRenderMap(data: DataStruct | null | undefined): boolean {
   if (!data) return false;
   if (data.metadata["is2D"] === true) return data.labels.length >= 3;
-  if (data.labels.length + 1 < 3 || data.values.length < 4) return false;
-  const cached = mappableCache.get(data);
-  if (cached !== undefined) return cached;
-  const ok = data.metadata["scatteredXYZ"] === true || hasGridAxes(data);
-  mappableCache.set(data, ok);
-  return ok;
-}
-
-/** Pair scans / rows examined since load (the gate's perf invariant). */
-export const mapGateWork = { pairScans: 0, pairRows: 0 };
-const SAMPLE_ROWS = 20_000;
-const MAX_CANDIDATES = 8;
-
-interface Axis {
-  idx: Int32Array; // level index per sampled row, -1 where not finite
-  val: Float64Array; // the sampled values (NaN where not finite)
-  levels: number;
-}
-
-/** Level-index a column over the sampled rows; null unless it repeats like an
- *  axis (3..m/2 distinct finite values). */
-function axisOf(m: number, at: (r: number) => number | null | undefined): Axis | null {
-  // levels-allowlist: counts distinct numeric axis values -- not category levels.
-  const seen = new Map<number, number>();
-  const idx = new Int32Array(m);
-  const val = new Float64Array(m);
-  for (let r = 0; r < m; r++) {
-    const v = at(r);
-    if (typeof v !== "number" || !Number.isFinite(v)) {
-      idx[r] = -1;
-      val[r] = NaN;
-      continue;
-    }
-    let k = seen.get(v);
-    if (k === undefined) {
-      k = seen.size;
-      seen.set(v, k);
-      if (seen.size > m / 2) return null;
-    }
-    idx[r] = k;
-    val[r] = v;
-  }
-  return seen.size >= 3 ? { idx, val, levels: seen.size } : null;
-}
-
-function hasGridAxes(data: DataStruct): boolean {
-  const n = data.values.length;
-  let stride = Math.ceil(n / SAMPLE_ROWS);
-  if (stride > 1 && stride % 2 === 0) stride++; // odd: avoid aliasing with even line lengths
-  const m = Math.floor((n - 1) / stride) + 1;
-  const cand: Axis[] = [];
-  const t = axisOf(m, (r) => data.time[r * stride]);
-  if (t) cand.push(t);
-  for (let c = 0; c < data.labels.length && cand.length < MAX_CANDIDATES; c++) {
-    const a = axisOf(m, (r) => data.values[r * stride][c]);
-    if (a) cand.push(a);
-  }
-  for (let a = 0; a < cand.length; a++) {
-    for (let b = a + 1; b < cand.length; b++) if (tiles(cand[a], cand[b], m)) return true;
-  }
-  return false;
-}
-
-/** Per slow-axis level: rows in the line, new fast values, and whether the fast
- *  value ever reverses direction along the line (row order). */
-class Lines {
-  cnt: Int32Array; fresh: Int32Array; bad: Uint8Array;
-  private last: Float64Array; private dir: Int8Array;
-  constructor(levels: number) {
-    this.cnt = new Int32Array(levels); this.fresh = new Int32Array(levels); this.bad = new Uint8Array(levels);
-    this.last = new Float64Array(levels).fill(NaN); this.dir = new Int8Array(levels);
-  }
-  add(slow: number, fast: number, isNew: boolean): void {
-    this.cnt[slow]++;
-    if (isNew) this.fresh[slow]++;
-    const p = this.last[slow];
-    const s = Math.sign(fast - p); // NaN on a line's first point: no direction yet
-    if (s !== 0 && s === s) {
-      if (this.dir[slow] === 0) this.dir[slow] = s;
-      else if (this.dir[slow] !== s) this.bad[slow] = 1;
-    }
-    this.last[slow] = fast;
-  }
-}
-
-/** Do two candidate axes tile a grid (full, or as uniform monotone scan lines)? */
-function tiles(a: Axis, b: Axis, m: number): boolean {
-  // Lines need >=3 points on each side, so the thinner axis has <= m/3 levels.
-  if (Math.min(a.levels, b.levels) > m / 3) return false;
-  mapGateWork.pairScans++;
-  mapGateWork.pairRows += m;
-  const cells = a.levels * b.levels;
-  const bits = cells <= 4_000_000 ? new Uint8Array(cells) : null;
-  const set = bits ? null : new Set<number>();
-  const byA = new Lines(a.levels), byB = new Lines(b.levels);
-  let pairs = 0;
-  for (let r = 0; r < m; r++) {
-    const ia = a.idx[r], ib = b.idx[r];
-    if (ia < 0 || ib < 0) continue;
-    const key = ia * b.levels + ib;
-    const isNew = !(bits ? bits[key] : set!.has(key));
-    if (isNew) {
-      if (bits) bits[key] = 1;
-      else set!.add(key);
-      pairs++;
-    }
-    byA.add(ia, b.val[r], isNew);
-    byB.add(ib, a.val[r], isNew);
-  }
-  if (pairs >= 0.8 * cells) return true;
-  // the fast axis must recur across lines (each level visited by >=3 rows)
-  return (b.levels <= m / 3 && uniformLines(byA)) || (a.levels <= m / 3 && uniformLines(byB));
-}
-
-/** >=3 slow-axis lines of >=3 points, near-constant (+-20 %) length, whose fast
- *  values are mostly new and run in one direction along each line. */
-function uniformLines(l: Lines): boolean {
-  const live = Array.from(l.cnt).filter((c) => c > 0).sort((x, y) => x - y);
-  const median = live[live.length >> 1];
-  if (live.length < 3 || median < 3) return false;
-  let ok = 0;
-  for (let k = 0; k < l.cnt.length; k++) {
-    const c = l.cnt[k];
-    if (c >= 0.8 * median && c <= 1.25 * median && l.fresh[k] >= 0.8 * c && !l.bad[k]) ok++;
-  }
-  return ok >= 0.8 * live.length;
+  if (tooSmall(data)) return false;
+  return data.metadata["scatteredXYZ"] === true || gate.get(data) === true;
 }

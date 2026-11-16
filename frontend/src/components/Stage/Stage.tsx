@@ -23,9 +23,9 @@
 // window after already visiting the matching tab (or vice versa) is a cache
 // hit, not a second fetch.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { canRenderMap } from "../../lib/mapdata";
+import { canRenderMap, ensureMapGate, mapGateVersion, subscribeMapGate } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { plotIntentStageTab } from "../../lib/stagetab";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
@@ -92,6 +92,10 @@ export default function Stage() {
   // never produce a map, so the tab was a permanent invitation to a screen that
   // only apologises. Same capability rule MapStage itself uses (lib/mapdata),
   // not a second copy of it.
+  // The grid test is a lazy chunk (fail closed until it lands); this is also
+  // the warm-up: the first stage render for a dataset loads and memoises it.
+  useSyncExternalStore(subscribeMapGate, mapGateVersion);
+  useEffect(() => void ensureMapGate(active?.data), [active?.data]);
   const mappable = canRenderMap(active?.data);
   const tabs = TABS.filter((t) => t.id !== "map" || mappable);
 

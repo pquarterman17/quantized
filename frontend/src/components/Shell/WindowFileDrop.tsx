@@ -10,8 +10,16 @@
 
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { importDroppedFiles, isFileDrag, isForeignLinkDrag } from "../../lib/fileDrop";
+import { importDroppedFiles, isFileDrag } from "../../lib/fileDrop";
 import { useApp } from "../../store/useApp";
+
+/** A link / page drag from another tab or window: no files, a URL, and none of
+ *  this app's own `application/x-qz-*` payloads. Dropping it would navigate. */
+const isForeignLinkDrag = (dt: DataTransfer | null | undefined): boolean => {
+  if (!dt) return false;
+  const t = Array.from(dt.types);
+  return t.includes("text/uri-list") && !t.includes("Files") && !t.some((x) => x.startsWith("application/x-qz"));
+};
 
 const Overlay = lazy(() => import("./FileDropOverlay"));
 

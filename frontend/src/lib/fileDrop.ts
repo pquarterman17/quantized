@@ -9,14 +9,6 @@ import { useState, type DragEvent as ReactDragEvent } from "react";
 /** The drag carries OS files (dataset / channel / panel drags never do). */
 export const isFileDrag = (dt: DataTransfer | null | undefined): boolean => !!dt && Array.from(dt.types).includes("Files");
 
-/** A link / page drag from another tab or window: no files, a URL, and none of
- *  this app's own `application/x-qz-*` payloads. Dropping it would navigate. */
-export const isForeignLinkDrag = (dt: DataTransfer | null | undefined): boolean => {
-  if (!dt) return false;
-  const t = Array.from(dt.types);
-  return t.includes("text/uri-list") && !t.includes("Files") && !t.some((x) => x.startsWith("application/x-qz"));
-};
-
 const taken = new WeakSet<Event>();
 
 /** Import the files carried by a drop event once; later callers see it taken. */
