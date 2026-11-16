@@ -14,6 +14,7 @@ from typing import Any
 
 import matplotlib
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from numpy.typing import NDArray
 
 __all__ = [
@@ -22,11 +23,14 @@ __all__ = [
     "check_angles",
     "check_curve_inputs",
     "check_extent",
+    "check_zoom",
     "check_grid_3d",
     "decimate",
     "draw_curves",
+    "draw_drop_lines",
     "parse_curves",
     "set_log_zticks",
+    "set_view",
     "step_rows",
 ]
 
@@ -45,6 +49,31 @@ def check_angles(elev: float, azim: float) -> None:
         raise ValueError("view_elev must be a finite number from -90 to 90 degrees")
     if not (math.isfinite(azim) and -360.0 <= azim <= 360.0):
         raise ValueError("view_azim must be a finite number from -360 to 360 degrees")
+
+
+# The interactive 3-D view's zoom range (frontend lib/project3d.ts ZOOM_RANGE):
+# the export draws the same magnification, so screen and figure crop alike.
+ZOOM_MIN, ZOOM_MAX = 0.5, 3.0
+
+
+def check_zoom(zoom: float) -> None:
+    if not (math.isfinite(zoom) and ZOOM_MIN <= zoom <= ZOOM_MAX):
+        raise ValueError(f"view_zoom must be a finite number from {ZOOM_MIN} to {ZOOM_MAX}")
+
+
+def set_view(ax: Any, elev: float, azim: float, zoom: float) -> None:
+    """The interactive view's camera on a 3-D axes: the same elevation and
+    azimuth, an ORTHOGRAPHIC projection (the screen view has no perspective;
+    matplotlib's default 90-degree perspective would bend the box differently)
+    and the same zoom of matplotlib's default 4:4:3 box."""
+    # Exactly +/-90 is matplotlib's degenerate pole (its up vector is undefined
+    # there and it falls back to a fudge that turns the plot ~3 degrees off the
+    # azimuth); the screen camera is the limit approaching the pole, which a
+    # 1e-6 degree step reproduces exactly.
+    pole = 90.0 - 1e-6
+    ax.view_init(elev=max(-pole, min(pole, elev)), azim=azim)
+    ax.set_proj_type("ortho")
+    ax.set_box_aspect((4, 4, 3), zoom=zoom)
 
 
 def check_extent(*arrays: NDArray[np.float64]) -> None:
@@ -144,6 +173,19 @@ def draw_curves(ax: Any, curves: list[Curve], cmap: str) -> None:
     line_cmap = matplotlib.colormaps[cmap]
     for j, (xs, zs, depth) in enumerate(curves):
         ax.plot(xs, np.full(xs.size, depth), zs, color=line_cmap(j / max(1, len(curves) - 1)))
+
+
+def draw_drop_lines(
+    ax: Any, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64]
+) -> None:
+    """A 3-D scatter's drop lines: each point joined straight down to the lowest
+    z drawn (one collection, so 50k points stay one path)."""
+    if z.size == 0:
+        return
+    floor = float(np.min(z))
+    base = np.column_stack([x, y, np.full(z.size, floor)])
+    segs = np.stack([base, np.column_stack([x, y, z])], axis=1)
+    ax.add_collection3d(Line3DCollection(segs, colors="0.45", linewidths=0.4, alpha=0.5))
 
 
 def set_log_zticks(ax: Any, log_decade_ticks: Any) -> None:

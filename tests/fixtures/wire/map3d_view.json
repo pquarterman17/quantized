@@ -1,0 +1,319 @@
+{
+  "cases": [
+    {
+      "name": "the default view",
+      "view": {
+        "elev": 30,
+        "azim": -60,
+        "zoom": 1
+      },
+      "edges": [
+        [
+          0.960768922830523,
+          -0.27735009811261463
+        ],
+        [
+          0.5547001962252294,
+          0.48038446141526137
+        ],
+        [
+          0,
+          0.7205766921228922
+        ]
+      ],
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20,
+          30
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            6
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "kind": "surface",
+        "view_elev": 30,
+        "view_azim": -60,
+        "view_zoom": 1,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      }
+    },
+    {
+      "name": "drag right and down",
+      "view": {
+        "elev": 50,
+        "azim": -120,
+        "zoom": 1
+      },
+      "edges": [
+        [
+          0.9145460713519808,
+          0.404481746652006
+        ],
+        [
+          -0.5280134204813806,
+          0.7005829359354773
+        ],
+        [
+          0,
+          0.5091007266504607
+        ]
+      ],
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20,
+          30
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            6
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "kind": "surface",
+        "view_elev": 50,
+        "view_azim": -120,
+        "view_zoom": 1,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      }
+    },
+    {
+      "name": "arrow keys and zoom in",
+      "view": {
+        "elev": 45,
+        "azim": -50,
+        "zoom": 1.21
+      },
+      "edges": [
+        [
+          0.8600121206459053,
+          -0.5102736053747369
+        ],
+        [
+          0.7216358532419697,
+          0.6081204024113429
+        ],
+        [
+          0,
+          0.5953836045745843
+        ]
+      ],
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20,
+          30
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            6
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "kind": "surface",
+        "view_elev": 45,
+        "view_azim": -50,
+        "view_zoom": 1.21,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      }
+    },
+    {
+      "name": "from below, past 180 degrees, zoomed out",
+      "view": {
+        "elev": -45,
+        "azim": -170,
+        "zoom": 0.74
+      },
+      "edges": [
+        [
+          0.2419547857523649,
+          -0.970287525247814
+        ],
+        [
+          -1.3721937776068855,
+          -0.17108786974603546
+        ],
+        [
+          0,
+          0.7389418307380442
+        ]
+      ],
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20,
+          30
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            6
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "kind": "surface",
+        "view_elev": -45,
+        "view_azim": -170,
+        "view_zoom": 0.74,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      }
+    },
+    {
+      "name": "looking straight down",
+      "view": {
+        "elev": 90,
+        "azim": -60,
+        "zoom": 1.82
+      },
+      "edges": [
+        [
+          0.8660254037844386,
+          -0.5000000000000001
+        ],
+        [
+          0.5000000000000001,
+          0.8660254037844386
+        ],
+        [
+          0,
+          4.592425496802574e-17
+        ]
+      ],
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20,
+          30
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            6
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "kind": "surface",
+        "view_elev": 90,
+        "view_azim": -60,
+        "view_zoom": 1.82,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      }
+    }
+  ]
+}

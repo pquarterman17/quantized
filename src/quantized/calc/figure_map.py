@@ -33,10 +33,13 @@ from quantized.calc.figure_map3d import (
     check_curve_inputs,
     check_extent,
     check_grid_3d,
+    check_zoom,
     decimate,
     draw_curves,
+    draw_drop_lines,
     parse_curves,
     set_log_zticks,
+    set_view,
     step_rows,
 )
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
@@ -101,6 +104,7 @@ def render_map_figure(
     dpi: int | None = None,
     view_elev: float = 30.0,
     view_azim: float = -60.0,
+    view_zoom: float = 1.0,
     z_limits: Sequence[float] | None = None,
     equal_aspect: bool = False,
     lines: Sequence[Sequence[float]] | None = None,
@@ -109,6 +113,7 @@ def render_map_figure(
     note: str = "",
     max_lines: int = 0,
     curves: Sequence[Mapping[str, Any]] | None = None,
+    drop_lines: bool = False,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -135,7 +140,9 @@ def render_map_figure(
     - ``heatmap`` — ``pcolormesh`` of the grid (``"grid"`` source only),
       rasterized at ``dpi`` inside an otherwise vector SVG/PDF (no cell seams).
     - ``surface`` / ``scatter3d`` / ``waterfall`` — static 3-D (mplot3d),
-      viewed from (``view_elev``, ``view_azim``) (``"grid"`` source only).
+      viewed from (``view_elev``, ``view_azim``) in an orthographic
+      projection magnified by ``view_zoom`` (0.5..3) -- the interactive 3-D
+      view's own camera, so the figure matches the screen.
 
     ``fmt`` / ``style`` / size overrides match ``render_figure``. ``dpi``
     defaults to the style preset's calibrated resolution when not given
@@ -171,6 +178,8 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
+    if kind in _3D_KINDS:
+        check_zoom(view_zoom)
     curve_list: list[Any] = []
     clim = _z_limits(z_limits)
     st = figure_style(style)
@@ -266,6 +275,10 @@ def render_map_figure(
             label_contours, view_elev, view_azim, contour_source=contour_source,
             max_lines=max_lines, curve_list=curve_list,
         )
+        if kind == "scatter3d" and drop_lines:
+            draw_drop_lines(ax, x, y, z)
+        if kind in _3D_KINDS:
+            set_view(ax, view_elev, view_azim, view_zoom)
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
         if kind == "heatmap":
@@ -286,7 +299,9 @@ def render_map_figure(
         if colorbar_log10 and kind in _3D_KINDS:
             set_log_zticks(ax, log_decade_ticks)
         if colorbar and mappable is not None:
-            cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            # A 3-D z axis sits on the right: pad the bar clear of its label.
+            pad = 0.12 if kind in _3D_KINDS else 0.05
+            cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8, pad=pad)
             if colorbar_log10:
                 ticks = log_decade_ticks(*mappable.get_clim())
                 cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])

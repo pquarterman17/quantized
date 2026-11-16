@@ -1,0 +1,132 @@
+// The Map stage's INTERACTIVE 3-D view (gap audit 5, items 3d/3e): it opens by
+// default, draws nothing server-side, and each settled gesture is ONE undoable
+// write of the camera into the map's 3-D view -- which ⤓ then exports.
+
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
+vi.mock("../../../lib/api/mapFigure", () => ({
+  exportMapFigure: vi.fn(() => Promise.resolve()),
+  renderMapFigure: vi.fn(() => Promise.resolve(new Blob(["png"], { type: "image/png" }))),
+}));
+
+import { exportMapFigure, renderMapFigure } from "../../../lib/api/mapFigure";
+import { EMPTY_MAP_VIEWS, mapViewFor } from "../../../lib/mapView";
+import { DEFAULT_MAP3D } from "../../../lib/mapView3d";
+import type { Dataset } from "../../../lib/types";
+import { useApp } from "../../../store/useApp";
+import { askParams } from "../../overlays/ParamDialog";
+import MapStage from "../MapStage";
+import { COMMIT_IDLE_MS } from "./useOrbit";
+
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+// jsdom has no PointerEvent: without one, fireEvent.pointer* carries no clientX.
+class FakePointerEvent extends MouseEvent {
+  pointerId: number;
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+  }
+}
+
+function grid(id: string): Dataset {
+  const values: number[][] = [];
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) values.push([i, j, 1 + i * 4 + j]);
+  return { id, name: `${id}.dat`, data: { time: values.map((_, k) => k), values, labels: ["X", "Y", "Signal"], units: ["mm", "mm", "V"], metadata: {} } };
+}
+
+beforeAll(() => {
+  vi.stubGlobal("ResizeObserver", MockResizeObserver);
+  vi.stubGlobal("PointerEvent", FakePointerEvent);
+  vi.stubGlobal("fetch", () => Promise.reject(new Error("offline")));
+});
+
+afterAll(() => vi.unstubAllGlobals());
+
+beforeEach(() => {
+  vi.mocked(exportMapFigure).mockClear();
+  vi.mocked(renderMapFigure).mockClear();
+  useApp.getState().loadWorkspace({ datasets: [grid("scan")], activeId: "scan" });
+  useApp.setState({ mapViews: EMPTY_MAP_VIEWS, mapRes: 50, status: "" });
+  useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface" });
+});
+
+const view3d = () => mapViewFor(useApp.getState().mapViews, "scan").view3d;
+const plot = () => screen.findByRole("img", { name: /Surface of Signal/ });
+
+describe("Map stage interactive 3-D", () => {
+  it("opens interactive and asks the server for nothing", async () => {
+    render(<MapStage />);
+    expect(await plot()).toBeTruthy();
+    expect(document.querySelector("[data-map3d-interactive]")).not.toBeNull();
+    expect(renderMapFigure).not.toHaveBeenCalled();
+  });
+
+  it("keyboard rotation commits ONCE after the keys stop; undo restores the view; ⤓ exports the view on screen", async () => {
+    vi.mocked(askParams).mockImplementation(async (_t, fields) => ({ ...Object.fromEntries(fields.map((f) => [f.key, f.default])), fmt: "pdf" }));
+    render(<MapStage />);
+    const el = await plot();
+    const undoDepth = () => useApp.getState().history.length;
+    const before = undoDepth();
+    fireEvent.keyDown(el, { key: "ArrowLeft" });
+    fireEvent.keyDown(el, { key: "ArrowLeft" });
+    fireEvent.keyDown(el, { key: "ArrowUp", shiftKey: true });
+    fireEvent.keyDown(el, { key: "+" });
+    expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 }); // nothing written mid-gesture
+    expect(screen.getByText(/elevation 45°, azimuth -50°, zoom 1\.10×/)).toBeTruthy();
+    await act(() => new Promise((r) => setTimeout(r, COMMIT_IDLE_MS + 100)));
+    expect(view3d()).toMatchObject({ elev: 45, azim: -50, zoom: 1.1, kind: "surface" });
+    expect(undoDepth()).toBe(before + 1);
+
+    fireEvent.click(screen.getByTitle(/^Export map/));
+    await waitFor(() => expect(useApp.getState().status).toBe("exported scan_map.pdf"));
+    expect(vi.mocked(exportMapFigure).mock.calls[0]![0]).toMatchObject({ kind: "surface", view_elev: 45, view_azim: -50, view_zoom: 1.1 });
+    // The export dialog offered the same angles as its defaults.
+    const fields = vi.mocked(askParams).mock.calls[0]![1];
+    expect(fields.find((f) => f.key === "elev")?.default).toBe(45);
+    expect(fields.find((f) => f.key === "azim")?.default).toBe(-50);
+
+    act(() => useApp.getState().undo());
+    expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 });
+    await waitFor(() => expect(screen.getByText(/elevation 30°, azimuth -60°, zoom 1\.00×/)).toBeTruthy());
+  });
+
+  it("a drag is one undo step, written on release", async () => {
+    render(<MapStage />);
+    const el = await plot();
+    const before = useApp.getState().history.length;
+    fireEvent.pointerDown(el, { pointerId: 3, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 3, clientX: 140, clientY: 110 });
+    fireEvent.pointerMove(el, { pointerId: 3, clientX: 160, clientY: 120 });
+    expect(view3d()?.azim).toBe(-60);
+    fireEvent.pointerUp(el, { pointerId: 3, clientX: 160, clientY: 120 });
+    expect(view3d()).toMatchObject({ elev: 40, azim: -90 });
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("Reset view returns to the default camera; the panel's angle fields follow the stored view", async () => {
+    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface", elev: 10, azim: 100, zoom: 2 });
+    render(<MapStage />);
+    await plot();
+    expect(screen.getByText(/elevation 10°, azimuth 100°, zoom 2\.00×/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reset 3-D view" }));
+    expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 });
+  });
+
+  it("3-D scatter offers drop lines, kept with the view and sent with the export", async () => {
+    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "scatter3d" });
+    vi.mocked(askParams).mockImplementation(async (_t, fields) => ({ ...Object.fromEntries(fields.map((f) => [f.key, f.default])), fmt: "svg" }));
+    render(<MapStage />);
+    fireEvent.click(await screen.findByLabelText("Drop lines"));
+    expect(view3d()?.dropLines).toBe(true);
+    fireEvent.click(screen.getByTitle(/^Export map/));
+    await waitFor(() => expect(useApp.getState().status).toBe("exported scan_map.svg"));
+    expect(vi.mocked(exportMapFigure).mock.calls[0]![0]).toMatchObject({ kind: "scatter3d", drop_lines: true });
+  });
+});

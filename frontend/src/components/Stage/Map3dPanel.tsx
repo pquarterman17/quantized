@@ -91,7 +91,7 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
           </label>
           <TextField label="Title" value={view3d.title} width={140} onCommit={(title) => edit({ title })} />
           <div style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "normal", lineHeight: 1.4 }}>
-            A static render; ⤓ exports exactly this view. Colormap is the toolbar's “map”. Needs a grid of at least 2×2
+            Drag the plot to rotate it, wheel to zoom; ⤓ exports exactly this view. Colormap is the toolbar's “map”. Needs a grid of at least 2×2
             {view3d.kind === "waterfall" ? ` and two or more rows; at most ${WATERFALL_MAX_LINES} evenly stepped rows are drawn (the preview says how many)` : ""}
             {view3d.kind === "scatter3d" ? "; scattered data plots your original points, not the regridded surface" : ""}.
           </div>

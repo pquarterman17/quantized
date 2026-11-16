@@ -1,10 +1,12 @@
-// The map's static 3-D view: which of the server-rendered 3-D marks (surface,
-// scatter, waterfall) the Map stage shows INSTEAD of the 2-D canvas, from which
-// angle, and how the z axis reads. A user decision, so it lives in the durable
-// per-dataset map view (`lib/mapView.ts`: `.dwk`, undo) and rides along in a
-// saved figure (recipe). Absent = the 2-D map. Static only: the picture is a
-// matplotlib render (`/api/export/map-figure`), and the export is the SAME
-// request with another format -- see `components/Stage/map3dRequest.ts`.
+// The map's 3-D view: which 3-D mark (surface, scatter, waterfall) the Map
+// stage shows INSTEAD of the 2-D canvas, from which angle and zoom, and how the
+// z axis reads. A user decision, so it lives in the durable per-dataset map
+// view (`lib/mapView.ts`: `.dwk`, undo) and rides along in a saved figure
+// (recipe). Absent = the 2-D map. On screen it is the interactive canvas
+// (`components/Stage/Map3D/`, whose settled rotation and zoom are written
+// here) or the server render; the export is the matplotlib render
+// (`/api/export/map-figure`) of the SAME camera -- see
+// `components/Stage/map3dRequest.ts`.
 //
 // EAGER module (the store reaches it): keep it tiny; the editing panel and the
 // preview are lazy chunks.
@@ -18,6 +20,10 @@ export interface Map3dView {
   elev: number;
   /** Azimuth, degrees, -360..360. */
   azim: number;
+  /** Magnification, 0.5..3 (`lib/project3d.ts` ZOOM_RANGE); the export draws it too. */
+  zoom: number;
+  /** 3-D scatter: a faint line from each point down to the floor. */
+  dropLines: boolean;
   /** z-axis label / unit; blank = the dataset channel's own. */
   zLabel: string;
   zUnit: string;
@@ -31,7 +37,7 @@ export interface Map3dView {
  *  panel's first option instead of the stored value. */
 export const MAP3D_STYLES: readonly string[] = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
 
-export const DEFAULT_MAP3D: Map3dView = { kind: "surface", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" };
+export const DEFAULT_MAP3D: Map3dView = { kind: "surface", elev: 30, azim: -60, zoom: 1, dropLines: false, zLabel: "", zUnit: "", style: "default", title: "" };
 
 const clamp = (v: unknown, lim: number, d: number): number =>
   typeof v === "number" && Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : d;
@@ -46,6 +52,7 @@ export function sanitizeMap3d(raw: unknown): Map3dView | undefined {
   const d = DEFAULT_MAP3D;
   return {
     kind, elev: clamp(o.elev, 90, d.elev), azim: clamp(o.azim, 360, d.azim),
+    zoom: Math.min(3, Math.max(0.5, clamp(o.zoom, 3, 1))), dropLines: o.dropLines === true,
     zLabel: str(o.zLabel, ""), zUnit: str(o.zUnit, ""), style: MAP3D_STYLES.find((s) => s === o.style) ?? d.style, title: str(o.title, ""),
   };
 }

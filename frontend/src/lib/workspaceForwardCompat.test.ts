@@ -109,10 +109,10 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "Annotation.dot": (ws) => editView(ws, (v) => { v.annotations = [...v.annotations, { id: "t", x: 1, y: 2, text: "note", dot: false }]; }),
   "MapViewState.view3d": (ws) => {
-    ws.mapViews = { a: { ...DEFAULT_MAP_VIEW, view3d: { kind: "surface", elev: 40, azim: 25, zLabel: "Z", zUnit: "u", style: "nature", title: "T" } } };
+    ws.mapViews = { a: { ...DEFAULT_MAP_VIEW, view3d: { kind: "surface", elev: 40, azim: 25, zLabel: "Z", zUnit: "u", style: "nature", title: "T", zoom: 1.5, dropLines: true } } };
   },
   "RecipeMapView.view3d": (ws) => {
-    ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" } };
+    ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", zoom: 1, dropLines: false } };
   },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
