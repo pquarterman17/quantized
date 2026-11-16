@@ -12,6 +12,7 @@ import { stemFromName } from "../../../lib/exportActive";
 import { copyText } from "../../../lib/clipboard";
 import { fitResultMarkdown, fitResultTsv, fitResultView, type FitResultInput } from "../../../lib/fitResultView";
 import { sigFigs } from "../../../lib/fitValueFormat";
+import { fmtNum as fmt } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CalcResult, Dataset } from "../../../lib/types";
