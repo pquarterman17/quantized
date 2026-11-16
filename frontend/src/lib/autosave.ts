@@ -4,182 +4,181 @@
 // large library "can exceed the ~5 MB quota". One generation deep, so a bad
 // write cost the work and there was nothing to fall back to.
 //
-// Now: several rotating generations on a backend that is IndexedDB where the
-// engine has it (see ./autosaveBackend.ts), with the old localStorage slot as a
-// one-generation fallback so no browser ends up worse off than before. The
-// rules deciding what to keep and what to restore are pure and tested in
-// ./autosaveGenerations.ts; this module is the seam wiring them to a store and
-// reporting health.
+// Now: several rotating generations on IndexedDB where the engine has it, with
+// the old localStorage slot as a one-generation fallback. The API is ASYNC —
+// IndexedDB has no synchronous mode. Callers await.
 //
-// The API is now ASYNC — IndexedDB has no synchronous mode. Callers await.
+// This module is only the EAGER surface (bundle headroom, soak-fix lane): the
+// backend and health every caller shares, and thin wrappers over
+// ./autosaveCore.ts — a lazy chunk the startup restore brings in, which holds
+// the generation rules, the backends and the on-hide stash. The one
+// synchronous entry point, `stashAutosave`, uses the core only once it is
+// here; a page left before then simply has no stash, and its async save
+// starts as it always did.
 
-import {
-  capByAge,
-  capBySize,
-  pickRestorable,
-  rotate,
-  totalSize,
-  type AutosaveHealth,
-  type Generation,
-} from "./autosaveGenerations";
-import { defaultBackend, LEGACY_KEY, type AutosaveBackend } from "./autosaveBackend";
+import type { AutosaveBackend } from "./autosaveBackend";
+import type { AutosaveHealth, Generation } from "./autosaveGenerations";
 import type { LoadedWorkspace, WorkspaceState } from "./workspace";
 import { workspaceCodec } from "./workspaceCodecLazy";
 
-/** The lazily loaded `.dwk` codec (bundle headroom slice 9): only its parser
- *  is needed here, and only once there is something to validate. */
-type ParseWorkspace = Awaited<ReturnType<typeof workspaceCodec>>["parseWorkspace"];
+/** Shared with the lazy core: the backend (resolved on first use, so the
+ *  backend code stays in the core chunk), the persistent health readout, and
+ *  the startup-restore guard (review N2): until the restore has succeeded or
+ *  been declined, generations from before `pinBefore` (this session's start)
+ *  are exempt from the count cap, and `restoreError` keeps a failed restore
+ *  on the persistent health line even after saves succeed. */
+export interface AutosaveState {
+  backend: AutosaveBackend | null;
+  health: AutosaveHealth;
+  pinBefore: number | null;
+  restoreError: string | null;
+  /** The previous session was APPENDED; its full copy is still pinned for a
+   *  Replace or Discard — "kept", not "not restored". */
+  restoreKept: boolean;
+  /** An unanswered recovery carried over from the previous page (review F2):
+   *  generations before this time are that session, still to be offered. */
+  carried: number | null;
+}
 
-/** Total retained bytes across all generations. Generous next to localStorage's
- *  ~5 MB because IndexedDB can take it, but still bounded — #32 wants recovery
- *  storage that cannot grow forever. */
-export const AUTOSAVE_BUDGET_BYTES = 64 * 1024 * 1024;
+/** The pending-recovery marker: while a previous session waits for an answer
+ *  (or for a restore that would not load), the time below which generations
+ *  are that session. Survives a reload, so the next startup offers the same
+ *  generation again instead of quietly restoring this session's newest save
+ *  and letting it rotate the old one out. Cleared when the pin settles. */
+export const PENDING_RECOVERY_KEY = "qz.autosave.pendingRecovery";
 
-let backend: AutosaveBackend = defaultBackend();
-let health: AutosaveHealth = { savedAt: null, error: null, count: 0 };
+function readMarker(): number | null {
+  try {
+    const at = Number(localStorage.getItem(PENDING_RECOVERY_KEY));
+    return Number.isFinite(at) && at > 0 ? at : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMarker(at: number | null): void {
+  try {
+    if (at === null) localStorage.removeItem(PENDING_RECOVERY_KEY);
+    else localStorage.setItem(PENDING_RECOVERY_KEY, String(at));
+  } catch {
+    /* storage blocked: the pin still holds for this page */
+  }
+}
+
+const carried = readMarker();
+const autosaveState: AutosaveState = {
+  backend: null,
+  health: { savedAt: null, error: null, count: 0 },
+  pinBefore: Math.min(Date.now(), carried ?? Infinity),
+  restoreError: null,
+  restoreKept: false,
+  carried,
+};
+
+type Core = typeof import("./autosaveCore");
+type RestoredGeneration = import("./autosaveCore").RestoredGeneration;
+let core: Core | null = null;
+let coreLoad: Promise<Core> | null = null;
+
+/** The core chunk, fetched once and bound to this module's state and codec
+ *  seam; a load that fails is not cached. */
+function autosaveCore(): Promise<Core> {
+  coreLoad ??= import("./autosaveCore").then(
+    (m) => (m.bindAutosave({ state: autosaveState, codec: workspaceCodec }), (core = m)),
+    (e: unknown) => {
+      coreLoad = null;
+      throw e;
+    },
+  );
+  return coreLoad;
+}
+
+const failure = (e: unknown): string => (e instanceof Error ? e.message : "storage unavailable");
 
 /** Swap the backing store. Tests use `memoryBackend()`; production never calls
  *  this. Resets health so one test cannot inherit another's state. */
 export function setAutosaveBackend(next: AutosaveBackend): void {
-  backend = next;
-  health = { savedAt: null, error: null, count: 0 };
+  autosaveState.backend = next;
+  autosaveState.health = { savedAt: null, error: null, count: 0 };
+  autosaveState.pinBefore = autosaveState.restoreError = null; // a test starts settled
+  autosaveState.restoreKept = false;
 }
 
+/** The startup restore failed (`error`) and will be retried: generations from
+ *  before `pinBefore` stay out of the rotation, and the failure stays on the
+ *  health line. */
+export function autosaveRestorePending(error: string, pinBefore = Date.now(), kept = false): void {
+  autosaveState.pinBefore ??= pinBefore;
+  autosaveState.restoreError = error;
+  autosaveState.restoreKept = kept;
+  writeMarker(autosaveState.pinBefore);
+}
+
+/** The startup restore succeeded, or the user declined it: normal rotation. */
+export function autosaveRestoreSettled(): void {
+  autosaveState.pinBefore = autosaveState.restoreError = autosaveState.carried = null;
+  autosaveState.restoreKept = false;
+  writeMarker(null);
+}
+
+/** The health readout. A pending restore rides on its OWN field (review R8):
+ *  the status bar says "previous session not restored", never "autosave
+ *  failing" while saves are succeeding. */
 export function autosaveHealth(): AutosaveHealth {
-  return health;
-}
-
-export function autosaveBackendKind(): AutosaveBackend["kind"] {
-  return backend.kind;
-}
-
-function isRestorable(parseWorkspace: ParseWorkspace, text: string): boolean {
-  try {
-    return parseWorkspace(text).datasets.length > 0;
-  } catch {
-    return false;
-  }
+  const { health, restoreError, restoreKept } = autosaveState;
+  return restoreError ? { ...health, restoreError, ...(restoreKept ? { restoreKept } : {}) } : health;
 }
 
 /** Persist the workspace as a new generation (empty library → clear the slot).
- *
- *  Resolves false on any storage failure, leaving `autosaveHealth().error` set
- *  so the UI can show a PERSISTENT warning instead of a status line that
- *  scrolls away — the transient message was the pre-#32 weakness. */
+ *  Resolves false on any failure — a core chunk that will not load included —
+ *  leaving `autosaveHealth().error` set for the persistent warning. */
 export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promise<boolean> {
   try {
-    if (ws.datasets.length === 0) {
-      await backend.clear();
-      health = { savedAt: health.savedAt, error: null, count: 0 };
-      return true;
-    }
-    // Inside the try: a codec chunk that will not load is reported like any
-    // other failed save (persistent health warning), and the next save retries.
-    const { serializeWorkspace } = await workspaceCodec();
-    const existing = await backend.read();
-    // Three bounds, applied in sequence, each preserving the newest
-    // generation on its own axis (count / age / size) — see
-    // autosaveGenerations.ts's docs on rotate/capByAge/capBySize.
-    const kept = capBySize(
-      // P2.7: the fit-model CARRY only, not the library — a restore happens
-      // on this machine, whose library is newer (lib/fitModelsProject.ts).
-      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, { fitModelLibrary: false, compact: true }) }), now),
-      AUTOSAVE_BUDGET_BYTES,
-    );
-    await backend.write(kept);
-    health = { savedAt: now, error: null, count: kept.length };
-    return true;
-  } catch (e: unknown) {
-    health = { ...health, error: e instanceof Error ? e.message : "storage unavailable" };
+    return (await autosaveCore()).saveAutosave(ws, now);
+  } catch (e) {
+    autosaveState.health = { ...autosaveState.health, error: failure(e) };
     return false;
   }
 }
 
-/** Restore the newest RESTORABLE generation, or null when none is usable.
- *
- *  Skipping past a corrupt newest snapshot to a good older one is the entire
- *  reason several generations are kept. */
+/** The newest restorable generation and its `at`, or null. REJECTS when the
+ *  code to read it will not load — never "nothing to restore" over a good
+ *  autosave (the caller reports the rejection). */
+export async function loadAutosaveGeneration(): Promise<RestoredGeneration | null> {
+  workspaceCodec().catch(() => undefined); // fetch the codec alongside the core chunk; the core reports failure
+  return (await autosaveCore()).loadAutosaveGeneration();
+}
+
 export async function loadAutosave(): Promise<LoadedWorkspace | null> {
-  const picked = await loadAutosaveGeneration();
-  return picked ? picked.workspace : null;
+  return (await loadAutosaveGeneration())?.workspace ?? null;
 }
 
-/** Same restore rule as `loadAutosave`, but also returns the generation's
- *  `at` timestamp — P1.2 box "explain crash recovery source/time/choices"
- *  needs the candidate's age to decide whether it is newer than the last-
- *  opened project, which the workspace content alone can't say. */
-export async function loadAutosaveGeneration(): Promise<
-  { workspace: LoadedWorkspace; at: number } | null
-> {
-  // The codec chunk is fetched alongside the storage read, and awaited OUTSIDE
-  // the try below: a chunk that will not load must REJECT, never read as
-  // "nothing to restore" — that would show an empty library over a perfectly
-  // good autosave. The caller (useWorkspaceAutosave) reports the rejection.
-  const [codec, read] = await Promise.allSettled([workspaceCodec(), (async () => backend.read())()]);
-  if (codec.status === "rejected") throw codec.reason;
-  const { parseWorkspace, autosaveRestoreFitModels } = codec.value;
-  try {
-    if (read.status === "rejected") return null;
-    const generations = await withLegacyGeneration(read.value, parseWorkspace);
-    const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
-    health = { ...health, count: generations.length };
-    // P2.7: an autosave embeds the fit-model CARRY only (above), so a
-    // restore merges nothing into the library — merging would resurrect
-    // deletions and pin stale versions — and puts every record it holds back
-    // in the carry (lib/fitModelsProject.ts).
-    if (!pick) return null;
-    const ws = parseWorkspace(pick.text);
-    return { workspace: { ...ws, ...autosaveRestoreFitModels(ws) }, at: pick.at };
-  } catch {
-    return null; // never block startup on a bad autosave
-  }
-}
-
-/** Every retained generation, newest first — for diagnostics and a future
- *  recovery picker, so the UI can show which recovery points exist. */
+/** Every retained generation (the stash included), newest first. */
 export async function listAutosaveGenerations(): Promise<Generation[]> {
   try {
-    const { parseWorkspace } = await workspaceCodec();
-    return (await withLegacyGeneration(await backend.read(), parseWorkspace)).sort((a, b) => b.at - a.at);
+    return await (await autosaveCore()).listAutosaveGenerations();
   } catch {
     return [];
   }
 }
 
-export async function autosaveBytes(): Promise<number> {
-  return totalSize(await listAutosaveGenerations());
-}
-
-/** Import the pre-#32 localStorage slot the first time, given the generations
- *  just read (split from the read itself so that read can overlap the codec
- *  fetch — the legacy slot is validated with the lazily loaded parser).
- *
- *  Without this, upgrading would strand whatever was autosaved before the
- *  switch — a data-loss bug introduced BY the data-loss fix. Migration only
- *  READS the legacy key: it is copied, never deleted, so a downgrade still
- *  finds it. */
-async function withLegacyGeneration(generations: Generation[], parseWorkspace: ParseWorkspace): Promise<Generation[]> {
-  if (generations.length > 0 || backend.kind === "localstorage") return generations;
-  let legacy: string | null = null;
-  try {
-    legacy = localStorage.getItem(LEGACY_KEY);
-  } catch {
-    return generations; // storage unavailable — nothing to migrate
-  }
-  if (!legacy || !isRestorable(parseWorkspace, legacy)) return generations;
-  // `at: 0` marks it the oldest possible snapshot; any real save outranks it.
-  return [{ at: 0, text: legacy }];
-}
-
-/** Wipe every autosaved generation ("Clear autosaved workspace"). Resolves
- *  null on success, else the failure's reason — the snapshot is then still
- *  there, so the caller must say so (silent-failure audit 2026-10-01). */
+/** Wipe every autosaved copy; null on success, else the reason. */
 export async function clearAutosave(): Promise<string | null> {
   try {
-    await backend.clear();
-    health = { savedAt: null, error: null, count: 0 };
-    return null;
+    return await (await autosaveCore()).clearAutosave();
   } catch (e) {
-    return e instanceof Error ? e.message : "storage unavailable";
+    return failure(e);
   }
+}
+
+/** Synchronously stash `ws` for a page being left; false when it did not
+ *  (the core chunk is not here yet, or the stash declined). */
+export function stashAutosave(ws: WorkspaceState, now = Date.now()): boolean {
+  return core?.stashAutosave(ws, now) ?? false;
+}
+
+/** Test seam: a fresh page, before the core chunk has loaded. */
+export function resetAutosaveStashState(): void {
+  core?.resetStashMemo();
+  core = coreLoad = null;
 }

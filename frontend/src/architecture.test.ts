@@ -2782,6 +2782,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // the qfit gadget frame (a tool-activation-only plugin) behind the same
     // getter seam. Plus the Plot menu's graph-template and dialog bodies.
     { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
+    // Soak-fix lane (2026-11-15): the autosave's working half (generation
+    // rules, backends, the on-hide stash) loads with the startup restore, and
+    // the presence socket's stale-token probe on its first close.
+    { module: "/lib/autosaveCore.ts", loader: "/lib/autosave.ts", call: 'import("./autosaveCore")' },
+    { module: "/lib/staleSession.ts", loader: "/lib/lifecycle.ts", call: 'import("./staleSession")' },
+    // ...and the late-restore Append / Replace / Discard prompt (review 3).
+    { module: "/lib/lateRestore.ts", loader: "/lib/autosaveRestoreApply.ts", call: 'import("./lateRestore")' },
+    { module: "/lib/autosaveRestoreApply.ts", loader: "/autosaveStartupRestore.ts", call: 'import("./lib/autosaveRestoreApply")' },
     { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
     // SLICE 27 (2026-11-14): the tool-dock plugin family (pan, cursor readout,
     // measure, region statistics, integrate, FWHM), warmed by the plot

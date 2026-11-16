@@ -38,13 +38,19 @@ export const MAX_GENERATION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /** Add `next` as the newest generation, dropping the oldest beyond the cap.
  *
  *  Newest-first ordering is the invariant every other function here relies on.
+ *  `existing` is SORTED first: a backend hands generations back in its own
+ *  order (IndexedDB's `getAll` is oldest-first by key), and slicing that
+ *  unsorted kept the OLDEST recovery points and dropped the newer ones.
+ *  `next` itself is ALWAYS kept, ahead of the rest whatever its `at`: after
+ *  the clock steps backwards, sorting it in with the others sliced off the
+ *  save being written while health still said "saved" (review N4).
  *  Returns a new array — callers persist the result. */
 export function rotate(
   existing: readonly Generation[],
   next: Generation,
   max = MAX_GENERATIONS,
 ): Generation[] {
-  return [next, ...existing].slice(0, Math.max(1, max));
+  return [next, ...newestFirst(existing)].slice(0, Math.max(1, max));
 }
 
 /** Pick the generation to restore, newest first, skipping any that fail
@@ -122,6 +128,13 @@ export interface AutosaveHealth {
   error: string | null;
   /** Generations currently retained. */
   count: number;
+  /** The previous session's library is not back yet (a startup restore that
+   *  could not load, or a recovered one awaiting Append/Replace/Discard) —
+   *  its generations are pinned meanwhile. Absent = nothing pending. */
+  restoreError?: string | null;
+  /** With `restoreError`: the previous session was appended and its full
+   *  copy is kept for a Replace or Discard (the label says "kept"). */
+  restoreKept?: boolean;
 }
 
 export const HEALTHY: AutosaveHealth = { savedAt: null, error: null, count: 0 };

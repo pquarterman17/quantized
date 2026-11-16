@@ -107,9 +107,11 @@ export function useHistoryCommands(): void {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z" || isEditing(e.target)) return;
+      const key = e.key.toLowerCase();
+      // Ctrl+Y is redo too (the Windows/Origin convention; soak test).
+      if (!(e.metaKey || e.ctrlKey) || (key !== "z" && key !== "y") || isEditing(e.target)) return;
       e.preventDefault();
-      if (e.shiftKey) runRedo();
+      if (e.shiftKey || key === "y") runRedo();
       else runUndo();
     };
     // R15: never while a modal dialog is open (lib/appShortcuts.ts).

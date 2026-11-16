@@ -10,9 +10,9 @@
 // any field to AppState.
 
 import type { BreakComposition, SpatialComposition } from "../lib/composition";
-import { hydrateView, navigationView, snapshotView, type PlotView } from "../lib/plotview";
+import { hydrateView, navigationView, snapshotView, type NavigationView, type PlotView, type PlotWindow } from "../lib/plotview";
+import { plotWindowDatasetId, plotWindowView, syncPlotWindow, windowsWithLiveFit } from "./windowDocuments";
 import { focusTransientReset } from "./windows";
-import { windowsWithLiveFit } from "./windowDocuments";
 import { overlaysNow } from "./windowOverlaysLazy";
 import type { LibrarySelection } from "./libraryPanel";
 import type { AppState } from "./useApp";
@@ -169,16 +169,20 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   // day AppState gains a real `view` field).
   const { view, carriedComposition, ...fields } = snap;
   const survives = fitOverlaySurvives(s, snap);
+  // Then put the LIVE zoom/pan back. `hydrateView` restores every PlotView
+  // field including the navigation ones, so without this an ordinary
+  // Ctrl+Z ("undo add shape") also silently discarded a zoom performed
+  // afterwards — and left the separate viewHistory/viewFuture stack
+  // pointing at bounds that are no longer live. Navigation is undone with
+  // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
+  // PER WINDOW (soak test): the live singleton fields hold the FOCUSED
+  // window's zoom only. An undo whose snapshot focused another window used
+  // to paint this window's zoom onto that one and drop this one's (it was
+  // never written back to its record). Each window keeps its own.
   return {
     ...fields,
     ...hydrateView(view),
-    // Then put the LIVE zoom/pan back. `hydrateView` restores every PlotView
-    // field including the navigation ones, so without this an ordinary
-    // Ctrl+Z ("undo add shape") also silently discarded a zoom performed
-    // afterwards — and left the separate viewHistory/viewFuture stack
-    // pointing at bounds that are no longer live. Navigation is undone with
-    // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
-    ...navigationView(s),
+    ...liveNavigation(s, snap.plotWindows.find((w) => w.id === snap.focusedWindowId)),
     expandedFolders: restoredExpandedFolders(s, snap),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
     // L0.25 on undo/redo (hardening review fix — undo was a SEVENTH
@@ -206,7 +210,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       return hasId(pools[sel.kind], sel.id) ? sel : null;
     })(),
     plotWindows: snap.plotWindows.map((w) =>
-      w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
+      withLiveNavigation(s, w, w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w),
     ),
     ...focusTransientReset(),
     // Preserve scratch across unrelated edits, but clear it when restored
@@ -225,6 +229,27 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     openReportId: hasId(snap.reports, s.openReportId) ? s.openReportId : null,
     openAnalysisResultId: hasId(snap.analysisResults, s.openAnalysisResultId) ? s.openAnalysisResultId : null,
   };
+}
+
+/** The live zoom/pan of the window the snapshot's `restored` record names
+ *  (undefined when there is none to carry): the focused window's from the
+ *  live singleton fields (its record is stale while it is focused), any
+ *  other window's from its own record. Carried ONLY while the window still
+ *  shows the same data (review Z1): undoing a rebind must bring the old data
+ *  back with its own range, not the new data's. */
+function liveNavigation(s: AppState, restored: PlotWindow | undefined): NavigationView | undefined {
+  const w = restored && s.plotWindows.find((l) => l.id === restored.id && l.kind === "plot");
+  if (!w || plotWindowDatasetId(w) !== plotWindowDatasetId(restored)) return undefined;
+  return navigationView(w.id === s.focusedWindowId ? s : plotWindowView(w));
+}
+
+/** Restored window `w` with its stored zoom/pan replaced by the live one
+ *  (unchanged when there is none, or it is equal — by value: a document
+ *  window's view is a fresh clone every read, review Z2). */
+function withLiveNavigation(s: AppState, w: PlotWindow, bound: PlotWindow): PlotWindow {
+  const nav = liveNavigation(s, w);
+  const stored = plotWindowView(bound);
+  return !nav || JSON.stringify(navigationView(stored)) === JSON.stringify(nav) ? bound : syncPlotWindow(bound, { ...stored, ...nav });
 }
 
 /** Does the drawn fit curve still describe its worksheet after this restore?

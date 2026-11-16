@@ -693,3 +693,11 @@ describe("PeaksPanel — Batch integrate entry point", () => {
     expect(within(windows).getByLabelText("window 2 high")).toHaveValue("3.9");
   });
 });
+
+describe("PeaksPanel — a backend that is down (soak item 7)", () => {
+  it("names the cause instead of a bare \"Failed to fetch\"", async () => {
+    vi.mocked(findPeaks).mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<PeaksPanel />);
+    expect(await screen.findByText(/Failed to fetch — the qz server is not responding/)).toBeInTheDocument();
+  });
+});

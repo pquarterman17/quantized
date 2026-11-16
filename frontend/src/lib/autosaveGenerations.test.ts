@@ -27,6 +27,16 @@ describe("rotate", () => {
     expect(gens).toHaveLength(MAX_GENERATIONS);
   });
 
+  it("keeps the newest N whatever order the backend read them in (IndexedDB: oldest-first)", () => {
+    // getAll on the `at` keyPath returns ascending order; slicing that as-is
+    // kept generations 1 and 2 and dropped 3.
+    expect(rotate([gen(1), gen(2), gen(3)], gen(4)).map((g) => g.at)).toEqual([4, 3, 2]);
+  });
+
+  it("always keeps the generation being written, even after the clock steps back (review N4)", () => {
+    expect(rotate([gen(10), gen(11), gen(12)], gen(5)).map((g) => g.at)).toEqual([5, 12, 11]);
+  });
+
   it("never returns an empty set even with a nonsense cap", () => {
     // A zero/negative cap must not silently disable autosave entirely.
     expect(rotate([gen(1)], gen(2), 0)).toHaveLength(1);

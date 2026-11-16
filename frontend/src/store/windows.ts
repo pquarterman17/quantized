@@ -33,7 +33,7 @@ import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { commitFocusedWindow, createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults, openNewGraph } from "./windowDefaults";
-import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, mainWindow, maxZ, nextWindowId } from "./windowFocus";
+import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, forgetWindowStageTab, mainWindow, maxZ, nextWindowId } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 import { noteMissedHandoff, overlaysNow } from "./windowOverlaysLazy";
@@ -257,7 +257,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     // call sites — the other is focusWindow) and following the same "focus
     // switch" contract focusWindow does below (activeId/selectedIds track the
     // new focus's dataset; transient tool state clears — item 4).
-    closeWindow: (id) => (get().recordHistory("close window"),
+    closeWindow: (id) => (get().recordHistory("close window"), forgetWindowStageTab(id),
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target) return {}; // id not found
@@ -271,6 +271,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),
+          s,
           seedOf(next, s),
         );
       })),
@@ -302,7 +303,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           if (w.id === id) return { ...w, z: raised };
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), seedOf(target, s));
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), s, seedOf(target, s));
       }),
     duplicateWindow: (id) => {
       const s = get();
@@ -417,6 +418,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),
+          s,
           seedOf(next, s),
         );
       })),
@@ -446,7 +448,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           if (w.id === s.focusedWindowId) return commitFocusedWindow(w, s);
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), seedOf(target, s));
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target), s, seedOf(target, s));
       })),
     // Origin habit: double-clicking a window's title BAR (not its editable
     // title text — that renames, see `renameWindow`) toggles normal<->

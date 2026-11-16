@@ -7,6 +7,8 @@ import { openRecentProject } from "../commands/recentProjectReopen";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
 import { useApp } from "../store/useApp";
 import { toast } from "../store/toasts";
+import { reportAutosaveHealth } from "../store/autosaveStatus";
+import { autosaveHealth, autosaveRestoreSettled } from "./autosave";
 import { replaceWorkspace } from "./openWorkspaceReplace";
 
 /** "Recover autosaved work" — load the autosave candidate into the live
@@ -25,6 +27,10 @@ export function applyRecoverAutosave(prompt: RecoveryPrompt): void {
   const s = useApp.getState;
   if (!replaceWorkspace(s, prompt.workspace, { name: prompt.lastProject.name, path: prompt.lastProject.path })) return;
   s().markProjectDirty();
+  // The autosave is back: its generations rotate normally again. (Cancel and
+  // Keep leave them pinned — both promise it stays available; review R5.)
+  autosaveRestoreSettled();
+  reportAutosaveHealth(autosaveHealth());
   const n = prompt.datasetCount;
   const msg = `recovered ${n} dataset${n === 1 ? "" : "s"} from autosave — newer than "${prompt.lastProject.name}"`;
   // BUG-010: this setStatus overwrites loadWorkspace's own migrationNotice

@@ -8,7 +8,7 @@ import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import { useBumpsFit } from "./useBumpsFit";
+import { resetBumpsFitSession, useBumpsFit } from "./useBumpsFit";
 
 vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn() }));
 vi.mock("../../../lib/fitbumps", () => ({ fitBumps: vi.fn() }));
@@ -27,6 +27,7 @@ const GAPPED: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetBumpsFitSession();
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
   useApp.setState({
@@ -111,5 +112,125 @@ describe("useBumpsFit DREAM job in the shared StatusBar ops", () => {
       await p;
     });
     expect(usePendingOps.getState().ops).toEqual([]);
+  });
+});
+
+describe("useBumpsFit survives the Curve Fit window closing (soak issue 6)", () => {
+  it("a reopened panel re-attaches to the running DREAM job and gets its posterior table", async () => {
+    vi.mocked(fitBumps).mockResolvedValue({ job_id: "dream-7" });
+    let finish!: (v: unknown) => void;
+    vi.mocked(jobs.pollJob).mockImplementation((_id, cb) => {
+      cb?.(0.26, "sampling");
+      return new Promise((r) => {
+        finish = r;
+      });
+    });
+    const first = renderHook(() => useBumpsFit());
+    act(() => first.result.current.setEngine("dream"));
+    let p!: Promise<void>;
+    act(() => {
+      p = first.result.current.run("Linear");
+    });
+    await waitFor(() => expect(first.result.current.progress).toBe(0.26));
+    first.unmount(); // close the Curve Fit window mid-job
+
+    const reopened = renderHook(() => useBumpsFit());
+    expect(reopened.result.current.engine).toBe("dream");
+    expect(reopened.result.current.busy).toBe(true);
+    expect(reopened.result.current.progress).toBe(0.26);
+    // A second concurrent job cannot be started while the first is live.
+    await act(async () => reopened.result.current.run("Linear"));
+    expect(fitBumps).toHaveBeenCalledTimes(1);
+    // Cancel still reaches the job the closed panel started.
+    await act(async () => reopened.result.current.cancel());
+    expect(jobs.cancelJob).toHaveBeenCalledWith("dream-7");
+
+    const posterior = { engine: "dream", popt: [2], uncertainties: [0.2], chisq: 1, uncertainty_kind: "posterior", paramNames: ["m"] };
+    finish(posterior);
+    await act(async () => {
+      await p;
+    });
+    expect(reopened.result.current.result).toEqual(posterior);
+    expect(reopened.result.current.busy).toBe(false);
+  });
+});
+
+describe("useBumpsFit orphaned submit (review N6)", () => {
+  it("a reset while the submit is in flight cancels the job by the id the submit returns", async () => {
+    let submitted!: (v: Awaited<ReturnType<typeof fitBumps>>) => void;
+    vi.mocked(fitBumps).mockReturnValue(new Promise((r) => (submitted = r)));
+    vi.mocked(jobs.cancelJob).mockResolvedValue(undefined as never);
+    const { result } = renderHook(() => useBumpsFit());
+    act(() => result.current.setEngine("dream"));
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.run("Linear");
+    });
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve(); // past resolveDataset, into the submit
+    });
+    expect(fitBumps).toHaveBeenCalled();
+    act(() => useApp.getState().clearAll()); // no job id yet: nothing to cancel
+    expect(jobs.cancelJob).not.toHaveBeenCalled();
+    await act(async () => {
+      submitted({ job_id: "dream-orphan" });
+      await p;
+    });
+    expect(jobs.cancelJob).toHaveBeenCalledWith("dream-orphan");
+    expect(jobs.pollJob).not.toHaveBeenCalled();
+    expect(usePendingOps.getState().ops).toEqual([]);
+  });
+});
+
+describe("useBumpsFit session scope (review D1)", () => {
+  const LM = { engine: "lm" as const, popt: [1], uncertainties: [0.1], chisq: 1, uncertainty_kind: "hessian" as const, paramNames: ["m"], yFit: [11, 31, 41] };
+
+  it("shows a result or an error only beside the dataset it was for", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "a", data: GAPPED }, { id: "d2", name: "b", data: GAPPED }] });
+    vi.mocked(fitBumps).mockResolvedValueOnce(LM).mockRejectedValueOnce(new Error("boom"));
+    const { result } = renderHook(() => useBumpsFit());
+    act(() => result.current.setEngine("lm"));
+    await act(async () => result.current.run("Linear"));
+    expect(result.current.result).toEqual(LM);
+
+    act(() => useApp.setState({ activeId: "d2" }));
+    expect(result.current.result).toBeNull();
+    await act(async () => result.current.run("Linear")); // fails on d2
+    expect(result.current.error).toBe("boom");
+
+    act(() => useApp.setState({ activeId: "d1" }));
+    expect(result.current.error).toBeNull();
+  });
+
+  it("a workspace replace cancels the running job and forgets it; its late result is dropped", async () => {
+    vi.mocked(fitBumps).mockResolvedValue({ job_id: "dream-9" });
+    let finish!: (v: unknown) => void;
+    vi.mocked(jobs.pollJob).mockImplementation((_id, cb) => {
+      cb?.(0.5, "sampling");
+      return new Promise((r) => {
+        finish = r;
+      });
+    });
+    vi.mocked(jobs.cancelJob).mockResolvedValue(undefined as never);
+    const { result } = renderHook(() => useBumpsFit());
+    act(() => result.current.setEngine("dream"));
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.run("Linear");
+    });
+    await waitFor(() => expect(result.current.progress).toBe(0.5));
+
+    act(() => useApp.getState().clearAll()); // File ▸ Remove all = loadWorkspace(empty)
+    expect(jobs.cancelJob).toHaveBeenCalledWith("dream-9");
+    expect(result.current.busy).toBe(false);
+    expect(result.current.engine).toBe("parity");
+
+    finish({ engine: "dream", popt: [1], uncertainties: [0.1], chisq: 1, uncertainty_kind: "posterior", paramNames: ["m"], yFit: [1, 2, 3] });
+    await act(async () => {
+      await p;
+    });
+    expect(result.current.result).toBeNull();
+    expect(result.current.busy).toBe(false);
+    expect(useApp.getState().fitOverlay).toBeNull();
   });
 });

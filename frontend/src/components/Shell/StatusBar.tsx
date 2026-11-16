@@ -11,6 +11,7 @@ import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { usePendingOps, type PendingOp } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 import { useShownDataset } from "../../store/useShownDataset";
+import { retryAutosaveRestoreNow } from "../../autosaveStartupRestore";
 
 /** Clock time of the last successful autosave, or "" when there isn't one. */
 function savedAtLabel(savedAt: number | null): string {
@@ -45,6 +46,7 @@ function useVisiblePendingOps(): PendingOp[] {
 export default function StatusBar() {
   const status = useApp((s) => s.status);
   const connected = useConnection((s) => s.connected);
+  const stale = useConnection((s) => s.stale);
   const count = useApp((s) => s.datasets.length);
   const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
   const health = useAutosaveStatus((s) => s.health);
@@ -54,6 +56,7 @@ export default function StatusBar() {
     <footer className="qzk-statusbar">
       <span className="qzk-conn">
         <StatusDot tone={connected ? "ok" : "warn"} />
+        {stale && <span className="qzk-conn-stale">{stale}</span>}
         {/* The result of most commands lands here: a polite live region,
             mounted while empty, and exempt from a dialog's background inert
             (R12) like the two regions below. */}
@@ -158,6 +161,20 @@ export default function StatusBar() {
         >
           ⚠ autosave failing
         </span>
+      ) : health.restoreError ? (
+        // Review R8: a restore still pending is not an autosave failure —
+        // saves may be succeeding. Its own label; a click retries a restore
+        // that is still failing at once, or re-offers the Append / Replace /
+        // Discard prompt once there is one to answer (review F10).
+        <button
+          type="button"
+          className="qzk-conn-stale"
+          style={{ background: "none", border: "none", padding: 0, font: "inherit", cursor: "default" }}
+          title={health.restoreError}
+          onClick={() => retryAutosaveRestoreNow() || void import("../../lib/lateRestore").then((m) => m.reofferLateRestore())}
+        >
+          {health.restoreKept ? "⚠ previous session kept — Replace or Discard" : "⚠ previous session not restored"}
+        </button>
       ) : (
         health.savedAt != null && (
           <span

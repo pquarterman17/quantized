@@ -67,6 +67,7 @@ import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { focusTransientReset, mainWindow } from "./windows";
 import { loadWindowOverlays } from "./windowOverlaysLazy";
+import { announceWorkspaceReplace } from "./workspaceReplace";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -282,6 +283,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
       // Gap audits 5 C / 6 K: the focused figure's saved overlays back on its
       // canvas, else its dataset's saved fit redrawn from its parameters (lazy).
       void loadWindowOverlays().then((m) => m.restoreOverlays(), () => undefined);
+      announceWorkspaceReplace();
     },
     appendWorkspace: (ws) => (relinkLoadedGraphs(ws.datasets), runAppendWorkspace(set, get, ws)),
     // Reuses loadWorkspace's "replace everything" reset (clears per-dataset
