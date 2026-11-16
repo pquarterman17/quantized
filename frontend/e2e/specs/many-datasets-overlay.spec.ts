@@ -70,8 +70,10 @@ test("ten same-shape files: batch offer, Shift-range of 10, Plot = one graph wit
   const offer = page.locator(".qzk-toast", { hasText: "10 files imported — overlay in one plot?" });
   await expect(offer).toBeVisible();
   await expect(offer.getByRole("button", { name: "Overlay" })).toBeVisible();
-  // The same-prefix folder offer rides the ONE toast as a second action.
-  await expect(offer.getByRole("button", { name: /^Create folder "MH/ })).toBeVisible();
+  // No folder action here: the shared stem "MH_" trims to "MH", under the
+  // folder offer's 3-character minimum (store/importTargetFolder.ts). A batch
+  // that does qualify gets it as a second action (importBatchOffers.test.ts).
+  await expect(offer.getByRole("button", { name: /^Create folder/ })).toHaveCount(0);
 
   // (1) click the first row, Shift-click the last: all ten are selected.
   const rows = page.locator("[data-ds-id]");
