@@ -7,6 +7,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import { useAnalysisExtras } from "../store/analysisExtras";
 import { useFitYByXStore } from "../store/fitYByX";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
 import { openSimsDialog } from "../store/simsDialog";
@@ -35,6 +36,9 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
   return [
     analyze("analysis-center", "Workflow", "Analysis Center…", "Browse analysis tools, requirements, and saved results.", "discover workflow favorites recent", () => s().setStageTab("analysis")),
     analyze("curvefit", "Fit", "Curve fit…", "Fit a model to active data and inspect parameters, uncertainty, residuals, and goodness-of-fit.", "regression least squares nonlinear model gaussian lorentzian", () => s().setCurveFitOpen(true)),
+    analyze("surface-fit", "Fit", "Surface fit z = f(x, y)…", "Fit a 2-D model (plane, paraboloid, Gaussian, Lorentzian, pseudo-Voigt…) to X, Y, Z columns or a map, with errors, confidence limits and a residual map.", "xyz map wafer 2d surface plane paraboloid gaussian regression", () => useAnalysisExtras.getState().show("surface-fit")),
+    analyze("optical-gap", "Fit", "Optical gap (Tauc plot)…", "Find a semiconductor band gap from an absorption or transmittance spectrum: direct or indirect Tauc plot, linear-edge fit and uncertainty.", "tauc band gap bandgap absorption transmittance uvvis semiconductor eg direct indirect", () => useAnalysisExtras.getState().show("optical-gap")),
+    analyze("ellipse-fit", "Fit", "Ellipse fit (implicit curve)…", "Fit an ellipse to X, Y points: centre, semi-axes and tilt with standard errors, by a direct then geometric least-squares fit.", "ellipse conic implicit circle orbit loop fitzgibbon geometric orthogonal distance", () => useAnalysisExtras.getState().show("ellipse-fit")),
     analyze("hysteresis", "Magnetometry", "Hysteresis analysis…", "Extract coercivity, remanence, saturation, squareness, loop area, and switching-field distribution.", "coercivity remanence saturation magnetization mh loop vsm squid", () => s().setHysteresisOpen(true)),
     analyze("magtools", "Magnetometry", "Magnetometry (background · units · Curie–Weiss)…", "Prepare magnetic data, correct internal field, or fit loaded χ(T)/M(T) data in the Curie–Weiss regime with explicit sample context.", "background units tesla oersted emu moment mass volume susceptibility curie weiss effective magnetic moment", () => s().setMagToolsOpen(true)),
     analyze("peaks", "Peaks & baseline", "Find peaks…", "Detect peaks and optionally fit their centers, heights, widths, and shared or independent backgrounds.", "peak picking detection fwhm prominence", () => s().setPeaksOpen(true)),

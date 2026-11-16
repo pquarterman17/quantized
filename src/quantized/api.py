@@ -78,8 +78,10 @@ from quantized.calc.figure_statplots import render_statplot_figure
 # ── Curve & peak fitting ───────────────────────────────────────────────────
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_holds import check_held_starts
+from quantized.calc.fit_implicit import fit_ellipse
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import curve_fit
+from quantized.calc.optical_gap import tauc_fit
 from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_fit import fit_single_peak
 from quantized.calc.peak_integrate import integrate_peaks
@@ -145,6 +147,7 @@ from quantized.calc.stats_tests import (
     sign_test,
     wilcoxon_signed_rank,
 )
+from quantized.calc.surface_fit import surface_fit
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
 from quantized.io.datastruct_table import write_table
@@ -332,6 +335,9 @@ __all__ = [
     "fit_model",
     "fit_single_peak",
     "fit_multi_peak",
+    "surface_fit",
+    "fit_ellipse",
+    "tauc_fit",
     "find_peaks_robust",
     "integrate_peaks",
     "batch_integrate_peaks",
