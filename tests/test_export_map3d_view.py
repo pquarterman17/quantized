@@ -167,3 +167,34 @@ def test_drop_lines_on_a_dense_cloud_are_thinned_like_the_screen(
     segs = next(c for c in ax.collections if isinstance(c, Line3DCollection))._segments3d
     assert len(segs) == math.ceil(n * n / math.ceil(n * n / DROP_LINES_MAX))
     assert len(segs) <= DROP_LINES_MAX
+
+
+@pytest.mark.parametrize("kind", ["surface", "scatter3d"])
+def test_a_zoomed_plot_is_cropped_at_its_column_not_drawn_under_the_colour_bar(kind: str) -> None:
+    import io
+
+    import matplotlib.image as mpimg
+
+    from quantized.calc.figure_map3d import plot_column
+
+    n = 60
+    z = np.add.outer(np.linspace(0, 1, n), np.linspace(0, 2, n))
+    body = {
+        **CASES[0]["request"], "kind": kind, "view_zoom": 3.0, "title": "T",
+        "x_axis": list(range(n)), "y_axis": list(range(n)), "z_grid": z.tolist(),
+    }
+    r = client.post("/api/export/map-figure", json=body)
+    assert r.status_code == 200, r.text
+    img = mpimg.imread(io.BytesIO(r.content), format="png")[..., :3]
+    h, w = img.shape[:2]
+    right, top = plot_column(True, True)
+    # The gutter between the plot column and the colour bar (which starts at
+    # right + 0.03), full height: background only.
+    gutter = img[:, int((right + 0.004) * w): int((right + 0.026) * w)]
+    assert np.all(gutter > 0.99)
+    # The title strip above the column holds only the centred title: its left
+    # quarter is background.
+    strip = img[: int((1 - top) * h) - 2, : int(0.25 * right * w)]
+    assert np.all(strip > 0.99)
+    # ...while the zoomed plot itself reaches the column's edge.
+    assert not np.all(img[:, int((right - 0.02) * w)] > 0.99)

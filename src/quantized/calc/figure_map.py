@@ -35,6 +35,7 @@ from quantized.calc.figure_map3d import (
     check_extent,
     check_grid_3d,
     check_zoom,
+    crop_3d,
     decimate,
     draw_curves,
     draw_drop_lines,
@@ -272,8 +273,9 @@ def render_map_figure(
         # call differs (3-D projection vs. a plain 2-D subplot).
         fig = new_figure(figsize=figsize)
         cax: Any = None
+        bar3d = colorbar and kind in ("surface", "scatter3d")  # a waterfall has no bar
         if kind in _3D_KINDS:
-            ax, cax = axes_3d(fig, colorbar, bool(title))
+            ax = axes_3d(fig, bar3d, bool(title))
         else:
             ax = fig.subplots()
         mappable = _draw(
@@ -294,7 +296,9 @@ def render_map_figure(
             ax.set_aspect("equal", adjustable="box")
         if kind not in _3D_KINDS:
             _draw_marks(ax, lines or [], labels or [], st.font_size)
-        if title:
+        if kind in _3D_KINDS:
+            cax = crop_3d(fig, ax, bar3d, title, st.title_font_size)
+        elif title:
             ax.set_title(title)
         if x_label:
             ax.set_xlabel(x_label)

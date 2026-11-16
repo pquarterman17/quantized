@@ -14,8 +14,9 @@ import { actionReset } from "../../../lib/glyphs";
 import type { View3d } from "../../../lib/project3d";
 import { useApp } from "../../../store/useApp";
 import { fmt } from "../mapColorbar";
-import { drawAxes, drawColorbar3d, drawPanes, frameFor, type Ink } from "./render3dAxes";
-import { drawMarks, pick, pickSet, type PickSet } from "./render3dMarks";
+import { drawScene, inPlot } from "./render3d";
+import { frameFor, type Ink } from "./render3dAxes";
+import { pick, pickSet, type PickSet } from "./render3dMarks";
 import type { Scene3d } from "./scene3d";
 import { useOrbit } from "./useOrbit";
 
@@ -100,10 +101,7 @@ export default function Map3dCanvas({ scene, view: stored, onCommit, home, child
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, size.w, size.h);
       const ink = inks();
-      drawPanes(ctx, frame, scene, ink);
-      const stats = drawMarks(ctx, frame, scene, moving, dpr, ink);
-      drawAxes(ctx, frame, scene, ink);
-      drawColorbar3d(ctx, frame, scene, ink);
+      const stats = drawScene(ctx, frame, scene, ink, moving, dpr);
       canvas.dataset.drawn = String(stats.drawn);
       canvas.dataset.fast = moving ? "1" : "0";
       picks.current = moving ? null : pickSet(frame, scene);
@@ -141,8 +139,9 @@ export default function Map3dCanvas({ scene, view: stored, onCommit, home, child
           if (orbit.onPointerMove(e)) return;
           const set = picks.current;
           const r = hostRef.current?.getBoundingClientRect();
-          if (!set || !r) return;
-          const i = pick(set, e.clientX - r.left, e.clientY - r.top);
+          if (!set || !r || !frame) return;
+          const px = e.clientX - r.left, py = e.clientY - r.top;
+          const i = inPlot(frame, px, py) ? pick(set, px, py) : null;
           setHover(i === null ? null : { i, x: set.sx[i], y: set.sy[i] });
         }}
         onPointerUp={orbit.onPointerUp}

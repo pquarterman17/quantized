@@ -24,7 +24,10 @@ export interface Frame {
   cam: Camera;
   /** Data -> box coordinate, per axis. */
   map: [(v: number) => number, (v: number) => number, (v: number) => number];
-  /** The colour bar's rectangle (CSS px), or null (a waterfall has none). */
+  /** The plot's own area (CSS px): the plot is clipped to it (`render3d.ts`). */
+  plot: { x: number; y: number; w: number; h: number };
+  /** The colour bar's rectangle (CSS px), in its own column right of `plot`,
+   *  or null (a waterfall has none). */
   bar: { x: number; y: number; w: number; h: number } | null;
 }
 
@@ -43,7 +46,7 @@ export function frameFor(scene: Scene3d, view: View3d, w: number, h: number): Fr
     boxScale(scene.z.lo, scene.z.hi, BOX[2]),
   ];
   const bh = Math.min(320, ph * 0.7);
-  return { cam, map, bar: barW ? { x: w - barW + 8, y: top + (ph - bh) / 2, w: 14, h: bh } : null };
+  return { cam, map, plot: { x: 0, y: top, w: pw, h: ph }, bar: barW ? { x: w - barW + 12, y: top + (ph - bh) / 2, w: 14, h: bh } : null };
 }
 
 interface Tick {
@@ -196,15 +199,18 @@ export function drawAxes(ctx: CanvasRenderingContext2D, f: Frame, scene: Scene3d
     }
     ctx.restore();
   });
-  if (scene.title) {
-    ctx.save();
-    ctx.font = `600 13px ${ink.ui}`;
-    ctx.fillStyle = ink.text;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText(scene.title, cam.cx, 6);
-    ctx.restore();
-  }
+}
+
+/** The title, centred over the plot in its own strip above it. */
+export function drawTitle(ctx: CanvasRenderingContext2D, f: Frame, scene: Scene3d, ink: Ink): void {
+  if (!scene.title) return;
+  ctx.save();
+  ctx.font = `600 13px ${ink.ui}`;
+  ctx.fillStyle = ink.text;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(scene.title, f.plot.x + f.plot.w / 2, 6);
+  ctx.restore();
 }
 
 /** The colour bar over the scene's colour range, labelled like the z axis. */

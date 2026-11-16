@@ -172,6 +172,24 @@ describe("Map stage interactive 3-D", () => {
     await waitFor(() => expect(live()).toMatch(/azimuth -70°/));
   });
 
+  it("FORCED race: a regrid that remounts the canvas mid-gesture keeps the gesture (flushed on unmount)", async () => {
+    // The race the earlier flake hit: keys pressed while the map regrids. The
+    // regrid is forced here (a new resolution), between two key presses.
+    render(<MapStage />);
+    const first = await plot();
+    fireEvent.keyDown(first, { key: "ArrowLeft" }); // pending, not yet committed
+    expect(view3d()?.azim).toBe(-60);
+    useApp.setState({ status: "" });
+    act(() => useApp.setState({ mapRes: 40 })); // regrid: the scene is rebuilt
+    await waitFor(() => expect(first.isConnected).toBe(false)); // the canvas really remounted
+    expect(view3d()?.azim).toBe(-55); // ...and the pending gesture was committed, not lost
+    const second = await plot();
+    expect(shown()).toMatch(/azimuth -55°/); // the new canvas starts from it
+    fireEvent.keyDown(second, { key: "ArrowLeft" });
+    fireEvent.blur(second);
+    expect(view3d()?.azim).toBe(-50);
+  });
+
   it("Reset view returns to the default camera; the panel's angle fields follow the stored view", async () => {
     useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface", elev: 10, azim: 100, zoom: 2 });
     render(<MapStage />);
