@@ -105,9 +105,9 @@ describe("PeakWizardPanel", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "fit engine" }), { target: { value: "classic" } });
 
     // ④ fit
-    fireEvent.click(screen.getByText("Fit & review"));
-    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    fireEvent.click(screen.getByText("Fit & review")); // fits on entry (UX audit 7 lane UX-I)
     await waitFor(() => expect(screen.getByText(/R² =/)).toBeInTheDocument());
+    expect(fitMock).toHaveBeenCalledTimes(1);
     expect(fitMock).toHaveBeenCalledWith(
       expect.objectContaining({ model: "Gaussian", link_mode: "None" }),
     );

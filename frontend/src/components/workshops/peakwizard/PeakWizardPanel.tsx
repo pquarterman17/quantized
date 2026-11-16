@@ -59,7 +59,11 @@ export default function PeakWizardPanel() {
       ? `peak find failed (${w.findError}) — retry it or add a peak, then continue`
       : "no peaks to fit — find or add at least one peak first";
   // Step ② -> ③ and ③ -> ④ (a model-table "×" can delete the last peak in ③).
-  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : null;
+  // Step ④ -> ⑤ waits for a running fit (it used to move on mid-fit).
+  const fitting = w.step === 3 && (w.model.busy || w.fitBusy);
+  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks
+    ? noPeaksWhy
+    : fitting ? "fitting — wait for it to finish, or cancel it" : null;
 
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,

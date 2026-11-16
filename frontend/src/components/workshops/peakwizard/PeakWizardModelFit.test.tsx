@@ -82,8 +82,7 @@ async function findTwoPeaks() {
 
 async function fitWith(res: PeakModelFitResponse | { detail: string }, status = 200) {
   stubModelFit(status, res);
-  step("Fit & review");
-  fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+  step("Fit & review"); // step ④ fits on entry (UX audit 7 lane UX-I)
 }
 
 describe("Peak Analyzer — model engine setup (step 3)", () => {

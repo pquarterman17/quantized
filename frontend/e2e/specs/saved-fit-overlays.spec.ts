@@ -159,7 +159,7 @@ test("a Peak Analyzer fit (with its fitted background) survives a reload with no
   await panel.getByRole("button", { name: "Find peaks", exact: true }).click();
   await expect(panel.getByRole("checkbox")).toHaveCount(2, { timeout: 15_000 });
   await panel.locator(".qzk-wizard-step", { hasText: "Fit & review" }).click();
-  await panel.getByRole("button", { name: "Fit", exact: true }).click();
+  // step ④ fits on entry (UX audit 7 lane UX-I)
   await expect(panel.getByLabel("fit metrics")).toBeVisible({ timeout: 20_000 });
   // No other edit: the fit alone triggers the autosave (review N2).
   await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, background: true });

@@ -143,7 +143,7 @@ test.describe("Peak Analyzer — Fit this range + direct add", () => {
 
     // ④ both peaks recovered by the real fit
     await panel.locator(".qzk-wizard-step", { hasText: "Fit & review" }).click();
-    await panel.getByRole("button", { name: "Fit", exact: true }).click();
+    // step ④ fits on entry (UX audit 7 lane UX-I)
     await expect(panel.getByLabel("fit metrics")).toBeVisible({ timeout: 20_000 });
     await expect(panel.getByText(/^converged ·/)).toBeVisible();
     const results = panel.locator("table").filter({ has: page.getByRole("columnheader", { name: "area" }) }).locator("tbody tr");

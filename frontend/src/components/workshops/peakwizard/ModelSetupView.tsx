@@ -6,6 +6,7 @@
 import { fmtNum } from "../../../lib/format";
 import { Button, Select } from "../../primitives";
 import ModelParamTable from "./ModelParamTable";
+import { freeParamWarning } from "./peakDefaults";
 import { MODEL_BACKGROUNDS, MODEL_SHAPES, type ModelBackground, type ModelShape } from "./peakModelParams";
 import type { FitEngine } from "./useModelFit";
 import type { PeakWizardState } from "./usePeakWizard";
@@ -51,6 +52,9 @@ export function SetupProblems({ problems }: { problems: string[] }) {
 export default function ModelSetupView({ w }: { w: PeakWizardState }) {
   const m = w.model;
   const peaks = w.candidates.filter((c) => c.included);
+  const heavy = freeParamWarning(m.setup.params.filter((p) => p.vary && !p.tie).length, w.points);
+  // ./usePeakWizard's effective model: no fitted background over a subtracted baseline.
+  const bgAuto = w.recipe.fit.background === null && w.recipe.baseline.method !== "none";
   return (
     <>
       <EngineSelect w={w} />
@@ -98,7 +102,8 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
               </tbody>
             </table>
           </div>
-          {[m.shapeNote, m.bgNote].filter(Boolean).map((note) => (
+          {[m.shapeNote, bgAuto ? "Background starts at None: the step-1 baseline is already subtracted." : m.bgNote]
+            .filter(Boolean).map((note) => (
             <div key={note} className="qzk-ds-meta qzk-msg" style={{ ...faint, marginTop: 4 }}>
               {note}
             </div>
@@ -127,6 +132,11 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
           </div>
           <ModelParamTable model={m} />
           <SetupProblems problems={m.problems} />
+          {heavy && (
+            <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--warn)", marginTop: 6 }}>
+              {heavy}
+            </div>
+          )}
           {/* Wraps: .qzk-ds-meta alone is one ellipsized line (re-audit #16). */}
           <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6, whiteSpace: "normal" }}>
             Seeded from the detected peaks; your edits save with the recipe. Blank min/max = open
