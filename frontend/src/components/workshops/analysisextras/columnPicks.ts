@@ -40,8 +40,8 @@ export function pickUnit(d: DataStruct, index: number): string {
 export const validPick = (cols: PickColumn[], index: number, fallback: number): number =>
   cols.some((c) => c.index === index) ? index : fallback;
 
-/** Loader for the picked columns of the FULL analysis view of dataset `id`
- *  (null when the dataset is gone). Taken through a selector, so a panel never
+/** Loader for the picked columns of the FULL analysis view of dataset `id`,
+ *  finite rows only (null when the dataset is gone). Taken through a selector, so a panel never
  *  reads the store imperatively in render. */
 export function useLoadColumns(): (
   id: string,
@@ -53,7 +53,11 @@ export function useLoadColumns(): (
       const ds = await resolve(id);
       if (!ds) return null;
       const d = analysisData(ds) ?? ds.data;
-      return { columns: picks.map((p) => (p < 0 ? d.time : d.values.map((row) => row[p]))), data: ds.data };
+      const cols = picks.map((p) => (p < 0 ? d.time : d.values.map((row) => row[p])));
+      // Rows with a missing value in ANY picked column are dropped together: the
+      // routes take plain numbers (a JSON null is a 422), and a fit needs whole points.
+      const keep = cols[0].map((_, i) => cols.every((c) => Number.isFinite(c[i])));
+      return { columns: cols.map((c) => c.filter((_, i) => keep[i])), data: ds.data };
     },
     [resolve],
   );

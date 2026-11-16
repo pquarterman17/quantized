@@ -123,7 +123,8 @@ export function useSurfaceFit(): SurfaceFitState {
     })();
   }
 
-  // Starting values follow the data and the model until the user edits them.
+  // Starting values are re-guessed when the model, the dataset or a picked column
+  // changes (a different quantity), never when rows are merely excluded or edited.
   useEffect(() => {
     if (model) {
       setP0(model.param_names.map(() => ""));
@@ -132,7 +133,7 @@ export function useSurfaceFit(): SurfaceFitState {
       resetGuess();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model?.name, active?.id, fingerprint, xCol, yCol, zCol, hasData]);
+  }, [model?.name, active?.id, xCol, yCol, zCol, hasData]);
 
   function setBound(kind: "p0" | "lower" | "upper", i: number, v: string): void {
     const set = kind === "p0" ? setP0 : kind === "lower" ? setLower : setUpper;

@@ -53,7 +53,6 @@ def _direct_conic(x: _F, y: _F) -> _F:
         t_mat = -np.linalg.solve(s3, s2.T)
     except np.linalg.LinAlgError as exc:
         raise ValueError("degenerate point set (collinear or repeated points)") from exc
-    m = s1 + s2 @ t_mat
     # M = C1^-1 (S1 + S2 T), C1^-1 = [[0,0,.5],[0,-1,0],[.5,0,0]]
     m = np.array([[0.0, 0.0, 0.5], [0.0, -1.0, 0.0], [0.5, 0.0, 0.0]]) @ (s1 + s2 @ t_mat)
     w, v = np.linalg.eig(m)
@@ -105,17 +104,29 @@ def _normalise_axes(p: _F, cov: _F | None) -> tuple[_F, _F | None]:
     return p, cov
 
 
-def _residual_and_jac(q: _F, x: _F, y: _F) -> tuple[_F, sparse.csr_matrix]:
+def _model_points(q: _F) -> tuple[_F, _F]:
+    """Points on the ellipse ``q[:5]`` at the per-point parameters ``q[5:]``."""
+    cx, cy, a, b, th = q[:5]
+    ct, st = np.cos(q[5:]), np.sin(q[5:])
+    cth, sth = math.cos(th), math.sin(th)
+    return cx + a * ct * cth - b * st * sth, cy + a * ct * sth + b * st * cth
+
+
+def _residuals(q: _F, x: _F, y: _F) -> _F:
+    mx, my = _model_points(q)
+    r = np.empty(2 * x.size)
+    r[0::2] = mx - x
+    r[1::2] = my - y
+    return r
+
+
+def _jacobian(q: _F, x: _F, y: _F) -> sparse.csr_matrix:
     n = x.size
     cx, cy, a, b, th = q[:5]
     t = q[5:]
     ct, st = np.cos(t), np.sin(t)
     cth, sth = math.cos(th), math.sin(th)
-    mx = cx + a * ct * cth - b * st * sth
-    my = cy + a * ct * sth + b * st * cth
-    r = np.empty(2 * n)
-    r[0::2] = mx - x
-    r[1::2] = my - y
+    mx, my = _model_points(q)
     rows, cols, vals = [], [], []
     ar = np.arange(n)
     # global params (columns 0..4): x residual rows 2i, y rows 2i+1
@@ -131,28 +142,38 @@ def _residual_and_jac(q: _F, x: _F, y: _F) -> tuple[_F, sparse.csr_matrix]:
     jac = sparse.csr_matrix(
         (np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(2 * n, 5 + n)
     )
-    return r, jac
+    return jac
 
 
-def _param_cov(q: _F, x: _F, y: _F) -> tuple[_F | None, float]:
-    """5x5 covariance of (cx, cy, a, b, theta) and the residual variance."""
+def _param_cov(q: _F, x: _F, y: _F) -> _F | None:
+    """5x5 covariance of (cx, cy, a, b, theta), or None when the points do not
+    determine the ellipse (too few points, or a near-singular normal matrix)."""
     n = x.size
-    r, jac = _residual_and_jac(q, x, y)
+    jac = _jacobian(q, x, y)
     dof = 2 * n - (5 + n)
-    ssr = float(r @ r)
     if dof <= 0:
-        return None, math.nan
-    s2 = ssr / dof
+        return None
+    r = _residuals(q, x, y)
+    s2 = float(r @ r) / dof
     ja = jac[:, :5].toarray()
     jb = jac[:, 5:]
     d = np.asarray(jb.multiply(jb).sum(axis=0)).ravel()  # diag of Jb^T Jb
     atb = np.asarray(jb.T @ ja)  # (n, 5)
     schur = ja.T @ ja - (atb.T / np.where(d > 0, d, np.inf)) @ atb
+    # A near-singular matrix (a short arc, an almost circular shape whose tilt is
+    # free) has no usable covariance: report none rather than a huge or zero SE.
+    dg = np.diag(schur)
+    if not (np.all(np.isfinite(schur)) and np.all(dg > 0)):
+        return None
+    if np.linalg.cond(schur / np.sqrt(np.outer(dg, dg))) > 1e12:  # unit-free conditioning
+        return None
     try:
         cov = s2 * np.linalg.inv(schur)
     except np.linalg.LinAlgError:
-        return None, s2
-    return np.asarray(cov, dtype=float), s2
+        return None
+    if np.any(np.diag(cov) < 0):
+        return None
+    return np.asarray(cov, dtype=float)
 
 
 def fit_ellipse(
@@ -164,7 +185,7 @@ def fit_ellipse(
     and, when ``geometric`` (default), the refined orthogonal-distance fit as
     the headline ``center_x/center_y/semi_major/semi_minor/angle_deg`` with
     ``*_se`` standard errors, ``rms`` (RMS orthogonal distance), ``residuals``
-    (signed-free: orthogonal distances) and the ``converged`` flag. With
+    (each point's orthogonal distance, unsigned) and the ``converged`` flag. With
     ``geometric=False`` the headline is the algebraic fit and SEs are NaN.
     Needs >= 5 distinct points (>= 6 for standard errors).
     """
@@ -208,9 +229,9 @@ def fit_ellipse(
         t0 = np.arctan2(v / p_alg[3], u / p_alg[2])
         q0 = np.concatenate([p_alg, t0])
         res = least_squares(
-            lambda q: _residual_and_jac(q, xa, ya)[0],
+            lambda q: _residuals(q, xa, ya),
             q0,
-            jac=lambda q: _residual_and_jac(q, xa, ya)[1],
+            jac=lambda q: _jacobian(q, xa, ya),
             method="trf",
             x_scale="jac",
             max_nfev=max_nfev,
@@ -220,11 +241,13 @@ def fit_ellipse(
         )
         p = np.asarray(res.x[:5], dtype=float)
         converged = bool(res.success)
-        cov, _s2 = _param_cov(np.asarray(res.x, dtype=float), xa, ya)
+        cov = _param_cov(np.asarray(res.x, dtype=float), xa, ya)
         p, cov = _normalise_axes(p, cov)
-        dist = _orth_distances(p, xa, ya)
+        # At the optimum each point's own curve parameter is its foot point, so
+        # the final residual pairs are the orthogonal distances.
+        dist = np.hypot(res.fun[0::2], res.fun[1::2])
 
-    se = np.sqrt(np.clip(np.diag(cov), 0.0, None)) if cov is not None else np.full(5, nan)
+    se = np.sqrt(np.diag(cov)) if cov is not None else np.full(5, nan)
     out.update(
         {
             "center_x": float(p[0]),
@@ -246,21 +269,30 @@ def fit_ellipse(
 
 
 def _orth_distances(p: _F, x: _F, y: _F) -> _F:
-    """Unsigned orthogonal distance of each point to the ellipse (Newton on t)."""
+    """Unsigned orthogonal distance of each point to the ellipse.
+
+    Newton on the foot-point parameter from four starts a quarter turn apart,
+    keeping the smallest distance per point: a single start can settle on the
+    far-side stationary point (or a saddle) for points near the centre or on
+    the major axis.
+    """
     cx, cy, a, b, th = p
     cth, sth = math.cos(th), math.sin(th)
     u = (x - cx) * cth + (y - cy) * sth
     v = -(x - cx) * sth + (y - cy) * cth
-    t = np.arctan2(v / b, u / a)
-    for _ in range(30):  # Newton on d/dt of squared distance
-        ct, st = np.cos(t), np.sin(t)
-        ex, ey = a * ct - u, b * st - v
-        g = -a * st * ex + b * ct * ey
-        h = a * a * st * st + b * b * ct * ct - a * ct * ex - b * st * ey
-        h = np.where(np.abs(h) < 1e-12, 1e-12, h)
-        step = g / h
-        t = t - step
-        if float(np.max(np.abs(step))) < 1e-13:
-            break
-    d = np.hypot(a * np.cos(t) - u, b * np.sin(t) - v)
-    return np.asarray(d, dtype=float)
+    t_start = np.arctan2(v / b, u / a)
+    best = np.full(x.size, np.inf)
+    for quarter in range(4):
+        t = t_start + quarter * (math.pi / 2.0)
+        for _ in range(40):
+            ct, st = np.cos(t), np.sin(t)
+            ex, ey = a * ct - u, b * st - v
+            g = -a * st * ex + b * ct * ey
+            h = a * a * st * st + b * b * ct * ct - a * ct * ex - b * st * ey
+            h = np.where(h > 1e-12, h, 1e-12)  # a non-convex step falls back to a small one
+            step = g / h
+            t = t - np.clip(step, -0.5, 0.5)
+            if float(np.max(np.abs(step))) < 1e-13:
+                break
+        best = np.minimum(best, np.hypot(a * np.cos(t) - u, b * np.sin(t) - v))
+    return np.asarray(best, dtype=float)

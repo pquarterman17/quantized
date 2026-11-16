@@ -91,7 +91,35 @@ describe("OpticalGapPanel", () => {
   });
 });
 
+describe("OpticalGapPanel inputs", () => {
+  it("re-reads the signal when another Y column is picked and drops rows with missing values", async () => {
+    const two: DataStruct = {
+      time: [2, 2.5, 3, 3.5],
+      values: [[1e3, 90], [1e4, Number.NaN], [5e4, 50], [9e4, 5]],
+      labels: ["alpha", "T"],
+      units: ["1/cm", "%"],
+      metadata: { x_column_name: "Energy", x_column_unit: "eV" },
+    };
+    useApp.setState({ datasets: [{ id: "two", name: "two", data: two }], activeId: "two" });
+    render(<OpticalGapPanel />);
+    await waitFor(() => expect(screen.getByLabelText("Y quantity")).toHaveValue("alpha"));
+    fireEvent.change(screen.getByLabelText("Y column"), { target: { value: "1" } });
+    await waitFor(() => expect(screen.getByLabelText("Y quantity")).toHaveValue("transmittance"));
+    expect(screen.getByLabelText("Transmittance scale")).toHaveValue("percent");
+    fireEvent.change(screen.getByLabelText("Film thickness (nm)"), { target: { value: "200" } });
+    fireEvent.click(screen.getByRole("button", { name: "Fit gap" }));
+    await screen.findByText(/Eg = /);
+    // The NaN row never reaches the request (a JSON null is a 422 on the server).
+    expect(taucMock).toHaveBeenCalledWith(expect.objectContaining({ x: [2, 3, 3.5], y: [90, 50, 5] }));
+  });
+});
+
 describe("guessSignal", () => {
+  it("does not throw on a very large column", () => {
+    const big = Array.from({ length: 400_000 }, (_, i) => i % 100);
+    expect(guessSignal("T", "%", big)).toEqual({ signal: "transmittance", percent: true });
+  });
+
   it("reads the column name and unit, never the value range", () => {
     // Absorption coefficients that happen to sit under 100 stay absorption.
     expect(guessSignal("alpha", "1/cm", [0, 97])).toEqual({ signal: "alpha", percent: false });

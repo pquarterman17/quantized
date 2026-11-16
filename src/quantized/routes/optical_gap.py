@@ -53,7 +53,6 @@ def tauc(req: TaucRequest) -> dict[str, Any]:
             refl = None if req.reflectance is None else np.asarray(req.reflectance, dtype=float) * k
             y = absorption_from_transmittance(y * k, req.thickness_nm * 1e-7, refl)
         res = tauc_fit(energy, y, req.kind, req.e_min, req.e_max, req.level)
-        res["alpha"] = y[np.isfinite(y) & np.isfinite(energy)]
         return to_jsonable(res)  # type: ignore[no-any-return]
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -2,7 +2,7 @@
 // table (SE and confidence limits), the stale-result rule and "Add fitted
 // surface as dataset". The backend wrappers are mocked.
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SurfaceFitResult } from "../../../lib/api/analysisExtras";
@@ -89,6 +89,21 @@ describe("SurfaceFitPanel", () => {
     await screen.findByText("± SE");
     fireEvent.change(screen.getByLabelText("Z column"), { target: { value: "0" } });
     expect(screen.queryByText("± SE")).not.toBeInTheDocument();
+  });
+
+  it("sends only complete rows (a missing cell would be a 422) and keeps typed starts when a row is excluded", async () => {
+    const holes: DataStruct = { ...DATA, values: [[0, 1], [0, Number.NaN], [1, 3], [1, 5]] };
+    useApp.setState({ datasets: [{ id: "h", name: "holes", data: holes }], activeId: "h" });
+    render(<SurfaceFitPanel />);
+    await waitFor(() => expect(screen.getByLabelText("Start a")).toHaveValue("1.5"));
+    expect(guessMock).toHaveBeenLastCalledWith({ x: [0, 0, 1], y: [0, 1, 1], z: [1, 3, 5], model: "Plane" });
+    fireEvent.change(screen.getByLabelText("Start a"), { target: { value: "7" } });
+    guessMock.mockClear();
+    // Excluding a row changes the analysis data, not the model or the columns.
+    act(() => useApp.setState({ datasets: [{ id: "h", name: "holes", data: holes, excludedRows: [0] }] }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByLabelText("Start a")).toHaveValue("7");
+    expect(guessMock).not.toHaveBeenCalled();
   });
 
   it("adds the fitted surface as a map-able dataset", async () => {

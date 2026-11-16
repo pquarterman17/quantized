@@ -151,3 +151,17 @@ def test_ellipse_route(client: TestClient) -> None:
     assert len(d["curve_x"]) == 200
     bad = client.post("/api/fit-implicit/ellipse", json={"x": [0, 1, 2], "y": [0, 1, 0]})
     assert bad.status_code == 422
+
+
+def test_tauc_route_alpha_pairs_with_energy_when_alpha_is_negative(client: TestClient) -> None:
+    e = np.linspace(1.5, 3.5, 120)
+    alpha = np.where(e > 2.35, np.sqrt(1e5 * (e - 2.35)) / e, 0.0)
+    alpha = alpha + np.random.default_rng(0).normal(0, 0.5, e.size)
+    r = client.post(
+        "/api/optical-gap/tauc",
+        json={"x": e.tolist(), "y": alpha.tolist(), "e_min": 2.7, "e_max": 3.2},
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert len(d["energy"]) == len(d["alpha"]) == len(d["tauc"])
+    assert np.allclose(np.array(d["tauc"]), (np.array(d["alpha"]) * np.array(d["energy"])) ** 2)

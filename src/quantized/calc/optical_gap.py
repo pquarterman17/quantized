@@ -203,8 +203,10 @@ def tauc_fit(
     ``Eg = -intercept / slope`` with a first-order (delta-method) standard
     error from the fit covariance; the confidence interval uses Student's t
     with ``N - 2`` degrees of freedom. When both bounds are omitted the linear
-    region is auto-detected around the steepest part of the edge. Returns the
-    full transformed curve (``energy``, ``tauc``) plus the fit line sampled
+    region is auto-detected (15 %-85 % of the edge height, trimmed to its
+    straight run; see ``_auto_window``). Returns the transformed curve
+    (``energy``, ``alpha``, ``tauc``: the same points, aligned, dropping any
+    where ``alpha * E`` is negative or non-finite) plus the fit line sampled
     from Eg to the window's upper edge (``fit_energy``, ``fit_tauc``).
     """
     if not 0.0 < level < 1.0:
@@ -217,7 +219,7 @@ def tauc_fit(
     ok = np.isfinite(e) & np.isfinite(y)
     if int(ok.sum()) < 3:
         raise ValueError("need at least 3 finite points")
-    ef, yf = e[ok], y[ok]
+    ef, yf, af = e[ok], y[ok], a[ok]
 
     auto = e_min is None and e_max is None
     if auto:
@@ -260,6 +262,7 @@ def tauc_fit(
         "e_max": hi,
         "auto_window": bool(auto),
         "energy": ef,
+        "alpha": af,
         "tauc": yf,
         "fit_energy": x_line,
         "fit_tauc": np.asarray(m * x_line + b, dtype=float),

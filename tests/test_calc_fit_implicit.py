@@ -87,3 +87,29 @@ def test_rejects_bad_input() -> None:
         fit_ellipse(np.arange(10.0), 2 * np.arange(10.0))  # collinear
     with pytest.raises(ValueError, match="same length"):
         fit_ellipse([1, 2, 3, 4, 5], [1, 2])
+
+
+def test_orthogonal_distance_is_the_nearest_foot_point_for_inner_points() -> None:
+    from quantized.calc.fit_implicit import _orth_distances
+
+    p = np.array([0.5, -0.25, 5.0, 2.0, np.radians(20)])
+    rng = np.random.default_rng(3)
+    # Centre, major-axis and random inner / outer points: a single Newton start
+    # from the polar angle can settle on the far-side stationary point.
+    x = np.r_[p[0], p[0] + 0.8 * np.cos(p[4]), rng.uniform(-6, 6, 40)]
+    y = np.r_[p[1], p[1] + 0.8 * np.sin(p[4]), rng.uniform(-4, 4, 40)]
+    got = _orth_distances(p, x, y)
+    t = np.linspace(0, 2 * np.pi, 20001)
+    ex, ey = ellipse_points(p[0], p[1], p[2], p[3], np.degrees(p[4]), t.size)
+    brute = np.array(
+        [np.sqrt(np.min((ex - xi) ** 2 + (ey - yi) ** 2)) for xi, yi in zip(x, y, strict=True)]
+    )
+    assert got == pytest.approx(brute, abs=2e-3)
+
+
+def test_standard_errors_are_absent_not_zero_when_unidentifiable() -> None:
+    # Exactly 5 points determine an ellipse with no residual degrees of freedom.
+    x, y = _sample(np.array([0.1, 1.3, 2.4, 3.9, 5.2]))
+    r = fit_ellipse(x, y)
+    assert np.isnan(r["semi_major_se"]) and np.isnan(r["center_x_se"])
+    assert r["semi_major"] == pytest.approx(TRUE[2], abs=1e-6)

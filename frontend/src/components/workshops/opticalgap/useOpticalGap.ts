@@ -11,7 +11,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
-import { useLoadColumns, parseField, pickColumns, validPick, type PickColumn } from "../analysisextras/columnPicks";
+import { useLoadColumns, parseField, pickColumns, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
 export const TRANSITIONS: { value: TransitionKind; label: string }[] = [
   { value: "direct", label: "Direct allowed, (αhν)²" },
@@ -53,7 +53,15 @@ export interface OpticalGapState {
 function guessXUnit(unit: string, x: number[]): "eV" | "nm" {
   if (/nm/i.test(unit)) return "nm";
   if (/ev/i.test(unit)) return "eV";
-  return Math.max(...x.filter(Number.isFinite)) > 30 ? "nm" : "eV";
+  return maxFinite(x) > 30 ? "nm" : "eV";
+}
+
+/** Largest finite value (-Infinity when none). A loop: spreading a whole spectrum
+ *  into Math.max throws once the column is large. */
+function maxFinite(v: readonly number[]): number {
+  let m = -Infinity;
+  for (const n of v) if (Number.isFinite(n) && n > m) m = n;
+  return m;
 }
 
 /** What the Y column holds, from its name and unit only (values cannot tell a
@@ -64,7 +72,7 @@ export function guessSignal(label: string, unit: string, y: number[]): { signal:
   const absorption = /absor|alpha|α|cm/i.test(text);
   const trans = !absorption && (/transmi|%/i.test(text) || /^T(\b|$)/.test(label.trim()));
   if (!trans) return { signal: "alpha", percent: false };
-  const top = Math.max(...y.filter(Number.isFinite));
+  const top = maxFinite(y);
   return { signal: "transmittance", percent: unit.includes("%") || top > 1.5 };
 }
 
@@ -94,27 +102,33 @@ export function useOpticalGap(): OpticalGapState {
   const result = stored && stored.key === key ? stored.res : null;
   const hasData = !!active && columns.length >= 2;
 
-  // A new dataset: reset picks, then read its X unit and signal scale from the data.
+  // A new dataset resets the picks and the fit window.
   useEffect(() => {
     setPicks([-1, 0]);
     setError(null);
     setEMin("");
     setEMax("");
+  }, [active?.id]);
+  // The picked columns say what the X unit and the signal are (re-read when a pick changes).
+  useEffect(() => {
     if (!active) return;
     let live = true;
-    void load(active.id, [-1, 0]).then((got) => {
-      if (!live || !got) return;
-      const [x, y] = got.columns;
-      setXUnit(guessXUnit(String(got.data.metadata?.["x_column_unit"] ?? ""), x));
-      const guess = guessSignal(got.data.labels[0] ?? "", got.data.units[0] ?? "", y);
-      setSignal(guess.signal);
-      setPercent(guess.percent);
-    });
+    load(active.id, [xCol, yCol]).then(
+      (got) => {
+        if (!live || !got) return;
+        const [x, y] = got.columns;
+        setXUnit(guessXUnit(pickUnit(got.data, xCol), x));
+        const guess = guessSignal(got.data.labels[yCol] ?? "", got.data.units[yCol] ?? "", y);
+        setSignal(guess.signal);
+        setPercent(guess.percent);
+      },
+      () => undefined, // a failed read keeps the current choices; Fit reports its own errors
+    );
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id]);
+  }, [active?.id, xCol, yCol]);
   useFollowColumnPicks(active, (follow) => setPicks((p) => [follow(p[0]) ?? -1, follow(p[1]) ?? 0]));
 
   async function fit(): Promise<void> {

@@ -92,3 +92,15 @@ def test_errors() -> None:
         tauc_fit(e, alpha, "direct", e_min=1.5, e_max=2.0)  # flat zero region
     with pytest.raises(ValueError, match="thickness"):
         absorption_from_transmittance([0.5], 0.0)
+
+
+def test_returned_curves_stay_aligned_when_noisy_alpha_goes_negative() -> None:
+    # Negative alpha (a noisy baseline, or T > 1) is dropped from the transform;
+    # alpha must be dropped with it or the three arrays no longer pair up.
+    e = np.linspace(1.5, 3.5, 120)
+    alpha = np.where(e > EG, np.sqrt(A * (e - EG)) / e, 0.0)
+    alpha = alpha + np.random.default_rng(0).normal(0, 0.5, e.size)
+    assert (alpha < 0).sum() > 10
+    r = tauc_fit(e, alpha, "direct", e_min=2.7, e_max=3.2)
+    assert len(r["energy"]) == len(r["alpha"]) == len(r["tauc"]) < e.size
+    assert r["tauc"] == pytest.approx((r["alpha"] * r["energy"]) ** 2)

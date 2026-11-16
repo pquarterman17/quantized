@@ -64,11 +64,8 @@ export function useEllipseFit(): EllipseFitState {
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;
       const [x, y] = got.columns;
-      const keep = x.map((v, i) => Number.isFinite(v) && Number.isFinite(y[i]));
-      const fx = x.filter((_, i) => keep[i]);
-      const fy = y.filter((_, i) => keep[i]);
-      const res = await ellipseFit({ x: fx, y: fy, geometric });
-      setStored({ key, res, x: fx, y: fy });
+      const res = await ellipseFit({ x, y, geometric });
+      setStored({ key, res, x, y });
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "ellipse fit failed");
