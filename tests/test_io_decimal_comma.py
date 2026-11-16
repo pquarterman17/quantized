@@ -73,10 +73,15 @@ def test_auto_ambiguous_three_digit_column_fails_closed(tmp_path: Path) -> None:
     assert "1.5 or 1500" in str(info.value)
 
 
-def test_auto_ambiguity_is_judged_column_by_column(tmp_path: Path) -> None:
-    # Column B is clearly decimal comma; column A still has no evidence.
-    with pytest.raises(ValueError, match="'A'"):
-        import_csv(_write(tmp_path, "A;B\n1,500;2,5\n3,750;4,25\n"))
+def test_auto_ambiguous_column_settled_by_another_column(tmp_path: Path) -> None:
+    # UX audit 8 (finding 7): column B can only be a decimal comma, so in a
+    # ';' file column A's "1,500" is 1.5 too -- one file, one number locale.
+    # (Pinned the other way before: A failed closed with B right beside it.)
+    ds = import_csv(_write(tmp_path, "A;B\n1,500;2,5\n3,750;4,25\n"))
+    assert ds.time.tolist() == [1.5, 3.75]
+    assert ds.values[:, 0].tolist() == [2.5, 4.25]
+    assert ds.metadata["decimal_comma_columns"] == ["A", "B"]
+    assert any("'A'" in n and "because" in n and "'B'" in n for n in ds.metadata["notes"])
 
 
 # --- forced comma --------------------------------------------------------------

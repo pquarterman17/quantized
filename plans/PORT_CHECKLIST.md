@@ -40,6 +40,20 @@ density↔SLD toggle, user plot templates.)
 - [x] SIMS depth profile — `+parser/importSIMS.m` — golden `2a7a538` (shared exact + paired interp 1e-9)
 - ~~AFM — `+parser/importAFM.m`~~ — **out of scope → fermiviewer** (AFM topography/phase images)
 - [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
+  - Intentional divergences (UX8-B, 2026-11-16; additive, golden unchanged): (1) a `#`/`%` comment line directly
+    above the data names the columns (`io/_comment_header.py`) only when it has structure — the data's own
+    delimiter, a 2+-space gap, or bracketed units (`# Qz (1/A)  R`, `# Field (Oe)<TAB>Moment (emu)`) — splits
+    into the data width, and every cell is a name (a letter; no number, date/time, version, `300K` value, or
+    all-bracketed units row, no prose: function words, `field cooled`, `Operator<TAB>JS`); a units row under a
+    structured name line (`# H  M` / `# Oe emu`) gives units, and a structured unit-symbol row alone (`# V  A`)
+    is names. Single-spaced prose (`# Hysteresis loop`, and so also `# x y`, `# K Ohm`) stays a comment,
+    columns Col1/Col2; the line stays in
+    `metadata["comments"]`. `importCSV.m` treats every comment line as preamble. (2) Under `decimal="auto"`,
+    a `;`/tab file whose ambiguous `2,000` column sits beside a column that proves the decimal comma (`0,5`,
+    `0,00527`; not `1,1`/`2,0`) reads both as decimal comma, with a note — unless ANY cell in the file is a
+    dotted number (`10.5`, and `1.234` too, since auto reads it point-style), which keeps it failing closed (`_decimal_comma._settled_by_file`). Decision: `;`
+    `1,234` beside `0,5` with no point decimal reads 1.234 (one locale per file; Point overrides). MATLAB
+    reference not re-read for this change (sibling checkout unavailable); behaviour inferred from the existing port.
 - [x] Excel — `+parser/importExcel.m` → `io/excel.py` (openpyxl) — golden `ce228ba`
 - [x] Header parsing / auto-detect — `+parser/parseColHeader.m` → `io/base.parse_col_header`/`resolve_column`
 - [x] Auto-dispatch + registry — `+parser/importAuto.m`, `+parser/resolveParser.m` → `io/registry.py` (single map + sniffers; `import_auto` drives `/api/parsers/import`)
