@@ -2,15 +2,15 @@
 // (component ceiling). Key results first, above the fold: the parameter table
 // (value ± error) and the headline statistics (N, R², reduced χ², RMSE, AIC),
 // with the result actions (→ Report, corner plot, Remove fit). Below them the
-// deeper tools, each its own lazy chunk fetched only when a fit exists:
-// Find X/Y, bands, the NLFit-style fit report, residual plots, output to
-// worksheet and diagnostics.
+// residual plots (open with the Results tab, UX-F) and then the deeper
+// tools, each its own lazy chunk fetched only when a fit exists: Find X/Y,
+// bands, the NLFit-style fit report, output to worksheet and diagnostics.
 
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { stemFromName } from "../../../lib/exportActive";
 import { copyText } from "../../../lib/clipboard";
-import { fitResultMarkdown, fitResultTsv, fitResultView, type FitResultInput } from "../../../lib/fitResultView";
+import { fitResultMarkdown, fitResultTsv, fitResultView, shownParamTable, type FitResultInput } from "../../../lib/fitResultView";
 import { sigFigs } from "../../../lib/fitValueFormat";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
@@ -42,6 +42,8 @@ interface Props {
   cornerBusy: boolean;
   onCornerPlot: () => void;
   onRemoveFit: () => void;
+  /** The Results tab is showing: the residual plots open by themselves. */
+  residualsOpen?: boolean;
 }
 
 /** The fitted X column's display name, for the residual-vs-X axis. */
@@ -76,6 +78,7 @@ export default function CurveFitResults(p: Props) {
 
   const setStatus = useApp((s) => s.setStatus);
   const view = done && active ? fitResultView(resultInput(active, modelName, names, result, fitData)) : null;
+  const shown = view ? shownParamTable(view) : null;
   const copy = async (md: boolean) => {
     if (!active || !result) return;
     const input = resultInput(active, modelName, names, result, fitData);
@@ -117,9 +120,11 @@ export default function CurveFitResults(p: Props) {
           The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.
         </div>
       )}
-      {view && view.paramRows.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <DataTable columns={view.paramColumns} rows={view.paramRows} />
+      {shown && shown.rows.length > 0 && (
+        // One line per value and per CI (UX-F): no wrapping, tight cells, and
+        // a sideways scroll in its own box if a unit column still overflows.
+        <div className="qzk-nowrap-table qzk-dense-table" style={{ marginTop: 12, overflowX: "auto" }}>
+          <DataTable columns={shown.columns} rows={shown.rows} />
         </div>
       )}
       {view?.notes.map((n) => (
@@ -154,15 +159,23 @@ export default function CurveFitResults(p: Props) {
           >
             {p.cornerBusy ? "Bootstrapping…" : "Corner plot…"}
           </Button>
+          {/* Destructive, so set apart at the row's end and styled as such. */}
           <Button
             size="sm"
-            variant="ghost"
+            variant="danger"
+            className="qz-cf-remove"
             title="Delete this fit, its saved recipe and Library result, and its curve in this window (other figures keep their saved copy; closing the window keeps them; Undo restores)"
             onClick={p.onRemoveFit}
           >
             Remove fit
           </Button>
         </div>
+      )}
+
+      {/* The residuals come straight after the parameters: the most important
+          result after them (UX-F). */}
+      {done && active && fitData && (
+        <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} autoOpen={p.residualsOpen ?? false} inView={p.residualsOpen ?? true} />
       )}
 
       {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
@@ -174,7 +187,6 @@ export default function CurveFitResults(p: Props) {
         <>
           <FitBandsSection target={{ dataset: active, model: modelName, result, fitData }} />
           <FitReportSection result={result} fitData={fitData} paramNames={names} fileStem={`${stemFromName(active.name)}-${modelName}`} />
-          <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} />
           <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
           <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want, fitData.fixed)} />
           <FitDiagnosticsSection result={result} fitData={fitData} />

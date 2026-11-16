@@ -107,7 +107,7 @@ async function fit(): Promise<void> {
 describe("CurveFitPanel — fit statistics sections", () => {
   it("offers Bands and Diagnostics only once a fit completed", async () => {
     render(<CurveFitPanel />);
-    await screen.findByText("Compare models");
+    await screen.findByRole("tab", { name: "Advanced" }); // the panel is up
     expect(screen.queryByText("Bands")).toBeNull();
     expect(screen.queryByText("Diagnostics")).toBeNull();
     await fit();
@@ -161,6 +161,7 @@ describe("CurveFitPanel — fit statistics sections", () => {
       ],
     });
     render(<CurveFitPanel />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: Compare lives under Advanced
     await screen.findAllByRole("option", { name: "Quadratic" });
     fireEvent.change(await screen.findByLabelText("Add a model to compare"), { target: { value: "Quadratic" } });
     await act(async () => {
@@ -174,11 +175,13 @@ describe("CurveFitPanel — fit statistics sections", () => {
 
   it("offers ODR only when an X-error column is designated", async () => {
     const { unmount } = render(<CurveFitPanel />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: loads on first visit
     await screen.findByText("Compare models");
     expect(screen.queryByRole("button", { name: "Fit line (ODR)" })).toBeNull();
     unmount();
     useApp.setState({ datasets: [withXErr(DS)] });
     render(<CurveFitPanel />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: ODR lives under Advanced
     expect(await screen.findByRole("button", { name: "Fit line (ODR)" })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { paramUnit } from "./fitParamUnits";
-import { fitDof, fitResultMarkdown, fitResultTsv, fitResultView } from "./fitResultView";
+import { fitDof, fitResultMarkdown, fitResultTsv, fitResultView, shownParamTable } from "./fitResultView";
 
 const result = { params: [9.0000000001, 0.5, 3], errors: [0.0123, 0.2, null], R2: 0.99987, chiSqRed: 1.2, RMSE: 0.05, AIC: -40, nPoints: 12, nFree: 3 };
 const input = { model: "ExpDec1", names: ["y0", "A1", "t1"], result, xUnit: "K", yUnit: "emu" };
@@ -67,5 +67,23 @@ describe("copy serializers", () => {
   it("Markdown: escapes backslashes before pipes in cells", () => {
     const md = fitResultMarkdown({ ...input, names: ["a\\|b", "A1", "t1"] });
     expect(md).toContain("| a\\\\\\|b |");
+  });
+});
+
+describe("shownParamTable (UX-F)", () => {
+  const view = (units: string[]) => ({
+    paramColumns: ["Parameter", "Value ± SE", "95 % CI", "Units"],
+    paramRows: units.map((u, i) => [`p${i}`, "1 ± 0.1", "[0.8, 1.2]", u]),
+    statRows: [],
+    notes: [],
+  });
+  it("drops the Units column when no parameter has a unit", () => {
+    expect(shownParamTable(view(["—", "—"]))).toEqual({
+      columns: ["Parameter", "Value ± SE", "95 % CI"],
+      rows: [["p0", "1 ± 0.1", "[0.8, 1.2]"], ["p1", "1 ± 0.1", "[0.8, 1.2]"]],
+    });
+  });
+  it("keeps it when any parameter has one", () => {
+    expect(shownParamTable(view(["s", "—"])).columns).toContain("Units");
   });
 });
