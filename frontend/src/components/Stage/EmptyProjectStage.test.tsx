@@ -51,10 +51,10 @@ describe("EmptyProjectStage", () => {
     expect(useApp.getState().datasets[0].name).toMatch(/^demo-\d+\.dat$/);
   });
 
-  it("Guided import opens the wizard", () => {
+  it("Import wizard opens the wizard", () => {
     useApp.setState({ importWizardOpen: false } as never);
     render(<EmptyProjectStage />);
-    fireEvent.click(screen.getByRole("button", { name: "Guided import…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import wizard…" }));
     expect(useApp.getState().importWizardOpen).toBe(true);
   });
 

@@ -47,6 +47,7 @@ function useVisiblePendingOps(): PendingOp[] {
 export default function StatusBar() {
   const status = useApp((s) => s.status);
   const statusDanger = useApp((s) => s.statusDanger);
+  const statusWarn = useApp((s) => s.statusWarn);
   const connected = useConnection((s) => s.connected);
   const stale = useConnection((s) => s.stale);
   const count = useApp((s) => s.datasets.length);
@@ -57,7 +58,7 @@ export default function StatusBar() {
   return (
     <footer className="qzk-statusbar">
       <span className="qzk-conn">
-        <StatusDot tone={!connected ? "warn" : statusDanger !== null && statusDanger === status ? "danger" : "ok"} />
+        <StatusDot tone={!connected ? "warn" : statusDanger !== null && statusDanger === status ? "danger" : statusWarn !== null && statusWarn === status ? "warn" : "ok"} />
         {stale && <span className="qzk-conn-stale">{stale}</span>}
         {/* The result of most commands lands here: a polite live region,
             mounted while empty, and exempt from a dialog's background inert

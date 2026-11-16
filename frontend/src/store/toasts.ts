@@ -18,6 +18,9 @@ export type ToastKind = "info" | "ok" | "danger";
 export interface ToastAction {
   label: string;
   onClick: () => void;
+  /** Leave the toast up after the click (a "Details" / "Copy" that must not
+   *  take the toast's other actions away). */
+  keep?: boolean;
 }
 
 export interface Toast {

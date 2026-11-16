@@ -51,6 +51,7 @@ import { useSavedFitModels } from "./useSavedFitModels";
 import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
 import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
 import { connectionHint } from "../../../lib/importFailureHint";
+import { historyTop, toastWithUndo } from "../../../lib/undoToast";
 
 // Global (shared-parameter) fit mode: replaces the single-fit body while on.
 const GlobalFitSection = lazyRegion(() => import("./GlobalFitSection"), "Global fit");
@@ -192,6 +193,7 @@ export default function CurveFitPanel() {
     if (!ok) return;
     recordHistory("remove fit");
     clear();
+    toastWithUndo(`removed the ${modelName} fit of ${active.name}`, "info", historyTop());
   };
 
   const template = useFitTemplateBinding({
