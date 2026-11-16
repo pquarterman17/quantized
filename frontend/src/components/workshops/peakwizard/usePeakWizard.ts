@@ -23,8 +23,8 @@ import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
 import { segmentYErr } from "./modelFitWeights";
 import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
-import { effectiveFit, loadedRecipe, savedFit, STRONGEST_PEAKS, weakerThanStrongest } from "./peakDefaults";
-import { useAutoBaseline, useFitOnEntry } from "./usePeakDefaults";
+import { defaultPeakShape, effectiveFit, loadedRecipe, savedFit, STRONGEST_PEAKS, weakerThanStrongest } from "./peakDefaults";
+import { useAutoBaseline, useAutoShape, useFitOnEntry } from "./usePeakDefaults";
 
 import { fitMultiPeak } from "../../../lib/api/peaks";
 import { dropGapRows } from "../../../lib/api/finitePairs";
@@ -163,8 +163,10 @@ export function usePeakWizard(): PeakWizardState {
   const [recipeRev, setRecipeRev] = useState(0);
 
   const baselineTouched = useRef<() => void>(() => {});
+  const shapeTouched = useRef<() => void>(() => {});
   const patchRecipe = useCallback((p: DeepPartialRecipe) => {
     if (p.baseline) baselineTouched.current();
+    if (p.model?.shape !== undefined) shapeTouched.current();
     setRecipe((r) => ({
       ...r,
       ...(p.range ? { range: { ...r.range, ...p.range } } : {}),
@@ -240,6 +242,14 @@ export function usePeakWizard(): PeakWizardState {
     method: recipe.baseline.method, apply: applyAutoBaseline,
   });
   baselineTouched.current = auto.touched;
+  // ③ starts from pseudo-Voigt on XRD / Raman (./peakDefaults), decided
+  // before the model is set up (steps ① and ②), as the baseline is.
+  const applyAutoShape = useCallback((shape: string) => {
+    setRecipe((r) => ({ ...r, model: { ...r.model, shape } }));
+    setFitResult(null); // as any recipe change: results made under the old shape are stale
+    setIntegrateResult(null);
+  }, []);
+  shapeTouched.current = useAutoShape(active && step < 2 ? defaultPeakShape(active, xKey) : null, recipe.model.shape, applyAutoShape);
   const { baseline, baselineBusy, baselineError } = usePeakBaseline(
     active,
     segment,
@@ -429,7 +439,8 @@ export function usePeakWizard(): PeakWizardState {
     // P3.5 "recently used" — after the existence guard, so applying a recipe
     // that is already gone records nothing.
     recordUse({ kind: "peak", scope: "global", id: r.name });
-    auto.touched(); // a recipe's baseline is a choice
+    auto.touched(); // a recipe's baseline and shape are choices
+    shapeTouched.current();
     setRecipe(loadedRecipe(r)); // an unset background keeps its saved meaning
     cands.clearCandidates();
     setAside.current.clear();

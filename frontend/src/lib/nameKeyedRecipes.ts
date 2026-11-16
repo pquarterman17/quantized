@@ -189,8 +189,8 @@ const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
  *                   max_peaks integer >= 1; the OPTIONAL Advanced fields
  *                   (lib/peakwizard's `PeakFindAdvanced`) only when
  *                   present: enums by membership, widths/windows >= 0,
- *                   bg_poly_degree integer >= 0, bg_iterative boolean —
- *                   an absent one stays absent (the route's default)
+ *                   bg_poly_degree integer >= 0, bg_iterative and
+ *                   strict_prominence boolean — absent = route default
  *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
  *                   bgDegree integer >= 0
  *    report         integrate: regionWidth > 0 (a width in x FWHM)
@@ -255,9 +255,10 @@ function parsePeakRecipeFile(text: string): NamedRecord {
     if (!nonnegInt(find.bg_poly_degree)) bad("find.bg_poly_degree");
     advanced.bg_poly_degree = find.bg_poly_degree as number;
   }
-  if (find.bg_iterative !== undefined) {
-    if (typeof find.bg_iterative !== "boolean") bad("find.bg_iterative");
-    advanced.bg_iterative = find.bg_iterative as boolean;
+  for (const k of ["bg_iterative", "strict_prominence"] as const) {
+    if (find[k] === undefined) continue;
+    if (typeof find[k] !== "boolean") bad(`find.${k}`);
+    advanced[k] = find[k] as boolean;
   }
   const model = o.model as Record<string, unknown>;
   if (!oneOf(model.shape, PEAK_SHAPES)) bad("model.shape");

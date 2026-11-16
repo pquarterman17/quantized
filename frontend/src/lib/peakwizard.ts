@@ -40,6 +40,9 @@ export interface PeakFindAdvanced {
   max_window_deg: number;
   bg_poly_degree: number;
   bg_iterative: boolean;
+  /** `min_prominence` as a true floor: every peak stands out by that
+   *  fraction of the tallest (the route's opt-in; the wizard's default). */
+  strict_prominence: boolean;
 }
 
 /** The step-① baseline methods: the original three plus the Baseline
@@ -109,7 +112,13 @@ export const DEFAULT_RECIPE: PeakRecipe = {
   name: "",
   range: { lo: null, hi: null },
   baseline: { method: "none", lam: 1e5, p: 0.01, radius: 50, order: 2 },
-  find: { snr_threshold: 3, min_prominence: 0, max_peaks: 20 },
+  // Adaptive find (UX audit 8 #5): the noise is the detector's robust MAD of
+  // differences of the trace it is given -- the baseline-corrected one --
+  // and every peak must stand out by 3 % of the tallest, at most 12 of them
+  // (Origin's Find: a local-noise threshold, 5 % of max, <= 10 by default).
+  // The old 0 / 20 / non-strict marked 14 noise points at 10-27° of an XRD
+  // scan with only 6 real peaks.
+  find: { snr_threshold: 3, min_prominence: 0.03, max_peaks: 12, strict_prominence: true },
   model: { shape: "Gaussian", bgDegree: 1, linkMode: "None", constrain: false },
   report: { mode: "fit", regionWidth: 3 },
   fit: DEFAULT_FIT,

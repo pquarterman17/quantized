@@ -42,7 +42,9 @@ import FitConvergenceWarning from "./FitConvergenceWarning";
 import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
-import { curveFitStatus } from "./curveFitStatus";
+import { curveFitStatus, poorFit } from "./curveFitStatus";
+import FitRangeBar from "./FitRangeBar";
+import { isSinglePeakModel } from "./fitRange";
 import { reportPrefs } from "../../../store/curveFitSession";
 import { useCurveFit } from "./useCurveFit";
 import { useFitTemplateBinding } from "./useFitTemplateBinding";
@@ -272,6 +274,7 @@ export default function CurveFitPanel() {
   const header = (
     <CurveFitHeader
       modelPicker={modelPicker}
+      range={<FitRangeBar active={active} offer={isSinglePeakModel(registryModel?.category) || (!!result && !guessOnly && !!poorFit(result))} fitted={!!result && !guessOnly && !resultStale} />}
       fit={{
         disabled: !active || busy,
         fitting: busy && runKind === "fit",

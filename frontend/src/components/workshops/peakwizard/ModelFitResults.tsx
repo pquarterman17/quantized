@@ -4,9 +4,8 @@
 // and the metrics under the objective's honest label. Every missing error is
 // a "—" whose tooltip says WHY (./modelFitReasons).
 
-import type { ReactNode } from "react";
-
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
+import { fmtValueErr, roundToError, sigFigs, timesTen } from "../../../lib/fitValueFormat";
 import { fmtNum } from "../../../lib/format";
 import { DataTable } from "../../primitives/DataTable";
 import { StatusDot } from "../../primitives";
@@ -20,34 +19,38 @@ const SHAPE_LABEL: Record<string, string> = {
   pearson_vii: "PVII", fano: "Fano", doniach_sunjic: "DS",
 };
 
-/** A standard error to two significant figures (its own precision); the
- *  full value is in the tooltip. */
-export function fmtErr(err: number): string {
-  const a = Math.abs(err);
-  if (!Number.isFinite(err)) return "—";
-  return a !== 0 && (a < 1e-3 || a >= 1e5) ? err.toExponential(1) : String(Number(err.toPrecision(2)));
-}
-
-/** "± err", or a dash that explains itself on hover. */
-function Err({ err, reason }: { err: number | null; reason: string | null }): ReactNode {
-  if (err !== null) return <span style={faint} title={`± ${fmtNum(err)}`}>± {fmtErr(err)}</span>;
-  return (
-    <span style={faint} title={reason ?? "no error reported"} data-no-error="">
-      ± —
-    </span>
-  );
+/** A value and its standard error as two display strings, by the SAME rule
+ *  Curve Fit's "Value ± SE" uses (lib/fitValueFormat.ts: the error to its
+ *  PDG significant figures, the value to the same decimal place, a shared
+ *  ×10ⁿ), so the two analysis panels never disagree on one number (UX audit
+ *  8 #5). With no usable error the value alone at four figures, as there. */
+export function valueErrCells(value: number | null, err: number | null): { value: string; error: string | null } {
+  const e = err !== null && Number.isFinite(err) ? sigFigs(err, 2) : null;
+  if (value === null || !Number.isFinite(value)) return { value: "—", error: e };
+  const r = err !== null ? roundToError(value, err) : null;
+  if (!r) return { value: sigFigs(value, 4), error: e };
+  const t = r.mag === 0 ? "" : timesTen(r.mag);
+  return { value: r.value + t, error: r.error + t };
 }
 
 /** Value over its error. `stacked` (the per-peak table) puts the error on a
  *  second line, so six columns fit the docked 420 px window without a
- *  sideways scroll (fitting live check: height and area were cut off). */
+ *  sideways scroll (fitting live check: height and area were cut off); inline
+ *  (the parameter table) it is Curve Fit's one-line "2.33 ± 0.12" /
+ *  "(5.94 ± 0.30)×10⁻⁴". A missing error is a dash that explains itself on
+ *  hover; the unrounded error is in the tooltip. */
 function Pm({ value, err, reason, stacked = false }: {
   value: number | null; err: number | null; reason: string | null; stacked?: boolean;
 }) {
+  const c = valueErrCells(value, err);
+  const tip = c.error !== null ? `± ${fmtNum(err)}` : (reason ?? "no error reported");
+  if (!stacked && value !== null && err !== null && roundToError(value, err)) {
+    return <span style={{ whiteSpace: "nowrap" }} title={tip}>{fmtValueErr(value, err)}</span>;
+  }
   return (
     <span style={{ whiteSpace: "nowrap", display: stacked ? "inline-flex" : undefined, flexDirection: "column", alignItems: "flex-end" }}>
-      <span>{fmtNum(value)}</span>{" "}
-      <Err err={err} reason={reason} />
+      <span>{c.value}</span>{" "}
+      <span style={faint} title={tip} {...(c.error === null ? { "data-no-error": "" } : {})}>± {c.error ?? "—"}</span>
     </span>
   );
 }
@@ -102,7 +105,7 @@ export default function ModelFitResults({ r }: { r: PeakModelFitResponse }) {
               <span key="n" title={p.name}>{paramLabel(p.name)}</span>,
               <Pm key="v" value={p.value} err={p.stderr} reason={paramErrorReason(r, p)} />,
               p.tie
-                ? `tied → ${tieText(p)}` + (p.tie_coef_vary ? ` (${p.tie_op === "offset" ? "offset" : "ratio"} fitted ± ${p.tie_coef_stderr == null ? "—" : fmtErr(p.tie_coef_stderr)})` : "")
+                ? `tied → ${tieText(p)}` + (p.tie_coef_vary ? ` (${p.tie_op === "offset" ? "offset" : "ratio"} fitted ± ${p.tie_coef_stderr == null ? "—" : sigFigs(p.tie_coef_stderr, 2)})` : "")
                 : !p.vary ? "fixed" : p.at_bound ? "at bound" : "free",
             ])}
           />

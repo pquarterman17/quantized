@@ -10,8 +10,12 @@
 //    wizard's effective model, usePeakWizard), and a warning when the free-
 //    parameter count makes the time limit likely.
 //  * Step ④: the time limit, and which peaks "Fit the N strongest" keeps.
+//  * Step ③'s starting shape (UX audit 8 #5): pseudo-Voigt on an XRD or
+//    Raman trace -- the shape those fields fit -- Gaussian otherwise.
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
+import { techniqueOf } from "../../../lib/techniqueDefaults";
+import type { Dataset } from "../../../lib/types";
 import type { PeakBaselineMethod, PeakRecipe } from "../../../lib/peakwizard";
 import type { PeakRecipeFit } from "../../../lib/peakRecipeFit";
 import { backgroundFromDegree, type ModelParam } from "./peakModelParams";
@@ -79,6 +83,24 @@ export const savedFit = (r: PeakRecipe): PeakRecipeFit => effectiveFit(r.fit, r.
  *  with (the recipe's degree), never the newer "none over a baseline" rule. */
 export function loadedRecipe(r: PeakRecipe): PeakRecipe {
   return r.fit.background === null ? { ...r, fit: { ...r.fit, background: backgroundFromDegree(r.model.bgDegree) } } : r;
+}
+
+/** XRD / Raman evidence in a name, an axis label or a unit. */
+const XRD_RAMAN = /(^|[^a-z])xrd([^a-z]|$)|x-?ray diffr|2\s*θ|2\s*-?theta|two.?theta|raman/i;
+
+/** The peak shape step ③ starts from on this dataset: pseudo-Voigt for XRD
+ *  powder and spectroscopy (Raman) techniques, Gaussian otherwise. A plain
+ *  .xy / .csv / .txt import is tagged generic, so the dataset's name and its
+ *  plotted X label and unit are read for the same evidence. */
+export function defaultPeakShape(ds: Dataset, xKey: number | null): "Pseudo-Voigt" | "Gaussian" {
+  const t = techniqueOf(ds);
+  if (t === "xrd.powder" || t === "spectroscopy") return "Pseudo-Voigt";
+  const d = ds.data;
+  const meta = d.metadata ?? {};
+  const x = xKey === null
+    ? `${String(meta["x_column_name"] ?? "")} ${String(meta["x_column_unit"] ?? "")}`
+    : `${d.labels[xKey] ?? ""} ${d.units[xKey] ?? ""}`;
+  return XRD_RAMAN.test(`${ds.name} ${x}`) ? "Pseudo-Voigt" : "Gaussian";
 }
 
 /** Free parameters of a model table (varying, untied). */

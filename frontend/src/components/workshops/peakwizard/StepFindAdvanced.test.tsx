@@ -68,8 +68,10 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
     expect(findMock).toHaveBeenCalledTimes(2);
     expect(findMock.mock.calls[1]![0]).toEqual(
       expect.objectContaining({
-        snr_threshold: 3, // the wizard's recipe default, not the route's 5
-        max_peaks: 20,
+        snr_threshold: 3, // the wizard's recipe defaults, not the route's 5 / 50
+        max_peaks: 12,
+        min_prominence: 0.03,
+        strict_prominence: true,
         max_width_deg: 0.5,
         min_separation: 0.2,
         bg_method: "polynomial",
@@ -82,14 +84,28 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(loadRecipes()).toHaveLength(1));
     expect(loadRecipes()[0]!.find).toEqual(
-      expect.objectContaining({ snr_threshold: 3, max_peaks: 20, max_width_deg: 0.5, min_separation: 0.2, bg_method: "polynomial" }),
+      expect.objectContaining({ snr_threshold: 3, max_peaks: 12, max_width_deg: 0.5, min_separation: 0.2, bg_method: "polynomial" }),
     );
   });
 
-  it("an untouched step ② still sends only the three fields it always did", async () => {
+  it("an untouched step ② sends only the recipe's own find fields (the adaptive defaults, UX8-D)", async () => {
     render(<PeakWizardPanel />);
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
     await waitFor(() => expect(candidateRows()).toHaveLength(1));
-    expect(Object.keys(findMock.mock.calls[0]![0]).sort()).toEqual(["max_peaks", "snr_threshold", "x", "y"]);
+    expect(Object.keys(findMock.mock.calls[0]![0]).sort()).toEqual(["max_peaks", "min_prominence", "snr_threshold", "strict_prominence", "x", "y"]);
+  });
+
+  it("'Defaults' restores the wizard's adaptive find, not the route's noise-prone one (UX8-D)", async () => {
+    render(<PeakWizardPanel />);
+    fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
+    fireEvent.change(await screen.findByLabelText("Max peaks"), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find again" }));
+    expect(findMock.mock.calls.at(-1)![0]).toEqual(expect.objectContaining({ max_peaks: 40 }));
+    // Wait on STATE: the find is done once its buttons are live again.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Defaults" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Defaults" }));
+    expect(findMock.mock.calls.at(-1)![0]).toEqual(
+      expect.objectContaining({ snr_threshold: 3, min_prominence: 0.03, max_peaks: 12, strict_prominence: true }),
+    );
   });
 });

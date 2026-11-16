@@ -45,6 +45,13 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
           {w.findBusy ? "Finding…" : "Find peaks"}
         </Button>
       </div>
+      {w.recipe.find.strict_prominence && (
+        // The adaptive find (UX8-D, lib/peakwizard DEFAULT_RECIPE), said plainly.
+        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
+          Peaks must clear the noise and stand out by at least {+(w.recipe.find.min_prominence * 100).toPrecision(3)} % of the
+          tallest peak (Advanced ▸ Min prominence).
+        </div>
+      )}
       {w.findError && (
         <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
           {w.findError}

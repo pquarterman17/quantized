@@ -129,7 +129,7 @@ test.describe("Origin journey: fitting and peaks", () => {
     await expect(batch.getByText(/Failed|Error/)).toHaveCount(0);
   });
 
-  test("Peak analyzer wizard fits two Gaussian peaks", async ({ page }) => {
+  test("Peak analyzer wizard fits the two peaks (pseudo-Voigt, a 2θ scan's default)", async ({ page }) => {
     test.setTimeout(60_000);
     await gotoApp(page);
     await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("two-peaks.csv"));
@@ -152,7 +152,7 @@ test.describe("Origin journey: fitting and peaks", () => {
     // Centres at 36 and 44 degrees (the fixture's peaks), each with an error.
     const centres = await pa
       .getByRole("row")
-      .filter({ hasText: "Gauss" })
+      .filter({ hasText: "pV" }) // the 2θ default shape (UX8-D)
       .evaluateAll((rs) => rs.map((r) => Number.parseFloat(r.querySelectorAll("td")[2]?.textContent ?? "NaN")));
     expect(centres).toHaveLength(2);
     expect(centres[0]).toBeCloseTo(36, 1);
