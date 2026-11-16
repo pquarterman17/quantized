@@ -20,6 +20,13 @@ body {
 .qzk-main.lc { grid-template-columns: 0 1fr var(--rw, 296px); }
 .qzk-main.rc { grid-template-columns: var(--lw, 210px) 1fr 0; }
 .qzk-main.lc.rc { grid-template-columns: 0 1fr 0; } /* both collapsed: without this .rc won and the library stayed open */
+/* UX-F: a docked analysis window (store/toolDock.ts) takes the right column at
+   its own width (--dock-w, set inline by App) and replaces the Inspector. It
+   wins over a collapsed Inspector (.rc): docking re-opens the column. */
+.qzk-main.tooldock, .qzk-main.rc.tooldock { grid-template-columns: var(--lw, 210px) 1fr var(--dock-w); }
+.qzk-main.lc.tooldock, .qzk-main.lc.rc.tooldock { grid-template-columns: 0 1fr var(--dock-w); }
+.qzk-main.tooldock > .qzk-inspector { display: none; }
+.qzk-tooldock-slot { min-width: 0; min-height: 0; background: var(--surface-1); border-left: 1px solid var(--border-soft); }
 
 /* ── calc-only shell (?view=calc — MAIN_PLAN #22 standalone DiraCulator) ── */
 .qzk-calc-app { display: grid; grid-template-rows: 38px 1fr; height: 100%; }
@@ -1156,9 +1163,36 @@ body {
    `height` is unset (auto), same dual-mode pattern as qzk-plotwin-body. */
 /* GUI audit: `100% - 24px` alone let a window placed at top:90px run 66px
    past the viewport. ToolWindow publishes its top edge as --qzk-win-top, so
-   the cap is "down to 12px above the viewport bottom" (never under 120px, so a
-   window dragged low still shows a body). */
-.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 12px)); max-width: 100%; width: 360px; z-index: 20; } /* max-width: an 840px panel in an 800px window */
+   the cap is "down to 8px above the 24px status bar" (UX-F: it used to stop
+   12px above the viewport bottom, i.e. under the status bar), never under
+   120px, so a window dragged low still shows a body. */
+.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 32px)); max-width: 100%; width: 360px; z-index: 20; } /* max-width: an 840px panel in an 800px window */
+/* Docked into the side column (ToolWindow sets the slot's box inline): square,
+   flush with the column, no floating shadow or resize grip. */
+.qzk-win.qzk-win-docked { max-height: none; border-radius: 0; box-shadow: none; border-top: none; border-right: none; border-bottom: none; }
+.qzk-win-dock { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: var(--font-size-sm); line-height: 1; }
+.qzk-win-dock:hover { background: var(--surface-3); color: var(--text); }
+.qzk-win-dock:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A non-scrolling band between the title bar and the body (Curve Fit's model,
+   Fit button, status and tabs stay in view while the body scrolls). */
+.qzk-win-head { flex: none; display: flex; flex-direction: column; gap: 6px; padding: var(--pad) var(--pad-lg) 0; border-bottom: 1px solid var(--border-soft); }
+/* Curve Fit's header (CurveFitHeader.tsx): the Fit button is the one primary
+   action, so it is full height and weight beside a quiet Auto-guess. */
+.qz-cf-fitbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.qz-btn.qz-cf-fit { min-width: 76px; font-weight: var(--weight-semibold); color: var(--text); background: color-mix(in oklab, var(--accent-soft), var(--accent) 24%); }
+.qz-cf-status { flex: 1 0 100%; min-width: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qz-cf-panel select { max-width: 100%; }
+.qz-cf-tabs { display: flex; gap: 2px; margin: 0 calc(-1 * var(--pad-lg)); padding: 0 var(--pad); }
+.qz-cf-panel { display: flex; flex-direction: column; gap: var(--pad); }
+.qz-cf-panel[hidden] { display: none; }
+:where(.qz-cf-panel) > * { flex-shrink: 0; }
+/* Every collapsible section in a tool window shows that it opens: a
+   `display: block` summary (.qzk-field-lbl) loses the native disclosure
+   marker, so the titles read as plain labels (audit 7: "no chevron"). */
+details > summary.qzk-field-lbl { list-style: none; }
+details > summary.qzk-field-lbl::-webkit-details-marker { display: none; }
+details > summary.qzk-field-lbl::before { content: "▸"; display: inline-block; width: 1.1em; font-size: 9px; color: var(--text-faint); }
+details[open] > summary.qzk-field-lbl::before { content: "▾"; }
 .qzk-win-title { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); font-weight: var(--weight-semibold); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-win-title .grow { flex: 1; }
 .qzk-win-title:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1339,6 +1373,15 @@ body {
 .qzk-wizard-step.qzk-active { border-color: var(--accent); color: var(--text); }
 .qzk-wizard-num { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-wizard-step.qzk-active .qzk-wizard-num { color: var(--accent); }
+/* UX-F: the five step chips stay on ONE line. An inactive chip may shrink, its
+   label ellipsized (the full label is the chip's tooltip); the active one
+   never does. */
+.qzk-wizard-steps { flex-wrap: nowrap; min-width: 0; }
+.qzk-wizard-step { display: inline-block; flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qzk-wizard-step.qzk-active { flex-shrink: 0; }
+/* Docked, the window has the column's full height: its peak tables show at
+   least 8 rows instead of 5 (read by the tables' inline max-height). */
+.qzk-win-docked { --qz-peak-table-h: calc(9 * var(--row-h) + 12px); }
 
 /* Pipeline view (#6): the editable step list. */
 .qzk-step-row { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; }

@@ -23,7 +23,7 @@
 // window after already visiting the matching tab (or vice versa) is a cache
 // hit, not a second fetch.
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { canRenderMap, ensureMapGate, mapGateVersion, subscribeMapGate } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
@@ -37,7 +37,6 @@ import { useWorkbookTransferCommands } from "../../commands/workbookTransferComm
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
-import { useRightDockClearance } from "./useRightDockClearance";
 import { PendingWorkspace } from "../Shell/workspaceSeams";
 
 const ScatterMapButton = lazyRegion(() => import("./ScatterMapButton"), "Scattered map");
@@ -65,9 +64,6 @@ const TABS = [
 export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
-  // A docked Curve Fit / Peak analyzer: the stage reflows to its left.
-  const cellRef = useRef<HTMLElement | null>(null);
-  const dockPad = useRightDockClearance(cellRef);
   // A snapshot window always carries its frozen bundle (sanitizePlotWindows
   // drops one without), so its kind alone says it can render.
   const hasRenderableContent = useApp((s) =>
@@ -115,7 +111,7 @@ export default function Stage() {
   const selectedTab = shown === "analysis" ? "technique" : shown;
 
   return (
-    <section ref={cellRef} className="qzk-stage-cell" style={dockPad ? { paddingRight: dockPad } : undefined}>
+    <section className="qzk-stage-cell">
       {/* WAI-ARIA tablist, MANUAL activation (lib/tabListKeys): showing a view
           mounts a lazy chunk and tears down the plot windows, so arrowing
           across the strip moves focus only and Enter/Space selects. */}

@@ -63,8 +63,9 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     await expect(panel.getByText("reduced χ²")).toBeVisible({ timeout: 15_000 });
     // Key results are above the fold: the parameter table is in view.
     await expect(panel.getByRole("cell", { name: "τ" })).toBeInViewport();
-    // Docked beside the graph, not over it: the plot frame and its legend
-    // reflow to the panel's left (store/rightDock.ts).
+    // Docked beside the graph, not over it: the window takes the side column
+    // (store/toolDock.ts), so the plot frame and its legend sit to its left,
+    // and it stops at the status bar.
     const win = (await panel.boundingBox())!;
     await expect.poll(async () => {
       const frame = (await page.locator(".qzk-stage .u-over").first().boundingBox())!;
@@ -72,6 +73,8 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     }).toBeLessThanOrEqual(win.x);
     const legendBox = await page.locator(".qzk-stage > .qzk-legend").first().boundingBox();
     if (legendBox) expect(legendBox.x + legendBox.width).toBeLessThanOrEqual(win.x);
+    const statusBar = (await page.locator(".qzk-statusbar").boundingBox())!;
+    expect(win.y + win.height).toBeLessThanOrEqual(statusBar.y + 1);
 
     // #5: closing hides; the fit survives and comes back on reopen.
     await panel.getByRole("button", { name: "Close Curve Fit" }).click();
@@ -110,7 +113,8 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     expect(Math.max(...rowHeights) - Math.min(...rowHeights)).toBeLessThanOrEqual(1);
     await panel.getByText("Fit report", { exact: true }).click(); // collapse again
 
-    // Residual plots: each of the four has a real data area.
+    // Residual plots: first under the results (UX-F); each of the four has a
+    // real data area.
     await panel.getByText("Residual plots", { exact: true }).click();
     const plots = panel.getByRole("img", { name: /residual/ });
     await expect(plots).toHaveCount(4, { timeout: 15_000 });
@@ -145,6 +149,8 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     await rows.nth(1).click({ modifiers: ["Control"] });
     await runPaletteCommand(page, "Curve fit…");
     const panel = curveFit(page);
+    // Batch lives under the Advanced tab (UX-F).
+    await panel.getByRole("tab", { name: "Advanced" }).click();
     const toggle = panel.getByRole("button", { name: /Batch · 2 worksheets/ });
     await toggle.scrollIntoViewIfNeeded();
     const batch = panel.locator(".qzk-analysis-batch");

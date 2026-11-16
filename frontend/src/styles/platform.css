@@ -361,10 +361,20 @@
   max-width: calc(var(--lw, 210px) - 16px);
   align-items: flex-start;
 }
+/* UX-F: a docked analysis window fills the right column (store/toolDock.ts),
+   so the stack moves to the Library, as with a collapsed Inspector, and to
+   the status bar with no Library either. */
+.qzk-app:has(.qzk-main.tooldock) .qzk-toaster {
+  left: 8px;
+  right: auto;
+  max-width: calc(var(--lw, 210px) - 16px);
+  align-items: flex-start;
+}
 .qzk-app .qzk-toast-alerts {
   align-items: inherit;
 }
-.qzk-app:has(.qzk-main.lc.rc) .qzk-toaster {
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toaster,
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-toaster {
   bottom: 1px;
   left: 50%;
   max-width: 50vw;
@@ -374,13 +384,16 @@
   align-items: center;
   justify-content: flex-end; /* an overflowing row clips the OLDEST chips */
 }
-.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts {
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts,
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-toast-alerts {
   flex-direction: row;
 }
-.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts:empty {
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast-alerts:empty,
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-toast-alerts:empty {
   margin: 0 0 0 -6px;
 }
-.qzk-app:has(.qzk-main.lc.rc) .qzk-toast {
+.qzk-app:has(.qzk-main.lc.rc) .qzk-toast,
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-toast {
   padding-block: 1px;
   white-space: nowrap;
 }
@@ -388,9 +401,10 @@
    Help over a plot, a fixed 310px card stuck out of the 296px Inspector over
    the x-axis); while it is open the toasts take the top of that column. */
 .qzk-hints-card { right: 8px; bottom: 32px; width: min(310px, calc(var(--rw, 296px) - 16px)); }
-.qzk-app:has(.qzk-main.rc) .qzk-hints-card { right: auto; left: 8px; width: min(310px, calc(var(--lw, 210px) - 16px)); }
-.qzk-app:has(.qzk-main.lc.rc) .qzk-hints-card { top: 76px; bottom: auto; left: auto; right: 16px; width: 310px; }
-.qzk-app:has(.qzk-hints-card):not(:has(.qzk-main.lc.rc)) .qzk-toaster { top: 76px; bottom: auto; }
+.qzk-app:has(.qzk-main.rc) .qzk-hints-card, .qzk-app:has(.qzk-main.tooldock) .qzk-hints-card { right: auto; left: 8px; width: min(310px, calc(var(--lw, 210px) - 16px)); }
+.qzk-app:has(.qzk-main.lc.rc) .qzk-hints-card, .qzk-app:has(.qzk-main.lc.tooldock) .qzk-hints-card { top: 76px; bottom: auto; left: auto; right: 16px; width: 310px; }
+.qzk-app:has(.qzk-main.lc.tooldock) .qzk-hints-card { left: 16px; right: auto; } /* the docked window holds the right */
+.qzk-app:has(.qzk-hints-card):not(:has(.qzk-main.lc.rc, .qzk-main.lc.tooldock)) .qzk-toaster { top: 76px; bottom: auto; }
 /* The always-mounted assertive region for danger toasts: a column of its own;
    while empty it cancels the stack gap it would otherwise add. */
 .qzk-toast-alerts {

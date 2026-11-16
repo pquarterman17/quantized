@@ -2,9 +2,9 @@
 // (component ceiling). Key results first, above the fold: the parameter table
 // (value ± error) and the headline statistics (N, R², reduced χ², RMSE, AIC),
 // with the result actions (→ Report, corner plot, Remove fit). Below them the
-// deeper tools, each its own lazy chunk fetched only when a fit exists:
-// Find X/Y, bands, the NLFit-style fit report, residual plots, output to
-// worksheet and diagnostics.
+// residual plots (first under the results, UX-F) and then the deeper
+// tools, each its own lazy chunk fetched only when a fit exists: Find X/Y,
+// bands, the NLFit-style fit report, output to worksheet and diagnostics.
 
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
@@ -165,6 +165,12 @@ export default function CurveFitResults(p: Props) {
         </div>
       )}
 
+      {/* The residuals come straight after the parameters: the most important
+          result after them (UX-F). */}
+      {done && active && fitData && (
+        <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} />
+      )}
+
       {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
       {done && p.xRange && (
         <FindXYSection target={{ model: modelName, params, xMin: p.xRange.min, xMax: p.xRange.max }} />
@@ -174,7 +180,6 @@ export default function CurveFitResults(p: Props) {
         <>
           <FitBandsSection target={{ dataset: active, model: modelName, result, fitData }} />
           <FitReportSection result={result} fitData={fitData} paramNames={names} fileStem={`${stemFromName(active.name)}-${modelName}`} />
-          <ResidualPlotsSection result={result} fitData={fitData} xLabel={xLabelOf(active, fitData.xKey)} />
           <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
           <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want, fitData.fixed)} />
           <FitDiagnosticsSection result={result} fitData={fitData} />

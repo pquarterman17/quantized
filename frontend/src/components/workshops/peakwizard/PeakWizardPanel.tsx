@@ -3,7 +3,7 @@
 // baseline / fit calc, ending in a #36 report (or the #32 integrate-only
 // path). All state lives in usePeakWizard so navigation never loses edits;
 // clearing the overlays on close mirrors the Peaks workshop. The window opens
-// docked at the right edge (overlays/dockedX.ts), like Curve Fit.
+// docked in the side column (store/toolDock.ts), like Curve Fit.
 //
 // "Batch" mode (audit P2.4 slice 4, ./PeakBatchView) runs a saved recipe over
 // many datasets. Once opened it stays MOUNTED (hidden) while the wizard is
@@ -12,7 +12,7 @@
 import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { dockedX } from "../../overlays/dockedX";
+import { floatingX } from "../../overlays/floatingX";
 import { Button, Select } from "../../primitives";
 import { onTabListKeyDown } from "../../../lib/tabListKeys";
 import { useApp } from "../../../store/useApp";
@@ -70,7 +70,7 @@ export default function PeakWizardPanel() {
   ][w.step];
 
   return (
-    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak analyzer" width={420} x={dockedX(420)} dock="right" onClose={close}>
+    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak analyzer" width={420} x={floatingX(420, PEAK_WIZARD_WINDOW_ID)} dockable onClose={close}>
       {/* Roving tablist, AUTOMATIC activation (lib/tabListKeys): switching is
           cheap, and the batch view stays mounted, so arrows select too. */}
       <div role="tablist" aria-label="Peak analyzer mode" style={{ display: "flex", gap: 6, marginBottom: 8 }} onKeyDown={(e) => onTabListKeyDown(e, true)}>
@@ -91,14 +91,16 @@ export default function PeakWizardPanel() {
         </div>
       ) : (
         <>
-          {/* Step chips: click to jump (state persists across steps). */}
+          {/* Step chips: click to jump (state persists across steps). One
+              line (UX-F): an inactive chip's label shortens with an ellipsis
+              before the row would wrap; the full label is its tooltip. */}
           <div className="qzk-wizard-steps">
             {WIZARD_STEPS.map((label, i) => (
               <button
                 key={label}
                 className={`qzk-wizard-step${i === w.step ? " qzk-active" : ""}`}
                 disabled={(i === 2 || i === 3) && noPeaks}
-                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : undefined}
+                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : label}
                 onClick={() => w.setStep(i)}
               >
                 <span className="qzk-wizard-num">{i + 1}</span> {label}

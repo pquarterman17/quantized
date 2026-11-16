@@ -24,15 +24,18 @@ import {
   keyboardLayout,
   MIN_HEIGHT,
   MIN_WIDTH,
+  STATUS_BAR_HEIGHT,
   TITLE_BAR_HEIGHT,
+  UNDOCK_DRAG,
 } from "../../lib/toolwindow";
 import { Z } from "../../lib/layers";
 import { nextToolZ, raiseToolWindow, registerToolWindow, type ToolZHandle } from "../../lib/toolWindowZ";
 import { workshopHelpTopic } from "../../lib/workshopHelp";
-import { openHelpTopic } from "../../store/help";
 import { useApp } from "../../store/useApp";
+import { floatingX } from "./floatingX";
+import ToolWindowTitleButtons from "./ToolWindowTitleButtons";
 import { useOpenerRestore } from "./useDialogFocus";
-import { useRightDockRegistration } from "./useRightDockRegistration";
+import { useToolWindowDock } from "./useToolWindowDock";
 
 // Focus order lives in lib/toolWindowZ.ts, bounded to the tool-window band.
 
@@ -53,7 +56,8 @@ export default function ToolWindow({
   width = 360,
   onClose,
   helpTopic,
-  dock,
+  dockable = false,
+  header,
   children,
 }: {
   /** Stable identity for the persisted-layout registry (store/toolwindows.ts)
@@ -73,9 +77,13 @@ export default function ToolWindow({
    *  so the search lands on that command's shared one-sentence description
    *  rather than a parallel catalog. */
   helpTopic?: string;
-  /** "right": while docked at the right edge the stage reflows to the
-   *  window's left instead of running under it (store/rightDock.ts). */
-  dock?: "right";
+  /** UX-F: the window opens DOCKED in the side column, replacing the
+   *  Inspector (store/toolDock.ts), with a title-bar button (or a drag) to
+   *  float it and one to dock it again. */
+  dockable?: boolean;
+  /** A band between the title bar and the scrolling body that stays in view
+   *  (e.g. Curve Fit's model, Fit button, status and tabs). */
+  header?: ReactNode;
   children: ReactNode;
 }) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
@@ -83,7 +91,11 @@ export default function ToolWindow({
   const toggleCollapsed = useApp((s) => s.toggleToolWindowCollapsed);
   const fallback = defaultToolWindowLayout(clearOfLibrary(x), y, width);
   const layout = stored ?? fallback;
-  useRightDockRegistration(id, dock === "right", layout);
+  const dock = useToolWindowDock(id, dockable, layout.width);
+  const docked = dock.docked;
+  // A docked window is never shown collapsed: the column would hold a bare bar.
+  const collapsed = layout.collapsed && !docked;
+  const undockDragRef = useRef<{ x: number; y: number; dx: number; dy: number } | null>(null);
   // P3.1: registry-driven by default (lib/workshopHelp.ts) so no panel needs
   // its own edit; an explicit `helpTopic` still wins, including for a window
   // with no registry entry.
@@ -102,7 +114,7 @@ export default function ToolWindow({
 
   const clampNow = (nx: number, ny: number, w: number) => {
     const th = titleRef.current?.offsetHeight ?? TITLE_BAR_HEIGHT;
-    return clampToolWindowPos(nx, ny, w, th, { width: window.innerWidth, height: window.innerHeight });
+    return clampToolWindowPos(nx, ny, w, th, { width: window.innerWidth, height: window.innerHeight - STATUS_BAR_HEIGHT });
   };
 
   // Re-clamp on viewport resize (monitor unplug — the classic loss scenario)
@@ -217,20 +229,46 @@ export default function ToolWindow({
     if (frame && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
   }, []);
 
+
   const onTitleDown = (e: React.PointerEvent) => {
-    dragRef.current = { dx: e.clientX - layout.x, dy: e.clientY - layout.y };
     (e.target as Element).setPointerCapture(e.pointerId);
+    if (docked) {
+      // UX-F: a press on a docked bar arms "drag out to float"; a click alone
+      // does nothing.
+      const box = winRef.current?.getBoundingClientRect();
+      const dx = Math.min(e.clientX - (box?.left ?? 0), layout.width - 24);
+      undockDragRef.current = { x: e.clientX, y: e.clientY, dx: Math.max(0, dx), dy: e.clientY - (box?.top ?? 0) };
+      return;
+    }
+    dragRef.current = { dx: e.clientX - layout.x, dy: e.clientY - layout.y };
   };
   const onTitleMove = (e: React.PointerEvent) => {
+    const pending = undockDragRef.current;
+    if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) >= UNDOCK_DRAG) {
+      undockDragRef.current = null;
+      dragRef.current = { dx: pending.dx, dy: pending.dy };
+      setLayout(id, { ...layout, collapsed: false, x: e.clientX - pending.dx, y: e.clientY - pending.dy });
+      dock.undock();
+      return;
+    }
     if (!dragRef.current) return;
     setLayout(id, { ...layout, x: e.clientX - dragRef.current.dx, y: e.clientY - dragRef.current.dy });
   };
   const onTitleUp = (e: React.PointerEvent) => {
+    undockDragRef.current = null;
     if (!dragRef.current) return;
     dragRef.current = null;
     (e.target as Element).releasePointerCapture(e.pointerId);
     const current = useApp.getState().toolWindowLayout[id] ?? layout;
     setLayout(id, { ...current, ...clampNow(current.x, current.y, current.width) });
+  };
+
+  // Float button: the window lands just left of the side column, where the
+  // Inspector comes back, at its own height.
+  const floatNow = () => {
+    const next = { ...layout, collapsed: false, x: floatingX(layout.width, id) };
+    setLayout(id, { ...next, ...clampNow(next.x, next.y, next.width) });
+    dock.undock();
   };
 
   const onResizeDown = (e: React.PointerEvent) => {
@@ -263,37 +301,39 @@ export default function ToolWindow({
   // R3: the focused title bar's keyboard twin of the drag and resize grip,
   // clamped like a drag end. Only on the bar itself: its buttons keep their
   // keys, and a claimed arrow never also steps the global dataset navigation.
+  // A docked window does not move; its Float button is the keyboard route out.
   const onTitleKey = (e: React.KeyboardEvent) => {
-    if (e.target !== e.currentTarget || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (docked || e.target !== e.currentTarget || e.altKey || e.ctrlKey || e.metaKey) return;
     const next = keyboardLayout(layout, e.key, e.shiftKey, winRef.current?.offsetHeight ?? MIN_HEIGHT);
     if (!next) return;
     e.preventDefault();
     setLayout(id, { ...next, ...clampNow(next.x, next.y, next.width) });
   };
 
-  const onCollapseToggle = () => toggleCollapsed(id, fallback);
+  const onCollapseToggle = () => {
+    if (!docked) toggleCollapsed(id, fallback);
+  };
+
+  // Docked: over the column's slot (useToolWindowDock). No slot (no shell: an
+  // error fallback, a unit test) leaves it where a floating one would be.
+  const r = dock.rect;
+  const place: CSSProperties = docked && r
+    ? { position: "fixed", left: r.left, top: r.top, width: r.width || layout.width, height: r.height || undefined }
+    : { left: layout.x, top: layout.y, width: layout.width, height: collapsed ? undefined : (layout.height ?? undefined), "--qzk-win-top": `${layout.y}px` } as CSSProperties;
 
   return (
     <div
       ref={winRef}
-      className="qzk-glass qzk-win"
+      className={`qzk-glass qzk-win${docked && r ? " qzk-win-docked" : ""}`}
       data-tool-window={id}
+      data-docked={docked ? "" : undefined}
       // A NON-modal dialog (no trap, no inert background), named by its
       // visible title, so a screen reader announces which panel focus is in.
       role="dialog"
       aria-labelledby={titleId}
       tabIndex={-1}
-      // --qzk-win-top: shell.css caps the window at the viewport below this edge.
-      style={
-        {
-          left: layout.x,
-          top: layout.y,
-          zIndex: Z.toolBase + z,
-          width: layout.width,
-          height: layout.collapsed ? undefined : (layout.height ?? undefined),
-          "--qzk-win-top": `${layout.y}px`,
-        } as CSSProperties
-      }
+      // --qzk-win-top: shell.css caps a floating window above the status bar.
+      style={{ ...place, zIndex: Z.toolBase + z }}
       onMouseDown={() => raiseToolWindow(zHandle.current)}
     >
       <div
@@ -302,7 +342,11 @@ export default function ToolWindow({
         tabIndex={0}
         role="group"
         aria-label={`${panelName} title bar`}
-        title="Drag or press the arrow keys to move, Shift+arrow keys to resize, double-click to collapse."
+        title={
+          docked
+            ? "Docked in the side panel. Drag the title bar out to float it."
+            : "Drag or press the arrow keys to move, Shift+arrow keys to resize, double-click to collapse."
+        }
         onKeyDown={onTitleKey}
         onPointerDown={onTitleDown}
         onPointerMove={onTitleMove}
@@ -322,47 +366,31 @@ export default function ToolWindow({
           />
         )}
         <span className="grow" id={titleId}>{title}</span>
-        {topic && (
-          <button
-            type="button"
-            className="qz-card-help"
-            aria-label={`Help for ${panelName}`}
-            data-tip="Open related help"
-            data-tip-desc="Show Help already filtered to this panel's related tools."
-            // The title bar IS the drag handle; Close and Collapse both stop
-            // pointerdown reaching it, and so must this or `?` picks the
-            // window up.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              openHelpTopic(topic);
-            }}
-          >
-            {/* Decorative: the accessible name comes from aria-label above. */}
-            <span aria-hidden="true">?</span>
-          </button>
-        )}
-        <button
-          aria-label={layout.collapsed ? "Expand" : "Collapse"}
-          className="qzk-win-collapse"
-          title={layout.collapsed ? "Expand" : "Collapse"}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={onCollapseToggle}
-        >
-          {layout.collapsed ? "▸" : "▾"}
-        </button>
+        <ToolWindowTitleButtons
+          panelName={panelName}
+          topic={topic}
+          dockable={dock.dockable}
+          docked={docked}
+          collapsed={collapsed}
+          onDock={dock.dock}
+          onFloat={floatNow}
+          onCollapseToggle={onCollapseToggle}
+        />
       </div>
-      {!layout.collapsed && (
+      {!collapsed && (
         <>
+          {header && <div className="qzk-win-head">{header}</div>}
           <div className="qzk-win-body">{children}</div>
-          <div
-            className="qzk-win-resize"
-            aria-hidden="true"
-            title="Resize"
-            onPointerDown={onResizeDown}
-            onPointerMove={onResizeMove}
-            onPointerUp={onResizeUp}
-          />
+          {!docked && (
+            <div
+              className="qzk-win-resize"
+              aria-hidden="true"
+              title="Resize"
+              onPointerDown={onResizeDown}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeUp}
+            />
+          )}
         </>
       )}
     </div>

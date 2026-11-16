@@ -60,7 +60,7 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
         </div>
       ) : (
         <>
-          <div style={{ marginTop: 8, maxHeight: 150, overflowY: "auto" }}>
+          <div style={{ marginTop: 8, maxHeight: "var(--qz-peak-table-h, 150px)", overflowY: "auto" }}>
             <table className="qz-table" aria-label="peak shapes">
               <thead>
                 <tr>
