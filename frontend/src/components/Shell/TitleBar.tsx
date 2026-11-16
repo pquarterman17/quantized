@@ -2,6 +2,7 @@
 // Native window owns OS chrome (no traffic-light dots), matching fermiviewer.
 
 import * as GLYPHS from "../../lib/glyphs";
+import { toggleInspector } from "../../store/inspectorToggle";
 import { useApp } from "../../store/useApp";
 import { useShownDataset } from "../../store/useShownDataset";
 import AppearanceMenu from "./AppearanceMenu";
@@ -9,7 +10,6 @@ import AppearanceMenu from "./AppearanceMenu";
 export default function TitleBar() {
   const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
   const toggleLeft = useApp((s) => s.toggleLeft);
-  const toggleRight = useApp((s) => s.toggleRight);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const setCalculatorsOpen = useApp((s) => s.setCalculatorsOpen);
@@ -63,7 +63,7 @@ export default function TitleBar() {
         <button aria-label="Library" className="qz-icon-btn" title="Toggle library" onClick={toggleLeft}>
           {GLYPHS.libraryToggle}
         </button>
-        <button aria-label="Inspector" className="qz-icon-btn" title="Toggle inspector" onClick={toggleRight}>
+        <button aria-label="Inspector" className="qz-icon-btn" title="Toggle inspector" onClick={toggleInspector}>
           {GLYPHS.inspectorToggle}
         </button>
       </div>

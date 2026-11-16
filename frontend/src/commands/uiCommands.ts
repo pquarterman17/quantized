@@ -14,6 +14,7 @@ import { copyText } from "../lib/clipboard";
 import { saveBlob } from "../lib/download";
 import type { StoreGet } from "../lib/exportActive";
 import { toast } from "../store/toasts";
+import { inspectorShown, toggleInspector } from "../store/inspectorToggle";
 import { openHelp, useHelp } from "../store/help";
 import { PALETTE_LABEL, PALETTE_SHORTCUT, type Action } from "../store/commands";
 import { showInteractionHints } from "../components/overlays/InteractionHints";
@@ -70,9 +71,10 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "right",
       group: "View",
       label: "Toggle inspector panel",
-      checked: () => !s().rightCollapsed,
+      // A docked analysis window replaces the Inspector (store/toolDock.ts).
+      checked: () => inspectorShown(),
       shortcut: "⌘]",
-      run: () => s().toggleRight(),
+      run: () => toggleInspector(),
     },
     {
       id: "column-switcher",

@@ -1,53 +1,57 @@
-// Curve Fit workshop — view. A draggable, resizable ToolWindow: pick a model,
-// auto-guess or fit the active dataset, see params (± errors) and goodness-of-
-// fit. The fitted curve overlays on the plot via the store (see useCurveFit).
-// Thin by design — all state/logic lives in the hook, the result area in
+// Curve Fit workshop — view. A dockable ToolWindow: pick a model, auto-guess
+// or fit the active dataset, see params (± errors) and goodness-of-fit. The
+// fitted curve overlays on the plot via the store (see useCurveFit). Thin by
+// design — all state/logic lives in the hook, the result area in
 // CurveFitResults. "→ Report" lands the fit as a #36 report sheet in the
 // library (emitted server-side, one source of truth).
+//
+// Layout (UX-F, audit 7 finding 4): a sticky header — model, the PRIMARY Fit
+// button and the fit's status — over three tabs: Setup (inputs, weighting,
+// start values, By), Results (the fit, residual plots open, then the deeper
+// result tools) and Advanced (batch, templates, compare, ODR, scan, bumps).
+// Fit switches to Results, so the outcome and the Fit button are both in view
+// without scrolling. Every tab stays mounted (hidden) once shown, so a running
+// batch or an open report survives a TAB switch -- not a switch into Global
+// fit or a custom equation, which replaces the whole body.
 //
 // Closing the window only HIDES it: the fit, its curve, its recipe (so auto
 // re-fit) and its Library result stay, and reopening shows the result again
 // (store/curveFitSession.ts). Deleting a fit is the explicit, confirmed, undoable
-// "Remove fit". The window opens docked at the RIGHT edge so it never covers
-// the plot's Y axis.
+// "Remove fit". The window opens docked in the side column (store/toolDock.ts),
+// so it never covers the plot or the Inspector.
 
 import { useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { dockedX } from "../../overlays/dockedX";
-import { Button, Select } from "../../primitives";
+import { floatingX } from "../../overlays/floatingX";
+import { Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import { groupFitModels } from "../../../lib/fitModelCatalog";
-import ModelSelect from "./ModelSelect";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { askConfirm } from "../../../store/confirmDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import BumpsSection from "./BumpsSection";
+import CurveFitAdvanced from "./CurveFitAdvanced";
 import CurveFitByLevelSection from "./CurveFitByLevelSection";
+import CurveFitHeader, { CurveFitModelPicker, CurveFitTabPanel as TabPanel, type CurveFitTab } from "./CurveFitHeader";
 import EquationModelPanel from "./EquationModelPanel";
 import CurveFitResults from "./CurveFitResults";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
+import { curveFitStatus } from "./curveFitStatus";
 import { reportPrefs } from "../../../store/curveFitSession";
 import { useCurveFit } from "./useCurveFit";
 import { useFitTemplateBinding } from "./useFitTemplateBinding";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
-import { xErrorChannel } from "./xErrorChannel";
 import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
 import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
-import CurveFitBatchSection from "./CurveFitBatchSection";
 import { connectionHint } from "../../../lib/importFailureHint";
 
-// Each its own chunk, fetched only when shown.
-const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "Templates");
-const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
-const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
 // Global (shared-parameter) fit mode: replaces the single-fit body while on.
 const GlobalFitSection = lazyRegion(() => import("./GlobalFitSection"), "Global fit");
 
@@ -113,6 +117,9 @@ export default function CurveFitPanel() {
     byBusy,
   } = useCurveFit();
   const byActive = byLevels.length > 0;
+  // Reopening on a fit shows it; otherwise start at Setup. Fit switches here.
+  const [tab, setTab] = useState<CurveFitTab>(() => (result && !guessOnly) || active?.fitSpec?.params?.length ? "results" : "setup");
+  const [runKind, setRunKind] = useState<"guess" | "fit">("fit"); // what `busy` is doing
 
   const fitParams = (
     <FitParamsSection rows={paramInputs} setRow={setParamRow} reset={resetParamRows} />
@@ -224,23 +231,9 @@ export default function CurveFitPanel() {
 
   const paramNames = models.find((m) => m.name === modelName)?.paramNames ?? [];
   const registryModel = models.find((m) => m.name === modelName);
-
   const modelPicker = (
-    <>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <label className="qzk-field-lbl">Model</label>
-        <Button
-          size="sm"
-          variant={globalMode ? "primary" : "ghost"}
-          aria-pressed={globalMode}
-          title="Fit one model to several series with shared parameters"
-          onClick={() => setGlobalMode((v) => !v)}
-        >
-          Global fit
-        </Button>
-      </div>
-      <ModelSelect groups={modelGroups} custom={customOptions} value={modelName} onChange={setModelName} />
-    </>
+    <CurveFitModelPicker groups={modelGroups} custom={customOptions} value={modelName} onChange={setModelName}
+      globalMode={globalMode} onGlobalMode={() => setGlobalMode((v) => !v)} />
   );
 
   if (globalMode) {
@@ -249,9 +242,8 @@ export default function CurveFitPanel() {
       ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses.map((g) => g ?? 1), lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
       : (reg ?? null);
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={dockedX(360)} dock="right" onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={floatingX(360, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} />}>
         <AnalysisInputReview toolId="curvefit" singleY />
-        {modelPicker}
         <GlobalFitSection model={globalModel} />
       </ToolWindow>
     );
@@ -261,9 +253,8 @@ export default function CurveFitPanel() {
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} dock="right" onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} />}>
         <AnalysisInputReview toolId="curvefit" singleY />
-        {modelPicker}
         <EquationModelPanel
           key={modelName}
           initial={currentCustom}
@@ -273,109 +264,127 @@ export default function CurveFitPanel() {
     );
   }
 
+  const status = curveFitStatus({
+    hasData: active != null, busy, guessing: runKind === "guess", error, result, guessOnly, stale: resultStale, byLevels: byActive ? byLevels.length : 0, byBusy,
+  });
+  const header = (
+    <CurveFitHeader
+      modelPicker={modelPicker}
+      fit={{
+        disabled: !active || busy,
+        fitting: busy && runKind === "fit",
+        onGuess: () => (setRunKind("guess"), void run("guess")),
+        onFit: () => {
+          setRunKind("fit");
+          setTab("results");
+          void run("fit");
+        },
+        status,
+        tab,
+        onTab: setTab,
+      }}
+    />
+  );
+
   return (
-    <ToolWindow id="curvefit" title="Curve Fit" width={340} x={dockedX(340)} dock="right" onClose={close}>
-      <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
-      {modelPicker}
-
-      {weighting}
-      {fitParams}
-
-      {/* "By" grouping (JMP_GAP_PLAN J7 residual): re-runs this SAME model
-          fit once per level of an optional categorical column, display-only
-          (never touches the plot overlay/macro/FitSpec) and unweighted. */}
-      {byOptions.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <label className="qzk-field-lbl">By (optional)</label>
-          <Select
-            aria-label="By (optional)"
-            options={[{ value: "", label: "None" }, ...byOptions.map((c) => ({ value: String(c.index), label: c.label }))]}
-            value={byCol == null ? "" : String(byCol)}
-            onChange={(e) => {
-              const factor = e.target.value === "" ? null : Number(e.target.value);
-              setByCol(factor);
-              if (active) updateAnalysisItem(active.id, { factorKeys: factor === null ? [] : [factor] });
-            }}
-          />
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <Button size="sm" disabled={!active || busy} onClick={() => void run("guess")}>
-          Auto-guess
-        </Button>
-        <Button variant="primary" size="sm" disabled={!active || busy} onClick={() => void run("fit")}>
-          {busy ? "Fitting…" : "Fit"}
-        </Button>
-      </div>
-
-      {!active && (
-        <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-          Select a dataset to fit.
-        </div>
-      )}
+    <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable onClose={close} header={header}>
+      {/* Above the tabs: a failed fit OR auto-guess shows on whichever tab is open. */}
       {error && (
-        <div className="qzk-ds-meta qzk-msg" style={{ marginTop: 10, color: "var(--danger)" }}>
+        <div className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
           {error}{connectionHint(error)}
         </div>
       )}
-      {!byActive && <FitConvergenceWarning result={guessOnly ? null : result} />}
+      <TabPanel id="setup" tab={tab}>
+        <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
+        {weighting}
+        {fitParams}
 
-      {byActive ? (
-        <>
-          {byTotalLevels > byLevels.length && (
-            <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-              By column has {byTotalLevels} levels — showing the first {byLevels.length}
-            </div>
-          )}
-          {byBusy && byResults.length === 0 ? (
-            <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-              fitting {byLevels.length} levels…
-            </div>
-          ) : (
-            byResults.map((r) => (
-              <CurveFitByLevelSection key={r.label} result={r} paramNames={paramNames} />
-            ))
-          )}
-        </>
-      ) : (
-        <CurveFitResults
+        {/* "By" grouping (JMP_GAP_PLAN J7 residual): re-runs this SAME model
+            fit once per level of an optional categorical column, display-only
+            (never touches the plot overlay/macro/FitSpec) and unweighted. */}
+        {byOptions.length > 0 && (
+          <div>
+            <label className="qzk-field-lbl">By (optional)</label>
+            <Select
+              aria-label="By (optional)"
+              options={[{ value: "", label: "None" }, ...byOptions.map((c) => ({ value: String(c.index), label: c.label }))]}
+              value={byCol == null ? "" : String(byCol)}
+              onChange={(e) => {
+                const factor = e.target.value === "" ? null : Number(e.target.value);
+                setByCol(factor);
+                if (active) updateAnalysisItem(active.id, { factorKeys: factor === null ? [] : [factor] });
+              }}
+            />
+          </div>
+        )}
+      </TabPanel>
+
+      <TabPanel id="results" tab={tab}>
+        {!active && (
+          <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
+            Select a dataset to fit.
+          </div>
+        )}
+        {active && !result && !error && !busy && !byActive && !active.fitSpec?.params?.length && (
+          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+            No fit yet. Press Fit to fit {modelName} to the data.
+          </div>
+        )}
+        {!byActive && <FitConvergenceWarning result={guessOnly ? null : result} />}
+
+        {byActive ? (
+          <>
+            {byTotalLevels > byLevels.length && (
+              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                By column has {byTotalLevels} levels — showing the first {byLevels.length}
+              </div>
+            )}
+            {byBusy && byResults.length === 0 ? (
+              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                fitting {byLevels.length} levels…
+              </div>
+            ) : (
+              byResults.map((r) => (
+                <CurveFitByLevelSection key={r.label} result={r} paramNames={paramNames} />
+              ))
+            )}
+          </>
+        ) : (
+          <CurveFitResults
+            active={active}
+            modelName={modelName}
+            paramNames={paramNames}
+            result={result}
+            fitData={fitData}
+            guessOnly={guessOnly}
+            stale={resultStale}
+            xRange={xRange}
+            reporting={reporting}
+            onReport={() => void toReport()}
+            cornerBusy={cornerBusy}
+            onCornerPlot={() => void runCornerPlot()}
+            onRemoveFit={() => void removeFit()}
+            residualsOpen={tab === "results"}
+          />
+        )}
+      </TabPanel>
+
+      <TabPanel id="advanced" tab={tab} lazy>
+        <CurveFitAdvanced
           active={active}
           modelName={modelName}
-          paramNames={paramNames}
-          result={result}
-          fitData={fitData}
-          guessOnly={guessOnly}
-          stale={resultStale}
-          xRange={xRange}
-          reporting={reporting}
-          onReport={() => void toReport()}
-          cornerBusy={cornerBusy}
-          onCornerPlot={() => void runCornerPlot()}
-          onRemoveFit={() => void removeFit()}
+          registryModel={registryModel}
+          paramRows={paramInputs}
+          weightMode={weightMode}
+          manualKey={manualKey}
+          scaleErrors={scaleErrors}
+          template={template}
+          modelOptions={modelOptions}
+          customModels={customModels}
+          modelScan={modelScan}
+          onApplyScanned={applyScanned}
         />
-      )}
-
-      {/* Batch across worksheets (below the results, which come first). */}
-      <CurveFitBatchSection
-        modelName={modelName} model={registryModel} paramRows={paramInputs}
-        weightMode={weightMode} manualKey={manualKey} scaleErrors={scaleErrors}
-      />
-
-      {/* Save / apply named fit settings. */}
-      <FitTemplatesSection current={template.current} apply={template.apply} />
-
-      {/* Fit 2+ models to this selection and compare them. */}
-      <CompareModelsSection options={modelOptions} current={modelName} customModels={customModels} />
-
-      {/* Errors in x and y: offered only with an X-error column. */}
-      {xErrorChannel(active) != null && <OdrSection />}
-
-      {/* AICc quick-scan (GOTO #6) — rank all plausible models; click applies. */}
-      <ModelScanSection state={modelScan} onApply={applyScanned} />
-
-      {/* Optional bumps engine (GOTO #10) — self-contained; parity stays default. */}
-      <BumpsSection modelName={modelName} />
+      </TabPanel>
     </ToolWindow>
   );
 }

@@ -6,6 +6,7 @@ import { buildAppActions } from "../appCommands";
 import type { Action } from "../store/commands";
 import { useSignalOperationSeed } from "../store/signalOperationSeed";
 import { useToasts } from "../store/toasts";
+import { TOOL_DOCK_KEY, registerDockable, resetToolDockForTests, toolDockSnapshot } from "../store/toolDock";
 import { useApp } from "../store/useApp";
 import { buildDiscoveryCommands } from "./discoveryCommands";
 
@@ -126,6 +127,17 @@ describe("Error bars…", () => {
     find("error-bars").run();
     expect(useApp.getState().rightCollapsed).toBe(false);
     await vi.waitFor(() => expect(mocks.reveal).toHaveBeenCalledWith("Error columns"));
+  });
+
+  it("floats a docked analysis window first, so the card it reveals is visible (UX-F)", () => {
+    const off = registerDockable("curvefit", 340);
+    expect(toolDockSnapshot().owner).toBe("curvefit");
+    find("error-bars").run();
+    expect(toolDockSnapshot().owner).toBeNull();
+    expect(useApp.getState().rightCollapsed).toBe(false);
+    off();
+    localStorage.removeItem(TOOL_DOCK_KEY);
+    resetToolDockForTests();
   });
 
   it("says why nothing happened when there is no card to open (no dataset)", async () => {
