@@ -56,9 +56,14 @@ test("an M(H) file opens with Moment alone on Y, on the loop's range @core", asy
   const canvas = await page.locator(".qzk-stage canvas").first().boundingBox();
   const scale = await page.evaluate(() => window.devicePixelRatio);
   const leftEdge = (over!.x - canvas!.x) * scale;
+  // An auto axis on a tiny range draws mantissas plus a "×10ⁿ" factor at
+  // the axis end (UX8-G), so scale the labels by it before comparing.
+  const sup: Record<string, string> = { "⁻": "-", "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+  const factorText = drawn.find((t) => !t.rotated && t.x < leftEdge && /×10[⁻⁰-⁹]+/.test(t.text))?.text;
+  const exp = factorText ? Number([...factorText.replace(/.*×10/, "")].map((c) => sup[c] ?? "").join("")) : 0;
   const yTicks = drawn
-    .filter((t) => !t.rotated && t.x < leftEdge)
-    .map((t) => tickValue(t.text))
+    .filter((t) => !t.rotated && t.x < leftEdge && !/×10/.test(t.text))
+    .map((t) => tickValue(t.text) * 10 ** exp)
     .filter(Number.isFinite);
   expect(yTicks.length).toBeGreaterThanOrEqual(3);
   expect(Math.max(...yTicks.map(Math.abs))).toBeLessThan(3e-3);
