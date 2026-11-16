@@ -45,8 +45,14 @@ describe("formatShortcut", () => {
   it("renders both ⌘ and ⌃ as Ctrl off macOS", () => {
     // ⌃ is the literal Control key (window cycling is Ctrl-only so it doesn't
     // collide with the macOS app switcher) — off macOS both read "Ctrl".
-    expect(formatShortcut("⌘O", false)).toBe("CtrlO");
-    expect(formatShortcut("⌃Tab", false)).toBe("CtrlTab");
+    expect(formatShortcut("⌘O", false)).toBe("Ctrl+O");
+    expect(formatShortcut("⌃Tab", false)).toBe("Ctrl+Tab");
+    expect(formatShortcut("⌘K", false)).toBe("Ctrl+K");
+    expect(formatShortcut("⌘⇧N", false)).toBe("Ctrl+Shift+N");
+    expect(formatShortcut("⌘,", false)).toBe("Ctrl+,");
+    // the cheat-sheet's spaced form keeps its spaces
+    expect(formatShortcut("⌘ ⇧ Z", false)).toBe("Ctrl Shift Z");
+    expect(formatShortcut("⌘K", true)).toBe("⌘K");
   });
 
   it("leaves a shortcut with no modifier glyph untouched on either platform", () => {

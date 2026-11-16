@@ -23,16 +23,12 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
   ".mat", ".ibw", ".png", ".tif", ".tiff", ".jpg", ".jpeg",
 ]);
 
-/** The palette chord for this platform, from the one PALETTE_SHORTCUT (the menu bar's source):
- *  "⌘K" on a Mac, "Ctrl+K" elsewhere (formatShortcut writes "CtrlK"; a "+" reads better in prose). */
-const paletteChord = (isMac: boolean): string => formatShortcut(PALETTE_SHORTCUT, isMac).replace(/^Ctrl(?=\S)/, "Ctrl+");
-
 /** The hint for a failed import of `name`: the wizard for a text-like file,
  *  nothing for a binary container (its error already says what to do). */
 export function importFailureHint(name: string, isMac: boolean = isMacPlatform()): string {
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
-  return BINARY_EXTS.has(ext) ? "" : ` — try the Import wizard (${paletteChord(isMac)} → Import wizard…)`;
+  return BINARY_EXTS.has(ext) ? "" : ` — try the Import wizard (${formatShortcut(PALETTE_SHORTCUT, isMac)} → Import wizard…)`;
 }
 
 /** The batch summary for status and toast. A parse failure is the wizard's

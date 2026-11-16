@@ -2,7 +2,7 @@
 // near-duplicates. It is grouped by Origin category (lib/fitModelCatalog.ts),
 // with each alias spelled out and the custom equations last.
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listFitModels } from "../../../lib/api/curvefit";
@@ -40,7 +40,15 @@ describe("CurveFitPanel — the model list is grouped by Origin category (re-aud
     });
     render(<CurveFitPanel />);
     const picker = await screen.findByRole("combobox", { name: "Model" });
-    await screen.findByRole("option", { name: "Exponential Decay (= ExpDec1)" });
+    // The "Add a model to compare" picker lists the SAME models, so an unscoped
+    // role query finds the option twice whenever both pickers have populated
+    // (it flaked under full-suite load, where they do before the first poll).
+    // Force that state first -- both pickers populated -- then assert on the
+    // Model picker alone, which is what this test is about.
+    const compare = await screen.findByRole("combobox", { name: "Add a model to compare" });
+    await within(compare).findByRole("option", { name: "Exponential Decay (= ExpDec1)" });
+    expect(screen.getAllByRole("option", { name: "Exponential Decay (= ExpDec1)" })).toHaveLength(2);
+    await within(picker).findByRole("option", { name: "Exponential Decay (= ExpDec1)" });
     const groups = [...picker.querySelectorAll("optgroup")].map((g) => g.label);
     expect(groups).toEqual(["Polynomial", "Exponential", "Custom equations"]);
     expect((picker as HTMLSelectElement).value).toBe("Linear");

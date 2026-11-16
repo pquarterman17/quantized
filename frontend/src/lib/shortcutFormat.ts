@@ -5,7 +5,7 @@
 // all lazy — no longer rides in the entry chunk behind them. Moved verbatim.
 
 /** Translate ONE key-combo string for the host platform: macOS keeps ⌘;
- *  everything else shows Ctrl. `⌃` (the literal Control key — item 5's
+ *  everything else shows Ctrl+ (and Shift+) joined to the next key. `⌃` (the literal Control key — item 5's
  *  window-cycling shortcuts are Ctrl ONLY, never Cmd, so they don't collide
  *  with the macOS app switcher) reads the same as `⌘` once translated: both
  *  mean "Ctrl" outside macOS.
@@ -17,7 +17,9 @@
  *  two answers for one key. Exported so every surface runs the same
  *  translation. */
 export function formatShortcut(keys: string, isMac: boolean): string {
-  return isMac ? keys : keys.replace(/⌘|⌃/g, "Ctrl");
+  // A "+" joins a modifier to the key that follows ("Ctrl+K", "Ctrl+Shift+N"); the
+  // cheat-sheet's own spaced form ("⌘ K") keeps its space ("Ctrl K").
+  return isMac ? keys : keys.replace(/[⌘⌃](?=\S)/g, "Ctrl+").replace(/[⌘⌃]/g, "Ctrl").replace(/⇧(?=\S)/g, "Shift+").replace(/⇧/g, "Shift");
 }
 
 /** Is the host a Mac? Single definition — `ShortcutsDialog` and
