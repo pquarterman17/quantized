@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from quantized.io import _column_kind as ck
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
@@ -153,22 +154,20 @@ def _numberish(cell: str) -> bool:
 
 
 def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
-    """Default role per column: a TEXT column (most of its non-empty sampled
-    cells are not numbers -- direct import's rule, `delimited._numeric_column`)
-    is ``label``, kept as a text column like direct import keeps it, never a
-    NaN-filled ``y``; the first numeric column is ``x``, the rest ``y``. A
-    file with no numeric column keeps the plain ``x, y, …`` start."""
+    """Default role per column: a TEXT column -- by direct import's own rule,
+    shared through `_column_kind.numeric_column` so the two never disagree
+    (a "NaN" is number-like, a missing token is not filled) -- is ``label``,
+    kept as a text column like direct import keeps it, never a NaN-filled
+    ``y``; the first numeric column is ``x``, the rest ``y``. A file with no
+    numeric column keeps the plain ``x, y, …`` start."""
     sample = data_rows[:64]
     text: list[bool] = []
     for c in range(n_cols):
-        cells = [
-            r[c].strip() for r in sample
-            if c < len(r) and r[c].strip().lower() not in layout._MISSING_TOKENS
-        ]
+        cells = [r[c].strip() for r in sample if c < len(r)]
         # A comma number is a number too: a decimal comma ("2,5", converted by
         # `_decimal_comma`) or a quoted grouped one ("1,234.5", `_quoted_numbers`).
-        numeric = sum(_numberish(x) for x in cells)
-        text.append(bool(cells) and 2 * numeric <= len(cells))
+        n_real, n_like, n_filled = ck.column_counts(cells, _numberish)
+        text.append(n_filled > 0 and not ck.numeric_column(n_real, n_like, n_filled, len(sample)))
     if all(text):
         return ["x"] + ["y"] * (n_cols - 1) if n_cols else []
     first_numeric = text.index(False)
@@ -289,6 +288,9 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     elif delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
         notes = qn.ungroup_columns(names, matrix, data_tokens)
         notes += dc.stray_comma_notes(names, matrix, data_tokens, separator_choice=False)
+    # Text cells read as NaN in a numeric column are named, as direct import does.
+    numeric = [k for k in range(n_cols) if roles[k] in ("x", "y", "error")]
+    notes += ck.dropped_text_notes(names, matrix, data_tokens, numeric)
     return _Parsed(
         lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes,
         found,

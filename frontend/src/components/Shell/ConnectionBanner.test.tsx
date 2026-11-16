@@ -3,6 +3,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetConnectionSeenForTests } from "../../lib/connectionSeen";
 import { useConnection } from "../../lib/lifecycle";
 import ConnectionBanner, { GRACE_MS } from "./ConnectionBanner";
 
@@ -12,6 +13,7 @@ const setConnected = (connected: boolean) => act(() => useConnection.setState({ 
 beforeEach(() => {
   vi.useFakeTimers();
   useConnection.setState({ connected: false, stale: null });
+  resetConnectionSeenForTests();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -27,7 +29,7 @@ describe("ConnectionBanner", () => {
     setConnected(true);
     setConnected(false);
     elapse(GRACE_MS - 1);
-    expect(screen.queryByRole("alert")).toBeNull(); // a quick backend reload never flashes it
+    expect(screen.queryByRole("alert")).toBeNull(); // a dev backend reload never flashes it
     elapse(1);
     expect(screen.getByRole("alert")).toHaveTextContent("Lost connection to the qz server");
     setConnected(true);
@@ -38,9 +40,24 @@ describe("ConnectionBanner", () => {
     const reload = vi.fn();
     vi.stubGlobal("location", { ...window.location, reload });
     render(<ConnectionBanner />);
-    act(() => useConnection.setState({ stale: "qz was relaunched" }));
+    act(() => useConnection.setState({ stale: "qz was relaunched — reload this page to reconnect" }));
+    // The stale session's own words, not "lost connection": the server is up.
+    expect(screen.getByRole("alert")).toHaveTextContent("qz was relaunched — reload this page to reconnect");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Lost connection");
     fireEvent.click(screen.getByRole("button", { name: "Reload" }));
     expect(reload).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("ConnectionBanner and the reconnect backoff", () => {
+  it("does not flash for a reload that reconnects on the 7.5 s retry", () => {
+    render(<ConnectionBanner />);
+    setConnected(true);
+    setConnected(false);
+    elapse(7500);
+    setConnected(true);
+    elapse(GRACE_MS);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

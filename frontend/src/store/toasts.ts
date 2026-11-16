@@ -39,9 +39,17 @@ export interface Toast {
 
 export interface ToastGroup {
   key: string;
-  /** The folded toast's text for `n` members. */
+  /** The folded toast's text for `n` -- the members' `count`s summed. */
   summary: (n: number) => string;
+  /** How many events this toast stands for (a batch toast reporting three
+   *  failed files is 3); default 1. A member pushed out by the `MAX` cap
+   *  hands its count to the oldest member still up, so the summary keeps
+   *  counting every failure, not just the toasts that fit. */
+  count?: number;
 }
+
+/** The events a grouped toast stands for. */
+export const groupCount = (t: Toast): number => t.group?.count ?? 1;
 
 /** Optional extras beyond message + kind. `ttlMs` overrides the default
  *  auto-dismiss timer — an action toast asks the user to read and decide,
@@ -150,7 +158,7 @@ export const useToasts = create<ToastsState>((set) => ({
       lastErrorAt = Date.now();
     }
     set((s) => ({
-      toasts: [...s.toasts, { id, msg, kind, action: opts?.action, actions: opts?.actions, group: opts?.group }].slice(-MAX),
+      toasts: capped([...s.toasts, { id, msg, kind, action: opts?.action, actions: opts?.actions, group: opts?.group }]),
     }));
     // An action toast lives long enough to act on even when the caller does not
     // say so (BUG-009's Re-import offer relies on this: importing the constant
@@ -168,6 +176,19 @@ export const useToasts = create<ToastsState>((set) => ({
     if (!n && expired.delete(id)) setTimeout(() => expire(id), TOAST_TTL);
   },
 }));
+
+/** The newest `MAX` toasts; a grouped toast pushed out hands its count to
+ *  the oldest kept member of its group (`ToastGroup.count`). */
+function capped(all: Toast[]): Toast[] {
+  const kept = all.slice(-MAX);
+  for (const gone of all.slice(0, -MAX)) {
+    const i = gone.group ? kept.findIndex((t) => t.group?.key === gone.group!.key) : -1;
+    if (i < 0) continue;
+    const heir = kept[i];
+    kept[i] = { ...heir, group: { ...heir.group!, count: groupCount(heir) + groupCount(gone) } };
+  }
+  return kept;
+}
 
 /** Imperative helper for non-component call sites (store actions, callbacks). */
 export function toast(msg: string, kind?: ToastKind, opts?: ToastOptions): void {

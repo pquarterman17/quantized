@@ -559,18 +559,42 @@
   border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--glass-border));
   border-radius: var(--radius);
 }
-/* A tool panel's card floats where its window would have opened: in flow it
-   became a row of the app grid and pushed the status bar into the stage. */
-.qzk-lazy-fail.tool {
+/* A tool panel's cards float in one fixed column (lib/toolLoadFailure.tsx,
+   portalled to <body>): in flow a card became a row of the app grid and
+   pushed the status bar into the stage, and two fixed cards covered each
+   other. */
+.qzk-lazy-fail-stack {
   position: fixed;
   top: 116px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: var(--z-tool-base);
-  margin: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   max-width: min(420px, calc(100vw - 32px));
+}
+.qzk-lazy-fail.tool {
+  position: relative;
+  margin: 0;
+  padding-right: 34px;
   background: color-mix(in srgb, var(--danger) 8%, var(--surface-1));
   box-shadow: var(--shadow);
+}
+.qzk-lazy-fail button.qzk-lazy-fail-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  line-height: 20px;
+}
+.qzk-lazy-fail-close::before {
+  content: "×";
+  font-size: 15px;
 }
 .qzk-lazy-fail button {
   padding: 3px 10px;

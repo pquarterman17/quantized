@@ -18,7 +18,7 @@ import {
   defaultGlob,
   DELIMITER_OPTIONS,
 } from "../../../lib/importwizard";
-import { highlightDelimiter, inWizard, countLines, lineIndex, lineLabel, rawLines, RAW_LINE_LIMIT } from "../../../lib/importRawLines";
+import { highlightDelimiter, inWizard, countLines, rawLines, RAW_LINE_LIMIT } from "../../../lib/importRawLines";
 import type { ImportDecimal } from "../../../lib/importTypes";
 import type { ImportColumnRole } from "../../../lib/types";
 import { useWizardHandoff } from "../../../lib/importFailureToast";
@@ -26,12 +26,12 @@ import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import ToolWindow from "../../overlays/ToolWindow";
-import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import ErrorRolesEditor from "./ErrorRolesEditor";
 import ErrorBindingSuggestions from "./ErrorBindingSuggestions";
 import MetadataPreview from "./MetadataPreview";
 import CategoricalProblems from "./CategoricalProblems";
+import LineField from "./LineField";
 import PreviewTable from "./PreviewTable";
 import RawLines, { NO_LINE_ROLES } from "./RawLines";
 import { useImportWizard } from "./useImportWizard";
@@ -172,42 +172,30 @@ export default function ImportWizardPanel() {
             </label>
             <label className="qzk-field">
               <span>Data start line</span>
-              <NumberField
-                // Every line field is 1-based, like the raw-lines gutter; the wire stays 0-based.
-                value={lineLabel(w.settings?.data_start_line ?? 0)}
-                onChange={(v) => w.patchSettings({ data_start_line: lineIndex(v) ?? 0 })}
-                width={56}
+              {/* Every line field is 1-based, like the raw-lines gutter (LineField). */}
+              <LineField
+                value={w.settings?.data_start_line ?? 0}
+                required
+                onLine={(i) => i !== null && w.patchSettings({ data_start_line: i })}
               />
             </label>
             <label className="qzk-field" title="The row that names the columns (the Long Name row of an Origin ASCII export); choosing a row re-reads the column names from it">
               <span>Header line</span>
-              <NumberField
-                value={lineLabel(w.settings?.header_line)}
-                // `column_names: null`: the guessed names were read from the OLD
-                // header row and outrank `header_line` while set, so picking a
-                // row by hand did nothing to the names.
-                onChange={(v) => w.patchSettings({ header_line: lineIndex(v), column_names: null })}
-                placeholder="none"
-                width={56}
+              {/* `column_names: null`: the guessed names were read from the OLD
+                  header row and outrank `header_line` while set, so picking a
+                  row by hand did nothing to the names. */}
+              <LineField
+                value={w.settings?.header_line}
+                onLine={(i) => w.patchSettings({ header_line: i, column_names: null })}
               />
             </label>
             <label className="qzk-field" title="The row that gives each column's unit (the Units row of an Origin ASCII export); any other row above the data start, such as an Origin Comments row, is kept as a comment in the dataset's metadata">
               <span>Units line</span>
-              <NumberField
-                value={lineLabel(w.settings?.units_line)}
-                onChange={(v) => w.patchSettings({ units_line: lineIndex(v) })}
-                placeholder="none"
-                width={56}
-              />
+              <LineField value={w.settings?.units_line} onLine={(i) => w.patchSettings({ units_line: i })} />
             </label>
             <label className="qzk-field" title="Per-column cells that override the legend label (P1.6)">
               <span>Label line</span>
-              <NumberField
-                value={lineLabel(w.settings?.label_line)}
-                onChange={(v) => w.patchSettings({ label_line: lineIndex(v) })}
-                placeholder="none"
-                width={56}
-              />
+              <LineField value={w.settings?.label_line} onLine={(i) => w.patchSettings({ label_line: i })} />
             </label>
           </div>
 

@@ -89,7 +89,7 @@ export function toastImportFailure(
   const landed = batch && batch.total > 1
     ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed, showing the last` : ""}.`
     : "";
-  toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2, group: FAILURE_GROUP });
+  toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2, group: { ...FAILURE_GROUP, count: failed } });
 }
 
 /** Three failures fold into one toast (Toaster.tsx), not a tall column. */

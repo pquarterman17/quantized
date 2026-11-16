@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countLines, guessDelimiter, highlightDelimiter, inWizard, lineIndex, lineLabel, rawLines } from "./importRawLines";
+import { countLines, guessDelimiter, highlightDelimiter, inWizard, lineIndex, rawLines } from "./importRawLines";
 
 describe("importRawLines", () => {
   it("splits any line ending, drops a trailing newline, caps at the limit", () => {
@@ -10,6 +10,12 @@ describe("importRawLines", () => {
     expect(countLines("1\n2\n3\n4\n")).toBe(4);
     expect(countLines("1\n2")).toBe(2);
     expect(countLines("")).toBe(0);
+  });
+
+  it("breaks lines where Python's splitlines() does, and drops a BOM, so numbering matches the backend", () => {
+    expect(rawLines("\ufeffa\fb\u2028c\x85d\ve")).toEqual(["a", "b", "c", "d", "e"]);
+    expect(countLines("a\fb\u2029")).toBe(2);
+    expect(countLines("\ufeff")).toBe(0);
   });
 
   it("guesses ';' over the decimal commas inside its cells, and tab first", () => {
@@ -29,11 +35,11 @@ describe("importRawLines", () => {
     expect(highlightDelimiter(null, "auto", ["a;b", "1;2"])).toBe(";");
   });
 
-  it("maps 1-based line fields to the wire's 0-based indices and back", () => {
-    expect(lineLabel(0)).toBe("1");
-    expect(lineLabel(null)).toBe("");
+  it("maps a 1-based line field to the wire's 0-based index, rejecting 0 and negatives", () => {
     expect(lineIndex("1")).toBe(0);
-    expect(lineIndex("0")).toBe(0);
+    expect(lineIndex("12")).toBe(11);
+    expect(lineIndex("0")).toBeNull();
+    expect(lineIndex("-3")).toBeNull();
     expect(lineIndex("")).toBeNull();
   });
 

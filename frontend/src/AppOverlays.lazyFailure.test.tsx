@@ -44,7 +44,7 @@ describe("AppOverlays panel family survives a failed chunk fetch (UX-003)", () =
       useApp.getState().setShortcutsOpen(true);
     });
 
-    expect(await screen.findByText("⚠ This tool couldn't load (server unreachable).")).toBeInTheDocument();
+    expect(await screen.findByText("⚠ This dialog couldn't load.")).toBeInTheDocument();
     // No component name in the card (UX audit 8 #9); it stays in the tooltip.
     expect(screen.getByRole("alert")).toHaveAttribute("title", "ShortcutsDialog");
     // WhatIsThis is its own lazy chunk: wait for it rather than assume it

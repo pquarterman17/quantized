@@ -623,3 +623,46 @@ describe("ImportWizardPanel — a failed preview still shows the file (UX audit 
     expect(screen.getByLabelText(/Data start line/)).toHaveValue("2");
   });
 });
+
+describe("ImportWizardPanel — 1-based line fields keep the draft as typed", () => {
+  it("clearing Data start line and typing 5 reads 5 (line 5, index 4), not 15", async () => {
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    const field = screen.getByLabelText(/Data start line/) as HTMLInputElement;
+    expect(field).toHaveValue("4"); // data_start_line 3
+    importPreviewMock.mockClear();
+    fireEvent.change(field, { target: { value: "" } });
+    expect(field).toHaveValue(""); // no snap back to "1"
+    fireEvent.change(field, { target: { value: "5" } });
+    expect(field).toHaveValue("5");
+    await waitFor(() =>
+      expect(importPreviewMock).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ data_start_line: 4 }),
+        30,
+      ),
+    );
+    // Blank on blur reverts to the committed line.
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.blur(field);
+    expect(field).toHaveValue("5");
+  });
+
+  it("0 is no line: it commits nothing (it used to clamp to line 1)", async () => {
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText(/Units line/), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText(/Units line/), { target: { value: "" } });
+    await waitFor(() =>
+      expect(importPreviewMock).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ units_line: null }),
+        30,
+      ),
+    );
+    expect(importPreviewMock.mock.calls.every((c) => (c[1] as ImportSettingsWire).units_line !== 0)).toBe(true);
+  });
+});

@@ -12,18 +12,28 @@ import { parseLineField } from "./importwizard";
 /** How many raw lines the wizard shows: the backend preview's `max_lines`. */
 export const RAW_LINE_LIMIT = 60;
 
-/** The first `limit` lines of `text`, any line ending. */
+/** Python's `str.splitlines()` boundaries, which the backend's numbering
+ *  (`import_parse`: `text.removeprefix("\ufeff").splitlines()`) counts by:
+ *  a form feed or U+2028 is a line break there, so it must be one here, or
+ *  every line after it is numbered one off from the preview. */
+const LINE_BREAK = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
+
+/** `text` the way the backend reads it: without a leading BOM. */
+const unBom = (text: string): string => (text.startsWith("\ufeff") ? text.slice(1) : text);
+
+/** The first `limit` lines of `text`, as `splitlines()` would give them. */
 export function rawLines(text: string, limit = RAW_LINE_LIMIT): string[] {
-  const lines = text.split(/\r\n|\r|\n/, limit + 1);
-  // A trailing newline is not one more (empty) line.
+  const lines = unBom(text).split(LINE_BREAK, limit + 1);
+  // A trailing line break is not one more (empty) line.
   if (lines.length <= limit && lines.at(-1) === "") lines.pop();
   return lines.slice(0, limit);
 }
 
-/** How many lines `text` holds (what `rawLines` would return, uncapped). */
+/** How many lines `text` holds (`len(text.splitlines())`, uncapped). */
 export function countLines(text: string): number {
-  const breaks = text.match(/\r\n|\r|\n/g)?.length ?? 0;
-  return text === "" || /[\r\n]$/.test(text) ? breaks : breaks + 1;
+  const body = unBom(text);
+  const breaks = body.match(new RegExp(LINE_BREAK.source, "g"))?.length ?? 0;
+  return body === "" || new RegExp(`(?:${LINE_BREAK.source})$`).test(body) ? breaks : breaks + 1;
 }
 
 /** The wizard's named delimiters (`DELIMITER_OPTIONS`) as the character they
@@ -73,12 +83,9 @@ export function inWizard(message: string): string {
   return message.replace(/ in the Import Wizard/gi, " above");
 }
 
-/** A line index (the wire's 0-based one) as the 1-based number the wizard
- *  shows in its line fields and raw-lines gutter. */
-export const lineLabel = (index: number | null | undefined): string => (index == null ? "" : String(index + 1));
-
-/** A 1-based line field back to the wire's 0-based index (`null` when blank). */
+/** A 1-based line field back to the wire's 0-based index: `null` when blank
+ *  or not a line number (0 and negatives are no line, not line 1). */
 export function lineIndex(raw: string): number | null {
   const n = parseLineField(raw);
-  return n === null ? null : Math.max(0, n - 1);
+  return n === null || n < 1 ? null : n - 1;
 }
