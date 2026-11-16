@@ -380,7 +380,7 @@ describe("reimportDataset — row/column count change", () => {
       activeId: "d1",
       hiddenChannels: [0],
       seriesStyles: { 0: { color: "#ff0000" } },
-      yKeys: [0],
+      yKeys: [1],
     });
 
     await useApp.getState().reimportDataset("d1");
@@ -388,7 +388,9 @@ describe("reimportDataset — row/column count change", () => {
     const s = useApp.getState();
     expect(s.hiddenChannels).toEqual([]); // reset to the new shape's defaults
     expect(s.seriesStyles).toEqual({});
-    expect(s.yKeys).toBeNull();
+    // The new shape's first plot (lib/firstPlot.ts): m alone, the T (K)
+    // monitor left off -- not the stale [1].
+    expect(s.yKeys).toEqual([0]);
   });
 
   it("resets a background window's view on a shape change, not just the singleton", async () => {

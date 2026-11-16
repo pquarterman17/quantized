@@ -144,6 +144,32 @@ export function datasetViewDefaults(
       ? { ...remembered, seriesStyles: { ...seriesStyles, ...remembered.seriesStyles } }
       : isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {}),
   };
+  // The first plot (lib/firstPlot.ts, stored at import as `metadata.first_plot`
+  // by store/firstPlotNotice.ts): Y1/Y2 by unit, monitors off, log Y. Below
+  // memory. It names the column labels it was picked for and is ignored once
+  // they differ (a column edit, a derived dataset that copied the metadata),
+  // so its indices never go stale. Log Y follows the pick both ways: data
+  // without one, reached from data with one, goes back to linear (a manual
+  // log on unpicked data still survives a same-technique switch).
+  const pick = (d?: Dataset) => {
+    const fp = d?.data.metadata?.first_plot as Record<string, unknown> | undefined;
+    return fp && JSON.stringify(fp.of) === JSON.stringify(d!.data.labels) ? fp : undefined;
+  };
+  const fp = pick(dataset);
+  // Re-validated NOW, not trusted from import: a copy with the same labels
+  // whose values went <= 0 (a baseline subtraction) must not open on log.
+  const y1Positive = (d: Dataset, y: number[] | null | undefined, y2: number[] | null | undefined, hidden: number[] | undefined) => {
+    const cols = (y ?? d.data.labels.map((_, c) => c)).filter((c) => !y2?.includes(c) && !hidden?.includes(c));
+    return d.data.values.every((row) => cols.every((c) => !(row[c] <= 0)));
+  };
+  const keys = (v: unknown) =>
+    Array.isArray(v) && v.length && v.every((c) => Number.isInteger(c) && dataset!.data.labels[c] !== undefined) ? (v as number[]) : undefined;
+  if (!remembered) {
+    out.yKeys = keys(fp?.y) ?? out.yKeys;
+    out.y2Keys = keys(fp?.y2) ?? out.y2Keys;
+    if (fp?.log && y1Positive(dataset!, out.yKeys, out.y2Keys, out.hiddenChannels)) out.yScale = "log";
+    else if (pick(previous)?.log && !isTechniqueChange(dataset, previous)) out.yScale = "linear";
+  }
   // A seeded window's series sit UNDER the dataset's own (the hint, memory).
   if (seed && dataset) out.seriesStyles = { ...seed.seriesFor(dataset, out), ...out.seriesStyles };
   return out;
@@ -153,7 +179,7 @@ export function datasetViewDefaults(
  *  SECONDARY X column is held back from the one-X default plot too
  *  (lib/errorbars.ts's `bookDefaultHiddenChannels`), so it is never drawn
  *  against the book's first X. Uses the worksheet's Set As designations. */
-function bookErrorLayer(
+export function bookErrorLayer(
   dataset: NonNullable<Parameters<typeof errorRoleViewDefaults>[0]> & Parameters<typeof bookDefaultHiddenChannels>[0],
 ): { errKeys: Record<number, number>; hiddenChannels: number[] } {
   const layer = errorRoleViewDefaults(dataset);
