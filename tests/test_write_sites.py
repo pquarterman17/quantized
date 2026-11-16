@@ -123,6 +123,12 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "refused an existing report (unless --overwrite) and any path that is, "
         "resolves into or links to an input project."
     ),
+    "cli_run.py": (
+        "`qz run` outputs (per-input tables/figures, summary, .dwk, run report): every "
+        "target passes io/write_guard.check_target up front (existing files refused "
+        "unless --overwrite; inputs, recipe and backgrounds protected); the only "
+        "unlink removes files this run itself just wrote for an input that failed."
+    ),
     "io/datastruct_table.py": (
         "write_table (qz convert, api.save_table): io/write_guard.check_target runs "
         "first -- an existing path is refused unless overwrite=True, and a path that "
