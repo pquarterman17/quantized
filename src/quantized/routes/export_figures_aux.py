@@ -117,6 +117,10 @@ class MapFigureRequest(BaseModel):
     height_in: float | None = Field(default=None, gt=0, le=_MAX_INCHES)
     view_elev: float = 30.0
     view_azim: float = -60.0
+    # The interactive 3-D view's magnification (calc.figure_map3d.check_zoom).
+    view_zoom: float = Field(default=1.0, ge=0.5, le=3.0)
+    # scatter3d: a faint line from each point down to the lowest z.
+    drop_lines: bool = False
     # 3-D waterfall of a grid: draw at most this many evenly stepped rows
     # (0 = every row).
     max_lines: int = Field(default=0, ge=0, le=1000)
@@ -150,7 +154,8 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         label_contours=req.label_contours, colorbar=req.colorbar,
         title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
         width_in=req.width_in, height_in=req.height_in,
-        view_elev=req.view_elev, view_azim=req.view_azim, z_limits=req.z_limits,
+        view_elev=req.view_elev, view_azim=req.view_azim,
+        view_zoom=req.view_zoom, drop_lines=req.drop_lines, z_limits=req.z_limits,
         equal_aspect=req.equal_aspect, note=req.note, lines=req.lines, max_lines=req.max_lines,
         curves=[c.model_dump() for c in req.curves] if req.curves else None,
         colorbar_log10=req.colorbar_log10,

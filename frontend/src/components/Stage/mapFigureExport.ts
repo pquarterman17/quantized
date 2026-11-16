@@ -144,7 +144,13 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
   const marks = view.marks && !v3 ? mapMarks(p, view.marks.slices, view.marks.annotations, view.marks.space) : null;
   const raw = rawSource(p, view);
   const contour = v3
-    ? { kind: v3.kind, view_elev: v3.elev, view_azim: v3.azim, ...(v3.kind === "waterfall" ? { max_lines: WATERFALL_MAX_LINES } : {}) }
+    ? {
+        // The interactive view's camera (`Map3D/`, `lib/project3d.ts`): the
+        // figure is the view on screen, angles and zoom alike.
+        kind: v3.kind, view_elev: v3.elev, view_azim: v3.azim, view_zoom: v3.zoom,
+        ...(v3.kind === "waterfall" ? { max_lines: WATERFALL_MAX_LINES } : {}),
+        ...(v3.kind === "scatter3d" && v3.dropLines ? { drop_lines: true } : {}),
+      }
     : view.contour.on
     ? {
         kind: "contourf",

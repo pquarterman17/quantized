@@ -14,6 +14,7 @@ from typing import Any
 
 import matplotlib
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
 
 __all__ = [
@@ -22,11 +23,18 @@ __all__ = [
     "check_angles",
     "check_curve_inputs",
     "check_extent",
+    "check_zoom",
     "check_grid_3d",
     "decimate",
     "draw_curves",
+    "draw_drop_lines",
     "parse_curves",
     "set_log_zticks",
+    "set_view",
+    "tight_limits",
+    "DROP_LINES_MAX",
+    "SURFACE_MAX_CELLS",
+    "draw_surface",
     "step_rows",
 ]
 
@@ -45,6 +53,99 @@ def check_angles(elev: float, azim: float) -> None:
         raise ValueError("view_elev must be a finite number from -90 to 90 degrees")
     if not (math.isfinite(azim) and -360.0 <= azim <= 360.0):
         raise ValueError("view_azim must be a finite number from -360 to 360 degrees")
+
+
+# The interactive 3-D view's zoom range (frontend lib/project3d.ts ZOOM_RANGE):
+# the export draws the same magnification, so screen and figure crop alike.
+ZOOM_MIN, ZOOM_MAX = 0.5, 3.0
+
+
+def check_zoom(zoom: float) -> None:
+    if not (math.isfinite(zoom) and ZOOM_MIN <= zoom <= ZOOM_MAX):
+        raise ValueError(f"view_zoom must be a finite number from {ZOOM_MIN} to {ZOOM_MAX}")
+
+
+# The screen draws a surface at full grid resolution (matplotlib's plot_surface
+# would sample 50 x 50). Beyond this many cells a side both step the grid alike.
+SURFACE_MAX_CELLS = 500
+# Drop lines on more points than this are thinned evenly (every k-th point),
+# here and on screen (`render3dMarks.ts` DROP_LINES_MAX): 50k grey lines are a
+# solid wall, not a reading aid.
+DROP_LINES_MAX = 5_000
+
+
+
+def _stepped(n: int, step: int) -> NDArray[np.intp]:
+    """0, step, 2*step, ... and always the last index (`render3dMarks.stepped`)."""
+    return np.unique(np.append(np.arange(0, n - 1, step), n - 1))
+
+
+def draw_surface(
+    ax: Any, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64], cmap: str
+) -> Any:
+    """The surface as the screen draws it (`render3dMarks.surfaceQuads`): one quad
+    per grid cell, coloured by its corners' mean z, and NO quad touching a gap
+    (plot_surface instead keeps the cell's finite corners as a triangle).
+    Painted far to near by mean depth (matplotlib's ``zsort="average"`` is the
+    screen's painter's algorithm). Rasterized like the heatmap's mesh: one
+    vector polygon per cell seams in every viewer."""
+    step = max(1, math.ceil(max(x.size, y.size) / SURFACE_MAX_CELLS))
+    xi, yi = _stepped(x.size, step), _stepped(y.size, step)
+    xg, yg = np.meshgrid(x[xi], y[yi])
+    zg = z[np.ix_(yi, xi)]
+    grid = np.stack([xg, yg, zg], axis=-1)  # (my, mx, 3)
+    quads = np.stack([grid[:-1, :-1], grid[:-1, 1:], grid[1:, 1:], grid[1:, :-1]], axis=2)
+    quads = quads[np.isfinite(quads[..., 2]).all(axis=2)]  # (n, 4, 3)
+    if not len(quads):
+        raise ValueError(
+            "a 3-D surface needs at least one grid cell with four finite corners"
+            + (f" (drawn every {step} cells on a grid this large)" if step > 1 else "")
+        )
+    pc = Poly3DCollection(
+        quads, cmap=cmap, linewidth=0, antialiased=True, rasterized=True, zsort="average"
+    )
+    pc.set_array(quads[..., 2].mean(axis=1))
+    ax.add_collection3d(pc, autolim=False)
+    zq = quads[..., 2]
+    ax.auto_scale_xyz(
+        [float(x.min()), float(x.max())], [float(y.min()), float(y.max())],
+        [float(zq.min()), float(zq.max())], had_data=False,
+    )
+    return pc
+
+
+def tight_limits(ax: Any) -> None:
+    """Axis limits at exactly the drawn data's extent -- the screen's box --
+    instead of matplotlib's padded autoscale (5% margins), so a surface meets
+    the walls and drop lines reach the floor in both. A flat range is padded as
+    the screen pads it (5% of the value, or 0.5 at zero)."""
+    def span(lo: float, hi: float) -> tuple[float, float]:
+        if not (math.isfinite(lo) and math.isfinite(hi)):
+            return 0.0, 1.0
+        if hi > lo:
+            return lo, hi
+        pad = abs(lo) * 0.05 or 0.5
+        return lo - pad, hi + pad
+
+    ax.set_xlim(*span(*ax.xy_dataLim.intervalx))
+    ax.set_ylim(*span(*ax.xy_dataLim.intervaly))
+    ax.set_zlim(*span(*ax.zz_dataLim.intervalx))
+
+
+def set_view(ax: Any, elev: float, azim: float, zoom: float) -> None:
+    """The interactive view's camera on a 3-D axes: the same elevation and
+    azimuth, an ORTHOGRAPHIC projection (the screen view has no perspective;
+    matplotlib's default 90-degree perspective would bend the box differently)
+    and the same zoom of matplotlib's default 4:4:3 box."""
+    # Exactly +/-90 is matplotlib's degenerate pole (its up vector is undefined
+    # there and it falls back to a fudge that turns the plot ~3 degrees off the
+    # azimuth); the screen camera is the limit approaching the pole, which a
+    # 1e-6 degree step reproduces exactly.
+    pole = 90.0 - 1e-6
+    ax.view_init(elev=max(-pole, min(pole, elev)), azim=azim)
+    ax.set_proj_type("ortho")
+    ax.set_box_aspect((4, 4, 3), zoom=zoom)
+    tight_limits(ax)
 
 
 def check_extent(*arrays: NDArray[np.float64]) -> None:
@@ -144,6 +245,22 @@ def draw_curves(ax: Any, curves: list[Curve], cmap: str) -> None:
     line_cmap = matplotlib.colormaps[cmap]
     for j, (xs, zs, depth) in enumerate(curves):
         ax.plot(xs, np.full(xs.size, depth), zs, color=line_cmap(j / max(1, len(curves) - 1)))
+
+
+def draw_drop_lines(
+    ax: Any, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64]
+) -> None:
+    """A 3-D scatter's drop lines: each point joined straight down to the lowest
+    z drawn (one collection, so 50k points stay one path)."""
+    if z.size == 0:
+        return
+    floor = float(np.min(z))
+    if z.size > DROP_LINES_MAX:
+        keep = np.arange(0, z.size, math.ceil(z.size / DROP_LINES_MAX))
+        x, y, z = x[keep], y[keep], z[keep]
+    base = np.column_stack([x, y, np.full(z.size, floor)])
+    segs = np.stack([base, np.column_stack([x, y, z])], axis=1)
+    ax.add_collection3d(Line3DCollection(segs, colors="0.45", linewidths=0.4, alpha=0.5))
 
 
 def set_log_zticks(ax: Any, log_decade_ticks: Any) -> None:

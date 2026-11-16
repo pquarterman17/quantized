@@ -13,7 +13,7 @@ import type { Dataset } from "./types";
 import { parseWorkspace, serializeWorkspace } from "./workspace";
 import { useApp } from "../store/useApp";
 
-const V: Map3dView = { kind: "waterfall", elev: 45, azim: 120, zLabel: "Counts", zUnit: "cps", style: "default", title: "T" };
+const V: Map3dView = { kind: "waterfall", elev: 45, azim: 120, zLabel: "Counts", zUnit: "cps", style: "default", title: "T", zoom: 1.5, dropLines: false };
 
 function ds(id: string): Dataset {
   return { id, name: `${id}.dat`, data: { time: [0, 1], values: [[1, 2, 3], [4, 5, 6]], labels: ["x", "y", "z"], units: ["", "", ""], metadata: {} } };
@@ -39,6 +39,13 @@ describe("sanitizeMap3d", () => {
     expect(sanitizeMap3d({ kind: "surface", style: "bogus" })?.style).toBe("default");
     expect(sanitizeMap3d({ kind: "surface", style: "nature" })?.style).toBe("nature");
     expect([...MAP3D_STYLES]).toEqual(FIGURE_STYLES); // the eager copy cannot drift from the figure presets
+  });
+  it("the interactive camera's zoom clamps to 0.5..3 (default 1); drop lines are only ever true or false", () => {
+    expect(sanitizeMap3d({ kind: "surface", zoom: 9 })?.zoom).toBe(3);
+    expect(sanitizeMap3d({ kind: "surface", zoom: 0.01 })?.zoom).toBe(0.5);
+    expect(sanitizeMap3d({ kind: "surface", zoom: "big" })).toMatchObject({ zoom: 1, dropLines: false });
+    expect(sanitizeMap3d({ kind: "scatter3d", dropLines: "yes" })?.dropLines).toBe(false);
+    expect(sanitizeMap3d({ kind: "scatter3d", dropLines: true })?.dropLines).toBe(true);
   });
   it("keeps a valid view unchanged", () => {
     expect(sanitizeMap3d(V)).toEqual(V);

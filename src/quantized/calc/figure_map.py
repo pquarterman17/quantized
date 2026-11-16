@@ -33,12 +33,17 @@ from quantized.calc.figure_map3d import (
     check_curve_inputs,
     check_extent,
     check_grid_3d,
+    check_zoom,
     decimate,
     draw_curves,
+    draw_drop_lines,
+    draw_surface,
     parse_curves,
     set_log_zticks,
+    set_view,
     step_rows,
 )
+from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -101,6 +106,7 @@ def render_map_figure(
     dpi: int | None = None,
     view_elev: float = 30.0,
     view_azim: float = -60.0,
+    view_zoom: float = 1.0,
     z_limits: Sequence[float] | None = None,
     equal_aspect: bool = False,
     lines: Sequence[Sequence[float]] | None = None,
@@ -109,6 +115,7 @@ def render_map_figure(
     note: str = "",
     max_lines: int = 0,
     curves: Sequence[Mapping[str, Any]] | None = None,
+    drop_lines: bool = False,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -135,7 +142,9 @@ def render_map_figure(
     - ``heatmap`` — ``pcolormesh`` of the grid (``"grid"`` source only),
       rasterized at ``dpi`` inside an otherwise vector SVG/PDF (no cell seams).
     - ``surface`` / ``scatter3d`` / ``waterfall`` — static 3-D (mplot3d),
-      viewed from (``view_elev``, ``view_azim``) (``"grid"`` source only).
+      viewed from (``view_elev``, ``view_azim``) in an orthographic
+      projection magnified by ``view_zoom`` (0.5..3) -- the interactive 3-D
+      view's own camera, so the figure matches the screen.
 
     ``fmt`` / ``style`` / size overrides match ``render_figure``. ``dpi``
     defaults to the style preset's calibrated resolution when not given
@@ -171,6 +180,8 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
+    if kind in _3D_KINDS:
+        check_zoom(view_zoom)
     curve_list: list[Any] = []
     clim = _z_limits(z_limits)
     st = figure_style(style)
@@ -260,12 +271,20 @@ def render_map_figure(
         # one per branch, with the SAME arguments): only the axes-creation
         # call differs (3-D projection vs. a plain 2-D subplot).
         fig = new_figure(figsize=figsize)
-        ax: Any = fig.add_subplot(projection="3d") if kind in _3D_KINDS else fig.subplots()
+        cax: Any = None
+        if kind in _3D_KINDS:
+            ax = axes_3d(fig)
+        else:
+            ax = fig.subplots()
         mappable = _draw(
             ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
-            label_contours, view_elev, view_azim, contour_source=contour_source,
+            label_contours, contour_source=contour_source,
             max_lines=max_lines, curve_list=curve_list,
         )
+        if kind == "scatter3d" and drop_lines:
+            draw_drop_lines(ax, x, y, z)
+        if kind in _3D_KINDS:
+            set_view(ax, view_elev, view_azim, view_zoom)
         if clim is not None and mappable is not None:
             mappable.set_clim(*clim)
         if kind == "heatmap":
@@ -275,7 +294,9 @@ def render_map_figure(
             ax.set_aspect("equal", adjustable="box")
         if kind not in _3D_KINDS:
             _draw_marks(ax, lines or [], labels or [], st.font_size)
-        if title:
+        if kind in _3D_KINDS and colorbar and mappable is not None:
+            cax = colorbar_axes(fig)  # a waterfall has no bar
+        if title and kind not in _3D_KINDS:
             ax.set_title(title)
         if x_label:
             ax.set_xlabel(x_label)
@@ -286,12 +307,20 @@ def render_map_figure(
         if colorbar_log10 and kind in _3D_KINDS:
             set_log_zticks(ax, log_decade_ticks)
         if colorbar and mappable is not None:
-            cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            cb = (
+                fig.colorbar(mappable, cax=cax, label=z_label or None) if cax is not None
+                else fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            )
             if colorbar_log10:
                 ticks = log_decade_ticks(*mappable.get_clim())
                 cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])
-        fig.tight_layout()
-        if note:  # after tight_layout: a footnote must not shrink the axes
+        if kind in _3D_KINDS:  # a fixed, measured layout (figure_map3d_layout)
+            note_3d = safe_mathtext_label(note) if note else ""
+            finish_3d(fig, ax, cax, title, st.title_font_size, note_3d, st.font_size * 0.7)
+        else:
+            fig.tight_layout()
+        # After tight_layout: a footnote must not shrink the axes.
+        if note and kind not in _3D_KINDS:
             fig.text(
                 0.01, 0.005, safe_mathtext_label(note), fontsize=st.font_size * 0.7, va="bottom"
             )
@@ -359,8 +388,6 @@ def _draw(
     levels: int | list[float],
     level_scale: str,
     label_contours: bool,
-    view_elev: float,
-    view_azim: float,
     *,
     contour_source: str = "grid",
     max_lines: int = 0,
@@ -368,13 +395,12 @@ def _draw(
 ) -> Any:
     """Draw the requested mark; return the colorbar mappable (or None)."""
     if contour_source == "curves":
-        ax.view_init(elev=view_elev, azim=view_azim)
         draw_curves(ax, curve_list or [], cmap)
         return None
     if contour_source == "points" and kind == "scatter3d":
         # The measured points themselves, coloured by z -- no grid, no resampling.
-        ax.view_init(elev=view_elev, azim=view_azim)
-        return ax.scatter(x, y, z, c=z, cmap=cmap, s=6, depthshade=True)
+        # No depth shading: the screen colours every point by z alone.
+        return ax.scatter(x, y, z, c=z, cmap=cmap, s=6, depthshade=False)
     if contour_source == "points":
         # x/y/z are flat, equal-length scattered arrays here (not a grid) --
         # Delaunay-triangulate the cloud and contour straight off the
@@ -411,17 +437,11 @@ def _draw(
             ax.clabel(cs, inline=True, fontsize=7, fmt="%.3g")
         return cs
 
-    # 3-D kinds
-    ax.view_init(elev=view_elev, azim=view_azim)
+    # 3-D kinds (the camera is set once, by set_view, after drawing)
     xg, yg = np.meshgrid(x, y)  # (ny, nx)
     if kind == "surface":
-        return ax.plot_surface(xg, yg, z, cmap=cmap, linewidth=0, antialiased=True)
-    if kind == "scatter3d":
-        finite = np.isfinite(z)
-        sc = ax.scatter(
-            xg[finite], yg[finite], z[finite], c=z[finite], cmap=cmap, s=6, depthshade=True
-        )
-        return sc
+        return draw_surface(ax, x, y, z, cmap)
+    # (a grid scatter3d never reaches here: render_map_figure flattens it to points)
     # waterfall: one profile line per y-row, stacked in depth
     line_cmap = matplotlib.colormaps[cmap]
     rows = step_rows(z, max_lines)  # rows with data only, evenly stepped
