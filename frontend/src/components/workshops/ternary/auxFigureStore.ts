@@ -8,6 +8,8 @@
 
 import { create } from "zustand";
 
+import { setTernaryOpener } from "../../../lib/ternaryPending";
+
 interface AuxFigureStoreState {
   ternaryOpen: boolean;
   fieldOpen: boolean;
@@ -21,3 +23,6 @@ export const useAuxFigureStore = create<AuxFigureStoreState>((set) => ({
   setTernaryOpen: (ternaryOpen) => set({ ternaryOpen }),
   setFieldOpen: (fieldOpen) => set({ fieldOpen }),
 }));
+
+// An applied Origin ternary figure opens the workshop (lib/ternaryPending).
+setTernaryOpener(() => useAuxFigureStore.getState().setTernaryOpen(true));
