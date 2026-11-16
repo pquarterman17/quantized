@@ -9,7 +9,7 @@ import type { PlotWindow } from "../../../lib/plotview";
 // imported rather than restated — restating it is exactly how the focus gate
 // below drifted from the canvas in the first place.
 import type { LiveTickSteps } from "../../../lib/liveTickSteps";
-import { readLiveTickSteps } from "../../../lib/liveTickStepsSpec";
+import { windowTickHints } from "../../../lib/liveTickStepsSpec";
 import { effectiveChannels } from "../../../lib/plotdata";
 import { windowCyclesSeriesStyles } from "../../../lib/seriesStyleCycle";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
@@ -159,8 +159,8 @@ export function selectSessionLiveDrifted(state: AppState): boolean {
  *  on that same window whose draft is live -- the Publication preview of the
  *  view on screen, which then sends the Stage Export's request. Any other
  *  session (library, new-editable, an unfocused window) gets none. */
-export function sessionTickHints(state: Pick<AppState, "figurePublicationSession" | "focusedWindowId">): LiveTickSteps | null {
+export function sessionTickHints(state: Pick<AppState, "figurePublicationSession" | "focusedWindowId" | "editableFigures">): LiveTickSteps | null {
   const session = state.figurePublicationSession;
   if (session === null || session.target !== "window" || session.windowId !== state.focusedWindowId) return null;
-  return session.draft.data.mode === "frozen" ? null : readLiveTickSteps(session.windowId);
+  return windowTickHints(state.editableFigures, session.windowId, session.draft); // none for a frozen or saved figure
 }

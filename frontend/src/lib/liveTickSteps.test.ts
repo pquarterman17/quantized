@@ -84,7 +84,7 @@ describe("only the focused window's own exports carry hints (review N1)", () => 
     const document = doc("w1");
     const exported = stage("w1", document);
     const session = { target: "window", windowId: "w1", draft: document } as never;
-    const preview = withLiveTickHints(buildFigureSpecFromDocument(document, ds, "a", { fmt: "svg" }), sessionTickHints({ figurePublicationSession: session, focusedWindowId: "w1" }));
+    const preview = withLiveTickHints(buildFigureSpecFromDocument(document, ds, "a", { fmt: "svg" }), sessionTickHints({ figurePublicationSession: session, focusedWindowId: "w1", editableFigures: [] }));
     expect(hints(exported)).toEqual([null, null, 2, 0.5]);
     expect(hints(preview)).toEqual(hints(exported));
   });
@@ -98,15 +98,37 @@ describe("only the focused window's own exports carry hints (review N1)", () => 
     const w1 = vi.fn(() => ({ ...st(), datasets: [ds], activeId: "d1", focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", datasetId: "d1", view, document: doc("w1") }] }));
     expect(hints(buildStageFigureSpec(w1 as unknown as typeof st, ds, "a", opts, { noTickHints: true }))).toEqual([null, null, null, null]);
     const other = { target: "window", windowId: "w2", draft: doc("w2") } as never;
-    expect(sessionTickHints({ figurePublicationSession: other, focusedWindowId: "w1" })).toBeNull();
+    expect(sessionTickHints({ figurePublicationSession: other, focusedWindowId: "w1", editableFigures: [] })).toBeNull();
     const library = { target: "library", draft: doc("w1") } as never;
-    expect(sessionTickHints({ figurePublicationSession: library, focusedWindowId: "w1" })).toBeNull();
+    expect(sessionTickHints({ figurePublicationSession: library, focusedWindowId: "w1", editableFigures: [] })).toBeNull();
     const frozen = { target: "window", windowId: "w1", draft: { ...doc("w1"), data: { mode: "frozen" } } } as never;
-    expect(sessionTickHints({ figurePublicationSession: frozen, focusedWindowId: "w1" })).toBeNull();
+    expect(sessionTickHints({ figurePublicationSession: frozen, focusedWindowId: "w1", editableFigures: [] })).toBeNull();
     // A saved figure of the SAME dataset, through the shared builder and batch export:
     const saved = doc("f2", { yKeys: [1] });
     expect(hints(buildFigureSpecFromDocument(saved, ds, "f2", { fmt: "svg" }))).toEqual([null, null, null, null]);
     const batch = batchFigureSpecs([saved, doc("w1")], [ds], { format: "svg", style: "default", dpi: 100 } as never);
     for (const s of batch) expect(hints(s)).toEqual([null, null, null, null]);
+  });
+
+  it("a saved editable figure reopened in a window exports as it did before saving (PR #713 e2e)", () => {
+    // export-roundtrip.spec: the Graph Builder's Publication Preview (a
+    // `new-editable` session) sent no hints; after Create Editable Figure and
+    // a reopen into a focused window, its preview must send the same request.
+    publishLiveTickSteps(DRAWN); // the reopened window's canvas has drawn
+    const savedDoc = doc("fig-1");
+    const st = useApp.getState;
+    const state = vi.fn(() => ({
+      ...st(), datasets: [ds], activeId: "d1", focusedWindowId: "w1", editableFigures: [savedDoc],
+      windowsForSave: () => [{ id: "w1", kind: "plot", datasetId: "d1", view, document: savedDoc }],
+    }));
+    const before = withLiveTickHints(buildFigureSpecFromDocument(savedDoc, ds, "a", { fmt: "svg" }), sessionTickHints({
+      figurePublicationSession: { target: "new-editable", windowId: null, draft: savedDoc } as never, focusedWindowId: "w1", editableFigures: [],
+    }));
+    const reopened = withLiveTickHints(buildFigureSpecFromDocument(savedDoc, ds, "a", { fmt: "svg" }), sessionTickHints({
+      figurePublicationSession: { target: "window", windowId: "w1", draft: savedDoc } as never, focusedWindowId: "w1", editableFigures: [savedDoc],
+    }));
+    expect(reopened).toEqual(before);
+    expect(hints(reopened)).toEqual([null, null, null, null]);
+    expect(hints(buildStageFigureSpec(state as unknown as typeof st, ds, "a", opts))).toEqual([null, null, null, null]);
   });
 });

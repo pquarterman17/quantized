@@ -20,6 +20,21 @@ export function readLiveTickSteps(windowId: string | null | undefined): LiveTick
   return windowId && liveTickSteps?.windowId === windowId ? liveTickSteps : null;
 }
 
+/** The hints for an export of window `windowId` showing `document`: its
+ *  canvas' drawn increments, unless the document is frozen (it draws its own
+ *  snapshot) or a SAVED editable figure (PR #713 e2e). A saved figure renders
+ *  from its document alone, so its Stage export and Publication preview send
+ *  the same request as the Graph Builder session it was saved from and as
+ *  any later reopen, whatever the canvas drew. */
+export function windowTickHints(
+  editableFigures: readonly { id: string }[] | undefined,
+  windowId: string | null | undefined,
+  shown: { id: string; data: { mode: string } },
+): LiveTickSteps | null {
+  if (shown.data.mode === "frozen" || editableFigures?.some((f) => f.id === shown.id)) return null;
+  return readLiveTickSteps(windowId);
+}
+
 const DATE_MODES = new Set(["date", "time", "datetime"]);
 
 /** `spec` with a hint for each AUTOMATIC increment on a linear, numeric axis.
