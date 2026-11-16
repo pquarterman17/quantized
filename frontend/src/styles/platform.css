@@ -439,7 +439,6 @@
   border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-border));
   font-family: inherit;
   font-size: inherit;
-
 }
 .qzk-toast-action:hover {
   background: var(--accent-soft);
@@ -483,7 +482,6 @@
   color: inherit;
   font-family: inherit;
   font-size: inherit;
-
 }
 .qzk-lazy-fail button:hover {
   background: color-mix(in srgb, var(--danger) 16%, transparent);

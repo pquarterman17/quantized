@@ -34,10 +34,10 @@ import ZoneWell from "./ZoneWell";
 const MARK_GLYPH: Record<string, string> = {
   scatter: "⣿ scatter",
   line: "╱ line",
-  step: "▤ step",
+  step: "⊓ step",
   box: "▯ box",
   violin: "◈ violin",
-  bar: "▭ bar",
+  bar: "▮ bar",
 };
 
 const STEP_MODE_OPTS: { value: StepMode; label: string }[] = [

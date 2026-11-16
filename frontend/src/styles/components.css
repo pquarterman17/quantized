@@ -193,6 +193,7 @@
 }
 
 .qz-select {
+  min-width: 0;
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -344,7 +345,6 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--surface-1, #fff);
-
 }
 
 /* ── Card (collapsible inspector card) ─────────────────────────────────── */
@@ -392,7 +392,6 @@
   color: var(--text-faint);
   font: inherit;
   line-height: 1;
-
 }
 .qz-card-help:hover,
 .qz-card-help:focus-visible {
