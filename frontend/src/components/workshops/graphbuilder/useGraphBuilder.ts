@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { runExportFigureView } from "../../../commands/fileCommands";
+import { runExportFigureView } from "../../../lib/exportFigureView";
 import { runExportFigureCommand } from "../../../lib/exportFigureCommand";
 import {
   figureTransitionWarning,
@@ -540,7 +540,7 @@ export function useGraphBuilder(): GraphBuilderState {
       // plot's presentation, same dialog + chokepoint (lib/plotEncodingExport).
       // UX-H: the view Plot ▸ Export figure… opens; an encoded graph keeps the quick dialog (its builder carries the encoding).
       if (encoded) await runExportFigureCommand(useApp.getState, encoded.facets ? undefined : (stem, d, o) => buildEncodedExport(useApp.getState, spec, d, stem, o));
-      else runExportFigureView(useApp.getState);
+      else await runExportFigureView(useApp.getState);
       return;
     }
     toast(`${spec.mark} exports from the Stat Stage's own Export button (now showing).`, "info");

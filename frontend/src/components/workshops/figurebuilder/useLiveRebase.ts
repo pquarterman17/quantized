@@ -5,18 +5,18 @@
 // (store/publicationRebase.ts); otherwise `useFigureBuilder.canExport`
 // disables Export and the view shows why.
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
-import { selectSessionExportStale } from "./canonicalSession";
 import { figurePublicationEdited } from "../../../store/figureUnsavedEdits";
 import { rebaseFigurePublicationOnLive } from "../../../store/publicationRebase";
 import { useApp } from "../../../store/useApp";
 
-export function useLiveRebase(): void {
-  const stale = useApp(selectSessionExportStale);
+/** `stale`: `useFigureBuilder`'s own `exportStale` (one subscription). */
+export function useLiveRebase(stale: boolean): void {
   // Also keyed on "has edits": undoing the preview's edits makes a rebase
   // lossless again, and it should then happen without another plot change.
-  const edited = useApp((s) => figurePublicationEdited(s.figurePublicationSession));
+  const session = useApp((s) => s.figurePublicationSession);
+  const edited = useMemo(() => figurePublicationEdited(session), [session]);
   useEffect(() => {
     if (stale && !edited) rebaseFigurePublicationOnLive();
   }, [stale, edited]);

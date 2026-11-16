@@ -28,6 +28,7 @@ export function rebaseFigurePublicationOnLive(): void {
       baseline: structuredClone(live),
       draft: { ...structuredClone(live), output: { ...live.output, format, stylePreset, dpi } },
       exported: undefined,
+      staleBaseline: undefined, // a fresh baseline: Apply works again
     },
   });
 }

@@ -18,10 +18,10 @@
 
 // askParams from its store home, not the ParamDialog component's re-export:
 // lib/ must not DIRECTLY import components/ (architecture.test.ts's lib
-// layering guard). GREYSCALE_FIELD/FIGURE_STYLES below come from
-// ./exportFigureCommand, a grandfathered module that does import ParamDialog
-// itself — shared deliberately so this dialog's style list and greyscale
-// field cannot drift from "Export figure…"'s.
+// layering guard). GREYSCALE_FIELD below comes from ./exportFigureCommand, a
+// grandfathered module that does import ParamDialog itself, and the preset
+// list from ./figurePresets — both shared deliberately so this dialog's style
+// list and greyscale field cannot drift from "Export figure…"'s.
 import { askParams } from "../store/paramDialog";
 import type { FigureSpec } from "./api/figures";
 import type { Dataset } from "./types";

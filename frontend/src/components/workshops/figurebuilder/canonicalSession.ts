@@ -14,6 +14,7 @@ import { effectiveChannels } from "../../../lib/plotdata";
 import { windowCyclesSeriesStyles } from "../../../lib/seriesStyleCycle";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
 import { libraryWindowLiveDrifted } from "../../../store/figurePublicationLibrary";
+import { figureDocumentsDiffer } from "../../../store/figureUnsavedEdits";
 import { plotWindowView } from "../../../store/windowDocuments";
 import type { AppState } from "../../../store/useApp";
 
@@ -174,5 +175,12 @@ export function sessionTickHints(state: Pick<AppState, "figurePublicationSession
 export function selectSessionExportStale(state: AppState): boolean {
   const session = state.figurePublicationSession;
   if (session === null || session.target !== "window") return false;
-  return sessionLiveDrifted(session, state.plotWindows, false, state);
+  if (session.staleBaseline) return true; // Apply already found it stale
+  const window = state.plotWindows.find((candidate) => candidate.id === session.windowId);
+  const live = window ? liveWindowDocument(state, window) : null;
+  if (live === null || JSON.stringify(live) === JSON.stringify(session.baseline)) return false; // the cheap, common answer
+  // The document NAME is not plot content: an unfocused window's live
+  // document carries its raw title where the focused one shows the dataset's
+  // name, so moving focus alone must not read as "the plot changed".
+  return figureDocumentsDiffer({ ...live, name: "" }, { ...session.baseline, name: "" });
 }

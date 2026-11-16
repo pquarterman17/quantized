@@ -33,7 +33,7 @@ import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisScale, DataStruct, RefLine, Shape } from "../../../lib/types";
-import { figurePublicationDirty, figurePublicationEdited } from "../../../store/figureUnsavedEdits";
+import { figurePublicationDirty } from "../../../store/figureUnsavedEdits";
 import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -324,7 +324,7 @@ export function useFigureBuilder() {
   const liveDrifted = useApp(selectSessionLiveDrifted), exportStale = useApp(selectSessionExportStale); // UX-H: never export a stale snapshot
   const canApply = !targetBlocked && !publicationSession?.staleBaseline && !liveDrifted && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
-      figurePublicationEdited(publicationSession) // UX-H: output-only choices (format/preset/DPI) are not edits
+      publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
     )
   );
   const applyBlockedReason = targetBlocked

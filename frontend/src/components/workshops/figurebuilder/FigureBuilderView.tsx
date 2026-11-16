@@ -58,10 +58,10 @@ export default function FigureBuilderView() {
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
   const detachedCanonical = f.publicationTarget === "new-editable";
   const exportDisabledReason = !f.canonical || f.canExport ? null
-    : f.error ?? (f.exportStale ? STALE_EXPORT : "figure is not ready to export");
+    : f.exportStale ? STALE_EXPORT : f.error ?? "figure is not ready to export";
   const onClose = () => (f.canonical ? void cancelPublicationPreview() : setOpen(false));
   const sizeCm = f.hitmap && f.previewDpi ? renderedSizeCm(f.hitmap.width, f.hitmap.height, f.previewDpi) : null;
-  useLiveRebase();
+  useLiveRebase(Boolean(f.exportStale));
 
   // Once per open: a window remembered at the old thumbnail width reopens
   // wide enough for the preview (ToolWindow's default only applies when no

@@ -117,7 +117,9 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   const fresh = await (await browser.newContext()).newPage();
   await gotoApp(fresh);
   await fresh.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await chooseFiles(fresh, () => fresh.getByText("Open workspace (.dwk)…", { exact: true }).click(), savedPath!);
+  // The menu ITEM: an empty fresh context also shows the first-run screen's
+  // own "Open workspace (.dwk)…" button (#719), so the bare text is ambiguous.
+  await chooseFiles(fresh, () => fresh.getByRole("menuitem", { name: "Open workspace (.dwk)…", exact: true }).click(), savedPath!);
   await waitForDatasetCount(fresh, 2);
   await expect.poll(async () => (await snap(fresh)).fitFor, { timeout: 15_000 }).not.toBeNull();
   expect((await snap(fresh)).band).toBeGreaterThan(0);

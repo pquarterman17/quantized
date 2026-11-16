@@ -54,6 +54,18 @@ describe("selectSessionExportStale (UX-H item 3)", () => {
     expect(selectSessionExportStale(useApp.getState())).toBe(true);
   });
 
+  it("is not stale when only the document name differs (an unfocused window carries its raw title)", () => {
+    live.doc = { ...doc(), name: "" };
+    useApp.setState({ figurePublicationSession: session(doc("Typed")), focusedWindowId: "w2" });
+    expect(selectSessionExportStale(useApp.getState())).toBe(false);
+  });
+
+  it("stays stale once Apply has found the baseline stale", () => {
+    live.doc = doc();
+    useApp.setState({ figurePublicationSession: session(doc("Typed"), { staleBaseline: true }) });
+    expect(selectSessionExportStale(useApp.getState())).toBe(true);
+  });
+
   it("never blocks a Library or detached draft: it IS the document it exports", () => {
     useApp.setState({ figurePublicationSession: session(doc(), { target: "library", windowId: null }) });
     expect(selectSessionExportStale(useApp.getState())).toBe(false);
@@ -71,7 +83,7 @@ describe("useLiveRebase (UX-H item 3)", () => {
 
   it("re-bases an unedited session onto the live plot, keeping its output choices", () => {
     useApp.setState({ figurePublicationSession: session(withOutput(doc(), { format: "svg", stylePreset: "aps", dpi: 450 })) });
-    renderHook(() => useLiveRebase());
+    renderHook(() => useLiveRebase(useApp(selectSessionExportStale)));
     const next = useApp.getState().figurePublicationSession!;
     expect(next.baseline.plot).toEqual((live.doc as FigureDocument).plot);
     expect(next.draft.plot).toEqual((live.doc as FigureDocument).plot);
@@ -81,13 +93,13 @@ describe("useLiveRebase (UX-H item 3)", () => {
   it("leaves a session with preview edits alone (Export is disabled instead)", () => {
     const edited = session(doc("Typed in the preview"));
     useApp.setState({ figurePublicationSession: edited });
-    renderHook(() => useLiveRebase());
+    renderHook(() => useLiveRebase(useApp(selectSessionExportStale)));
     expect(useApp.getState().figurePublicationSession).toBe(edited);
   });
 
   it("re-bases once the preview's own edits are undone, with no further plot change", () => {
     useApp.setState({ figurePublicationSession: session(doc("Typed in the preview")) });
-    renderHook(() => useLiveRebase());
+    renderHook(() => useLiveRebase(useApp(selectSessionExportStale)));
     expect(useApp.getState().figurePublicationSession?.baseline.plot).not.toEqual((live.doc as FigureDocument).plot);
     act(() => useApp.setState({ figurePublicationSession: session(doc()) })); // the edit, undone
     expect(useApp.getState().figurePublicationSession?.baseline.plot).toEqual((live.doc as FigureDocument).plot);
@@ -96,7 +108,7 @@ describe("useLiveRebase (UX-H item 3)", () => {
   it("never re-bases a detached draft", () => {
     const detached = session(doc(), { target: "new-editable", windowId: null });
     useApp.setState({ figurePublicationSession: detached });
-    renderHook(() => useLiveRebase());
+    renderHook(() => useLiveRebase(useApp(selectSessionExportStale)));
     expect(useApp.getState().figurePublicationSession).toBe(detached);
   });
 });

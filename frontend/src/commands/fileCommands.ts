@@ -10,13 +10,11 @@ import { makeDemoDataset } from "../lib/demo";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
-import { createFigureDocument } from "../lib/figureDocument";
 import { loadGraphTemplates, saveGraphTemplate } from "../lib/figuredoc";
 import { chooseAndImport } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
-import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { useImportBatch } from "../store/importBatch";
 import { withOp } from "../store/pendingOps";
@@ -36,6 +34,7 @@ import { nextDatasetId } from "../store/useApp";
 // 2026-09-29) once components and App.tsx needed them too; re-exported here
 // so the command modules and fileCommands.test.ts keep their import path.
 import { onLoadFailure, runLazy } from "../lib/runLazy";
+import { openPublicationPreview, runExportFigureView, runQuickExport } from "../lib/exportFigureView";
 export { onLoadFailure, runLazy };
 
 let demoCounter = 0;
@@ -54,72 +53,6 @@ let demoCounter = 0;
 // (P1.1 C3's native-open wiring pushed this module over the ceiling; see
 // that file's header for the extraction note).
 const replaceHalf = () => import("../lib/openWorkspaceReplace");
-
-// Body lives in lib/exportFigureCommand (store-size ratchet offset for
-// MAIN_PLAN #16's Append workspace command — see that file's doc).
-// Bundle: click-only — dynamic import keeps lib/exportFigureCommand
-// (and the figureSpec transport builder behind it) off the eager path.
-// runLazy (F5) — see that function's own doc.
-function runQuickExport(s: StoreGet): void {
-  void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand"))
-    .then((m) => m.runExportFigureCommand(s), onLoadFailure);
-}
-function openPublicationPreview(s: StoreGet): void {
-  if (s().figurePublicationSession) {
-    s().setStatus("finish or cancel the current Publication Preview before opening another");
-    return;
-  }
-  if (s().beginFigurePublicationEdit()) return;
-  // F2.1e: no focused plot window. With no active dataset either, this
-  // degrades exactly as before -- the legacy FigureBuilderView opens
-  // with nothing to show ("Select a dataset to preview a figure.").
-  // With an active dataset, open the SAME detached canonical session
-  // Graph Builder's openInFigureBuilder uses
-  // (beginDetachedFigurePublicationEdit), synthesized from the active
-  // dataset + the live on-screen view (snapshotView mirrors channels,
-  // scales, styles, decor) rather than the old legacy-mode preview --
-  // so Apply now creates a new editable figure instead of being a dead
-  // end.
-  const state = s();
-  const active = state.datasets.find((dataset) => dataset.id === state.activeId);
-  if (!active) {
-    s().setStatus("no plot window is focused — previewing the active dataset; Apply is unavailable in this mode");
-    s().setFigureBuilderOpen(true);
-    return;
-  }
-  const draft = createFigureDocument({
-    id: `figure-preview-${active.id}`,
-    name: active.name,
-    datasetId: active.id,
-    view: snapshotView(state),
-  });
-  if (s().beginDetachedFigurePublicationEdit(draft)) {
-    s().setStatus(
-      `no plot window is focused — previewing "${active.name}"; Apply will save it as a new editable figure`,
-    );
-  }
-}
-
-/** Plot ▸ Export figure… (UX-H): the one export view — the Publication
- *  preview, with its large true-size preview. A view that preview cannot draw
- *  (stat, polar, a per-channel stack, a spatial page) keeps the quick dialog,
- *  which exports those — as does no dataset at all (it refuses with a reason).
- *  So does a waterfall: the Stage export staggers by the span the live canvas
- *  measured (lib/waterfallOffset's seam; a zoomed, server-thinned canvas
- *  differs from the full data), which the document-built preview cannot see,
- *  so preview and file could disagree.
- *  Exported so other "Export" buttons (Graph Builder) open the same view. */
-export function runExportFigureView(s: StoreGet): void {
-  const st = s();
-  const stack = st.stackMode && st.composition === null && st.facetKey === null;
-  const waterfall = st.waterfall !== 0 || st.waterfallDx !== 0;
-  if (st.figurePublicationSession) {
-    st.setFigureBuilderOpen(true);
-    st.setStatus("the export view is already open — finish or cancel it to export another figure");
-  } else if (!st.datasets.some((d) => d.id === st.activeId) || st.statMode || st.polarMode || stack || waterfall || st.composition?.kind === "spatial") {
-    runQuickExport(s);
-  } else openPublicationPreview(s);
-}
 
 /** Build the File-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -382,7 +315,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Export figure…",
-      run: () => runExportFigureView(s),
+      run: () => void runExportFigureView(s),
     },
     {
       id: "export-figure-quick",
@@ -390,7 +323,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Export figure (quick dialog)…",
       // The pre-UX-H dialog, kept as the power-user path (no preview).
-      run: () => runQuickExport(s),
+      run: () => void runQuickExport(s),
     },
     {
       id: "export-origin",

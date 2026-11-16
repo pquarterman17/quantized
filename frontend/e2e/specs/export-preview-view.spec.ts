@@ -60,6 +60,18 @@ test("Plot ▸ Export figure… opens the large true-aspect preview and exports 
     await page.screenshot({ path: `${shotDir}/export_view_1440.png` });
   }
 
+  // A window resized short still shows its action row (it sticks to the
+  // window's bottom edge rather than scrolling away under the preview).
+  await page.evaluate(() => {
+    const app = (window as unknown as { __qz: { useApp: { getState: () => {
+      toolWindowLayout: Record<string, { x: number; y: number; width: number; height: number | null; collapsed: boolean } | undefined>;
+      setToolWindowLayout: (id: string, l: { x: number; y: number; width: number; height: number | null; collapsed: boolean }) => void;
+    } } } }).__qz.useApp;
+    const layout = app.getState().toolWindowLayout.figurebuilder ?? { x: 240, y: 90, width: 1120, height: null, collapsed: false };
+    app.getState().setToolWindowLayout("figurebuilder", { ...layout, height: 600 });
+  });
+  await expect(view.getByRole("button", { name: "Export PDF…", exact: true })).toBeInViewport({ ratio: 1 });
+
   // ONE primary action, and it downloads the figure in the chosen format.
   await preset.selectOption("aps");
   await expect(view.getByRole("status", { name: "Figure size" })).toHaveText(/8\.6 × 6\.5 cm/);

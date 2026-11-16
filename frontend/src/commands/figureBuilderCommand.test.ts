@@ -13,6 +13,11 @@ vi.mock("../lib/exportFigureCommand", () => ({ runExportFigureCommand: quick.run
 
 // F2.1e fixture: minimal dataset shared by the no-focused-window canonical
 // tests below -- shape mirrors figureLifecycle.test.ts's own fixture.
+const twoChannels = () => ({
+  id: "d1",
+  name: "Two channels",
+  data: { time: [0, 1, 2], values: [[1, 4], [2, 5], [3, 6]], labels: ["A", "B"], units: ["", ""], metadata: {} },
+});
 const sampleDataset = () => ({
   id: "d1",
   name: "Sample data",
@@ -186,12 +191,21 @@ describe("Publication Preview command", () => {
     async (_mode, view) => {
       const called = quickCalled();
       const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
-      useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, ...view });
+      useApp.setState({ datasets: [twoChannels()], activeId: "d1", beginFigurePublicationEdit, ...view });
       runExportFigure();
       await called;
       expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
     },
   );
+
+  it("Export figure… opens the preview for a stack of ONE channel (the Stage draws a plain plot)", () => {
+    quick.run.mockReset();
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
+    useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, stackMode: true });
+    runExportFigure();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
+    expect(quick.run).not.toHaveBeenCalled();
+  });
 
   it("Export figure… keeps the quick dialog for a spatial page composition", async () => {
     const called = quickCalled();
