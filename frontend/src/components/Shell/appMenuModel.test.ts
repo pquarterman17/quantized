@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Action } from "../../store/commands";
+import { buildAppActions } from "../../appCommands";
+import { useApp } from "../../store/useApp";
 import { buildAppMenuItems } from "./appMenuModel";
 
 const fmt = (s: string) => `key:${s}`;
@@ -126,5 +128,38 @@ describe("buildAppMenuItems", () => {
     expect(item).toMatchObject({ shortcutLabel: "key:⌘K" });
     if ("run" in item) item.run();
     expect(run).toHaveBeenCalledOnce();
+  });
+});
+
+// UX audit 8 #6 / lane UX8-F: menu structure against the REAL registry.
+describe("real menu structure (findability)", () => {
+  const real = buildAppActions(useApp.getState);
+  const menu = (group: string) => buildAppMenuItems(group, real, fmt);
+  const flyout = (group: string, label: string) =>
+    (menu(group).find((i) => "label" in i && i.label === label) as { submenu?: { label?: string }[] } | undefined)?.submenu?.map((i) => i.label);
+
+  it("Analyze > Fit lists Curve fit (and keeps it at the root)", () => {
+    expect(flyout("Analyze", "Fit")).toContain("Curve fit…");
+    expect(menu("Analyze")).toContainEqual(expect.objectContaining({ label: "Curve fit…" }));
+  });
+
+  it("Analyze > Peaks & baseline lists Peak analyzer (and keeps it at the root)", () => {
+    expect(flyout("Analyze", "Peaks & baseline")).toContain("Peak analyzer…");
+    expect(menu("Analyze")).toContainEqual(expect.objectContaining({ label: "Peak analyzer…" }));
+  });
+
+  it("the Workflow flyout is Tools", () => {
+    expect(flyout("Analyze", "Workflow")).toBeUndefined();
+    expect(flyout("Analyze", "Tools")).toEqual(expect.arrayContaining(["Graph digitizer (trace a curve from an image)…"]));
+  });
+
+  it("Edit offers Copy figure and Select all datasets", () => {
+    const labels = menu("Edit").map((i) => ("label" in i ? i.label : undefined));
+    expect(labels).toEqual(expect.arrayContaining(["Copy figure", "Select all datasets"]));
+  });
+
+  it("Data carries Set Column Values… and Dataset math", () => {
+    const all = (menu("Data") as { label?: string; submenu?: { label?: string }[] }[]).flatMap((i) => [i.label, ...(i.submenu?.map((s) => s.label) ?? [])]);
+    expect(all).toEqual(expect.arrayContaining(["Set Column Values…", "Dataset math (combine two datasets)…"]));
   });
 });

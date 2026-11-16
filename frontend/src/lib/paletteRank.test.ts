@@ -91,7 +91,26 @@ const BENCHMARK: Row[] = [
   { q: "smooth data", first: "signal-smooth" },
   { q: "smooth the data", first: "signal-smooth" },
   { q: "import data", first: "import" },
-  { q: "set column values", first: /.*/, maxResults: 1 },
+  // UX audit 8 #6: the vocabulary of daily jobs.
+  { q: "save", first: "save-workspace", notFirst: ["graph-template-save"] },
+  { q: "linear fit", first: "curvefit", notFirst: ["optical-gap"] },
+  { q: "gaussian", first: "curvefit", top3: ["curvefit"] },
+  { q: "set column values", first: "set-column-values" },
+  { q: "subtract dataset", first: "dataset-math" },
+  { q: "difference", first: "dataset-math" },
+  { q: "dataset algebra", first: "dataset-math" },
+  { q: "FC minus ZFC", first: "dataset-math" },
+  { q: "dataset math", first: "dataset-math" },
+  { q: "font size", first: "figure-builder" },
+  { q: "nature", first: "export-figure" },
+  { q: "aps", first: "export-figure" },
+  { q: "tc", first: "peaks" },
+  { q: "peak position", first: "peaks" },
+  { q: "units convert", first: "calculators" },
+  { q: "axis range", first: "axis-dialog" },
+  { q: "annotate", first: /^insert-(textbox|arrow)$/, top3: ["insert-textbox", "insert-arrow"] },
+  { q: "copy figure", first: "copy-figure" },
+  { q: "batch", first: /^(curvefit|peaks)$/, top3: ["curvefit", "peaks"] },
   { q: "zzzz qqqq", first: /.*/, maxResults: 0 },
   // Origin vocabulary.
   { q: "layer contents", first: "layer-contents" },
@@ -109,6 +128,7 @@ describe("palette ranking benchmark (real commands)", () => {
     const all = rankActions(REAL, q);
     const ids = all.slice(0, 3).map((r) => r.a.id);
     if (maxResults !== undefined) expect(all.length).toBeLessThanOrEqual(maxResults);
+    if (maxResults === undefined) expect(all.length, "a benchmark query must find something").toBeGreaterThan(0);
     if (all.length === 0) return;
     if (typeof first === "string") expect(ids[0]).toBe(first);
     else expect(ids[0]).toMatch(first);

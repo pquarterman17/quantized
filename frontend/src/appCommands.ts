@@ -18,6 +18,7 @@ import { buildAnalysisCommands } from "./commands/analysisCommands";
 import { withCommandDocs } from "./commands/commandDocs";
 import { buildDataCommands } from "./commands/dataCommands";
 import { buildDiscoveryCommands } from "./commands/discoveryCommands";
+import { buildEditDataExtras } from "./commands/editDataExtras";
 import { buildFileCommands } from "./commands/fileCommands";
 import { buildPlotCommands } from "./commands/plotCommands";
 import { buildUiCommands } from "./commands/uiCommands";
@@ -36,5 +37,6 @@ export function buildAppActions(s: StoreGet): Action[] {
     ...buildDataCommands(s),
     ...buildPlotCommands(s),
     ...buildDiscoveryCommands(s),
+    ...buildEditDataExtras(s),
   ]);
 }

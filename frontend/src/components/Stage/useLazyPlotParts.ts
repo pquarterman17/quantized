@@ -50,8 +50,9 @@ export interface LazyDecorNeeds {
 }
 
 /** How many things on a plot the region-decor STARTUP chunk draws: reference
- *  lines (off-scale markers), region shades, error bars (`lib/uplotErrorDraw.ts`)
- *  and colour-mapped scatter columns (`lib/uplotScatterDraw.ts`), each counted
+ *  lines (off-scale markers), region shades, error bars (`lib/uplotErrorDraw.ts`),
+ *  colour-mapped scatter columns (`lib/uplotScatterDraw.ts`) and the series of
+ *  a non-monotonic-x plot (`lib/uplotLoopLine.ts`), each counted
  *  as a list's length, a map's size or a record's keys. Above zero, a plot
  *  drawn before the chunk rebuilds when it lands. */
 export const startupOverlayCount = (o: Record<string, object | null | undefined>): number =>

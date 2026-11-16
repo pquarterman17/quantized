@@ -65,6 +65,14 @@ const COMMON_IDS: Record<string, ReadonlySet<string>> = {
   View: new Set(["plot", "worksheet", "left", "right"]),
 };
 
+/** Frequent commands kept at a menu's root that ALSO appear in their own topic
+ *  flyout, where users browsing that topic look for them (UX audit 8 #6:
+ *  Analyze > Fit did not list Curve fit, Peaks & baseline not Peak analyzer).
+ *  Same command, same id: a second entry point, not a second command. */
+const ALSO_IN_SECTION: Record<string, ReadonlySet<string>> = {
+  Analyze: new Set(["curvefit", "peak-wizard"]),
+};
+
 const FILE_SECTIONS: Record<string, string> = {
   "import-sheets": "Import",
   "import-append": "Import",
@@ -178,11 +186,11 @@ export function buildAppMenuItems(
     const section = guest ?? defaultSection(action);
     if (common.has(action.id) || !section) {
       roots.push(item);
-      continue;
+      if (!section || !ALSO_IN_SECTION[group]?.has(action.id)) continue;
     }
     const bucket = sections.get(section);
-    if (bucket) bucket.push(item);
-    else sections.set(section, [item]);
+    if (bucket) bucket.push(common.has(action.id) ? { ...item } : item);
+    else sections.set(section, [common.has(action.id) ? { ...item } : item]);
   }
 
   const result = [...roots];
