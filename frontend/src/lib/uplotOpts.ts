@@ -24,7 +24,8 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { drawnOnAxis, sharedAxisTitle } from "./sharedAxisTitle";
-import { logDecadeLabels, logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
+import { logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
+import { autoFactorTopPad, autoLogTickValues, autoMultiplierAllowed, autoPlainValues, drawAutoFactors, autoTickValues, autoUnpadded, splitsIncrement, stripNegZero, type TickValues } from "./autoTickValues";
 export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
@@ -143,97 +144,6 @@ export function seriesColorsFor(bg?: PlotBg): SeriesColors {
   return { accentColor: cssVar("--accent") || "#8b5cf6", inkColor, inkDimColor, isDarkBg: isDark };
 }
 
-/** A uPlot axis `values` callback: maps tick split values to label strings. */
-type TickValues = (
-  self: uPlot,
-  splits: number[],
-  axisIdx: number,
-  foundSpace: number,
-  foundIncr: number,
-) => (string | number | null)[];
-
-/** The smallest positive gap between consecutive (sorted, finite, non-null)
- *  tick SPLITS — the increment that actually governs label precision,
- *  independent of which generator produced the splits. uPlot's own
- *  `foundIncr` (the 5th `values` argument) reflects a generic linear-
- *  increment search over `[scaleMin, scaleMax]` that ALWAYS runs internally,
- *  even when this module supplies a custom `axis.splits` override
- *  (`fixedLogAxisSplits`/`reciprocalAxisSplits` above) — so `foundIncr` can
- *  silently disagree with the spacing of the splits actually drawn there.
- *  Deriving the increment directly from the splits array is correct
- *  regardless of scale/override, and is the primary source; `foundIncr` is
- *  only a fallback for the (single-split, no diffable pair) degenerate
- *  case. */
-function splitsIncrement(splits: readonly (number | null | undefined)[], foundIncr: number): number {
-  const vals = splits
-    .filter((v): v is number => v != null && Number.isFinite(v))
-    .slice()
-    .sort((a, b) => a - b);
-  let min = Infinity;
-  for (let i = 1; i < vals.length; i++) {
-    const gap = vals[i] - vals[i - 1];
-    if (gap > 0 && gap < min) min = gap;
-  }
-  return Number.isFinite(min) ? min : foundIncr;
-}
-
-/** Strip a rounded-to-zero value's leading minus sign: a legitimately
- *  non-zero split (e.g. -0.00003) can still format as "-0"/"-0.000"/
- *  "-0.0e+0" once rounded to the tick's display precision, which is never
- *  meaningful data (MAIN #20 — the owner's screenshot showed a bare "-0"
- *  tick label on a dense M-H moment axis). Works after ANY formatter
- *  (toFixed/toExponential/Intl.NumberFormat) by re-parsing the FORMATTED
- *  string rather than inspecting the pre-format float, so it's agnostic to
- *  locale grouping separators / exponent suffixes. */
-function stripNegZero(formatted: string): string {
-  if (!formatted.startsWith("-")) return formatted;
-  const bare = formatted.slice(1);
-  return Number(bare.replace(/,/g, "")) === 0 ? bare : formatted;
-}
-
-const autoNumberFormatCache = new Map<number, Intl.NumberFormat>();
-/** `d`: `decimalsForIncrement`'s 0..20. */
-function autoNumberFormat(d: number, pad: boolean): Intl.NumberFormat {
-  // A linear axis shows one decimal count (audit 6 P3): "0.0090" beside "0.0095", as Origin pads --
-  // up to 5 decimals: a finer increment (where matplotlib turns to an offset) keeps labels unpadded.
-  const min = pad && d <= 5 ? d : 0, key = d + 21 * min;
-  let nf = autoNumberFormatCache.get(key);
-  if (!nf) {
-    nf = new Intl.NumberFormat(undefined, { minimumFractionDigits: min, maximumFractionDigits: d });
-    autoNumberFormatCache.set(key, nf);
-  }
-  return nf;
-}
-
-/** uPlot's OWN default axis `values` formatter (`numAxisVals` in its
- *  source, `dist/uPlot.esm.js`) is `splits.map(v => fmtNum(v))`, where
- *  `fmtNum` is a bare `Intl.NumberFormat(locale).format(v)` with NO options
- *  — the ECMA-402 spec default caps `maximumFractionDigits` at 3
- *  REGARDLESS of the actual tick increment, and never consults `foundIncr`
- *  at all. This is the confirmed mechanism behind the owner's dense M-H
- *  moment-axis bug report (Moment (emu), range +-0.002, ticks ~0.0001
- *  apart -> every label rounds to 3 decimals -> long duplicate runs:
- *  "0.001"x8, "0"x5, "-0.001"x9, plus a bare "-0" — reproduced via
- *  `tools/visual` with `yFmt` still at the untouched default
- *  `{mode:"auto"}`, no fixed/sci path involved; the healthy X axis in the
- *  same screenshot (Field, integer Oe values) never needed >0 fraction
- *  digits, so it never showed the bug). This replaces `undefined` (defer to
- *  uPlot's own formatter) as the "auto" mode's `values` callback: SAME
- *  Intl locale-grouping behaviour uPlot already provides, but with a
- *  `splitsIncrement`-derived floor instead of a hardcoded 3. On a linear
- *  axis (`pad`) it is also the minimum, so every label of one axis carries
- *  the same decimals (audit 6 P3); log and reciprocal ticks are uneven, so
- *  theirs stay unpadded. */
-const autoValues = (pad: boolean): TickValues => (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
-  const nf = autoNumberFormat(decimalsForIncrement(splitsIncrement(splits, foundIncr)), pad);
-  return splits.map((v) => (v == null ? null : stripNegZero(nf.format(v))));
-};
-const autoTickValues = autoValues(true), autoUnpadded = autoValues(false);
-
-/** Auto labels on a log axis: decade anchors on a multi-decade view, the
- *  ordinary auto labels on a sub-decade one (lib/logTicks.ts). */
-const autoLogTickValues: TickValues = (u, splits, ...rest) => logDecadeLabels(splits) ?? autoUnpadded(u, splits, ...rest);
-
 /** Decimal places needed for a value's MANTISSA (sci/eng modes) so that two
  *  ticks `incr` apart in the SAME decade never format to the same digits —
  *  `incr` is rescaled into the mantissa's own units (divided by the same
@@ -327,9 +237,12 @@ function dateTickFormatter(
 /** A date / time / datetime tick mode (`TickMode`). */
 const isDateMode = (mode?: string): mode is "date" | "time" | "datetime" => /date|time/.test(mode ?? "");
 
-export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear"): TickValues {
+export function tickFormatter(fmt?: AxisFormat, scale: AxisScale = "linear", factor = true): TickValues {
   const mode = fmt?.mode ?? "auto";
-  if (mode === "auto") return scale === "log" ? autoLogTickValues : scale === "linear" ? autoTickValues : autoUnpadded;
+  if (mode === "auto") {
+    if (scale !== "linear") return scale === "log" ? autoLogTickValues : autoUnpadded;
+    return factor && autoMultiplierAllowed(fmt) ? autoTickValues : autoPlainValues; // UX audit 8 #8: ×10ⁿ
+  }
   if (isDateMode(mode)) {
     // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
     // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
@@ -1108,6 +1021,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // scale. In particular, an auto-format linear primary axis plus a log y2
   // needs decade labels rather than inheriting y's linear formatter.
   const y2Values = tickFormatter(y2Fmt ?? yFmt, y2ScaleEff);
+  const factorAxes = ([[0, "x", xValues], [1, "y", yValues], [2, "y2", hasY2 && y2Values]] as const).filter((a) => a[2] === autoTickValues).map(([i, k]) => [i, k] as const);
   // A FIXED range (xLim/yLim/y2Lim — an applied Origin figure or a hand-typed
   // Inspector AxisLimits value) bypasses uPlot's own rangeLog decade-snapping
   // on a log axis, so supply our own splits generator there (see
@@ -1198,7 +1112,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   }
   // The extras' per-axis lists follow `axes`; Y3+ (lib/uplotMultiY.ts) drops Y2's slot when it has none and appends its own.
   const look: [unknown[], unknown[], unknown[], unknown[]] = [[xFmt, yFmt, y2Fmt ?? yFmt], [xScale, yScale, y2ScaleEff], [!!xLim, !!yLim, !!args.y2Lim], [args.xStep, args.yStep, args.y2Step]];
-  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: tickFormatter, splits: splitsFor, space: yTickSpace(tickPx), distr: scaleDistrProps, label: soloLabel, look }) : undefined;
+  const fitSlots = args.yAxes?.length ? extraYAxesPusher()?.(scales, axes, args.yAxes, { axis, payload, hidden: args.hidden, reach, scan: !xAscending, values: (f, s) => tickFormatter(f, s, false), splits: splitsFor, space: yTickSpace(tickPx), distr: scaleDistrProps, label: soloLabel, look }) : undefined;
 
   // Figures-audit #6: the Axis dialog's extras (minor/inward ticks, divide-by,
   // tick font, Ln) -- null, and nothing changed, when no axis has one. y2
@@ -1231,6 +1145,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     // painted sliver box) is extracted to `regionSelectPick` — see its doc.
     hooks: {
       setCursor: [regionLiveBoxHook(tool)],
+      draw: [drawAutoFactors], // UX audit 8 #8: the auto ×10ⁿ at the axis end
       setSelect: [
         (u: uPlot): void => {
           if (u.select.width <= 0) return;
@@ -1254,7 +1169,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     // which builds an Intl formatter per call.
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
     ...orientAxes(scales, axes, args.seriesStyles, args.exchangeXY), // horizontal bars: uplotOrient
-    padding: [null, hasY2 || args.yAxes?.length ? null : xLabelRightPad(tickPx), null, null],
+    padding: [autoFactorTopPad(null, factorAxes), hasY2 || args.yAxes?.length ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),
   };

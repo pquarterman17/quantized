@@ -36,23 +36,43 @@ function splitDecimals(a: number, b: number, from: number, cap: number): number 
 const isLarge = (v: number | undefined): v is number =>
   v != null && Number.isFinite(v) && Math.abs(v) >= BIG && Math.abs(v) < FULL;
 
-/** One column's formatter (`at(r)` reads row r of `n`, in data order). It is
- *  fmtCell unless the column's large values (|v| >= 1e4, exponential there)
- *  need more: in an all-integer column every value prints in full; otherwise,
+/** fmtCell's notations, each for a whole column (UX audit 8 #8: one column
+ *  read "1.553e-5" above "0.001591" when fmtCell chose per cell). */
+const expCell: CellFormatter = (v) => (v == null || !Number.isFinite(v) ? "—" : v.toExponential(3));
+const fixedCell: CellFormatter = (v) => {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const a = Math.abs(v);
+  const d = a > 0 && a < 0.1 ? 3 - Math.floor(Math.log10(a)) : 4;
+  return d > 20 ? v.toExponential(3) : v.toFixed(d); // never zeros where the value lives past 20 places
+};
+
+/** One column's formatter (`at(r)` reads row r of `n`, in data order), with
+ *  ONE notation for the whole column, picked from its magnitude range:
+ *  exponential when it reaches 1e4, or when it stays below 1 with values
+ *  under 1e-3 (a VSM moment column); otherwise fixed, with fmtCell's
+ *  significant figures. The column's large values (|v| >= 1e4) may need
+ *  more: in an all-integer column every value prints in full; otherwise,
  *  when two adjacent distinct large values print the same, the large values
  *  print fixed with the fewest decimals that tell every such pair apart (at
- *  most 15 significant digits). Values from 1e15 up stay exponential. Two
- *  O(n) passes; build it once per data change, never per cell. */
+ *  most 15 significant digits), and the rest of the column fixed too.
+ *  Values from 1e15 up stay exponential. Two O(n) passes; build it once per data change, never per cell. */
 export function columnFormatter(n: number, at: (r: number) => number | undefined): CellFormatter {
   let allInt = true;
-  let maxLarge = 0;
+  let maxLarge = 0, maxAbs = 0, minNonZero = Infinity;
   for (let r = 0; r < n; r++) {
     const v = at(r);
     if (v == null || !Number.isFinite(v)) continue;
     if (allInt && !Number.isInteger(v)) allInt = false;
-    if (isLarge(v) && Math.abs(v) > maxLarge) maxLarge = Math.abs(v);
+    const a = Math.abs(v);
+    if (isLarge(v) && a > maxLarge) maxLarge = a;
+    if (a > maxAbs) maxAbs = a;
+    if (a > 0 && a < minNonZero) minNonZero = a;
   }
-  if (maxLarge === 0) return fmtCell;
+  // Also exponential when fixed would need more than ~12 decimals for the
+  // smallest value, or the column spans more than 9 decades ([5, 3e-25]).
+  const wide = minNonZero < 1e-9 || maxAbs / minNonZero > 1e9;
+  const plain = maxAbs >= BIG || (maxAbs < 1 && minNonZero < 1e-3) || wide ? expCell : fixedCell;
+  if (maxLarge === 0) return plain;
   if (allInt) return (v) => (v != null && Number.isFinite(v) && Math.abs(v) < FULL ? v.toFixed(0) : fmtCell(v));
 
   const cap = Math.max(0, MAX_DIGITS - (Math.floor(Math.log10(maxLarge)) + 1));
@@ -70,8 +90,8 @@ export function columnFormatter(n: number, at: (r: number) => number | undefined
     }
     prev = v;
   }
-  if (decimals < 0) return fmtCell;
-  return (v) => (isLarge(v) ? v.toFixed(decimals) : fmtCell(v));
+  if (decimals < 0) return plain;
+  return (v) => (isLarge(v) ? v.toFixed(decimals) : fixedCell(v));
 }
 
 /** A timestamp cell (epoch seconds, UTC -- the importers' convention) as

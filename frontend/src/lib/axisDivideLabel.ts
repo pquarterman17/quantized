@@ -43,12 +43,26 @@ export function divideLabelSpot(
   bbox: { left: number; top: number; width: number; height: number },
   pr: number,
   px: number,
+  lift = 0,
 ): { x: number; y: number; align: CanvasTextAlign; baseline: CanvasTextBaseline } {
   const { left, top, width, height } = bbox;
-  if (side === 3) return { x: left, y: top - GAP * pr, align: "left", baseline: "bottom" };
-  if (side === 1) return { x: left + width, y: top - GAP * pr, align: "right", baseline: "bottom" };
+  // `lift`: a Y / Y2 factor rides above a shown top X axis (its device-px size) instead of under it.
+  if (side === 3) return { x: left, y: top - lift - GAP * pr, align: "left", baseline: "bottom" };
+  if (side === 1) return { x: left + width, y: top - lift - GAP * pr, align: "right", baseline: "bottom" };
   if (side === 2) return { x: left + width, y: top + height + X_LABEL_OFFSET * pr + px + GAP * pr, align: "right", baseline: "top" };
   return { x: left + width, y: top - X_LABEL_OFFSET * pr - px - GAP * pr, align: "right", baseline: "bottom" };
+}
+
+/** Device px a Y / Y2 factor must rise to clear the top X axis (axis side 0)
+ *  the plot draws, 0 without one: both would otherwise sit in the same band. */
+export function topAxisLift(u: uPlot, pr: number): number {
+  let lift = 0;
+  for (const axis of u.axes) {
+    if ((axis?.side as number | undefined) !== 0 || axis.show === false || (axis as { _show?: boolean })._show === false) continue;
+    const size = (axis as { _size?: number })._size ?? (typeof axis.size === "number" ? axis.size : 0);
+    lift = Math.max(lift, size * pr);
+  }
+  return lift;
 }
 
 /** The top padding (CSS px) a plot needs so a factor above a Y / Y2 axis is

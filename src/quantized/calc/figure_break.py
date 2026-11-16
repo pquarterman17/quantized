@@ -58,6 +58,7 @@ from quantized.calc.figure_render import in_render_scope, new_figure, savefig_by
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
+from quantized.calc.tick_multiplier import auto_multiplier_allowed, disable_auto_multiplier
 
 __all__ = ["render_breaks_impl"]
 
@@ -224,6 +225,8 @@ def render_breaks_impl(
         # A Y break is applied ONCE, below, to the shared y: per panel, the
         # first panel's data alone sized it and later panels' fell off-axis.
         apply_tick_formats(ax, x_fmt, panel_y_fmt)
+        if not auto_multiplier_allowed(y_fmt):  # a broken Y: no x10^n, as on screen
+            disable_auto_multiplier(ax.yaxis)
         if i == 0:
             handles, _ = ax.get_legend_handles_labels()
         if i > 0:

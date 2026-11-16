@@ -56,8 +56,8 @@ const screenVerticalTicks = (page: Page): Promise<number[]> =>
     const over = document.querySelector(".qzk-stage .u-over")!.getBoundingClientRect();
     const k = canvas.width / c.width;
     return draws
-      .filter((o) => o.op === "text" && /^-?[\d.,]+$/.test(o.text ?? "") && c.left + o.x! / k < over.left - 3) // right-aligned beside the plot (the bottom axis' first label is centred ON its edge)
-      .map((o) => Number((o.text ?? "").replace(/,/g, "")));
+      .filter((o) => o.op === "text" && /^[-−]?[\d.,]+$/.test(o.text ?? "") && c.left + o.x! / k < over.left - 3) // right-aligned beside the plot (the bottom axis' first label is centred ON its edge)
+      .map((o) => Number((o.text ?? "").replace(/,/g, "").replace(/^−/, "-")));
   });
 
 /** The numeric tick labels of the SVG's leftmost label column (the vertical axis). */

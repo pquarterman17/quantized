@@ -1,0 +1,15 @@
+{
+  "_doc": "UX audit 8 #8: AUTO linear tick labels in publication style -- no digit grouping, a true minus (U+2212), and a common x10^n factor at the axis end when every drawn tick is below 1e-2 or one reaches 1e4. Screen (frontend/src/lib/autoTickMultiplier.test.ts) and export (tests/test_tick_multiplier.py) must draw these labels and this factor (null = none) for the same drawn ticks.",
+  "cases": [
+    {"name": "M(T) moment in emu", "ticks": [0, 0.00025, 0.0005, 0.00075, 0.001, 0.00125, 0.0015, 0.00175], "labels": ["0.00", "0.25", "0.50", "0.75", "1.00", "1.25", "1.50", "1.75"], "factor": "×10⁻³"},
+    {"name": "field sweep of +-7e4 Oe", "ticks": [-60000, -40000, -20000, 0, 20000, 40000, 60000], "labels": ["−6", "−4", "−2", "0", "2", "4", "6"], "factor": "×10⁴"},
+    {"name": "small symmetric", "ticks": [-0.004, -0.002, 0, 0.002, 0.004], "labels": ["−4", "−2", "0", "2", "4"], "factor": "×10⁻³"},
+    {"name": "reaches 1e4 exactly", "ticks": [0, 5000, 10000], "labels": ["0.0", "0.5", "1.0"], "factor": "×10⁴"},
+    {"name": "reaches 1e-2 exactly: no factor", "ticks": [0, 0.005, 0.01], "labels": ["0.000", "0.005", "0.010"], "factor": null},
+    {"name": "below 1e4: no factor, no grouping", "ticks": [0, 2000, 4000, 6000, 8000], "labels": ["0", "2000", "4000", "6000", "8000"], "factor": null},
+    {"name": "temperature: unchanged", "ticks": [0, 100, 200, 300], "labels": ["0", "100", "200", "300"], "factor": null},
+    {"name": "true minus without a factor", "ticks": [-3, -2, -1, 0], "labels": ["−3", "−2", "−1", "0"], "factor": null},
+    {"name": "tight range far from zero: full labels, no factor", "ticks": [1000.001, 1000.0012, 1000.0014, 1000.0016, 1000.0018, 1000.002], "labels": ["1000.0010", "1000.0012", "1000.0014", "1000.0016", "1000.0018", "1000.0020"], "factor": null},
+    {"name": "tight tiny range: full labels, no factor", "ticks": [0.0010001, 0.0010002, 0.0010003], "labels": ["0.0010001", "0.0010002", "0.0010003"], "factor": null}
+  ]
+}
