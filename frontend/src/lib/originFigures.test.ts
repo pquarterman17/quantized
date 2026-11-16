@@ -1427,6 +1427,12 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
     expect(figureStatState(figure({ curves: [curve("column")] }), book)).toEqual({});
   });
 
+  it("an area curve fills down to zero and a step curve steps, both lines without the latent symbol", () => {
+    expect(originCurveSeriesStyle(curve("area"))).toEqual({ color: "#ff0000", width: 1, fill: "under" });
+    expect(originCurveSeriesStyle(curve("step"))).toEqual({ color: "#ff0000", width: 1, step: "post" });
+    expect(originCurveSeriesStyle({ plotType: "step" })).toEqual({ width: 1.5, step: "post" });
+  });
+
   it("a histogram of the X column opens the Stat Stage's histogram of that column", () => {
     const hist = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }] });
     expect(figureStatState(hist, book)).toEqual({
@@ -1438,6 +1444,31 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
     });
     const ofB = figure({ curves: [{ book: "Book1", x: "A", y: "B", plotType: "histogram" }] });
     expect(figureStatState(ofB, book).statPicks?.cols?.value).toEqual([0, "Height"]);
+  });
+
+  it("an all-box / violin / strip figure opens that Stat Stage mode with no group column", () => {
+    for (const mode of ["box", "violin", "strip"] as const) {
+      const fig = figure({
+        curves: [
+          { book: "Book1", x: "", y: "B", plotType: mode },
+          { book: "Book1", x: "", y: "A", plotType: mode },
+        ],
+      });
+      expect(figureStatState(fig, book)).toEqual({
+        statMode: true,
+        statPicks: {
+          mode,
+          cols: { group: null, group2: null, value: [0, "Height"], facet: null, color: null },
+        },
+      });
+    }
+    const mixed = figure({
+      curves: [
+        { book: "Book1", x: "", y: "B", plotType: "box" },
+        { book: "Book1", x: "", y: "B", plotType: "violin" },
+      ],
+    });
+    expect(figureStatState(mixed, book)).toEqual({});
   });
 
   it("line figures, mixed figures and unbound columns stay as they are", () => {

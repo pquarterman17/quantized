@@ -6,10 +6,14 @@ the four frontend rules involved, line for line:
 
 * ``lib/originFigureEntries.ts::resolveFigureDataset`` -- which imported
   dataset a figure opens on;
+* ``lib/originOverlayFigure.ts::buildOverlayDataset`` -- the apply's FIRST
+  branch: curves on >= 2 (book, X column) blocks (cross-book, or one book's
+  X,Y,X,Y multi-X sheet) draw as an overlay, each Y against its own X;
 * ``lib/originFigureSelection.ts::figureChannelSelection`` -- decoded curves
   -> ``xKey``/``yKeys`` (``null`` when nothing maps);
-* ``lib/originFigureSelection.ts::figureStatState`` -- an all-histogram
-  figure opens the Stat stage;
+* ``lib/originFigureSelection.ts::figureStatState`` -- an all-histogram /
+  all-box / all-violin / all-strip figure opens the Stat stage (a histogram of
+  the first curve; one box / violin / strip per plotted channel);
 * the dataset DEFAULT view the apply falls back to when the selection is
   ``null`` (``figureSelectionState``): ``lib/errorbars.ts::
   bookDefaultHiddenChannels`` (non-Y/Z designations hidden) plus
@@ -31,10 +35,12 @@ from import_compare import drawn_kind
 
 __all__ = [
     "channel_selection",
+    "overlay_curves",
     "default_view",
     "drawn_curves",
     "resolve_dataset",
     "stat_histogram_value",
+    "stat_view",
 ]
 
 # lib/columnmeta.ts DESIGNATIONS: anything else reads as undefined.
@@ -79,6 +85,47 @@ def resolve_dataset(
     return None
 
 
+def _channel_of(meta: Mapping[str, Any], letter: str) -> int:
+    """``channelOf``: the designated-X letter -> -2 (``.time``), else the
+    value-channel index, or -1."""
+    if letter and letter == str(meta.get("x_column_name") or ""):
+        return -2
+    letters = _letters(meta) or []
+    return letters.index(letter) if letter in letters else -1
+
+
+def overlay_curves(
+    figure: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]] | None:
+    """The curves ``buildOverlayDataset`` binds (``[{book, x, y, curve}]``,
+    in curve order), or ``None`` when the figure is not an overlay: fewer
+    than 2 bound curves or fewer than 2 distinct (book, X channel) blocks
+    (``assembleOverlay``)."""
+    bound: list[dict[str, Any]] = []
+    for curve in figure.get("curves") or []:
+        ds = next(
+            (c for c in candidates
+             if str(c["metadata"].get("origin_book") or "") == curve.get("book")),
+            None,
+        )
+        if ds is None:
+            continue
+        meta = ds["metadata"]
+        y = str(curve.get("y") or "")
+        if _channel_of(meta, y) == -1:
+            continue
+        cx = str(curve.get("x") or "")
+        x_ch = _channel_of(meta, cx) if cx else -2
+        if cx and x_ch == -1:
+            continue
+        x = str(meta.get("x_column_name") or "") if x_ch == -2 else (_letters(meta) or [])[x_ch]
+        bound.append({"book": str(meta.get("origin_book") or ""), "x": x, "y": y,
+                      "block": (id(ds), x_ch), "curve": curve})
+    if len(bound) < 2 or len({b["block"] for b in bound}) < 2:
+        return None
+    return bound
+
+
 def channel_selection(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> dict[str, Any] | None:
     """``{"xKey", "yKeys"}`` (``figureChannelSelection``, materialized data)."""
     meta = ds["metadata"]
@@ -119,19 +166,31 @@ def channel_selection(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> dict[
     return {"xKey": x_key, "yKeys": y_keys} if y_keys else None
 
 
-def stat_histogram_value(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> int | None:
-    """The histogram value channel ``figureStatState`` opens (``-1`` = the X
-    column), or ``None`` when the figure stays on the XY stage."""
+_STAT_MODES = ("histogram", "box", "violin", "strip")
+
+
+def stat_view(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> tuple[str, int] | None:
+    """``(mode, value channel)`` of the Stat stage ``figureStatState`` opens
+    (``-1`` = the X column), or ``None`` when the figure stays on the XY
+    stage: every curve one of ``_STAT_MODES``, all the same."""
     curves = figure.get("curves") or []
-    if not curves or any(c.get("plotType") != "histogram" for c in curves):
+    mode = curves[0].get("plotType") if curves else None
+    if mode not in _STAT_MODES or any(c.get("plotType") != mode for c in curves):
         return None
     meta = ds["metadata"]
     letters = _letters(meta) or []
     y = curves[0].get("y")
     xname = str(meta.get("x_column_name") or "")
     if y == xname:
-        return -1
-    return letters.index(y) if y in letters else None
+        return str(mode), -1
+    return (str(mode), letters.index(y)) if y in letters else None
+
+
+def stat_histogram_value(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> int | None:
+    """The histogram value channel ``figureStatState`` opens (``-1`` = the X
+    column), or ``None`` when the figure is not an all-histogram figure."""
+    got = stat_view(figure, ds)
+    return got[1] if got is not None and got[0] == "histogram" else None
 
 
 def default_view(ds: Mapping[str, Any]) -> dict[str, Any]:
@@ -160,13 +219,19 @@ def drawn_curves(
 ) -> dict[str, Any]:
     """``{"dataset", "via", "kind", "curves": [{book, x, y}]}`` for one figure.
 
-    ``via``: ``selection`` (decoded curves mapped), ``stat`` (histogram stage),
+    ``via``: ``overlay`` (curves on >= 2 (book, X) blocks, each Y against
+    its own X), ``selection`` (decoded curves mapped), ``stat`` (Stat stage),
     ``default`` (no decoded curve mapped: the dataset default view) or
     ``none`` (no dataset resolved: nothing drawn). ``kind`` is what that view
     draws (``import_compare.drawn_kind`` of the curves the selection mapped;
     ``default`` for the default view, ``none`` when nothing is drawn).
     """
     i = resolve_dataset(figure, candidates)
+    overlay = overlay_curves(figure, candidates)
+    if i is not None and overlay is not None:
+        return {"dataset": overlay[0]["book"], "via": "overlay",
+                "kind": drawn_kind([b["curve"] for b in overlay]),
+                "curves": [{"book": b["book"], "x": b["x"], "y": b["y"]} for b in overlay]}
     if i is None:
         return {"dataset": None, "via": "none", "kind": "none", "curves": []}
     ds = candidates[i]
@@ -174,12 +239,16 @@ def drawn_curves(
     book = str(meta.get("origin_book") or "")
     letters = _letters(meta) or []
     x_letter = str(meta.get("x_column_name") or "")
-    hv = stat_histogram_value(figure, ds)
-    if hv is not None:
-        y = x_letter if hv < 0 else letters[hv]
-        return {"dataset": book, "via": "stat", "kind": "histogram",
-                "curves": [{"book": book, "x": None, "y": y}]}
+    sv = stat_view(figure, ds)
     sel = channel_selection(figure, ds)
+    if sv is not None:
+        mode, hv = sv
+        if mode == "histogram":  # a histogram of the first curve's column
+            ys = [x_letter if hv < 0 else letters[hv]]
+        else:  # one box / violin / strip per plotted channel
+            ys = [letters[k] for k in sel["yKeys"]] if sel is not None else []
+        return {"dataset": book, "via": "stat", "kind": mode,
+                "curves": [{"book": book, "x": None, "y": y} for y in ys]}
     if sel is not None:
         x = letters[sel["xKey"]] if sel["xKey"] is not None else x_letter
         curves = [{"book": book, "x": x, "y": letters[k]} for k in sel["yKeys"]]

@@ -31,6 +31,7 @@ polar, waterfall, bubble or colour-map template name.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from quantized.io.origin_project.opju_column_fixed import record_prefix
@@ -56,9 +57,12 @@ _KINDS = (
 _OMIT = frozenset({"polar", "offset_stack"})
 
 
-def page_layer_kind(b: bytes, off: int, name: str) -> str | None:
+def page_layer_kind(
+    b: bytes, off: int, name: str, kinds: Sequence[tuple[re.Pattern[bytes], str]] = _KINDS
+) -> str | None:
     """The undecoded layer kind the graph page at ``off`` (window ``name``)
-    was made as, from its template name; ``None`` when none is named."""
+    was made as, from its template name; ``None`` when none is named.
+    ``kinds``: the (pattern, kind) table, first hit wins."""
     p = b.find(name.encode("utf-8"), off, off + 16 + len(name.encode("utf-8")))
     if p < 0:
         return None
@@ -66,7 +70,7 @@ def page_layer_kind(b: bytes, off: int, name: str) -> str | None:
     if got is None:
         return None
     buf, lit = got
-    for pat, kind in _KINDS:
+    for pat, kind in kinds:
         m = pat.search(buf, *_SCAN)
         if m and all(lit[m.start() : m.end()]):
             return kind
