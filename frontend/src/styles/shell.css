@@ -958,6 +958,8 @@ body {
 .qzk-legend.out .it { font-size: var(--font-size-sm); }
 .qzk-legend.out .it .qz-icon-btn { display: none; }
 .qzk-legend.out .qzk-legend-toggle { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qzk-legend-label { min-width: 0; overflow-wrap: anywhere; }
+.qzk-legend.out .qzk-legend-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* Owner 2026-07-09 (item 2, "up the default x/y axis legend and label
    size"): one step up the density-scaled type ramp from --font-size-sm
    (was 11px @ regular) to --font-size (13px @ regular / 12 compact / 14

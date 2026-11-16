@@ -1,27 +1,35 @@
 // UX-A: the top of the Inspector on the Plot tab — names what is selected
-// (a curve, an axis, the legend, an annotation or a shape), lets a keyboard
-// user pick any plot object from a list (the canvas click is mouse-only), and
-// shows the selection's own controls when they are not a whole card. A curve,
-// axis, annotation or shape hoists its card to just below this section
-// instead (Inspector.tsx), so no control exists twice.
+// (a curve, an axis, the legend, an annotation or a shape) in a polite live
+// region, lets a keyboard user pick any plot object from a list (the canvas
+// click is mouse-only), and shows the selection's own controls when they are
+// not a whole card: the legend's, or an axis' key fields (AxisQuickFields).
+// A curve, axis, annotation or shape also hoists its card to just below this
+// section (Inspector.tsx).
 
 import { useMemo } from "react";
 
 import { effectiveChannels } from "../../lib/plotdata";
 import type { Dataset } from "../../lib/types";
-import { openFigureDialog, type AxisId } from "../../store/figureDialogs";
-import { clearAllSelection, parseSelectionKey, selectPlotObject, selectionKey, usePlotSelection } from "../../store/plotSelection";
+import {
+  clearAllSelection,
+  parseSelectionKey,
+  selectPlotObject,
+  selectionKey,
+  usePlotSelection,
+} from "../../store/plotSelection";
 import { useApp } from "../../store/useApp";
 import { IconButton } from "../primitives/IconButton";
 import { Select } from "../primitives";
+import AxisQuickFields, { AXIS_NAMES } from "./AxisQuickFields";
 import LegendControls from "./LegendControls";
+import "./inspectorSelection.css";
 
-const AXIS_NAMES: Record<AxisId, string> = { x: "X axis", y: "Y axis", y2: "Y2 (right) axis" };
 /** The `<select>` value standing for an annotation / shape selection. */
 const OBJECT = "object";
 
 export default function InspectorSelection({ active }: { active: Dataset }) {
   const sel = usePlotSelection((s) => s.sel);
+  const onCanvas = usePlotSelection((s) => s.onCanvas);
   const annotation = useApp((s) => s.annotations.find((a) => a.id === s.selectedAnnotationId));
   const shape = useApp((s) => s.shapes.find((x) => x.id === s.selectedShapeId));
   const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0);
@@ -45,24 +53,28 @@ export default function InspectorSelection({ active }: { active: Dataset }) {
     objectName ??
     (sel?.kind === "series" ? curveName(sel.channel) : sel?.kind === "axis" ? AXIS_NAMES[sel.axis] : sel ? "Legend" : null);
 
+  // Only what this view can select: a polar / statistics / multi-panel view
+  // has no on-plot selection, so its picker lists no plot objects.
   const options = [
     { value: "", label: "Nothing selected" },
     ...(objectName ? [{ value: OBJECT, label: objectName }] : []),
-    ...channels.map((c) => ({ value: `series:${c}`, label: curveName(c) })),
-    { value: "axis:x", label: AXIS_NAMES.x },
-    { value: "axis:y", label: AXIS_NAMES.y },
-    ...(hasY2 ? [{ value: "axis:y2", label: AXIS_NAMES.y2 }] : []),
-    ...(showLegend || sel?.kind === "legend" ? [{ value: "legend", label: "Legend" }] : []),
+    ...(onCanvas
+      ? [
+          ...channels.map((c) => ({ value: `series:${c}`, label: curveName(c) })),
+          { value: "axis:x", label: AXIS_NAMES.x },
+          { value: "axis:y", label: AXIS_NAMES.y },
+          ...(hasY2 ? [{ value: "axis:y2", label: AXIS_NAMES.y2 }] : []),
+          ...(showLegend || sel?.kind === "legend" ? [{ value: "legend", label: "Legend" }] : []),
+        ]
+      : []),
   ];
   const value = objectName ? OBJECT : selectionKey(sel);
 
   return (
     <section className="qzk-inspector-selection" aria-label="Selection" data-selected={name ? value : undefined}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <span className="qzk-field-lbl" style={{ margin: 0 }}>
-          Selected
-        </span>
-        <strong style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={name ?? undefined}>
+      <div className="qzk-sel-head">
+        <span className="qzk-field-lbl">Selected</span>
+        <strong className="qzk-sel-name" role="status" aria-live="polite" title={name ?? undefined}>
           {name ?? "Nothing"}
         </strong>
         {name && (
@@ -83,25 +95,18 @@ export default function InspectorSelection({ active }: { active: Dataset }) {
         }}
       />
       {!name && (
-        <p className="qzk-ds-meta" style={{ margin: "6px 0 0", whiteSpace: "normal" }}>
-          Click a curve, axis or legend on the plot (Pointer tool) to edit it here.
+        <p className="qzk-ds-meta qzk-sel-hint">
+          {onCanvas
+            ? "Click a curve, axis or legend on the plot (Pointer tool) to edit it here."
+            : "This view has no on-plot selection; its settings are in the cards below."}
         </p>
       )}
       {sel?.kind === "legend" && !objectName && (
-        <div style={{ marginTop: 6 }}>
+        <div className="qzk-sel-fields">
           <LegendControls />
         </div>
       )}
-      {sel?.kind === "axis" && !objectName && (
-        <button
-          type="button"
-          className="qz-btn"
-          style={{ marginTop: 6 }}
-          onClick={() => openFigureDialog({ kind: "axis", axis: sel.axis })}
-        >
-          {AXIS_NAMES[sel.axis]} settings…
-        </button>
-      )}
+      {sel?.kind === "axis" && !objectName && <AxisQuickFields key={sel.axis} axis={sel.axis} />}
     </section>
   );
 }

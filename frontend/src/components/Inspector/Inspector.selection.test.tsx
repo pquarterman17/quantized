@@ -24,7 +24,7 @@ const data: DataStruct = {
 beforeEach(() => {
   localStorage.removeItem(INSPECTOR_CARDS_KEY);
   useInspectorCards.setState({ open: {} });
-  usePlotSelection.setState({ sel: null });
+  usePlotSelection.setState({ sel: null, onCanvas: true });
   useFigureDialog.setState({ open: null });
   useApp.setState({
     datasets: [{ id: "d1", name: "sample", data }],
@@ -93,6 +93,39 @@ describe("selection-driven Inspector", () => {
     expect(useFigureDialog.getState().open).toEqual({ kind: "axis", axis: "y" });
   });
 
+  it("a selected axis shows THAT axis' scale, limits and title inline", () => {
+    useApp.setState({ yScale: "linear", yLim: null, xLim: null, yAxisLabel: "" });
+    render(<Inspector />);
+    select({ kind: "axis", axis: "y" });
+    const section = screen.getByRole("region", { name: "Selection" });
+    fireEvent.change(within(section).getByRole("combobox", { name: "Selected Y axis scale" }), { target: { value: "log" } });
+    expect(useApp.getState().yScale).toBe("log");
+    const min = within(section).getByRole("textbox", { name: "Selected Y axis minimum" });
+    fireEvent.change(min, { target: { value: "0.5" } });
+    fireEvent.blur(min);
+    expect(useApp.getState().yLim).toEqual([0.5, null]);
+    expect(useApp.getState().xLim).toBeNull(); // only the selected axis
+    const title = within(section).getByRole("textbox", { name: "Selected Y axis title" });
+    fireEvent.change(title, { target: { value: "M (emu)" } });
+    fireEvent.blur(title);
+    expect(useApp.getState().yAxisLabel).toBe("M (emu)");
+  });
+
+  it("announces the selection in a polite live region", () => {
+    render(<Inspector />);
+    select({ kind: "series", channel: 0 });
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent("Curve: Moment");
+  });
+
+  it("a view with no on-plot selection lists no plot objects in the picker", () => {
+    usePlotSelection.setState({ onCanvas: false });
+    render(<Inspector />);
+    const picker = screen.getByRole("combobox", { name: "Select plot object" });
+    expect(within(picker).getAllByRole("option").map((o) => o.textContent)).toEqual(["Nothing selected"]);
+  });
+
   it("a selected legend shows its controls in the Selection section", () => {
     render(<Inspector />);
     select({ kind: "legend" });
@@ -134,6 +167,18 @@ describe("selection-driven Inspector", () => {
 });
 
 describe("contextual cards", () => {
+  it("the Plot tab lists the plot cards first, then the data cards under a Data heading", () => {
+    render(<Inspector />);
+    const titles = cardTitles();
+    expect(titles.slice(0, 5)).toEqual(["Channels", "Plot objects", "Axes", "Titles & labels", "Series style"]);
+    const heading = screen.getByRole("heading", { name: "Data" });
+    const notes = card("Notes")!;
+    const shapes = card("Shapes")!;
+    expect(shapes.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(titles.indexOf("Metadata")).toBeGreaterThan(titles.indexOf("Shapes"));
+  });
+
   it("the Worksheet tab lists only the data cards", () => {
     useApp.setState({ stageTab: "worksheet" });
     render(<Inspector />);

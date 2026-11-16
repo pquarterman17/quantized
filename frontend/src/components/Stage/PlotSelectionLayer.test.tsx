@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render } from "@testing-library/react";
 import type uPlot from "uplot";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pressEscape } from "../../test/pressEscape";
 import { makeFakePlot, OVER, type FakePlot } from "../../test/plotSelectionFixture";
@@ -59,7 +59,7 @@ describe("PlotSelectionLayer", () => {
       fireEvent.click(plot.axisX, { clientX: 100, clientY: 140 });
     });
     expect(usePlotSelection.getState().sel).toEqual({ kind: "axis", axis: "x" });
-    const box = container.querySelector(".qzk-selection-halo rect");
+    const box = container.querySelector(".qzk-selection-box");
     expect(box?.getAttribute("display")).toBe("inline");
     expect(box?.getAttribute("y")).toBe("120");
   });
@@ -113,4 +113,76 @@ describe("PlotSelectionLayer", () => {
     view.unmount();
     expect(usePlotSelection.getState().sel).toBeNull();
   });
+
+  it("a click on a legend row selects that curve; Alt+click is left to the row's hide/show", () => {
+    mount();
+    const row = plot.legend.appendChild(document.createElement("div"));
+    row.dataset.channel = "1";
+    act(() => {
+      fireEvent.mouseDown(row, { clientX: 130, clientY: 35 });
+      fireEvent.click(row, { clientX: 130, clientY: 35 });
+    });
+    expect(usePlotSelection.getState().sel).toEqual({ kind: "series", channel: 1 });
+    act(() => usePlotSelection.setState({ sel: null }));
+    act(() => {
+      fireEvent.mouseDown(row, { clientX: 130, clientY: 35 });
+      fireEvent.click(row, { clientX: 130, clientY: 35, altKey: true });
+    });
+    expect(usePlotSelection.getState().sel).toBeNull();
+  });
+
+  it("a click with no press of its own is not measured against a stale one", () => {
+    mount();
+    // A press far away, then its click (a drag: ignored) …
+    act(() => clickData(2, 2, [OVER.left + 80, OVER.top + 10]));
+    // … then a click with no pointerdown (keyboard / synthetic): still a click.
+    act(() => {
+      fireEvent.click(plot.over, { clientX: OVER.left + 20, clientY: OVER.top + 80 });
+    });
+    expect(usePlotSelection.getState().sel).toEqual({ kind: "series", channel: 0 });
+  });
+
+  it("recomputes the halo only when the plot changes, not on every frame", () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+    try {
+      const calls = vi.spyOn(plot.u, "valToPos");
+      const { container } = mount();
+      act(() => clickData(2, 2));
+      const path = () => container.querySelector(".qzk-selection-halo path")?.getAttribute("d");
+      const first = path();
+      const n = calls.mock.calls.length;
+      act(() => {
+        vi.advanceTimersByTime(500); // ~30 frames, nothing changed
+      });
+      expect(calls.mock.calls.length).toBe(n);
+      // A zoom: the next frame redraws the halo.
+      plot.u.scales.x.min = 1;
+      act(() => {
+        vi.advanceTimersByTime(20);
+      });
+      expect(calls.mock.calls.length).toBeGreaterThan(n);
+      expect(path()).not.toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears a curve selection when the dataset's columns change (an index would name another curve)", () => {
+    const data = { time: [0, 1], values: [[1, 2], [3, 4]], labels: ["A", "B"], units: ["", ""], metadata: {} };
+    useApp.setState({ datasets: [{ id: "d1", name: "s", data }], activeId: "d1" });
+    mount();
+    act(() => clickData(2, 2));
+    expect(usePlotSelection.getState().sel).not.toBeNull();
+    act(() => useApp.setState({ datasets: [{ id: "d1", name: "s", data: { ...data, labels: ["B", "C"] } }] }));
+    expect(usePlotSelection.getState().sel).toBeNull();
+  });
+
+  it("clears a stale Y2 axis selection when the last Y2 curve goes", () => {
+    useApp.setState({ y2Keys: [1] });
+    mount();
+    act(() => usePlotSelection.setState({ sel: { kind: "axis", axis: "y2" } }));
+    act(() => useApp.setState({ y2Keys: [] }));
+    expect(usePlotSelection.getState().sel).toBeNull();
+  });
 });
+

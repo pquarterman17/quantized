@@ -34,11 +34,16 @@ import TitlesCard from "./TitlesCard";
 import { useInspectorCardState } from "./useInspectorCardState";
 import { folderPathLabel } from "../../lib/foldertree";
 import { CardStateContext } from "../primitives/cardState";
-import { selectionKey, useExclusiveSelection, usePlotSelection } from "../../store/plotSelection";
+import { selectionKey, useExclusiveSelection, usePlotSelection, useSelectionGuards } from "../../store/plotSelection";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
 /** Cards that edit the plot, not the data: hidden off the Plot / Map tabs. */
 const PLOT_CARDS = new Set(["Plot objects", "Axes", "Titles & labels", "Reference lines", "Region shades", "Annotations", "Shapes", "Series style"]);
+/** The Plot tab's own order: the plot's series list and the plot cards first;
+ *  every other card follows under a "Data" heading. */
+const PLOT_TAB_ORDER = ["Channels", "Plot objects", "Axes", "Titles & labels", "Series style", "Reference lines", "Region shades", "Annotations", "Shapes"];
+/** Rank of a card after every PLOT_TAB_ORDER entry: the data cards. */
+const DATA_RANK = 99;
 
 export default function Inspector() {
   const active = useActiveDataset();
@@ -53,6 +58,7 @@ export default function Inspector() {
   const plotTab = ctx === "plot";
 
   useExclusiveSelection();
+  useSelectionGuards();
   const sel = usePlotSelection((s) => s.sel);
   const annotationId = useApp((s) => s.selectedAnnotationId);
   const shapeId = useApp((s) => s.selectedShapeId);
@@ -86,9 +92,9 @@ export default function Inspector() {
   if (!hasData) {
     return (
       <aside className="qzk-inspector" aria-label="Inspector">
-        <section className="qzk-inspector-empty" aria-label="Nothing to inspect" style={{ padding: "12px 4px" }}>
+        <section className="qzk-inspector-empty" aria-label="Nothing to inspect">
           <strong>Nothing to inspect yet</strong>
-          <p className="qzk-ds-meta" style={{ margin: "6px 0 0" }}>
+          <p className="qzk-ds-meta">
             Import data or drop files into the Library. Then click a curve, axis or legend on the plot and its
             properties appear here.
           </p>
@@ -98,7 +104,8 @@ export default function Inspector() {
   }
 
   const seriesChannel = sel?.kind === "series" ? sel.channel : undefined;
-  // Order is the pre-UX-A order; `show` drops what this context doesn't use.
+  // The pre-UX-A order (kept off the Plot tab); `shown` drops what this
+  // context doesn't use.
   const cards: [string, ReactNode][] = [
     ["Notes", <NotesCard active={active} />],
     ["Channels", <ChannelsCard active={active} />],
@@ -128,8 +135,11 @@ export default function Inspector() {
   ];
   const plotLike = plotTab || ctx === "map";
   const shown = cards.filter(([id]) => plotLike || !PLOT_CARDS.has(id));
-  // The selection's card first, right under the Selection section.
-  if (focus) shown.sort(([a], [b]) => Number(b === focus) - Number(a === focus));
+  // The selection's card first, right under the Selection section; on the
+  // Plot tab the plot cards next, then the data cards after a "Data" heading.
+  const rank = (id: string) => (id === focus ? -1 : plotTab ? PLOT_TAB_ORDER.indexOf(id) + 1 || DATA_RANK : 0);
+  shown.sort(([a], [b]) => rank(a) - rank(b));
+  const dataStart = plotTab ? shown.findIndex(([id]) => rank(id) === DATA_RANK) : -1;
 
   return (
     <aside ref={asideRef} className="qzk-inspector" aria-label="Inspector" data-context={ctx}>
@@ -144,8 +154,11 @@ export default function Inspector() {
 
         {plotTab && active && <InspectorSelection active={active} />}
 
-        {shown.map(([id, node]) => (
-          <Fragment key={id}>{node}</Fragment>
+        {shown.map(([id, node], i) => (
+          <Fragment key={id}>
+            {i === dataStart && <h3 className="qzk-inspector-group">Data</h3>}
+            {node}
+          </Fragment>
         ))}
       </CardStateContext.Provider>
     </aside>
