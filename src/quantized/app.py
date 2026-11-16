@@ -73,6 +73,7 @@ from quantized.routes import (
     semiconductor,
     sims,
     sld,
+    source_watch,
     spectral,
     statplots,
     stats,
@@ -251,6 +252,7 @@ def create_app(
     application.include_router(rsm.router)
     application.include_router(xray.router)
     application.include_router(sld.router)
+    application.include_router(source_watch.router)
     application.include_router(spectral.router)
     application.include_router(crystallography.router)
     application.include_router(composition.router)

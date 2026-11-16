@@ -13,6 +13,7 @@ import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { multiSelected } from "./multiSelected";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
+import { canAutoUpdate, toggleAutoUpdate, watchedIds } from "./sourceWatchMenu";
 import { useApp } from "../store/useApp";
 
 // Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
@@ -71,6 +72,19 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.reimport",
     label: (t) => (t.dataset.source ? "Re-import from source" : "Re-import from file…"),
     run: (t) => void useApp.getState().reimportDataset(t.dataset.id),
+  },
+  // Gap audit 5 lane J: Origin's Data Connector auto-update (lib/sourceWatch.ts, lazy).
+  // Per worksheet, this session only; needs a source PATH, which a browser upload lacks.
+  {
+    id: "dataset.autoUpdate",
+    label: "Auto-update from source",
+    checked: (t) => watchedIds.has(t.dataset.id),
+    enabled: (t) => watchedIds.has(t.dataset.id) || canAutoUpdate(t.dataset).ok,
+    disabledReason: (t) => {
+      const can = canAutoUpdate(t.dataset);
+      return can.ok ? "" : can.reason;
+    },
+    run: (t) => void toggleAutoUpdate(t.dataset.id),
   },
   {
     id: "dataset.split",

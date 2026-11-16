@@ -75,7 +75,7 @@ import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { originBookErrorRoles } from "../lib/originBookRoles";
-import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
+import { reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
 import type { PlotView } from "../lib/plotview";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
@@ -128,8 +128,11 @@ export interface ReimportMerge {
  *  above: the caller decides what "validation failed" means for it (a single
  *  reimport's catch-all toast below, or one row of `store/reimportAll.ts`'s
  *  per-source problem report). */
-export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw: DataStruct): Promise<ReimportMerge> {
-  const shapeChanged = reimportShapeChanged(ds, freshRaw);
+export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw: DataStruct, grow?: { base?: DataStruct }): Promise<ReimportMerge> {
+  // `grow` (the live source watch, store/reimportLive.ts): a file whose last-read rows (`base`) are an
+  // untouched prefix of the new ones, same columns, is not a reshape -- view, styles, excluded rows stay.
+  const columnsChanged = reimportColumnsChanged(ds, freshRaw);
+  const shapeChanged = grow && !columnsChanged && reimportIsAppend(ds, freshRaw, grow.base) ? false : reimportShapeChanged(ds, freshRaw);
   let newData = freshRaw;
   if (ds.corrections) {
     const bg = ds.bgRef && ds.bgRef.datasetId !== ds.id ? await get().resolveDataset(ds.bgRef.datasetId) : undefined;
@@ -140,7 +143,6 @@ export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw:
     }
     newData = await applyCorrectionsApi(req);
   }
-  const columnsChanged = reimportColumnsChanged(ds, freshRaw);
   const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
   // perf(reimport): only fetched when actually needed, during this async
   // staging phase -- never on the synchronous commit path (applyReimportMerge).
@@ -189,9 +191,10 @@ export function applyReimportMerge(
   ds: Dataset,
   merge: ReimportMerge,
   historyToken?: HistoryBatchToken,
+  quiet = false,
 ): void {
   const { newData, shapeChanged, columnsChanged, viewReset, reshape } = merge;
-  get().recordHistory("re-import dataset", historyToken);
+  if (!quiet) get().recordHistory("re-import dataset", historyToken); // `quiet`: the live watch records its own step, or none
   // PR M booked finding (G5 canonical-state review): resetFigureDocumentForReshape
   // now clears a stale groupKey (see its module doc) — capture whether any
   // bound figure actually HAD one set, BEFORE the reset, so the toast below
@@ -326,7 +329,7 @@ export function applyReimportMerge(
     // ValueError at export/preview time (lib/figureSpec.ts's group_col).
     toast(`"${ds.name}" re-import: a figure's grouping column no longer exists — grouping was reset`, "info");
   }
-  get().recordMacro(`Re-import "${ds.name}"`, `qz.reimportDataset(${lit(ds.name)})`);
+  if (!quiet) get().recordMacro(`Re-import "${ds.name}"`, `qz.reimportDataset(${lit(ds.name)})`);
   get().touchDataset(ds.id);
 }
 

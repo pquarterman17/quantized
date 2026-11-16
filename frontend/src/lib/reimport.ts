@@ -75,6 +75,23 @@ export function reimportShapeChanged(ds: Dataset, fresh: DataStruct): boolean {
   return fresh.time.length !== ds.data.time.length || reimportColumnsChanged(ds, fresh);
 }
 
+/** Are the file rows `ds` was last filled with an untouched PREFIX of `fresh` (the file only
+ *  gained rows)? `base` is those rows when the caller knows them (the source watch passes the
+ *  generation it installed, so a hand-edited CELL does not make a growing file a reshape);
+ *  else the file's own rows `ds` holds -- `ds.raw` when corrections are applied. Base columns
+ *  only, so row-indexed state (excluded rows, the view) stays valid only for a genuine append. */
+export function reimportIsAppend(ds: Dataset, fresh: DataStruct, base?: DataStruct): boolean {
+  const old = base ?? (ds.corrections && ds.raw ? ds.raw : ds.data);
+  const cols = Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
+  if (fresh.time.length < old.time.length) return false;
+  const same = (a: number, b: number): boolean => a === b || (a !== a && b !== b);
+  for (let r = 0; r < old.time.length; r++) {
+    if (!same(old.time[r], fresh.time[r])) return false;
+    for (let c = 0; c < cols; c++) if (!same(old.values[r]?.[c], fresh.values[r]?.[c])) return false;
+  }
+  return true;
+}
+
 /** The COLUMN half of `reimportShapeChanged` alone. Every column-indexed
  *  field — filter/channelRoles/channelTypes/formulas/errorRoles — stays
  *  provably valid across a row-only reshape (column meaning is untouched),

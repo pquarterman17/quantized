@@ -228,6 +228,12 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "never remove anything but a tree this module itself made; never "
         "touches an original dataset source path."
     ),
+    "routes/_liveimport.py": (
+        "_read: writes the bytes just read from a watched source into a "
+        "COPY inside a fresh tempfile.TemporaryDirectory (removed on exit), "
+        "named by the source's basename -- never the source path itself, "
+        "and the source is only ever opened for reading."
+    ),
     "routes/_uploadcache.py": (
         "UploadCache.stage/_commit/_save/_evict: writes, renames "
         "(os.replace) and evicts (unlink/rmdir) entries + its index.json "
