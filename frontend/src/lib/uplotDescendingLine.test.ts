@@ -3,7 +3,7 @@
 // descending FTIR spectrum (4000 -> 400 cm^-1, thousands of points) every
 // point then collapsed into the first pixel column and the trace drew as one
 // vertical line. A recording Path2D stands in for jsdom's missing one.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   // Extends the real Path2D (installed by test/setup): the canvas backend rejects a clip() of anything else.
@@ -25,8 +25,11 @@ vi.hoisted(() => {
 import uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
+import { regionDecorSettled } from "./regionDecorLoader";
 import { buildOpts } from "./uplotOpts";
 
+// A descending line is drawn by the region-decor startup chunk (lib/uplotLoopLine.ts).
+beforeAll(() => regionDecorSettled);
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
 

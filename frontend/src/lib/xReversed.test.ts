@@ -29,9 +29,12 @@ import { viewOverrides } from "./figureViewOverrides";
 import type { PlotPayload } from "./plotdata";
 import { defaultPlotView, sanitizePlotView } from "./plotview";
 import type { Dataset } from "./types";
+import { regionDecorSettled } from "./regionDecorLoader";
 import { buildOpts } from "./uplotOpts";
 import { loadToolPlugins } from "./axisExtrasHook";
 
+// A descending line is drawn by the region-decor startup chunk (lib/uplotLoopLine.ts).
+beforeAll(() => regionDecorSettled);
 const live: uPlot[] = [];
 afterEach(() => live.splice(0).forEach((u) => u.destroy()));
 

@@ -16,6 +16,7 @@ import { offAutoscale } from "./overlayAutoscale";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
 import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
+import { regionDecor } from "./regionDecorLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -72,27 +73,35 @@ export function buildSeriesDefs(
   // crossed that interval (an overlay's block rows are all nulls). A loop
   // breaks the line by not drawing across a null (or a value a log axis cannot
   // place) and keeps no clip.
-  const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
+  // `own` (the linear builder): once the region-decor startup chunk has landed,
+  // lib/uplotLoopLine.ts builds the stroke over the same runs, with a bounded
+  // raster cost (its header), and the builder gives only the first run's fill
+  // and band. Before that, every run is the builder's, as it always was.
+  const fullLine = (b: uPlot.Series.PathBuilder, own = false): uPlot.Series.PathBuilder =>
     (u, sidx) => {
       const ys = u.data[sidx] as readonly (number | null | undefined)[];
       const last = u.data[0].length - 1;
       const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
       const log = (u.scales?.[u.series?.[sidx]?.scale ?? "y"]?.distr as number | undefined) === 3;
       const drawable = (i: number) => { const y = ys[i]; return y != null && Number.isFinite(y) && !(log && y <= 0); };
+      const ll = own ? regionDecor() : null;
+      const ink = ll?.loopInk(u);
       let out: uPlot.Series.Paths | null = null;
       for (let s = 0; s <= last; s++) {
         if (!drawable(s)) continue;
         let e = s;
         while (e < last && drawable(e + 1)) e++;
         for (let i = s; ; i += run) {
-          const p = b(u, sidx, i, Math.min(e, i + run));
+          const i1 = Math.min(e, i + run);
+          if (ink) ll!.strokeRows(u, sidx, i, i1, ink);
+          const p: uPlot.Series.Paths | null = ink && out ? null : b(u, sidx, i, i1);
           if (p && out) (out.stroke as Path2D).addPath(p.stroke as Path2D);
           else if (p) out = { ...p, clip: null };
           if (i + run >= e) break;
         }
         s = e;
       }
-      return out ?? b(u, sidx, 0, last);
+      return !out ? b(u, sidx, 0, last) : ink ? ll!.finishLoop(out, ink, u, sidx) : out;
     };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
@@ -228,8 +237,9 @@ export function buildSeriesDefs(
         // must not read as an explicit choice, or the pref would un-step this.
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
       } else if (!xAscending && width > 0 && args.linearPaths) {
-        // Loop rendering: draw the line over every point in acquisition order.
-        def.paths = fullLine(args.linearPaths);
+        // Loop rendering: draw the line over every point in acquisition order,
+        // with the stroke built by lib/uplotLoopLine.ts (bounded raster cost).
+        def.paths = fullLine(args.linearPaths, true);
       }
       return def;
     }),
