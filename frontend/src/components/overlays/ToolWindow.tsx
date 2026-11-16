@@ -17,6 +17,7 @@
 
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
+import { isModalOpen } from "../../lib/appShortcuts";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import {
   clampToolWindowPos,
@@ -223,9 +224,17 @@ export default function ToolWindow({
   // `autoFocus` during that commit and this passive effect runs after it, so
   // the first cut took focus back off any panel that opens straight into a
   // field — the opposite of what its own commit body claimed.
+  //
+  // Never while a modal dialog is open: a window opened under it (from the
+  // store, a background operation) is background and must not take focus.
+  // The inert walk normally refuses it, but a DOCKED window's layout-effect
+  // claim (useToolWindowDock) re-renders synchronously, which flushes this
+  // passive effect early -- before the walk's MutationObserver has marked the
+  // new node inert -- and WebKit and Firefox then moved focus out of the
+  // dialog (modal-inert.spec, CI on PR #723). This gate does not race.
   useEffect(() => {
     const frame = winRef.current;
-    if (frame && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
+    if (frame && !isModalOpen() && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
   }, []);
 
   const onTitleDown = (e: React.PointerEvent) => {
