@@ -160,6 +160,19 @@ export default function StatusBar() {
         >
           ⚠ autosave failing
         </span>
+      ) : health.restoreError ? (
+        // Review R8: a restore still pending is not an autosave failure —
+        // saves may be succeeding. Its own label; a click re-offers the
+        // Append / Replace / Discard prompt once there is one to answer.
+        <button
+          type="button"
+          className="qzk-conn-stale"
+          style={{ background: "none", border: "none", padding: 0, font: "inherit", cursor: "default" }}
+          title={health.restoreError}
+          onClick={() => void import("../../lib/lateRestore").then((m) => m.reofferLateRestore())}
+        >
+          ⚠ previous session not restored
+        </button>
       ) : (
         health.savedAt != null && (
           <span

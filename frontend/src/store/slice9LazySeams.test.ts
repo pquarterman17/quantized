@@ -35,6 +35,11 @@ import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 import { resetWorkspaceIOCoreForTests, warmSaveModules } from "./workspaceIOLazy";
 
+// The prompt is a lazy chunk; across this file's `vi.resetModules` a real one
+// would bind to a different store instance, so the hand-off is what is checked.
+const { offerLateRestore } = vi.hoisted(() => ({ offerLateRestore: vi.fn<(picked: { workspace: { datasets: { name: string }[] } }) => void>() }));
+vi.mock("../lib/lateRestore", () => ({ offerLateRestore }));
+
 const ds: Dataset = {
   id: "a",
   name: "a.dat",
@@ -65,6 +70,7 @@ function resetAllLoaders(): void {
 }
 
 beforeEach(() => {
+  vi.mocked(offerLateRestore).mockClear();
   resetAllLoaders();
   setAutosaveBackend(memoryBackend());
   useToasts.setState({ toasts: [] });
@@ -160,8 +166,8 @@ describe("a failed startup restore is retried (review N2)", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     renderHook(() => useWorkspaceAutosave());
     await settleAll();
-    // The failure is on the PERSISTENT health line, not only a toast.
-    expect(autosaveHealth().error).toMatch(/^Couldn't restore the autosaved library/);
+    // The failure is on the PERSISTENT health line (its own field), not only a toast.
+    expect(autosaveHealth().restoreError).toMatch(/^Couldn't restore the autosaved library/);
     vi.doUnmock("../lib/workspace");
     vi.resetModules();
   }
@@ -170,24 +176,29 @@ describe("a failed startup restore is retried (review N2)", () => {
     vi.useRealTimers();
   });
 
-  it("restores once the code loads, and clears the health line", async () => {
+  // Review 3 (R2/R3/R7): a restore that lands LATE is never applied
+  // automatically — it goes to the Append / Replace / Discard prompt
+  // (lib/lateRestore.ts, whose answers its own spec covers).
+  it("a late success is offered, not applied — into an empty library too", async () => {
     await failFirstRestore();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
     await settleAll();
-    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["a.dat"]);
-    expect(autosaveHealth().error).toBeNull();
+    expect(useApp.getState().datasets).toEqual([]);
+    expect(offerLateRestore).toHaveBeenCalledTimes(1);
+    expect(offerLateRestore.mock.calls[0][0].workspace.datasets.map((d) => d.name)).toEqual(["a.dat"]);
   });
 
-  it("adds the restored library BESIDE work started meanwhile, never over it", async () => {
+  it("…and beside work started meanwhile, nothing is mixed in", async () => {
     await failFirstRestore();
     act(() => useApp.setState({ datasets: [{ ...ds, id: "b", name: "b.dat" }] }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
     await settleAll();
-    expect(useApp.getState().datasets.map((d) => d.name).sort()).toEqual(["a.dat", "b.dat"]);
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["b.dat"]);
+    expect(offerLateRestore).toHaveBeenCalledTimes(1);
   });
 });
 

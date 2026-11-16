@@ -118,7 +118,7 @@ function sameState(text: string): (other: string) => boolean {
 export function resetStashMemo(): void {
   codecNow = null;
   lastChars = 0;
-  tail = Promise.resolve(); // and an empty save queue (a test may leave a save hanging)
+  tail = Promise.resolve(); // and an empty queue (a test may leave a save hanging)
 }
 
 function isRestorable(parseWorkspace: ParseWorkspace, text: string): boolean {
@@ -135,11 +135,41 @@ function isRestorable(parseWorkspace: ParseWorkspace, text: string): boolean {
  *  landing last would otherwise put back its own older read. */
 let tail: Promise<unknown> = Promise.resolve();
 
-function queued<T>(job: () => Promise<T>): Promise<T> {
-  const run = tail.then(job);
+/** How long one queued job may take before the queue moves on (review R4: a
+ *  storage call that never settles — a blocked or hung IndexedDB open — used
+ *  to stall every later save and Clear for the session, silently). */
+export const QUEUE_TIMEOUT_MS = 15_000;
+
+/** Run `job` after every earlier one. A job still running after
+ *  QUEUE_TIMEOUT_MS settles as `timedOut()` and the queue continues; the job
+ *  is told through `live()` that it no longer owns the store, and must check
+ *  it before every write, so its late write can never land over a newer one. */
+function queued<T>(job: (live: () => boolean) => Promise<T>, timedOut: () => T): Promise<T> {
+  const run = tail.then(
+    () =>
+      new Promise<T>((resolve, reject) => {
+        let owned = true;
+        const timer = setTimeout(() => {
+          owned = false;
+          resolve(timedOut());
+        }, QUEUE_TIMEOUT_MS);
+        const settle = (finish: () => void) => {
+          if (!owned) return;
+          owned = false;
+          clearTimeout(timer);
+          finish();
+        };
+        job(() => owned).then(
+          (v) => settle(() => resolve(v)),
+          (e: unknown) => settle(() => reject(e instanceof Error ? e : new Error(String(e)))),
+        );
+      }),
+  );
   tail = run.catch(() => undefined);
   return run;
 }
+
+const TIMED_OUT = "the browser's storage did not answer (timed out) — the next autosave tries again";
 
 /** Persist the workspace as a new generation (empty library → clear the slot).
  *
@@ -147,16 +177,26 @@ function queued<T>(job: () => Promise<T>): Promise<T> {
  *  so the UI can show a PERSISTENT warning instead of a status line that
  *  scrolls away — the transient message was the pre-#32 weakness. */
 export function saveAutosave(ws: WorkspaceState, now: number): Promise<boolean> {
-  return queued(() => writeGeneration(ws, now));
+  return queued(
+    (live) => writeGeneration(ws, now, live),
+    () => ((ctx.state.health = { ...ctx.state.health, error: TIMED_OUT }), false),
+  );
 }
 
-async function writeGeneration(ws: WorkspaceState, now: number): Promise<boolean> {
+async function writeGeneration(ws: WorkspaceState, now: number, live: () => boolean): Promise<boolean> {
   const be = backend();
+  const pin = ctx.state.pinBefore;
   try {
     if (ws.datasets.length === 0) {
-      await be.clear();
-      dropStash(now);
-      ctx.state.health = { savedAt: ctx.state.health.savedAt, error: null, count: 0 };
+      // An empty library clears the slot — except, while the startup restore
+      // is pending, the generations from before this session and that
+      // session's stash: they are the work not yet given back (review R1).
+      const keep = pin === null ? [] : (await be.read()).filter((g) => g.at < pin);
+      if (!live()) return false;
+      await (keep.length ? be.write(keep) : be.clear());
+      if (pin === null) dropStash(now);
+      else if ((readStash()[0]?.at ?? -Infinity) >= pin) dropStash(now);
+      ctx.state.health = { savedAt: ctx.state.health.savedAt, error: null, count: keep.length };
       return true;
     }
     // Inside the try: a codec chunk that will not load is reported like any
@@ -177,7 +217,6 @@ async function writeGeneration(ws: WorkspaceState, now: number): Promise<boolean
     // generations from before this session are pinned (review N2): a restore
     // that failed must not be rotated out by the session that replaced it.
     // Exempt from the count cap only — age and bytes still bound them.
-    const pin = ctx.state.pinBefore;
     const all = [...fresh, ...read];
     const pinned = pin === null ? [] : all.filter((g) => g.at < pin);
     const rotating = pin === null ? all : all.filter((g) => g.at >= pin);
@@ -190,6 +229,7 @@ async function writeGeneration(ws: WorkspaceState, now: number): Promise<boolean
       capByAge([...rotate(rotating, { at: now, text }), ...pinned], now),
       AUTOSAVE_BUDGET_BYTES,
     );
+    if (!live()) return false; // timed out: a later save owns the store now
     await be.write(kept);
     // Only the stash this save wrote out (or found duplicated), or one older
     // than it: a stash written while the write was in flight is newer, and
@@ -286,11 +326,12 @@ async function withLegacyGeneration(
  *  reason — the snapshot is then still there, so the caller must say so
  *  (silent-failure audit 2026-10-01). */
 export function clearAutosave(): Promise<string | null> {
-  return queued(wipe);
+  return queued(wipe, () => TIMED_OUT);
 }
 
-async function wipe(): Promise<string | null> {
+async function wipe(live: () => boolean): Promise<string | null> {
   try {
+    if (!live()) return TIMED_OUT;
     await backend().clear();
     dropStash();
     ctx.state.health = { savedAt: null, error: null, count: 0 };

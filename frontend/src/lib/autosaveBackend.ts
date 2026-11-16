@@ -53,6 +53,10 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("IndexedDB open failed"));
+    // Another tab holds an older connection open across a version change:
+    // the open would wait for it indefinitely (review R4). Fail now, with
+    // the remedy, rather than stall the autosave queue.
+    req.onblocked = () => reject(new Error("the autosave store is blocked by another quantized tab — close the other tabs, then autosave resumes"));
   });
 }
 

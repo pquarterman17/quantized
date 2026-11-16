@@ -74,21 +74,17 @@
 //    `autosavePausedReported`'s own doc.
 
 import { useEffect } from "react";
-import { autosaveHealth, autosaveRestorePending, autosaveRestoreSettled, loadAutosaveGeneration, saveAutosave, stashAutosave } from "./lib/autosave";
+import { autosaveHealth, saveAutosave, stashAutosave } from "./lib/autosave";
+import { startAutosaveRestore } from "./autosaveStartupRestore";
 import { hasDesktopShell } from "./lib/desktopBridge";
-import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryChoice";
-import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
 import type { WorkspaceState } from "./lib/workspace";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
 import { BROWSER_AUTOSAVE_LOCK_PATH } from "./store/projectLockPaths";
-import { useRecentProjects } from "./store/recentProjects";
-import { useRecoveryChoice } from "./store/recoveryChoice";
-import { notifyMigrationWarnings, toast } from "./store/toasts";
+import { toast } from "./store/toasts";
 import { shouldAutosave } from "./store/autosaveTrigger";
 import { useApp } from "./store/useApp";
-import { stageWorkspaceRestore } from "./store/windowHydration";
 
 /** Synthetic, stable "project path" for the shared browser autosave slot —
  *  see this module's header. Exported so App.tsx's install effect and this
@@ -312,69 +308,6 @@ function workspaceForSave(): WorkspaceState {
   return { ...s, plotWindows: s.windowsForSave(), techniqueViewMemory };
 }
 
-/** Apply what the startup restore found, and settle the restore guard once
- *  it is applied or declined. `late`: a retry that succeeded after a failed
- *  first attempt — if the user has started a library meanwhile, the restored
- *  one is ADDED beside it (Append Project) rather than replacing their work. */
-function restorePicked(
-  picked: Awaited<ReturnType<typeof loadAutosaveGeneration>>,
-  late: boolean,
-  priorEnd: ReturnType<typeof priorSessionEnd>,
-  setStatus: (msg: string) => void,
-): void {
-  const settle = () => (autosaveRestoreSettled(), reportAutosaveHealth(autosaveHealth()));
-  if (!picked?.workspace.datasets.length) return settle();
-  const { workspace: restored, at: autosaveAt } = picked;
-  const n = restored.datasets.length;
-  const what = `${n} dataset${n === 1 ? "" : "s"}`;
-  if (late && useApp.getState().datasets.length > 0) {
-    void useApp.getState().appendWorkspace(restored).then((ok) => {
-      if (!ok) return; // still pinned; the next launch offers it again
-      settle();
-      toast(`Restored ${what} from the autosave that failed to load at startup — added beside your current work`, "info");
-    });
-    return;
-  }
-  // P1.2 box 5: only when there IS a named last project AND the
-  // candidate is actually newer does silent auto-restore stop being
-  // safe — see lib/recoveryChoice.ts's header for the full reasoning.
-  const lastProject = lastKnownProject();
-  if (shouldOfferRecoveryChoice(autosaveAt, lastProject)) {
-    useRecoveryChoice.getState().offerRecovery({
-      workspace: restored,
-      autosaveAt,
-      datasetCount: n,
-      lastProject: lastProject as LastProjectRef,
-    });
-    // Settled once the user has chosen (any choice clears the prompt).
-    const off = useRecoveryChoice.subscribe((st) => {
-      if (st.pending) return;
-      off();
-      settle();
-    });
-    return;
-  }
-  useApp.getState().loadWorkspace(restored);
-  stageWorkspaceRestore(useApp.getState().plotWindows, useApp.getState().focusedWindowId);
-  settle();
-  if (priorEnd === "unclean") {
-    setStatus(`recovered ${what} after an unexpected close`);
-    toast(`Recovered ${what} after an unexpected close — check your latest edits`, "info");
-  } else {
-    // BUG-010: this setStatus overwrites loadWorkspace's own
-    // migrationNotice status-line fold — the toast below is the only
-    // channel that survives it (both branches restore silently, so
-    // neither has any other confirmation surface for it).
-    setStatus(`restored ${what} from autosave`);
-  }
-  notifyMigrationWarnings(restored.migrationWarnings);
-}
-
-function lastKnownProject(): LastProjectRef | null {
-  const entry = useRecentProjects.getState().recentProjects[0];
-  return entry ? { name: entry.name, path: entry.path, at: Date.parse(entry.at) } : null;
-}
-
 // `AutosaveState` + `shouldAutosave` live in store/autosaveTrigger.ts (moved
 // out under this module's size ceiling, MAIN_PLAN #42); re-exported here.
 export { shouldAutosave, type AutosaveState } from "./store/autosaveTrigger";
@@ -382,43 +315,10 @@ export { shouldAutosave, type AutosaveState } from "./store/autosaveTrigger";
 export function useWorkspaceAutosave(): void {
   const setStatus = useApp((s) => s.setStatus);
 
-  // Restore the autosaved library once on startup (before any new import).
-  useEffect(() => {
-    // Async since #32 (IndexedDB has no sync mode). `cancelled` guards the
-    // StrictMode double-invoke and an unmount mid-read — restoring into a
-    // torn-down store would clobber whatever the user did in between.
-    let cancelled = false;
-    // Read how the PREVIOUS session ended before marking this one active —
-    // installSessionMarker overwrites the flag.
-    const priorEnd = priorSessionEnd();
-    const teardown = installSessionMarker();
-    // Review N2: a restore whose code will not load is RETRIED (backoff, up to
-    // 30 s) rather than given up on, and until one succeeds or is declined the
-    // generations from before this session stay pinned (lib/autosave.ts), with
-    // the failure on the persistent health line — the session's own saves
-    // must not rotate out the work the user has not got back yet.
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let delay = 2000;
-    const attempt = (late: boolean): void => {
-      void loadAutosaveGeneration().then((picked) => {
-        if (!cancelled) restorePicked(picked, late, priorEnd, setStatus);
-      }, (e: unknown) => {
-        if (cancelled) return;
-        const why = `Couldn't restore the autosaved library (${e instanceof Error ? e.message : "load failed"}) — retrying; earlier autosaves are kept`;
-        if (!late) toast(why, "danger");
-        autosaveRestorePending(why);
-        reportAutosaveHealth(autosaveHealth());
-        retry = setTimeout(() => attempt(true), delay);
-        delay = Math.min(delay * 2, 30_000);
-      });
-    };
-    attempt(false);
-    return () => {
-      cancelled = true;
-      clearTimeout(retry);
-      teardown();
-    };
-  }, [setStatus]);
+  // Restore the autosaved library once on startup (before any new import):
+  // retried while its code will not load, never applied over the user's
+  // work (./autosaveStartupRestore.ts).
+  useEffect(() => startAutosaveRestore(setStatus), [setStatus]);
 
   // Debounced autosave whenever the library changes (identity comparisons).
   useEffect(() => {

@@ -102,6 +102,13 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     render(<StatusBar />);
     expect(screen.getByRole("alert")).toHaveTextContent("autosave failing");
   });
+
+  it("a pending restore reads as itself, never as 'autosave failing' while saves succeed (review R8)", () => {
+    useAutosaveStatus.setState({ health: { savedAt: Date.now(), error: null, count: 2, restoreError: "Couldn't restore (x) — retrying" } });
+    render(<StatusBar />);
+    expect(screen.getByRole("button", { name: "⚠ previous session not restored" })).toHaveAttribute("title", "Couldn't restore (x) — retrying");
+    expect(screen.queryByText("⚠ autosave failing")).toBeNull();
+  });
 });
 
 describe("StatusBar pending-op live region (accessibility gap)", () => {

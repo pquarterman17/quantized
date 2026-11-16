@@ -80,9 +80,12 @@ export function autosaveRestoreSettled(): void {
   autosaveState.pinBefore = autosaveState.restoreError = null;
 }
 
+/** The health readout. A pending restore rides on its OWN field (review R8):
+ *  the status bar says "previous session not restored", never "autosave
+ *  failing" while saves are succeeding. */
 export function autosaveHealth(): AutosaveHealth {
   const { health, restoreError } = autosaveState;
-  return restoreError && !health.error ? { ...health, error: restoreError } : health;
+  return restoreError ? { ...health, restoreError } : health;
 }
 
 /** Persist the workspace as a new generation (empty library → clear the slot).

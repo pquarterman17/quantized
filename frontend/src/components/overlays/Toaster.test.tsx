@@ -168,3 +168,28 @@ describe("Toaster announces danger assertively", () => {
     }
   });
 });
+
+describe("Toaster — several actions (the late-restore prompt)", () => {
+  beforeEach(() => {
+    useToasts.setState({ toasts: [] });
+  });
+
+  it("renders each choice; one click fires that choice only and dismisses", () => {
+    const pick = { append: vi.fn(), replace: vi.fn(), discard: vi.fn() };
+    render(<Toaster />);
+    act(() => {
+      useToasts.getState().push("Recovered previous session", "info", {
+        actions: [
+          { label: "Append", onClick: pick.append },
+          { label: "Replace", onClick: pick.replace },
+          { label: "Discard", onClick: pick.discard },
+        ],
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
+    expect(pick.replace).toHaveBeenCalledTimes(1);
+    expect(pick.append).not.toHaveBeenCalled();
+    expect(pick.discard).not.toHaveBeenCalled();
+    expect(screen.queryByText("Recovered previous session")).toBeNull();
+  });
+});

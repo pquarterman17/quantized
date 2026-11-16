@@ -128,6 +128,10 @@ export interface AutosaveHealth {
   error: string | null;
   /** Generations currently retained. */
   count: number;
+  /** The previous session's library is not back yet (a startup restore that
+   *  could not load, or a recovered one awaiting Append/Replace/Discard) —
+   *  its generations are pinned meanwhile. Absent = nothing pending. */
+  restoreError?: string | null;
 }
 
 export const HEALTHY: AutosaveHealth = { savedAt: null, error: null, count: 0 };

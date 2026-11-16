@@ -25,7 +25,7 @@ import {
   setAutosaveBackend,
   stashAutosave,
 } from "./lib/autosave";
-import { STASH_KEY, STASH_MAX_CHARS } from "./lib/autosaveCore";
+import { QUEUE_TIMEOUT_MS, STASH_KEY, STASH_MAX_CHARS } from "./lib/autosaveCore";
 import { localStorageBackend, memoryBackend, type AutosaveBackend } from "./lib/autosaveBackend";
 import type { Generation } from "./lib/autosaveGenerations";
 import { serializeWorkspace } from "./lib/workspace";
@@ -363,12 +363,64 @@ describe("the startup-restore guard (review N2)", () => {
     expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([6000, 5000, 4000]);
   });
 
-  it("keeps the restore failure on the persistent health line, even after a save succeeds", async () => {
+  it("keeps a pending restore on the health line's OWN field — never as an autosave failure (review R8)", async () => {
     await loadCodec();
     autosaveRestorePending("Couldn't restore the autosaved library (x)", 1000);
     expect(await saveAutosave(ws("a.dat"), 2000)).toBe(true);
-    expect(autosaveHealth().error).toMatch(/Couldn't restore/);
+    expect(autosaveHealth().restoreError).toMatch(/Couldn't restore/);
+    expect(autosaveHealth().error).toBeNull(); // saves are succeeding
     autosaveRestoreSettled();
+    expect(autosaveHealth().restoreError).toBeUndefined();
+  });
+
+  it("an empty-library save keeps the pinned generations, and a retry still restores them (review R1)", async () => {
+    await loadCodec(gens(100, 200));
+    autosaveRestorePending("Couldn't restore the autosaved library (x)", 1000);
+    await saveAutosave(ws("session.dat"), 2000);
+    await saveAutosave({ datasets: [] } as unknown as Ws, 3000); // e.g. Remove all, or an edit while empty
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([200, 100]);
+    expect((await loadAutosaveGeneration())?.workspace.datasets[0].name).toBe("g200.dat");
+  });
+
+  it("an empty-library save keeps the previous session's stash, and drops only this session's (review R1)", async () => {
+    await loadCodec();
+    stashAutosave(ws("previous-session.dat"), 500);
+    autosaveRestorePending("x", 1000);
+    await saveAutosave({ datasets: [] } as unknown as Ws, 3000);
+    expect(stashText()).toContain("previous-session.dat");
+
+    autosaveRestoreSettled();
+    stashAutosave(ws("this-session.dat"), 2500);
+    autosaveRestorePending("x", 1000);
+    await saveAutosave({ datasets: [] } as unknown as Ws, 3000);
+    expect(stashText()).toBeNull();
+  });
+
+  it("with no restore pending, an empty library still clears the slot", async () => {
+    await loadCodec(gens(100, 200));
+    await saveAutosave({ datasets: [] } as unknown as Ws, 3000);
+    expect(await listAutosaveGenerations()).toEqual([]);
+  });
+});
+
+describe("the save queue watchdog (review R4)", () => {
+  it("a storage call that never settles times out with a health error, and the next save still runs", async () => {
+    await loadCodec();
+    const base = memoryBackend();
+    let hang = true;
+    setAutosaveBackend({
+      ...base,
+      read: () => (hang ? new Promise<Generation[]>(() => undefined) : base.read()),
+    });
+    vi.useFakeTimers();
+    const first = saveAutosave(ws("hung.dat"), 100);
+    await vi.advanceTimersByTimeAsync(QUEUE_TIMEOUT_MS + 10);
+    expect(await first).toBe(false);
+    expect(autosaveHealth().error).toMatch(/timed out/);
+    hang = false;
+    expect(await saveAutosave(ws("after.dat"), 200)).toBe(true);
     expect(autosaveHealth().error).toBeNull();
+    vi.useRealTimers();
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([200]);
   });
 });
