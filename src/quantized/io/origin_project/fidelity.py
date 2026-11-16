@@ -187,6 +187,9 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         # bubble / colour-mapped scatter: X/Y drawn, size/colour map not
         # (`opju_layer_kind`)
         omissions.append("marker_encoding_not_decoded")
+    for note in ("histogram_bins_not_decoded", "box_marks_not_decoded", "marker_scale_not_decoded"):
+        if fig.get(note):  # drawn with quantized's own bins / box marks (`opju_stat_plots`)
+            omissions.append(note)
     out: FigureFidelity = {
         # No current decoder proves every visual property, so "exact" is
         # deliberately reserved for a future preview/oracle comparison gate.
