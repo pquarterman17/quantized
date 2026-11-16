@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct, ImportFilterWire, ImportPreviewResponse, ImportSettingsWire } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useWizardHandoff } from "../../../lib/importFailureToast";
 import ParamDialog from "../../overlays/ParamDialog";
 import ImportWizardPanel from "./ImportWizardPanel";
 
@@ -565,5 +566,15 @@ describe("ImportWizardPanel", () => {
     await waitFor(() =>
       expect(importPreviewMock).toHaveBeenCalledWith(expect.any(String), SETTINGS, 30),
     );
+  });
+});
+
+describe("ImportWizardPanel — hand-off from a failed import (UX-C)", () => {
+  it("opens already previewing the file the failed import handed over", async () => {
+    render(<ImportWizardPanel />);
+    act(() => useWizardHandoff.setState({ file: new File(["Temp,Moment\n300,0.0012\n"], "garbage.dat") }));
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    expect(screen.getByText("garbage.dat")).toBeInTheDocument();
+    expect(useWizardHandoff.getState().file).toBeNull(); // consumed, so a re-open does not replay it
   });
 });

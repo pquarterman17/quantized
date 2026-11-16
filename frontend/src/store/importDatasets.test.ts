@@ -1021,7 +1021,7 @@ describe("finding 3 — a failed recipe-suggestion lookup never swallows the fai
 
     await useApp.getState().importPaths(["/gone.dat", "/ok.dat"]);
 
-    expect(toastMsgs().some((m) => m.includes("file not found"))).toBe(true);
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("gone.dat"))).toBe(true);
   });
 });
 
@@ -1037,10 +1037,12 @@ describe("a partly-failed batch says how much of it landed", () => {
 
     await useApp.getState().importPaths(["/gone.dat", "/ok.dat"]);
 
-    const failure = toastMsgs().find((m) => m.includes("file not found"));
+    // UX-C: plain-language headline (technical text sits behind Details), same facts.
+    const failure = useToasts.getState().toasts.find((t) => t.kind === "danger");
     expect(failure, "the failed file still gets a danger toast").toBeDefined();
-    expect(failure, "whether data changed").toContain("imported 1/2");
-    expect(failure, "next action").toMatch(/import wizard/i);
+    expect(failure!.msg, "which file").toContain("gone.dat");
+    expect(failure!.msg, "whether data changed").toContain("Imported 1 of 2 files");
+    expect(failure!.actions?.map((a) => a.label), "next action").toContain("Open import wizard");
   });
 });
 
@@ -1446,5 +1448,21 @@ describe("XRD map colour scale", () => {
     vi.mocked(importFile).mockResolvedValueOnce(map("generic")).mockResolvedValueOnce(payload("xrd.rsm"));
     await useApp.getState().importPaths(["/data/a.dat", "/data/b.dat"]);
     expect(useApp.getState().mapViews).toEqual({});
+  });
+});
+
+describe("a failed upload (UX-C)", () => {
+  it("raises a plain-language danger toast whose wizard action carries the file", async () => {
+    vi.mocked(uploadFile).mockRejectedValueOnce(new Error("no parser registered for 'garbage.dat' (extension '.dat')"));
+    useToasts.setState({ toasts: [] });
+    useApp.setState({ importWizardOpen: false });
+    const file = new File([new Uint8Array([0, 255, 7, 1])], "garbage.dat");
+    await useApp.getState().importFiles([file]);
+    const t = useToasts.getState().toasts.find((x) => x.kind === "danger");
+    expect(t?.msg).toBe("Couldn't read garbage.dat — the format wasn't recognised.");
+    t?.actions?.find((a) => a.label === "Open import wizard")?.onClick();
+    expect(useApp.getState().importWizardOpen).toBe(true);
+    const { useWizardHandoff } = await import("../lib/importFailureToast");
+    expect(useWizardHandoff.getState().file).toBe(file);
   });
 });

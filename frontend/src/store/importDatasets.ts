@@ -407,6 +407,7 @@ async function runImport<T>(
   let added = 0;
   let lastError = "";
   let lastFailed = ""; // its file name/path: picks the follow-up hint below
+  let lastItem: T | undefined; // ...and the item itself, for the toast's wizard hand-off
   let cancelled = false;
   const createdIds: string[] = [];
   const structures: StructurePreset[] = []; // .cif: lattice presets, not datasets
@@ -438,6 +439,7 @@ async function runImport<T>(
           break;
         }
         lastFailed = describe(item);
+        lastItem = item;
         lastError = `${lastFailed}: ${e instanceof Error ? e.message : "error"}`;
       }
     }
@@ -473,12 +475,8 @@ async function runImport<T>(
   const dataAdded = added - structures.length;
   if (structures.length > 0) presentStructures(structures);
   if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId, { suppressFolderOffer });
-  // P3.4 error-quality audit (2026-09-14, deduped in the review round): the
-  // toast carries the "whether data changed" fact too. The status line said
-  // "imported 3/5 — failed …" while the toast — what actually appears over
-  // the stage — named only the broken file. Reuses `summary`, already built
-  // above to this exact string, rather than re-interpolating it.
-  if (lastError) toast(summary, "danger");
+  // UX-C: plain-language failure toast (lazy chunk; a failed load must not swallow the failure).
+  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, total: items.length })).catch(() => toast(summary, "danger"));
   notifyParserNotes(noted);
   return createdIds;
 }

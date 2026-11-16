@@ -63,7 +63,7 @@ describe("HomeScreen", () => {
 
   it("offers the guided import path without mutating the library", () => {
     render(<HomeScreen onImport={noop} />);
-    screen.getByRole("button", { name: /Guided import/ }).click();
+    screen.getByRole("button", { name: /Import wizard/ }).click();
     expect(useApp.getState().importWizardOpen).toBe(true);
     expect(useApp.getState().datasets).toEqual([]);
   });

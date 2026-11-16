@@ -44,6 +44,7 @@ import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
 import { runCancellable } from "../store/pendingOpActions";
 import { closeProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
+import { toastWithUndo } from "../lib/undoToast";
 import type {
   exportConsolidated,
   exportHdf5,
@@ -197,5 +198,5 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
   if (rejectIfImportRunning()) return;
   s().clearAll();
   closeProjectLock(); // after the clear: a throwing clear keeps the loaded project's lock
-  toast("removed all datasets", "ok");
+  toastWithUndo("removed all datasets", "ok");
 }

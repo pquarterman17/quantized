@@ -9,8 +9,16 @@
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { plural } from "./plural";
-import { toast } from "../store/toasts";
+import { toast, type ToastKind } from "../store/toasts";
 import { useApp } from "../store/useApp";
+
+/** Announce a removal with an Undo (lib/undoToast, loaded on demand to keep it
+ *  out of the eager bundle). The history entry is captured NOW, synchronously;
+ *  if the chunk fails to load the plain toast still shows. */
+export function toastRemoved(msg: string, kind?: ToastKind): void {
+  const seq = useApp.getState().history.at(-1)?.seq;
+  void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, seq)).catch(() => toast(msg, kind));
+}
 
 /** Request removal of exactly `ids` (dead ids dropped; empty = no-op),
  *  honoring Preferences ▸ Interaction ▸ "Confirm before removing data".
@@ -26,7 +34,7 @@ export function requestDatasetRemoval(ids: readonly string[]): void {
     st.removeDatasets(live);
     const msg = `removed ${n} dataset${plural(n)}`;
     st.setStatus(msg);
-    toast(msg);
+    toastRemoved(msg);
   };
   if (s.confirmRemove) {
     void askParams(`Remove ${n} dataset${plural(n)}?`, [], { confirmLabel: "Remove" }).then((ok) => {

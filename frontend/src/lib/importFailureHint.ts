@@ -37,6 +37,15 @@ export function connectionHint(message: string): string {
   return /invalid API token/i.test(message) ? " — qz was relaunched; reload this page" : "";
 }
 
+/** Whether the Import wizard can help with a failed import of `name`: a
+ *  text-like file whose failure reached a parser (not a down server / stale
+ *  token, and not a binary container). */
+export function wizardCanRead(name: string, message = ""): boolean {
+  if (connectionHint(message)) return false;
+  const dot = name.lastIndexOf(".");
+  return !BINARY_EXTS.has(dot >= 0 ? name.slice(dot).toLowerCase() : "");
+}
+
 /** The hint for a failed import of `name`: the wizard for a text-like file,
  *  nothing for a binary container (its error already says what to do).
  *  Soak-test fix: a failure that never reached a parser is not the file's
@@ -47,9 +56,7 @@ export function connectionHint(message: string): string {
 export function importFailureHint(name: string, message = "", isMac: boolean = isMacPlatform()): string {
   const cause = connectionHint(message);
   if (cause) return cause;
-  const dot = name.lastIndexOf(".");
-  const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
-  return BINARY_EXTS.has(ext) ? "" : ` — try the Import wizard (${formatShortcut(PALETTE_SHORTCUT, isMac)} → Import wizard…)`;
+  return !wizardCanRead(name, message) ? "" : ` — try the Import wizard (${formatShortcut(PALETTE_SHORTCUT, isMac)} → Import wizard…)`;
 }
 
 /** The batch summary for status and toast. A parse failure is the wizard's

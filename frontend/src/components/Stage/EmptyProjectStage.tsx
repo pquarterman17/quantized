@@ -44,7 +44,7 @@ export default function EmptyProjectStage() {
         </div>
         <p className="qzk-empty-hint">
           <button className="qz-btn qz-ghost qz-sm" type="button" onClick={() => setImportWizardOpen(true)}>
-            Guided import…
+            Import wizard…
           </button>
           <span>
             <kbd aria-hidden="true">{formatShortcut("⌘K", mac)}</kbd> command palette

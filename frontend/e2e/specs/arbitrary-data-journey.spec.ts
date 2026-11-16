@@ -21,7 +21,7 @@
 // gate — nothing pauses there for approval. The one surface that actually
 // shows the app's GUESS and blocks on user confirmation before any data
 // lands is the **Import wizard** (`ImportWizardPanel.tsx`, commands/
-// fileCommands.ts's "Import wizard (guided preview + saved filters)…"):
+// fileCommands.ts's "Import wizard…"):
 // `POST /api/import/guess` (`io/import_preview.py::guess_settings`) proposes
 // a delimiter, header/units line, and a per-column role — x / y / error /
 // label / ignore (`io.import_preview.DATA_ROLES`) — and `PreviewTable.tsx`

@@ -2309,6 +2309,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   textFormatHelpOpen: "text-format help visibility; UI state",
   status: "status-bar text; transient announcement, not data",
   statusDanger: "status-bar failure marker for the current status text; transient, not data",
+  statusWarn: "status-bar warning marker for the current status text; transient, not data",
 
   // persisted user preferences (own localStorage lifecycle via store/prefs.ts, not project edits)
   theme: "prefs",

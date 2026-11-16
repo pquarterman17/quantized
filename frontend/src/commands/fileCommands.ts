@@ -112,7 +112,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "import-wizard",
       group: "File",
-      label: "Import wizard (guided preview + saved filters)…",
+      label: "Import wizard…",
       run: () => s().setImportWizardOpen(true),
     },
     {

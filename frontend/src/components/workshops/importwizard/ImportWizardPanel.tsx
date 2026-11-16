@@ -21,6 +21,7 @@ import {
 } from "../../../lib/importwizard";
 import type { ImportDecimal } from "../../../lib/importTypes";
 import type { ImportColumnRole } from "../../../lib/types";
+import { useWizardHandoff } from "../../../lib/importFailureToast";
 import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -48,6 +49,17 @@ export default function ImportWizardPanel() {
   useEffect(() => {
     if (w.imported) setOpen(false);
   }, [w.imported, setOpen]);
+
+  // A failed import's "Open import wizard" hands its file over: take it (clear
+  // first, so a re-open does not replay it) and preview it as if just picked.
+  const handedFile = useWizardHandoff((s) => s.file);
+  const { pickFile } = w;
+  useEffect(() => {
+    if (!handedFile) return;
+    useWizardHandoff.setState({ file: null });
+    setPickedFilter("");
+    void pickFile(handedFile);
+  }, [handedFile, pickFile]);
 
   function onFileChosen(e: React.ChangeEvent<HTMLInputElement>): void {
     const f = e.target.files?.[0];
