@@ -15,8 +15,16 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   meta text is larger, wraps instead of ellipsizing, and several status/muted
   colours were darkened or lightened to meet WCAG AA contrast.
 
+## [0.35.0] - 2026-11-16
+
 ### Added
 
+- **Exchange X–Y axes** (plot right-click menu, like Origin's): swaps a plot's axes without
+  touching the data; autoscale, bar plots and export follow the swap (#717).
+  A workspace using it saves as `.dwk` version 6, which 0.34 refuses to open.
+- Origin-style keyboard shortcuts, and **Ctrl+S saves back to the file you
+  opened** instead of always asking where (#717). Opening or starting another
+  workspace resets the target, so Ctrl+S can never write over the wrong file.
 - Worksheet grid: a cell cursor with keyboard navigation (arrows, Home/End,
   PageUp/Down, Enter/Tab, F2, Esc, Delete, Ctrl+C/X/V/D/A), type-to-edit, a
   column menu (insert/add/delete/move, edit Long Name/Units/Comments, number
@@ -229,6 +237,11 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   rejected (422).
 
 ### Fixed
+
+- Leaving the app idle, switching plots and coming back no longer leaves
+  stale or missing overlays, ticks or status messages (#717).
+- The eager JavaScript bundle is about 6 kB smaller, so the app starts a
+  little faster (#717).
 
 - An exported PDF/SVG/EPS of a graph with a fit, band, baseline or peak
   overlay titled its Y axis "signal, fit, 95% CI low, …"; it now reads
