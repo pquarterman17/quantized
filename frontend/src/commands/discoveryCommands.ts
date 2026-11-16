@@ -19,6 +19,7 @@ import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { Action } from "../store/commands";
 import { useSignalOperationSeed } from "../store/signalOperationSeed";
 import { toast } from "../store/toasts";
+import { inspectorShown, toggleInspector } from "../store/inspectorToggle";
 
 function signal(id: string, op: string, label: string, description: string, keywords: string, s: StoreGet): Action {
   return {
@@ -115,7 +116,8 @@ export function buildDiscoveryCommands(s: StoreGet): Action[] {
       keywords: "error columns uncertainty sigma standard deviation yerr whiskers",
       paletteOnly: true,
       run: () => {
-        if (s().rightCollapsed) s().toggleRight();
+        // Collapsed, or replaced by a docked analysis window (which this floats).
+        if (!inspectorShown()) toggleInspector();
         void runLazy("Opening Error columns…", () => import("../lib/revealInspectorCard")).then(
           (m) =>
             m.revealInspectorCard("Error columns").then((found) => {

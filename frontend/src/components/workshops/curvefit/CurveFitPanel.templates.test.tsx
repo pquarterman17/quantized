@@ -70,6 +70,7 @@ describe("CurveFitPanel — fit templates", () => {
     fireEvent.change(await modelsLoaded(), { target: { value: "Quadratic" } });
     fireEvent.change(screen.getByLabelText("Weighting"), { target: { value: "manual" } });
     await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("manual"));
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: Templates live under Advanced
     fireEvent.click(await screen.findByText("Templates"));
     fireEvent.change(screen.getByLabelText("New fit template name"), { target: { value: "quad" } });
     fireEvent.click(screen.getByRole("button", { name: "Save as template" }));
@@ -99,6 +100,7 @@ describe("CurveFitPanel — fit templates", () => {
     await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("direct"));
     fireEvent.change(screen.getByLabelText("Weight column"), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /Scale errors/ }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: Templates live under Advanced
     fireEvent.click(await screen.findByText("Templates"));
     fireEvent.change(screen.getByLabelText("New fit template name"), { target: { value: "w" } });
     fireEvent.click(screen.getByRole("button", { name: "Save as template" }));
@@ -110,6 +112,7 @@ describe("CurveFitPanel — fit templates", () => {
     fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "w" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply template" }));
     await waitFor(() => expect(screen.getByLabelText("Weighting")).toHaveValue("direct"));
+    fireEvent.click(screen.getByRole("tab", { name: "Setup" }));
     expect(screen.getByRole("checkbox", { name: /Scale errors/ })).not.toBeChecked();
   });
 
@@ -119,6 +122,7 @@ describe("CurveFitPanel — fit templates", () => {
     saveTemplate(toFitTemplate("ranged", { version: 1, model: "Linear", weight: "none", rows: [], range: { lo: 1, hi: 2 } }));
     render(<CurveFitPanel />);
     await modelsLoaded();
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: Templates live under Advanced
     fireEvent.click(await screen.findByText("Templates"));
     fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "ranged" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply template" }));
@@ -133,6 +137,7 @@ describe("CurveFitPanel — fit templates", () => {
     saveTemplate(toFitTemplate("old", { version: 1, model: "Linear", weight: "none", rows: [] }));
     render(<CurveFitPanel />);
     await modelsLoaded();
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: Templates live under Advanced
     fireEvent.click(await screen.findByText("Templates"));
     // Nothing picked: there is nothing to delete.
     expect(screen.getByRole("button", { name: "Delete template" })).toBeDisabled();
@@ -157,6 +162,7 @@ describe("CurveFitPanel — fit templates", () => {
     saveTemplate(toFitTemplate("plugin", { version: 1, model: "Langevin", weight: "poisson", rows: [] }));
     render(<CurveFitPanel />);
     await modelsLoaded();
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" })); // UX-F: Templates live under Advanced
     fireEvent.click(await screen.findByText("Templates"));
     fireEvent.change(screen.getByLabelText("Saved fit template"), { target: { value: "plugin" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply template" }));

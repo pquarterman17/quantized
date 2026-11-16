@@ -268,10 +268,29 @@ describe("CurveFitPanel — a background re-fit", () => {
 });
 
 describe("CurveFitPanel — window placement and key results", () => {
-  it("opens docked at the right edge, not over the plot's Y axis", async () => {
+  it("opens docked in the side column; floated, it sits left of the Inspector", async () => {
     render(<CurveFitPanel />);
     const frame = await screen.findByRole("dialog");
-    expect(parseFloat(frame.style.left)).toBe(window.innerWidth - 340 - 16);
+    // UX-F: docked INTO the Inspector's column (store/toolDock.ts), not over it.
+    expect(frame).toHaveAttribute("data-docked");
+    fireEvent.click(screen.getByRole("button", { name: "Float Curve Fit" }));
+    // Floating, it opens just left of the 296 px Inspector, clear of the Y axis.
+    expect(parseFloat(frame.style.left)).toBe(window.innerWidth - 296 - 340 - 16);
+    fireEvent.click(screen.getByRole("button", { name: "Dock Curve Fit in the side panel" }));
+    expect(frame).toHaveAttribute("data-docked");
+  });
+
+  it("Fit switches to the Results tab; the Fit button stays in the header", async () => {
+    render(<CurveFitPanel />);
+    expect(await screen.findByRole("tab", { name: "Setup" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    await screen.findByText("0.98000");
+    expect(screen.getByRole("tab", { name: "Results" })).toHaveAttribute("aria-selected", "true");
+    expect(document.querySelector(".qz-cf-status")?.textContent).toMatch(/^R² 0\.98000/);
+    // Advanced tools are one tab away, not below the results.
+    expect(screen.queryByRole("button", { name: "Scan models" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    expect(screen.getByRole("button", { name: "Scan models" })).toBeInTheDocument();
   });
 
   it("reports a finished fit in the status line", async () => {

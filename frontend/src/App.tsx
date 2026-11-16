@@ -3,7 +3,7 @@
 // command registry lives in appCommands.ts, the global keymap in
 // useGlobalShortcuts.ts, and the overlay/workshop mounts in AppOverlays.tsx.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import AppOverlays from "./AppOverlays";
 import Library from "./components/Library/Library";
@@ -30,6 +30,7 @@ import {
 import { BACKEND_UNREACHABLE, recordBackendHealth } from "./store/backendHealth";
 import { useProjectLock } from "./store/projectLock";
 import { toast } from "./store/toasts";
+import { dockColumnWidth, useToolDock } from "./store/toolDock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
@@ -58,6 +59,8 @@ const fullCommands = onDemand(() => import("./appCommands"));
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
   const rightCollapsed = useApp((s) => s.rightCollapsed);
+  // UX-F: a docked analysis window takes the Inspector's column (store/toolDock.ts).
+  const dock = useToolDock();
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
   const quickFigureBuilderDatasetId = useApp((s) => s.quickFigureBuilderDatasetId);
@@ -233,14 +236,15 @@ export default function App() {
     );
   }, []);
 
-  const mainCls = `qzk-main${leftCollapsed ? " lc" : ""}${rightCollapsed ? " rc" : ""}`;
+  const mainCls = `qzk-main${leftCollapsed ? " lc" : ""}${rightCollapsed ? " rc" : ""}${dock.owner ? " tooldock" : ""}`;
+  const mainStyle = dock.owner ? ({ "--dock-w": dockColumnWidth(dock.width, leftCollapsed) } as CSSProperties) : undefined;
 
   return (
     <div className="qzk-app" {...appRootFocusProps}>
       <TitleBar />
       <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
       <WorkspaceErrorBoundary resetKey={workspaceResetKey}>
-        <div className={mainCls}>
+        <div className={mainCls} style={mainStyle}>
           <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
           {quickFigureBuilderDatasetId ? (
             <QuickFigureBuilderWorkspace />
@@ -250,6 +254,8 @@ export default function App() {
             <Stage />
           )}
           <Inspector />
+          {/* The docked window sits over this slot (overlays/useToolWindowDock.ts). */}
+          {dock.owner && <div className="qzk-tooldock-slot" aria-hidden="true" />}
         </div>
       </WorkspaceErrorBoundary>
       <StatusBar />
