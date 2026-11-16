@@ -234,7 +234,10 @@ export default function DatasetRow({
     onChange: setRename,
     onCommit: commitRename,
     onCancel: () => setRename(null),
-    onStart: () => setRename(d.name),
+    // A one-line Tree row puts the name under the row's centre, so a
+    // double-click there must still OPEN a dataset that is not yet shown; the
+    // name renames only the row already open (and F2 / the menu always do).
+    onStart: () => (treeMode && !active ? openExplicit() : setRename(d.name)),
   };
 
   // UX-001 review round: tags are SHARED by both layouts (DatasetRowTags).
