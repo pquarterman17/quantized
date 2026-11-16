@@ -55,8 +55,12 @@ function StyleRow({
   naturalErr,
   cycle,
   drawnColor,
+  selected = false,
 }: {
   channel: number;
+  /** UX-A: the curve selected on the plot — its row opens and is outlined
+   *  (the Inspector scrolls it into view). */
+  selected?: boolean;
   cycle: CycleSlot;
   /** The colour the graph's gradient gives this curve (gap audit 4 G1), if any. */
   drawnColor?: string;
@@ -98,7 +102,13 @@ function StyleRow({
   const canError = errCol != null || naturalErr != null;
 
   return (
-    <details id={`series-style-${channel}`} className="qz-card" style={{ marginBottom: 4 }}>
+    <details
+      id={`series-style-${channel}`}
+      className="qz-card"
+      open={selected || undefined}
+      aria-current={selected || undefined}
+      style={{ marginBottom: 4, ...(selected ? { outline: "2px solid var(--accent)", outlineOffset: -1 } : {}) }}
+    >
       <summary>
         <span
           style={{
@@ -269,7 +279,14 @@ function StyleRow({
   );
 }
 
-export default function SeriesStyleCard({ active }: { active: Dataset | null }) {
+export default function SeriesStyleCard({
+  active,
+  selectedChannel,
+}: {
+  active: Dataset | null;
+  /** UX-A: the dataset channel of the curve selected on the plot, if any. */
+  selectedChannel?: number;
+}) {
   const styled = useApp((s) => Object.keys(s.seriesStyles).length);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
@@ -304,6 +321,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
           naturalErr={natErr[i]}
           cycle={cycle}
           drawnColor={ramped[i]?.color}
+          selected={i === selectedChannel}
         />
       ))}
     </Card>
