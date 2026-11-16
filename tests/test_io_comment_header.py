@@ -3,9 +3,11 @@
 numpy ``savetxt``, gnuplot and many instrument exports write the header as a
 comment (``# Qz (1/A)  R``). Every comment line is preamble, so such files
 imported as Col1/Col2 with no units. The last comment line(s) directly above
-the data now name the columns when they fit the table exactly; a free-text
-comment does not, and the old Col1/Col2 names stand. The comment itself is
-still kept in ``metadata["comments"]``.
+the data now name the columns when they fit the table exactly AND have
+structure (the data's delimiter, a 2+-space gap or bracketed units). Prose,
+dates, versions, rules and units-only lines do not, and the old Col1/Col2
+names stand -- including a single-spaced ``# x y``, which cannot be told from
+prose. The comment itself is still kept in ``metadata["comments"]``.
 
 MATLAB parity: ``+parser/importCSV.m`` never names columns from a comment
 line -- a deliberate, additive divergence (PORT_CHECKLIST, generic CSV).
@@ -73,7 +75,8 @@ def test_fixture_columns_are_named_from_the_comment(
     [
         ("# Field (Oe)\tMoment (emu)\n1\t2\n3\t4\n", "Field", ["Moment"]),
         ("# x,y,z\n1,2,3\n3,5,6\n", "x", ["y", "z"]),  # savetxt(delimiter=",")
-        ("# x y\n1 2\n3 4\n", "x", ["y"]),  # gnuplot
+        ("# x  y\n1 2\n3 4\n", "x", ["y"]),  # gnuplot, aligned
+        ("# H M\n# Oe emu\n1 2\n3 4\n", "H", ["M"]),  # a names + units pair
         ("% time  signal\n1 2\n3 4\n", "time", ["signal"]),  # MATLAB-style comment
         ("## T [K]  M [emu]\n\n1 2\n3 4\n", "T", ["M"]),  # blank line, "##"
         ("# H (Oe) M (emu)\n1 2\n3 4\n", "H", ["M"]),  # units glue to their names
@@ -102,6 +105,27 @@ def test_comment_header_names_columns(
         "# Field cooled.\n1 2\n3 4\n",  # a sentence
         "# a b c\n1 2\n3 4\n",  # three names over two columns
         "# (Oe)  (emu)\n1 2\n3 4\n",  # units with no names
+        # Single-spaced prose: no delimiter, wide gap or bracketed unit.
+        "# Temperature dependence\n1 2\n3 4\n",
+        "# Hysteresis loop\n1 2\n3 4\n",
+        "# John Smith\n1 2\n3 4\n",
+        "% Sample MnBi\n1 2\n3 4\n",
+        "# MnBi_film_07 annealed\n1 2\n3 4\n",
+        "# Field sweep up\n1 2 3\n4 5 6\n",
+        "# x y\n1 2\n3 4\n",  # even short names: indistinguishable from prose
+        "# measured, 300K, sample A\n1 2 3\n4 5 6\n",
+        "# measured, 300K, sample A\n1,2,3\n4,5,6\n",  # "300K" is a value
+        # Dates, versions, rules.
+        "# 2024-01-01 12:00:01\n1 2\n3 4\n",
+        "# 2024-01-01\t12:00:01\n1\t2\n3\t4\n",
+        "# v1.2 beta\n1 2\n3 4\n",
+        "# v1.2  beta\n1 2\n3 4\n",
+        "# -----  -----\n1 2\n3 4\n",
+        "# ***\t***\n1\t2\n3\t4\n",
+        # Units are not names.
+        "# K Ohm\n1 2\n3 4\n",
+        "# K  Ohm\n1 2\n3 4\n",
+        "# Oe\temu\n1\t2\n3\t4\n",
     ],
 )
 def test_free_text_comment_is_not_a_header(tmp_path: Path, text: str) -> None:
@@ -120,16 +144,30 @@ def test_a_real_header_row_wins_over_a_comment(tmp_path: Path) -> None:
 
 
 def test_comment_separated_by_a_non_comment_line_is_not_used() -> None:
-    lines = ["# x y", "[Header]", "1 2"]
+    lines = ["# x  y", "[Header]", "1 2"]
     assert comment_lines_above_data(lines) == []
-    assert comment_header(["# x y", "1 2"], " ", 2) is not None
-    assert comment_header(["# x y", "1 2"], " ", 1) is None
+    assert comment_header("# x  y\n1 2\n", " ", 2) is not None
+    assert comment_header("# x  y\n1 2\n", " ", 1) is None
 
 
-def test_units_line_needs_brackets_on_every_cell() -> None:
-    got = comment_header(["# Temperature  Moment", "# (K)  (emu)", "1 2"], " ", 2)
+def test_units_line_under_names() -> None:
+    got = comment_header("# Temperature  Moment\n# (K)  (emu)\n1 2\n", " ", 2)
     assert got is not None and got.names == ["Temperature", "Moment"]
     assert got.units == ["K", "emu"]
     assert got.names_with_units() == ["Temperature (K)", "Moment (emu)"]
-    plain = comment_header(["# Created  by", "# x  y", "1 2"], " ", 2)
+    # "# H M" over "# Oe emu": the units name the units, never the columns.
+    pair = comment_header("# H M\n# Oe emu\n1 2\n", " ", 2)
+    assert pair is not None and pair.names == ["H", "M"] and pair.units == ["Oe", "emu"]
+    # A units row with prose (or nothing) above it promotes nothing.
+    assert comment_header("# Hysteresis loop.\n# Oe emu\n1 2\n", " ", 2) is None
+    assert comment_header("# Oe  emu\n1 2\n", " ", 2) is None
+    plain = comment_header("# Created  by\n# x  y\n1 2\n", " ", 2)
     assert plain is not None and plain.names == ["x", "y"] and plain.units == []
+
+
+def test_only_the_head_of_the_file_is_searched() -> None:
+    from quantized.io._comment_header import HEAD_CHARS
+
+    pad = "# filler\n" * (HEAD_CHARS // 9)
+    assert comment_header(pad + "# x  y\n1 2\n", " ", 2) is None
+    assert comment_header("# x  y\n" + "1 2\n" * HEAD_CHARS, " ", 2) is not None

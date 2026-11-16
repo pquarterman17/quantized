@@ -194,8 +194,7 @@ def import_csv(
     # A header written as a comment ("# Qz (1/A)  R", `_comment_header`).
     promoted = None
     if header_row < 0 and data_start == 0 and origin_rows is None:
-        head = text.removeprefix("\ufeff")[:65536].splitlines()  # not a 1M-row split
-        promoted = comment_header(head, delim, n_data_cols)
+        promoted = comment_header(text, delim, n_data_cols)
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
@@ -240,11 +239,11 @@ def import_csv(
         # it is already a `Sequence[Sequence[str]]`.
         data_tokens = data_tokens_list
     comma_cols: list[int] = []
-    dc_notes: list[str] = []  # ambiguous columns resolved by the file's evidence
+    dc_found: list[dc.FileEvidence] = []  # ambiguous columns settled by the file
     if comma_path:
         comma_cols = dc.resolve_decimal_columns(
             path.name, col_headers, matrix, data_tokens, decimal=decimal, delim=delim,
-            notes=dc_notes,
+            evidence=dc_found,
         )
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
@@ -450,7 +449,8 @@ def import_csv(
         decimal_meta, decimal_note = dc.decimal_metadata(shown)
         metadata.update(decimal_meta)
         notes.append(decimal_note)
-    notes.extend([*dc_notes, *comma_notes])
+    shown_all = [_extract_units(h)[1] or h for h in col_headers]
+    notes.extend([*(e.note(shown_all) for e in dc_found), *comma_notes])
     if time_promoted:
         if time_idx in categorical_idx:
             notes.append(

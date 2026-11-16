@@ -19,10 +19,11 @@ strings in -> floats/column indices out. No fastapi/pydantic/
   column like ``"1,500"`` -- exactly three digits after the comma and no
   other evidence -- could be 1.5 or 1500. The file does not say which, so
   it fails closed and the error names the Import Wizard's decimal-separator
-  control -- unless the FILE settles it: with a ``;`` or tab delimiter, any
-  other column that can only be a decimal comma makes the ambiguous ones
-  decimal-comma too, with a note (``2,000;0,00527``). All-ambiguous files
-  (``2,000;3,500``) still fail closed. That holds with plain integers mixed
+  control -- unless the FILE settles it (`_settled_by_file`): with a ``;``
+  or tab delimiter, a column that proves the decimal comma and no point
+  decimal anywhere make the ambiguous ones decimal-comma too, with a note
+  (``2,000;0,00527``). All-ambiguous files (``2,000;3,500``) and files with
+  a point decimal (``10.5<TAB>1,234``) still fail closed. That holds with plain integers mixed
   in too; only a column with a text cell keeps the old reading.
 
 A pure US file never reaches the per-column work here: the callers skip it
@@ -34,15 +35,16 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, overload
 
 import numpy as np
 
 from quantized.io._delimited_layout import _MISSING_TOKENS, _is_numeric_like, _to_float
-from quantized.io._header_units import _extract_units
 
 __all__ = [
     "DECIMAL_CHOICES",
+    "FileEvidence",
     "check_decimal",
     "decimal_metadata",
     "stray_comma_notes",
@@ -206,17 +208,17 @@ def resolve_decimal_columns(
     *,
     decimal: str,
     delim: str = "",
-    notes: list[str] | None = None,
+    evidence: list[FileEvidence] | None = None,
 ) -> list[int]:
     """Convert decimal-comma columns of ``matrix`` in place; return their indices.
 
     ``decimal`` is ``"auto"`` or ``","`` (the caller handles ``"."``).
     Raises ``ValueError`` on an ambiguous ``"auto"`` column -- unless the
-    FILE settles it (`_file_evidence`): with a ``;`` or tab ``delim``, a
-    column elsewhere in the file that is unambiguously decimal-comma makes
-    the ambiguous ones decimal-comma too, and one sentence saying so is
-    appended to ``notes``. Every ambiguous column is checked before any is
-    converted, so a refusal leaves ``matrix`` untouched.
+    FILE settles it (`_settled_by_file`): in a ``;`` or tab file, a column
+    that can only be a decimal comma, and no point decimal anywhere, make
+    the ambiguous ones decimal-comma too; the `FileEvidence` is appended to
+    ``evidence`` for the caller's note. Every ambiguous column is checked
+    before any is converted, so a refusal leaves ``matrix`` untouched.
     """
     n_rows = max(matrix.shape[0], 1)
     pending: list[tuple[int, list[str]]] = []
@@ -235,11 +237,13 @@ def resolve_decimal_columns(
         elif convert:
             pending.append((c, cells))
     if ambiguous:
-        if not (delim in _LOCALE_DELIMS and pending):
+        proof = _settled_by_file(delim, pending, data_tokens)
+        if not proof:
             c, _, example = ambiguous[0]
             raise _ambiguous_error(col_headers[c], file_label, example)
-        if notes is not None:
-            notes.append(_file_evidence(col_headers, ambiguous, pending, delim))
+        if evidence is not None:
+            found = FileEvidence(tuple(c for c, _, _ in ambiguous), proof, ambiguous[0][2], delim)
+            evidence.append(found)
         pending = sorted([*pending, *((c, cells) for c, cells, _ in ambiguous)])
     converted: list[int] = []
     for c, cells in pending:
@@ -261,33 +265,90 @@ def resolve_decimal_columns(
 _LOCALE_DELIMS = (";", "\t")
 
 
-def _file_evidence(
-    col_headers: Sequence[str],
-    ambiguous: Sequence[tuple[int, list[str], str]],
-    evidence: Sequence[tuple[int, list[str]]],
-    delim: str,
-) -> str:
-    """The note for ambiguous columns read as decimal comma on file evidence.
+def _strong(cells: Sequence[str]) -> bool:
+    """Whether a converted column PROVES the decimal comma.
 
-    UX audit 8 (finding 7): ``2,000;0,00527`` -- the temperature column alone
-    could be 2.0 or 2000, but the resistance column next to it can only be a
-    decimal comma, and a file does not mix two number locales. Both columns
-    are judged over EVERY data row (not a leading sample), so a decimal comma
-    first seen at the end of the file counts as much as one in the first row.
+    Unambiguous is not enough: ``"1,1"`` / ``"2,0"`` (a pair, a version, a
+    plate position) is a one-digit comma value too. Proof is a value no
+    label is written like: a leading ``0,`` / ``,5``, two or more fraction
+    digits (bar exactly three), a ``.`` thousands group or an exponent.
     """
-    def shown(c: int) -> str:  # as the dataset shows it: the unit split off
-        return f"'{_extract_units(col_headers[c])[1] or col_headers[c]}'"
+    for cell in cells:
+        m = _COMMA_RE.match(cell)
+        if m is None or not _unambiguous(m):
+            continue
+        whole, frac = m["int"], m["frac"]
+        if whole in ("", "0") or "." in whole or m["exp"] or (len(frac) >= 2 and len(frac) != 3):
+            return True
+    return False
 
-    names = ", ".join(shown(c) for c, _, _ in ambiguous)
-    proof = ", ".join(shown(c) for c, _ in evidence)
-    example = ambiguous[0][2]
-    sep = "semicolon" if delim == ";" else "tab"
+
+def _point_decimal(cell: str) -> bool:
+    """A point-decimal number that cannot be European thousands grouping
+    (``"10.5"``, ``"1.5e-3"`` -- not ``"1.234"``)."""
     return (
-        f"Column(s) {names} only hold values like '{example}', where the comma could be a "
-        f"decimal or a thousands separator; they were read with a decimal comma because "
-        f"column(s) {proof} in this {sep}-delimited file can only be read that way. Pick "
-        "the decimal separator in the Import Wizard if that is wrong."
+        "." in cell
+        and "," not in cell
+        and not _THOUSANDS_RE.match(cell)
+        and _is_numeric_like(cell)
     )
+
+
+def _settled_by_file(
+    delim: str,
+    converted: Sequence[tuple[int, list[str]]],
+    data_tokens: Sequence[Sequence[str]],
+) -> tuple[int, ...]:
+    """The columns that settle ambiguous ``"1,500"`` columns as decimal
+    comma, or ``()`` when the file does not (UX audit 8, finding 7).
+
+    ``2,000;0,00527``: the temperature column alone could be 2.0 or 2000,
+    but the resistance beside it is a decimal comma, and one file is written
+    in one number locale. That holds only when
+
+    * the delimiter is ``;`` or tab (with ``,`` the comma is a delimiter,
+      and whitespace says nothing about locale);
+    * some converted column PROVES the decimal comma (`_strong`); and
+    * no cell ANYWHERE is a point decimal (`_point_decimal`): ``10.5``
+      beside ``1,234`` means the comma is US thousands grouping, and the
+      European reading would be 1000x too small.
+
+    Every data row is inspected, so evidence at the end of a file counts as
+    much as at the start. A ``;`` file whose ``1,234`` column sits beside
+    ``0,5`` with no point decimal anywhere reads 1.234 -- one locale per file
+    -- with a note; the Import Wizard's Point choice overrides it.
+    """
+    if delim not in _LOCALE_DELIMS:
+        return ()
+    proof = tuple(c for c, cells in converted if _strong(cells))
+    if not proof:
+        return ()
+    if any(_point_decimal(cell.strip()) for row in data_tokens for cell in row):
+        return ()
+    return proof
+
+
+@dataclass(frozen=True)
+class FileEvidence:
+    """Ambiguous columns read as decimal comma on the file's evidence."""
+
+    ambiguous: tuple[int, ...]
+    proof: tuple[int, ...]
+    example: str
+    delim: str
+
+    def note(self, names: Sequence[str]) -> str:
+        """One sentence, columns named by ``names`` (indexed by raw column)."""
+        listed = ", ".join(f"'{names[c]}'" for c in self.ambiguous)
+        proof = ", ".join(f"'{names[c]}'" for c in self.proof)
+        sep = "semicolon" if self.delim == ";" else "tab"
+        return (
+            f"Column(s) {listed} only hold values like '{self.example}', where the comma "
+            f"could be a decimal or a thousands separator; they were read with a decimal "
+            f"comma because column(s) {proof} in this {sep}-delimited file use one and no "
+            "column uses a decimal point. Pick the decimal separator in the Import Wizard "
+            "if that is wrong."
+        )
 
 
 def decimal_metadata(column_names: Sequence[str]) -> tuple[dict[str, Any], str]:

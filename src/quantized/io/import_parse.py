@@ -76,6 +76,9 @@ class _Parsed:
     # Worksheet audit #21: decimal-comma cells left NaN in a point-decimal
     # column, one sentence per column (`_decimal_comma.stray_comma_notes`).
     decimal_notes: list[str] = field(default_factory=list)
+    # Ambiguous columns read as decimal comma on the file's evidence; the
+    # note is written once the dataset's column names are known.
+    decimal_evidence: list[dc.FileEvidence] = field(default_factory=list)
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -233,7 +236,7 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
     if header_line is None and units_line is None and origin is None:
         above = lines[section:data_start]
         if all(not ln.strip() or ln.strip()[0] in COMMENT_CHARS for ln in above):
-            promoted = comment_header(lines, delim, n_cols)
+            promoted = comment_header(text, delim, n_cols)
             names = promoted.names_with_units() if promoted else names
     return header_line, units_line, data_start, names, _guess_roles(data_rows, n_cols)
 
@@ -277,16 +280,18 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     decimal = dc.check_decimal(settings.decimal, delim)
     comma_cols: list[int] = []
     notes: list[str] = []
+    found: list[dc.FileEvidence] = []
     if dc.uses_decimal_path(decimal, delim, "," in text):
         comma_cols = dc.resolve_decimal_columns(
-            "this file", names, matrix, data_tokens, decimal=decimal, delim=delim, notes=notes
+            "this file", names, matrix, data_tokens, decimal=decimal, delim=delim, evidence=found
         )
-        notes += dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
+        notes = dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
     elif delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
         notes = qn.ungroup_columns(names, matrix, data_tokens)
         notes += dc.stray_comma_notes(names, matrix, data_tokens, separator_choice=False)
     return _Parsed(
-        lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes
+        lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes,
+        found,
     )
 
 
@@ -334,7 +339,13 @@ def _decimal_names(p: _Parsed, effective_names: list[str]) -> list[str]:
     """The decimal-comma columns, named as the parsed dataset shows them: the
     x column keeps its header name (`x_column_name`); every other column
     carries its effective (label-row) name."""
-    return [p.names[k] if p.roles[k] == "x" else effective_names[k] for k in p.decimal_columns]
+    shown = _shown_names(p, effective_names)
+    return [shown[k] for k in p.decimal_columns]
+
+
+def _shown_names(p: _Parsed, effective_names: list[str]) -> list[str]:
+    """Every column named as the parsed dataset shows it (`_decimal_names`)."""
+    return [p.names[k] if p.roles[k] == "x" else effective_names[k] for k in range(len(p.names))]
 
 
 def _decimal_fields(p: _Parsed, effective_names: list[str]) -> dict[str, object]:
@@ -348,6 +359,7 @@ def _decimal_fields(p: _Parsed, effective_names: list[str]) -> dict[str, object]
         decimal_meta, decimal_note = dc.decimal_metadata(_decimal_names(p, effective_names))
         fields.update(decimal_meta)
         notes.append(decimal_note)
+    notes.extend(e.note(_shown_names(p, effective_names)) for e in p.decimal_evidence)
     notes.extend(p.decimal_notes)
     if notes:
         fields["notes"] = notes
