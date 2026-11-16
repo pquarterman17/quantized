@@ -914,7 +914,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // OriginFigureFidelity joined lib/originFidelityTypes.ts (re-exported, no
   // importer changed), funding `OriginFigure.curve_sheet_notes`; the pin is
   // unchanged. (The reader branch's own 934 -> 901 move is subsumed.)
-  "/lib/types.ts": 821,
+  "/lib/types.ts": 694,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;
