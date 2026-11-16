@@ -1,4 +1,4 @@
-// Peak Analyzer step 1: every field has an accessible name. The numeric fields
+// Peak analyzer step 1: every field has an accessible name. The numeric fields
 // sat beside a bare <label> (no htmlFor) or carried only a placeholder, so a
 // screen reader announced "edit text" for the range, lambda, p, radius, order
 // and iteration fields.

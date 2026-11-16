@@ -170,7 +170,7 @@ export async function runExportConsolidated(
     });
     if (!done) s().setStatus("export cancelled");
   } catch (e: unknown) {
-    s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+    s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`, "danger");
   }
 }
 

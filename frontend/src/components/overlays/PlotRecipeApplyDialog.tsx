@@ -180,7 +180,7 @@ export default function PlotRecipeApplyDialog() {
           </div>
         )}
         {warnings.length > 0 && (
-          <div style={{ marginTop: 8, color: "var(--warning, var(--danger))" }}>
+          <div style={{ marginTop: 8, color: "var(--warn)" }}>
             {warnings.map((w) => (
               <div key={w}>{w}</div>
             ))}

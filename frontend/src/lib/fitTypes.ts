@@ -130,6 +130,10 @@ export interface FitOverlay {
   y: (number | null)[];
   /** Curve Fit's shaded band around this curve (./fitBandOverlay.ts). */
   band?: FitBandEdges;
+  /** Drawn by the Curve Fit panel: only then is the curve a thinner dashed line
+   *  and unstyled Line data gains markers (lib/fitOverlayStyle.ts). Quick Fit,
+   *  the peak envelope, reflectivity, ... leave it unset and keep the plain look. */
+  curveFit?: true;
 }
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the

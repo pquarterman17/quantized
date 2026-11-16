@@ -52,9 +52,12 @@ const GROUP_ORDER = [
 
 /** What the picker shows for a registry name, when it is not the name itself. */
 const DISPLAY: Record<string, string> = {
-  "Exponential Decay": "Exponential Decay (= ExpDec1)",
-  "Exponential Growth": "Exponential Growth (= ExpGro1)",
-  "Bi-exponential Decay": "Bi-exponential Decay (= ExpDec2)",
+  // Same curve as the Origin built-in, but NOT interchangeable: other
+  // parameters in another order (Quick Fit fits "Exponential Decay"), so both
+  // stay listed and the hint names the twin -- searching either name finds both.
+  "Exponential Decay": "Exponential Decay (ExpDec1's curve; A, τ, C)",
+  "Exponential Growth": "Exponential Growth (ExpGro1's curve; A, τ, C)",
+  "Bi-exponential Decay": "Bi-exponential Decay (ExpDec2's curve; A₁, τ₁, A₂, τ₂, C)",
   ExpDecay1: "ExpDecay1 (ExpDec1 with an x0 offset)",
   ExpDecay2: "ExpDecay2 (ExpDec2 with an x0 offset)",
   ExpDecay3: "ExpDecay3 (ExpDec3 with an x0 offset)",

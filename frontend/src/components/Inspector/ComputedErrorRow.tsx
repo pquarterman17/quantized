@@ -44,7 +44,7 @@ export default function ComputedErrorRow({ datasetId, labels, series }: {
       const { addComputedError } = await import("../../store/computedErrorRun");
       await addComputedError(datasetId, t, source, Number(param), reps.filter((c) => c !== t));
     } catch (e) {
-      setStatus(`Can't add the error column: ${e instanceof Error ? e.message : String(e)}`);
+      setStatus(`Can't add the error column: ${e instanceof Error ? e.message : String(e)}`, "danger");
     } finally {
       setBusy(false);
     }

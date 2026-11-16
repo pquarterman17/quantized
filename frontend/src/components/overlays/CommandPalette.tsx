@@ -15,13 +15,26 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { fuzzy } from "../../lib/fuzzy";
+import { rankActions } from "../../lib/paletteRank";
+import { loadUsage, recentIds, recordUse, type UsageMap } from "../../lib/paletteUsage";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { mergeCommands, PALETTE_LABEL, runAction, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 import { useOpenerCapture } from "./openerCapture";
 
 export type { Action };
+
+/** One row: the command, the label characters to highlight, and the group
+ *  header it sits under (a real group, "Recent", or the ranked "Results"). */
+interface Match {
+  a: Action;
+  hits: number[];
+  group: string;
+}
+
+const RECENT = "Recent";
+const RESULTS = "Results";
+const RECENT_LIMIT = 5;
 
 // Resolved once at module load — the host platform does not change.
 const IS_MAC = isMacPlatform();
@@ -38,6 +51,9 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [menuCmds, setMenuCmds] = useState<Action[]>([]);
+  // Per-user run counts (lib/paletteUsage.ts), re-read on every open: they
+  // feed the empty-query "Recent" group and the ranker's tie-breaking boost.
+  const [usage, setUsage] = useState<UsageMap>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -94,6 +110,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     setCursor(0);
     const menu = useCommands.getState().menuCommands;
     setMenuCmds(menu);
+    setUsage(loadUsage());
     // Context-selection commands (the active dataset / selected annotation
     // / selected shape's registry actions) are computed fresh each open —
     // non-reactive by design, same snapshot discipline as menuCommands. Their
@@ -116,25 +133,25 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     [actions, menuCmds],
   );
 
-  const matches = useMemo(() => {
-    return allActions
-      .map((a) => {
-        // Match the visible label first (so highlight hits map to it); fall back
-        // to hidden keywords (aliases like "diraculator") with no highlight.
-        const ml = fuzzy(query, a.label);
-        if (ml) return { a, m: ml };
-        const mk = a.keywords ? fuzzy(query, a.keywords) : null;
-        if (mk) return { a, m: { score: mk.score, hits: [] as number[] } };
-        // A fuzzy subsequence over a full sentence matches too much. Search
-        // descriptions by precise substring, while labels/keywords remain
-        // typo-tolerant.
-        const q = query.trim().toLowerCase();
-        const md = q && a.description?.toLowerCase().includes(q);
-        return { a, m: md ? { score: 0, hits: [] as number[] } : null };
-      })
-      .filter((x): x is { a: Action; m: NonNullable<typeof x.m> } => !!x.m)
-      .sort((x, y) => y.m.score - x.m.score);
-  }, [allActions, query]);
+  // Ranked best-first (lib/paletteRank.ts: whole word, prefix, synonym,
+  // keyword, description, fuzzy last; every typed word must match). An empty
+  // query lists the recently run commands first, then everything else.
+  const matches = useMemo((): Match[] => {
+    if (query.trim()) {
+      return rankActions(allActions, query, usage).map(({ a, hits }) => ({ a, hits, group: RESULTS }));
+    }
+    const byId = new Map(allActions.map((a) => [a.id, a]));
+    const recent = recentIds(usage, RECENT_LIMIT).flatMap((id) => {
+      const a = byId.get(id);
+      // A destructive command is never offered as "repeat last": Ctrl+K, Enter would be one key from it.
+      return a && !a.perEntity && !a.danger ? [a] : [];
+    });
+    const seen = new Set(recent.map((a) => a.id));
+    return [
+      ...recent.map((a) => ({ a, hits: [], group: RECENT })),
+      ...allActions.filter((a) => !seen.has(a.id)).map((a) => ({ a, hits: [], group: a.group })),
+    ];
+  }, [allActions, query, usage]);
 
   useEffect(() => {
     setCursor(0);
@@ -144,6 +161,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   const run = (a: Action) => {
     close();
+    if (!a.perEntity) recordUse(a.id);
     // P3.4 slice 2: routes through the shared chokepoint so an async
     // command (every File-menu export) registers an in-flight signal
     // StatusBar can show instead of firing untracked.
@@ -176,9 +194,9 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   // Consecutive matches of one group form a labelled `group` (the header is
   // its name, not an option); a group can recur after a better-scoring match.
-  const runs: ((typeof matches)[number] & { i: number })[][] = [];
+  const runs: (Match & { i: number })[][] = [];
   matches.forEach((x, i) => {
-    if (x.a.group !== matches[i - 1]?.a.group) runs.push([]);
+    if (x.group !== matches[i - 1]?.group) runs.push([]);
     runs[runs.length - 1].push({ ...x, i });
   });
 
@@ -221,26 +239,37 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
           )}
           {runs.map((grp, r) => (
             <div key={r} role="group" aria-labelledby={`${listId}-g${r}`}>
-              <div id={`${listId}-g${r}`} className="qz-cmdk-group" role="presentation">
-                {grp[0].a.group}
+              <div
+                id={`${listId}-g${r}`}
+                className={grp[0].group === RESULTS ? "qz-sr-only" : "qz-cmdk-group"}
+                role="presentation"
+              >
+                {grp[0].group}
               </div>
-              {grp.map(({ a, m, i }) => (
+              {grp.map(({ a, hits, group, i }) => (
                 <div
                   key={a.id}
                   id={`${listId}-${i}`}
                   role="option"
+                  // The name is the label alone; the outcome, category and shortcut are
+                  // the description (otherwise every span was run together into the name).
+                  aria-label={a.label}
+                  aria-describedby={`${listId}-${i}-d ${listId}-${i}-m`}
                   aria-selected={i === cursor}
                   className={`qz-cmdk-item${i === cursor ? " active" : ""}`}
                   onMouseEnter={() => setCursor(i)}
                   onMouseDown={() => run(a)}
                 >
                   <span className="qz-cmdk-copy">
-                    <span>{highlight(a.label, m.hits)}</span>
+                    <span>{highlight(a.label, hits)}</span>
                     {a.description && (
-                      <span className="qz-cmdk-desc">{a.description}</span>
+                      <span id={`${listId}-${i}-d`} className="qz-cmdk-desc">{a.description}</span>
                     )}
                   </span>
-                  {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
+                  <span id={`${listId}-${i}-m`} className="qz-cmdk-meta">
+                    {group !== a.group && <span className="qz-cmdk-cat">{a.group}</span>}
+                    {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
+                  </span>
                 </div>
               ))}
             </div>

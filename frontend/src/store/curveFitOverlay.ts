@@ -31,7 +31,8 @@ export function ownCurveFitOverlay(datasetId: string): FitOverlay | null {
  *  (undefined removes it) — a no-op when `from` was replaced meanwhile. */
 export function setCurveFitOverlayBand(from: FitOverlay, band: FitOverlay["band"]): void {
   if (useApp.getState().fitOverlay !== from) return;
-  const next: FitOverlay = { datasetId: from.datasetId, binding: from.binding, y: from.y, ...(band ? { band } : {}) };
+  const { band: _old, ...rest } = from; // keeps `curveFit` (and the curve) as drawn
+  const next: FitOverlay = { ...rest, ...(band ? { band } : {}) };
   own = next;
   useApp.getState().setFitOverlay(next);
 }

@@ -1,0 +1,20 @@
+/* UX-A: the Inspector's Selection section, empty-project hint and the Data
+   group heading on the Plot tab. Lazy with the Inspector chunk. */
+.qzk-inspector-selection { display: flex; flex-direction: column; gap: 6px; }
+.qzk-sel-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.qzk-sel-head .qzk-field-lbl { margin: 0; }
+.qzk-sel-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-sel-hint { margin: 0; white-space: normal; }
+.qzk-sel-fields { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.qzk-sel-row { display: flex; align-items: center; gap: 6px; }
+.qzk-sel-dash { color: var(--text-faint); }
+.qzk-inspector-empty { padding: 12px 4px; }
+.qzk-inspector-empty p { margin: 6px 0 0; white-space: normal; }
+.qzk-inspector-group {
+  margin: var(--pad) 0 0;
+  font-size: var(--type-label);
+  font-weight: var(--weight-semibold);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}

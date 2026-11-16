@@ -157,7 +157,7 @@ describe("BUG-018 — one Escape closes the INNERMOST backdrop dialog only", () 
   // `defaultPrevented` re-read then aborted it: the pause fired and
   // Preferences STAYED OPEN — Escape dead for the dialog, where the parent's
   // per-dialog window-capture `stopPropagation()` had shielded it.
-  // Reachable with no mouse: Peak Analyzer at step ②, then `Ctrl+,`.
+  // Reachable with no mouse: Peak analyzer at step ②, then `Ctrl+,`.
   it("a window-bubble claimant behind the dialog cannot swallow the dialog's Escape", async () => {
     const user = userEvent.setup();
     render(<PreferencesDialog />);

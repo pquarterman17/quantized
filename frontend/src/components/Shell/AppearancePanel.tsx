@@ -8,11 +8,11 @@
 
 import { PALETTES } from "../../lib/palettes";
 import { isCalcOnlyView } from "../../lib/viewMode";
-import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
+import { type Accent, type Density, type ThemeMode, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 
-const THEMES: Theme[] = ["dark", "light"];
+const THEMES: ThemeMode[] = ["system", "dark", "light"];
 const ACCENTS: Accent[] = ["violet", "teal", "ocean", "amber", "rose"];
 const DENSITIES: Density[] = ["compact", "regular", "comfy"];
 const opts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
@@ -22,8 +22,8 @@ const PALETTE_OPTS = PALETTES.map((p) => ({ value: p.value, label: p.label }));
 const IS_MAC = isMacPlatform();
 
 export default function AppearancePanel({ onClose }: { onClose: () => void }) {
-  const theme = useApp((s) => s.theme);
-  const setTheme = useApp((s) => s.setTheme);
+  const themeMode = useApp((s) => s.themeMode);
+  const setThemeMode = useApp((s) => s.setThemeMode);
   const accent = useApp((s) => s.accent);
   const setAccent = useApp((s) => s.setAccent);
   const density = useApp((s) => s.density);
@@ -49,7 +49,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
       }}
     >
       <label className="qzk-field-lbl">Theme</label>
-      <Select aria-label="Theme" options={opts(THEMES)} value={theme} onChange={(e) => setTheme(e.target.value as Theme)} />
+      <Select aria-label="Theme" options={opts(THEMES)} value={themeMode} onChange={(e) => setThemeMode(e.target.value as ThemeMode)} />
       <label className="qzk-field-lbl" style={{ marginTop: 4 }}>
         Accent
       </label>

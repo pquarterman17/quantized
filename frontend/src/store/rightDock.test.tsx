@@ -1,4 +1,4 @@
-// A docked Curve Fit / Peak Analyzer makes the stage reflow to its left
+// A docked Curve Fit / Peak analyzer makes the stage reflow to its left
 // (fitting live check: the docked window covered ~60 px of the plot and the
 // legend). The registry, the clearance and ToolWindow's registration.
 

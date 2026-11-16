@@ -223,13 +223,13 @@ export function useTabulate(): TabulateState {
       } else {
         setQueuedAction(null);
         setReportBusy(false);
-        setStatus(`Could not finish ${kind} because the full dataset is unavailable; re-import the source to continue`);
+        setStatus(`Could not finish ${kind} because the full dataset is unavailable; re-import the source to continue`, "danger");
       }
     }).catch((e: unknown) => {
       if (request !== pendingSeq.current) return;
       setQueuedAction(null);
       setReportBusy(false);
-      setStatus(`Could not finish ${kind} because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`);
+      setStatus(`Could not finish ${kind} because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`, "danger");
     });
     return true;
   }
@@ -312,7 +312,7 @@ export function useTabulate(): TabulateState {
       const resolved = await useApp.getState().resolveDataset(active.id);
       if (request !== copySeq.current) return null;
       if (!resolved) {
-        setStatus("Could not copy the table because the full dataset is unavailable; re-import the source to continue");
+        setStatus("Could not copy the table because the full dataset is unavailable; re-import the source to continue", "danger");
         return null;
       }
       if (actionKeyRef.current !== key) {
@@ -322,7 +322,7 @@ export function useTabulate(): TabulateState {
       return tsvForDataset(resolved);
     } catch (e) {
       if (request === copySeq.current) {
-        setStatus(`Could not copy the table because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`);
+        setStatus(`Could not copy the table because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`, "danger");
       }
       return null;
     }

@@ -459,7 +459,7 @@ async function runImport<T>(
   // A parser note (a skipped workbook sheet, dropped rows) rides on the status
   // line too -- the toast is transient; the danger toast below keeps `summary`.
   const notes = parserNotesSummary(noted);
-  get().setStatus(notes ? `${summary} — ${notes}` : summary);
+  get().setStatus(notes ? `${summary} — ${notes}` : summary, lastError ? "danger" : "ok");
   // P2 review fix: `added` (files actually imported), not createdIds.length
   // (datasets created) — a multi-book Origin file inflates the latter. The
   // toast cascade itself (overlay / folder / P1.3 wave-3 recipe-suggestion /

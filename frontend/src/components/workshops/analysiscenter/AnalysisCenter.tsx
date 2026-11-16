@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ANALYSIS_CATEGORIES, analysisTools, matchesAnalysisSearch, type AnalysisCategory } from "../../../lib/analysisCenter";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { isStatisticalResult } from "../../../lib/statisticalResultWorkspace";
+import { useMapGate } from "../../../lib/useMapGate";
 import { useAnalysisCenter } from "../../../store/analysisCenter";
 import { analysisCenterActions, launchAnalysisCenterTool, openAnalysisResult } from "../../../store/analysisCenterRun";
 import { useApp } from "../../../store/useApp";
@@ -37,7 +38,11 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
   const [busyId, setBusyId] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const actions = useMemo(() => analysisCenterActions(), []);
-  const tools = useMemo(() => analysisTools(actions, dataset), [actions, dataset]);
+  // Map-requiring tools (RSM, ROI cuts) read the lazy grid gate: warm it and
+  // recompute when it resolves, so they are not shown unavailable on first open.
+  const mapGate = useMapGate(dataset?.data);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mapGate is the recompute signal
+  const tools = useMemo(() => analysisTools(actions, dataset), [actions, dataset, mapGate]);
 
   useEscapeSurface("workspace", () => {
     onBack();

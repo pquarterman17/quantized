@@ -17,8 +17,9 @@ interface Menu {
   items: ContextMenuItem[];
 }
 
-/** Title-size presets offered under Format ▸ Size. */
-const SIZE_PRESETS = [10, 12, 14, 16, 18, 20, 24, 28] as const;
+/** Title-size presets offered under Format ▸ Size, in pt (the Axis dialog's unit);
+ *  the stored size is px (pt x 4/3), the export sends it back as pt. */
+const SIZE_PRESETS_PT = [8, 9, 10, 11, 12, 14, 16, 18] as const;
 
 export function useAxisLabelEdit(tool: string): {
   bridge: AxisLabelEditOpts;
@@ -54,10 +55,10 @@ export function useAxisLabelEdit(tool: string): {
         submenu: [
           {
             label: "Size",
-            submenu: SIZE_PRESETS.map((s) => ({
-              label: `${s} px`,
-              checked: st.size === s,
-              run: () => setAxisLabelStyle(axis, { size: s }),
+            submenu: SIZE_PRESETS_PT.map((pt) => ({
+              label: `${pt} pt`,
+              checked: st.size != null && Math.abs(st.size * 0.75 - pt) < 0.01,
+              run: () => setAxisLabelStyle(axis, { size: Math.round((pt * 4 / 3) * 1e4) / 1e4 }),
             })),
           },
           { label: "Italic", checked: !!st.italic, run: () => setAxisLabelStyle(axis, { italic: !st.italic }) },

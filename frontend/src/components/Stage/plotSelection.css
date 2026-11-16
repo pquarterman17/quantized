@@ -1,0 +1,6 @@
+/* UX-A: the Pointer-tool selection halo over the plot (PlotSelectionLayer).
+   Lazy with its component. Violet = selection (DESIGN_GUIDE). */
+.qzk-selection-halo { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.qzk-selection-curve { fill: none; stroke: var(--accent); stroke-opacity: 0.35; stroke-linecap: round; stroke-linejoin: round; }
+.qzk-selection-box { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.qzk-selection-idle { opacity: 0.4; }

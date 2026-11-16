@@ -76,12 +76,20 @@ const OUTPUT_FIELDS: ParamField[] = [
   },
 ];
 
+/** The output fields with the Format answer pre-selected (the palette's
+ *  "Export PDF…" / "Export SVG…"); `undefined` keeps the dialog's own default. */
+function outputFields(fmt: string | undefined): ParamField[] {
+  return fmt ? OUTPUT_FIELDS.map((f) => (f.key === "fmt" ? { ...f, default: fmt } : f)) : OUTPUT_FIELDS;
+}
+
 /** `buildSpec` replaces the focused Stage plot as the figure's source while
  *  keeping this dialog and `exportActive`'s chokepoint — the Graph Builder's
- *  encoded export (`lib/plotEncodingExport.ts`) is its one caller. */
+ *  encoded export (`lib/plotEncodingExport.ts`) is its one caller. `fmt`
+ *  pre-selects the dialog's Format (still editable). */
 export async function runExportFigureCommand(
   s: StoreGet,
   buildSpec?: (stem: string, ds: Dataset, o: FigureRenderOpts) => FigureSpec,
+  fmt?: string,
 ): Promise<void> {
   // Refuse before the dialog: `exportActive` would refuse anyway, but only
   // after every field below had been answered.
@@ -94,7 +102,7 @@ export async function runExportFigureCommand(
   // Stat mode exports the stat plot on screen through the stage's own export.
   const stat = buildSpec ? null : activeStatExporter(s());
   if (stat) {
-    const p = await askParams("Export figure", OUTPUT_FIELDS, { confirmLabel: "Export" });
+    const p = await askParams("Export figure", outputFields(fmt), { confirmLabel: "Export" });
     if (p) await exportStatFigure(s, stat, String(p.fmt), { style: String(p.style), dpi: Number(p.dpi) });
     return;
   }
@@ -103,7 +111,7 @@ export async function runExportFigureCommand(
   // part of the export, so the dialog asks for them too.
   const hasY2 = (s().y2Keys?.length ?? 0) > 0;
   const params = await askParams("Export figure", [
-    ...OUTPUT_FIELDS,
+    ...outputFields(fmt),
     ...pageSizeFields(s().pageSetup),
     GREYSCALE_FIELD,
     { key: "title", label: "Title", type: "text", default: s().plotTitle },

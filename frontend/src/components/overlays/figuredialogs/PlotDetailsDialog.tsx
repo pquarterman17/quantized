@@ -62,7 +62,7 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 360 }}>
       <div className="qzk-ds-meta">{name}</div>
 
-      <h3 style={{ margin: "4px 0" }}>Color</h3>
+      <h3 style={{ margin: "4px 0" }}>Colour</h3>
       <div style={row}>
         {PALETTE.map((c) => (
           <button

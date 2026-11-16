@@ -24,13 +24,13 @@ export async function resolveAnalysisResultPlot(
   const binding = result?.plotBindings?.[bindingIndex];
   const datasetId = fitDatasetId ?? binding?.datasetId;
   if (!result || !datasetId) {
-    initial.setStatus("can't open result figure: the saved plot binding is unavailable");
+    initial.setStatus("can't open result figure: the saved plot binding is unavailable", "danger");
     return null;
   }
   try {
     await initial.resolveDataset(datasetId);
   } catch (error) {
-    useApp.getState().setStatus(`can't open result figure: ${error instanceof Error ? error.message : "worksheet loading failed"}`);
+    useApp.getState().setStatus(`can't open result figure: ${error instanceof Error ? error.message : "worksheet loading failed"}`, "danger");
     return null;
   }
   const state = useApp.getState();
@@ -38,7 +38,7 @@ export async function resolveAnalysisResultPlot(
   const fitDataset = fitDatasetId ? state.datasets.find((item) => item.id === fitDatasetId) : null;
   if (fitDatasetId) {
     if (currentResult?.settingsRef?.field !== "fitSpec" || currentResult.settingsRef.datasetId !== fitDatasetId) {
-      state.setStatus("can't open result figure: its result changed while loading");
+      state.setStatus("can't open result figure: its result changed while loading", "danger");
       return null;
     }
     const liveBinding = currentResult && fitDataset ? liveFitPlotBinding(currentResult, fitDataset) : null;
@@ -56,7 +56,7 @@ export async function resolveAnalysisResultPlot(
     }
   }
   if (!binding) {
-    state.setStatus("can't open result figure: the saved plot binding is unavailable");
+    state.setStatus("can't open result figure: the saved plot binding is unavailable", "danger");
     return null;
   }
   const currentBinding = currentResult?.plotBindings?.[bindingIndex];
@@ -64,7 +64,7 @@ export async function resolveAnalysisResultPlot(
       currentBinding.xChannel !== binding.xChannel ||
       currentBinding.channels.length !== binding.channels.length ||
       currentBinding.channels.some((channel, index) => channel !== binding.channels[index])) {
-    state.setStatus("can't open result figure: the saved plot binding changed while loading");
+    state.setStatus("can't open result figure: the saved plot binding changed while loading", "danger");
     return null;
   }
   const dataset = state.datasets.find((item) => item.id === currentBinding.datasetId);
@@ -75,7 +75,7 @@ export async function resolveAnalysisResultPlot(
   const xValid = xChannel === undefined || xChannel === null ||
     (Number.isInteger(xChannel) && xChannel >= 0 && xChannel < (dataset?.data.labels.length ?? 0));
   if (!dataset || channels.length === 0 || !xValid) {
-    state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`);
+    state.setStatus(`can't open result figure: ${dataset ? "its plotted channels are unavailable" : "its worksheet is missing"}`, "danger");
     return null;
   }
   return { dataset, channels, ...(xChannel !== undefined ? { xChannel } : {}) };

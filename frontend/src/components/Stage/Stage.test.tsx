@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Stage from "./Stage";
+import { ensureMapGate } from "../../lib/mapdata";
 import { useApp } from "../../store/useApp";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
@@ -33,16 +34,18 @@ vi.mock("./EmptyProjectStage", async (importOriginal) => {
 // Figures-audit #13: the Map tab needs a map-shaped dataset, not merely
 // three channels. `ds(n >= 3)` is long-form gridded XYZ (the axis column and
 // c0 repeat like grid axes); `ds(2)` is an ordinary 1-D sweep.
-const ds = (nChannels: number): Dataset => {
+// UX-D: the long-form grid is 3 x 3 -- the gate needs >=3 levels per axis (a
+// 2 x 2 table is covered explicitly by the "2 x 2" test below).
+const makeDs = (nChannels: number): Dataset => {
   const gridded = nChannels >= 3;
-  const time = gridded ? [0, 0, 1, 1] : [0, 1, 2, 3];
+  const time = gridded ? [0, 0, 0, 1, 1, 1, 2, 2, 2] : [0, 1, 2, 3];
   return {
     id: "d1",
     name: "d.dat",
     data: {
       time,
       values: time.map((t, r) =>
-        Array.from({ length: nChannels }, (_, c) => (gridded && c === 0 ? r % 2 : 10 * r + c + t)),
+        Array.from({ length: nChannels }, (_, c) => (gridded && c === 0 ? r % 3 : 10 * r + c + t)),
       ),
       labels: Array.from({ length: nChannels }, (_, i) => `c${i}`),
       units: Array(nChannels).fill(""),
@@ -50,6 +53,12 @@ const ds = (nChannels: number): Dataset => {
     },
   };
 };
+// The Map tab's grid test is a lazy, memoised gate (fail closed until it lands):
+// the shared grid dataset is warmed once so most tests see the settled state;
+// "arrives lazily" below builds a fresh one to see the transition itself.
+const WARM_GRID = makeDs(3);
+beforeAll(() => ensureMapGate(WARM_GRID.data));
+const ds = (nChannels: number): Dataset => (nChannels >= 3 ? WARM_GRID : makeDs(nChannels));
 
 beforeEach(() => {
   useApp.setState({
@@ -135,6 +144,36 @@ describe("Map tab visibility", () => {
     useApp.setState({ datasets: [ds(3)], activeId: "d1" });
     render(<Stage />);
     expect(screen.getByText("Map")).toBeInTheDocument();
+  });
+
+  it("arrives lazily for a never-seen grid dataset (absent first, then offered)", async () => {
+    useApp.setState({ datasets: [makeDs(3)], activeId: "d1" });
+    render(<Stage />);
+    expect(screen.queryByText("Map")).not.toBeInTheDocument(); // fail closed until known
+    expect(await screen.findByText("Map")).toBeInTheDocument();
+  });
+
+  it("is hidden for a 2 x 2 long-form table (too few levels to be a map)", () => {
+    const d = ds(3);
+    const data = { ...d.data, time: [0, 0, 1, 1], values: [[0, 1, 2], [1, 2, 3], [0, 3, 4], [1, 4, 5]] };
+    useApp.setState({ datasets: [{ ...d, data }], activeId: "d1" });
+    render(<Stage />);
+    expect(screen.queryByText("Map")).not.toBeInTheDocument();
+  });
+
+  it("offers 'View as scattered map' for a three-column dataset that is not a grid, and it opens Map", async () => {
+    useApp.setState({ datasets: [ds(2)], activeId: "d1", stageTab: "plot" });
+    render(<Stage />);
+    expect(screen.queryByText("Map")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "View as scattered map" }));
+    expect(await screen.findByText("map-canvas")).toBeInTheDocument();
+    expect(useApp.getState().stageTab).toBe("map");
+  });
+
+  it("does not offer the scattered fallback for a real grid", () => {
+    useApp.setState({ datasets: [ds(3)], activeId: "d1" });
+    render(<Stage />);
+    expect(screen.queryByRole("button", { name: "View as scattered map" })).toBeNull();
   });
 
   it("Plot and Worksheet are always available", () => {

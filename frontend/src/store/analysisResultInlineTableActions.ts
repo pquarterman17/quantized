@@ -18,15 +18,15 @@ export function exportAnalysisInlineTables(id: string, tableIndex?: number, expe
   const oneTable = tableIndex === undefined ? undefined
     : Number.isInteger(tableIndex) && tableIndex >= 0 ? tables?.[tableIndex] : undefined;
   if (!result) {
-    state.setStatus("can't export analysis result: it was deleted");
+    state.setStatus("can't export analysis result: it was deleted", "danger");
     return false;
   }
   if (expectedTables && tables !== expectedTables) {
-    state.setStatus(`can't export ${result.name}: its saved tables changed; try again`);
+    state.setStatus(`can't export ${result.name}: its saved tables changed; try again`, "danger");
     return false;
   }
   if (!tables?.length || (tableIndex !== undefined && !oneTable)) {
-    state.setStatus(`can't export ${result?.name ?? "analysis result"}: the saved table is unavailable`);
+    state.setStatus(`can't export ${result?.name ?? "analysis result"}: the saved table is unavailable`, "danger");
     return false;
   }
   const sentence = tableIndex === undefined && typeof result.scalarValues?.Interpretation === "string"
@@ -50,15 +50,15 @@ export async function copyAnalysisInlineTables(id: string, tableIndex?: number, 
   const oneTable = tableIndex === undefined ? undefined
     : Number.isInteger(tableIndex) && tableIndex >= 0 ? tables?.[tableIndex] : undefined;
   if (!result) {
-    state.setStatus("can't copy analysis result: it was deleted");
+    state.setStatus("can't copy analysis result: it was deleted", "danger");
     return false;
   }
   if (expectedTables && tables !== expectedTables) {
-    state.setStatus(`can't copy ${result.name}: its saved tables changed; try again`);
+    state.setStatus(`can't copy ${result.name}: its saved tables changed; try again`, "danger");
     return false;
   }
   if (!tables?.length || (tableIndex !== undefined && !oneTable)) {
-    state.setStatus(`can't copy ${result?.name ?? "analysis result"}: the saved table is unavailable`);
+    state.setStatus(`can't copy ${result?.name ?? "analysis result"}: the saved table is unavailable`, "danger");
     return false;
   }
   const sentence = tableIndex === undefined && typeof result.scalarValues?.Interpretation === "string"
@@ -86,7 +86,7 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
   const table = tables?.[0];
   if (!result || !tables || !table) return false;
   if (!snapshotCurrent(result, initial.datasets)) {
-    initial.setStatus(`can't add ${result.name} to report: its source is missing or out of date`);
+    initial.setStatus(`can't add ${result.name} to report: its source is missing or out of date`, "danger");
     return false;
   }
   try {
@@ -105,13 +105,13 @@ export async function sendAnalysisInlineTableToReport(id: string): Promise<boole
     // change too: publishing would label the Report list and sheet differently.
     if (!live || live.tables !== tables || live.name !== result.name ||
         !snapshotCurrent(live, current.datasets)) {
-      current.setStatus("can't add analysis result to report: the result or its source changed while rendering");
+      current.setStatus("can't add analysis result to report: the result or its source changed while rendering", "danger");
       return false;
     }
     addReportWithProvenance(live.name, report, live.sources[0]?.datasetId ?? null);
     return true;
   } catch (error) {
-    useApp.getState().setStatus(`could not add analysis result to report — ${error instanceof Error ? error.message : "unknown error"}`);
+    useApp.getState().setStatus(`could not add analysis result to report — ${error instanceof Error ? error.message : "unknown error"}`, "danger");
     return false;
   }
 }

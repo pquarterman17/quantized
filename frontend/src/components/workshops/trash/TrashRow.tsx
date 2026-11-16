@@ -59,7 +59,7 @@ export default function TrashRow({ entry, now }: { entry: TrashEntry; now: numbe
             // a stale tab after a rebuild or a dropped connection rejects
             // the chunk load, and a silent click is the wrong answer
             // (self-review on #292).
-            .catch(() => setStatus(`could not restore ${name} — reload and try again`));
+            .catch(() => setStatus(`could not restore ${name} — reload and try again`, "danger"));
         }}
         title="Put this back where it was"
       >

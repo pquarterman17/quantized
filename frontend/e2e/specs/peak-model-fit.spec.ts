@@ -1,4 +1,4 @@
-// Peak Analyzer — a real multi-peak fit through the mixed-shape model engine
+// Peak analyzer — a real multi-peak fit through the mixed-shape model engine
 // (PRIMARY_SOFTWARE_AUDIT_PLAN P2.4 slice 2), end to end against the REAL
 // backend: import a synthetic two-peak pattern (fixtures/two-peaks.csv: a
 // Gaussian at 36 deg, FWHM 0.4, height 800 and a Lorentzian at 44 deg, FWHM
@@ -44,14 +44,14 @@ function readPeakTable(page: Page): Promise<{ producer: string | undefined; rows
   });
 }
 
-test.describe("Peak Analyzer mixed-shape model fit", () => {
+test.describe("Peak analyzer mixed-shape model fit", () => {
   test("find two peaks, fit Gaussian + Lorentzian, report", async ({ page }) => {
     await gotoApp(page);
     await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("two-peaks.csv"));
     await waitForDatasetCount(page, 1);
 
-    await runPaletteCommand(page, "Peak Analyzer");
-    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
+    await runPaletteCommand(page, "Peak analyzer");
+    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak analyzer", { exact: true }) });
     await expect(panel).toBeVisible();
 
     // ② find
@@ -138,6 +138,6 @@ test.describe("Peak Analyzer mixed-shape model fit", () => {
       expect(Math.abs(value - want)).toBeLessThan(0.01);
       expect(err).toBeGreaterThan(0);
     }
-    await expect(peaks.getByText(/Peak Analyzer model fit/)).toBeVisible();
+    await expect(peaks.getByText(/Peak analyzer model fit/)).toBeVisible();
   });
 });

@@ -43,7 +43,7 @@
 .qzk-analysis-input-fields select { min-width: 0; }
 .qzk-analysis-input-issue { margin: var(--space-1) 0 0; font-size: var(--font-size-sm); }
 .qzk-analysis-input-issue.error { color: var(--danger); }
-.qzk-analysis-input-issue.warning { color: var(--warning); }
+.qzk-analysis-input-issue.warning { color: var(--warn); }
 
 .qzk-analysis-batch { flex-shrink: 0; margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .qzk-analysis-batch-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }

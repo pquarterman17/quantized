@@ -19,23 +19,59 @@ export function is2DMap(ds: DataStruct): boolean {
   return ds.metadata["is2D"] === true && ds.labels.length >= 3;
 }
 
-/** True when `col` repeats values the way a gridded axis does: at most half
- *  as many distinct finite values as rows. A swept axis (every value new) or
- *  a continuous measured signal never does. */
-export function repeats(col: (number | null | undefined)[]): boolean {
-  // levels-allowlist: counts DISTINCT values of a numeric axis to tell a
-  // gridded axis from a sweep -- not a column's category levels.
-  const seen = new Set<number>();
-  const limit = col.length / 2;
-  for (const v of col) {
-    if (typeof v !== "number" || !Number.isFinite(v)) continue;
-    seen.add(v);
-    if (seen.size > limit) return false;
-  }
-  return seen.size >= 2;
+const gate = new WeakMap<DataStruct, boolean>();
+const pending = new WeakMap<DataStruct, Promise<boolean>>();
+const listeners = new Set<() => void>();
+let version = 0;
+
+/** `useSyncExternalStore` plumbing: re-render when a lazy gate result lands. */
+export const subscribeMapGate = (f: () => void): (() => void) => {
+  listeners.add(f);
+  return () => void listeners.delete(f);
+};
+export const mapGateVersion = (): number => version;
+
+/** Cheap synchronous rejections shared by `canRenderMap` / `ensureMapGate`. */
+const tooSmall = (d: DataStruct): boolean => d.labels.length + 1 < 3 || d.values.length < 4;
+
+/** True when `canRenderMap(data)` is already its FINAL answer: decided
+ *  synchronously (no data, parser-flagged, too small, scattered XYZ) or the
+ *  lazy grid gate has classified this DataStruct. False only while the gate
+ *  has not run yet -- a "no" from `canRenderMap` then means "not known yet",
+ *  and a surface that names availability (the plot-type gallery, the Analysis
+ *  Center) must say it is checking rather than call the type unavailable. */
+export function mapGateResolved(data: DataStruct | null | undefined): boolean {
+  if (!data || data.metadata["is2D"] === true || tooSmall(data) || data.metadata["scatteredXYZ"] === true) return true;
+  return gate.has(data);
 }
 
-const mappableCache = new WeakMap<DataStruct, boolean>();
+/** Shown while the lazy grid gate is still classifying a dataset. */
+export const MAP_GATE_CHECKING = "Checking whether the data forms an X/Y grid…";
+
+/** Resolve the grid gate for a dataset (loads the lazy engine once), memoised
+ *  per DataStruct. Resolves to `canRenderMap(data)`'s final answer. */
+export function ensureMapGate(data: DataStruct | null | undefined): Promise<boolean> {
+  if (!data || data.metadata["is2D"] === true || tooSmall(data) || data.metadata["scatteredXYZ"] === true) {
+    return Promise.resolve(canRenderMap(data));
+  }
+  const known = gate.get(data);
+  if (known !== undefined) return Promise.resolve(known);
+  let p = pending.get(data);
+  if (!p) {
+    p = import("./mapGate").then(
+      (m) => {
+        const ok = m.hasGridAxes(data);
+        gate.set(data, ok);
+        version++;
+        listeners.forEach((f) => f());
+        return ok;
+      },
+      () => false, // fail closed; a later call retries the chunk
+    );
+    pending.set(data, p);
+  }
+  return p;
+}
 
 /** Can this dataset produce a 2-D map at all? (owner request 2026-07-25)
  *
@@ -49,20 +85,33 @@ const mappableCache = new WeakMap<DataStruct, boolean>();
  *  stops offering a Map tab for a 1-D sweep (`Energy,S0..S7`: a swept
  *  axis plus continuous signals), which could only ever draw nonsense.
  *
+ *  UX-D: repeating columns are only CANDIDATE axes (an instrument file is full
+ *  of step-valued status/range/setpoint columns). A candidate pair forms a grid
+ *  when its value pairs cover >=80 % of levels(a) x levels(b), OR it is made of
+ *  uniform scan lines (a sheared / staggered raster, e.g. a coupled omega-2theta
+ *  RSM exported as long-form CSV): >=3 lines of >=3 points, near-constant
+ *  (+-20 %) length, the fast axis (revisited by >=3 rows per level) taking new values that run ONE way along each
+ *  line (a real raster line is monotone; a step column's noise is not). Each
+ *  axis needs >=3 levels, so a 2 x N table is not a map. A dataset the gate
+ *  rejects can still be opened as a scattered map by hand (Stage's "View as
+ *  scattered map").
+ *
+ *  Cost is bounded: at most ~20k (strided) rows and 8 candidate columns are
+ *  examined, level sets are built once, and pairs that cannot qualify are never
+ *  scanned (`mapGateWork` counts the scans for the perf-invariant test).
+ *
+ *  The grid test itself (lib/mapGate.ts) is a LAZY chunk: `canRenderMap` is
+ *  synchronous and FAILS CLOSED -- a dataset the parser did not flag `is2D`
+ *  has no Map tab until `ensureMapGate` has resolved it (memoised per DataStruct,
+ *  so once per dataset version) and notified `subscribeMapGate` listeners.
+ *  `Stage` triggers it for the active dataset (that is the warm-up on import).
+ *  Parser-flagged 2-D maps keep the tab immediately, with no lazy wait.
+ *
  *  Deliberately capability, not history: "has a map been drawn" would be
  *  circular -- you could never reach the tab to draw the first one. */
 export function canRenderMap(data: DataStruct | null | undefined): boolean {
   if (!data) return false;
   if (data.metadata["is2D"] === true) return data.labels.length >= 3;
-  if (data.labels.length + 1 < 3 || data.values.length < 4) return false;
-  const cached = mappableCache.get(data);
-  if (cached !== undefined) return cached;
-  let gridAxes = repeats(data.time) ? 1 : 0;
-  for (let c = 0; c < data.labels.length && gridAxes < 2; c++) {
-    if (repeats(data.values.map((row) => row[c]))) gridAxes++;
-  }
-  // Scattered XYZ is opt-in (Plot > Contour from scattered XYZ), never guessed.
-  const ok = gridAxes >= 2 || data.metadata["scatteredXYZ"] === true;
-  mappableCache.set(data, ok);
-  return ok;
+  if (tooSmall(data)) return false;
+  return data.metadata["scatteredXYZ"] === true || gate.get(data) === true;
 }

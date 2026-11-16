@@ -43,7 +43,7 @@ import { useApp } from "./useApp";
 
 /** Ask before REPLACING a dataset's peak table; true when there is none to
  *  replace, `when` says this one needs no question, or the user confirms.
- *  The one replace guard both producers share: the Peak Analyzer asks for any
+ *  The one replace guard both producers share: the Peak analyzer asks for any
  *  existing table (a narrow-range fit would otherwise silently shrink a
  *  full-pattern one), and the Peaks workshop asks — before it fits — only
  *  when the table is a model fit, whose errors, shapes and reasons a Peaks
@@ -58,7 +58,7 @@ export async function confirmReplacingPeakTable(
   return askConfirm(
     "Replace the peak table?",
     `This dataset already has a ${t.peaks.length}-peak table ` +
-      `(${t.provenance.producer === "model_fit" ? "a Peak Analyzer model fit, with per-peak errors" : "from the Peaks workshop"}). ` +
+      `(${t.provenance.producer === "model_fit" ? "a Peak analyzer model fit, with per-peak errors" : "from the Peaks workshop"}). ` +
       `Publishing replaces it with ${incoming}; exclusions carry over to matching peaks, and Undo restores the old table.`,
     "Replace",
   );
@@ -181,7 +181,7 @@ export function publishFitResult(
   );
 }
 
-/** Publish a table another workshop BUILT — the Peak Analyzer's model fit
+/** Publish a table another workshop BUILT — the Peak analyzer's model fit
  *  (peakwizard/modelFitPeakTable.ts). `fitDataset` is the record the fit RAN
  *  on: records are immutable, so it IS the fit-time data, and its fingerprint
  *  (the one hash every publish pays) is what the table is stamped with. The

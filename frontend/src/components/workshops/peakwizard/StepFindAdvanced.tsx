@@ -1,4 +1,4 @@
-// Peak Analyzer step ② ▸ Advanced — the Peaks panel's detector settings
+// Peak analyzer step ② ▸ Advanced — the Peaks panel's detector settings
 // (peaks/PeakFindAdvanced.tsx, loaded lazily: the disclosure is rarely
 // opened) over the recipe's `find` section. The panel component edits a
 // local draft and hands back a FULL `PeakFindParams` on "Find again" /

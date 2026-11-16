@@ -6,6 +6,15 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Theme: Preferences > Appearance now offers "Follow system" alongside Dark and
+  Light, and the page picks the OS colour scheme before first paint (no dark
+  flash on a light OS). New installs follow the system; existing users who
+  already saved a theme stay pinned to it until they pick "System". Help and
+  meta text is larger, wraps instead of ellipsizing, and several status/muted
+  colours were darkened or lightened to meet WCAG AA contrast.
+
 ## [0.35.0] - 2026-11-16
 
 ### Added

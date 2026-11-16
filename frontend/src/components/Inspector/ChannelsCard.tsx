@@ -5,6 +5,8 @@
 // (R / dR / resolution) etc. legible. Analysis workshops still use the first
 // channel; this controls the plot only.
 
+import { useState } from "react";
+
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { describeLabelRow, labelRows, labelsFromRow, type LabelRow } from "../../lib/labelRows";
 import { withErrKey, withSymmetricYError } from "../../lib/errorRoleEdits";
@@ -19,11 +21,20 @@ import { SliderRow } from "../primitives/SliderRow";
 import BufferedNumberField from "../primitives/BufferedNumberField";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
+import ChannelsFilterBar from "./ChannelsFilterBar";
+
+/** Above this many columns the card switches to one compact line per channel. */
+const COMPACT_ABOVE = 12;
 
 /** Compact modeling-type tags for the per-channel select. */
 const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
 
+/** Keyed by dataset so the filter text and opened rows never leak across files. */
 export default function ChannelsCard({ active }: { active: Dataset | null }) {
+  return <ChannelsCardBody key={active?.id ?? ""} active={active} />;
+}
+
+function ChannelsCardBody({ active }: { active: Dataset | null }) {
   const xKey = useApp((s) => s.xKey);
   const setXKey = useApp((s) => s.setXKey);
   const yKeys = useApp((s) => s.yKeys);
@@ -42,6 +53,9 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const waterfallDx = useApp((s) => s.waterfallDx);
   const setWaterfallDx = useApp((s) => s.setWaterfallDx);
   const endHistoryRun = useApp((s) => s.endHistoryRun);
+
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
 
   if (!active || active.data.labels.length < 2) return null;
 
@@ -101,10 +115,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   };
   const xDefaultLabel = String(meta?.["x_column_long"] || meta?.["x_column_name"] || "Index");
 
-  const toggle = (i: number) => {
-    const next = selected.includes(i)
-      ? selected.filter((x) => x !== i)
-      : [...selected, i].sort((a, b) => a - b);
+  const apply = (next: number[], dropped: number[]) => {
     // Keep at least one *plotted* (non-x) channel — the x channel is filtered out.
     if (next.filter((x) => x !== xKey).length === 0) return;
     // Collapse back to the "auto" sentinel (null) only when the manual pick
@@ -116,10 +127,26 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
       next.length === denseDefault.length && next.every((v, idx) => v === denseDefault[idx]);
     setYKeys(isDefault ? null : next);
     // A hidden channel can't sit on the secondary axis.
-    if (!next.includes(i) && y2.has(i)) {
-      const ny2 = (y2Keys ?? []).filter((x) => x !== i);
-      setY2Keys(ny2.length ? ny2 : null);
-    }
+    const ny2 = (y2Keys ?? []).filter((x) => !dropped.includes(x));
+    if (ny2.length !== y2.size) setY2Keys(ny2.length ? ny2 : null);
+  };
+  const toggle = (i: number) =>
+    selected.includes(i)
+      ? apply(selected.filter((x) => x !== i), [i])
+      : apply([...selected, i].sort((a, b) => a - b), []);
+
+  // Many-column mode: Select all / none act on the rows the filter shows.
+  const compact = labels.length > COMPACT_ABOVE;
+  const needle = query.trim().toLowerCase();
+  const matches = (i: number): boolean => !needle || `${labels[i]} ${units[i] ?? ""}`.toLowerCase().includes(needle);
+  const targets = labels.map((_, i) => i).filter((i) => i !== xKey && !channelRoles[i] && matches(i));
+  const shownCount = labels.filter((_, i) => i !== xKey && matches(i)).length;
+  const selectAll = () => apply([...new Set([...selected, ...targets])].sort((a, b) => a - b), []);
+  const selectNone = () => {
+    const rest = selected.filter((x) => !targets.includes(x));
+    // Never empty the plot: the first channel that was plotted stays.
+    const keep = rest.some((x) => x !== xKey) ? rest : [selected.find((x) => x !== xKey) ?? 0];
+    apply(keep, targets.filter((t) => !keep.includes(t)));
   };
 
   // The axis a channel draws on: an extra axis that exists, else Y2 / Y1 (an
@@ -174,17 +201,50 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
           />
         </div>
       )}
+      {compact && (
+        <ChannelsFilterBar query={query} onQuery={setQuery} shown={shownCount} total={labels.length - (xKey == null ? 0 : 1)} onAll={selectAll} onNone={selectNone} />
+      )}
       {labels.map((lab, i) => {
         if (i === xKey) return null; // this channel is the X axis, not a Y series
+        if (compact && !matches(i)) return null;
         const role = channelRoles[i];
         const isData = !role; // a roled channel (label/ignore) is not a plotted series
         const visible = isData && selected.includes(i);
+        const expanded = !compact || open.has(i);
+        const roleSelect = (
+          <Select
+            style={{ flex: compact ? "0 0 auto" : "0.9 1 0", minWidth: 0, width: compact ? 74 : undefined }}
+            aria-label={`${lab} column role`}
+            value={role ?? ""}
+            onChange={(e) => changeRole(i, e.target.value === "" ? null : (e.target.value as ChannelRole))}
+            title="Column role — Data: plotted · Label: kept in the worksheet but off the plot · Ignore: also dropped from statistics"
+            options={[
+              { value: "", label: "Data" },
+              { value: "label", label: "Label" },
+              { value: "ignore", label: "Ignore" },
+            ]}
+          />
+        );
+        const axisSelect = (
+          <Select
+            style={{ flex: "0 0 auto", width: 64 }}
+            aria-label={`${lab} Y axis`}
+            disabled={!visible}
+            value={String(axisOf(i))}
+            onChange={(e) => moveAxis(i, Number(e.target.value))}
+            title="The Y axis this series is drawn on: Y1 left, Y2 right, Y3 and up further right, each pushed out one slot (Plot ▸ Y Axis Settings… sets each one's range, scale, title and colour)"
+            options={axisChoices.map((n) => ({ value: String(n), label: n - 3 === yAxes.length ? `+Y${n}` : `Y${n}` }))}
+          />
+        );
         return (
           // Figures-audit #14: TWO lines per channel. One line (name + up to
           // three selects + the Y2 pill) did not fit the Inspector's default
           // 296px column: the name collapsed to a few characters and the
           // error select clipped to "± symmet…". The name line now owns the
           // full width; the controls share the line below it equally.
+          // Many-column files (UX-D): ONE line per channel -- checkbox, name,
+          // role -- and the rest behind a "⋯" disclosure, so a 38-column file
+          // is a scannable list rather than 114 dropdowns.
           <div key={i} className="qzk-channel-row" style={{ marginBottom: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <label
@@ -207,17 +267,28 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                   {units[i] ? ` (${units[i]})` : ""}
                 </span>
               </label>
-              <Select
-                style={{ flex: "0 0 auto", width: 64 }}
-                aria-label={`${lab} Y axis`}
-                disabled={!visible}
-                value={String(axisOf(i))}
-                onChange={(e) => moveAxis(i, Number(e.target.value))}
-                title="The Y axis this series is drawn on: Y1 left, Y2 right, Y3 and up further right, each pushed out one slot (Plot ▸ Y Axis Settings… sets each one's range, scale, title and colour)"
-                options={axisChoices.map((n) => ({ value: String(n), label: n - 3 === yAxes.length ? `+Y${n}` : `Y${n}` }))}
-              />
+              {compact && visible && axisOf(i) !== 1 && (
+                <span className="qz-k" title="Drawn on this Y axis (change it under ⋯)" style={{ flex: "0 0 auto", color: "var(--accent)" }}>
+                  Y{axisOf(i)}
+                </span>
+              )}
+              {compact ? roleSelect : axisSelect}
+              {compact && (
+                <button
+                  type="button"
+                  className="qz-icon-btn"
+                  aria-label={`${lab} more options`}
+                  aria-expanded={expanded}
+                  title="Y axis, modeling type and error column"
+                  onClick={() => setOpen((o) => { const n = new Set(o); if (!n.delete(i)) n.add(i); return n; })}
+                >
+                  ⋯
+                </button>
+              )}
             </div>
+            {expanded && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 21 }}>
+              {compact && axisSelect}
               <Select
                 style={{ flex: "1.2 1 0", minWidth: 0 }}
                 aria-label={`${lab} modeling type`}
@@ -233,18 +304,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                   { value: "nominal", label: "Nom" },
                 ]}
               />
-              <Select
-                style={{ flex: "0.9 1 0", minWidth: 0 }}
-                aria-label={`${lab} column role`}
-                value={role ?? ""}
-                onChange={(e) => changeRole(i, e.target.value === "" ? null : (e.target.value as ChannelRole))}
-                title="Column role — Data: plotted · Label: kept in the worksheet but off the plot · Ignore: also dropped from statistics"
-                options={[
-                  { value: "", label: "Data" },
-                  { value: "label", label: "Label" },
-                  { value: "ignore", label: "Ignore" },
-                ]}
-              />
+              {!compact && roleSelect}
               {visible && (
                 <Select
                   style={{ flex: "1.4 1 0", minWidth: 0 }}
@@ -262,6 +322,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                 />
               )}
             </div>
+            )}
           </div>
         );
       })}

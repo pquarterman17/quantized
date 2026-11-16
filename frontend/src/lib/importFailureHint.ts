@@ -10,6 +10,8 @@
 // failures carry their own, format-specific advice in the server's message.
 
 import { plural } from "./plural";
+import { PALETTE_SHORTCUT } from "../store/commands";
+import { formatShortcut, isMacPlatform } from "./shortcutFormat";
 
 /** Binary containers the wizard cannot read, by lower-cased extension. */
 const BINARY_EXTS: ReadonlySet<string> = new Set([
@@ -42,12 +44,12 @@ export function connectionHint(message: string): string {
  *  down (`fetch` rejected) or a stale token (a relaunched `qz` mints a new
  *  one, so every call is 401) gets its real cause and remedy, never the
  *  wizard, which would fail the same way. */
-export function importFailureHint(name: string, message = ""): string {
+export function importFailureHint(name: string, message = "", isMac: boolean = isMacPlatform()): string {
   const cause = connectionHint(message);
   if (cause) return cause;
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
-  return BINARY_EXTS.has(ext) ? "" : " — try the Import wizard (⌘K → Import wizard…)";
+  return BINARY_EXTS.has(ext) ? "" : ` — try the Import wizard (${formatShortcut(PALETTE_SHORTCUT, isMac)} → Import wizard…)`;
 }
 
 /** The batch summary for status and toast. A parse failure is the wizard's

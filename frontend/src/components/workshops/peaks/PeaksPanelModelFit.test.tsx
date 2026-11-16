@@ -1,4 +1,4 @@
-// The Peaks workshop showing a table the Peak Analyzer's model fit published
+// The Peaks workshop showing a table the Peak analyzer's model fit published
 // (audit P2.1 uncertainties): each value reads "value ± error", a null error
 // reads "± —" with its saved reason on hover, the header names the producer,
 // and a legacy table (no errors measured) keeps rendering bare values.
@@ -65,7 +65,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     // p1's centre was fixed
     expect(cells(1)[1].querySelector("[data-no-error]")?.getAttribute("title")).toMatch(/^fixed/);
     expect(cells(1)[4]).toHaveTextContent("1.81 ± 0.03");
-    expect(screen.getByText(/Peak Analyzer model fit/)).toBeInTheDocument();
+    expect(screen.getByText(/Peak analyzer model fit/)).toBeInTheDocument();
   });
 
   it("an OPEN panel switches to a table published while it shows another (values AND errors)", async () => {
@@ -144,7 +144,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     vi.mocked(askConfirm).mockResolvedValueOnce(false);
     await act(async () => fireEvent.click(fitAll)); // flushes the declined confirm
     expect(askConfirm).toHaveBeenCalledTimes(1);
-    expect(String(vi.mocked(askConfirm).mock.calls[0][1])).toMatch(/Peak Analyzer model fit, with per-peak errors/);
+    expect(String(vi.mocked(askConfirm).mock.calls[0][1])).toMatch(/Peak analyzer model fit, with per-peak errors/);
     expect(fitMultiPeak).not.toHaveBeenCalled();
     expect(useApp.getState().datasets[0].peakTable).toBe(table);
 
@@ -199,7 +199,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     const grid = await screen.findByRole("table", { name: "fitted peaks" });
     await waitFor(() => expect(within(grid).getAllByRole("row")).toHaveLength(2));
     expect(grid).not.toHaveTextContent("±");
-    expect(screen.queryByText(/Peak Analyzer model fit/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Peak analyzer model fit/)).not.toBeInTheDocument();
   });
 
   it("→ Report sends each peak's errors (null = none reported) and the fit's objective", async () => {

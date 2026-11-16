@@ -23,9 +23,9 @@
 // window after already visiting the matching tab (or vice versa) is a cache
 // hit, not a second fetch.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { canRenderMap } from "../../lib/mapdata";
+import { canRenderMap, ensureMapGate, mapGateVersion, subscribeMapGate } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { plotIntentStageTab } from "../../lib/stagetab";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
@@ -40,6 +40,7 @@ import WindowCanvas from "../windows/WindowCanvas";
 import { useRightDockClearance } from "./useRightDockClearance";
 import { PendingWorkspace } from "../Shell/workspaceSeams";
 
+const ScatterMapButton = lazyRegion(() => import("./ScatterMapButton"), "Scattered map");
 const EmptyProjectStage = lazyRegion(() => import("./EmptyProjectStage"), "Empty workspace");
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
 const Worksheet = lazyRegion(() => import("./Worksheet"), "Worksheet");
@@ -64,7 +65,7 @@ const TABS = [
 export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
-  // A docked Curve Fit / Peak Analyzer: the stage reflows to its left.
+  // A docked Curve Fit / Peak analyzer: the stage reflows to its left.
   const cellRef = useRef<HTMLElement | null>(null);
   const dockPad = useRightDockClearance(cellRef);
   // A snapshot window always carries its frozen bundle (sanitizePlotWindows
@@ -91,6 +92,10 @@ export default function Stage() {
   // never produce a map, so the tab was a permanent invitation to a screen that
   // only apologises. Same capability rule MapStage itself uses (lib/mapdata),
   // not a second copy of it.
+  // The grid test is a lazy chunk (fail closed until it lands); this is also
+  // the warm-up: the first stage render for a dataset loads and memoises it.
+  useSyncExternalStore(subscribeMapGate, mapGateVersion);
+  useEffect(() => void ensureMapGate(active?.data), [active?.data]);
   const mappable = canRenderMap(active?.data);
   const tabs = TABS.filter((t) => t.id !== "map" || mappable);
 
@@ -131,6 +136,7 @@ export default function Stage() {
             </button>
           ))}
         </div>
+        {!mappable && active && active.data.labels.length === 2 && active.data.values.length >= 4 && <ScatterMapButton />}
         <WindowWorkspaceControls />
       </div>
       <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${selectedTab}`}>

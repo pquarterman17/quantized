@@ -1,5 +1,5 @@
 import { channelModelingType, isCategorical } from "./modeling";
-import { canRenderMap } from "./mapdata";
+import { canRenderMap, MAP_GATE_CHECKING, mapGateResolved } from "./mapdata";
 import { techniqueOf } from "./techniqueDefaults";
 import type { Dataset, Technique } from "./types";
 import type { Action } from "../store/commands";
@@ -108,6 +108,7 @@ function compatibility(meta: AnalysisToolMetadata, dataset: Dataset | undefined)
     return { available: false, reason: "Choose data with one numeric response and two factor columns." };
   }
   if (meta.requirement === "map") {
+    if (!canRenderMap(dataset.data) && !mapGateResolved(dataset.data)) return { available: false, reason: MAP_GATE_CHECKING };
     if (!canRenderMap(dataset.data)) return { available: false, reason: "A 2-D map with x, y, and intensity columns is required." };
   }
   return { available: true };

@@ -1,4 +1,4 @@
-// Peak Analyzer — "Batch" mode (audit P2.4 slice 4): pick a saved recipe and
+// Peak analyzer — "Batch" mode (audit P2.4 slice 4): pick a saved recipe and
 // datasets, run the recipe over each (./usePeakBatch: client prepares, one
 // job on the queue fits), watch n/N progress, cancel, then read / sort /
 // export the uncertainty-diagnostic table (./PeakBatchTable) or add it to the

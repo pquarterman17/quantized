@@ -18,7 +18,7 @@
 //                                          draws; `figureDialogActions` routes)
 
 import { seriesModePatch, type SeriesMode } from "./seriesMode";
-import { canRenderMap } from "./mapdata";
+import { canRenderMap, MAP_GATE_CHECKING, mapGateResolved } from "./mapdata";
 import type { PlotView } from "./plotview";
 import type { Dataset, SeriesStyle } from "./types";
 
@@ -61,6 +61,9 @@ export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall",
 export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): string | null {
   if (!dataset) return "Select a dataset first.";
   if (id === "contour" && !canRenderMap(dataset.data)) {
+    // The grid gate is lazy (lib/mapdata.ts): before it has run, "no" means
+    // "not known yet", never "unavailable" (the gallery warms it and re-renders).
+    if (!mapGateResolved(dataset.data)) return MAP_GATE_CHECKING;
     return "Needs X, Y, Z on a grid; else Plot > Contour from scattered XYZ.";
   }
   const columns = dataset.data.labels.length;

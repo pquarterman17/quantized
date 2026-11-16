@@ -23,7 +23,7 @@ describe("ORIGIN_TIPS content", () => {
     const toolNames = buildAppActions(useApp.getState)
       .filter((action) => action.description)
       .map((action) => actionToHelpItem(action).title);
-    const referenced = ["Curve fit", "Find peaks", "Peak Analyzer", "Test chooser", "Distribution", "Graph Builder"];
+    const referenced = ["Curve fit", "Find peaks", "Peak analyzer", "Test chooser", "Distribution", "Graph Builder"];
     for (const name of referenced) {
       // sanity: the reference list itself names real tools
       expect(toolNames.some((toolName) => toolName.startsWith(name))).toBe(true);

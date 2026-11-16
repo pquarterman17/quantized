@@ -9,13 +9,13 @@ import {
 import { MAX_TABLE_COLS, MAX_TABLE_ROWS, sanitizeLayers } from "./graphLayers";
 
 describe("number format", () => {
-  it("rounds the value to the error's decimals (two significant figures of the error)", () => {
+  it("rounds the value to the error's decimals (PDG: two significant figures when the error's leading digits are 100-354, else one)", () => {
     expect(valueWithError(1.23456, 0.01234)).toBe("1.235 ± 0.012");
-    expect(valueWithError(12.3456, 0.5)).toBe("12.35 ± 0.50");
+    expect(valueWithError(12.3456, 0.5)).toBe("12.3 ± 0.5");
     expect(valueWithError(300, 2)).toBe("300.0 ± 2.0");
   });
   it("shares one exponent at large or small magnitudes", () => {
-    expect(valueWithError(1.234e-5, 4.2e-7)).toBe("(1.234 ± 0.042)e-5");
+    expect(valueWithError(1.234e-5, 4.2e-7)).toBe("(1.23 ± 0.04)e-5");
     expect(valueWithError(2.5e6, 1.1e4)).toBe("(2.500 ± 0.011)e6");
   });
   it("prints a value alone (no ±) without a usable error, a dash for a missing number", () => {
@@ -32,7 +32,7 @@ describe("tables", () => {
 
   it("single fit: parameters ± errors, then only the chosen statistics", () => {
     expect(singleFitTable(["A", "tau"], result, DEFAULT_WANT)).toEqual([
-      ["Parameter", "Value"], ["A", "2.500 ± 0.050"], ["tau", "0.12 (no error)"], ["R²", "0.99877"], ["Reduced χ²", "1.234"],
+      ["Parameter", "Value"], ["A", "2.50 ± 0.05"], ["tau", "0.12 (no error)"], ["R²", "0.99877"], ["Reduced χ²", "1.234"],
     ]);
     const all = singleFitTable(["A", "tau"], result, { r2: false, chiSqRed: false, chiSq: true, n: true });
     expect(all.slice(-2)).toEqual([["χ²", "12.35"], ["N", "12"]]);

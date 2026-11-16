@@ -1,5 +1,6 @@
 import { buildAnalysisCommands } from "../commands/analysisCommands";
 import { analysisTools, type AnalysisTool } from "../lib/analysisCenter";
+import { ensureMapGate } from "../lib/mapdata";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Action } from "./commands";
 import { runAction } from "./commands";
@@ -37,7 +38,13 @@ export async function launchAnalysisCenterTool(
 
   const name = tool.action.label.replace(/…$/, "");
   try {
-    const outcome = await withResolved(useApp.getState, sourceId, name, (resolved) => {
+    const outcome = await withResolved(useApp.getState, sourceId, name, (resolved) => resolved);
+    if (outcome.ok) {
+      const resolved = outcome.value;
+      // A full-resolution load is a NEW DataStruct the lazy Map grid gate
+      // (lib/mapdata.ts) has never classified: resolve it before the re-check
+      // below, or a map tool would fail closed on a perfectly good grid.
+      await ensureMapGate(resolved.data);
       const state = useApp.getState();
       if (state.activeId !== resolved.id) {
         state.setStatus(`${name} skipped: the active worksheet changed while data loaded`);
@@ -63,7 +70,7 @@ export async function launchAnalysisCenterTool(
       }
       beforeRun();
       runAction(tool.action);
-    });
+    }
     if (!outcome.ok && useApp.getState().status !== outcome.error) {
       // `withResolved` reports fetch/replacement failures itself. The only
       // silent outcome is an id removed before it starts; cover that without

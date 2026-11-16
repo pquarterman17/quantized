@@ -9,7 +9,11 @@
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { stemFromName } from "../../../lib/exportActive";
+import { copyText } from "../../../lib/clipboard";
+import { fitResultMarkdown, fitResultTsv, fitResultView, type FitResultInput } from "../../../lib/fitResultView";
+import { sigFigs } from "../../../lib/fitValueFormat";
 import { fmtNum as fmt } from "../../../lib/format";
+import { useApp } from "../../../store/useApp";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { singleFitTable } from "../../../lib/fitTableLayer";
@@ -47,23 +51,37 @@ function xLabelOf(ds: Dataset, xKey: number | null): string {
   return String(meta["x_column_long"] || meta["x_column_name"] || "x");
 }
 
+/** The result's inputs for the table builders: the fitted X/Y column units come
+ *  from the dataset's own (never guessed; blank when it has none). */
+function resultInput(ds: Dataset, model: string, names: readonly string[], result: CalcResult, fit: FittedData | null): FitResultInput {
+  const d = ds.data;
+  const meta = d.metadata ?? {};
+  const xKey = fit?.xKey ?? null;
+  const yKey = fit?.yKey;
+  return {
+    model,
+    names,
+    result,
+    fixed: fit?.fixed,
+    xUnit: xKey == null ? String(meta["x_column_unit"] ?? "") : (d.units[xKey] ?? ""),
+    yUnit: yKey == null ? "" : (d.units[yKey] ?? ""),
+  };
+}
+
 export default function CurveFitResults(p: Props) {
   const { active, result, fitData, guessOnly, modelName } = p;
   const params = (result?.params as number[] | undefined) ?? [];
-  const errors = (result?.errors as (number | null)[] | undefined) ?? [];
   const names = params.map((_, i) => p.paramNames[i] ?? `p${i}`);
   const done = result && !guessOnly;
 
-  const paramRows = params.map((v, i) => [names[i]!, fmt(v), guessOnly ? "—" : fmt(errors[i])]);
-  const statRows: string[][] = done
-    ? [
-        ["N", fmt(result.nPoints)],
-        ["R²", fmt(result.R2)],
-        ["reduced χ²", fmt(result.chiSqRed)],
-        ["RMSE", fmt(result.RMSE)],
-        ["AIC", fmt(result.AIC)],
-      ]
-    : [];
+  const setStatus = useApp((s) => s.setStatus);
+  const view = done && active ? fitResultView(resultInput(active, modelName, names, result, fitData)) : null;
+  const copy = async (md: boolean) => {
+    if (!active || !result) return;
+    const input = resultInput(active, modelName, names, result, fitData);
+    const ok = await copyText(md ? fitResultMarkdown(input) : fitResultTsv(input));
+    setStatus(ok ? `copied the fit results (${md ? "Markdown" : "TSV, paste into Excel"})` : "clipboard unavailable");
+  };
 
   // Review #8: a saved fit drawn after a reopen (its curve restored from the
   // figure or its saved parameters) has no in-memory result here -- Remove fit
@@ -95,22 +113,36 @@ export default function CurveFitResults(p: Props) {
         </div>
       )}
       {done && p.stale && (
-        <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, color: "var(--warning)" }}>
+        <div className="qzk-helptext" role="status" style={{ marginTop: 10, color: "var(--warn)" }}>
           The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.
         </div>
       )}
-      {paramRows.length > 0 && (
+      {view && view.paramRows.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <DataTable columns={["param", "value", "± err"]} rows={paramRows} />
+          <DataTable columns={view.paramColumns} rows={view.paramRows} />
         </div>
       )}
-      {statRows.length > 0 && (
+      {view?.notes.map((n) => (
+        <div key={n} className="qzk-ds-meta" role="status" style={{ marginTop: 6, color: "var(--warn)" }}>{n}</div>
+      ))}
+      {view && (
         <div style={{ marginTop: 8 }}>
-          <DataTable columns={["stat", "value"]} rows={statRows} />
+          <DataTable columns={["stat", "value"]} rows={view.statRows} />
+        </div>
+      )}
+      {!done && params.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <DataTable columns={["param", "value", "± err"]} rows={params.map((v, i) => [names[i]!, sigFigs(v, 6), "—"])} />
         </div>
       )}
       {done && (
         <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <Button size="sm" title="Copy the results table as tab-separated text (pastes into Excel)" onClick={() => void copy(false)}>
+            Copy
+          </Button>
+          <Button size="sm" title="Copy the results table as Markdown" onClick={() => void copy(true)}>
+            Copy MD
+          </Button>
           <Button size="sm" disabled={p.reporting} onClick={p.onReport}>
             {p.reporting ? "Reporting…" : "→ Report"}
           </Button>

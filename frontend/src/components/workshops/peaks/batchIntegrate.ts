@@ -3,7 +3,7 @@
 //
 // CHANNELS. The batch integrates the X/Y the plot shows on the active dataset
 // (its X column + primary Y), matched in every other dataset BY COLUMN NAME,
-// as the Peak Analyzer batch does. A dataset without that column is an error
+// as the Peak analyzer batch does. A dataset without that column is an error
 // row naming it — never a guess at another column (fail closed).
 //
 // GRIDS. Datasets measured on one grid go up with a single shared `x`, the
@@ -16,7 +16,7 @@
 // unit K) or the dataset order, and each window contributes Area / Centroid /
 // FWHM columns. Provenance — windows, baseline, alignment, channels, the
 // field, every source and every skipped one — is `metadata.peakIntegrateBatch`,
-// the same shape of record the Peak Analyzer batch keeps in `peakBatch`.
+// the same shape of record the Peak analyzer batch keeps in `peakBatch`.
 
 import { ownXChannels, type OwnXChannels } from "../../../lib/ownXChannels";
 import { dropGapRows } from "../../../lib/api/finitePairs";
