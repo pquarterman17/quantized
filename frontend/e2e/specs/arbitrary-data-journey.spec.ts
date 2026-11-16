@@ -244,7 +244,7 @@ test("importing an arbitrary CSV confirms the guessed roles and reaches a clean,
   //    group-facet-journey.spec.ts uses for series text, re-verified here for
   //    AXIS text (see header) via a direct backend probe before this spec was
   //    written. ─────────────────────────────────────────────────────────────
-  await preview.locator("select").first().selectOption("svg");
+  await preview.getByRole("radio", { name: "SVG" }).click();
   const download = page.waitForEvent("download");
   const exportResponse = page.waitForResponse((r) =>
     r.request().method() === "POST" && new URL(r.url()).pathname === "/api/export/figure",

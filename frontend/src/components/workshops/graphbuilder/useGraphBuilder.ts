@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { runExportFigureView } from "../../../lib/exportFigureView";
 import { runExportFigureCommand } from "../../../lib/exportFigureCommand";
 import {
   figureTransitionWarning,
@@ -512,9 +513,9 @@ export function useGraphBuilder(): GraphBuilderState {
 
   // Item 6: reuse the EXISTING export path — never a bespoke pipeline.
   // applyToCurrent() first, so Export works even if the user never applied
-  // the graph themselves; the xy family (scatter/line) then renders
-  // through the exact command the File menu's "Export figure…" runs
-  // (lib/exportFigureCommand), reading the live xKey/yKeys it just set.
+  // the graph themselves; the xy family (scatter/line) then runs the
+  // Plot menu's "Export figure…" command (commands/fileCommands), reading
+  // the live xKey/yKeys it just set.
   // box/violin/bar render through the Stat Stage's OWN hook-local exporter
   // (useStatStage.exportFigure — it needs live UI state like the histogram
   // bin rule/fit distribution that only exists once that view is mounted),
@@ -537,10 +538,9 @@ export function useGraphBuilder(): GraphBuilderState {
     if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {
       // P1.4: an encoded graph exports the preview's series over the applied
       // plot's presentation, same dialog + chokepoint (lib/plotEncodingExport).
-      await runExportFigureCommand(
-        useApp.getState,
-        encoded && !encoded.facets ? (stem, d, o) => buildEncodedExport(useApp.getState, spec, d, stem, o) : undefined,
-      );
+      // UX-H: the view Plot ▸ Export figure… opens; an encoded graph keeps the quick dialog (its builder carries the encoding).
+      if (encoded) await runExportFigureCommand(useApp.getState, encoded.facets ? undefined : (stem, d, o) => buildEncodedExport(useApp.getState, spec, d, stem, o));
+      else await runExportFigureView(useApp.getState);
       return;
     }
     toast(`${spec.mark} exports from the Stat Stage's own Export button (now showing).`, "info");

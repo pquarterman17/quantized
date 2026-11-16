@@ -15,6 +15,7 @@ import { DEFAULT_MAP3D, MAP3D_KINDS, type Map3dView } from "../../lib/mapView3d"
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+import { presetOptions } from "../../lib/figurePresets";
 import AngleField from "./AngleField";
 import { FLAT_CHOICE, MAP3D_LABELS, WATERFALL_MAX_LINES } from "./map3dRequest";
 
@@ -83,8 +84,8 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
           <label style={ROW}>
             Style
             <select className="qz-select" aria-label="3-D figure style" value={view3d.style} onChange={(e) => edit({ style: e.target.value })}>
-              {FIGURE_STYLES.map((n) => (
-                <option key={n}>{n}</option>
+              {presetOptions(view3d.style, FIGURE_STYLES).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </label>

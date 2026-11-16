@@ -65,7 +65,7 @@ async function exportFormat(
   builder: Locator,
   fmt: keyof typeof MIME,
 ): Promise<{ body: FigureBody; bytes: Buffer; filename: string }> {
-  await builder.locator("select").first().selectOption(fmt);
+  await builder.getByRole("radio", { name: fmt.toUpperCase() }).click();
   const responsePromise = page.waitForResponse((response) =>
     response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure",
   );

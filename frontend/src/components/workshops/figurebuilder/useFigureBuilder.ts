@@ -16,7 +16,7 @@ import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canoni
 import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { canonicalSeriesOps } from "./canonicalSeriesOps";
-import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted, sessionTickHints } from "./canonicalSession";
+import { selectSessionCyclesSeriesStyles, selectSessionExportStale, selectSessionLiveDrifted, sessionTickHints } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
 import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
@@ -126,9 +126,9 @@ export function useFigureBuilder() {
   // journal preset's dpi never actually reached the export dialog). The user
   // can still freely override the DPI field afterwards; only a *style*
   // change re-syncs it.
-  function setStyle(next: string): void {
+  function setStyle(next: string, keepDpi = false): void { // keepDpi: the user typed one (UX-H)
     setStyleRaw(next);
-    const presetDpi = FIGURE_STYLE_DPI[next];
+    const presetDpi = keepDpi ? undefined : FIGURE_STYLE_DPI[next];
     if (presetDpi !== undefined) setDpi(presetDpi);
   }
 
@@ -169,8 +169,8 @@ export function useFigureBuilder() {
         overrides: publicationOverridesDelta(effective!, next, document.publication?.overrides),
       },
     }));
-  const setCanonicalStyle = (next: string) =>
-    setCanonicalOutput({ stylePreset: next, ...(FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
+  const setCanonicalStyle = (next: string, keepDpi = false) =>
+    setCanonicalOutput({ stylePreset: next, ...(keepDpi || FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
   const activeOverrides = effective ?? overrides;
   const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
   // Item 3: canonical x-breaks read/write through the unified home — see
@@ -305,7 +305,7 @@ export function useFigureBuilder() {
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
   // Debounced PNG preview + hit-map — see usePreviewRender's module doc.
-  const { preview, hitmap, error, busy } = usePreviewRender(spec, canonical);
+  const { preview, hitmap, error, busy, previewDpi } = usePreviewRender(spec, canonical);
   // A window-target session outlives its target window closing/unfocusing
   // (windows.ts's closeWindow clears the common case, but a session can still
   // be left pointing at a background window — applyFigurePublicationEdit's
@@ -321,7 +321,7 @@ export function useFigureBuilder() {
   // stay a real subscription, never a `useApp.getState()` read — the live
   // document derives from view SINGLETONS this hook selects on none of; see
   // canonicalSession.ts's selectSessionLiveDrifted for what that let through.
-  const liveDrifted = useApp(selectSessionLiveDrifted);
+  const liveDrifted = useApp(selectSessionLiveDrifted), exportStale = useApp(selectSessionExportStale); // UX-H: never export a stale snapshot
   const canApply = !targetBlocked && !publicationSession?.staleBaseline && !liveDrifted && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
       publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
@@ -404,12 +404,12 @@ export function useFigureBuilder() {
     setXLabel: canonical ? (next: string) => setCanonicalView({ xAxisLabel: next }) : setXLabel,
     yLabel: canonicalView?.yAxisLabel ?? yLabel,
     setYLabel: canonical ? (next: string) => setCanonicalView({ yAxisLabel: next }) : setYLabel,
-    preview,
+    preview, previewDpi,
     error: canonicalReadiness?.state === "ready" || !canonicalReadiness
       ? error
       : canonicalReadiness.error,
     canonicalReadiness: canonicalReadiness?.state ?? null,
-    canExport: !canonical || canonicalReadiness?.state === "ready",
+    canExport: !canonical || (canonicalReadiness?.state === "ready" && !exportStale), exportStale,
     busy,
     exportNow,
     overrides: activeOverrides,

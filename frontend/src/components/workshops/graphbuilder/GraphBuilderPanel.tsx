@@ -210,7 +210,7 @@ export default function GraphBuilderPanel() {
               size="sm"
               disabled={!g.canApplyToCurrent}
               onClick={() => void g.exportPlot()}
-              title="Apply to the current plot, then open the Export figure dialog"
+              title="Apply to the current plot, then open the export view"
             >
               Export
             </Button>

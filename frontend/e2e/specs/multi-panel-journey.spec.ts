@@ -346,7 +346,7 @@ test("build a 2×2 page from four saved figures, link then unlink axes, rearrang
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   await chooseFiles(
     page,
-    () => page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
+    () => page.getByRole("menuitem", { name: "Open workspace (.dwk)…", exact: true }).click(),
     savedPath!,
   );
   await page.getByRole("button", { name: "Replace", exact: true }).click(); // replacing non-empty content confirms first

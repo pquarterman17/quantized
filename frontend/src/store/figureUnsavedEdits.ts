@@ -50,8 +50,25 @@ export function figureDocumentsDiffer(a: unknown, b: unknown): boolean {
   return canonicalJson(pruned(a)) !== canonicalJson(pruned(b));
 }
 
+/** `document` without its output-only choices (format, preset, DPI): picking
+ *  how a file is written is not an edit to the figure (UX-H review item 4). */
+function withoutOutputChoices(document: FigurePublicationSession["draft"]): unknown {
+  const { format: _format, stylePreset: _preset, dpi: _dpi, ...output } = document.output;
+  return { ...document, output };
+}
+
+/** The draft holds figure edits the baseline does not: output-only choices
+ *  never count. */
+export function figurePublicationEdited(session: FigurePublicationSession | null): boolean {
+  return session !== null && figureDocumentsDiffer(withoutOutputChoices(session.baseline), withoutOutputChoices(session.draft));
+}
+
+/** Unpublished changes worth a discard prompt: figure edits (not output-only
+ *  choices) made since the session began AND since the last export of it — a
+ *  figure just exported as shown is not lost work when the view closes. */
 export function figurePublicationDirty(session: FigurePublicationSession | null): boolean {
-  return session !== null && figureDocumentsDiffer(session.baseline, session.draft);
+  if (!figurePublicationEdited(session)) return false;
+  return !session!.exported || figureDocumentsDiffer(withoutOutputChoices(session!.exported), withoutOutputChoices(session!.draft));
 }
 
 /** Closing a plot window the user styled but never saved as an editable
