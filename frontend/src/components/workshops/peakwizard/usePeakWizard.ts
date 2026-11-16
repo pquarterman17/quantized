@@ -1,4 +1,4 @@
-// Peak Analyzer wizard (#31 + #32) — state hook. Orchestrates the 5-step flow
+// Peak analyzer wizard (#31 + #32) — state hook. Orchestrates the 5-step flow
 // over the calc endpoints (the fit step's default engine is the mixed-shape
 // /api/peaks/model-fit, audit P2.4 — see useModelFit.ts): ① range & baseline (live
 // subtract preview via the baseline overlay) → ② find peaks (auto-find params,
@@ -297,7 +297,7 @@ export function usePeakWizard(): PeakWizardState {
     }
   }, [pendingFind, auto.settled, active, recipe.range.lo, recipe.range.hi, recipe.baseline.method, segment, baseline, baselineError, runFind]);
 
-  // Origin's Peak Analyzer finds peaks on reaching the find step: arm one find
+  // Origin's Peak analyzer finds peaks on reaching the find step: arm one find
   // when the step is entered with no candidates, and fire it once the working
   // trace is ready (same terminal outcomes as the armed find above). A range
   // request already carries its own armed find, so it is not doubled here.

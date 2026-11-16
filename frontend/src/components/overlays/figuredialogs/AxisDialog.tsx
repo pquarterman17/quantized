@@ -174,7 +174,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("divide", "Divide by", "1")}
       {text("size", "Label size (pt)")}
       {current === "x" && text("rotate", "Rotation (°)", "0")}
-      {text("titleSize", "Title size (px)")}
+      {text("titleSize", "Title size (pt)")}
       <h3 style={{ margin: "4px 0" }}>Line &amp; grid</h3>
       {text("offset", "Offset (pt)", "0")}
       {text("cross", current === "x" ? "Cross Y at" : "Cross X at", "frame")}

@@ -16,7 +16,7 @@ import { useLibraryFocus } from "./useLibraryFocus";
 import { useLibraryResize } from "./useLibraryResize";
 import { useRevealImported } from "./useRevealImported";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
-import { makeDemoDataset } from "../../lib/demo";
+import { useFileDropTarget } from "../../lib/fileDrop";
 import { folderPath } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import { chooseAndImport } from "../../lib/importEntry";
@@ -47,12 +47,10 @@ const HomeScreen = lazyRegion(() => import("./HomeScreen"), "Library");
 // (query empty, hierarchy empty) — see LibraryFlatRows.tsx's own header for
 // why this is the only static edge that kept DatasetRow.tsx eager.
 const LibraryFlatRows = lazyRegion(() => import("./LibraryFlatRows"), "Library");
-import type { Dataset } from "../../lib/types";
-import { nextDatasetId, useApp } from "../../store/useApp";
+import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { askParams } from "../overlays/ParamDialog";
 
-let demoSeq = 0;
 const ACCEPT = IMPORT_ACCEPT;
 
 interface LibraryProps {
@@ -66,7 +64,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
-  const addDataset = useApp((s) => s.addDataset);
   const importFiles = useApp((s) => s.importFiles);
   const folders = useApp((s) => s.folders);
   const createFolder = useApp((s) => s.createFolder);
@@ -89,7 +86,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const { hierarchy, rows: allRows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [contentFilter, setContentFilter] = useState<LibraryContentFilter>("all");
-  const [dragging, setDragging] = useState(false);
+  const { dragging, props: dropProps } = useFileDropTarget((f) => importFiles(f));
   const { viewMode, changeViewMode, rememberLibraryFocus } = useLibraryViewTransition({
     controlledMode: controlledViewMode, onModeChange: onViewModeChange,
     hierarchy, rows: allRows, expandedFolders, expandedWorkbookIds,
@@ -151,22 +148,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   // MAIN #31: routes through the shared entry point so a desktop shell gets a
   // NATIVE dialog (paths -> source.path) and a browser gets today's picker.
   const onImport = () => void chooseAndImport(useApp.getState(), ACCEPT);
-
-  const onDemo = () => {
-    const ds: Dataset = {
-      id: nextDatasetId(),
-      name: `demo-vsm-${++demoSeq}.dat`,
-      data: makeDemoDataset(),
-    };
-    addDataset(ds);
-  };
-
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length) void importFiles(files);
-  };
 
   // Filter through the shared smart-folder grammar (lib/smartfolders): a bare
   // term matches the dataset name OR any tag (the historical behavior — a tag
@@ -263,17 +244,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     <aside
       ref={panelRef}
       className={`qzk-library${dragging ? " dragover" : ""}`}
-      onDragOver={(e) => {
-        // Only react to OS file drags; an internal dataset drag (row → folder) is
-        // handled by FolderRow and must not trip the file-import dropzone.
-        if (!e.dataTransfer.types.includes("Files")) return;
-        e.preventDefault();
-        if (!dragging) setDragging(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragging(false);
-      }}
-      onDrop={onDrop}
+      {...dropProps}
       onFocusCapture={rememberLibraryFocus}
     >
       <div className="qzk-lib-head">
@@ -289,9 +260,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
              *  node kind, so it wears that kind's mark from `nodeIcons.ts`
              *  instead of a literal ▦ that no longer means "folder"). */}
             {LIBRARY_NODE_GLYPH.folder}
-          </button>
-          <button className="qz-icon-btn" aria-label="Add demo" title="Add demo dataset" onClick={onDemo}>
-            ✚
           </button>
           <button className="qz-icon-btn" aria-label="Import data" title="Import data…" onClick={onImport}>
             ⊞

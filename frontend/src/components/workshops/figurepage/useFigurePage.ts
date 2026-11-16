@@ -302,7 +302,7 @@ export function useFigurePage() {
     }
     const compatibility = figureDocPublicationCompatibility(doc, datasetIds);
     if (compatibility.blocker) {
-      setStatus(`cannot create an editable copy of "${doc.name}": ${compatibility.blocker}`);
+      setStatus(`cannot create an editable copy of "${doc.name}": ${compatibility.blocker}`, "danger");
       return;
     }
     if (compatibility.losses.length === 0) {

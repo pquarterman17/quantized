@@ -110,7 +110,7 @@ export function snapshotToNewWindow(): void {
   useApp.getState().createSnapshotWindow(freezePlotSnapshot(live));
 }
 
-/** Open Worksheet in Window / Open Map in Window (item 17 — full MDI): float
+/** Open worksheet in window / Open map in window (item 17 — full MDI): float
  *  the ACTIVE dataset's worksheet / 2-D map as a document window — the same
  *  component the stage tab mounts, live-bound to the dataset. A no-op without
  *  an active dataset. The new window is created on top and "focused" (=
@@ -231,7 +231,7 @@ export function useWindowCommands(): void {
             onLoadFailure,
           ),
       },
-      { id: "window-new", group: "Window", label: "New Graph Window", shortcut: "⌘⇧N", run: newGraphWindow },
+      { id: "window-new", group: "Window", label: "New graph window", shortcut: "⌘⇧N", run: newGraphWindow },
       {
         id: "window-duplicate",
         group: "Window",
@@ -239,7 +239,7 @@ export function useWindowCommands(): void {
         shortcut: "⌘⇧D",
         run: duplicateFocusedWindow,
       },
-      { id: "window-close", group: "Window", label: "Close Window", shortcut: "⌘⇧W", run: closeFocusedWindow },
+      { id: "window-close", group: "Window", label: "Close window", shortcut: "⌘⇧W", run: closeFocusedWindow },
       {
         id: "window-snapshot",
         group: "Window",
@@ -249,17 +249,17 @@ export function useWindowCommands(): void {
       {
         id: "window-worksheet",
         group: "Window",
-        label: "Open Worksheet in Window",
+        label: "Open worksheet in window",
         run: () => openDocumentWindow("worksheet"),
       },
       {
         id: "window-map",
         group: "Window",
-        label: "Open Map in Window",
+        label: "Open map in window",
         run: () => openDocumentWindow("map"),
       },
-      { id: "window-tile", group: "Window", label: "Tile Windows", run: tileWindows },
-      { id: "window-cascade", group: "Window", label: "Cascade Windows", run: cascadeWindows },
+      { id: "window-tile", group: "Window", label: "Tile windows", run: tileWindows },
+      { id: "window-cascade", group: "Window", label: "Cascade windows", run: cascadeWindows },
       {
         id: "window-bg-cycle",
         group: "Window",

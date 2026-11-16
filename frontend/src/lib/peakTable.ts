@@ -20,7 +20,7 @@
 // `calc/peak_multifit.fit_multi_peak` nor `calc/peak_fit.fit_peak` returns a
 // covariance or a standard error, and inventing one would be new numerics
 // with no MATLAB golden to check them against (CLAUDE.md's golden-parity
-// rule). The Peak Analyzer's mixed-shape model fit (`calc/peak_model_fit.py`,
+// rule). The Peak analyzer's mixed-shape model fit (`calc/peak_model_fit.py`,
 // P2.4) DOES return them — delta-method errors from the fit's own pinv
 // covariance — and its "Publish to peak table" action
 // (components/workshops/peakwizard/modelFitPeakTable.ts) fills the columns,
@@ -173,7 +173,7 @@ export interface PeakTableEntry {
   fwhmL?: number | null;
   fwhmLErr?: number | null;
   /** Why a field's 1σ is null (not converged / fixed / tied / on a bound /
-   *  undetermined / edited by hand) — the text the Peak Analyzer shows on
+   *  undetermined / edited by hand) — the text the Peak analyzer shows on
    *  hover. Keyed by every `ERR_FIELDS` field, the shape parameters (η, the
    *  Voigt widths) included; a key is present only for a field that HAS a
    *  value on this row and whose error is null. */
@@ -244,7 +244,7 @@ export interface PeakTableProvenance {
   fittedAt: string;
   // ── model-fit tables only ──────────────────────────────────────────────
   /** Absent = the Peaks workshop (legacy `fit_multi_peak` / `fit_peak`, no
-   *  uncertainties). "model_fit" = the Peak Analyzer's mixed-shape engine,
+   *  uncertainties). "model_fit" = the Peak analyzer's mixed-shape engine,
    *  published with standard errors. Every field below is present exactly when
    *  this is. For a model-fit table `method` is "simultaneous" (it is one
    *  global fit), `model` names the shape(s), `bgDegree` is the model
@@ -257,7 +257,7 @@ export interface PeakTableProvenance {
   producer?: "model_fit";
   /** The fit engine (`"peak_model_fit"`). */
   engine?: string;
-  /** The Peak Analyzer recipe name the fit ran under, or null (unsaved). */
+  /** The Peak analyzer recipe name the fit ran under, or null (unsaved). */
   recipe?: string | null;
   /** Which objective was minimised: "chi2" only for a weighted fit. */
   objective?: "ssr" | "chi2";

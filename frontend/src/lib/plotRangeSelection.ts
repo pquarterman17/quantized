@@ -6,7 +6,7 @@
 // likely to have meant:
 //   1. the Gadget's region band (`qfitRoi`, the ≈ tool) — an explicit ROI;
 //   2. the Integrate tool's committed region (`integral`, the ∫ chip);
-//   3. rows picked with Select Rows (or in the worksheet) — their x extent on
+//   3. rows picked with Select rows (or in the worksheet) — their x extent on
 //      the plotted X column.
 // Each counts only while it belongs to what is plotted NOW: the band and the
 // ∫ region are stamped with the dataset + X column they were drawn on
@@ -54,7 +54,7 @@ export interface PlotRange {
 }
 
 export const NO_RANGE_REASON =
-  "select an x-range first — drag with the Gadget (≈), Integrate (∫) or Select Rows tool";
+  "select an x-range first — drag with the Live fit (≈), Integrate (∫) or Select rows tool";
 
 function ordered(a: number, b: number, source: PlotRange["source"]): PlotRange | null {
   if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) return null;

@@ -92,9 +92,10 @@ tooling (EELS/EDS, imaging) is **out of scope** and lives in the separate
 | From source | see below | for development |
 
 Once installed, `qz` serves the app at `http://127.0.0.1:8000` and opens a
-browser tab. An empty library shows a **"Drop files here, or use ⊞ to import
-/ ✚ for a demo"** hint — click **✚** for an instant synthetic dataset, so a
-fresh install has something to plot within seconds.
+browser tab. An empty library shows a **"Try an example"** list — pick one to
+load a first-run example, or use **File ▸ Import ▸ Add demo dataset**
+(also in the **⌘K** palette) for an instant synthetic dataset, so a fresh
+install has something to plot within seconds.
 
 **From source — double-click a launcher** (builds the UI + installs deps on
 first run, then opens the app in your browser):

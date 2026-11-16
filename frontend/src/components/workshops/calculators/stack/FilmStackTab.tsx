@@ -92,7 +92,7 @@ export default function FilmStackTab() {
 
       {s.shown && <StackResults result={s.shown} />}
       {s.shown?.warnings.map((w) => (
-        <div key={w} className="qzk-ds-meta" role="note" style={{ marginTop: 4, color: "var(--warning)" }}>
+        <div key={w} className="qzk-ds-meta" role="note" style={{ marginTop: 4, color: "var(--warn)" }}>
           ⚠ {w}
         </div>
       ))}

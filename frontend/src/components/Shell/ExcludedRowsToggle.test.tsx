@@ -1,13 +1,19 @@
 // F4.2c (a): the one-click, always-visible "Excluded rows" toggle.
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import ExcludedRowsToggle from "./ExcludedRowsToggle";
 import StatusBar from "./StatusBar";
 import { buildUiCommands } from "../../commands/uiCommands";
+import { makeDemoDataset } from "../../lib/demo";
 import { useApp } from "../../store/useApp";
 
+const withData = () => useApp.setState({ datasets: [{ id: "ex1", name: "ex1.dat", data: makeDemoDataset() }], activeId: "ex1" });
+
+beforeEach(withData);
+
 afterEach(() => {
+  useApp.setState({ datasets: [], activeId: null });
   useApp.getState().setPref("excludedDisplay", "grey");
 });
 
@@ -50,10 +56,13 @@ describe("ExcludedRowsToggle (F4.2c (a))", () => {
     expect(useApp.getState().history.length).toBe(before);
   });
 
-  it("is always visible in the status bar, with or without a dataset", () => {
+  it("shows in the status bar once a dataset exists, and is hidden on an empty project (UX-Q)", () => {
+    const { unmount } = render(<StatusBar />);
+    expect(screen.getByRole("button", { name: "Grey excluded rows" })).toBeTruthy();
+    unmount();
     useApp.setState({ datasets: [], activeId: null });
     render(<StatusBar />);
-    expect(screen.getByRole("button", { name: "Grey excluded rows" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Grey excluded rows" })).toBeNull();
   });
 
   it("has a command-palette twin that toggles the same preference", () => {

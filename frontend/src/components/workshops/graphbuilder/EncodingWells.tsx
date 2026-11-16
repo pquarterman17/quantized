@@ -19,7 +19,7 @@ import type { GraphBuilderState } from "./useGraphBuilder";
 import ZoneWell from "./ZoneWell";
 
 const WELLS: { zone: EncodingZone; title: string; hint: string }[] = [
-  { zone: "color", title: "Color", hint: "a colour per level, or a gradient (continuous)" },
+  { zone: "color", title: "Colour", hint: "a colour per level, or a gradient (continuous)" },
   { zone: "symbol", title: "Symbol", hint: "a marker per level (categorical)" },
   { zone: "label", title: "Label", hint: "legend text from a column" },
 ];

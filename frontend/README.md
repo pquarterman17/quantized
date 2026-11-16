@@ -21,7 +21,7 @@ npm run dev
 ```
 
 Open http://localhost:5173. The UI also runs **offline** (no backend): use
-*Library → ✚ Add demo dataset* — the Stage falls back to client-side column
+*File ▸ Import ▸ Add demo dataset* (or the ⌘K palette) — the Stage falls back to client-side column
 packing and the status bar reads "offline — demo mode".
 
 ## Build (served by the backend)

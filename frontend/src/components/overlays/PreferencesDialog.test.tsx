@@ -34,6 +34,17 @@ describe("PreferencesDialog", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
+  it("offers a System theme, selected on a fresh store, and picking Light pins the choice (G1)", () => {
+    useApp.getState().setThemeMode("system");
+    useApp.getState().setPrefsOpen(true);
+    render(<PreferencesDialog />);
+    expect(screen.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByText("Light"));
+    expect(useApp.getState().themeMode).toBe("light");
+    fireEvent.click(screen.getByRole("radio", { name: "System" }));
+    expect(useApp.getState().themeMode).toBe("system");
+  });
+
   it("Origin book click opens (WORKSHEET_PLAN item 15) defaults to Worksheet and can switch to Plot", () => {
     useApp.getState().setPrefsOpen(true);
     render(<PreferencesDialog />);

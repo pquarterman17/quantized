@@ -161,7 +161,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
 
     // Audit P2.4 "Peak Fitting ▸ Fit this range": the selected x-range (Gadget
     // band / ∫ region / selected rows — lib/plotRangeSelection) handed to the
-    // Peak Analyzer through store/peakFitRange, which applies it and finds
+    // Peak analyzer through store/peakFitRange, which applies it and finds
     // the peaks. Same open-time snapshot as everything else in this menu.
     const activeDs = st.datasets.find((d) => d.id === st.activeId) ?? null;
     const peakRange = plotRangeSelection({

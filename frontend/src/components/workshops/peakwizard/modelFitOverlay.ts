@@ -1,4 +1,4 @@
-// Peak Analyzer — place a model-fit curve on the plot (audit P2.4 slice 2).
+// Peak analyzer — place a model-fit curve on the plot (audit P2.4 slice 2).
 // Pure. The fit runs on the wizard's WORKING trace (analysis rows, range-cut,
 // gap-dropped, baseline-subtracted), so a curve drawn on the raw plot must add
 // the step-① baseline back — the same correction `plotApexY` applies to the

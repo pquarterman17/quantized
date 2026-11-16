@@ -115,6 +115,15 @@ describe("curve-fit analysis result actions", () => {
     expect(useApp.getState().fitOverlay).toBeNull();
   });
 
+  it("keeps the Curve Fit flag on a recalculated Curve Fit curve, and adds none to another tool's", async () => {
+    useApp.setState({ fitOverlay: { datasetId: "source", binding: SINGLE_X, y: [9, 9, 9], curveFit: true } });
+    expect(await recalculateFitAnalysisResult("analysis-fit-source")).toBe(true);
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5], curveFit: true });
+    useApp.setState({ fitOverlay: { datasetId: "source", binding: SINGLE_X, y: [9, 9, 9] }, staleFits: ["source"] });
+    expect(await recalculateFitAnalysisResult("analysis-fit-source")).toBe(true);
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] });
+  });
+
   it("keeps a visible fit overlay through an unrelated result rename undo", () => {
     const overlay = { datasetId: "source", binding: SINGLE_X, y: [1, 3, 5] };
     useApp.setState({ fitOverlay: overlay });

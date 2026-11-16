@@ -25,7 +25,7 @@ let _peakSeq = 0;
 
 /** Stable per-peak id, same `Date.now().toString(36)` + module counter shape as
  *  every other id generator in the app (store/useApp.ts's `nextFigureId`,
- *  store/rois.ts's `nextRoiId`). Exported for the Peak Analyzer's model-fit
+ *  store/rois.ts's `nextRoiId`). Exported for the Peak analyzer's model-fit
  *  table builder, so every producer mints ids the same way. */
 export function nextPeakId(): string {
   return `peak-${Date.now().toString(36)}-${++_peakSeq}`;

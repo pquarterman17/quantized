@@ -1,12 +1,24 @@
-// Right panel: stacked collapsible Cards (start collapsed). Corrections posts to
+// Right panel: stacked collapsible Cards. Corrections posts to
 // /api/corrections/apply via the store. Appearance lives in the title-bar menu.
+//
+// UX-A: the Inspector follows the context and the selection, like Figma's
+// properties panel or Prism's Format Graph sheet —
+// - an empty project shows a short hint, not a wall of cards that need data;
+// - the Worksheet (and Workflow / Analysis) tabs show only the data cards;
+// - on the Plot tab a Selection section comes first, and the card for the
+//   selected curve / axis / annotation / shape is hoisted under it, opened
+//   and scrolled into view;
+// - which cards the user opened is remembered per context (CardStateContext +
+//   store/inspectorCards), across reloads.
+
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 
 import AnnotationsCard from "./AnnotationsCard";
-import AxisLimits from "./AxisLimits";
-import AxisScaleControls from "./AxisScaleControls";
+import AxesCard from "./AxesCard";
 import ChannelsCard from "./ChannelsCard";
 import ErrorRolesCard from "./ErrorRolesCard";
 import CorrectionsCard from "./CorrectionsCard";
+import InspectorSelection from "./InspectorSelection";
 import MacroCard from "./MacroCard";
 import MapCard from "./MapCard";
 import MetadataCard from "./MetadataCard";
@@ -18,13 +30,20 @@ import RegionShadesCard from "./RegionShadesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import ShapesCard from "./ShapesCard";
 import StatsCard from "./StatsCard";
-import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
+import { useInspectorCardState } from "./useInspectorCardState";
 import { folderPathLabel } from "../../lib/foldertree";
-import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
-import { Select } from "../primitives";
-import Card from "../primitives/Card";
-import { useActiveDataset, useApp, type LegendPos } from "../../store/useApp";
+import { CardStateContext } from "../primitives/cardState";
+import { selectionKey, useExclusiveSelection, usePlotSelection, useSelectionGuards } from "../../store/plotSelection";
+import { useActiveDataset, useApp } from "../../store/useApp";
+
+/** Cards that edit the plot, not the data: hidden off the Plot / Map tabs. */
+const PLOT_CARDS = new Set(["Plot objects", "Axes", "Titles & labels", "Reference lines", "Region shades", "Annotations", "Shapes", "Series style"]);
+/** The Plot tab's own order: the plot's series list and the plot cards first;
+ *  every other card follows under a "Data" heading. */
+const PLOT_TAB_ORDER = ["Channels", "Plot objects", "Axes", "Titles & labels", "Series style", "Reference lines", "Region shades", "Annotations", "Shapes"];
+/** Rank of a card after every PLOT_TAB_ORDER entry: the data cards. */
+const DATA_RANK = 99;
 
 export default function Inspector() {
   const active = useActiveDataset();
@@ -34,118 +53,110 @@ export default function Inspector() {
   const folders = useApp((s) => s.folders);
   const breadcrumb = active ? folderPathLabel(folders, active.folderId) : undefined;
   const stageTab = useApp((s) => s.stageTab);
-  const showGrid = useApp((s) => s.showGrid);
-  const setShowGrid = useApp((s) => s.setShowGrid);
-  const showLegend = useApp((s) => s.showLegend);
-  const setShowLegend = useApp((s) => s.setShowLegend);
-  const legendPos = useApp((s) => s.legendPos);
-  const setLegendPos = useApp((s) => s.setLegendPos);
-  const plotTemplate = useApp((s) => s.plotTemplate);
-  const setPlotTemplate = useApp((s) => s.setPlotTemplate);
-  const showAxisBox = useApp((s) => s.showAxisBox);
-  const setShowAxisBox = useApp((s) => s.setShowAxisBox);
+  const hasData = useApp((s) => s.datasets.length > 0);
+  const ctx = hasData ? stageTab : "empty";
+  const plotTab = ctx === "plot";
+
+  useExclusiveSelection();
+  useSelectionGuards();
+  const sel = usePlotSelection((s) => s.sel);
+  const annotationId = useApp((s) => s.selectedAnnotationId);
+  const shapeId = useApp((s) => s.selectedShapeId);
+  // The card the selection points at (Plot tab only): it is hoisted, opened
+  // and scrolled into view. A legend's controls sit in the Selection section.
+  const focus = !plotTab
+    ? null
+    : annotationId
+      ? "Annotations"
+      : shapeId
+        ? "Shapes"
+        : sel?.kind === "series"
+          ? "Series style"
+          : sel?.kind === "axis"
+            ? "Axes"
+            : null;
+  const focusKey = plotTab ? (annotationId ? `a:${annotationId}` : shapeId ? `s:${shapeId}` : selectionKey(sel)) : "";
+  const cardState = useInspectorCardState(ctx, focus, focusKey);
+  // A new selection: bring a selected curve's style row into view — "nearest",
+  // so the panel moves only when the row is out of view (the hoisted card's
+  // own reveal does the same for its header). Runs after the cards' effects.
+  const asideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focusKey) asideRef.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [focusKey]);
+
+  if (!hasData) {
+    return (
+      <aside className="qzk-inspector" aria-label="Inspector">
+        <section className="qzk-inspector-empty" aria-label="Nothing to inspect">
+          <strong>Nothing to inspect yet</strong>
+          <p className="qzk-ds-meta">
+            Import data or drop files into the Library. Then click a curve, axis or legend on the plot and its
+            properties appear here.
+          </p>
+        </section>
+      </aside>
+    );
+  }
+
+  const seriesChannel = sel?.kind === "series" ? sel.channel : undefined;
+  // The pre-UX-A order (kept off the Plot tab); `shown` drops what this
+  // context doesn't use.
+  const cards: [string, ReactNode][] = [
+    ["Notes", <NotesCard active={active} />],
+    ["Channels", <ChannelsCard active={active} />],
+    ["Error columns", <ErrorRolesCard active={active} />],
+    ["Plot objects", <PlotObjectsCard />],
+    // SILENT_STATE_CORRUPTION_PLAN #10: a derived worksheet's corrections
+    // are its pipeline recipe, re-run from its source by
+    // `recomputeDerivedSheet`. Correcting one from this card rebuilt it from
+    // the sheet's cached copy of the source instead of the source's current
+    // data. store/corrections.ts refuses it outright (the class fix, covering
+    // the bulk/pipeline/baseline callers too); hiding the card here is the
+    // instance fix, so the affordance isn't offered at all rather than
+    // offered and refused.
+    ["Corrections", !active?.derivedFrom && <CorrectionsCard key={active?.id ?? "none"} active={active} />],
+    ["Channel statistics", <StatsCard active={active} />],
+    ["Metadata", <MetadataCard active={active} />],
+    ["Origin provenance", <OriginProvenanceCard active={active} />],
+    ["Axes", <AxesCard />],
+    ["Titles & labels", <TitlesCard />],
+    ["Reference lines", <RefLinesCard />],
+    ["Region shades", <RegionShadesCard />],
+    ["Annotations", <AnnotationsCard />],
+    ["Shapes", <ShapesCard />],
+    // Line/Scatter/marker controls style XY curves; a map draws none (figures audit #18).
+    ["Series style", stageTab !== "map" && <SeriesStyleCard active={active} selectedChannel={seriesChannel} />],
+    ["Macro recorder", <MacroCard />],
+  ];
+  const plotLike = plotTab || ctx === "map";
+  const shown = cards.filter(([id]) => plotLike || !PLOT_CARDS.has(id));
+  // The selection's card first, right under the Selection section; on the
+  // Plot tab the plot cards next, then the data cards after a "Data" heading.
+  const rank = (id: string) => (id === focus ? -1 : plotTab ? PLOT_TAB_ORDER.indexOf(id) + 1 || DATA_RANK : 0);
+  shown.sort(([a], [b]) => rank(a) - rank(b));
+  const dataStart = plotTab ? shown.findIndex(([id]) => rank(id) === DATA_RANK) : -1;
 
   return (
-    <aside className="qzk-inspector">
-      {breadcrumb && (
-        <div className="qzk-ds-breadcrumb" title={breadcrumb}>
-          {breadcrumb}
-        </div>
-      )}
-
-      {stageTab === "map" && <MapCard />}
-
-      <NotesCard active={active} />
-
-      <ChannelsCard active={active} />
-      <ErrorRolesCard active={active} />
-
-      <PlotObjectsCard />
-
-      {/* SILENT_STATE_CORRUPTION_PLAN #10: a derived worksheet's corrections
-          are its pipeline recipe, re-run from its source by
-          `recomputeDerivedSheet`. Correcting one from this card rebuilt it
-          from the sheet's cached copy of the source instead of the source's
-          current data. store/corrections.ts refuses it outright (the class
-          fix, covering the bulk/pipeline/baseline callers too); hiding the
-          card here is the instance fix, so the affordance isn't offered at
-          all rather than offered and refused. */}
-      {!active?.derivedFrom && <CorrectionsCard key={active?.id ?? "none"} active={active} />}
-
-      <StatsCard active={active} />
-
-      <MetadataCard active={active} />
-
-      <OriginProvenanceCard active={active} />
-
-      <Card title="Axes" defaultOpen={false} helpTopic="axis scale">
-        <AxisScaleControls />
-        <label className="qz-check">
-          <input
-            type="checkbox"
-            checked={showGrid}
-            onChange={(e) => setShowGrid(e.target.checked)}
-          />
-          Grid lines
-        </label>
-        <label className="qz-check">
-          <input
-            type="checkbox"
-            checked={showAxisBox}
-            onChange={(e) => setShowAxisBox(e.target.checked)}
-          />
-          Axis box (frame)
-        </label>
-        <label className="qz-check">
-          <input
-            type="checkbox"
-            checked={showLegend}
-            onChange={(e) => setShowLegend(e.target.checked)}
-          />
-          Legend
-        </label>
-        {showLegend && (
-          <label className="qzk-field-lbl" style={{ marginTop: 2 }}>
-            Legend position
-            <Select
-              options={[
-                { value: "auto", label: "Auto (least crowded)" },
-                { value: "ne", label: "Top right" },
-                { value: "nw", label: "Top left" },
-                { value: "se", label: "Bottom right" },
-                { value: "sw", label: "Bottom left" },
-              ]}
-              value={legendPos}
-              onChange={(e) => setLegendPos(e.target.value as LegendPos)}
-            />
-          </label>
+    <aside ref={asideRef} className="qzk-inspector" aria-label="Inspector" data-context={ctx}>
+      <CardStateContext.Provider value={cardState}>
+        {breadcrumb && (
+          <div className="qzk-ds-breadcrumb" title={breadcrumb}>
+            {breadcrumb}
+          </div>
         )}
-        <label className="qzk-field-lbl" style={{ marginTop: 2 }}>
-          Plot template
-          <Select
-            options={PLOT_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))}
-            value={plotTemplate}
-            onChange={(e) => setPlotTemplate(e.target.value)}
-          />
-        </label>
-        <AxisLimits />
-        <TickFormat />
-      </Card>
 
-      <TitlesCard />
+        {stageTab === "map" && <MapCard />}
 
-      <RefLinesCard />
+        {plotTab && active && <InspectorSelection active={active} />}
 
-      <RegionShadesCard />
-
-      <AnnotationsCard />
-
-      <ShapesCard />
-
-      {/* Line/Scatter/marker controls style XY curves; a map draws none (figures audit #18). */}
-      {stageTab !== "map" && <SeriesStyleCard active={active} />}
-
-      <MacroCard />
+        {shown.map(([id, node], i) => (
+          <Fragment key={id}>
+            {i === dataStart && <h3 className="qzk-inspector-group">Data</h3>}
+            {node}
+          </Fragment>
+        ))}
+      </CardStateContext.Provider>
     </aside>
   );
 }

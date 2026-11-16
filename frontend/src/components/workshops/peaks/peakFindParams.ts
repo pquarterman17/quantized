@@ -6,7 +6,7 @@
 // The "_deg" names are the route's: they are x-axis units, which are degrees
 // only for a 2θ scan — hence the panel labels them by role, not unit.
 //
-// The field set IS the Peak Analyzer recipe's `find` section with every
+// The field set IS the Peak analyzer recipe's `find` section with every
 // Advanced field present (lib/peakwizard.ts's `PeakFindAdvanced`), so the
 // wizard's step ② reuses `PeakFindAdvanced.tsx` over its recipe verbatim.
 

@@ -33,7 +33,7 @@ const RECALC_MODE_STATUS: Record<RecalcMode, string> = {
 function statsRun(s: StoreGet, which: "row" | "freq"): void {
   void import("../store/worksheetStatsRun").then(
     (m) => (which === "row" ? m.runRowStatistics() : m.runFrequencyCount()),
-    () => s().setStatus(`couldn't load ${which === "row" ? "Row statistics" : "Frequency count"} — try again`),
+    () => s().setStatus(`couldn't load ${which === "row" ? "Row statistics" : "Frequency count"} — try again`, "danger"),
   );
 }
 

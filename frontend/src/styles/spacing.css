@@ -18,6 +18,13 @@
   --radius: 8px;
   --radius-sm: 5px;
   --radius-pill: 99px;
+  --radius-md: 6px;
+  --radius-lg: var(--radius);
+
+  /* Inspector (right panel) width — read by the shell grid and the floating
+     hint cards; nothing sets it at runtime, so it is defined here (the left
+     Library width --lw IS set at runtime, from the persisted pref). */
+  --rw: 296px;
 }
 
 /* density: regular is the default */
@@ -28,6 +35,8 @@
   --row-h: 28px;
   --font-size: 13px;
   --font-size-sm: 11px;
+  /* help / meta prose: one step above --font-size-sm so it is readable */
+  --font-size-help: 12px;
 }
 
 [data-density="compact"] {
@@ -36,6 +45,7 @@
   --row-h: 24px;
   --font-size: 12px;
   --font-size-sm: 10px;
+  --font-size-help: 11px;
 }
 
 [data-density="comfy"] {
@@ -44,4 +54,5 @@
   --row-h: 32px;
   --font-size: 14px;
   --font-size-sm: 12px;
+  --font-size-help: 13px;
 }

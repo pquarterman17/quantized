@@ -1,4 +1,4 @@
-// Peak Analyzer step ④ — the mixed-shape model fit's result (audit P2.4
+// Peak analyzer step ④ — the mixed-shape model fit's result (audit P2.4
 // slice 2): convergence, the warnings (first, and loud), per-peak derived
 // centre / FWHM / height / area with standard errors, the parameter table,
 // and the metrics under the objective's honest label. Every missing error is

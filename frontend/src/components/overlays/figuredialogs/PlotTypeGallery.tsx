@@ -9,10 +9,14 @@ import { applyPlotType } from "../../../lib/figureDialogActions";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAuxFigureStore } from "../../workshops/ternary/auxFigureStore";
 import { PLOT_TYPES, plotTypeUnavailable } from "../../../lib/plotTypes";
+import { useMapGate } from "../../../lib/useMapGate";
 
 export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
   const active = useActiveDataset();
   const hintId = useId();
+  // Contour's grid test is lazy: warm it, and re-render when it resolves, so
+  // the tile is right on first open (it reads "Checking…" for that moment).
+  useMapGate(active?.data);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }} role="group" aria-label="Plot types">
       {PLOT_TYPES.map((t) => {

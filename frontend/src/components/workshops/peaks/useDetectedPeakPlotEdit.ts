@@ -1,5 +1,5 @@
 // Opt-in direct manipulation for the ordinary Peaks panel.  It reuses the
-// plot bridge/plugin introduced by Peak Analyzer: click empty plot space to
+// plot bridge/plugin introduced by Peak analyzer: click empty plot space to
 // add a snapped candidate; click a marker to remove it.  The legacy store
 // field is named `peakWizardEdit`, but is a generic thin bridge at runtime.
 
@@ -42,7 +42,7 @@ export function useDetectedPeakPlotEdit({ activeId, allowed, peaks, addPeakAt, r
       setBridge(null);
     }
     return () => {
-      // Do not clear a Peak Analyzer bridge that replaced ours meanwhile.
+      // Do not clear a Peak analyzer bridge that replaced ours meanwhile.
       if (bridgeRef.current?.addPeakAt === addPeakAt) setBridge(null);
     };
   }, [active, peaks, addPeakAt, removePeak, setBridge]);

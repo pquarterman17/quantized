@@ -269,7 +269,7 @@ describe("PeakWizardPanel mode tabs", () => {
 
   it("roves the tab stop to the selected mode", () => {
     render(<PeakWizardPanel />);
-    expect(screen.getByRole("tablist", { name: "Peak Analyzer mode" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Peak analyzer mode" })).toBeInTheDocument();
     expect(screen.getAllByRole("tab").map((t) => t.tabIndex)).toEqual([0, -1]);
   });
 

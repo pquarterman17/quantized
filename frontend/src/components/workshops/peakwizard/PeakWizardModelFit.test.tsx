@@ -1,4 +1,4 @@
-// The Peak Analyzer's mixed-shape model engine, driven through the panel
+// The Peak analyzer's mixed-shape model engine, driven through the panel
 // (audit P2.4 slice 2): per-peak shapes, background, the parameter table
 // (vary / min / max / tie), share-FWHM, the request that reaches the backend
 // (real postJSON over a stubbed fetch), result rendering (null-error reasons,
@@ -85,7 +85,7 @@ async function fitWith(res: PeakModelFitResponse | { detail: string }, status = 
   step("Fit & review"); // step ④ fits on entry (UX audit 7 lane UX-I)
 }
 
-describe("Peak Analyzer — model engine setup (step 3)", () => {
+describe("Peak analyzer — model engine setup (step 3)", () => {
   it("seeds from the found peaks and sends the edited table to /api/peaks/model-fit", async () => {
     await findTwoPeaks();
     step("Model");
@@ -207,7 +207,11 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     // shell.css's rule targets (the classic engine's "N peak(s) will be fit…").
     expect(screen.getByText(/Seeded from the detected peaks/).closest(".qzk-peakwizard")).not.toBeNull();
     const css = readFileSync(join(__dirname, "../../../styles/shell.css"), "utf8");
-    expect(css).toMatch(/\.qzk-peakwizard div\.qzk-ds-meta \{ white-space: normal; \}/);
+    // Wrapping is now global: the base hint class carries no nowrap / ellipsis.
+    const rule = css.match(/^\.qzk-ds-meta, \.qzk-helptext \{([^}]*)\}/m);
+    expect(rule, "global .qzk-ds-meta rule").not.toBeNull();
+    expect(rule![1]).not.toMatch(/nowrap|ellipsis/);
+    expect(css).not.toMatch(/^\.qzk-ds-meta[^{]*\{[^}]*nowrap/m);
   });
 
   it("a peak's × in the model table deletes it; the other peak keeps its edit under its new number (slice 3)", async () => {
@@ -223,7 +227,7 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
   });
 });
 
-describe("Peak Analyzer — model fit results (step 4)", () => {
+describe("Peak analyzer — model fit results (step 4)", () => {
   it("renders derived values ± errors, reasons for missing errors, SSR (never χ²) and warnings", async () => {
     await findTwoPeaks();
     await fitWith(modelFitResponse());

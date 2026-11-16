@@ -26,13 +26,15 @@
 import type { Notation } from "../lib/format";
 import type { PanelFit } from "../lib/panelLayout";
 import type { DefaultTrace } from "../lib/types";
-import { syncPrefs, type Prefs } from "./prefs";
+import { resolveTheme, syncPrefs, systemTheme, type Prefs } from "./prefs";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
 export type Theme = "dark" | "light";
+/** The user's theme CHOICE; "system" follows the OS (`Theme` is what renders). */
+export type ThemeMode = Theme | "system";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
 /** How excluded/filtered rows (#50/#53) render on the plot: "hide" drops them
@@ -51,7 +53,8 @@ export type OriginBookClickOpens = "worksheet" | "plot";
 export type PrefKey = keyof Prefs;
 
 export interface AppearancePrefsSlice {
-  theme: Theme;
+  theme: Theme; // effective theme, derived from themeMode
+  themeMode: ThemeMode;
   accent: Accent;
   density: Density;
   palette: string; // series colour-cycle preset (overrides --series-1..8)
@@ -79,7 +82,8 @@ export interface AppearancePrefsSlice {
   // (frames = aspect-preserving letterbox, window = fill). Read at apply time,
   // mirroring how `defaultGrid` seeds `showGrid`.
   defaultPanelFit: PanelFit;
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Theme) => void; // an explicit pick: pins themeMode too
+  setThemeMode: (mode: ThemeMode) => void;
   setAccent: (accent: Accent) => void;
   setDensity: (density: Density) => void;
   setPalette: (palette: string) => void;
@@ -93,6 +97,23 @@ export function createAppearancePrefsSlice(set: SliceSet, get: SliceGet, initial
     set(patch);
     syncPrefs(get());
   };
+  // Follow the OS while themeMode is "system": re-resolve on a scheme change.
+  // An explicit pick ignores it. Lives for the page (the store is a singleton).
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    try {
+      const mq = window.matchMedia("(prefers-color-scheme: light)");
+      const onChange = (): void => {
+        if (get().themeMode !== "system") return;
+        const theme = systemTheme();
+        if (theme !== get().theme) write({ theme });
+      };
+      // Older WebKit (Safari < 14, old webviews) only has the deprecated addListener.
+      if (typeof mq.addEventListener === "function") mq.addEventListener("change", onChange);
+      else if (typeof mq.addListener === "function") mq.addListener(onChange);
+    } catch {
+      /* no usable matchMedia - the theme just stays as resolved at load */
+    }
+  }
   return {
     // Every `Prefs` key IS an AppState field of the same name — that is how
     // `prefsOf(s)` reads them straight back out — so the persisted blob seeds
@@ -102,10 +123,16 @@ export function createAppearancePrefsSlice(set: SliceSet, get: SliceGet, initial
     // `createLibraryPanelSlice` was constructed from, so the order of the two
     // spreads in useApp is immaterial.
     ...initialPrefs,
-    setTheme: (theme) => write({ theme }),
+    setTheme: (theme) => write({ theme, themeMode: theme }),
+    setThemeMode: (themeMode) => write({ themeMode, theme: resolveTheme(themeMode) }),
     setAccent: (accent) => write({ accent }),
     setDensity: (density) => write({ density }),
     setPalette: (palette) => write({ palette }),
-    setPref: (key, value) => write({ [key]: value } as Partial<AppState>),
+    setPref: (key, value) =>
+      key === "theme"
+        ? write({ theme: value as Theme, themeMode: value as Theme })
+        : key === "themeMode"
+          ? write({ themeMode: value as ThemeMode, theme: resolveTheme(value as ThemeMode) })
+          : write({ [key]: value } as Partial<AppState>),
   };
 }

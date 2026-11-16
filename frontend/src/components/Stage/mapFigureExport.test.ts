@@ -167,6 +167,6 @@ describe("runMapExport", () => {
     vi.mocked(askParams).mockResolvedValue({ fmt: "pdf", style: "default", title: "" });
     vi.mocked(postDownload).mockRejectedValueOnce(new Error("422 bad grid"));
     await runMapExport({ canvas, payload, view, stem: "scan", setStatus });
-    expect(setStatus).toHaveBeenLastCalledWith("map export failed — 422 bad grid");
+    expect(setStatus).toHaveBeenLastCalledWith("map export failed — 422 bad grid", "danger");
   });
 });

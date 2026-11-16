@@ -49,6 +49,8 @@ const PlotResultChips = lazyRegion(() => import("./PlotResultChips"), "Plot");
 const InsetPlot = lazyRegion(() => import("./InsetPlot"), "Inset");
 // Graph layers (inset graphs of other data, images, tables): their own chunk.
 const GraphLayers = lazyRegion(() => import("./GraphLayers"), "Inset");
+// UX-A: Pointer-tool click selection + its on-canvas halo, its own chunk.
+const PlotSelectionLayer = lazyRegion(() => import("./PlotSelectionLayer"), "Plot");
 
 export interface PlotStageOverlaysProps {
   displayPayload: PlotPayload | null;
@@ -144,6 +146,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
       )}
       {/* After the legend: a layer paints over it, as the export stacks them (Origin's layer 2 over layer 1). */}
       {hasLayers && p.displayPayload && <GraphLayers plotRef={p.plotRef} />}
+      {p.displayPayload && <PlotSelectionLayer plotRef={p.plotRef} plotted={p.plotted} tool={p.tool} />}
     </>
   );
 }

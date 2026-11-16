@@ -18,8 +18,8 @@
 // persisted state (store/prefs.ts's loadToolbarPrefs/saveToolbarPrefs — NOT
 // store/useApp.ts, which has zero ratchet headroom), toggled from the "…"
 // flyout at the end of the dock. Two buttons are disabled-with-reason off
-// real state: Reset View when there's nothing to reset (mirrors the "A" key's
-// own no-op guard in useGlobalShortcuts.ts), and Copy Figure when the browser
+// real state: Reset view when there's nothing to reset (mirrors the "A" key's
+// own no-op guard in useGlobalShortcuts.ts), and Copy figure when the browser
 // has no Clipboard image API (the exact condition usePlotStageActions'
 // publication-copy command would be unable to write its PNG fallback).
 //
@@ -68,7 +68,7 @@ interface Props {
   onCopyData: () => void;
   onCopyFigure: () => void;
   /** Item 11: freeze the current plot into a static in-app compare window
-   *  (the toolbar's in-app counterpart to the ⎘ Copy Figure clipboard copy). */
+   *  (the toolbar's in-app counterpart to the ⎘ Copy figure clipboard copy). */
   onSnapshotWindow: () => void;
 }
 
@@ -85,7 +85,7 @@ interface BtnSpec {
   onClick: () => void;
 }
 
-const LASSO_STACK_NOTE = "Lasso Mask works on a single graph only";
+const LASSO_STACK_NOTE = "Lasso mask works on a single graph only";
 
 function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
   const reason = disabled && disabledReason ? disabledReason : undefined;
@@ -154,7 +154,7 @@ export default function PlotToolbar({
   useEffect(() => {
     loadToolPlugins().catch(() => undefined);
   }, []);
-  // Lasso Mask draws on one graph only: a multi-panel layout drops it, and says why.
+  // Lasso mask draws on one graph only: a multi-panel layout drops it, and says why.
   useEffect(() => {
     if (stackOn && tool === "lasso") {
       setPlotTool("zoom");

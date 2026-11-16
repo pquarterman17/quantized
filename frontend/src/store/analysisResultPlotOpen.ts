@@ -84,7 +84,7 @@ export async function openResultPlot(
   const prepared = await resolveAnalysisResultPlot(id, bindingIndex);
   if (!prepared) return null;
   const curve = await resultFitCurve(id, prepared);
-  const fail = (why: string) => { useApp.getState().setStatus(`can't ${purpose === "report" ? "send" : "open"} fitted plot: ${why}`); return null; };
+  const fail = (why: string) => { useApp.getState().setStatus(`can't ${purpose === "report" ? "send" : "open"} fitted plot: ${why}`, "danger"); return null; };
   if (curve.kind === "fail") return fail(curve.why);
   const refused = curve.kind === "refused" ? curve.why : null;
   if (refused && purpose === "report") return fail(refused); // refused by the gate: nothing changed

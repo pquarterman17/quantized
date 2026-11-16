@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FigureSpec } from "./api/figures";
+import { FIT_MARKER_MAX_POINTS, fitLineWidth } from "./fitOverlayStyle";
 import { resolveToHex } from "./color";
 import type { StoreGet } from "./exportActive";
 import { withAnalysisOverlays, type OverlayGrey, type OverlaySources, type OverlayView } from "./figureSpecOverlays";
@@ -97,19 +98,38 @@ describe("withAnalysisOverlays", () => {
   });
 
   it("appends the fit as a line and the peaks as markers, each with a legend entry", () => {
-    const out = overlay(flat(), DS, VIEW);
+    const out = overlay(flat(), DS, { ...VIEW, fitOverlay: { ...VIEW.fitOverlay!, curveFit: true } });
     expect(out.y_keys).toEqual([0, 1, 2]);
     expect(out.dataset.labels).toEqual(["Intensity", "fit", "peaks"]);
     expect(col(out, 1)).toEqual([1.1, 4.9, 2.1, 0.9]);
     expect(col(out, 2).map((v) => (Number.isNaN(v) ? null : v))).toEqual([null, 5, null, null]);
     const [, fit, peaks] = out.series_styles ?? [];
-    expect(fit).toMatchObject({ legend: "fit", width: 1.5 });
-    expect(fit?.line).toBeUndefined();
+    // A thinner DASHED line, so it cannot hide the data (lib/fitOverlayStyle); the canvas agrees.
+    expect(fit).toMatchObject({ legend: "fit", width: fitLineWidth(1.5), line: "dashed" });
+    // ... and the unstyled data now carries markers while the fit is shown.
+    expect(out.series_styles?.[0]).toMatchObject({ marker: true });
     expect(peaks).toMatchObject({ legend: "peaks", line: "none", marker: true, marker_size: 8 });
     // The palette slot at the overlay's DISPLAY position on the canvas — after
     // the one plotted channel — exactly as `uplotSeries` colours it.
     expect(fit?.color).toBe(resolveToHex(seriesColor(1)));
     expect(peaks?.color).toBe(resolveToHex(seriesColor(2)));
+  });
+
+  it("draws another tool's fit (Quick Fit, peak envelope: no curveFit flag) as before: solid, data unmarked", () => {
+    const out = overlay(flat(), DS, VIEW);
+    const [data, fit] = out.series_styles ?? [];
+    expect(fit).toMatchObject({ legend: "fit", width: 1.5 });
+    expect(fit?.line).toBeUndefined();
+    expect(data).toEqual({ color: "#111111", width: 1.5 });
+  });
+
+  it("does not add data markers past the density cap, even for the Curve Fit's curve", () => {
+    const n = FIT_MARKER_MAX_POINTS + 1;
+    const big: Dataset = { ...DS, data: { ...DS.data, time: Array.from({ length: n }, (_, i) => i), values: Array.from({ length: n }, () => [1]) } };
+    const view: TestView = { ...VIEW, peakOverlay: null, fitOverlay: { datasetId: "d1", binding: SINGLE_X, y: Array(n).fill(1), curveFit: true } };
+    const out = overlay(flat({ dataset: big.data }), big, view);
+    expect(out.series_styles?.[0]).toEqual({ color: "#111111", width: 1.5 });
+    expect(out.series_styles?.[1]).toMatchObject({ line: "dashed" });
   });
 
   it("keeps the source spec untouched when no overlay belongs to the exported dataset", () => {

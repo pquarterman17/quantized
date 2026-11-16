@@ -58,8 +58,8 @@ test("Exclude selected points, Include all points, and undo both", async ({ page
   await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
   await setXLim(page, lim);
 
-  // Brush x in [2, 5] with Select Rows.
-  await page.getByRole("button", { name: "Select Rows" }).click();
+  // Brush x in [2, 5] with Select rows.
+  await page.getByRole("button", { name: "Select rows" }).click();
   const from = await pixelAt(page, lim, 2);
   const to = await pixelAt(page, lim, 5);
   await page.mouse.move(from.x, from.y);

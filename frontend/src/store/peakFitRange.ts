@@ -1,5 +1,5 @@
 // "Peak Fitting ▸ Fit this range" (audit P2.4 slice 3) — the one-shot hand-off
-// from the plot's context menu to the Peak Analyzer. A tiny standalone zustand
+// from the plot's context menu to the Peak analyzer. A tiny standalone zustand
 // store, the same shape as store/combineDialog.ts (see that header): transient
 // UI intent, not project data — no `.dwk` hook-in, no undo entry, and zero
 // lines in useApp.ts (which sits at its STORE_PINS ratchet). The menu writes a
@@ -25,7 +25,7 @@ export const usePeakFitRange = create<PeakFitRangeState>(() => ({ request: null 
 
 let seq = 0;
 
-/** Ask the Peak Analyzer to fit [lo, hi] of `datasetId` (order-free). */
+/** Ask the Peak analyzer to fit [lo, hi] of `datasetId` (order-free). */
 export function requestPeakFitRange(datasetId: string, lo: number, hi: number): void {
   usePeakFitRange.setState({ request: { datasetId, lo: Math.min(lo, hi), hi: Math.max(lo, hi), seq: ++seq } });
 }

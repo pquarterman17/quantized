@@ -84,7 +84,7 @@ interface Inputs {
 let nextCandidateId = 1;
 const includedIds = (cs: readonly CandidatePeak[]): number[] => cs.filter((c) => c.included).map((c) => c.id);
 
-/** The Peak Analyzer's `ToolWindow` id — shared with PeakWizardPanel so the
+/** The Peak analyzer's `ToolWindow` id — shared with PeakWizardPanel so the
  *  Escape pause below can tell focus inside its own frame (R11). */
 export const PEAK_WIZARD_WINDOW_ID = "peakwizard";
 

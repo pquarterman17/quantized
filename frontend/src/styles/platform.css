@@ -3,12 +3,26 @@
    theme-web.css with fvd-* → qz-* renames; identical design tokens. The
    tool/results window frame reuses the kit's qzk-win* classes (shell.css). */
 
+/* ── z-index layers (mirror lib/layers.ts; layers.test.ts keeps them equal).
+   Bottom to top: tool windows 200..899, file-drop overlay 900, modal backdrops 1000.. (lib/modalInert
+   stamps open order), modal popovers 1500, toasts 1600, tooltips 2000,
+   context menus 2100. ── */
+:root {
+  --z-tool-base: 200;
+  --z-file-drop: 900;
+  --z-modal: 1000;
+  --z-modal-popover: 1500;
+  --z-toast: 1600;
+  --z-tooltip: 2000;
+  --z-menu: 2100;
+}
+
 /* ── overlay backdrop (modal scrim) ── */
 .qz-overlay-backdrop {
   position: fixed;
   inset: 0;
   background: rgb(0 0 0 / 0.35);
-  z-index: 100;
+  z-index: var(--z-modal);
 }
 
 /* ── centered glass dialog panel ── */
@@ -107,6 +121,32 @@
 .qz-cmdk-item.active {
   background: var(--accent-soft);
   color: var(--accent-text);
+}
+/* Right edge of a row: the category of a ranked / recent result, then its shortcut. */
+.qz-cmdk-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.qz-cmdk-cat {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+}
+.qz-cmdk-item.active .qz-cmdk-cat {
+  color: var(--text-muted);
+}
+/* The ranked list has no visible group header; the group stays named for assistive tech. */
+.qz-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .qz-cmdk-hit {
   background: none;
@@ -249,7 +289,7 @@
   bottom: 38px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 200;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -296,7 +336,7 @@
   bottom: 38px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 250;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -449,7 +489,7 @@
    (e.g. MenuBar) only sets [data-tip]/[data-tip-key]. ── */
 .qz-tip {
   position: fixed;
-  z-index: 2000;
+  z-index: var(--z-tooltip);
   display: flex;
   flex-direction: column;
   gap: 2px;

@@ -90,6 +90,11 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
+    // The app's first-run theme is "System" (follows prefers-color-scheme) and
+    // Playwright's default scheme is light; pin dark so every journey and
+    // screenshot golden keeps the look it was written against. A spec that
+    // tests the OS-follow behaviour overrides it with test.use({ colorScheme }).
+    colorScheme: "dark",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

@@ -86,7 +86,7 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
       );
       setStatus(`added the worksheet "${name}" to the Library (Undo removes)`);
     } catch (e) {
-      setStatus(`could not write the fit results — ${e instanceof Error ? e.message : "unknown error"}`);
+      setStatus(`could not write the fit results — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {
       setBusy(false);
     }

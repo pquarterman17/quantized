@@ -176,7 +176,7 @@ async function run(modelName: string): Promise<void> {
       const kept = activeRowIndices(n, droppedRows(ds));
       const aligned = restoreGapRows(fit.yFit, pairs);
       const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-      useApp.getState().setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y });
+      useApp.getState().setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true });
     }
   } catch (e) {
     if (!(e instanceof JobCancelledError)) {

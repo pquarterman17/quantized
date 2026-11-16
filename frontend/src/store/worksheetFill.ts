@@ -29,7 +29,7 @@ export function fillColumns(id: string, cols: readonly number[], spec: FillSpec)
   if (resolvePendingEdit(get, ds, "filling a column", () => fillColumns(id, [...cols], spec))) return;
   const why = fillProblem(spec);
   if (why) {
-    get().setStatus(`can't fill: ${why}`);
+    get().setStatus(`can't fill: ${why}`, "danger");
     return;
   }
   const base = ds.data.labels.length - (ds.formulas?.length ?? 0);

@@ -32,6 +32,7 @@ vi.mock("../../../store/confirmDialog", () => ({ askConfirm: vi.fn(async () => t
 const DATA: DataStruct = { time: [0, 1, 2, 3], values: [[1, 0.1], [3, 0.1], [5, 0.1], [7, 0.1]], labels: ["y", "w"], units: ["", ""], metadata: {} };
 
 beforeEach(() => {
+  localStorage.clear(); // the picker lists recently picked models twice (Recent group)
   vi.clearAllMocks();
   localStorage.clear();
   retainFitted(null, null);

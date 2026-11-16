@@ -1,4 +1,4 @@
-// Peak Analyzer step ④ — a compact preview of the model fit (audit P2.4
+// Peak analyzer step ④ — a compact preview of the model fit (audit P2.4
 // slice 2): the fitted points, the total model, the background, each peak
 // component standing on that background, and a residual strip. The main plot
 // has one fit-curve slot (the model goes there, via useModelFit); the

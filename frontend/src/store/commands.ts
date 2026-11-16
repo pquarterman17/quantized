@@ -28,6 +28,10 @@ export interface Action {
   checked?: boolean | (() => boolean);
   disabled?: boolean | (() => boolean);
   disabledReason?: string | (() => string | undefined);
+  /** A search-only entry (a deep link into a dialog's operation, e.g.
+   *  "Normalize · peak = 1"): reachable from ⌘K and Help, deliberately left
+   *  out of the menus, which already list its parent command. */
+  paletteOnly?: boolean;
   /** Destructive commands receive the shared danger treatment in menus. */
   danger?: boolean;
   /** True for a PER-ENTITY command — one published per recent project, per

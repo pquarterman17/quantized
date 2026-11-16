@@ -36,12 +36,12 @@ export default function Waterfall3dSection({ series, channel, xLabel, zLabel }: 
   const { shot, busy } = useMap3dImage(built.ok ? built.body : null);
   const exportAs = async (fmt: string) => {
     const r = curveWaterfallBody(series, opts, fmt, `waterfall3d_${channel}`);
-    if (!r.ok) return setStatus(`3-D waterfall export refused — ${r.error}`);
+    if (!r.ok) return setStatus(`3-D waterfall export refused — ${r.error}`, "danger");
     try {
       await exportMapFigure(r.body);
       setStatus(`exported waterfall3d_${channel}.${fmt}`);
     } catch (e) {
-      setStatus(`3-D waterfall export failed — ${e instanceof Error ? e.message : "error"}`);
+      setStatus(`3-D waterfall export failed — ${e instanceof Error ? e.message : "error"}`, "danger");
     }
   };
   const note = !built.ok ? built.error : shot && "error" in shot && !busy ? shot.error : null;

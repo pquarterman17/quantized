@@ -97,7 +97,6 @@ describe("workshop dataset identity", () => {
     "/components/workshops/reflectivity/useReflectivity.ts",
     "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
-    "/components/Library/Library.tsx",
     "/components/Library/folderOps.ts",
     "/components/Stage/worksheet/useWorksheetView.ts",
     "/components/workshops/database/SqliteQueryDialog.tsx",
@@ -2309,9 +2308,11 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   shortcutsOpen: "shortcuts sheet visibility; UI state",
   textFormatHelpOpen: "text-format help visibility; UI state",
   status: "status-bar text; transient announcement, not data",
+  statusDanger: "status-bar failure marker for the current status text; transient, not data",
 
   // persisted user preferences (own localStorage lifecycle via store/prefs.ts, not project edits)
   theme: "prefs",
+  themeMode: "prefs (user choice system|dark|light; `theme` is the effective value)",
   accent: "prefs",
   density: "prefs",
   palette: "prefs",
@@ -2554,38 +2555,24 @@ GUI_INTERACTION_PLAN #21 motivating incident: savedRois was missing for 24 hours
   });
 });
 
-// Alert/note text must never be clipped (2026-08-12). `.qzk-ds-meta` is a
-// SINGLE-LINE utility — `overflow: hidden; text-overflow: ellipsis;
-// white-space: nowrap` — and it is exactly right for a dataset's
-// "201 pts · 1 ch" row. Applied to a `role="alert"`/`role="note"` MESSAGE it
-// hides the actionable half of the sentence. Measured case that motivated
-// this guard: the Figure Page save gate rendered 988 px of "…save it (its
-// title-bar Save button, or File > Save Editable Figure), then Save this page
-// again" inside a 154 px column — ~84% invisible, and because the text
-// overflowed a nowrap line rather than filling one, not even an ellipsis
-// hinted that anything was missing. The `.qzk-msg` modifier restores wrapping.
+// Alert/note text must never be clipped (2026-08-12; reworked UX-G1). The
+// original guard required every role=alert/note using `qzk-ds-meta` to also
+// carry `.qzk-msg`, because `.qzk-ds-meta` was a single-line ellipsis utility
+// that hid the actionable half of a message (the Figure Page save gate: 988 px
+// of text in a 154 px column). G1 made the base class wrap, so the per-site
+// modifier guard is retired as redundant; the invariant it protected is now
+// pinned at its source: no `.qzk-ds-meta` rule may force one line or ellipsis.
 describe("alert/note messages are not clipped", () => {
-  it("every role=alert/note element using qzk-ds-meta also carries qzk-msg", () => {
+  it("no .qzk-ds-meta rule in any stylesheet forces nowrap / ellipsis", () => {
     const offenders: string[] = [];
-    for (const [path, src] of sources()) {
-      if (!path.endsWith(".tsx")) continue;
-      // Walk each `className="qzk-ds-meta"` (no qzk-msg) back to its opening
-      // `<`, so a multi-line JSX tag is matched as a whole.
-      const re = /className="qzk-ds-meta"/g;
-      let match: RegExpExecArray | null;
-      while ((match = re.exec(src)) !== null) {
-        const open = src.lastIndexOf("<", match.index);
-        if (open < 0) continue;
-        const tag = src.slice(open, match.index + match[0].length);
-        if (/role="(alert|note)"/.test(tag)) {
-          offenders.push(`${path}:${src.slice(0, match.index).split("\n").length}`);
-        }
+    const sheets = import.meta.glob("./styles/*.css", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    expect(Object.keys(sheets).length).toBeGreaterThan(0);
+    for (const [path, src] of Object.entries(sheets)) {
+      for (const m of src.matchAll(/([^{}]*\.qzk-ds-meta[^{}]*)\{([^}]*)\}/g)) {
+        if (/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(m[2])) offenders.push(`${path}: ${m[1].trim()}`);
       }
     }
-    expect(
-      offenders,
-      'add the "qzk-msg" modifier (className="qzk-ds-meta qzk-msg") so the message wraps instead of being clipped mid-sentence',
-    ).toEqual([]);
+    expect(offenders, "help/meta text must wrap, never clip").toEqual([]);
   });
 });
 

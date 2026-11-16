@@ -172,6 +172,13 @@ describe("importPaths", () => {
     await useApp.getState().importPaths(["/gone.dat", "/ok.dat"]);
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["ok.dat"]);
     expect(useApp.getState().status).toContain("file not found");
+    // UX-Q: a failure paints the status-bar dot red (statusDanger === status) ...
+    expect(useApp.getState().statusDanger).toBe(useApp.getState().status);
+  });
+
+  it("a clean batch leaves the status tone non-danger", async () => {
+    await useApp.getState().importPaths(["/ok.dat"]);
+    expect(useApp.getState().statusDanger).toBeNull();
   });
 });
 

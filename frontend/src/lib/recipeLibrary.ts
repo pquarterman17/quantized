@@ -81,7 +81,7 @@ export const RECIPE_KIND_LABEL: Record<RecipeKind, string> = {
  *  action would show, instead of hardcoding it a third time. */
 export const NAME_KEYED_WORKSHOP_LABEL: Record<Extract<RecipeKind, "analysis" | "peak" | "graph" | "fitModel">, string> = {
   analysis: "Pipeline",
-  peak: "Peak Analyzer",
+  peak: "Peak analyzer",
   graph: "Figure Builder",
   fitModel: "Curve Fit",
 };
