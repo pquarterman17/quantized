@@ -1,6 +1,6 @@
 // UX-003, real seam-family coverage: exercises the ACTUAL AppOverlays panel
 // registry (the `lazyPanel()` family — 52 workshop panels + on-demand
-// dialogs, all sharing one `lazyRegion()` call site, see AppOverlays.tsx)
+// dialogs, all sharing one `lazyRegion()` call site, see AppOverlayPanels.tsx)
 // against a genuinely mocked module path, not a synthetic loader.
 // `src/lib/lazyRegion.test.tsx` proves the general mechanism; this proves it
 // holds for a real production call site wired through the real composition

@@ -602,12 +602,12 @@ describe("Analyze-menu/⌘K command registry entry (MAIN_PLAN #26)", () => {
   // TextFormatHelp.test.tsx uses for the identical reason (the App tree is
   // too heavy to render in jsdom). Split moved here from appCommands.ts
   // when that module was decomposed by menu domain (2026-07-17). The
-  // overlay mount lives in AppOverlays.tsx.
+  // overlay mount lives in AppOverlayPanels.tsx.
   const commandsSrc = Object.values(
     import.meta.glob("../../commands/dataCommands.ts", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
   const overlaysSrc = Object.values(
-    import.meta.glob("../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),
+    import.meta.glob("../../AppOverlayPanels.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
 
   it("commands/dataCommands.ts registers the Split command in the Data group, acting on the active dataset", () => {
@@ -617,7 +617,7 @@ describe("Analyze-menu/⌘K command registry entry (MAIN_PLAN #26)", () => {
     expect(commandsSrc).toContain("openSplitDialog(id)");
   });
 
-  it("AppOverlays.tsx mounts the dialog", () => {
+  it("AppOverlayPanels.tsx mounts the dialog", () => {
     expect(overlaysSrc).toContain("<SplitDatasetDialog />");
   });
 });
