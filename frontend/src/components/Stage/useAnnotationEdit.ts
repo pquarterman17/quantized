@@ -11,14 +11,14 @@
 // parameterized picker, not a discrete action) is hand-built. Both are built
 // in ./objectMenus, loaded on demand (bundle diet slice 30).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import type { AnnotationConv } from "./annotationShapeActions";
-import { preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
+import { cancelPendingObjectMenu, preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
 
 export interface AnnotationMenuState {
   x: number;
@@ -58,9 +58,15 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
   );
 
   // The menu's items (the registry actions plus the Frame picker) are built
-  // in ./objectMenus, which loads on demand (bundle diet slice 30).
+  // in ./objectMenus, which loads on demand (bundle diet slice 30). A gesture
+  // that waited for that load is dropped if the tool has left pointer mode.
+  const toolRef = useRef(tool);
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
+  const stillPointer = () => toolRef.current === "pointer";
   const openMenu = (id: string, clientX: number, clientY: number, conv: AnnotationConv) =>
-    withObjectMenus((m) => setMenu({ x: clientX, y: clientY, items: m.annotationMenuItems(id, conv) }));
+    withObjectMenus((m) => setMenu({ x: clientX, y: clientY, items: m.annotationMenuItems(id, conv) }), stillPointer);
 
   // Stable across annotation content edits (MAIN #8f reasoning): only the
   // tool switching in/out of pointer mode, or the list going empty<->non-
@@ -73,7 +79,7 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
       onSelect: setSelectedAnnotationId,
       onMove: (id, x, y) => updateAnnotation(id, { x, y }),
       onResize: (id, size) => updateAnnotation(id, { size }),
-      onEditText: (id) => withObjectMenus((m) => m.editAnnotationText(id)),
+      onEditText: (id) => withObjectMenus((m) => m.editAnnotationText(id), stillPointer),
       onContextMenu: openMenu,
       // Empty-canvas double-click → reset zoom (owner ask 2026-07-11). The
       // store half: clear committed limits so an applied Origin figure's
@@ -86,6 +92,7 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
         st.setY2Lim(null);
       },
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, hasAnnotations, selectedAnnotationId, setSelectedAnnotationId, updateAnnotation]);
 
   // Warm the object menus once there is an annotation to act on.
@@ -93,5 +100,12 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
     if (bridge) preloadObjectMenus();
   }, [bridge]);
 
-  return { bridge, menu, closeMenu: () => setMenu(null) };
+  return {
+    bridge,
+    menu,
+    closeMenu: () => {
+      cancelPendingObjectMenu();
+      setMenu(null);
+    },
+  };
 }

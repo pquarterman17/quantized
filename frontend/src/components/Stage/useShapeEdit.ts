@@ -11,14 +11,14 @@
 // pickers (parameterized, not discrete actions) are hand-built. Both are
 // built in ./objectMenus, loaded on demand (bundle diet slice 30).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import type { ShapeConv } from "./annotationShapeActions";
-import { preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
+import { cancelPendingObjectMenu, preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
 
 export interface ShapeMenuState {
   x: number;
@@ -61,12 +61,20 @@ export function useShapeEdit(tool: string): ShapeEditResult {
 
   // The menu's items (the swatch/opacity/width pickers plus the registry
   // actions) are built in ./objectMenus, which loads on demand (bundle diet
-  // slice 30). A shape that no longer exists opens no menu.
+  // slice 30). A shape that no longer exists opens no menu, and a gesture
+  // that waited for that load is dropped if the tool has left pointer mode.
+  const toolRef = useRef(tool);
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
   const openMenu = (id: string, clientX: number, clientY: number, conv: ShapeConv) =>
-    withObjectMenus((m) => {
-      const items = m.shapeMenuItems(id, conv);
-      if (items) setMenu({ x: clientX, y: clientY, items });
-    });
+    withObjectMenus(
+      (m) => {
+        const items = m.shapeMenuItems(id, conv);
+        if (items) setMenu({ x: clientX, y: clientY, items });
+      },
+      () => toolRef.current === "pointer",
+    );
 
   const bridge = useMemo<NonNullable<BuildOptsArgs["shapeEdit"]> | null>(() => {
     if (tool !== "pointer" || !hasShapes) return null;
@@ -84,5 +92,12 @@ export function useShapeEdit(tool: string): ShapeEditResult {
     if (bridge) preloadObjectMenus();
   }, [bridge]);
 
-  return { bridge, menu, closeMenu: () => setMenu(null) };
+  return {
+    bridge,
+    menu,
+    closeMenu: () => {
+      cancelPendingObjectMenu();
+      setMenu(null);
+    },
+  };
 }

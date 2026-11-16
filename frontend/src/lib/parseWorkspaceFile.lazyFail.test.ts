@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "../commands/fileCommands";
 import { openFilePicker } from "./openFilePicker";
+import { WORKSPACE_FORMAT } from "./workspace";
 import { usePendingOps } from "../store/pendingOps";
 import { useImportBatch } from "../store/importBatch";
 import { useApp } from "../store/useApp";
@@ -43,5 +44,20 @@ describe("Open workspace: the parse chunk will not load", () => {
       expect(usePendingOps.getState().ops).toHaveLength(0);
     });
     expect(useApp.getState().datasets).toBe(before);
+
+    // Nothing is cached on the failure: the next open loads the parser and opens.
+    vi.doUnmock("./parseWorkspaceFile");
+    useApp.setState({ status: "" });
+    buildFileCommands(useApp.getState).find((c) => c.id === "open-workspace")?.run();
+    const retry = vi.mocked(openFilePicker).mock.calls.at(-1)?.[0];
+    const ws = JSON.stringify({
+      format: WORKSPACE_FORMAT,
+      version: 3,
+      datasets: [{ id: "d1", name: "retry.dat", data: { time: [1, 2], values: [[1], [2]], labels: ["y"], units: [""], metadata: {} } }],
+      folders: [],
+    });
+    retry?.([{ text: () => Promise.resolve(ws) } as unknown as File]);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/^loaded workspace/));
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["retry.dat"]);
   });
 });

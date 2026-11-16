@@ -86,5 +86,4 @@ export async function createDerivedWorksheetRun(
     get().setStatus(`create derived worksheet failed: ${e instanceof Error ? e.message : "error"}`);
     return null;
   }
-
 }

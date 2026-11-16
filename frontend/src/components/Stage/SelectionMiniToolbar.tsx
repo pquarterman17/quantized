@@ -17,30 +17,21 @@
 // and would otherwise paint over (and swallow clicks on) this strip's
 // rightmost buttons.
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { useApp } from "../../store/useApp";
-import { loadObjectMenus, objectMenus } from "./objectMenusLoader";
+import { loadObjectMenus, objectMenus, subscribeObjectMenus } from "./objectMenusLoader";
 
-/** The object-menu module, re-rendering once it lands. Starts the load only
- *  while `wanted` (a live selection in pointer mode); a failed load shows no
- *  strip and the next selection tries again (the right-click menu reports
- *  its own failure). */
-function useObjectMenus(wanted: boolean) {
-  const [mod, setMod] = useState(objectMenus);
+/** The object-menu module, re-rendering once it lands, whoever started the
+ *  load (this strip, a right-click, a warm-up). While it is missing, each new
+ *  `selectedKey` (a live selection in pointer mode) starts a load; a failed
+ *  load shows no strip until a later load succeeds (the right-click menu
+ *  reports its own failure). */
+function useObjectMenus(selectedKey: string | null) {
+  const mod = useSyncExternalStore(subscribeObjectMenus, objectMenus);
   useEffect(() => {
-    if (!wanted || mod) return;
-    let live = true;
-    loadObjectMenus().then(
-      (m) => {
-        if (live) setMod(() => m);
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-    };
-  }, [wanted, mod]);
+    if (selectedKey !== null && !mod) loadObjectMenus().catch(() => {});
+  }, [selectedKey, mod]);
   return mod;
 }
 
@@ -57,7 +48,7 @@ export default function SelectionMiniToolbar() {
     plotTool === "pointer" && !annotation && selectedShapeId ? shapes.find((x) => x.id === selectedShapeId) : undefined;
   // The strip and its registry actions load with the object menus (bundle
   // diet slice 30); nothing shows until they have.
-  const m = useObjectMenus(Boolean(annotation ?? shape));
+  const m = useObjectMenus(annotation ? `a:${annotation.id}` : shape ? `s:${shape.id}` : null);
   if (!m) return null;
 
   if (annotation) return <m.AnnotationStrip id={annotation.id} />;

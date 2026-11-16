@@ -6,8 +6,9 @@ worksheet, the parse half of Paste data, the commit half of Append project),
 the `.dwk` parse entry point (loaded once a file is picked), and the plot
 object menus (annotation/shape right-click menus, their registry actions and
 the selection mini-toolbar strip, warmed once a plot has an object).
-Measured on main `6c454b3c`: **809,593 -> 802,703 B (-6,890 B)**, about
-13.0 kB under the UNMOVED 816,042 B pin. That headroom is for
+Measured on main `c40ed030` (809,593 B, the same as `6c454b3c`):
+**809,593 -> 803,410 B (-6,183 B)** with the review round's fixes, about
+12.3 kB under the UNMOVED 816,042 B pin. That headroom is for
 the pending feature branches (~+5-6 kB eager together). See "Slice 30".
 
 **Previous state (2026-11-15, after slice 29):** the core command list's
@@ -3576,7 +3577,7 @@ plot-window gesture, and the published-command copy of
 
 ### Slice 30 — four async seams and the plot-object menus, pin UNMOVED — **DONE (2026-11-15)**
 
-**Measured net eager delta -6,890 B — pin unchanged at 816,042 B**
+**Measured net eager delta −6,183 B — pin unchanged at 816,042 B**
 
 Several pending branches together add roughly +5 to +6 kB eager, which would
 have left main within a few hundred bytes of the pin. Exact bytes, `npm ci`,
@@ -3591,8 +3592,10 @@ cumulative:
 | + Paste data parse half -> `store/pasteDataRun.ts`, Append project commit -> `store/appendWorkspaceRun.ts` | 807,449 | −1,108 |
 | + `.dwk` parse entry point behind `import()` (`lib/parseWorkspaceFile.ts`) | 806,889 | −560 |
 | + plot-object menus -> `components/Stage/objectMenus.tsx` | 802,784 | −4,105 |
-| (tidy-up after review: lint fixes, `recentProjectReopen` import) | 802,703 | −81 |
-| this slice | 802,703 | **-6,890** |
+| (tidy-up: lint fixes, `recentProjectReopen` import) | 802,703 | −81 |
+| merged with main `c40ed030` (#712; main itself also measures 809,593) | 802,703 | 0 |
+| + review round: queued-gesture cancel, mini-toolbar subscription (L-1, L-2) | 803,410 | +707 |
+| this slice, as landed | 803,410 | **−6,183** |
 
 #### How it was found
 
@@ -3648,10 +3651,17 @@ plot has an annotation or a shape.
   least one annotation / shape), and `useShapeDraw` as soon as the text-box
   tool is armed; nothing in this family can run before then, so a plot
   without objects never fetches it. A gesture that finds the module unloaded
-  waits for it; a failed load shows "Could not load the object menu: …" and
-  opens nothing, and nothing is cached, so the next gesture retries. The
-  mini-toolbar shows nothing until the module is in (a failed warm-up is
-  silent).
+  is queued, and only the newest queued gesture runs. Review round (same
+  day, finding L-1): it is dropped if the user moves on before the chunk
+  lands (a pointerdown anywhere, Escape, the menu's close, or leaving the
+  pointer tool), where it used to pop up late at the old position. A placed
+  text box is the exception to the tool check, since its own commit flips
+  the tool to pointer. A failed load shows "Could not load the object menu:
+  …" for a gesture still current and opens nothing, and nothing is cached,
+  so the next gesture retries. The mini-toolbar shows nothing until the
+  module is in (a failed warm-up is silent); it subscribes to the loader,
+  so a later load by any caller, or a load it starts for a newly selected
+  object, shows the strip without a deselect (finding L-2).
 
 In a real browser (headless Chromium against `qz --no-browser`, built tree,
 real backend): none of the five chunks was fetched at startup. Paste data
@@ -3677,10 +3687,21 @@ journeys passed against the same build.
 - `store/slice30Seams.lazyFail.test.ts`: each of the three store bodies
   failing to load is reported and changes nothing (paste still reads the
   clipboard first). `lib/parseWorkspaceFile.lazyFail.test.ts`: the parse
-  chunk failing lands in "open failed: …" and clears the busy op.
-- `components/Stage/objectMenus.lazy.test.tsx`: the cold path. A right-click
-  whose chunk fails toasts and opens nothing, then a retry opens the menu;
-  an annotation menu and the mini-toolbar strip appear once loaded.
+  chunk failing lands in "open failed: …" and clears the busy op, and the
+  next open loads the parser and opens.
+- `components/Stage/objectMenus.lazy.test.tsx`: a right-click whose chunk
+  fails toasts and opens nothing, then a retry opens the menu; an annotation
+  menu and the mini-toolbar strip appear once loaded.
+- `components/Stage/objectMenus.cold.test.tsx` (review round, finding L-3):
+  a fresh module graph per test with the chunk held behind a gate, so each
+  race is forced. No objects means no fetch, and the first annotation
+  starts one. A queued right-click opens once the chunk lands, and only the
+  newest queued gesture runs. A pointerdown, Escape, `closeMenu` or leaving
+  the pointer tool drops a queued menu. A double-click edit and a placed
+  text box run once it lands, and a text box whose chunk fails toasts and
+  creates nothing. After a failed load the strip appears on a new selection
+  or on any other caller's load. Removing the gesture check or the loader's
+  notification turns five of these red.
 - The suites that open an object menu and read it synchronously
   (`useAnnotationEdit`, `useShapeEdit`, `useShapeDraw`,
   `SelectionMiniToolbar`) load the module in `beforeAll`, as the warm-up
