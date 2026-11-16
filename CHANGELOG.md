@@ -6,8 +6,41 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-11-16
+
 ### Added
 
+- **Auto-update from source** (#734): a worksheet can follow its file while a
+  measurement is still writing it. New rows appear as the file grows; a
+  half-written last line waits until it is complete. Your edits are respected:
+  if you changed values, names, units or category labels, the update is one
+  labelled, undoable step ("Auto-update replaced your edits"). Library ▸
+  "Read the source file now" re-reads on demand.
+- **Many datasets** (#735):
+  - Shift-click selects a range in the Library tree, and Ctrl+A selects every
+    visible dataset.
+  - The selection bar's Plot makes one overlay graph with a legend. Its
+    legend drops file extensions, and when every curve shares a unit, that
+    unit moves to the Y title, on screen and in export.
+  - Panel grids keep each panel's own X range unless the panels share an X
+    quantity.
+  - Multi-panel export can use datasets as sources.
+  - Importing several same-shape files offers an overlay.
+- **Column names from comment headers** (#732): a `#` or `%` comment line
+  just above the data such as `# H (Oe)  M (emu)` now names the columns and
+  sets their units. Free-text comments are left alone.
+- **Decimal-comma files recognised from the whole file** (#732): a `;` or tab
+  file whose other columns prove decimal commas (`0,5`) imports without the
+  wizard. Any point-decimal cell keeps the old fail-safe refusal.
+- **Command search finds daily-job words** (#731): save, gaussian, Tc, Oe or
+  tesla, APS/Nature presets, fonts, annotate, "FC minus ZFC", axis range.
+  New commands: Set Column Values…, Copy figure, Select all datasets. Curve
+  fit and Peak analyzer are also listed under Analyze ▸ Fit / Peaks.
+- **Analysis extras** (#725): surface fit z = f(x, y), Tauc optical-gap fit
+  and ellipse fit.
+- **Automation** (#727): read `.dwk` workspaces from Python, a data-operation
+  API, `qz run` for headless recipes, and fuller script export.
+- Tick-label prefix/suffix; recode mappings are saved in the project (#726).
 - **Interactive 3-D view** on the Map tab (and in the waterfall workshop):
   drag to rotate, wheel to zoom, arrow keys / +/− / 0 from the keyboard, and a
   hover readout of x/y/z for surfaces, 3-D scatter (optional drop lines) and
@@ -15,6 +48,19 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   saving a 3-D view still saves as `.dwk` version 6.
 
 ### Changed
+
+- **Usability pass** (#719, #720, #722, #723):
+  - the Inspector follows what you have selected;
+  - first-run guidance;
+  - readable fit results;
+  - uniform selects and icons, with one meaning per glyph;
+  - one export view with a true-size preview and readable presets;
+  - analysis windows dock into the Inspector column.
+- Peak Analyzer starts from sensible defaults, and fit overlays no longer drive
+  the Y autoscale, on screen or in export (#721).
+- Import failures, Undo and the peak-fit status now report what actually
+  happened; the open project follows undo/redo (#728).
+- Startup loads about 19 kB less JavaScript (#724).
 
 - 3-D map exports are now **orthographic** (no perspective, as in MATLAB and on
   screen), draw the surface at full grid resolution (up to 500 cells a side), fit the axes to the data
@@ -27,6 +73,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   already saved a theme stay pinned to it until they pick "System". Help and
   meta text is larger, wraps instead of ellipsizing, and several status/muted
   colours were darkened or lightened to meet WCAG AA contrast.
+
+### Fixed
+
+- **Large imports with unordered X draw in seconds** (#733): a 100k-row file
+  whose X is not sorted took about 3 minutes to first paint and now takes
+  about 6 s; 1M rows now paint instead of hanging.
+- Hysteresis: loops that sample H = 0 exactly report Mr and squareness;
+  squareness is blank, not 1, when Mr or Ms is undefined (#730).
 
 ## [0.35.0] - 2026-11-16
 
