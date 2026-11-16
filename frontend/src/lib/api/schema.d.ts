@@ -1545,6 +1545,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fit-implicit/ellipse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ellipse
+         * @description Direct algebraic ellipse fit, refined to orthogonal distance.
+         */
+        post: operations["ellipse_api_fit_implicit_ellipse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/autoguess": {
         parameters: {
             query?: never;
@@ -2595,6 +2615,26 @@ export interface paths {
          *     remains).
          */
         post: operations["subtract_hysteresis_bg_api_magnetometry_subtract_hysteresis_background_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/optical-gap/tauc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tauc
+         * @description Tauc transform and linear-edge fit -> optical band gap Eg (eV).
+         */
+        post: operations["tauc_api_optical_gap_tauc_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5330,6 +5370,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/surface-fit/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit
+         * @description Fit ``model`` to (x, y, z); non-finite triples are dropped.
+         */
+        post: operations["fit_api_surface_fit_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/surface-fit/guess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Guess
+         * @description Heuristic starting parameters for ``model`` on this data.
+         */
+        post: operations["guess_api_surface_fit_guess_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/surface-fit/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Models
+         * @description The surface model catalog (name, parameter names, formula text).
+         */
+        get: operations["models_api_surface_fit_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/thermal/debye": {
         parameters: {
             query?: never;
@@ -7620,6 +7720,23 @@ export interface components {
             d: number;
             /** Epsilon */
             epsilon: number;
+        };
+        /** EllipseRequest */
+        EllipseRequest: {
+            /**
+             * Curve Points
+             * @default 200
+             */
+            curve_points?: number;
+            /**
+             * Geometric
+             * @default true
+             */
+            geometric?: boolean;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
         };
         /** EquationFitRequest */
         EquationFitRequest: {
@@ -11814,6 +11931,44 @@ export interface components {
             /** Temperature */
             temperature: number[];
         };
+        /** SurfaceFitRequest */
+        SurfaceFitRequest: {
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /**
+             * Max Iter
+             * @default 10000
+             */
+            max_iter?: number;
+            /** Model */
+            model: string;
+            /** P0 */
+            p0?: number[] | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+            /** Z */
+            z: number[];
+        };
+        /** SurfaceXYZ */
+        SurfaceXYZ: {
+            /** Model */
+            model: string;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+            /** Z */
+            z: number[];
+        };
         /** TTestRequest */
         TTestRequest: {
             /**
@@ -11882,6 +12037,54 @@ export interface components {
              * @default 298.15
              */
             t?: number;
+        };
+        /**
+         * TaucRequest
+         * @description Spectrum + optional conversions. ``x`` is photon energy (eV) or
+         *     wavelength (nm); ``y`` is alpha (1/cm), or transmittance when
+         *     ``signal='transmittance'`` (then ``thickness_nm`` is required).
+         */
+        TaucRequest: {
+            /** E Max */
+            e_max?: number | null;
+            /** E Min */
+            e_min?: number | null;
+            /**
+             * Kind
+             * @default direct
+             * @enum {string}
+             */
+            kind?: "direct" | "direct-forbidden" | "indirect" | "indirect-forbidden";
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /**
+             * Percent
+             * @default false
+             */
+            percent?: boolean;
+            /** Reflectance */
+            reflectance?: number[] | null;
+            /**
+             * Signal
+             * @default alpha
+             * @enum {string}
+             */
+            signal?: "alpha" | "transmittance";
+            /** Thickness Nm */
+            thickness_nm?: number | null;
+            /** X */
+            x: number[];
+            /**
+             * X Unit
+             * @default eV
+             * @enum {string}
+             */
+            x_unit?: "eV" | "nm";
+            /** Y */
+            y: number[];
         };
         /** TernaryFigureRequest */
         TernaryFigureRequest: {
@@ -14766,6 +14969,41 @@ export interface operations {
             };
         };
     };
+    ellipse_api_fit_implicit_ellipse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EllipseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     autoguess_api_fitting_autoguess_post: {
         parameters: {
             query?: never;
@@ -16462,6 +16700,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HysteresisBgRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tauc_api_optical_gap_tauc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaucRequest"];
             };
         };
         responses: {
@@ -20968,6 +21241,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_api_surface_fit_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfaceFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    guess_api_surface_fit_guess_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfaceXYZ"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    models_api_surface_fit_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };

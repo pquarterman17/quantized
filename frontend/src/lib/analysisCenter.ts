@@ -32,6 +32,9 @@ const GENERAL_RECOMMENDED: readonly Technique[] = ["generic", "transport", "spec
  * authority, so the Analysis Center cannot drift into a second tool registry. */
 export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadata>> = {
   curvefit: { category: "Fit", requiredInputs: "one numeric response and an x axis", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
+  "surface-fit": { category: "Fit", requiredInputs: "X, Y and Z columns: a map or a long-form XYZ table", requirement: "two-continuous" },
+  "optical-gap": { category: "Fit", requiredInputs: "an energy or wavelength column and an absorption or transmittance column", requirement: "continuous", recommendedFor: ["spectroscopy"] },
+  "ellipse-fit": { category: "Fit", requiredInputs: "two columns of points tracing an ellipse", requirement: "two-continuous" },
   hysteresis: { category: "Magnetometry", requiredInputs: "a magnetometry field sweep and response", requirement: "continuous", techniques: ["magnetometry.mvsh", "magnetometry.mvst"], recommendedFor: ["magnetometry.mvsh", "magnetometry.mvst"] },
   magtools: { category: "Magnetometry", requiredInputs: "magnetometry data and sample or unit context", requirement: "continuous", techniques: ["magnetometry.mvsh", "magnetometry.mvst"], recommendedFor: ["magnetometry.mvsh", "magnetometry.mvst"] },
   peaks: { category: "Peaks & baseline", requiredInputs: "one numeric signal with at least three rows", requirement: "continuous", recommendedFor: ["xrd.powder", "spectroscopy"] },
