@@ -3,7 +3,7 @@
 // than two flags on useApp.ts, which sits at its size-ratchet pin. One tiny
 // file for both so the eager bundle pays one zustand `create`, not two: it
 // is the ONLY module from these workshop directories that eager code
-// (commands/analysisCommands.ts, AppOverlays.tsx) may import — see
+// (commands/analysisCommands.ts, AppOverlayPanels.tsx) may import — see
 // ternary/lazyMount.test.ts.
 
 import { create } from "zustand";

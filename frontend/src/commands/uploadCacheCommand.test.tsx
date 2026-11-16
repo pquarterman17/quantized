@@ -105,10 +105,10 @@ describe("Preferences ▸ Origin upload cache", () => {
 
   it("stays out of the eager bundle: only the lazy Preferences dialog imports it", () => {
     const here = dirname(fileURLToPath(import.meta.url));
-    for (const eager of ["fileCommands.ts", "../AppOverlays.tsx", "../App.tsx"]) {
+    for (const eager of ["fileCommands.ts", "../AppOverlays.tsx", "../AppOverlayPanels.tsx", "../App.tsx"]) {
       expect(readFileSync(resolve(here, eager), "utf-8")).not.toMatch(/uploadCacheCommand|UploadCachePref/);
     }
-    expect(readFileSync(resolve(here, "../AppOverlays.tsx"), "utf-8")).toMatch(
+    expect(readFileSync(resolve(here, "../AppOverlayPanels.tsx"), "utf-8")).toMatch(
       /lazyPanel\(\(\) => import\("\.\/components\/overlays\/PreferencesDialog"\)/,
     );
   });

@@ -16,6 +16,7 @@ import quantized.api as qz
 _EXPECTED = {
     "DataStruct", "load", "read_origin_books", "convert_origin_project", "save_table",
     "curve_fit", "fit_model", "fit_single_peak", "fit_multi_peak", "find_peaks_robust",
+    "surface_fit", "fit_ellipse", "tauc_fit",
     "integrate_peaks", "batch_integrate_peaks",
     "estimate_background", "fit_region_background", "baseline_als",
     "baseline_modpoly", "baseline_rolling_ball",
