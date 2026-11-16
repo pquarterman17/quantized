@@ -100,7 +100,7 @@ const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
       "XRD & reflectivity",
       "Transform & signal",
       "Statistics",
-      "Workflow",
+      "Tools",
     ],
   },
   Data: {
