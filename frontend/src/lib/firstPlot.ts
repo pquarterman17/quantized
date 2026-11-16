@@ -40,6 +40,10 @@ const TEMP_UNIT = /^(m?K|°C|degC|℃)$/;
 // and "Template" are not. Pressure is NOT here: against T it is often the
 // measurement (vapour pressure); a chamber gauge says "Chamber".
 const MONITOR = /(^|[^a-z])(status|chamber|motor|set ?point)/i;
+// A name that says it is a measured quantity is data, never a monitor via the
+// pattern above: "Motor Current (A)", "Chamber Signal". (Constant and
+// readback-in-X's-unit columns are still left off.)
+const DATA_NAME = /current|voltage|resistance|moment|signal|intensity/i;
 const isTemp = (label: string, unit: string): boolean => /(^|[^a-z])temp/i.test(label) || TEMP_UNIT.test(unit);
 const TIME_UNIT = /^(s|secs?|ms|us|µs|min|mins|h|hrs?|hours?|days?)$/i;
 
@@ -55,18 +59,25 @@ function flat(ds: DataStruct, c: number): boolean {
   return hi >= lo && hi - lo <= 1e-6 * Math.max(Math.abs(lo), Math.abs(hi));
 }
 
-/** Decades `chs` span against a finite X when every value is positive, else 0. */
+/** Decades `chs` span against a finite X when every value is positive, else 0.
+ *  Measured from the 1st to 99th percentile of the values, so one outlier
+ *  (a 1e4 spike among values of 1-3) cannot open log on its own. */
 function logSpan(ds: DataStruct, xKey: number | null, chs: readonly number[]): number {
-  let lo = Infinity;
-  let hi = 0;
-  ds.values.forEach((row, r) => {
-    if (!Number.isFinite(xKey == null ? ds.time[r] : row[xKey])) return;
+  const vals: number[] = [];
+  for (let r = 0; r < ds.values.length; r++) {
+    const row = ds.values[r];
+    if (!Number.isFinite(xKey == null ? ds.time[r] : row[xKey])) continue;
     for (const c of chs) {
       const v = row[c];
-      if (Number.isFinite(v)) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
+      if (!Number.isFinite(v)) continue;
+      if (v <= 0) return 0;
+      vals.push(v);
     }
-  });
-  const decades = lo > 0 ? Math.log10(hi / lo) : 0;
+  }
+  if (vals.length === 0) return 0;
+  const sorted = Float64Array.from(vals).sort();
+  const n = sorted.length - 1;
+  const decades = Math.log10(sorted[Math.ceil(0.99 * n)] / sorted[Math.floor(0.01 * n)]);
   return decades > 3 ? Math.round(decades * 10) / 10 : 0;
 }
 
@@ -86,7 +97,7 @@ export function firstPlot(ds: DataStruct, xKey: number | null, skip: readonly nu
     const unit = (c: number) => (ds.units[c] ?? "").trim();
     const monitor = (c: number) =>
       (isTemp(ds.labels[c], unit(c)) && !isTemp(xLabel, xUnit)) ||
-      MONITOR.test(ds.labels[c]) ||
+      (MONITOR.test(ds.labels[c]) && !DATA_NAME.test(ds.labels[c])) ||
       (unit(c) !== "" && unit(c) === xUnit) ||
       flat(ds, c);
     const data = timeX ? live : live.filter((c) => !monitor(c));

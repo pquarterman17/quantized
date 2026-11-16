@@ -84,6 +84,14 @@ describe("Y channels by unit group (firstPlot)", () => {
     expect(firstPlot(ds, null)).toEqual({ yKeys: [0], y2Keys: null, logDecades: 0 });
   });
 
+  it("a measured quantity named like a monitor ('Motor Current') is data", () => {
+    const ds = table({ name: "Field", unit: "Oe", v: field }, [
+      { name: "Moment", unit: "emu", v: moment },
+      { name: "Motor Current", unit: "A", v: moment.map((m, i) => m * 3 + 0.01 * i) },
+    ]);
+    expect(firstPlot(ds, null).y2Keys).toEqual([1]); // plotted on Y2, not left off
+  });
+
   it("a logger (time X) plots its temperature and pressure: nothing is a monitor there", () => {
     const ds = table({ name: "Time", unit: "s", v: ramp(0, 3600) }, [
       { name: "Temperature", unit: "K", v: ramp(300, 4) },
@@ -191,6 +199,13 @@ describe("auto log Y (firstPlot.logDecades)", () => {
     ]);
     expect(firstPlot(ds, null).logDecades).toBe(0);
     expect(firstPlot(VSM, null).logDecades).toBe(0);
+  });
+
+  it("one 1e4 outlier among values of 1-3 does not open log", () => {
+    const ds = table({ name: "Field", unit: "Oe", v: field }, [
+      { name: "Signal", unit: "V", v: field.map((_, i) => (i === 100 ? 1e4 : 1 + 2 * ((i % 7) / 6))) },
+    ]);
+    expect(firstPlot(ds, null).logDecades).toBe(0);
   });
 
   it("only Y1 counts: a wide-span column left off never forces log", () => {

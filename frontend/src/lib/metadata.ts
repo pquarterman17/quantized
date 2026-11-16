@@ -46,6 +46,7 @@ const HIDDEN_METADATA_KEYS = new Set([
   "x_column_unrecovered_reason",
   PREVIEW_SOURCE_ROWS,
   FIT_ROW_IDENTITIES,
+  "first_plot", // wiring: the import-time first-plot pick (lib/firstPlot.ts)
 ]);
 
 export function isHiddenMetadataKey(key: string): boolean {

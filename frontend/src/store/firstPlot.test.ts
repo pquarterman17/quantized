@@ -81,6 +81,12 @@ describe("datasetViewDefaults applies the first plot", () => {
     expect(datasetViewDefaults(origin).yKeys).toBeNull();
   });
 
+  it("a copy with the same labels whose Y went <= 0 does not inherit log Y", () => {
+    const subtracted: Dataset = { ...XRR, data: { ...XRR.data, values: XRR.data.values.map((r) => r.map((v) => v - 1e-3)) } };
+    expect(datasetViewDefaults(XRR).yScale).toBe("log");
+    expect(datasetViewDefaults(subtracted).yScale).not.toBe("log");
+  });
+
   it("a malformed or out-of-range stored pick (a hand-edited .dwk) is ignored", () => {
     const of = VSM.data.labels;
     const bad = (fp: unknown): Dataset => ({ ...VSM, data: { ...VSM.data, metadata: { ...VSM.data.metadata, first_plot: fp } } });
@@ -164,6 +170,33 @@ describe("presentFirstPlot (the import toast)", () => {
     const tagged: Dataset = { ...MAP, id: "t", data: { ...MAP.data, metadata: { ...MAP.data.metadata, technique: "magnetometry.mvsh" } } };
     useApp.getState().addDataset(tagged);
     await presentFirstPlot(useApp.getState, "imported 1 file", "t");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("a unitless table with a repeating third column is not a map (empty units are not a shared unit)", async () => {
+    const hx = Array.from({ length: 120 }, (_, i) => (i % 40) * 10);
+    const ds: Dataset = withFirstPlot({
+      id: "ua",
+      name: "HMT.csv",
+      data: data([{ name: "M", unit: "", v: (i) => Math.sin(i % 40) }, { name: "T", unit: "", v: (i) => 100 * (1 + Math.floor(i / 40)) }], hx, "H", ""),
+    });
+    useApp.getState().addDataset(ds);
+    await presentFirstPlot(useApp.getState, "imported 1 file", "ua");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("x and y1 must tile themselves: a jittered same-unit readback beside a gridded Y2 is not a map", async () => {
+    const hx = Array.from({ length: 120 }, (_, i) => (i % 40) * 10);
+    const ds: Dataset = withFirstPlot({
+      id: "ub",
+      name: "HHT.csv",
+      data: data(
+        [{ name: "Field_meas", unit: "Oe", v: (i) => (i % 40) * 10 + 0.001 * i * i }, { name: "Temperature", unit: "K", v: (i) => 100 * (1 + Math.floor(i / 40)) }],
+        hx, "Field", "Oe",
+      ),
+    });
+    useApp.getState().addDataset(ds);
+    await presentFirstPlot(useApp.getState, "imported 1 file", "ub");
     expect(useApp.getState().stageTab).toBe("plot");
   });
 

@@ -156,12 +156,18 @@ export function datasetViewDefaults(
     return fp && JSON.stringify(fp.of) === JSON.stringify(d!.data.labels) ? fp : undefined;
   };
   const fp = pick(dataset);
+  // Re-validated NOW, not trusted from import: a copy with the same labels
+  // whose values went <= 0 (a baseline subtraction) must not open on log.
+  const y1Positive = (d: Dataset, y: number[] | null | undefined, y2: number[] | null | undefined, hidden: number[] | undefined) => {
+    const cols = (y ?? d.data.labels.map((_, c) => c)).filter((c) => !y2?.includes(c) && !hidden?.includes(c));
+    return d.data.values.every((row) => cols.every((c) => !(row[c] <= 0)));
+  };
   const keys = (v: unknown) =>
     Array.isArray(v) && v.length && v.every((c) => Number.isInteger(c) && dataset!.data.labels[c] !== undefined) ? (v as number[]) : undefined;
   if (!remembered) {
     out.yKeys = keys(fp?.y) ?? out.yKeys;
     out.y2Keys = keys(fp?.y2) ?? out.y2Keys;
-    if (fp?.log) out.yScale = "log";
+    if (fp?.log && y1Positive(dataset!, out.yKeys, out.y2Keys, out.hiddenChannels)) out.yScale = "log";
     else if (pick(previous)?.log && !isTechniqueChange(dataset, previous)) out.yScale = "linear";
   }
   // A seeded window's series sit UNDER the dataset's own (the hint, memory).

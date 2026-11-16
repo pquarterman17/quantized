@@ -58,16 +58,22 @@ export async function presentFirstPlot(get: () => AppState, lead: string, id: st
   const actions: ToastAction[] = [];
   const d = ds.data;
   const md = d.metadata;
-  // An x, y, z table opens as a map when its two axes share a unit (x, y in
-  // mm; 2θ, ω in deg) and cover a regular grid: the Map tab's own gate
+  // An x, y, z table opens as a map when its two axes share a non-empty unit (x, y
+  // in mm; 2θ, ω in deg) and cover a regular grid: the Map tab's own gate
   // (lib/mapdata), so the tab exists. Never for a parser-hinted or
   // technique-tagged file: "Field, Moment, Temperature" at a few setpoints
   // is a grid too, but its plot is M(H).
   const mapLike =
-    d.labels.length === 2 && get().xKey === null && (d.units[0] ?? "") === String(md.x_column_unit ?? "") &&
+    d.labels.length === 2 && get().xKey === null && (d.units[0] ?? "").trim() !== "" &&
+    (d.units[0] ?? "") === String(md.x_column_unit ?? "") &&
     md.origin_book == null && md.default_value_channels === undefined && techniqueOf(ds) === "generic";
   let mapped = false;
-  if (mapLike && get().stageTab === "plot" && (await ensureMapGate(d)) && get().activeId === id && get().stageTab === "plot") {
+  // The table's grid gate is not enough (any two repeating columns pass it):
+  // x and y1 themselves must tile.
+  if (
+    mapLike && get().stageTab === "plot" && (await ensureMapGate(d)) && (await import("../lib/mapGate")).hasGridPair(d, 0) &&
+    get().activeId === id && get().stageTab === "plot"
+  ) {
     get().setStageTab("map");
     mapped = true;
     notes.push("opened as a map");
