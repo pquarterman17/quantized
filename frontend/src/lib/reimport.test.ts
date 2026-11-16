@@ -7,7 +7,7 @@ vi.mock("./api", () => ({
   fetchBookData: (...args: unknown[]) => fetchBookData(...args),
 }));
 
-const { datasetBookId, findBook, reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } =
+const { datasetBookId, findBook, holdsFileRows, reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } =
   await import("./reimport");
 
 function ds(over: Partial<Dataset> = {}): Dataset {
@@ -278,5 +278,17 @@ describe("reimportIsAppend", () => {
     expect(reimportIsAppend(deleted, fresh([10, 20, 30, 40]), ds().data)).toBe(false);
     expect(reimportIsAppend(ds(), fresh([10, 20, 33, 40]))).toBe(false);
     expect(reimportIsAppend(ds(), fresh([10, 20, 33, 40]), undefined, true)).toBe(true);
+  });
+});
+
+describe("holdsFileRows", () => {
+  const file: DataStruct = { time: [0, 1], values: [[0], [1]], labels: ["G"], units: [""], metadata: {}, cat_levels: { 0: ["A", "B"] } };
+  it("a renamed level is an edit; a formula output's own levels (Recode) and the level order are not", () => {
+    expect(holdsFileRows(ds({ data: { ...file, cat_levels: { 0: ["Alpha", "B"] } } }), file)).toBe(false);
+    const withRecode = ds({
+      data: { ...file, labels: ["G", "R"], units: ["", ""], values: [[0, 1], [1, 0]], cat_levels: { 0: ["A", "B"], 1: ["x", "y"] }, level_order: { 0: [1, 0] } },
+      formulas: [{ name: "R", expr: "recode", deps: [] } as never],
+    });
+    expect(holdsFileRows(withRecode, file)).toBe(true);
   });
 });

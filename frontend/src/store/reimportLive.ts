@@ -48,7 +48,7 @@ import { HttpError } from "../lib/api/http";
 import type { DataStruct, Dataset } from "../lib/types";
 import type { HistoryEntry } from "./history";
 import { toast } from "./toasts";
-import { holdsFileRows, untouchedPrefix, reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
+import { holdsFileRows, untouchedPrefix, withLevelOrder, reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
 import type { AppState } from "./useApp";
 
@@ -106,7 +106,9 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
     // last line was read earlier, by the import or a read that did not hold: never shrink).
     const sameRows = freshRaw.time.length === own.time.length || (read.held && freshRaw.time.length < own.time.length);
     const nothingNew = !diverged && sameRows && !reimportColumnsChanged(ds, freshRaw) && rowsArePrefix(freshRaw, own, reimportBaseCols(ds));
-    const merge = nothingNew ? null : await computeReimportMerge(get, ds, freshRaw, { base: opts.base ?? undefined, skipLast: true });
+    const staged = nothingNew ? null : await computeReimportMerge(get, ds, freshRaw, { base: opts.base ?? undefined, skipLast: true });
+    // The user's level ORDER is presentation (like the view): kept wherever it still fits.
+    const merge = staged && { ...staged, newData: withLevelOrder(staged.newData, ds.data.level_order) };
     // Anything awaited above may have let the user (or a project switch) change this worksheet;
     // a store update replaces the dataset object, so identity is the whole-worksheet check.
     if (get().datasets.find((d) => d.id === id) !== ds) return { ok: false, stale: true, error: "the worksheet changed while its file was being read" };
@@ -162,7 +164,7 @@ function rebaseHistory(set: SliceSet, ds: Dataset, base: DataStruct, next: Datas
       // Same file rows AND the same formula columns / corrections as the worksheet just updated,
       // so `next`'s columns mean the same thing in that snapshot.
       if (!held || held.formulas !== ds.formulas || held.corrections !== ds.corrections || !holdsFileRows(held, base)) return e;
-      const datasets = e.snapshot.datasets.map((d) => (d.id === id ? { ...d, data: next.data, source: next.source, ...(d.raw ? { raw: next.raw } : {}) } : d));
+      const datasets = e.snapshot.datasets.map((d) => (d.id === id ? { ...d, data: withLevelOrder(next.data, d.data.level_order), source: next.source, ...(d.raw ? { raw: next.raw } : {}) } : d));
       return { ...e, snapshot: { ...e.snapshot, datasets } };
     });
   set((s) => ({ history: fix(s.history), future: fix(s.future) }));

@@ -13,6 +13,8 @@ import type { DataStruct, Dataset, FitSpec } from "../lib/types";
 import { addDerivedColumn } from "./derivedColumnRun";
 import { setColumnHeader } from "./worksheetColumns";
 import { growAndSetCell } from "./worksheetGrow";
+import { renameLevel } from "./levelRename";
+import { useLevelOrder } from "./levelOrder";
 import { liveReimport } from "./reimportLive";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -29,12 +31,14 @@ vi.mock("./toasts", () => ({ toast: vi.fn() }));
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const PATH = "/data/run.dat";
+// Column 2 is categorical (codes into `cat_levels`), as an instrument's state column would be.
 const rows = (n: number): DataStruct => ({
   time: Array.from({ length: n }, (_, i) => i),
-  values: Array.from({ length: n }, (_, i) => [i * 10, 2 * i + 1]),
-  labels: ["T", "m"],
-  units: ["K", "emu"],
+  values: Array.from({ length: n }, (_, i) => [i * 10, 2 * i + 1, i % 2]),
+  labels: ["T", "m", "G"],
+  units: ["K", "emu", ""],
   metadata: {},
+  cat_levels: { 2: ["A", "B"] },
 });
 let n = 3;
 const stampOf = (k: number): string => `${k}000000000:${k * 10}:7:${k}`;
@@ -101,7 +105,7 @@ describe("data rewrites that are not edits keep growth quiet", () => {
     await addDerivedColumn("d1", { name: "twice", expr: "B * 2", propagate: false });
     const ds = live();
     // What a sheet() column's recompute writes: a new `data`, file columns untouched.
-    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, values: ds.data.values.map((r) => [r[0], r[1], r[2] + 1]) } }] });
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, values: ds.data.values.map((r) => [...r.slice(0, -1), r[r.length - 1] + 1]) } }] });
     expect(await grow()).toBe(0);
     expect(replaced()).toHaveLength(0);
   });
@@ -174,5 +178,48 @@ describe("older file data is not 'your edits' (undo past a formula-column add)",
     expect(await grow()).toBe(1);
     expect(labels().at(-1)).toBe("Auto-update (newer file data)");
     expect(replaced()).toHaveLength(0);
+  });
+});
+
+describe("categorical levels (M1)", () => {
+  const reorder = () => {
+    useLevelOrder.getState().openLevelOrder("d1", 2);
+    useLevelOrder.getState().moveDown(0); // [1, 0]
+    expect(useLevelOrder.getState().commit()).toBe(true);
+  };
+
+  it("a level rename is an edit: replaced only as a labelled step that undo reverses", async () => {
+    expect(renameLevel("d1", 2, 0, "Alpha")).toBe(true);
+    const renamed = live().data;
+    expect(await grow()).toBe(1);
+    expect(labels().at(-1)).toBe("Auto-update replaced your edits");
+    app().undo();
+    expect(live().data).toBe(renamed);
+    expect(live().data.cat_levels?.[2]).toEqual(["Alpha", "B"]);
+  });
+
+  it("a level ORDER is presentation: kept across quiet growth, and its undo still works", async () => {
+    reorder();
+    expect(live().data.level_order).toEqual({ 2: [1, 0] });
+    expect(await grow()).toBe(0); // not an edit of the file's data: no step
+    expect(live().data.level_order).toEqual({ 2: [1, 0] }); // carried over, like the view
+    expect(await grow()).toBe(0);
+    app().undo(); // "reorder levels": its snapshot was rebased with ITS OWN (absent) order
+    expect(live().data.level_order).toBeUndefined();
+    expect(live().data.time).toHaveLength(n); // ...and the fresh rows
+    expect(replaced()).toHaveLength(0);
+  });
+
+  it("the review's repro: rename, reorder, growth -- both survive or are one undo away", async () => {
+    expect(renameLevel("d1", 2, 0, "Alpha")).toBe(true);
+    reorder();
+    expect(await grow()).toBe(1);
+    expect(live().data.level_order).toEqual({ 2: [1, 0] }); // the order is kept even here
+    app().undo();
+    expect(live().data.cat_levels?.[2]).toEqual(["Alpha", "B"]);
+    expect(live().data.level_order).toEqual({ 2: [1, 0] });
+    app().undo();
+    expect(live().data.level_order).toBeUndefined();
+    expect(live().data.cat_levels?.[2]).toEqual(["Alpha", "B"]);
   });
 });

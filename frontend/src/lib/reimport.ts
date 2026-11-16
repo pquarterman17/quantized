@@ -94,7 +94,23 @@ const matchCache = new WeakMap<DataStruct, { base: DataStruct; same: boolean }>(
 
 /** The user-editable `metadata` a header or text edit writes: the X column's name and unit, the
  *  categorical levels, and the row-indexed text sidecars. */
-const EDITABLE_META = ["x_column_long", "x_column_name", "x_column_unit", "cat_levels", ...ROW_INDEXED_SIDECARS];
+const EDITABLE_META = ["x_column_long", "x_column_name", "x_column_unit", ...ROW_INDEXED_SIDECARS];
+
+/** `cat_levels` of the base columns only: a formula output (e.g. Recode) has levels of its own. */
+const baseLevels = (d: DataStruct, cols: number): [string, string[]][] =>
+  Object.entries(d.cat_levels ?? {}).filter(([k]) => Number(k) < cols).sort(([a], [b]) => Number(a) - Number(b));
+
+/** `order` (a `level_order`, presentation only) kept on `data` for each channel whose levels it
+ *  still permutes exactly; the rest dropped. How the live watch keeps a user's level order
+ *  across a re-read, like the view -- never a reason to call the worksheet edited. */
+export function withLevelOrder(data: DataStruct, order: DataStruct["level_order"]): DataStruct {
+  const kept = Object.entries(order ?? {}).filter(([k, o]) => {
+    const n = data.cat_levels?.[Number(k)]?.length;
+    return n !== undefined && o.length === n && [...o].sort((a, b) => a - b).every((c, i) => c === i);
+  });
+  const { level_order: _drop, ...rest } = data;
+  return kept.length ? { ...rest, level_order: Object.fromEntries(kept) } : rest;
+}
 
 const sameJson = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b);
 
@@ -103,7 +119,9 @@ const sameJson = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(
  *  rewrite `data` without being an edit: a fit()/fitval() refresh, sheet() and other formula
  *  columns, a background-subtraction recalc (with corrections the file's rows are `ds.raw`,
  *  which a recalc never writes -- and a corrected sheet refuses edits). Compared: the base
- *  columns' values, labels and units, and the user-editable metadata (EDITABLE_META), so a
+ *  columns' values, labels, units and categorical levels (a level rename is an edit; the level
+ *  ORDER is presentation, carried over by `withLevelOrder`), and the user-editable metadata
+ *  (EDITABLE_META), so a
  *  header, unit or text edit is an edit too. Identity first; the rest once per new data
  *  object (cached), not per poll. */
 export function holdsFileRows(ds: Dataset, base: DataStruct): boolean {
@@ -134,6 +152,7 @@ export function untouchedPrefix(ds: Dataset, file: DataStruct): boolean {
     rowsArePrefix(own, file, cols) &&
     sameJson(own.labels.slice(0, cols), file.labels.slice(0, cols)) &&
     sameJson(own.units.slice(0, cols), file.units.slice(0, cols)) &&
+    sameJson(baseLevels(own, cols), baseLevels(file, cols)) &&
     EDITABLE_META.filter((k) => !(ROW_INDEXED_SIDECARS as readonly string[]).includes(k)).every((k) => sameJson(own.metadata?.[k], file.metadata?.[k])) &&
     sidecarsPrefix
   );
