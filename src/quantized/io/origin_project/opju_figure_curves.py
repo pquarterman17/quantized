@@ -128,7 +128,11 @@ from quantized.io.origin_project.opju_curve_token import (
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
-from quantized.io.origin_project.opju_plot_kinds import apply_plot_kind
+from quantized.io.origin_project.opju_plot_kinds import (
+    apply_plot_kind,
+    rowless_kind,
+    stat_x_reason,
+)
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
@@ -385,7 +389,12 @@ def extract_curves_by_id(
                 sheet_x = sheet_x_names(table.ids, table.x_ids, off)
             x_col = sheet_x.get(sheet, x_col)
             reason = "" if sheet in sheet_x else "x_sheet_unproven"
-        reason = reason or x_reason
+        # the token IS the sparse form of the .opj curve-anchor record; the
+        # id chunk's 0x80 tag sits 3 bytes into the regex match
+        stat_record = opju_style_record(b, m.start() + 3)
+        # a box / histogram plot has no X column: drawn from its Y alone
+        stat = rowless_kind(x_reason, stat_record)
+        reason = reason or ("" if stat else x_reason) or stat_x_reason(stat, stat_record)
         if not reason and gates is not None and book in gates.filtered_books:
             reason = "worksheet_filter"  # rows Origin filters out (opju_sheet_signals)
         newly = gates.newly if gates is not None else frozenset()
@@ -411,9 +420,7 @@ def extract_curves_by_id(
         if cid in newly or partner in newly:
             placed.add(len(out))
         curve: dict[str, str | float] = {"book": sheet or book, "x": x_col, "y": y_col}
-        # the token IS the sparse form of the .opj curve-anchor record; the
-        # id chunk's 0x80 tag sits 3 bytes into the regex match
-        record = opju_style_record(b, m.start() + 3)
+        record = stat_record
         if record is not None:
             curve.update(style_fields(record))
         if not reason:  # a plot of part of its column: no row-range binding
@@ -424,7 +431,8 @@ def extract_curves_by_id(
         style = curve_plot_style(b, m.start())
         if style:
             curve["style"] = style
-        apply_plot_kind(curve, record)  # area / step; step style withheld
+        # area / step / column, or a row-less box / histogram; step style withheld
+        apply_plot_kind(curve, record, stat)
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)

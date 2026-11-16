@@ -1446,6 +1446,31 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
     expect(figureStatState(ofB, book).statPicks?.cols?.value).toEqual([0, "Height"]);
   });
 
+  it("an all-box / violin / strip figure opens that Stat Stage mode with no group column", () => {
+    for (const mode of ["box", "violin", "strip"] as const) {
+      const fig = figure({
+        curves: [
+          { book: "Book1", x: "", y: "B", plotType: mode },
+          { book: "Book1", x: "", y: "A", plotType: mode },
+        ],
+      });
+      expect(figureStatState(fig, book)).toEqual({
+        statMode: true,
+        statPicks: {
+          mode,
+          cols: { group: null, group2: null, value: [0, "Height"], facet: null, color: null },
+        },
+      });
+    }
+    const mixed = figure({
+      curves: [
+        { book: "Book1", x: "", y: "B", plotType: "box" },
+        { book: "Book1", x: "", y: "B", plotType: "violin" },
+      ],
+    });
+    expect(figureStatState(mixed, book)).toEqual({});
+  });
+
   it("line figures, mixed figures and unbound columns stay as they are", () => {
     expect(figureStatState(figure({ curves: [curve()] }), book)).toEqual({});
     const mixed = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }, curve()] });
