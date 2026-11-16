@@ -393,7 +393,16 @@ body {
 /* UX8-I: the add-tag "+" of an UNTAGGED compact row is an overlay at the row's
    right edge, painted only on hover/focus (opacity, so it keeps its box and
    tab stop) -- it used to take a full extra line under every dataset. */
-.qzk-ds.qzk-ds-compact { position: relative; }
+.qzk-ds.qzk-ds-compact { position: relative; container-type: inline-size; }
+/* ...and in a narrow Library (the default 210-260 px panel) the "N pts - M ch"
+   counts no longer wrap to a SECOND line under every name (that was ~54 px per
+   dataset; Origin's Project Explorer shows ~30 rows). They go visually hidden --
+   still read by a screen reader, and shown by the status bar for the active row
+   and by the Inspector -- so a dataset is one ~32 px line. A wider panel keeps
+   them inline. */
+@container (max-width: 300px) {
+  .qzk-ds-compact-meta { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .qzk-ds-tags-resting { position: absolute; top: 50%; right: 4px; flex-basis: auto; transform: translateY(-50%); opacity: 0; }
 .qzk-ds:hover .qzk-ds-tags-resting,
 .qzk-ds:focus-within .qzk-ds-tags-resting,
