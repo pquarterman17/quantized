@@ -69,7 +69,7 @@ test.describe("Peak analyzer mixed-shape model fit", () => {
 
     // ④ fit against the real backend
     await panel.locator(".qzk-wizard-step", { hasText: "Fit & review" }).click();
-    await panel.getByRole("button", { name: "Fit", exact: true }).click();
+    // step ④ fits on entry (UX audit 7 lane UX-I)
     const metrics = panel.getByLabel("fit metrics");
     await expect(metrics).toBeVisible({ timeout: 20_000 });
     await expect(panel.getByRole("alert")).toHaveCount(0);

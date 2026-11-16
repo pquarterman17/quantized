@@ -59,7 +59,12 @@ export default function PeakWizardPanel() {
       ? `peak find failed (${w.findError}) — retry it or add a peak, then continue`
       : "no peaks to fit — find or add at least one peak first";
   // Step ② -> ③ and ③ -> ④ (a model-table "×" can delete the last peak in ③).
-  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : null;
+  // Step ④ -> ⑤ (Next or the chip) waits for a running fit (it used to move
+  // on mid-fit). Only the model engine's fit can be cancelled.
+  const fitting = w.step === 3 && (w.model.busy || w.fitBusy);
+  const fittingWhy = w.model.busy ? "fitting — wait for it to finish, or cancel it" : "fitting — wait for it to finish";
+  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : fitting ? fittingWhy : null;
+  const chipBlock = (i: number) => ((i === 2 || i === 3) && noPeaks ? noPeaksWhy : i === 4 && fitting ? fittingWhy : null);
 
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,
@@ -97,8 +102,8 @@ export default function PeakWizardPanel() {
               <button
                 key={label}
                 className={`qzk-wizard-step${i === w.step ? " qzk-active" : ""}`}
-                disabled={(i === 2 || i === 3) && noPeaks}
-                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : undefined}
+                disabled={chipBlock(i) !== null}
+                title={chipBlock(i) ?? undefined}
                 onClick={() => w.setStep(i)}
               >
                 <span className="qzk-wizard-num">{i + 1}</span> {label}
