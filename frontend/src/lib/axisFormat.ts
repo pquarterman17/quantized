@@ -109,6 +109,9 @@ export interface TopAxis {
 export const MAX_AXIS_BREAKS = 4;
 /** Longest tick-label prefix / suffix. */
 export const MAX_AFFIX = 12;
+/** An affix as drawn: backslashes dropped (export would read one before a "$" as mathtext), at most
+ *  MAX_AFFIX characters, cut on whole characters (a surrogate pair is never split). */
+export const cleanAffix = (v: unknown): string => (typeof v === "string" ? Array.from(v.replace(/\\/g, "")).slice(0, MAX_AFFIX).join("") : "");
 
 /** `raw` as a valid break list -- finite `[lo, hi]` pairs with `lo < hi`,
  *  sorted and non-overlapping, at most `MAX_AXIS_BREAKS` -- or `undefined`
@@ -143,8 +146,8 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     ...(pos(size, 72) ? { size } : {}),
     ...(base === "e" || base === "2" ? { base } : {}),
     ...(fmt.prob === "fraction" || fmt.prob === "percent" ? { prob: fmt.prob } : {}),
-    ...(typeof prefix === "string" && prefix ? { prefix: prefix.slice(0, MAX_AFFIX) } : {}),
-    ...(typeof suffix === "string" && suffix ? { suffix: suffix.slice(0, MAX_AFFIX) } : {}),
+    ...(cleanAffix(prefix) ? { prefix: cleanAffix(prefix) } : {}),
+    ...(cleanAffix(suffix) ? { suffix: cleanAffix(suffix) } : {}),
     ...(custom ? { custom } : {}),
     ...(fin(fmt.cross) ? { cross: fmt.cross } : {}),
     ...(breaks ? { breaks } : {}),

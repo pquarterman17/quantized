@@ -27,9 +27,8 @@ export interface SampleProfilesSlice {
   /** Replace the saved list with `update(current)` as ONE undoable step
    *  labelled `label`; returning the same array is a no-op (no history). */
   setSavedSampleProfiles: (update: (list: SavedSampleProfile[]) => SavedSampleProfile[], label: string) => void;
+  /** Written only by store/recode.ts (lazy), as one undo step + one set. */
   savedRecodeMappings: SavedRecodeMapping[];
-  /** As `setSavedSampleProfiles`, for the saved Recode mappings. */
-  setSavedRecodeMappings: (update: (list: SavedRecodeMapping[]) => SavedRecodeMapping[], label: string) => void;
 }
 
 export function createSampleProfilesSlice(set: SliceSet, get: SliceGet): SampleProfilesSlice {
@@ -42,11 +41,5 @@ export function createSampleProfilesSlice(set: SliceSet, get: SliceGet): SampleP
       set({ savedSampleProfiles: next });
     },
     savedRecodeMappings: [],
-    setSavedRecodeMappings: (update, label) => {
-      const next = update(get().savedRecodeMappings);
-      if (next === get().savedRecodeMappings) return;
-      get().recordHistory(label);
-      set({ savedRecodeMappings: next });
-    },
   };
 }

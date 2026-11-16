@@ -24,7 +24,7 @@
 
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
-import { inheritedAxisFormat, MAX_AFFIX, MAX_CUSTOM_TICKS, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
+import { cleanAffix, inheritedAxisFormat, MAX_CUSTOM_TICKS, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
 import { topAxisProblem, topRangeProblem } from "./axisTop";
 import { drawableOn, inProbDomain } from "./axisScales";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
@@ -299,8 +299,8 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     mode: d.mode,
     digits: num(d.digits) ?? base.digits,
     ...(div !== null && div !== 1 ? { divide: div } : {}),
-    ...(d.prefix ? { prefix: d.prefix.slice(0, MAX_AFFIX) } : {}),
-    ...(d.suffix ? { suffix: d.suffix.slice(0, MAX_AFFIX) } : {}),
+    ...(cleanAffix(d.prefix) ? { prefix: cleanAffix(d.prefix) } : {}),
+    ...(cleanAffix(d.suffix) ? { suffix: cleanAffix(d.suffix) } : {}),
     ...(minor ? { minor } : {}),
     ...(d.ticks !== "out" ? { ticks: d.ticks } : {}),
     ...(size !== null ? { size } : {}),

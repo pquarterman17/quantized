@@ -174,6 +174,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {text("divide", "Divide by", "1")}
       {text("prefix", "Label prefix", "none, e.g. $")}
       {text("suffix", "Label suffix", "none, e.g. K, %")}
+      <div className="qzk-helptext">Prefix and suffix wrap each numeric tick label; tick text you type under Tick positions stays as written.</div>
       {text("size", "Label size (pt)")}
       {current === "x" && text("rotate", "Rotation (°)", "0")}
       {text("titleSize", "Title size (pt)")}

@@ -63,6 +63,15 @@ import { resolvePendingEdit } from "./pendingEdit";
 import { useRecodePanel } from "./recodePanel";
 import { useApp } from "./useApp";
 
+/** Replace the project's saved mappings as ONE undo step; returning the same list is a no-op. */
+function setSaved(update: (list: SavedRecodeMapping[]) => SavedRecodeMapping[], label: string): void {
+  const app = useApp.getState();
+  const next = update(app.savedRecodeMappings);
+  if (next === app.savedRecodeMappings) return;
+  app.recordHistory(label);
+  useApp.setState({ savedRecodeMappings: next });
+}
+
 let _savedSeq = 0;
 const nextSavedId = (): string => `recode-${Date.now().toString(36)}-${++_savedSeq}`;
 
@@ -280,11 +289,10 @@ export const useRecode = create<RecodeState>((set, get) => ({
       sourceLevels: [...levels],
       createdAt: new Date().toISOString(),
     };
-    useApp.getState().setSavedRecodeMappings((list) => [...list, entry], `Save recode mapping "${nm}"`);
+    setSaved((list) => [...list, entry], `Save recode mapping "${nm}"`);
     toast(`saved recode mapping "${nm}"`, "ok");
   },
-  deleteMapping: (id) =>
-    useApp.getState().setSavedRecodeMappings((list) => (list.some((m) => m.id === id) ? list.filter((m) => m.id !== id) : list), "Delete recode mapping"),
+  deleteMapping: (id) => setSaved((list) => (list.some((m) => m.id === id) ? list.filter((m) => m.id !== id) : list), "Delete recode mapping"),
   applySavedMapping: (id) => {
     const saved = useApp.getState().savedRecodeMappings.find((m) => m.id === id);
     const { datasetId, channel } = get();

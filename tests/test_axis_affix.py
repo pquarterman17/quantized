@@ -58,3 +58,27 @@ def test_empty_affix_changes_nothing() -> None:
     texts = [t.get_text() for t in ax.get_xticklabels() if t.get_text()]
     plt.close(fig)
     assert texts and not any("\\$" in t or " " in t for t in texts)
+
+
+def test_backslashes_are_dropped_so_a_dollar_cannot_open_mathtext() -> None:
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    apply_tick_formats(ax, {"mode": "fixed", "digits": 1, "prefix": "a\\", "suffix": "\\$b"}, None)
+    ax.figure.canvas.draw()
+    texts = [t.get_text() for t in ax.get_xticklabels() if t.get_text()]
+    plt.close(fig)
+    assert texts and all(t.startswith("a") and not t.startswith("a\\") for t in texts)
+    assert all(t.endswith(r"\$b") for t in texts)  # one escaped dollar, no stray backslash
+
+
+def test_a_log_axis_affixes_its_minor_labels_too_and_keeps_blanks_blank() -> None:
+    fig, ax = plt.subplots()
+    ax.set_yscale("log")
+    ax.plot([0, 1], [1, 1000])
+    apply_tick_formats(ax, None, {"mode": "fixed", "digits": 0, "suffix": "x"})
+    minor = ax.yaxis.get_minor_formatter()
+    assert type(minor).__name__ == "_AffixFormatter"  # the labelled minors carry the suffix
+    minor.inner = lambda x, pos=None: "5" if x == 5 else ""  # type: ignore[assignment]
+    assert minor(5.0) == "5x"
+    assert minor(4.0) == ""
+    plt.close(fig)

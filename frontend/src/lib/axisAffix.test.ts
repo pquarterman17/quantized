@@ -42,6 +42,13 @@ describe("tick-label prefix / suffix on the canvas", () => {
     expect(sanitizeAxisExtras({ mode: "auto", digits: 2, suffix: "x".repeat(40) }).suffix).toHaveLength(12);
   });
 
+  it("drops backslashes and never splits a surrogate pair when cutting to 12 characters", () => {
+    expect(sanitizeAxisExtras({ mode: "auto", digits: 2, prefix: "a\\", suffix: "\\$" })).toEqual({ mode: "auto", digits: 2, prefix: "a", suffix: "$" });
+    const cut = sanitizeAxisExtras({ mode: "auto", digits: 2, suffix: "x".repeat(11) + "😀😀" }).suffix as string;
+    expect(Array.from(cut)).toHaveLength(12);
+    expect(cut.endsWith("😀")).toBe(true); // a whole emoji, not half of one
+  });
+
   it("a Y2 axis does not inherit Y's prefix (Y's units)", () => {
     expect(inheritedAxisFormat({ mode: "auto", digits: 2, prefix: "$", suffix: "K", minor: 2 })).toEqual({ mode: "auto", digits: 2, minor: 2 });
   });
