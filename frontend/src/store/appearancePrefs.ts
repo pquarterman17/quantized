@@ -101,11 +101,15 @@ export function createAppearancePrefsSlice(set: SliceSet, get: SliceGet, initial
   // An explicit pick ignores it. Lives for the page (the store is a singleton).
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     try {
-      window.matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => {
+      const mq = window.matchMedia("(prefers-color-scheme: light)");
+      const onChange = (): void => {
         if (get().themeMode !== "system") return;
         const theme = systemTheme();
         if (theme !== get().theme) write({ theme });
-      });
+      };
+      // Older WebKit (Safari < 14, old webviews) only has the deprecated addListener.
+      if (typeof mq.addEventListener === "function") mq.addEventListener("change", onChange);
+      else if (typeof mq.addListener === "function") mq.addListener(onChange);
     } catch {
       /* no usable matchMedia - the theme just stays as resolved at load */
     }

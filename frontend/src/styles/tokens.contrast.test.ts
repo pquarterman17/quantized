@@ -68,7 +68,7 @@ const THEMES: [string, Tokens][] = [
   ["dark", DARK],
   ["light", LIGHT],
 ];
-const SURFACES_0_2 = ["--surface-0", "--surface-1", "--surface-2"];
+const SURFACES_0_3 = ["--surface-0", "--surface-1", "--surface-2", "--surface-3"];
 
 describe("token contrast (WCAG)", () => {
   it("decodes every token the pairs below use, in both themes", () => {
@@ -81,7 +81,7 @@ describe("token contrast (WCAG)", () => {
 
   for (const [name, t] of THEMES) {
     describe(`${name} theme`, () => {
-      for (const s of SURFACES_0_2) {
+      for (const s of SURFACES_0_3) {
         for (const fg of ["--text", "--text-dim", "--text-faint", "--accent-text", "--ok", "--danger", "--warn"]) {
           it(`${fg} on ${s} is >= 4.5:1`, () => {
             expect(ratio(t, fg, s)).toBeGreaterThanOrEqual(4.5);

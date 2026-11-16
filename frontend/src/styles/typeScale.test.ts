@@ -23,6 +23,7 @@ describe("help / meta prose", () => {
   for (const sel of [".qzk-ds-meta", ".qzk-helptext"]) {
     it(`${sel}: UI font, readable size, AA colour, wraps (never truncates)`, () => {
       const b = body(sel);
+      // The shared rule is the UI font (prose); .qzk-ds-meta alone is overridden to mono below.
       expect(b).toContain("font-family: var(--font-ui)");
       expect(b).toContain("font-size: var(--font-size-help)");
       expect(b).toContain("color: var(--text-dim)");
@@ -33,6 +34,14 @@ describe("help / meta prose", () => {
       expect(b).not.toContain("--text-faint");
     });
   }
+
+  it(".qzk-ds-meta shows mostly numbers, so it overrides the shared rule with JetBrains Mono", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "shell.css"), "utf8");
+    expect(css).toMatch(/^\.qzk-ds-meta \{ font-family: var\(--font-mono\); \}/m);
+  });
 
   it("the prose class does not collide with another stylesheet's rule (the Help dialog owns .qzk-help, 680px wide)", async () => {
     const { readFileSync } = await import("node:fs");

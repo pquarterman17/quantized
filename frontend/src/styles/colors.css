@@ -20,7 +20,7 @@
 
   --border-soft: oklch(0.28 0.01 280);
   --border: oklch(0.34 0.01 280);
-  --border-strong: oklch(0.54 0.012 280); /* >=3:1 on surfaces 0-2 (WCAG 1.4.11) */
+  --border-strong: oklch(0.56 0.012 280); /* >=3:1 on surfaces 0-3 (WCAG 1.4.11) */
 
   --text: oklch(0.93 0.005 280);
   --text-dim: oklch(0.72 0.008 280);
@@ -39,7 +39,7 @@
   /* status — used sparingly (single dots / one word): green ok (connected,
      converged), red danger (offline / destructive / diverged), warn = amber */
   --ok: oklch(0.74 0.16 150);
-  --danger: oklch(0.66 0.2 18);
+  --danger: oklch(0.685 0.2 18);
   --warn: oklch(0.78 0.14 75);
 
   /* plot series palette — categorical, color-blind-aware, ordered by use.
@@ -81,11 +81,11 @@
   /* light borders were 1.13-1.17:1 against their surface (cards vanished) */
   --border-soft: oklch(0.83 0.005 280);
   --border: oklch(0.74 0.006 280);
-  --border-strong: oklch(0.57 0.008 280); /* >=3:1 on surfaces 0-2 */
+  --border-strong: oklch(0.53 0.008 280); /* >=3:1 on surfaces 0-3 */
 
   --text: oklch(0.22 0.01 280);
   --text-dim: oklch(0.42 0.01 280);
-  --text-faint: oklch(0.45 0.01 280); /* >=4.5:1 on surfaces 0-2 */
+  --text-faint: oklch(0.435 0.01 280); /* >=4.5:1 on surfaces 0-3 */
 
   --accent: oklch(0.55 0.18 295);
   --accent-soft: oklch(0.55 0.18 295 / 0.14);
@@ -94,10 +94,10 @@
   --capture: oklch(0.66 0.15 75);
   --capture-soft: oklch(0.66 0.15 75 / 0.16);
 
-  /* status colours double as TEXT (warnings, one-word states): AA on surface-1 */
-  --ok: oklch(0.44 0.14 150);
-  --danger: oklch(0.5 0.2 18);
-  --warn: oklch(0.46 0.12 75);
+  /* status colours double as TEXT (warnings, one-word states): AA on surfaces 0-3 */
+  --ok: oklch(0.415 0.14 150);
+  --danger: oklch(0.445 0.2 18);
+  --warn: oklch(0.44 0.12 75);
 
   --series-1: oklch(0.55 0.18 295);
   --series-2: oklch(0.58 0.12 185);

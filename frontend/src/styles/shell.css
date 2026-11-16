@@ -387,26 +387,25 @@ body {
 .qzk-ds-sheet-chip { flex-shrink: 0; color: var(--text-dim); font-size: var(--font-size-sm); font-family: var(--font-mono); white-space: nowrap; }
 .qzk-ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-ds-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-/* Help / hint / warning PROSE (UX audit 7, G1): readable UI font, one step
-   above --font-size-sm, AA contrast, and it WRAPS — help text never ends in an
+/* Help / hint / warning / meta text (UX audit 7, G1): readable size (one step
+   above --font-size-sm), AA contrast, and it WRAPS - it never ends in an
    ellipsis (the first-launch onboarding sentence was cut off at 9 px mono).
-   `.qzk-helptext` is the explicit name for new code; `.qzk-ds-meta` keeps its 500+
-   existing call sites and behaves identically. */
+   `.qzk-ds-meta` (500+ call sites) mostly shows NUMBERS ("201 pts", "chi2 =
+   1.2e-3"), so it stays JetBrains Mono; `.qzk-helptext` is the explicit name
+   for new PROSE and uses the UI font. */
 .qzk-ds-meta, .qzk-helptext { min-width: 0; overflow-wrap: break-word; font-family: var(--font-ui); font-size: var(--font-size-help); line-height: 1.4; color: var(--text-dim); }
-/* DATA meta ("201 pts · 1 ch"): mono for the numbers, one line, may ellipsize
-   — it is a value row, not prose. */
+/* ds-meta overrides the shared UI font: it is mostly numbers. */
+.qzk-ds-meta { font-family: var(--font-mono); }
+/* DATA meta ("201 pts - 1 ch"): mono for the numbers, one line, may ellipsize
+   - it is a value row, not prose. */
 .qzk-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
 
-/* Modifier for MESSAGE text (role="alert" / role="note") that borrows
-   qzk-ds-meta's typography but must never be clipped. qzk-ds-meta is a
-   single-line utility built for a dataset's "201 pts · 1 ch" row, where an
-   ellipsis is exactly right; applied to a multi-sentence, actionable message
-   it hides the actionable half. Measured case that prompted this: the Figure
-   Page save gate rendered 988 px of "…save it (its title-bar Save button, or
-   File > Save Editable Figure), then Save this page again" inside a 154 px
-   column — ~84% of the instruction invisible, with no ellipsis to hint at it
-   (the text overflowed a nowrap line rather than filling one). Any new
-   alert/note that borrows qzk-ds-meta should carry this too. */
+/* Legacy modifier from when `.qzk-ds-meta` was a single-line ellipsis utility
+   and role="alert"/"note" messages had to opt back into wrapping. The base
+   class now wraps by itself, so this adds nothing a plain `.qzk-ds-meta` lacks;
+   it is kept only as a belt-and-braces override should a more specific
+   single-line rule ever match an alert/note (architecture.test.ts pins the
+   base class's wrapping instead of requiring this modifier). */
 .qzk-msg { overflow: visible; text-overflow: clip; white-space: normal; }
 /* Per-dataset tag chips (Library): click a chip to filter, ✕ to remove, ＋ to add. */
 .qzk-ds-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
