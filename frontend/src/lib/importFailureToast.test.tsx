@@ -49,8 +49,10 @@ describe("toastImportFailure", () => {
     act(() => toastImportFailure("garbage.dat", NO_PARSER));
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     expect(await screen.findByText(NO_PARSER)).toBeInTheDocument();
-    act(() => toastImportFailure("garbage.dat", NO_PARSER));
+    // Details did not take the way forward away
+    expect(screen.getByRole("button", { name: "Open import wizard" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
+    expect(screen.getByRole("button", { name: "Open import wizard" })).toBeInTheDocument();
     await waitFor(() => expect(useApp.getState().status).toBe("copied import details"));
     expect(writeText).toHaveBeenCalledWith(NO_PARSER);
     vi.unstubAllGlobals();
@@ -59,7 +61,24 @@ describe("toastImportFailure", () => {
   it("says when several files failed (the toast covers the last one)", () => {
     render(<Toaster />);
     act(() => toastImportFailure("c.dat", NO_PARSER, undefined, { added: 2, total: 5 }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Imported 2 of 5 files — 3 failed; this is the last.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Imported 2 of 5 files — 3 failed, showing the last.");
+  });
+
+  it.each([
+    ["not found", "gone.dat: file not found", /wasn't found/],
+    ["permission", "a.dat: permission denied", /permission was denied/],
+    ["server error", "a.dat: 500 internal server error", /server hit an error/],
+  ])("a %s failure is not blamed on parsing and offers no wizard", (_n, msg, headline) => {
+    render(<Toaster />);
+    act(() => toastImportFailure(msg.split(":")[0], msg));
+    expect(screen.getByRole("alert").textContent).toMatch(headline);
+    expect(screen.queryByRole("button", { name: "Open import wizard" })).toBeNull();
+  });
+
+  it("keeps a binary container's own advice visible in the toast", () => {
+    render(<Toaster />);
+    act(() => toastImportFailure("broken.opju", "broken.opju: file is truncated — re-save it from Origin"));
+    expect(screen.getByRole("alert")).toHaveTextContent("file is truncated — re-save it from Origin");
   });
 
   it("offers no wizard for a binary container (its own error says what to do)", () => {

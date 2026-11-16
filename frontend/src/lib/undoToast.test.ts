@@ -68,8 +68,8 @@ describe("Undo toast after removing a dataset", () => {
   it("Remove all (clearAll) can be undone from its toast", async () => {
     useApp.getState().clearAll();
     expect(useApp.getState().datasets).toHaveLength(0);
-    const { toastWithUndo, historyTopSeq } = await import("./undoToast");
-    toastWithUndo("removed all datasets", "ok", historyTopSeq());
+    const { toastWithUndo, historyTop } = await import("./undoToast");
+    toastWithUndo("removed all datasets", "ok", historyTop());
     (await undoToast()).action!.onClick();
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a", "b"]);
   });

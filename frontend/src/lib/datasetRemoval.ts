@@ -16,9 +16,11 @@ import { useApp } from "../store/useApp";
  *  out of the eager bundle). The history entry is captured NOW, synchronously;
  *  if the chunk fails to load the plain toast still shows. */
 export function toastRemoved(msg: string, kind: ToastKind = "info"): void {
-  const seq = useApp.getState().history.at(-1)?.seq;
-  // The fallback is for the chunk LOAD only; an error inside the toast must not double it.
-  void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, seq), () => toast(msg, kind));
+  // Captured NOW (synchronously): the lazy chunk must not re-read it after the load.
+  const h = useApp.getState().history;
+  const t = h.at(-1);
+  const top = t ? { seq: t.seq, label: t.label, depth: h.length } : undefined;
+  void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, top), () => toast(msg, kind));
 }
 
 /** Request removal of exactly `ids` (dead ids dropped; empty = no-op),

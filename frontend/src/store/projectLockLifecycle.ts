@@ -11,6 +11,13 @@ export function reserveProjectLock(path: string): number {
 
 /** Detach immediately; release only a record owned by this instance. */
 export function closeProjectLock(): void {
+  void closeProjectLockAwaitable();
+}
+
+/** `closeProjectLock`, returning the release so a caller that re-acquires the
+ *  same path soon after (Undo of Remove all) can wait for it to land instead
+ *  of racing it. Never rejects. */
+export function closeProjectLockAwaitable(): Promise<unknown> {
   const { provider, path, record, instanceId } = useProjectLock.getState();
   // This helper closes a NAMED project, so with no path there is nothing to
   // close. Every named open reserves its path synchronously first
@@ -19,10 +26,10 @@ export function closeProjectLock(): void {
   // the shared slot) or its first engagement still in flight. Resetting
   // either would let a read-only tab overwrite the owning tab's autosave, as
   // would dropping the slot's app-lifetime lock itself.
-  if (path === null || path === BROWSER_AUTOSAVE_LOCK_PATH) return;
+  if (path === null || path === BROWSER_AUTOSAVE_LOCK_PATH) return Promise.resolve();
   beginProjectLockOperation();
-  if (record !== null && record.instanceId === instanceId) {
-    void provider.release(path, record.token ?? "").catch(() => false);
-  }
+  const released =
+    record !== null && record.instanceId === instanceId ? provider.release(path, record.token ?? "").catch(() => false) : Promise.resolve();
   useProjectLock.setState({ ...DETACHED_LOCK, status: "unlocked" });
+  return released;
 }

@@ -1042,7 +1042,7 @@ describe("a partly-failed batch says how much of it landed", () => {
     expect(failure, "the failed file still gets a danger toast").toBeDefined();
     expect(failure!.msg, "which file").toContain("gone.dat");
     expect(failure!.msg, "whether data changed").toContain("Imported 1 of 2 files");
-    expect(failure!.actions?.map((a) => a.label), "next action").toContain("Open import wizard");
+    expect(failure!.actions?.map((a) => a.label), "next action").toContain("Details");
   });
 });
 

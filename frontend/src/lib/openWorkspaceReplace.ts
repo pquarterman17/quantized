@@ -98,12 +98,15 @@ function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior
     if (prior.op && !isCurrentProjectLockOperation(prior.op)) return;
     const result = await useProjectLock.getState().openProject(native.path);
     if (!result.readOnly) return;
-    const reason =
-      result.status === "held-by-other-stale"
-        ? "another (unresponsive) instance has this project open — Take Over Editing is available"
-        : "another instance has this project open for editing — opened read-only";
-    toast(`"${native.name}": ${reason}`, "info");
+    toast(`"${native.name}": ${readOnlyOpenReason(result.status)}`, "info");
   })();
+}
+
+/** Why a project opened read-only, with the next step (shared with Undo of Remove all). */
+export function readOnlyOpenReason(status: string): string {
+  return status === "held-by-other-stale"
+    ? "another (unresponsive) instance has this project open — Take Over Editing is available"
+    : "another instance has this project open for editing — opened read-only";
 }
 
 /** DEFECT A fix (2026-08-21, Sol audit item P1-6): record a Recent Projects

@@ -43,7 +43,7 @@ import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
 import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
 import CurveFitBatchSection from "./CurveFitBatchSection";
 import { connectionHint } from "../../../lib/importFailureHint";
-import { historyTopSeq, toastWithUndo } from "../../../lib/undoToast";
+import { historyTop, toastWithUndo } from "../../../lib/undoToast";
 
 // Each its own chunk, fetched only when shown.
 const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "Templates");
@@ -186,7 +186,7 @@ export default function CurveFitPanel() {
     if (!ok) return;
     recordHistory("remove fit");
     clear();
-    toastWithUndo(`removed the ${modelName} fit of ${active.name}`, "info", historyTopSeq());
+    toastWithUndo(`removed the ${modelName} fit of ${active.name}`, "info", historyTop());
   };
 
   const template = useFitTemplateBinding({

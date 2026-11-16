@@ -41,9 +41,24 @@ export function connectionHint(message: string): string {
  *  text-like file whose failure reached a parser (not a down server / stale
  *  token, and not a binary container). */
 export function wizardCanRead(name: string, message = ""): boolean {
-  if (connectionHint(message)) return false;
+  const kind = failureKind(message);
+  return (kind === "unrecognised" || kind === "parse") && !isBinaryName(name);
+}
+
+export const isBinaryName = (name: string): boolean => {
   const dot = name.lastIndexOf(".");
-  return !BINARY_EXTS.has(dot >= 0 ? name.slice(dot).toLowerCase() : "");
+  return BINARY_EXTS.has(dot >= 0 ? name.slice(dot).toLowerCase() : "");
+};
+
+/** What kind of failure an error message describes: only the last two reached
+ *  a parser, so only those are the file's content and worth the wizard. */
+export type FailureKind = "server" | "missing" | "denied" | "servererror" | "unrecognised" | "parse";
+export function failureKind(message: string): FailureKind {
+  if (connectionHint(message)) return "server";
+  if (/not found|no such file|enoent|\b404\b/i.test(message)) return "missing";
+  if (/permission|eacces|forbidden|\b403\b/i.test(message)) return "denied";
+  if (/internal server error|\bhttp 5\d\d\b|\b5\d\d (error|server)/i.test(message)) return "servererror";
+  return /no parser registered/i.test(message) ? "unrecognised" : "parse";
 }
 
 /** The hint for a failed import of `name`: the wizard for a text-like file,

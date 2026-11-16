@@ -12,7 +12,7 @@ import { create } from "zustand";
 
 import { toast, TOAST_ACTION_TTL } from "../store/toasts";
 import { useApp } from "../store/useApp";
-import { connectionHint, wizardCanRead } from "./importFailureHint";
+import { connectionHint, failureKind, isBinaryName, wizardCanRead } from "./importFailureHint";
 
 /** The file the wizard should open on, set by a failed import's toast action
  *  and consumed (cleared) by the wizard on mount / on change. */
@@ -20,11 +20,18 @@ export const useWizardHandoff = create<{ file: File | null }>(() => ({ file: nul
 
 /** Plain-language headline: what happened to which file, no parser jargon. */
 export function importFailureHeadline(name: string, technical: string): string {
-  const cause = connectionHint(technical);
-  if (cause) return `Couldn't import ${name}${cause}.`;
-  return /no parser registered/i.test(technical)
-    ? `Couldn't read ${name} — the format wasn't recognised.`
-    : `Couldn't read ${name} — the file couldn't be parsed.`;
+  switch (failureKind(technical)) {
+    case "server": return `Couldn't import ${name}${connectionHint(technical)}.`;
+    case "missing": return `Couldn't open ${name} — it wasn't found (moved or deleted?).`;
+    case "denied": return `Couldn't open ${name} — permission was denied.`;
+    case "servererror": return `Couldn't import ${name} — the qz server hit an error (see Details).`;
+    case "unrecognised": return `Couldn't read ${name} — the format wasn't recognised.`;
+    default:
+      // A binary container's own message is the format-specific advice: keep it visible.
+      return isBinaryName(name)
+        ? `Couldn't read ${name} — ${technical.replace(`${name}: `, "")}`
+        : `Couldn't read ${name} — the file couldn't be parsed.`;
+  }
 }
 
 export function toastImportFailure(
@@ -38,17 +45,23 @@ export function toastImportFailure(
       ? [{
           label: "Open import wizard",
           onClick: () => {
-            if (file) useWizardHandoff.setState({ file });
+            if (file) {
+              useWizardHandoff.setState({ file });
+              // If the wizard never mounts (chunk failure), do not keep the File pinned.
+              setTimeout(() => useWizardHandoff.getState().file === file && useWizardHandoff.setState({ file: null }), 30000);
+            }
             useApp.getState().setImportWizardOpen(true);
           },
         }]
       : []),
     {
       label: "Details",
+      keep: true, // the toast (and its wizard action) stays while the details show
       onClick: () => toast(technical, "info", { ttlMs: TOAST_ACTION_TTL * 2 }),
     },
     {
       label: "Copy details",
+      keep: true,
       onClick: () => {
         // navigator directly: importing lib/clipboard here re-homed its TSV code into the eager chunk.
         void (navigator.clipboard?.writeText(technical) ?? Promise.reject(new Error("no clipboard"))).then(
@@ -61,7 +74,7 @@ export function toastImportFailure(
   // Whether data changed: a partly-failed batch says how much of it landed.
   const failed = batch ? batch.total - batch.added : 1;
   const landed = batch && batch.total > 1
-    ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed; this is the last` : ""}.`
+    ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed, showing the last` : ""}.`
     : "";
   toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2 });
 }
