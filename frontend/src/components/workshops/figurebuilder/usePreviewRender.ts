@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { renderFigureHitmap, type FigureSpec } from "../../../lib/api/figures";
 import type { FigureHitmap } from "../../../lib/previewmap";
 import { previewDpiFor } from "./previewSizing";
+import { withLiveLegendCorner } from "../../../lib/liveLegendCorner";
 
 // Screen-resolution preview, sized to the figure (previewSizing.ts); the
 // export uses the document's chosen DPI.
@@ -36,7 +37,9 @@ export interface PreviewRender {
   previewDpi: number | null;
 }
 
-export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): PreviewRender {
+/** `pinLegend`: the session is on the focused window, whose Stage picked the
+ *  auto legend's corner — pin it, as that session's Export does (UX-H). */
+export function usePreviewRender(spec: FigureSpec | null, canonical: boolean, pinLegend = false): PreviewRender {
   const [preview, setPreview] = useState<string | null>(null);
   const [hitmap, setHitmap] = useState<FigureHitmap | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +62,9 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
     let cancelled = false;
     const controller = new AbortController();
     setBusy(true);
-    const dpi = previewDpiFor(spec);
+    const dpi = previewDpiFor(spec, typeof window === "undefined" ? 1 : window.devicePixelRatio);
     const timer = setTimeout(() => {
-      renderFigureHitmap({ ...spec, dpi }, controller.signal)
+      renderFigureHitmap({ ...(pinLegend ? withLiveLegendCorner(spec) : spec), dpi }, controller.signal)
         .then((map) => {
           if (cancelled) return;
           setHitmap(map);
@@ -81,7 +84,7 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
       clearTimeout(timer);
       controller.abort();
     };
-  }, [canonical, spec]);
+  }, [canonical, spec, pinLegend]);
 
   return { preview, hitmap, error, busy, previewDpi };
 }

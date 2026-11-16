@@ -35,7 +35,7 @@ describe("PreviewStage (UX-H)", () => {
     const frame = screen.getByTestId("figure-preview-frame");
     expect(frame).toHaveAttribute("data-zoom", "fit");
     expect(frame.style.width).toContain("min(100%");
-    fireEvent.click(screen.getByRole("radio", { name: "Actual size (100 %)" }));
+    fireEvent.click(screen.getByRole("radio", { name: "100 % (screen)" }));
     const trueWidth = (map.width / DPI) * 96 + 18; // + the ruler column
     expect(parseFloat(screen.getByTestId("figure-preview-frame").style.width)).toBeCloseTo(trueWidth, 3);
   });

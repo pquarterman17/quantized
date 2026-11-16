@@ -9,9 +9,12 @@
 import { useEffect, useState } from "react";
 
 import { xColumnLabel } from "./canonicalChannels";
+import ExportFooter from "./ExportFooter";
 import FigureOutputControls from "./FigureOutputControls";
 import PreviewStage from "./PreviewStage";
+import { renderedSizeCm } from "./previewSizing";
 import PropertyPanels from "./PropertyPanels";
+import { useLiveRebase } from "./useLiveRebase";
 import { cancelPublicationPreview } from "../../windows/figureLifecycleUi";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -27,6 +30,8 @@ const WINDOW_ID = "figurebuilder";
  *  open at 560 px, which left a ~300 px thumbnail): widen it on open. A
  *  width the user chose above it is kept. */
 const LEGACY_WIDTH = 600;
+/** A remembered explicit height below this would squeeze the preview pane. */
+const MIN_HEIGHT = 560;
 const SETTINGS_WIDTH = 260;
 
 /** Wide enough for a >= 600 px preview at 1440 px, never wider than the
@@ -49,24 +54,30 @@ export default function FigureBuilderView() {
     : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
   const detachedCanonical = f.publicationTarget === "new-editable";
-  const exportDisabled = f.canonical && !f.canExport;
+  const exportDisabledReason = f.canonical && !f.canExport
+    ? (f.error ?? (f.canonicalReadiness === "ready" ? f.applyBlockedReason : null) ?? "figure is not ready to export")
+    : null;
+  const onClose = () => (f.canonical ? void cancelPublicationPreview() : setOpen(false));
+  const sizeCm = f.hitmap && f.previewDpi ? renderedSizeCm(f.hitmap.width, f.hitmap.height, f.previewDpi) : null;
+  useLiveRebase();
 
   // Once per open: a window remembered at the old thumbnail width reopens
   // wide enough for the preview (ToolWindow's default only applies when no
   // layout was ever stored).
   useEffect(() => {
-    if (storedLayout && storedLayout.width < LEGACY_WIDTH && setLayout) {
-      const width = defaultWidth();
+    const short = storedLayout?.height != null && storedLayout.height < MIN_HEIGHT;
+    if (storedLayout && (storedLayout.width < LEGACY_WIDTH || short) && setLayout) {
+      const width = storedLayout.width < LEGACY_WIDTH ? defaultWidth() : storedLayout.width;
       // Re-clamp: ToolWindow's own mount clamp ran at the OLD width, and the
       // whole title bar must stay on screen (lib/toolwindow.ts).
       const pos = clampToolWindowPos(storedLayout.x, storedLayout.y, width, TITLE_BAR_HEIGHT, { width: window.innerWidth, height: window.innerHeight });
-      setLayout(WINDOW_ID, { ...storedLayout, ...pos, width });
+      setLayout(WINDOW_ID, { ...storedLayout, ...pos, width, height: short ? null : storedLayout.height });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <ToolWindow id={WINDOW_ID} title={title} width={defaultWidth()} onClose={() => f.canonical ? void cancelPublicationPreview() : setOpen(false)}>
+    <ToolWindow id={WINDOW_ID} title={title} width={defaultWidth()} onClose={onClose}>
       {!f.data && !canonicalFailure ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to preview a figure.
@@ -86,7 +97,7 @@ export default function FigureBuilderView() {
                 ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; Cancel discards them.`
                 : "Settings here affect saved and exported output; they do not change the editable Stage plot."}
             </div>
-            <FigureOutputControls fmt={f.fmt} setFmt={f.setFmt} style={f.style} setStyle={f.setStyle} dpi={f.dpi} setDpi={f.setDpi} />
+            <FigureOutputControls fmt={f.fmt} setFmt={f.setFmt} style={f.style} setStyle={f.setStyle} dpi={f.dpi} setDpi={f.setDpi} sizeCm={sizeCm} />
             {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
                 via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>
@@ -260,60 +271,10 @@ export default function FigureBuilderView() {
               />
             )}
 
-            {/* Sticky action row. Export/Apply/Cancel used to scroll away with
-                the rest of the column: with the property groups expanded the
-                settings column is ~2,400 px tall inside a ~900 px viewport, so
-                the buttons that COMMIT the work sat ~200 px below the fold and
-                had to be hunted for. Sticking them to the bottom of the
-                scroller keeps the commit affordance permanently in reach
-                without changing the DOM structure ToolWindow lays out. */}
-            <div
-              style={{
-                position: "sticky",
-                // The scroller (.qzk-win-body) has `--pad-lg` bottom padding;
-                // sticking at plain `bottom: 0` parks the row one padding-width
-                // ABOVE the scrollport edge, so scrolling content shows through
-                // the gap under it. Stick past the padding and add it back
-                // inside, so the row sits flush and stays opaque.
-                bottom: "calc(var(--pad-lg) * -1)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                paddingTop: 8,
-                paddingBottom: "var(--pad-lg)",
-                marginTop: "auto",
-                background: "var(--surface-2)",
-                borderTop: "1px solid var(--border-soft)",
-              }}
-            >
-              <span title={exportDisabled ? (f.error ?? "figure is not ready to export") : undefined}>
-                <Button variant="primary" onClick={() => void f.exportNow()} disabled={exportDisabled}>
-                  Export {f.fmt.toUpperCase()}
-                </Button>
-              </span>
-              {f.canonical && f.applyBlockedReason && (
-                <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
-                  {f.applyBlockedReason}
-                </div>
-              )}
-              {f.canonical && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Button
-                    variant="primary"
-                    onClick={f.apply}
-                    disabled={!f.canApply}
-                    title={f.applyBlockedReason ?? undefined}
-                  >
-                    {detachedCanonical ? "Create Editable Figure" : "Apply"}
-                  </Button>
-                  <Button onClick={() => void cancelPublicationPreview()}>Cancel</Button>
-                </div>
-              )}
-            </div>
           </div>
           {/* Sticky: the settings column can run ~2,400 px with every group
               open; the preview stays in view while it scrolls. */}
-          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             <PreviewStage
               preview={f.preview}
               hitmap={f.hitmap}
@@ -329,6 +290,18 @@ export default function FigureBuilderView() {
                 onDragEnd: f.dragElement,
                 canonicalSeries: f.canonical && f.seriesChannels.length > 0,
               }}
+            />
+            <ExportFooter
+              fmt={f.fmt}
+              onExport={() => void f.exportNow()}
+              exportDisabledReason={exportDisabledReason}
+              canonical={f.canonical}
+              detached={detachedCanonical}
+              dirty={f.dirty}
+              canApply={f.canApply}
+              applyBlockedReason={f.applyBlockedReason ?? null}
+              onApply={f.apply}
+              onClose={onClose}
             />
           </div>
         </div>

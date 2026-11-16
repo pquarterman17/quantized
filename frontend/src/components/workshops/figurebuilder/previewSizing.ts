@@ -13,11 +13,15 @@ import { FIGURE_STYLE_SIZE_CM } from "./figureOutputConstants";
 
 /** CSS reference pixels per inch: "100 %" shows the figure at this scale. */
 export const CSS_PX_PER_IN = 96;
-/** Pixel width the preview aims for, so "fit" in a ~800 px pane is not an
- *  up-scaled blur of a small journal-column figure. */
+/** Pixel width the preview aims for at 1 device pixel per CSS pixel, so
+ *  "fit" in a ~800 px pane is not an up-scaled blur of a small journal-column
+ *  figure; scaled by the display's devicePixelRatio, but never past
+ *  MAX_TARGET_PX (render cost grows with pixel count, on every debounced
+ *  keystroke). */
 const TARGET_PX = 960;
+const MAX_TARGET_PX = 1600;
 const MIN_DPI = 110; // the old fixed preview resolution: never coarser
-const MAX_DPI = 200; // bounds render cost for a tiny figure
+const MAX_DPI = 300; // bounds render cost for a tiny figure
 
 /** The figure's width in inches as the export will size it: the request's
  *  own page width, else its style preset's, else the default preset's. */
@@ -31,9 +35,10 @@ export function specWidthIn(spec: Pick<FigureSpec, "width_in" | "style">): numbe
  *  facet grid is drawn several panels wide (figure_facets_grid.py), wider
  *  than the preset says, so it keeps the old floor resolution instead of
  *  multiplying the render's pixel count. */
-export function previewDpiFor(spec: Pick<FigureSpec, "width_in" | "style" | "facets">): number {
+export function previewDpiFor(spec: Pick<FigureSpec, "width_in" | "style" | "facets">, devicePixelRatio = 1): number {
   if (spec.facets?.length) return MIN_DPI;
-  return Math.round(Math.min(MAX_DPI, Math.max(MIN_DPI, TARGET_PX / specWidthIn(spec))));
+  const target = Math.min(MAX_TARGET_PX, TARGET_PX * Math.max(1, devicePixelRatio || 1));
+  return Math.round(Math.min(MAX_DPI, Math.max(MIN_DPI, target / specWidthIn(spec))));
 }
 
 /** Physical size in cm of a `widthPx` × `heightPx` render made at `dpi`. */

@@ -12,6 +12,7 @@ import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+import { exportFromView } from "../utils/exportView";
 
 interface ErrorSpan {
   y?: { plus?: (number | null)[] | null; minus?: (number | null)[] | null };
@@ -85,15 +86,9 @@ test("Error columns ▸ Computed √Y: a linked error column, live on the plot a
 
   // The export carries the same bound error, as a symmetric Y error span
   // (lib/figureSpecSeries.ts::exportErrorSpans) aligned to the plotted series.
-  await runPaletteCommand(page, "Export figure (quick dialog)…");
-  const dialog = page.getByRole("dialog", { name: "Export figure" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Format").selectOption("svg");
-  const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");
-  const download = page.waitForEvent("download");
-  await dialog.getByRole("button", { name: "Export", exact: true }).click();
-  const body = (await request).postDataJSON() as FigureBody;
-  await download; // the export actually completed (a download followed)
+  // UX-H: through the DEFAULT path (Export figure… -> the export view);
+  // exportFromView waits for the download too.
+  const { body } = await exportFromView<FigureBody>(page, "svg");
 
   expect(body.y_keys).toEqual([0]);
   expect(body.dataset?.labels).toEqual(["Value", "√(Value)"]);

@@ -32,6 +32,7 @@ vi.mock("../../overlays/ToolWindow", () => ({
 }));
 
 vi.mock("./PropertyPanels", () => ({ default: () => null }));
+vi.mock("./useLiveRebase", () => ({ useLiveRebase: () => undefined }));
 
 const figureState = {
   frozen: false,
@@ -100,9 +101,9 @@ beforeEach(() => {
 describe("Publication Preview control names (review finding)", () => {
   it("names the Format and Style pickers and the DPI field", () => {
     render(<FigureBuilderView />);
-    expect(screen.getByRole("radiogroup", { name: "Figure format" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Figure style" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Figure DPI (raster)" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Format" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Preset" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Resolution (dpi)" })).toBeInTheDocument();
   });
 });
 
@@ -110,7 +111,7 @@ describe("Publication Preview control names (review finding)", () => {
 describe("Publication Preview output controls (UX-H)", () => {
   it("offers every backend format as a radio, in journal order, and sets it", () => {
     render(<FigureBuilderView />);
-    const group = screen.getByRole("radiogroup", { name: "Figure format" });
+    const group = screen.getByRole("radiogroup", { name: "Format" });
     const radios = Array.from(group.querySelectorAll('[role="radio"]')).map((r) => r.textContent);
     expect(radios).toEqual(["PDF", "SVG", "PNG", "TIFF", "EPS"]);
     expect(screen.getByRole("radio", { name: "PNG" })).toHaveAttribute("aria-checked", "true");
@@ -121,17 +122,29 @@ describe("Publication Preview output controls (UX-H)", () => {
   it("shows the DPI field only for raster formats", () => {
     vi.mocked(useFigureBuilder).mockReturnValue({ ...figureState, fmt: "pdf" } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
-    expect(screen.queryByRole("textbox", { name: "Figure DPI (raster)" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Resolution (dpi)" })).toBeNull();
     expect(screen.getByText(/stay sharp at any size/)).toBeInTheDocument();
   });
 
   it("names presets for people, keeping the calibrated ids as values", () => {
     render(<FigureBuilderView />);
-    const picker = screen.getByRole("combobox", { name: "Figure style" });
+    const picker = screen.getByRole("combobox", { name: "Preset" });
     const aps = Array.from(picker.querySelectorAll("option")).find((o) => o.value === "aps");
     expect(aps?.textContent).toBe("APS · single column · 8.6 × 6.5 cm");
     fireEvent.change(picker, { target: { value: "nature" } });
-    expect(figureState.setStyle).toHaveBeenCalledWith("nature");
+    expect(figureState.setStyle).toHaveBeenLastCalledWith("nature", false);
+  });
+
+  it("keeps a typed DPI when the preset changes, and shows the raster pixel size", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState, hitmap: { width: 960, height: 640, elements: [], warnings: [] }, previewDpi: 160,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+    // 6 x 4 in at 300 dpi.
+    expect(screen.getByRole("status", { name: "Raster size" })).toHaveTextContent("1800 × 1200 px");
+    fireEvent.change(screen.getByRole("textbox", { name: "Resolution (dpi)" }), { target: { value: "450" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Preset" }), { target: { value: "aps" } });
+    expect(figureState.setStyle).toHaveBeenLastCalledWith("aps", true);
   });
 });
 
@@ -168,7 +181,7 @@ describe("Publication Preview role cues", () => {
     render(<FigureBuilderView />);
     expect(screen.getByRole("region", { name: /Publication preview.*Device figure.*modified/ })).toBeInTheDocument();
     expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent("Apply updates this figure");
-    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply to plot" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     // Item 1: the discard gate wrapper, not the hook's `cancel`, owns both
     // canonical close paths now — `cancel` is kept on the hook for
@@ -202,22 +215,39 @@ describe("Publication Preview role cues", () => {
     expect(screen.queryByText("Save as figure")).toBeNull();
   });
 
-  it("keeps Export/Apply/Cancel in a sticky row, not scrolled away with the settings", () => {
-    // Measured in the running app before this was added: with the property
-    // groups expanded, the settings column is ~2,400 px tall inside a ~900 px
-    // viewport, which put the buttons that COMMIT the work ~200 px below the
-    // fold. jsdom has no layout, so the assertion is on the mechanism (the
-    // sticky container) rather than on a pixel position.
+  it("puts Close, Apply to plot and ONE primary Export in the action row under the preview (UX-H)", () => {
     vi.mocked(useFigureBuilder).mockReturnValue({
       ...figureState, canonical: true, documentName: "Device figure",
       publicationTarget: "window", dirty: true, canApply: true,
     } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
-    const actions = screen.getByRole("button", { name: "Apply" }).closest("[style*='sticky']");
-    expect(actions).not.toBeNull();
-    // Export shares the row, so a long panel list cannot strand it either.
-    expect(actions).toContainElement(screen.getByRole("button", { name: /^Export/ }));
-    expect(actions).toContainElement(screen.getByRole("button", { name: "Cancel" }));
+    const row = screen.getByRole("group", { name: "Export actions" });
+    const buttons = Array.from(row.querySelectorAll("button")).map((b) => b.textContent);
+    expect(buttons).toEqual(["Cancel", "Apply to plot", "Export PNG…"]);
+    expect(row.querySelectorAll(".qz-primary")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Export PNG…" })).toHaveClass("qz-primary");
+    // The row sits with the (sticky) preview, not at the end of the settings.
+    expect(row.closest("[style*='sticky']")).toContainElement(screen.getByTestId("figure-preview-pane"));
+  });
+
+  it("says Close, not Cancel, when nothing would be discarded", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState, canonical: true, documentName: "Device figure", publicationTarget: "window", dirty: false,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(cancelPublicationPreview).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  });
+
+  it("disables Export with the drift reason when the plot changed under preview edits", () => {
+    const reason = "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes";
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState, canonical: true, canonicalReadiness: "ready", canExport: false, applyBlockedReason: reason,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+    expect(screen.getByRole("button", { name: "Export PNG…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export PNG…" }).closest("span")).toHaveAttribute("title", reason);
   });
 
   // F2.3b: the view builds a `series` prop for PropertyPanels only once
@@ -268,7 +298,7 @@ describe("Publication Preview role cues", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("source unavailable");
     expect(screen.queryByText("Select a dataset to preview a figure.")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export PNG" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export PNG…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Create Editable Figure" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
@@ -288,7 +318,7 @@ describe("Publication Preview role cues", () => {
     render(<FigureBuilderView />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("focus the previewed plot window to apply");
-    const applyButton = screen.getByRole("button", { name: "Apply" });
+    const applyButton = screen.getByRole("button", { name: "Apply to plot" });
     expect(applyButton).toBeDisabled();
     expect(applyButton).toHaveAttribute("title", "focus the previewed plot window to apply");
   });
@@ -312,7 +342,7 @@ describe("Publication Preview role cues", () => {
     } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
 
-    const exportButton = screen.getByRole("button", { name: "Export PNG" });
+    const exportButton = screen.getByRole("button", { name: "Export PNG…" });
     expect(exportButton).toBeDisabled();
     expect(exportButton).not.toHaveAttribute("title");
     expect(exportButton.closest("span")).toHaveAttribute(
@@ -330,7 +360,7 @@ describe("Publication Preview role cues", () => {
     } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
 
-    expect(screen.getByRole("button", { name: "Export PNG" }).closest("span")).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Export PNG…" }).closest("span")).toHaveAttribute(
       "title",
       "figure is not ready to export",
     );
@@ -338,7 +368,7 @@ describe("Publication Preview role cues", () => {
 
   it("leaves the Export button tooltip-free when it is enabled", () => {
     render(<FigureBuilderView />); // default figureState: canonical=false -> never disabled
-    expect(screen.getByRole("button", { name: "Export PNG" }).closest("span")).not.toHaveAttribute("title");
+    expect(screen.getByRole("button", { name: "Export PNG…" }).closest("span")).not.toHaveAttribute("title");
   });
 });
 

@@ -23,7 +23,13 @@ import type { FigureHitmap } from "../../../lib/previewmap";
 type Zoom = "fit" | "100";
 type OverlayProps = Omit<ComponentProps<typeof PreviewOverlay>, "src" | "map">;
 
-const PANE_H = "min(680px, calc(100vh - 220px))";
+// The pane fills the window's own height: ToolWindow caps a window at the
+// viewport below its top edge (`--qzk-win-top`, shell.css), and ~190 px of
+// that is the title bar, this toolbar, a warning line and the action row.
+// Never below 260 px.
+const PANE_H = "max(260px, min(680px, calc(100vh - var(--qzk-win-top, 90px) - 190px)))";
+const ZOOM_TIP =
+  "100 % draws the figure at 96 CSS pixels per inch, so it is its true size only on a display that matches; the exported file is always the size shown in the readout.";
 const PAD = 12;
 const RULER = 18;
 
@@ -136,23 +142,25 @@ export default function PreviewStage({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <SegmentedControl<Zoom>
-          aria-label="Preview zoom"
-          options={[
-            { value: "fit", label: "Fit" },
-            { value: "100", label: "100 %", ariaLabel: "Actual size (100 %)" },
-          ]}
-          value={zoom}
-          onChange={setZoom}
-        />
+        <span title={ZOOM_TIP}>
+          <SegmentedControl<Zoom>
+            aria-label="Preview zoom"
+            options={[
+              { value: "fit", label: "Fit" },
+              { value: "100", label: "100 % (screen)" },
+            ]}
+            value={zoom}
+            onChange={setZoom}
+          />
+        </span>
         {size && (
-          <span
+          <output
             aria-label="Figure size"
-            title="The exported figure's physical size; 100 % shows it at that size on screen."
+            title="The exported figure's physical size."
             style={{ ...TEXT, fontSize: "var(--font-size-sm)", color: "var(--text-dim)" }}
           >
             {formatSizeCm(size.widthCm, size.heightCm)} · {toInches(size.widthCm, "cm").toFixed(2)} × {toInches(size.heightCm, "cm").toFixed(2)} in
-          </span>
+          </output>
         )}
         {busy && ready && <span style={{ ...TEXT, fontSize: "var(--font-size-sm)" }}>updating…</span>}
       </div>

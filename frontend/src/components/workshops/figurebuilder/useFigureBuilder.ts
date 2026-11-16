@@ -126,9 +126,9 @@ export function useFigureBuilder() {
   // journal preset's dpi never actually reached the export dialog). The user
   // can still freely override the DPI field afterwards; only a *style*
   // change re-syncs it.
-  function setStyle(next: string): void {
+  function setStyle(next: string, keepDpi = false): void { // keepDpi: the user typed one (UX-H)
     setStyleRaw(next);
-    const presetDpi = FIGURE_STYLE_DPI[next];
+    const presetDpi = keepDpi ? undefined : FIGURE_STYLE_DPI[next];
     if (presetDpi !== undefined) setDpi(presetDpi);
   }
 
@@ -169,8 +169,8 @@ export function useFigureBuilder() {
         overrides: publicationOverridesDelta(effective!, next, document.publication?.overrides),
       },
     }));
-  const setCanonicalStyle = (next: string) =>
-    setCanonicalOutput({ stylePreset: next, ...(FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
+  const setCanonicalStyle = (next: string, keepDpi = false) =>
+    setCanonicalOutput({ stylePreset: next, ...(keepDpi || FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
   const activeOverrides = effective ?? overrides;
   const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
   // Item 3: canonical x-breaks read/write through the unified home — see
@@ -305,7 +305,7 @@ export function useFigureBuilder() {
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
   // Debounced PNG preview + hit-map — see usePreviewRender's module doc.
-  const { preview, hitmap, error, busy, previewDpi } = usePreviewRender(spec, canonical);
+  const { preview, hitmap, error, busy, previewDpi } = usePreviewRender(spec, canonical, publicationSession?.target === "window" && publicationSession.windowId === focusedWindowId);
   // A window-target session outlives its target window closing/unfocusing
   // (windows.ts's closeWindow clears the common case, but a session can still
   // be left pointing at a background window — applyFigurePublicationEdit's
@@ -409,7 +409,7 @@ export function useFigureBuilder() {
       ? error
       : canonicalReadiness.error,
     canonicalReadiness: canonicalReadiness?.state ?? null,
-    canExport: !canonical || canonicalReadiness?.state === "ready",
+    canExport: !canonical || (canonicalReadiness?.state === "ready" && !liveDrifted), // never a stale snapshot (UX-H)
     busy,
     exportNow,
     overrides: activeOverrides,

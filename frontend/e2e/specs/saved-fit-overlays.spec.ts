@@ -5,7 +5,6 @@
 // redraws it -> a project saved without the figure's own copy redraws it from
 // the saved parameters.
 
-import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
@@ -13,6 +12,7 @@ import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+import { exportFromView } from "../utils/exportView";
 
 interface Snap { focused: string | null; fitFor: string | null; band: number; docFit: boolean; windows: number; firstDs: string | null }
 type Qz = { __qz: { useApp: { getState: () => Record<string, unknown>; setState: (p: Record<string, unknown>) => void } } };
@@ -76,16 +76,10 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   expect(fitted.fitFor).toBe(fitted.firstDs);
 
   // ── Export: the fit series are marked, and the Y title is the screen's ──
-  await runPaletteCommand(page, "Export figure (quick dialog)…");
-  const dialog = page.getByRole("dialog", { name: "Export figure" });
-  await dialog.getByLabel("Format").selectOption("svg");
-  const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");
-  const download = page.waitForEvent("download");
-  await dialog.getByRole("button", { name: "Export", exact: true }).click();
-  const body = (await request).postDataJSON() as { y_keys: number[]; dataset: { labels: string[] }; analysis_overlays?: boolean[] };
+  // UX-H: through the DEFAULT path (Export figure… -> the export view).
+  const { body, text: svg } = await exportFromView<{ y_keys: number[]; dataset: { labels: string[] }; analysis_overlays?: boolean[] }>(page, "svg");
   expect(body.analysis_overlays).toHaveLength(body.y_keys.length);
   expect(body.analysis_overlays?.filter(Boolean).length).toBeGreaterThanOrEqual(3); // fit + two band edges
-  const svg = (await readFile(await (await download).path())).toString("utf8");
   expect(svg).not.toMatch(/signal[^<]*, fit/);
   expect(svg).not.toMatch(/fit, 95%/);
 

@@ -45,11 +45,14 @@ describe("figure preset mirrors (UX-H)", () => {
 });
 
 describe("preview sizing (UX-H)", () => {
-  it("renders the preview near 960 px wide, within [110, 200] dpi", () => {
+  it("renders the preview near 960 device px wide (x devicePixelRatio, <= 1600), within [110, 300] dpi", () => {
     expect(specWidthIn({ style: "aps" })).toBeCloseTo(8.6 / 2.54);
     expect(specWidthIn({ style: "aps", width_in: 5 })).toBe(5); // a page size wins
     expect(previewDpiFor({ style: "default" })).toBe(160); // 6 in
-    expect(previewDpiFor({ style: "aps" })).toBe(200); // capped
+    expect(previewDpiFor({ style: "aps" })).toBe(284); // 960 px over 8.6 cm
+    expect(previewDpiFor({ style: "default" }, 2)).toBe(267); // 1600 px cap over 6 in
+    expect(previewDpiFor({ style: "aps" }, 3)).toBe(300); // capped
+    expect(previewDpiFor({ style: "aps", facets: [{ label: "a", x: [], series: [] }] })).toBe(110); // a grid is wider
     expect(previewDpiFor({ style: "poster" })).toBe(110); // floored
     expect(previewDpiFor({ style: "nope" })).toBe(160); // unknown -> default size
   });

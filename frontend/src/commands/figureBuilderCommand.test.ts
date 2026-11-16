@@ -186,6 +186,27 @@ describe("Publication Preview command", () => {
     },
   );
 
+  it("Export figure… keeps the quick dialog for a spatial page composition", async () => {
+    const called = quickCalled();
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
+    useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, composition: { kind: "spatial", panels: [] } as never });
+    runExportFigure();
+    await called;
+    expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
+    useApp.setState({ composition: null });
+  });
+
+  it("Export figure… on a focused plot window opens a session on THAT window", () => {
+    useApp.setState({ datasets: [sampleDataset()], activeId: "d1" });
+    useApp.getState().createWindow("d1");
+    const focused = useApp.getState().focusedWindowId;
+    expect(focused).not.toBeNull();
+    runExportFigure();
+    expect(useApp.getState().figurePublicationSession).toMatchObject({ target: "window", windowId: focused });
+    expect(useApp.getState().figureBuilderOpen).toBe(true);
+    useApp.getState().cancelFigurePublicationEdit();
+  });
+
   it("Export figure… with no dataset lets the quick dialog refuse with its reason", async () => {
     const called = quickCalled();
     const setFigureBuilderOpen = vi.fn();

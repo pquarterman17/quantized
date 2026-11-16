@@ -6,7 +6,6 @@
 // stacked view refuses them with a status note, and an assignment to an axis
 // that no longer exists draws on Y1 and says so.
 
-import { readFile } from "node:fs/promises";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -15,6 +14,7 @@ import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+import { exportFromView } from "../utils/exportView";
 
 interface Axis { lim: [number, number] | null; label: string; color: string | null }
 type Qz = {
@@ -103,16 +103,10 @@ test("Y3 and Y4 axes: assign, stack, format, zoom, export, refuse and fail close
   await expect.poll(async () => (await state(page)).yAxes[0].lim).toEqual([0, 10]);
 
   // ── The SVG export carries both axes, with Y3's look ──
-  await runPaletteCommand(page, "Export figure (quick dialog)…");
-  const exportDialog = page.getByRole("dialog", { name: "Export figure" });
-  await exportDialog.getByLabel("Format").selectOption("svg");
-  const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");
-  const download = page.waitForEvent("download");
-  await exportDialog.getByRole("button", { name: "Export", exact: true }).click();
-  const body = (await request).postDataJSON() as { y_axes?: { keys: number[]; label?: string; color?: string; lim?: number[] }[] };
+  // UX-H: through the DEFAULT path (Export figure… -> the export view).
+  const { body, text: svg } = await exportFromView<{ y_axes?: { keys: number[]; label?: string; color?: string; lim?: number[] }[] }>(page, "svg");
   expect(body.y_axes?.map((a) => a.keys)).toEqual([[1], [2]]);
   expect(body.y_axes?.[0]).toMatchObject({ label: "Beta axis", color: "#c0392b", lim: [0, 10] });
-  const svg = (await readFile(await (await download).path())).toString("utf8");
   expect(svg).toContain("Beta axis");
 
   // ── Undo takes the settings back ──

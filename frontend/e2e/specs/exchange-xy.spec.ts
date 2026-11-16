@@ -11,6 +11,7 @@ import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+import { exportFromView } from "../utils/exportView";
 
 type QzWindow = { __qz: { useApp: { getState: () => { exchangeXY: boolean; undo: () => void } } } };
 const exchanged = (page: Page) => page.evaluate(() => (window as unknown as QzWindow).__qz.useApp.getState().exchangeXY);
@@ -80,17 +81,10 @@ function svgText(svg: string): Record<string, [number, number, number]> {
   return out;
 }
 
+// UX-H: through the DEFAULT path (Export figure… -> the export view).
 async function exportSvg(page: Page): Promise<{ svg: string; body: { overrides?: { exchange_xy?: boolean } } }> {
-  await runPaletteCommand(page, "Export figure (quick dialog)…");
-  const dialog = page.getByRole("dialog", { name: "Export figure" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Format").selectOption("svg");
-  const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");
-  const download = page.waitForEvent("download");
-  await dialog.getByRole("button", { name: "Export", exact: true }).click();
-  const body = (await request).postDataJSON() as { overrides?: { exchange_xy?: boolean } };
-  const bytes = await (await import("node:fs/promises")).readFile(await (await download).path());
-  return { svg: bytes.toString("utf8"), body };
+  const { body, text } = await exportFromView<{ overrides?: { exchange_xy?: boolean } }>(page, "svg");
+  return { svg: text, body };
 }
 
 test("Exchange X-Y axes: the screen and the exported SVG put the same title on the same side", async ({ page }) => {

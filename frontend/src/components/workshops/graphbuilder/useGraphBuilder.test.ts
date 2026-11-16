@@ -1257,14 +1257,17 @@ describe("useGraphBuilder — exportPlot (item 6)", () => {
     vi.mocked(exportFigure).mockResolvedValue(undefined);
   });
 
-  it("scatter/line: applies to the current plot, then uses the existing Export-figure path", async () => {
+  it("scatter/line: applies to the current plot, then opens the export view Export figure… opens (UX-H)", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     await act(async () => result.current.exportPlot());
     expect(useApp.getState().xKey).toBe(0);
     expect(useApp.getState().yKeys).toEqual([1]);
-    expect(exportFigure).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().figureBuilderOpen).toBe(true);
+    expect(useApp.getState().figurePublicationSession).not.toBeNull();
+    expect(exportFigure).not.toHaveBeenCalled(); // the view exports on its own button
+    act(() => useApp.getState().cancelFigurePublicationEdit());
   });
 
   it("box/violin: applies to the stat stage but does NOT call the xy export path", async () => {
@@ -1662,11 +1665,12 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     expect(spec.encoding).toMatchObject({ color_col: 2 });
   });
 
-  it("Export without encodings still goes through the Stage view (regression)", async () => {
+  it("Export without encodings opens the export view, not the encoded dialog (UX-H)", async () => {
     const { result } = build();
     await act(async () => result.current.exportPlot());
-    expect(exportFigure).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(exportFigure).mock.calls[0][0].encoding).toBeUndefined();
+    expect(exportFigure).not.toHaveBeenCalled();
+    expect(useApp.getState().figurePublicationSession?.draft.bindings).not.toHaveProperty("encoding");
+    act(() => useApp.getState().cancelFigurePublicationEdit());
   });
 
   it("Open Publication Preview carries the encodings onto the draft, with no loss to confirm", async () => {

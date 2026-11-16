@@ -10,6 +10,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { exportFromView } from "../utils/exportView";
 import { runPaletteCommand } from "../utils/palette";
 
 interface TopAxis {
@@ -76,20 +77,11 @@ test("Axis dialog: a reciprocal top axis and a reversed Y axis, matched on scree
 
   // ── Export to SVG: the request carries the same axis formats, and the
   //    rendered SVG actually draws the top axis' title text. ──
-  await runPaletteCommand(page, "Export figure (quick dialog)…");
-  const exportDialog = page.getByRole("dialog", { name: "Export figure" });
-  await expect(exportDialog).toBeVisible();
-  await exportDialog.getByLabel("Format").selectOption("svg");
-  const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");
-  const download = page.waitForEvent("download");
-  await exportDialog.getByRole("button", { name: "Export", exact: true }).click();
-  const body = (await request).postDataJSON() as FigureBody;
-  const file = await download;
-  const bytes = await (await import("node:fs/promises")).readFile(await file.path());
+  // UX-H: through the DEFAULT path (Export figure… -> the export view).
+  const { body, text: svg } = await exportFromView<FigureBody>(page, "svg");
 
   expect(body.x_fmt?.top).toMatchObject({ kind: "reciprocal", factor: 1000, title: TOP_TITLE });
   expect(body.y_fmt?.reverse).toBe(true);
-  const svg = bytes.toString("utf8");
   expect(svg).toMatch(/<svg[^>]*>/);
   expect(svg).toContain(TOP_TITLE); // the secondary axis' own label, drawn
 });

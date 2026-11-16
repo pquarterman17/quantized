@@ -96,7 +96,7 @@ const FILE_SECTIONS: Record<string, string> = {
  *  publication preview, which otherwise sit only under Plot > Build & export
  *  and Plot > Layout). Same command, same id — just a second entry point. */
 const CROSS_LISTED: Record<string, Readonly<Record<string, string>>> = {
-  File: { "export-figure": "Export", "figure-builder": "Export", "page-setup": "Export" },
+  File: { "export-figure": "Export", "export-figure-quick": "Export", "figure-builder": "Export", "page-setup": "Export" },
 };
 
 const WINDOW_SECTIONS: Record<string, string> = {

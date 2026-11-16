@@ -10,12 +10,14 @@
 import { exportFigure, type FigureSpec } from "../../../lib/api/figures";
 import type { CanonicalReadiness } from "./canonicalReadiness";
 import { buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
+import { withLiveLegendCorner } from "../../../lib/liveLegendCorner";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { LiveTickSteps } from "../../../lib/liveTickSteps";
 import { withLiveTickHints } from "../../../lib/liveTickStepsSpec";
+import { overlayDropTracker, withDropNote } from "../../../lib/overlayDropNotice";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { runCancellable } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
@@ -51,6 +53,13 @@ export interface PreviewExportDeps {
 const EXPORT_LABEL = "Exporting figure…";
 const CANCELLED = "export cancelled";
 
+/** Remember the draft just exported on its (still open) session, so closing
+ *  the view right afterwards does not ask to discard it (UX-H). */
+function markExported(document: FigureDocument): void {
+  const session = useApp.getState().figurePublicationSession;
+  if (session?.draft === document) useApp.setState({ figurePublicationSession: { ...session, exported: document } });
+}
+
 /** Export the current figure: the canonical FigureDocument when a
  *  publication session is open, else the legacy live-plot spec. Both paths
  *  resolve a still-pending dataset before exporting (#38) so the request
@@ -70,20 +79,30 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
         signal.throwIfAborted();
         const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
+        // A session on the focused window pins the Stage's auto-legend
+        // corner, as the Stage's own export does (lib/liveLegendCorner).
+        const { figurePublicationSession: session, focusedWindowId } = useApp.getState();
+        const pinLegend = session?.target === "window" && session.windowId === focusedWindowId ? withLiveLegendCorner : (s: FigureSpec) => s;
+        // An overlay the figure cannot carry is reported, never dropped
+        // silently (lib/overlayDropNotice — the quick dialog's own notice).
+        const drops = overlayDropTracker();
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         const picked = await chooseExcludedRows(
-          (greyExcluded) => withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
+          (greyExcluded) => drops.build((onDroppedOverlays) => pinLegend(withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
             autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
-            defaultLineWidth: useApp.getState().defaultLineWidth, staleFits: useApp.getState().staleFits,
-          }), deps.tickHints),
+            defaultLineWidth: useApp.getState().defaultLineWidth, staleFits: useApp.getState().staleFits, onDroppedOverlays,
+          }), deps.tickHints))),
           excludedChoiceMatters,
           useApp.getState().excludedDisplay,
         );
         if (!picked) return null;
         await exportFigure({ ...picked.value, filename: stem }, signal);
-        return stem;
+        markExported(canonicalDocument);
+        return { stem, note: drops.note(picked.value) };
       });
-      setStatus(done?.value ? `exported ${done.value}.${canonicalDocument.output.format}` : CANCELLED);
+      const msg = done?.value ? withDropNote(`exported ${done.value.stem}.${canonicalDocument.output.format}`, done.value.note) : CANCELLED;
+      if (done?.value?.note) toast(msg, "info");
+      setStatus(msg);
     } catch (e) {
       const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
       toast(msg, "danger");

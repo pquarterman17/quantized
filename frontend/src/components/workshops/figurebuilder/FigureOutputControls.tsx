@@ -1,34 +1,40 @@
 // The Publication preview's output block (UX audit 7, lane UX-H): the file
 // format as a segmented control, the style preset under a human-readable
 // name with its size, and a DPI field shown only for the raster formats
-// (vector output has no resolution, so a DPI field there only misleads).
-// Every format offered here is one `routes/_export_common._FIGURE_MIME`
-// accepts.
+// (with the pixel size it gives). Every format offered here is one
+// `routes/_export_common._FIGURE_MIME` accepts. Visible labels are the
+// controls' accessible names (aria-labelledby), so the two cannot disagree.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
-import { FIGURE_FORMATS, RASTER_FORMATS } from "./figureOutputConstants";
-import { presetOptions } from "./figurePresets";
+import { FIGURE_FORMATS, FIGURE_STYLE_SIZE_CM, RASTER_FORMATS } from "./figureOutputConstants";
+import { formatSizeCm, presetOptions } from "./figurePresets";
 import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Select } from "../../primitives";
+import { toInches } from "../../../lib/pageGeometry";
 
 /** The control's left-to-right order: the vector formats a journal wants
  *  first, then raster, then the legacy vector format. */
 const FORMAT_ORDER = ["pdf", "svg", "png", "tiff", "eps"];
 
-const LABEL_STYLE = { fontSize: "var(--font-size-sm)", color: "var(--text-dim)" } as const;
+const NOTE = { fontSize: "var(--font-size-sm)", color: "var(--text-dim)" } as const;
+const MONO = { ...NOTE, fontFamily: "var(--font-mono)" } as const;
 
 export default function FigureOutputControls({
-  fmt, setFmt, style, setStyle, dpi, setDpi,
+  fmt, setFmt, style, setStyle, dpi, setDpi, sizeCm = null,
 }: {
   fmt: string;
   setFmt: (next: string) => void;
   style: string;
-  setStyle: (next: string) => void;
+  /** `keepDpi`: the user typed a DPI, so the preset must not replace it. */
+  setStyle: (next: string, keepDpi?: boolean) => void;
   dpi: number;
   setDpi: (next: number) => void;
+  /** The rendered figure's physical size (null before the first preview). */
+  sizeCm?: { widthCm: number; heightCm: number } | null;
 }) {
+  const id = useId();
   const raster = RASTER_FORMATS.includes(fmt);
   const formats = FORMAT_ORDER.filter((f) => FIGURE_FORMATS.includes(f));
   // A document carrying a format this build does not list keeps its own value
@@ -39,44 +45,62 @@ export default function FigureOutputControls({
   // invalid or out-of-range keystroke must not immediately snap back to the
   // last committed value while the user is still typing.
   const [dpiText, setDpiText] = useState(String(dpi));
+  const [dpiTyped, setDpiTyped] = useState(false);
   const committedDpiText = String(dpi);
   useEffect(() => {
     setDpiText(committedDpiText);
   }, [committedDpiText]);
 
+  // A page size (Page setup / the Page & canvas group) overrides the preset's.
+  const preset = FIGURE_STYLE_SIZE_CM[style];
+  const custom = sizeCm && preset && (Math.abs(sizeCm.widthCm - preset[0]) > 0.05 || Math.abs(sizeCm.heightCm - preset[1]) > 0.05);
+  const px = sizeCm ? [Math.round(toInches(sizeCm.widthCm, "cm") * dpi), Math.round(toInches(sizeCm.heightCm, "cm") * dpi)] : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={LABEL_STYLE}>Format</span>
+      <span className="qzk-field-lbl" id={`${id}-fmt`}>Format</span>
       <SegmentedControl
-        aria-label="Figure format"
+        aria-labelledby={`${id}-fmt`}
         options={formats.map((f) => ({ value: f, label: f.toUpperCase() }))}
         value={fmt}
         onChange={setFmt}
       />
-      <span style={LABEL_STYLE}>Preset</span>
-      <Select aria-label="Figure style" options={presetOptions(style)} value={style} onChange={(e) => setStyle(e.target.value)} />
+      <label className="qzk-field-lbl" htmlFor={`${id}-preset`}>Preset</label>
+      <Select
+        id={`${id}-preset`}
+        options={presetOptions(style)}
+        value={style}
+        onChange={(e) => setStyle(e.target.value, dpiTyped)}
+      />
+      {custom && sizeCm && (
+        <span style={NOTE}>Page size {formatSizeCm(sizeCm.widthCm, sizeCm.heightCm)} overrides the preset's size.</span>
+      )}
       {raster ? (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, ...LABEL_STYLE }}>
-          Resolution
-          <NumberField
-            aria-label="Figure DPI (raster)"
-            value={dpiText}
-            onChange={(v) => {
-              setDpiText(v);
-              const n = Number(v);
-              // Only commit a finite, sane DPI; an invalid/out-of-range
-              // keystroke leaves the field text as typed and self-corrects
-              // once the entry becomes valid (no silent snap to 300, no
-              // negative/absurd DPI reaching the export request).
-              // [50, 1200] is the backend's own clamp (_export_common).
-              if (Number.isFinite(n) && n >= 50 && n <= 1200) setDpi(n);
-            }}
-            width={70}
-          />
-          dpi
-        </label>
+        <>
+          <label className="qzk-field-lbl" htmlFor={`${id}-dpi`}>Resolution (dpi)</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <NumberField
+              id={`${id}-dpi`}
+              value={dpiText}
+              onChange={(v) => {
+                setDpiText(v);
+                const n = Number(v);
+                // Only commit a finite, sane DPI; an invalid/out-of-range
+                // keystroke leaves the field text as typed and self-corrects
+                // once the entry becomes valid. [50, 1200] is the backend's
+                // own clamp (_export_common).
+                if (Number.isFinite(n) && n >= 50 && n <= 1200) {
+                  setDpiTyped(true);
+                  setDpi(n);
+                }
+              }}
+              width={70}
+            />
+            {px && <output aria-label="Raster size" style={MONO}>{px[0]} × {px[1]} px</output>}
+          </div>
+        </>
       ) : (
-        <span style={LABEL_STYLE}>Vector: lines and text stay sharp at any size.</span>
+        <span style={NOTE}>Vector: lines and text stay sharp at any size.</span>
       )}
     </div>
   );
