@@ -1,4 +1,4 @@
-// The Peak Analyzer's mixed-shape model engine through usePeakWizard (audit
+// The Peak analyzer's mixed-shape model engine through usePeakWizard (audit
 // P2.4 slice 2): the request body the backend receives (a real `postJSON`
 // over a stubbed fetch), stale / superseded responses, the ASCII error
 // detail, and the plot overlays. Waits are on hook STATE, never on a mock.

@@ -1,4 +1,4 @@
-// Peak Analyzer — the recipe's step ① baseline and step ② peak find as plain
+// Peak analyzer — the recipe's step ① baseline and step ② peak find as plain
 // async functions (audit P2.4 slice 4). The wizard's hooks (usePeakBaseline,
 // usePeakCandidates) and the batch runner (peakBatchPrep.ts) call exactly
 // these, so a batch row is prepared by the same requests the wizard makes on

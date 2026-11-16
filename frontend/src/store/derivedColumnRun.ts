@@ -158,6 +158,6 @@ export async function addDerivedColumn(
   // previous column's "added …" while the formula row shows this error
   // (live check). The inline message carries the same reason.
   const named = req.name.trim() ? ` "${req.name.trim()}"` : "";
-  if (!r.ok) get().setStatus(`Can't add column${named}: ${r.error}`);
+  if (!r.ok) get().setStatus(`Can't add column${named}: ${r.error}`, "danger");
   return r;
 }

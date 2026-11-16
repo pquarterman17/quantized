@@ -49,7 +49,7 @@ export const FACET_GRADIENT_NOTE = "A gradient colours single points, so it does
  *  split: none explicit, and the plot's default list (`lib/facet.
  *  facetSplitChannels`, the flat plot's own) names none either. */
 export const FACET_NO_Y_NOTE =
-  "Color, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.";
+  "Colour, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.";
 
 /** Is `spec`'s xy facet grid encoded over NO Y channel at all (see
  *  `FACET_NO_Y_NOTE`)? With explicit Y, or a default the flat plot would draw,

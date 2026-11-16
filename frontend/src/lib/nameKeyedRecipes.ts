@@ -163,7 +163,7 @@ const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
  *  `isPeakRecipe` -- the storage-boundary guard -- only checks that the five
  *  child values are non-null objects, which is the right tolerance for a
  *  record this app wrote itself but accepts `{range:{}, baseline:{}, ...}`
- *  from a file, and the Peak Analyzer then reads `undefined` where it
+ *  from a file, and the Peak analyzer then reads `undefined` where it
  *  expects numbers and enums. An imported file is untrusted, so every field
  *  the `PeakRecipe` type declares is checked for type, finiteness and enum
  *  membership here; nothing structurally "present but empty" gets through.

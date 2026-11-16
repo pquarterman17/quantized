@@ -248,7 +248,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       run: () =>
         void clearAutosave().then((failed) => {
           if (failed === null) return s().setStatus("autosaved workspace cleared (current library unchanged)");
-          s().setStatus(`couldn't clear the autosaved workspace — ${failed}`);
+          s().setStatus(`couldn't clear the autosaved workspace — ${failed}`, "danger");
           toast(`couldn't clear the autosaved workspace — ${failed}`, "danger");
         }),
     },

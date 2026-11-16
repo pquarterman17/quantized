@@ -1,4 +1,4 @@
-// Peak Analyzer — honest labels for a `/api/peaks/model-fit` result (audit
+// Peak analyzer — honest labels for a `/api/peaks/model-fit` result (audit
 // P2.4 slice 2). Pure. Two jobs the results view must never get wrong:
 //
 // * WHY an error is missing. The backend reports `stderr: null` for a fixed

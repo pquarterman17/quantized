@@ -31,4 +31,10 @@ describe("importFailureHint", () => {
   it("keeps the wizard hint for a genuine parse failure", () => {
     expect(importSummary(0, 1, "scan.csv: could not detect columns", "scan.csv")).toContain("Import wizard");
   });
+
+  it("names the platform shortcut and never shows the Mac glyph off macOS (UX-Q)", () => {
+    expect(importFailureHint("scan.csv", "", false)).toContain("Ctrl+K");
+    expect(importFailureHint("scan.csv", "", false)).not.toContain("⌘");
+    expect(importFailureHint("scan.csv", "", true)).toContain("⌘K");
+  });
 });

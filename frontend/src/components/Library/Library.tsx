@@ -16,7 +16,6 @@ import { useLibraryFocus } from "./useLibraryFocus";
 import { useLibraryResize } from "./useLibraryResize";
 import { useRevealImported } from "./useRevealImported";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
-import { makeDemoDataset } from "../../lib/demo";
 import { folderPath } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import { chooseAndImport } from "../../lib/importEntry";
@@ -47,12 +46,10 @@ const HomeScreen = lazyRegion(() => import("./HomeScreen"), "Library");
 // (query empty, hierarchy empty) — see LibraryFlatRows.tsx's own header for
 // why this is the only static edge that kept DatasetRow.tsx eager.
 const LibraryFlatRows = lazyRegion(() => import("./LibraryFlatRows"), "Library");
-import type { Dataset } from "../../lib/types";
-import { nextDatasetId, useApp } from "../../store/useApp";
+import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { askParams } from "../overlays/ParamDialog";
 
-let demoSeq = 0;
 const ACCEPT = IMPORT_ACCEPT;
 
 interface LibraryProps {
@@ -66,7 +63,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
-  const addDataset = useApp((s) => s.addDataset);
   const importFiles = useApp((s) => s.importFiles);
   const folders = useApp((s) => s.folders);
   const createFolder = useApp((s) => s.createFolder);
@@ -152,14 +148,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   // NATIVE dialog (paths -> source.path) and a browser gets today's picker.
   const onImport = () => void chooseAndImport(useApp.getState(), ACCEPT);
 
-  const onDemo = () => {
-    const ds: Dataset = {
-      id: nextDatasetId(),
-      name: `demo-vsm-${++demoSeq}.dat`,
-      data: makeDemoDataset(),
-    };
-    addDataset(ds);
-  };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -289,9 +277,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
              *  node kind, so it wears that kind's mark from `nodeIcons.ts`
              *  instead of a literal ▦ that no longer means "folder"). */}
             {LIBRARY_NODE_GLYPH.folder}
-          </button>
-          <button className="qz-icon-btn" aria-label="Add demo" title="Add demo dataset" onClick={onDemo}>
-            ✚
           </button>
           <button className="qz-icon-btn" aria-label="Import data" title="Import data…" onClick={onImport}>
             ⊞

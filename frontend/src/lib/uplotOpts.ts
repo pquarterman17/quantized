@@ -583,7 +583,7 @@ export interface BuildOptsArgs {
   /** In `qfit` tool + cursors mode: fires on every create/move of a cursor. */
   onCursorsChange?: (c: [number, number] | null) => void;
   /** Peak-workshop click-on-plot marker editing (interaction item 5): non-null
-   *  while Peak Analyzer step ② or the Peaks panel's edit mode is live (see
+   *  while Peak analyzer step ② or the Peaks panel's edit mode is live (see
    *  PlotStage's legacy-named `peakWizardEdit` store read). Independent of
    *  `tool` — like wheelZoom, it composes with whatever tool is active; only
    *  a plain (non-drag) click over the plot acts. */

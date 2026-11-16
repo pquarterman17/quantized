@@ -11,7 +11,8 @@
 //   divide, size
 //   breakFrom/To     the same AxisFormat's `breaks[0]` (Y and Y2 only: a
 //                    linear axis with that stretch elided, lib/axisBreaks.ts)
-//   titleSize        axisLabelStyles[axis].size (the axis title font, px)
+//   titleSize        axisLabelStyles[axis].size (the axis title font, stored in px,
+//                    shown in pt like the tick-label size -- UX-Q)
 //   reverse          xReversed (X) / the AxisFormat's `reverse` (Y, Y2)
 //   grid*, rotate,   the same AxisFormat's gap-audit-2 #5 fields
 //   offset, top*     (lib/axisStyleExtras.ts, calc/axis_style.py)
@@ -77,6 +78,13 @@ export type AxisView = Pick<
   | "xFmt" | "yFmt" | "y2Fmt" | "axisLabelStyles" | "xReversed"
 >;
 
+const round2 = (v: number): number => Math.round(v * 1e2) / 1e2;
+const round4 = (v: number): number => Math.round(v * 1e4) / 1e4;
+/** The title size is stored in px but edited in pt (the tick-label "Label
+ *  size" is pt), shown to 2 decimals. An UNTOUCHED field keeps the stored px
+ *  exactly (axisPatch compares the draft with this display string); an edited
+ *  one converts pt x 4/3. */
+const pxToPtStr = (px: number | null | undefined): string => (px == null || !Number.isFinite(px) ? "" : String(round2((px * 72) / 96)));
 const str = (v: number | null | undefined): string => (v == null || !Number.isFinite(v) ? "" : String(v));
 
 function parts(view: AxisView, axis: AxisId): { scale: AxisScale; lim: readonly (number | null)[] | null; step: number | null; fmt: AxisFormat } {
@@ -111,7 +119,7 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     ticks: fmt.ticks ?? "out",
     divide: str(fmt.divide),
     size: str(fmt.size),
-    titleSize: str(view.axisLabelStyles[axis]?.size),
+    titleSize: pxToPtStr(view.axisLabelStyles[axis]?.size),
     breakFrom: axis === "x" ? "" : str(fmt.breaks?.[0]?.[0]),
     breakTo: axis === "x" ? "" : str(fmt.breaks?.[0]?.[1]),
     reverse: axis === "x" ? !!view.xReversed : !!fmt.reverse,
@@ -309,7 +317,9 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   void _old;
   // No title size and nothing else: drop the axis' entry rather than store
   // an empty `{}` (a "style" that differs from the default by structure only).
-  const nextStyle = titleSize !== null ? { ...restStyle, size: titleSize } : restStyle;
+  const untouched = d.titleSize === pxToPtStr(_old);
+  const titlePx = titleSize === null ? null : untouched && _old != null ? _old : round4((titleSize * 96) / 72);
+  const nextStyle = titlePx !== null ? { ...restStyle, size: titlePx } : restStyle;
   if (Object.keys(nextStyle).length > 0) styles[axis] = nextStyle;
   else delete styles[axis];
   const lim = lo === null && hi === null ? null : ([lo, hi] as [number | null, number | null]);

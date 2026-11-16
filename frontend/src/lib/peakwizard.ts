@@ -1,4 +1,4 @@
-// Peak Analyzer wizard (#31/#32) — pure helpers + the recipe contract. A
+// Peak analyzer wizard (#31/#32) — pure helpers + the recipe contract. A
 // PeakRecipe is the wizard's full configuration (range, baseline, find, model,
 // report mode, and — since v2 — the mixed-shape model fit's engine / shapes /
 // background / parameter-table edits, lib/peakRecipeFit.ts) as plain diffable

@@ -72,6 +72,6 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     },
     { id: "ternary-figure", group: "Plot", section: "Build & export", label: "Ternary diagram…", description: "Plot three composition columns on a ternary diagram, optionally coloured by a fourth, previewed as the PDF/SVG/PNG export renders.", keywords: "ternary composition phase triangle barycentric alloy", run: () => useAuxFigureStore.getState().setTernaryOpen(true) },
     { id: "field-figure", group: "Plot", section: "Build & export", label: "Vector field…", description: "Draw X, Y, U, V columns on a regular grid as quiver arrows or streamlines, previewed as the PDF/SVG/PNG export renders.", keywords: "vector field quiver streamline flow magnetization", run: () => useAuxFigureStore.getState().setFieldOpen(true) },
-    analyze("peak-wizard", "Peaks & baseline", "Peak Analyzer (baseline → find → fit → report wizard)…", "Use a guided baseline, peak detection, fitting, and report workflow.", "wizard stepper guided origin peak analyzer", () => s().setPeakWizardOpen(true)),
+    analyze("peak-wizard", "Peaks & baseline", "Peak analyzer…", "A guided wizard that takes you from baseline to peak finding, fitting, and a report.", "wizard stepper guided origin peak analyzer", () => s().setPeakWizardOpen(true)),
   ];
 }

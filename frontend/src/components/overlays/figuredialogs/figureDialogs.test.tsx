@@ -67,11 +67,18 @@ describe("Axis dialog model (#6)", () => {
     const d = axisDraft(view, "y");
     expect(d.scale).toBe("ln");
     expect(d.minor).toBe("4");
-    const patch = axisPatch(view, "y", { ...d, divide: "0.001", ticks: "in", from: "1", to: "100", increment: "", titleSize: "14" });
+    const patch = axisPatch(view, "y", { ...d, divide: "0.001", ticks: "in", from: "1", to: "100", increment: "", titleSize: "10.5" });
     expect(patch.yScale).toBe("log");
     expect(patch.yFmt).toEqual({ mode: "auto", digits: 2, divide: 0.001, minor: 4, ticks: "in", base: "e" });
     expect(patch.yLim).toEqual([1, 100]);
     expect(patch.axisLabelStyles?.y?.size).toBe(14);
+  });
+
+  it("edits the axis title size in pt (like Label size) while storing px, losslessly", () => {
+    const view = { ...defaultPlotView(), axisLabelStyles: { y: { size: 14.5 } } };
+    const d = axisDraft(view, "y");
+    expect(d.titleSize).toBe("10.88");
+    expect(axisPatch(view, "y", d).axisLabelStyles?.y?.size).toBe(14.5);
   });
 
   it("validates before Apply", () => {

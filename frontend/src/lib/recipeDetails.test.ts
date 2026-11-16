@@ -298,7 +298,7 @@ describe("recipeDetails — 'Available actions' is derived, never hardcoded", ()
     const sources = buildSources();
     const expected: Record<string, string> = {
       analysis: "Open in Pipeline",
-      peak: "Open in Peak Analyzer",
+      peak: "Open in Peak analyzer",
       graph: "Open in Figure Builder",
       fitModel: "Open in Curve Fit",
     };

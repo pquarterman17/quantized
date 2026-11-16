@@ -1,4 +1,4 @@
-// Peak Analyzer recipe v2 — the model-fit section (audit P2.4 slice 3). Pure.
+// Peak analyzer recipe v2 — the model-fit section (audit P2.4 slice 3). Pure.
 // A PeakRecipe v1 (lib/peakwizard.ts) stored range / baseline / find / model /
 // report; the mixed-shape fit engine's configuration (engine, per-peak shapes,
 // background, the parameter table) lived only in memory. This module is that

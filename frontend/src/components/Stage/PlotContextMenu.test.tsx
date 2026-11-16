@@ -201,7 +201,7 @@ describe("PlotContextMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () 
     expect(useApp.getState().qfitRoiFor).toBeNull();
   });
 
-  it("hands the selected rows' x-range to the Peak Analyzer and opens it", () => {
+  it("hands the selected rows' x-range to the Peak analyzer and opens it", () => {
     useApp.setState({ selection: { datasetId: "d1", rows: [1, 2, 3] } });
     const onClose = open();
     fireEvent.click(fitEntry());

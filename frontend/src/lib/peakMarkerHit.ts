@@ -1,5 +1,5 @@
 // Peak-workshop click-on-plot marker editing (interaction plan item 5,
-// introduced for Peak Analyzer and shared by the simpler Peaks panel): hit-test candidate markers
+// introduced for Peak analyzer and shared by the simpler Peaks panel): hit-test candidate markers
 // against a plot click, in PIXEL space so the tolerance stays constant across
 // zoom levels. Rides the shared point-gesture core (lib/pointGesture) for the
 // pixel-frame conversion + nearest-point hit test — this file was the template

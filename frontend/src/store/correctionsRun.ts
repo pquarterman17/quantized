@@ -79,7 +79,7 @@ export async function runApplyCorrections(
         to: recalcNodes.dataset(id),
       });
       if (reason) {
-        get().setStatus(`Can't set "${bgDs!.name}" as the background: ${reason}`);
+        get().setStatus(`Can't set "${bgDs!.name}" as the background: ${reason}`, "danger");
         return false;
       }
     }

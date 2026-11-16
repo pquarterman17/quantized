@@ -143,7 +143,7 @@ function StyleRow({
           </Checkbox>
         </div>
 
-        <span className="qzk-field-lbl">Color</span>
+        <span className="qzk-field-lbl">Colour</span>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {PALETTE.map((n) => {
             const token = `--series-${n}`;

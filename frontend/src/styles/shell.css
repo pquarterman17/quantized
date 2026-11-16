@@ -388,7 +388,7 @@ body {
 .qzk-ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-ds-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .qzk-ds-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
-/* Peak Analyzer's step hints are sentences, not one-line metadata: they wrap
+/* Peak analyzer's step hints are sentences, not one-line metadata: they wrap
    in its narrow window rather than ending in an ellipsis (re-audit #16). */
 .qzk-peakwizard div.qzk-ds-meta { white-space: normal; }
 /* Modifier for MESSAGE text (role="alert" / role="note") that borrows
@@ -1319,7 +1319,7 @@ body {
 .qzk-marker { position: absolute; pointer-events: none; }
 .qzk-marker .v { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--capture); background: var(--glass); padding: 1px 5px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); white-space: nowrap; }
 
-/* Peak Analyzer wizard (#31): the step chips. */
+/* Peak analyzer wizard (#31): the step chips. */
 .qzk-wizard-steps { display: flex; flex-wrap: wrap; gap: 4px; }
 .qzk-wizard-step { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: pointer; color: var(--text-dim); font-size: var(--type-label); }
 .qzk-wizard-step.qzk-active { border-color: var(--accent); color: var(--text); }

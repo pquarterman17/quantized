@@ -1,4 +1,4 @@
-// Peak Analyzer batch — the sortable uncertainty / diagnostic table (audit
+// Peak analyzer batch — the sortable uncertainty / diagnostic table (audit
 // P2.4 slice 4). Rows come from ./peakBatchRows (pure): one per (dataset,
 // peak), a failed dataset as one row with its reason. Every missing error is
 // "± —" whose tooltip says WHY (./modelFitReasons); the objective column

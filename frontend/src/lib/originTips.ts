@@ -59,7 +59,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "peak-analyzer",
     origin: "Peak Analyzer (baseline → find → fit)",
     quantized:
-      "Analyze ▸ Peak Analyzer is the same guided workflow; or use Find peaks (P) and Baseline / background as standalone steps.",
+      "Analyze ▸ Peak analyzer is the same guided workflow; or use Find peaks (P) and Baseline / background as standalone steps.",
     keywords: "peak analyzer baseline find fit deconvolution",
   },
   {
@@ -136,7 +136,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "mask-points",
     origin: "Mask data points (Regional Mask tool)",
     quantized:
-      "The plot toolbar's Lasso Mask masks the points inside an outline (Shift unmasks); right-click a point for Mask / Unmask this point. Masked rows are left out of fits and exports.",
+      "The plot toolbar's Lasso mask masks the points inside an outline (Shift unmasks); right-click a point for Mask / Unmask this point. Masked rows are left out of fits and exports.",
     keywords: "mask unmask regional mask lasso exclude points data reader",
   },
   {

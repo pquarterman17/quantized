@@ -1,4 +1,4 @@
-// Peak Analyzer wizard — the small field helpers every step body uses (the
+// Peak analyzer wizard — the small field helpers every step body uses (the
 // labelled numeric field and the clamp router), moved out of steps.tsx when
 // step ① got its own module (StepRangeBaseline.tsx) so both can share them.
 

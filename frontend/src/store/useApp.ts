@@ -189,6 +189,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // pipeline view's (#6) OWN state — declared on MacroPipelineSlice
   // (store/macroPipeline.ts); see AppState's extends list.
   status: string;
+  /** The `status` text that was set as a failure (`setStatus(msg, "danger")`): the status-bar dot is
+   *  red only while `status` still equals it, so a later direct `set({ status })` can't leave it stale. */
+  statusDanger: string | null;
 
   /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
    *  the caller (e.g. `importPaths`) so this add folds into that batch's
@@ -248,7 +251,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // overlay and map/contour setters — are declared on WorkshopFlagsSlice.)
   // (startMacro … setPipelineRunning — the macro recorder + pipeline view's
   // actions — are declared on MacroPipelineSlice; see store/macroPipeline.ts.)
-  setStatus: (status: string) => void;
+  setStatus: (status: string, tone?: "ok" | "danger") => void;
 }
 
 // Appearance/behaviour prefs persistence (the `qz.prefs` blob) lives in
@@ -338,6 +341,7 @@ export const useApp = create<AppState>((set, get) => ({
   // (macroRecording / macroSteps / pipelineRunning initialized by
   // createMacroPipelineSlice above, spread into this literal.)
   status: "starting…",
+  statusDanger: null,
 
   addDataset: (ds, historyToken, intoFocused) => {
     // MAIN_PLAN #9: the single entry point for import/paste/demo/merge — one
@@ -356,7 +360,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({ history: s.history.slice(0, s.history.findIndex((e) => e.seq === step) + 1 || s.history.length) }));
     const defaults = datasetViewDefaults(ds, undefined, {}, { outgoing: get(), win: get().focusedWindowId });
     set((s) => ({
-      datasets: [...s.datasets, ds],
+      datasets: [...s.datasets, ds], statusDanger: null, // new data supersedes a stale failure marker (UX-Q)
       activeId: ds.id,
       selectedIds: [ds.id], // a fresh import is the sole selection
       // L0.25 coherence (retrospective-audit fix): a fresh dataset selection
@@ -453,7 +457,7 @@ export const useApp = create<AppState>((set, get) => ({
   // moved to createRecalcEngineSlice, spread into this literal above.)
   // (startMacro … setPipelineRunning bodies moved to
   // createMacroPipelineSlice, spread into this literal above.)
-  setStatus: (status) => set({ status }),
+  setStatus: (status, tone = "ok") => set({ status, statusDanger: tone === "danger" ? status : null }),
 }));
 
 // Apply the persisted prefs to <html> + the number formatter on load (set* only

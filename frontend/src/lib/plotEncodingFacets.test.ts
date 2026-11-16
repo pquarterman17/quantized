@@ -206,7 +206,7 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
     const r = { datasetId: "lone", channel: 0 };
     const zones = { ...SPEC.zones, x: r, y: [], facet: r, color: null, symbol: null, label: r };
     expect(encodingNotes(ds, { ...SPEC, zones })).toEqual([
-      "Color, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.",
+      "Colour, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.",
     ]);
     expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, label: null } })).toEqual([]); // nothing assigned
     expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, y: [r] } })).toEqual([]); // explicit Y

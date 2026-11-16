@@ -265,7 +265,7 @@ describe("Williamson-Hall — the previous result never outlives its inputs (rev
   });
 });
 
-describe("Williamson-Hall — a table the Peak Analyzer published (model fit, with errors)", () => {
+describe("Williamson-Hall — a table the Peak analyzer published (model fit, with errors)", () => {
   it("loads its peaks, sends NO weights (unweighted, golden path), and says the errors are unused", async () => {
     const res = modelFitResponse();
     res.peaks = res.peaks.map((p, i) => ({ ...p, center: [30.1, 43.2][i], fwhm: [0.2, 0.25][i] }));
@@ -274,7 +274,7 @@ describe("Williamson-Hall — a table the Peak Analyzer published (model fit, wi
     }, null);
     mount({ ...t, provenance: { ...t.provenance, fingerprint: null, xLabel: "2-Theta", xUnit: "deg" } });
     fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (2)" }));
-    expect(screen.getByText(/Peak Analyzer model fit.*per-peak errors not used \(unweighted fit\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Peak analyzer model fit.*per-peak errors not used \(unweighted fit\)/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Fit" }));
     await screen.findByText("Grain size");
     expect(williamsonHall).toHaveBeenCalledWith({
@@ -286,12 +286,12 @@ describe("Williamson-Hall — a table the Peak Analyzer published (model fit, wi
     });
   });
 
-  it("a stale model-fit table names the Peak Analyzer as the remedy, not the Peaks workshop", () => {
+  it("a stale model-fit table names the Peak analyzer as the remedy, not the Peaks workshop", () => {
     const t = peakTableFromModelFit(modelFitResponse(), { id: "d1", name: "film.xrdml", data: scan }, {
       xKey: null, recipe: null, baseline: "none", bgAtCenter: [5, 5], fingerprint: "fp-of-other-data",
     }, null);
     mount({ ...t, provenance: { ...t.provenance, xLabel: "2-Theta", xUnit: "deg" } });
-    expect(screen.getByText(/re-fit the peaks in the Peak Analyzer and publish again/)).toBeInTheDocument();
+    expect(screen.getByText(/re-fit the peaks in the Peak analyzer and publish again/)).toBeInTheDocument();
     expect(screen.queryByText(/Peaks workshop$/)).not.toBeInTheDocument();
   });
 });

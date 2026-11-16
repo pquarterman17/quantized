@@ -155,7 +155,7 @@ describe("capability gating happens BEFORE anything is touched", () => {
 describe("apply vs open — two different verbs, labelled apart", () => {
   it("opens the owning workshop for the four that cannot be applied here", async () => {
     expect(primaryActionLabel("analysis")).toBe("Open in Pipeline");
-    expect(primaryActionLabel("peak")).toBe("Open in Peak Analyzer");
+    expect(primaryActionLabel("peak")).toBe("Open in Peak analyzer");
     expect(primaryActionLabel("graph")).toBe("Open in Figure Builder");
     expect(primaryActionLabel("fitModel")).toBe("Open in Curve Fit");
     expect(primaryActionLabel("plot")).toBe("Apply");

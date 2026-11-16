@@ -4,7 +4,7 @@
 // WHY. `lib/plotdata.composeDisplayPayload` splices the fit / baseline / peak
 // overlays onto the drawn payload after the plotted channels, each with a
 // legend entry ("fit", "baseline", "peaks"). The export request never carried
-// them, so a Peak Analyzer model fit, a peak-find result or a reflectivity fit
+// them, so a Peak analyzer model fit, a peak-find result or a reflectivity fit
 // exported as bare data (round-3 plot audit: an XRD pattern with 14 peak
 // markers and a legend entry on screen, none of either in the SVG). The ROI
 // differentiate preview (`derivOverlay`, a secondary-axis gadget preview) is

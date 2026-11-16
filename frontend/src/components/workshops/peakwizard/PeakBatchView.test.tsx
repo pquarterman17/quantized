@@ -1,4 +1,4 @@
-// Peak Analyzer "Batch" mode end to end over a stubbed backend (audit P2.4
+// Peak analyzer "Batch" mode end to end over a stubbed backend (audit P2.4
 // slice 4): prepare → one job → poll → table; progress n/N; per-dataset
 // failure isolation; cancel mid-fit through the job API; a failed job; the
 // table's null-stderr reasons and SSR/χ² labels; CSV; "Add as table" with

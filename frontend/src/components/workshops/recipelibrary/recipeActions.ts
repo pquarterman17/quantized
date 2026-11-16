@@ -83,7 +83,7 @@ function plotRecipeFor(ref: RecipeRef) {
 
 /** Which workshop owns a kind — the honest meaning of "open" for the four
  *  that have no in-Library apply. Applying a peak recipe means loading it into
- *  the Peak Analyzer and stepping through; the Library's job is to get the
+ *  the Peak analyzer and stepping through; the Library's job is to get the
  *  user there, not to pretend it can run it. */
 const WORKSHOP_OPENERS: Record<NameKeyedKind, { label: string; open: () => void }> = {
   analysis: { label: NAME_KEYED_WORKSHOP_LABEL.analysis, open: () => useApp.getState().setPipelineOpen(true) },

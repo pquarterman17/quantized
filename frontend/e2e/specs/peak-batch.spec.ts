@@ -1,4 +1,4 @@
-// Peak Analyzer batch — a saved recipe run over three datasets against the
+// Peak analyzer batch — a saved recipe run over three datasets against the
 // REAL backend (PRIMARY_SOFTWARE_AUDIT_PLAN P2.4 slice 4): the client
 // prepares each dataset (range, find, the recipe's stored per-peak shapes),
 // ONE job on the queue fits them (POST /api/peaks/model-fit-batch, polled
@@ -42,7 +42,7 @@ const RECIPE = {
   fit: { engine: "model", shapes: [null, "lorentzian"], background: null, params: {}, shareFwhm: null, shareVary: {} },
 };
 
-test.describe("Peak Analyzer batch", () => {
+test.describe("Peak analyzer batch", () => {
   test("runs a saved recipe over three datasets and tabulates centres ± errors, one bad dataset isolated", async ({ page }) => {
     test.setTimeout(90_000);
     await gotoApp(page);
@@ -64,8 +64,8 @@ test.describe("Peak Analyzer batch", () => {
     }, first.id);
     await page.evaluate((r) => localStorage.setItem("qz.peakRecipes", JSON.stringify([r])), RECIPE);
 
-    await runPaletteCommand(page, "Peak Analyzer");
-    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
+    await runPaletteCommand(page, "Peak analyzer");
+    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak analyzer", { exact: true }) });
     await expect(panel).toBeVisible();
     await panel.getByRole("tab", { name: "Batch" }).click();
     await expect(panel.getByRole("combobox", { name: "batch recipe" })).toHaveValue("e2e batch");

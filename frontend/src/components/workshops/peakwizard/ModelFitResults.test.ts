@@ -1,6 +1,6 @@
 // The per-peak table's error formatting: two significant figures (an
 // uncertainty's own precision) so value-over-error columns fit the docked
-// 420 px Peak Analyzer; the full value stays in the tooltip.
+// 420 px Peak analyzer; the full value stays in the tooltip.
 
 import { describe, expect, it } from "vitest";
 

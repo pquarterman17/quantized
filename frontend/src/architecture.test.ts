@@ -97,7 +97,6 @@ describe("workshop dataset identity", () => {
     "/components/workshops/reflectivity/useReflectivity.ts",
     "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
-    "/components/Library/Library.tsx",
     "/components/Library/folderOps.ts",
     "/components/Stage/worksheet/useWorksheetView.ts",
     "/components/workshops/database/SqliteQueryDialog.tsx",
@@ -2309,6 +2308,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   shortcutsOpen: "shortcuts sheet visibility; UI state",
   textFormatHelpOpen: "text-format help visibility; UI state",
   status: "status-bar text; transient announcement, not data",
+  statusDanger: "status-bar failure marker for the current status text; transient, not data",
 
   // persisted user preferences (own localStorage lifecycle via store/prefs.ts, not project edits)
   theme: "prefs",
