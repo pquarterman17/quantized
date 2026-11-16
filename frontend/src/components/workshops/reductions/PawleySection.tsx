@@ -33,7 +33,7 @@ const pct = (v: number | null): string => (v == null ? "—" : `${(100 * v).toFi
 export default function PawleySection() {
   const s = usePawley();
   if (!s.active) {
-    return <div className="qzk-ds-meta" style={hint}>Select a powder XRD dataset (2θ vs intensity) first.</div>;
+    return <div className="qzk-helptext" style={hint}>Select a powder XRD dataset (2θ vs intensity) first.</div>;
   }
 
   const grid = {
@@ -97,7 +97,7 @@ export default function PawleySection() {
         <input type="checkbox" checked={s.refineCell} onChange={(e) => s.setRefineCell(e.target.checked)} />
         Refine unit cell
       </label>
-      <div className="qzk-ds-meta" style={hint}>
+      <div className="qzk-helptext" style={hint}>
         Local refinement: start close to the true cell. Angles are held fixed.
       </div>
 

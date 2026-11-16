@@ -139,7 +139,7 @@ export default function PipelinePanel() {
       </section>
 
       {p.steps.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           No steps yet — turn on the macro recorder (Inspector ▸ Macro recorder) and work
           normally, or add an expression step below.
         </div>
@@ -202,7 +202,7 @@ export default function PipelinePanel() {
                   </div>
                 )}
                 {selected === s.id && p.running && (
-                  <div className="qzk-ds-meta qzk-step-note">Editing is paused while this run finishes.</div>
+                  <div className="qzk-helptext qzk-step-note">Editing is paused while this run finishes.</div>
                 )}
                 {selected === s.id && !p.running && (
                   <StepEditor

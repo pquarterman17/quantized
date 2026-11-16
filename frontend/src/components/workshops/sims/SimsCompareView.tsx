@@ -32,7 +32,7 @@ function Preview({ r }: { r: SimsCompareState }) {
         nothing interpolated)
       </div>
       {r.previewOnly && (
-        <div className="qzk-ds-meta" style={{ marginTop: 4, ...faint }}>
+        <div className="qzk-helptext" style={{ marginTop: 4, ...faint }}>
           Previewed on the loaded rows; the full data are compared when you create.
         </div>
       )}

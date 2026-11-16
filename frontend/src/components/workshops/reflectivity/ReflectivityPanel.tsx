@@ -140,7 +140,7 @@ export default function ReflectivityPanel() {
                   {error}
                 </div>
               )}
-              <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
+              <div className="qzk-helptext" style={{ marginTop: 8, color: "var(--text-faint)" }}>
                 Adds the model to the library — view it on a log-Y axis.
               </div>
             </>

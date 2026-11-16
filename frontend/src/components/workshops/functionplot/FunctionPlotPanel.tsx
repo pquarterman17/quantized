@@ -70,7 +70,7 @@ export default function FunctionPlotPanel() {
         </div>
       )}
       {editing && !m.problem && (
-        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
           Editing live: graphs holding this curve follow.
         </div>
       )}

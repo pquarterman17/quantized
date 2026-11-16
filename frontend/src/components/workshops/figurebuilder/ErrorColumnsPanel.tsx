@@ -84,7 +84,7 @@ export default function ErrorColumnsPanel({
     // Tab stop.
     <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {bindings.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           No error columns bound. Detect them from the column names, or add one below.
         </div>
       ) : (

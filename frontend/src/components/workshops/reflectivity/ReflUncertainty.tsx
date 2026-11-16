@@ -133,7 +133,7 @@ export default function ReflUncertainty({ dream, record }: { dream: ReflDreamSta
             </Button>
           </div>
           {!dream.hasBands(record) && (
-            <div className="qzk-ds-meta" style={FAINT}>
+            <div className="qzk-helptext" style={FAINT}>
               The stored estimate keeps intervals and R-hat, not the bands: re-estimate to plot them.
             </div>
           )}

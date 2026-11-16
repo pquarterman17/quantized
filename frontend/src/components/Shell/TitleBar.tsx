@@ -1,6 +1,7 @@
 // App title bar: brand · centred document title · panel + theme toggles.
 // Native window owns OS chrome (no traffic-light dots), matching fermiviewer.
 
+import * as GLYPHS from "../../lib/glyphs";
 import { useApp } from "../../store/useApp";
 import { useShownDataset } from "../../store/useShownDataset";
 import AppearanceMenu from "./AppearanceMenu";
@@ -27,7 +28,7 @@ export default function TitleBar() {
     <header className="qzk-titlebar">
       <div className="qzk-brand">
         <span className="ic" style={{ color: "var(--accent)" }}>
-          ⎓
+          {GLYPHS.brand}
         </span>
         <span className="nm">Quantized</span>
         {currentProject && (
@@ -48,7 +49,7 @@ export default function TitleBar() {
           title="DiraCulator — materials calculators"
           onClick={() => setCalculatorsOpen(true)}
         >
-          √
+          {GLYPHS.calculators}
         </button>
         <button
           aria-label="Theme"
@@ -56,14 +57,14 @@ export default function TitleBar() {
           title="Toggle theme"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          {theme === "dark" ? "☾" : "☀"}
+          {theme === "dark" ? GLYPHS.themeDark : GLYPHS.themeLight}
         </button>
         <AppearanceMenu />
         <button aria-label="Library" className="qz-icon-btn" title="Toggle library" onClick={toggleLeft}>
-          ▤
+          {GLYPHS.libraryToggle}
         </button>
         <button aria-label="Inspector" className="qz-icon-btn" title="Toggle inspector" onClick={toggleRight}>
-          ▥
+          {GLYPHS.inspectorToggle}
         </button>
       </div>
     </header>

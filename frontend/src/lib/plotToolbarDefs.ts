@@ -20,6 +20,7 @@
 
 import type { DrawShapeKind } from "../components/Stage/useShapeDraw";
 import type { PlotTool } from "./uplotOpts";
+import * as GLYPHS from "./glyphs";
 
 export interface ToolDef {
   id: PlotTool;
@@ -46,26 +47,26 @@ export interface ShapeDef {
 // (MAIN #18, owner directive from live testing) — a plain arrow cursor for
 // selecting/arranging plot objects; zoom/pan move or reshape the view. ──
 export const NAVIGATE_TOOLS: ToolDef[] = [
-  { id: "pointer", glyph: "➤", name: "Pointer", desc: "Select and arrange plot objects" },
-  { id: "zoom", glyph: "⛶", name: "Zoom", desc: "Drag a box to zoom into a region" },
-  { id: "pan", glyph: "✥", name: "Pan", desc: "Drag to pan the view" },
+  { id: "pointer", glyph: GLYPHS.toolPointer, name: "Pointer", desc: "Select and arrange plot objects" },
+  { id: "zoom", glyph: GLYPHS.toolZoom, name: "Zoom", desc: "Drag a box to zoom into a region" },
+  { id: "pan", glyph: GLYPHS.toolPan, name: "Pan", desc: "Drag to pan the view" },
 ];
 
 // ── Inspect: read values off the plot without transforming it. ──
 export const INSPECT_TOOLS: ToolDef[] = [
-  { id: "cursor", glyph: "✛", name: "Data cursor", desc: "Click a point to read its coordinates" },
-  { id: "measure", glyph: "∡", name: "Measure", desc: "Drag between two points for Δx, Δy, slope" },
-  { id: "stats", glyph: "Σ", name: "Region stats", desc: "Drag a range to compute summary statistics" },
-  { id: "select", glyph: "⬚", name: "Select rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
-  { id: "lasso", glyph: "◌", name: "Lasso mask", desc: "Drag an outline around points to mask them; Shift unmasks" },
+  { id: "cursor", glyph: GLYPHS.toolCursor, name: "Data cursor", desc: "Click a point to read its coordinates" },
+  { id: "measure", glyph: GLYPHS.toolMeasure, name: "Measure", desc: "Drag between two points for Δx, Δy, slope" },
+  { id: "stats", glyph: GLYPHS.toolStats, name: "Region stats", desc: "Drag a range to compute summary statistics" },
+  { id: "select", glyph: GLYPHS.toolSelect, name: "Select rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
+  { id: "lasso", glyph: GLYPHS.toolLasso, name: "Lasso mask", desc: "Drag an outline around points to mask them; Shift unmasks" },
 ];
 
 // ── Analyze: region tools whose result persists as a chip (∫ / ∩) or a live
 // gadget overlay. ──
 export const ANALYZE_TOOLS: ToolDef[] = [
-  { id: "integ", glyph: "∫", name: "Integrate", desc: "Drag a range for the area under the curve" },
-  { id: "fwhm", glyph: "∩", name: "Peak / FWHM", desc: "Drag a range to measure a peak's width" },
-  { id: "qfit", glyph: "≈", name: "Live fit / quick analysis", desc: "Drag a region or place cursors for a live fit or analysis" },
+  { id: "integ", glyph: GLYPHS.toolIntegrate, name: "Integrate", desc: "Drag a range for the area under the curve" },
+  { id: "fwhm", glyph: GLYPHS.toolFwhm, name: "Peak / FWHM", desc: "Drag a range to measure a peak's width" },
+  { id: "qfit", glyph: GLYPHS.toolQuickFit, name: "Live fit / quick analysis", desc: "Drag a region or place cursors for a live fit or analysis" },
 ];
 
 // The Baseline workshop's "Fit from region" (useBaseline.pickRegion) arms
@@ -74,7 +75,7 @@ export const ANALYZE_TOOLS: ToolDef[] = [
 // Mirrors PlotReadouts' existing resting text for this tool.
 const REGION_TOOL: ToolDef = {
   id: "region",
-  glyph: "▭",
+  glyph: GLYPHS.toolRegion,
   name: "Background region",
   desc: "Drag a background range on x for baseline fitting; drag a taller box to limit y too",
 };
@@ -96,11 +97,11 @@ export function toolDefFor(tool: PlotTool): ToolDef | undefined {
 // user discovers every drawable mark, including "Text box" (not a Shape
 // kind — see useShapeDraw's header). ──
 export const SHAPE_TOOLS: ShapeDef[] = [
-  { kind: "arrow", glyph: "↗", label: "Arrow" },
-  { kind: "line", glyph: "╱", label: "Line" },
-  { kind: "rect", glyph: "▭", label: "Rectangle" },
-  { kind: "ellipse", glyph: "◯", label: "Ellipse" },
-  { kind: "textbox", glyph: "▤", label: "Text box" },
+  { kind: "arrow", glyph: GLYPHS.shapeArrow, label: "Arrow" },
+  { kind: "line", glyph: GLYPHS.shapeLine, label: "Line" },
+  { kind: "rect", glyph: GLYPHS.shapeRect, label: "Rectangle" },
+  { kind: "ellipse", glyph: GLYPHS.shapeEllipse, label: "Ellipse" },
+  { kind: "textbox", glyph: GLYPHS.shapeTextbox, label: "Text box" },
 ];
 
 // ── View: whole-plot view actions + alternate render modes. Each is a named
@@ -108,37 +109,37 @@ export const SHAPE_TOOLS: ShapeDef[] = [
 // PlotToolbar.tsx, so array-index lookups would be more fragile than a name. ──
 export const RESET_VIEW: ActionDef = {
   id: "reset",
-  glyph: "⊡",
+  glyph: GLYPHS.actionReset,
   name: "Reset view",
   desc: "Restore the default zoom and pan",
 };
 export const SMART_SCALE: ActionDef = {
   id: "smartScale",
-  glyph: "⊿",
+  glyph: GLYPHS.actionSmartScale,
   name: "Smart auto-scale",
   desc: "Pick linear or log scale from the data's range",
 };
 export const STACK_MODE: ActionDef = {
   id: "stack",
-  glyph: "▤",
+  glyph: GLYPHS.stackedPanels,
   name: "Stack channels",
   desc: "Show each channel in its own panel",
 };
 export const INSET_MODE: ActionDef = {
   id: "inset",
-  glyph: "⊕",
+  glyph: GLYPHS.actionInset,
   name: "Magnifier inset",
   desc: "Show a zoomed inset over the plot",
 };
 export const POLAR_MODE: ActionDef = {
   id: "polar",
-  glyph: "✺",
+  glyph: GLYPHS.actionPolar,
   name: "Polar plot",
   desc: "Render angle vs. radius",
 };
 export const STAT_MODE: ActionDef = {
   id: "statMode",
-  glyph: "▦",
+  glyph: GLYPHS.actionStatMode,
   name: "Statistics view",
   desc: "Show box, violin, Q-Q, or histogram views",
 };
@@ -146,25 +147,25 @@ export const STAT_MODE: ActionDef = {
 // ── Export: get the plot or its data out. ──
 export const SAVE_PNG: ActionDef = {
   id: "savePng",
-  glyph: "⤓",
+  glyph: GLYPHS.actionSavePng,
   name: "Save PNG",
   desc: "Export the plot as a PNG image",
 };
 export const COPY_DATA: ActionDef = {
   id: "copyData",
-  glyph: "⧉",
+  glyph: GLYPHS.actionCopyData,
   name: "Copy data",
   desc: "Copy the plotted data as tab-separated values",
 };
 export const COPY_FIGURE: ActionDef = {
   id: "copyFigure",
-  glyph: "⎘",
+  glyph: GLYPHS.actionCopyFigure,
   name: "Copy figure",
   desc: "Copy the publication figure (300 DPI) for Office; adds vector SVG where the browser allows",
 };
 export const SNAPSHOT_WINDOW: ActionDef = {
   id: "snapshotWindow",
-  glyph: "⊞",
+  glyph: GLYPHS.newWindow,
   name: "Snapshot window",
   desc: "Freeze the plot into a new compare window",
 };

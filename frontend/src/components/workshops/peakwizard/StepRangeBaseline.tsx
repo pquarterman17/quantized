@@ -92,7 +92,7 @@ export function StepRangeBaseline({ w }: { w: PeakWizardState }) {
         </div>
       )}
       {b.method !== "none" && !w.baselineBusy && !w.baselineError && (
-        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
+        <div className="qzk-helptext" style={{ ...faint, marginTop: 6 }}>
           Baseline previewed on the plot; later steps fit the subtracted signal.
         </div>
       )}

@@ -56,7 +56,7 @@ export default function ElementsTab() {
 
   if (error) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 12, color: "var(--text-faint)" }}>
         Element data unavailable (backend offline).
       </div>
     );

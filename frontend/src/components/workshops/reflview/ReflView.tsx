@@ -26,7 +26,7 @@ export default function ReflView() {
           <label className="qzk-field">
             <span>Reflectivity</span>
             <select
-              className="qz-input"
+              className="qz-select"
               value={v.reflId ?? ""}
               onChange={(e) => v.setReflId(e.target.value)}
             >
@@ -41,7 +41,7 @@ export default function ReflView() {
           <label className="qzk-field">
             <span>SLD profile</span>
             <select
-              className="qz-input"
+              className="qz-select"
               value={v.profileId ?? ""}
               onChange={(e) => v.setProfileId(e.target.value)}
             >

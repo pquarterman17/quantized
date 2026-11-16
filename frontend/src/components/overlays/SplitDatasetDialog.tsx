@@ -267,7 +267,7 @@ export default function SplitDatasetDialog() {
               {`${dataset.name}: ${dataset.data.time.length} rows × ${dataset.data.labels.length} columns → ${groups.length} datasets; this one: ${child.time.length} rows × ${child.labels.length} columns`}
             </div>
             {dataset.pending && (
-              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+              <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
                 Preview only: counted on the loaded preview of a book that is still loading; the full data is split when you confirm.
               </div>
             )}

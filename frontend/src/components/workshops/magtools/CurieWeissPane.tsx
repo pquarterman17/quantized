@@ -19,7 +19,7 @@ export default function CurieWeissPane() {
 
   return (
     <div style={{ marginTop: 12 }}>
-      <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginBottom: 10 }}>
+      <div className="qzk-helptext" style={{ color: "var(--text-faint)", marginBottom: 10 }}>
         Fits 1/χ against temperature and creates an editable inverse-susceptibility worksheet.
         Effective moment requires molar χ in cm³/mol.
       </div>
@@ -67,7 +67,7 @@ export default function CurieWeissPane() {
         <NumberField id="cw-fit-max" value={c.fitMax} width={100} unit="K"
           onChange={(value) => c.setFitMax(Number(value))} />
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
         Defaults to the upper 40% of the temperature span (at least three rows); adjust this to the visibly linear paramagnetic region.
       </div>
 

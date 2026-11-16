@@ -145,7 +145,7 @@ export default function FigurePageView() {
             </div>
           ) : (
             !p.everSaved && (
-              <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--text-dim)" }}>
+              <div role="note" className="qzk-helptext qzk-msg" style={{ color: "var(--text-dim)" }}>
                 Not yet saved — closing without saving discards this page.
               </div>
             )

@@ -23,7 +23,7 @@ function MetaFactorsWorkshop() {
   return (
     <ToolWindow id="metafactors" title="Metadata → factors" width={420} onClose={m.close}>
       {!m.datasets.length ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Load a dataset first.</div>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Load a dataset first.</div>
       ) : (
         <>
           <label className="qzk-field-lbl">Datasets</label>

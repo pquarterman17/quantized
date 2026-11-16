@@ -68,7 +68,7 @@ export default function ShapesCard() {
           <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span
               className="qz-k"
-              style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
               onClick={() => setSelectedShapeId(sh.id === selectedShapeId ? null : sh.id)}
             >
               <span aria-hidden="true">{KIND_GLYPH[sh.kind] ?? "?"}</span>

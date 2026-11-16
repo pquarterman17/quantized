@@ -253,7 +253,7 @@ export default function PeaksPanel() {
     <ToolWindow id="peaks" title="Peaks" width={360} onClose={close}>
       <PeakAnalysisInputs params={find.params} />
       {!active && (
-        <div className="qzk-ds-meta" style={faint}>
+        <div className="qzk-helptext" style={faint}>
           Select a dataset to find peaks.
         </div>
       )}

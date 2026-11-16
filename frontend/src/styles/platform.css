@@ -39,6 +39,12 @@
   max-height: 70vh;
   overflow-y: auto;
 }
+/* Modal panels are OPAQUE: the translucent --glass let the plot's ticks and
+   curves read through a dialog's form (worst in the light theme). */
+.qzk-glass.qz-dialog, .qz-dialog {
+  background: var(--surface-1);
+  backdrop-filter: none;
+}
 .qz-dialog h2 {
   margin: 0 0 var(--pad);
   font-size: var(--font-size);
@@ -433,7 +439,6 @@
   border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-border));
   font-family: inherit;
   font-size: inherit;
-  cursor: pointer;
 }
 .qzk-toast-action:hover {
   background: var(--accent-soft);
@@ -477,7 +482,6 @@
   color: inherit;
   font-family: inherit;
   font-size: inherit;
-  cursor: pointer;
 }
 .qzk-lazy-fail button:hover {
   background: color-mix(in srgb, var(--danger) 16%, transparent);

@@ -80,7 +80,7 @@ export default function FilmStackTab() {
             Evaluate stack
           </Button>
         </div>
-        <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+        <div className="qzk-helptext" style={{ marginTop: 6 }}>
           The first row sits on the substrate. Blank c means c = a. Each layer matches the in-plane lattice
           of the one below as grown (cube-on-cube, scalar a); a layer thicker than its Matthews–Blakeslee h_c
           is shown fully relaxed, a simple limit. h_c uses 60° dislocations with b = a/√2 (FCC-type slip), so

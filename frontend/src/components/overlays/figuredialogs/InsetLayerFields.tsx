@@ -77,7 +77,7 @@ export default function InsetLayerFields({
   return (
     <>
       <h3 style={{ margin: "4px 0" }}>Curves</h3>
-      {draft.curves.length === 0 && <p className="qzk-ds-meta" style={{ margin: 0 }}>No curves yet — add one below.</p>}
+      {draft.curves.length === 0 && <p className="qzk-helptext" style={{ margin: 0 }}>No curves yet — add one below.</p>}
       <ol style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 4 }}>
         {draft.curves.map((c, i) => (
           <li key={`${c.datasetId}-${c.xKey}-${c.yKey}-${i}`} style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -88,7 +88,7 @@ export default function InsetLayerFields({
         ))}
       </ol>
       {sources.length === 0 ? (
-        <p className="qzk-ds-meta">No dataset to take a curve from.</p>
+        <p className="qzk-helptext">No dataset to take a curve from.</p>
       ) : (
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <CurveSourcePicker label="New curve" sources={sources} value={adding} onChange={pick} />

@@ -91,7 +91,7 @@ export default function PeakWizardPanel() {
         </div>
       )}
       {mode === "batch" ? null : !w.active ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to analyze.
         </div>
       ) : (
