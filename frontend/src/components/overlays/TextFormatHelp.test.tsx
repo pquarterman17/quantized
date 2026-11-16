@@ -161,12 +161,12 @@ describe("Help-menu command registry entry (GOTO #11)", () => {
   // uses. (Extracted from App.tsx, MAIN_PLAN #1; Help moved from
   // appCommands.ts to commands/uiCommands.ts when that module was
   // decomposed by menu domain, 2026-07-17. The overlay mounts live in
-  // AppOverlays.tsx.)
+  // AppOverlayPanels.tsx.)
   const commandsSrc = Object.values(
     import.meta.glob("../../commands/uiCommands.ts", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
   const overlaysSrc = Object.values(
-    import.meta.glob("../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),
+    import.meta.glob("../../AppOverlayPanels.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
 
   it("commands/uiCommands.ts registers the Text formatting command in the Help group", () => {
@@ -175,7 +175,7 @@ describe("Help-menu command registry entry (GOTO #11)", () => {
     expect(commandsSrc).toContain("setTextFormatHelpOpen(true)");
   });
 
-  it("AppOverlays.tsx mounts the dialog", () => {
+  it("AppOverlayPanels.tsx mounts the dialog", () => {
     expect(overlaysSrc).toContain("<TextFormatHelp />");
   });
 });
