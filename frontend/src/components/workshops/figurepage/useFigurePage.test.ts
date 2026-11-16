@@ -1404,3 +1404,43 @@ describe("figure page export/copy cancel (P3.4)", () => {
     expect(usePendingOps.getState().ops).toEqual([]);
   });
 });
+
+// UX8-C: four datasets offered ONE source (the one open window).
+describe("useFigurePage — datasets as page sources", () => {
+  it("lists every dataset; picking one reuses its plot window, else opens one unfocused", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data: DATA },
+        { id: "d2", name: "other.dat", data: DATA },
+      ],
+    });
+    const { result } = renderHook(() => useFigurePage());
+    expect(result.current.datasetSources).toEqual([
+      { id: "d1", name: "scan.dat" },
+      { id: "d2", name: "other.dat" },
+    ]);
+    act(() => result.current.assignDataset("d1"));
+    expect(result.current.slots[0].source).toMatchObject({ kind: "window", id: "w1" });
+    const before = useApp.getState().plotWindows.length;
+    act(() => result.current.setSelected(1));
+    act(() => result.current.assignDataset("d2"));
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(before + 1);
+    const opened = s.plotWindows.find((w) => w.kind === "plot" && w.datasetId === "d2")!;
+    expect(result.current.slots[1].source).toMatchObject({ kind: "window", id: opened.id });
+    expect(s.focusedWindowId).toBeNull(); // the page composer keeps the stage as it was
+    expect(result.current.sourceStatuses[1]).toEqual({ status: "ok", lifecycle: "live" });
+  });
+
+  it("with every slot full and none selected, opens no window", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: DATA }, { id: "d2", name: "other.dat", data: DATA }] });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGrid(1, 1));
+    act(() => result.current.assignDataset("d1"));
+    act(() => result.current.setSelected(null));
+    const before = useApp.getState().plotWindows.length;
+    act(() => result.current.assignDataset("d2"));
+    expect(useApp.getState().plotWindows).toHaveLength(before);
+    expect(result.current.slots[0].source).toMatchObject({ id: "w1" });
+  });
+});

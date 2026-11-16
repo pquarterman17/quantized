@@ -59,6 +59,17 @@ function parseGapField(v: string): number | null {
 
 const SOURCE_GLYPH: Record<PanelSource["kind"], string> = { figure: "◇ ", figdoc: "▣ ", window: "□ " };
 
+const SOURCE_ROW: React.CSSProperties = {
+  padding: "3px 6px",
+  borderRadius: 4,
+  border: "1px solid var(--border)",
+  background: "var(--surface-1)",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
 function SourceList({
   heading,
   sources,
@@ -83,21 +94,42 @@ function SourceList({
             }
             onClick={() => onPick(src)}
             title="Drag onto a slot, or click to assign"
-            style={{
-              padding: "3px 6px",
-              borderRadius: 4,
-              border: "1px solid var(--border)",
-              background: "var(--surface-1)",
-              fontSize: 12,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
+            style={SOURCE_ROW}
           >
             {SOURCE_GLYPH[src.kind]}
             {src.name}
           </div>
         ))
+      )}
+    </>
+  );
+}
+
+/** UX8-C: the Library's datasets as page sources (4 datasets used to offer
+ *  1 source, its one open window). Click-only, no drag: a pick first binds
+ *  the dataset to a plot window (useFigurePage's `assignDataset`), which a
+ *  raw slot drop could not do. */
+function DatasetSourceList({ sources, onPick }: { sources: { id: string; name: string }[]; onPick: (id: string) => void }) {
+  return (
+    <>
+      <label className="qzk-field-lbl">Datasets</label>
+      {sources.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--text-faint)" }}>(none)</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto" }}>
+          {sources.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => onPick(d.id)}
+              title="Click to assign (opens a plot window for it if none shows it)"
+              style={{ ...SOURCE_ROW, color: "inherit", textAlign: "left", font: "inherit", fontSize: 12 }}
+            >
+              {"\u2261 "}
+              {d.name}
+            </button>
+          ))}
+        </div>
       )}
     </>
   );
@@ -269,6 +301,8 @@ export default function FigurePageView() {
         {/* Panel sources */}
         <div style={{ width: 190, display: "flex", flexDirection: "column", gap: 4 }}>
           <SourceList heading="Plot windows" sources={p.windowSources} onPick={p.assignToNext} />
+          <div style={{ height: 4 }} />
+          <DatasetSourceList sources={p.datasetSources} onPick={p.assignDataset} />
           <div style={{ height: 4 }} />
           <SourceList heading="Editable figures" sources={p.figureSources} onPick={p.assignToNext} />
           <div style={{ height: 4 }} />

@@ -189,6 +189,19 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     else focus();
   };
 
+  // UX8-C: the dataset rows in the order the tree SHOWS them (folders,
+  // workbooks and order keys rearrange the store's append order).
+  const visibleDatasetIds = (): string[] => rows.flatMap((r) => (r.node.kind === "worksheet" ? [r.node.entityId] : []));
+  // Shift-click ranges over that order; the row's own handler would range
+  // over the store's. A nested control keeps its own click.
+  const onClickCapture = (e: React.MouseEvent) => {
+    const target = e.target as Element;
+    const id = e.shiftKey ? target.closest("[data-ds-id]")?.getAttribute("data-ds-id") : null;
+    if (!id || target.closest("button, input, textarea, select, [contenteditable='true']")) return;
+    e.stopPropagation();
+    useApp.getState().selectRange(id, visibleDatasetIds());
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     // The CONTAINER itself holds focus — the scroll-out fallback above put it
     // there. A nav key resumes from the roving row's model position (it is not
@@ -207,6 +220,14 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     // handle Delete or bare arrows itself, so those are consumed here —
     // never left to reach the global handlers and act on an unrelated
     // dataset. Enter/Space/Tab pass untouched (button activation).
+    // UX8-C: Ctrl/Cmd+A selects every visible dataset row (Finder, Igor's
+    // Data Browser) -- from a row or a row's control; a text editor keeps its own.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a" && !isTextEditorTarget(e.target as Element)) {
+      e.preventDefault();
+      const all = visibleDatasetIds();
+      if (all.length > 0) useApp.getState().selectIds(all);
+      return;
+    }
     if (!fromContainer && isEditorTarget(e.target as Element)) {
       // U5: Escape from a nested control, or Escape/Enter closing an inline
       // editor (whose own handler already cancelled/committed), returns
@@ -334,6 +355,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
       aria-multiselectable="true"
       {...scrollOutFocusProps}
       onKeyDown={onKeyDown}
+      onClickCapture={onClickCapture}
       onFocusCapture={onFocusCapture}
       onContextMenu={(event) => {
         const key = keyOfRow(event.target as Element);

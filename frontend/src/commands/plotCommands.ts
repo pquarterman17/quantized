@@ -302,7 +302,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
         ["panel-row", "Panel: side by side", "row"],
         ["panel-column", "Panel: stacked", "column"],
         ["panel-grid", "Panel: grid", "grid"],
-        ["panel-overlay", "Overlay in one plot", "overlay"],
+        ["panel-overlay", "Panel: overlay (separate scales)", "overlay"],
       ] as const
     ).map(([id, label, layout]) => ({
       id,
@@ -319,7 +319,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       },
     })),
     {
-      // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above —
+      // PLOT_WORKFLOW_PLAN #3: distinct from "Panel: overlay" above —
       // that opens a composite panel window keeping each dataset separate;
       // this lands ONE live graph (a Library dataset whose curves reference
       // their sources and follow their edits — lib/linkedCurves.ts) so it
@@ -327,7 +327,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "plot-selected-together",
       group: "Plot",
       section: "Layout",
-      label: "Plot selected together",
+      label: "Overlay in one plot", // UX8-C; "plot selected together" stays a keyword
       run: () => void plotSelectedTogether(s().selectedIds),
     },
     {

@@ -145,7 +145,7 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       ["panelRow", "Panel: side by side", "row"],
       ["panelColumn", "Panel: stacked", "column"],
       ["panelGrid", "Panel: grid", "grid"],
-      ["overlay", "Overlay in one plot", "overlay"],
+      ["overlay", "Panel: overlay (separate scales)", "overlay"],
     ] as const
   ).map(
     ([key, label, layout]): ContextAction<DatasetActionTarget> => ({
@@ -159,14 +159,15 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       },
     }),
   ),
-  // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above (a
+  // PLOT_WORKFLOW_PLAN #3: distinct from "Panel: overlay" above (a
   // composite panel window keeping each dataset separate) — this MERGES the
   // selection into one real Library dataset via the same gate+build+land
   // sequence the Plot-menu/palette command uses (lib/plotSelectedTogether),
   // so the row menu and the menu bar can never drift apart.
   {
     id: "dataset.plotSelectedTogether",
-    label: "Plot selected together",
+    // UX8-C: named for what it does; the old name stays in the palette keywords.
+    label: "Overlay in one plot",
     hidden: (t) => !multiSelected(t),
     run: (t) => {
       void plotSelectedTogether(t.selectedIds);

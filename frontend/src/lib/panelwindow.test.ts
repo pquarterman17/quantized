@@ -12,6 +12,7 @@ import {
   decodePanelCellDrag,
   encodePanelCellDrag,
   panelGridShape,
+  panelsShareX,
   panelSyncKey,
   panelWindowTitle,
   PANEL_CELL_DND,
@@ -234,5 +235,20 @@ describe("encodePanelCellDrag / decodePanelCellDrag", () => {
   });
   it("PANEL_CELL_DND is distinct from the other internal drag MIME types", () => {
     expect(PANEL_CELL_DND).toBe("application/x-qz-panel-cell");
+  });
+});
+
+// UX8-C: a grid of M(T), XRD, Raman and M(H) drew all four on the field range.
+describe("panelsShareX", () => {
+  const withX = (name: string, unit: string): Dataset => ({
+    id: name,
+    name,
+    data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: { x_column_name: name, x_column_unit: unit } },
+  });
+  it("links only cells that plot the same X quantity and unit", () => {
+    expect(panelsShareX([withX("Field", "Oe"), withX("Field", "Oe")])).toBe(true);
+    expect(panelsShareX([withX("Field", "Oe"), withX("Temperature", "K")])).toBe(false);
+    expect(panelsShareX([withX("Field", "Oe"), withX("Field", "T")])).toBe(false);
+    expect(panelsShareX([withX("Field", "Oe")])).toBe(true);
   });
 });
