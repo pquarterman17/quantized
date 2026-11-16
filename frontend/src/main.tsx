@@ -126,7 +126,7 @@ if (new URLSearchParams(window.location.search).has("harness")) {
 // CalculatorsContent's entire tab tree (SuperconductorTab, SldTab, VacuumTab,
 // …) — ~136 kB of module source that every default-view user was previously
 // downloading for a shell they never mount. Same `lazyRegion()` seam as
-// AppOverlays.tsx's lazyPanel() (UX-003: error boundary + a retry that
+// AppOverlayPanels.tsx's lazyPanel() (UX-003: error boundary + a retry that
 // recreates the lazy() promise); no Suspense fallback because the chunk is
 // served from localhost and arrives in a frame or two.
 const CalcOnlyApp = lazyRegion(() => import("./CalcOnlyApp"), "Calc-only view");

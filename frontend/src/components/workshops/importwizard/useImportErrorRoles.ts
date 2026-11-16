@@ -4,7 +4,7 @@
 // narrower state hook rather than a Zustand slice because — like the REST of
 // useImportWizard's state (columns/filters/preview) — it is scoped entirely
 // to one open wizard session, never read outside this workshop, and is
-// naturally reset by the wizard's own unmount-on-close (AppOverlays.tsx only
+// naturally reset by the wizard's own unmount-on-close (AppOverlayPanels.tsx only
 // mounts ImportWizardPanel while importWizardOpen).
 //
 // One WizardErrorRow per `error`-role column (lib/importwizard.errorRoleChannels),

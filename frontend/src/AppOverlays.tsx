@@ -1,372 +1,111 @@
-// The platform overlay + workshop mount block, extracted verbatim from
-// App.tsx (MAIN_PLAN #1, component-ceiling ratchet). Owns the open/closed
-// flag selectors so App stays a thin composition root; DOM order here is the
-// stacking order the monolithic App used (always-mounted infrastructure first,
-// then the flag-gated workshop panels and ordinary dialogs, then the sheets +
-// toaster). CommandPalette
-// stays in App — it needs the curated actions list.
+// The overlay layer App mounts (MAIN_PLAN #1, component-ceiling ratchet): the
+// always-on infrastructure, plus the flag-gated workshop panels and on-demand
+// dialogs, which live in AppOverlayPanels.tsx.
 //
-// CODE SPLITTING (MAIN_PLAN #29). The flag-gated workshop panels below are
-// `lazyPanel(...)`, not static imports: each renders only when its `open` flag
-// is true, so a static import made a user who opens ONE panel download all 25.
-// Most infrastructure dialogs stay eager because they expose promise/event
-// interfaces that must be ready before a component has rendered. Help and the
-// ordinary store-flag dialogs are exceptions: their open flags live here, so
-// their growing content can be omitted from startup without losing an event
-// listener. `SqliteQueryDialog` WAS eager for the same reason -- it self-gated
-// on a `SHOW_SQLITE_QUERY` window event registered in its own `useEffect`, so
-// it had to stay mounted to hear it -- but as of the 2026-08-29 bundle pass
-// that listener and the event name moved to `store/sqliteQueryDialog.ts`
-// (the `store/annotationTextDialog.ts` shape). The flag is read here, the
-// event is heard while the chunk is still unloaded, and the dialog itself is
-// a `lazyPanel()` below. That also cut the second, less obvious eager edge:
-// `commands/dataCommands.ts` imported the `SHOW_SQLITE_QUERY` *constant* from
-// the component file, which gave the whole dialog the command registry's
-// reachability no matter how it was mounted.
+// BUNDLE DIET SLICE 31 (plans/BUNDLE_HEADROOM.md). AppOverlayPanels.tsx is
+// ~60 `lazyPanel()` seams and their open-flag selectors, and every one of
+// them renders nothing until the user opens something. It loads as one chunk
+// right after this shell mounts (the warm-up timing MenuBar, the palette gate
+// and the Appearance menu use), so the first open of any panel finds it in
+// the module cache, as it found the eager module before. A flag set before
+// that chunk lands (a startup recovery prompt, a shortcut in the first
+// milliseconds) is read when it does: the panels mount reading the stores'
+// current state, and each panel was already a chunk fetch of its own.
 //
-// Three more overlays were evaluated for the same treatment; two stay put and
-// one now joins the lazy panels below. `AnnotationTextDialog` exposes a
-// promise-based `askAnnotationText()` API like ParamDialog/ConfirmDialog, and
-// `components/Stage/useShapeDraw.ts` (part of the always-eager Stage tree)
-// does call it — but as of the 2026-08-18 bundle-size pass, `askAnnotationText()`
-// and its store moved to `store/annotationTextDialog.ts` (the same shape as
-// `store/quickPlotWithDialog.ts`), so that eager call site no longer touches
-// this component file at all. The DIALOG itself (RichLabelInput ->
-// SymbolPalette, the Omega symbol grid) is now a `lazyPanel()` below, gated
-// the same way as SplitDatasetDialog/QuickPlotWithDialog: no keep-mounted
-// wrapper needed because the component already reseeds `draft` from
-// `initial` in a `useEffect` every time it mounts with a non-null title, so a
-// fresh mount per open is behavior-identical to the old always-mounted-but-
-// hidden one. `InteractionHints` registers its
-// `SHOW_INTERACTION_HINTS` window listener unconditionally on mount (so
-// Help's "Show interaction hints" can reopen it after the first-run card is
-// dismissed) — gating the mount would drop that listener while dismissed and
-// break reopening, so it stays eager. `WhatIsThis` has neither: its own
-// Escape listener is already gated on the `on` flag internally, so wrapping
-// its mount in the same flag below is a no-op change in behavior.
+// What stays here is what must work before any chunk arrives:
+//  * ParamDialog and ConfirmDialog expose promise APIs (askParams /
+//    askConfirm) that eager code awaits; they mount LAST among the dialogs
+//    (R12, see below).
+//  * Toaster and TooltipLayer are on screen from first paint.
+//  * InteractionHints registers its SHOW_INTERACTION_HINTS listener on mount
+//    and shows the first-run card.
+//  * The SQLite dialog's open listener (store/sqliteQueryDialog.ts) is
+//    registered here, so the Data command can dispatch before any panel
+//    chunk is loaded.
 //
-// For panels already flag-gated in JSX, the mount line is deliberately
-// unchanged — wrapping at the IMPORT site keeps it byte-identical for the
-// raw-source assertions in SplitDatasetDialog / TextFormatHelp /
-// ReductionsPanel tests (the App tree is too heavy to render in jsdom, so
-// those tests scan this file's text). `WhatIsThis` did NOT have a JSX flag
-// before (it was always mounted, self-hiding via its own `if (!on) return
-// null`), so its conversion adds one — a behavior-preserving change, not a
-// violation of that byte-identical rule.
+// DOM ORDER is unchanged: the panel module renders in three parts placed
+// around TooltipLayer and InteractionHints exactly where the single component
+// rendered them.
+//
+// LOAD FAILURE. A danger toast says the panels could not load, and the next
+// click or key press anywhere loads again (a failed load is not cached), so
+// the gesture that opens a panel is also the one that retries. Nothing else
+// on screen depends on the chunk.
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
-import { useApp } from "./store/useApp";
-import { usePackProjectPanel } from "./store/packProjectPanel";
-import { useRecoveryChoice } from "./store/recoveryChoice";
-import { useHelp } from "./store/help";
-import { useAnnotationTextDialog } from "./store/annotationTextDialog";
-import { listenForSqliteQuery, useSqliteQueryDialog } from "./store/sqliteQueryDialog";
-import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
-import { useFitYByXStore } from "./store/fitYByX";
-import { useOutlierScreeningStore } from "./store/outlierScreening";
-import { useMultivarStore } from "./store/multivar";
-import { useStatsTestsStore } from "./store/statsTests";
-import { useVariabilityStore } from "./store/variability";
-import { useAnalysisExtras } from "./store/analysisExtras";
-import { useRelinkPanel } from "./store/relinkPanel";
-import { useRecodePanel } from "./store/recodePanel";
-import { useFigureDialog } from "./store/figureDialogs";
-import { useLevelOrderPanel } from "./store/levelOrderPanel";
-import { useCombineDialog } from "./store/combineDialog";
-import { useResampleDialog } from "./store/resampleDialog";
-import { useSimsDialog } from "./store/simsDialog";
-import { useMetaFactorsDialog } from "./store/metaFactorsDialog";
-import { useTransformPreviewDialog } from "./store/transformPreviewDialog";
-import { useRecipeManager } from "./store/recipeManager";
-import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
-import { useAuxFigureStore } from "./components/workshops/ternary/auxFigureStore";
-import { lazyRegion as lazyPanel } from "./lib/lazyRegion";
+import { lazyRegion, useRegionLoaded } from "./lib/lazyRegion";
+import { listenForSqliteQuery } from "./store/sqliteQueryDialog";
+import { toast } from "./store/toasts";
 
-/** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
- *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
- *  is the point: with one shared boundary, opening a second panel would
- *  suspend the whole subtree and blank an already-open panel while the new
- *  chunk loaded, and a failed one would take every other panel down with
- *  it. `fallback={null}` because these are overlays served from
- *  localhost — the chunk arrives in a frame or two, and a spinner would
- *  flash more than it informs. `label` names the panel in the fallback and
- *  the console log (review finding #6: 52 panels sharing one "Panel" label
- *  left no way to tell which one failed). */
-/** Load an on-demand dialog only after its first opening, then leave it mounted
- * while closed. That preserves local dialog state (for example Preferences'
- * active tab) exactly as the former eager mount did. */
-function useKeepMountedAfterOpen(open: boolean): boolean {
-  const [mounted, setMounted] = useState(open);
-  useEffect(() => {
-    if (open) setMounted(true);
-  }, [open]);
-  return mounted;
+const Panels = lazyRegion(() => import("./AppOverlayPanels"), "Panels and dialogs");
+
+const PANELS_LOAD_FAILED = "Panels and dialogs could not load. Your next click or key press tries again.";
+/** A load retried on every keystroke while the server is away would toast on
+ *  every keystroke; one report per this many ms is enough. */
+const FAIL_TOAST_GAP_MS = 10_000;
+let lastFailToast = -Infinity;
+
+/** True once the panel module is loaded, starting the load on mount
+ *  (`useRegionLoaded`, so the flip is `flushSync`ed: a dialog whose flag was
+ *  set before the chunk landed arrives with its focus and Tab-trap effects in
+ *  the task that paints it, BUG-031). After a failure, the next pointer or
+ *  key press anywhere loads again; that gesture is usually the one opening a
+ *  panel, whose flag is then read when the chunk lands. */
+function usePanelsLoaded(): boolean {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const ready = useRegionLoaded(
+    Panels,
+    true,
+    () => {
+      setFailed(true);
+      const now = Date.now();
+      if (now - lastFailToast < FAIL_TOAST_GAP_MS) return;
+      lastFailToast = now;
+      toast(PANELS_LOAD_FAILED, "danger");
+    },
+    attempt,
+  );
+  // A layout effect, so the listener is in place in the commit that shows
+  // the failure toast: a key press the moment the toast is on screen retries.
+  useLayoutEffect(() => {
+    if (!failed) return;
+    const retry = (): void => {
+      setFailed(false);
+      setAttempt((a) => a + 1);
+    };
+    const opts = { capture: true };
+    window.addEventListener("pointerdown", retry, opts);
+    window.addEventListener("keydown", retry, opts);
+    return () => {
+      window.removeEventListener("pointerdown", retry, opts);
+      window.removeEventListener("keydown", retry, opts);
+    };
+  }, [failed]);
+  return ready;
 }
 
-const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/database/SqliteQueryDialog"), "SqliteQueryDialog");
-const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"), "BaselinePanel");
-const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"), "CalculatorsPanel");
-const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"), "DatasetMathPanel");
-const ResamplePanel = lazyPanel(() => import("./components/workshops/resample/ResamplePanel"), "ResamplePanel");
-const SimsPanel = lazyPanel(() => import("./components/workshops/sims/SimsPanel"), "SimsPanel");
-const ReshapePanel = lazyPanel(() => import("./components/workshops/transformPreview/ReshapePanel"), "ReshapePanel");
-const MetaFactorsPanel = lazyPanel(() => import("./components/workshops/metafactors/MetaFactorsPanel"), "MetaFactorsPanel");
-const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"), "TabulatePanel");
-const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"), "DistributionPanel");
-const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
-const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
-const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
-const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
-const AnalysisExtrasHost = lazyPanel(() => import("./components/workshops/analysisextras/AnalysisExtrasHost"), "Analysis tools");
-const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"), "VariabilityChartPanel");
-const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"), "ReportPanel");
-const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"), "StatsChooserPanel");
-const PeakWizardPanel = lazyPanel(() => import("./components/workshops/peakwizard/PeakWizardPanel"), "PeakWizardPanel");
-const ImportWizardPanel = lazyPanel(() => import("./components/workshops/importwizard/ImportWizardPanel"), "ImportWizardPanel");
-const PipelinePanel = lazyPanel(() => import("./components/workshops/pipeline/PipelinePanel"), "PipelinePanel");
-const DataFilterPanel = lazyPanel(() => import("./components/workshops/datafilter/DataFilterPanel"), "DataFilterPanel");
-const ColumnSwitcher = lazyPanel(() => import("./components/workshops/switcher/ColumnSwitcher"), "ColumnSwitcher");
-const FigureBuilderView = lazyPanel(() => import("./components/workshops/figurebuilder/FigureBuilderView"), "FigureBuilderView");
-const FigurePageView = lazyPanel(() => import("./components/workshops/figurepage/FigurePageView"), "FigurePageView");
-const GraphBuilderPanel = lazyPanel(() => import("./components/workshops/graphbuilder/GraphBuilderPanel"), "GraphBuilderPanel");
-const CurveFitPanel = lazyPanel(() => import("./components/workshops/curvefit/CurveFitPanel"), "CurveFitPanel");
-const HysteresisPanel = lazyPanel(() => import("./components/workshops/hysteresis/HysteresisPanel"), "HysteresisPanel");
-const MagToolsPanel = lazyPanel(() => import("./components/workshops/magtools/MagToolsPanel"), "MagToolsPanel");
-const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPanel"), "PeaksPanel");
-const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"), "ReflectivityPanel");
-const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"), "ReductionsPanel");
-const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"), "RsmPanel");
-const RoiCutsPanel = lazyPanel(() => import("./components/workshops/roicuts/RoiCutsPanel"), "RoiCutsPanel");
-const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"), "DigitizerView");
-const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/WaterfallView"), "WaterfallView");
-const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"), "ReflView");
-const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"), "TrashPanel");
-const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"), "SearchPanel");
-const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"), "HelpDialog");
-// These ordinary dialogs have no startup responsibility: their store flags are
-// already in this composition root, so loading them only when opened removes
-// their implementation (and dialog-only helpers) from first-paint JS.
-const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"), "SplitDatasetDialog");
-// LIBRARY_WORKBOOK_UX_PLAN PR J slice 2 (L0.32-L0.34/L0.51): same "on-demand
-// dialog with no startup responsibility" class as SplitDatasetDialog above.
-const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"), "CombineWorkbooksDialog");
-const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"), "SeparateWorksheetsDialog");
-// L0.33 (PR M): the transactional multi-source Reimport All / Reimport
-// Available Sources problem report — same "on-demand dialog with no
-// startup responsibility" class as SeparateWorksheetsDialog right above.
-const ReimportAllDialog = lazyPanel(() => import("./components/overlays/ReimportAllDialog"), "ReimportAllDialog");
-const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"), "QuickPlotWithDialog");
-// P1.3 wave 3, Lane D: the plot-recipe apply preview+confirm dialog -- same
-// "on-demand dialog with no startup responsibility" class as QuickPlotWithDialog.
-const PlotRecipeApplyDialog = lazyPanel(() => import("./components/overlays/PlotRecipeApplyDialog"), "PlotRecipeApplyDialog");
-// The Recipe Manager panel -- rare-ish, on-demand (opened from the command
-// palette / a menu), so it stays out of the eager bundle like every other
-// workshop panel above.
-const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipemanager/RecipeManagerPanel"), "RecipeManagerPanel");
-// P3.5: the cross-kind Recipe Library is a separate, browse-first surface.
-// The existing Plot Recipe Manager remains the advanced plot-specific editor.
-const RecipeLibraryPanel = lazyPanel(() => import("./components/workshops/recipelibrary/RecipeLibraryPanel"), "RecipeLibraryPanel");
-// Figures-audit #6/#8: the Axis dialog and the Plot-type gallery, one lazy
-// chunk gated by the dependency-free store/figureDialogs.ts flag.
-const FigureDialogs = lazyPanel(() => import("./components/overlays/figuredialogs/FigureDialogs"), "FigureDialogs");
-const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"), "AnnotationTextDialog");
-const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"), "ShortcutsDialog");
-const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"), "TextFormatHelp");
-const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"), "PreferencesDialog");
-// No local state to preserve across toggles (purely `useHelp`-flag-driven),
-// so a plain lazyPanel — not useKeepMountedAfterOpen — matches its former
-// always-mounted-but-self-hiding behavior exactly.
-const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"), "WhatIsThis");
-// P1.2 box 5: the crash-recovery chooser. Rare (only when a startup autosave
-// candidate outdates the last-known named project — see
-// lib/recoveryChoice.ts), so it stays out of the eager bundle like every
-// other on-demand dialog above.
-const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/RecoveryChoiceDialog"), "RecoveryChoiceDialog");
-// P1.7: relink-one/relink-folder dry-run + commit. Rare-ish, on-demand
-// action (opened from the command palette, never on startup), so it stays
-// out of the eager bundle like every other workshop panel above.
-// Its open flag is the tiny store/relinkPanel.ts mirror, not store/relink.ts.
-const RelinkPanel =lazyPanel(() => import("./components/workshops/relink/RelinkPanel"), "RelinkPanel");
-const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproject/PackProjectPanel"), "PackProjectPanel");
-// J2: the Recode workshop, opened from the worksheet's column context menu
-// (a categorical column only) — rare-ish, on-demand, so it stays out of the
-// eager bundle like every other workshop panel above.
-// Its open flag is the tiny store/recodePanel.ts mirror, not store/recode.ts.
-const RecodePanel = lazyPanel(() => import("./components/workshops/recode/RecodePanel"), "RecodePanel");
-// JMP_GAP J1 (Group O-2b): the level-order reorder workshop, opened from the
-// same worksheet column context menu as Recode (categorical columns only) —
-// same "rare-ish, on-demand" class as every other workshop panel above. Its
-// OPEN FLAG is the tiny store/levelOrderPanel.ts (below), not the heavy
-// store/levelOrder.ts — see that file's header: only THIS lazy import ever
-// reaches the heavy store, keeping it off the eager bundle entirely.
-const LevelOrderPanel = lazyPanel(() => import("./components/workshops/levelorder/LevelOrderPanel"), "LevelOrderPanel");
-// UX-007: invoked from the shared workbook menu registry, so its tiny store
-// keeps this dialog out of the eager Library renderer graph.
-const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/WorkbookPropertiesDialog"), "WorkbookPropertiesDialog");
-// Origin gap #23 frontend: the ternary-diagram and vector-field workshops
-// (Plot ▸ Build & export) share one chunk and one tiny open-flag store, so
-// the eager bundle pays for the flags and a single stub; see
-// ternary/lazyMount.test.ts.
-const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
-// Signal Processing and its durable results share one lazy host chunk.
-const SignalAnalysisPanels = lazyPanel(() => import("./components/workshops/analysisresults/SignalAnalysisPanels"), "SignalAnalysisPanels");
-
 export default function AppOverlays() {
-  const helpOpen = useHelp((s) => s.open);
-  const whatIsThisOn = useHelp((s) => s.whatIsThis);
-  const curveFitOpen = useApp((s) => s.curveFitOpen);
-  const hysteresisOpen = useApp((s) => s.hysteresisOpen);
-  const peaksOpen = useApp((s) => s.peaksOpen);
-  const reflectivityOpen = useApp((s) => s.reflectivityOpen);
-  const baselineOpen = useApp((s) => s.baselineOpen);
-  const calculatorsOpen = useApp((s) => s.calculatorsOpen);
-  const rsmOpen = useApp((s) => s.rsmOpen);
-  const roiCutsOpen = useApp((s) => s.roiCutsOpen);
-  const reductionsOpen = useApp((s) => s.reductionsOpen);
-  const digitizerOpen = useApp((s) => s.digitizerOpen);
-  const magToolsOpen = useApp((s) => s.magToolsOpen);
-  const datasetMathOpen = useApp((s) => s.datasetMathOpen);
-  const resampleOpen = useResampleDialog((s) => s.seed !== null);
-  const simsOpen = useSimsDialog((s) => s.seed !== null);
-  const reshapeOpen = useTransformPreviewDialog((s) => s.op !== null);
-  const metaFactorsOpen = useMetaFactorsDialog((s) => s.seed !== null);
-  const tabulateOpen = useApp((s) => s.tabulateOpen);
-  const distributionOpen = useApp((s) => s.distributionOpen);
-  const fitYByXOpen = useFitYByXStore((s) => s.open);
-  const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
-  const multivarOpen = useMultivarStore((s) => s.open);
-  const statsTestsOpen = useStatsTestsStore((s) => s.open);
-  const variabilityOpen = useVariabilityStore((s) => s.open);
-  const extrasOpen = useAnalysisExtras((s) => s.open.length > 0);
-  const signalProcessingOpen = useApp((s) => s.signalProcessingOpen);
-  const dataFilterOpen = useApp((s) => s.dataFilterOpen);
-  const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
-  const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
-  const figurePageOpen = useApp((s) => s.figurePageOpen);
-  const graphBuilderOpen = useApp((s) => s.graphBuilderOpen);
-  const waterfallOpen = useApp((s) => s.waterfallOpen);
-  const reflViewOpen = useApp((s) => s.reflViewOpen);
-  const trashOpen = useApp((s) => s.trashOpen);
-  const searchOpen = useApp((s) => s.searchOpen);
-  const openReportId = useApp((s) => s.openReportId);
-  const openAnalysisResultId = useApp((s) => s.openAnalysisResultId);
-  const statsChooserOpen = useApp((s) => s.statsChooserOpen);
-  const peakWizardOpen = useApp((s) => s.peakWizardOpen);
-  const importWizardOpen = useApp((s) => s.importWizardOpen);
-  const pipelineOpen = useApp((s) => s.pipelineOpen);
-  const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
-  const combineDialogOpen = useCombineDialog((s) => s.seed !== null);
-  const separateDialogOpen = useApp((s) => s.separatePreview !== null);
-  // Coordinator review F4: gated on `reimportAllRows !== null || reimportAllBusy`
-  // — an earlier bundle-size trim dropped the `busy` half, which meant
-  // nothing ever rendered while staging was in flight (the dialog's
-  // "staging…" branch was reachable only from its own isolated unit test).
-  // A real UI race deserves a real gate, not saved bytes. Restoring it did
-  // NOT require raising scripts/check-bundle-size.mjs's EAGER_JS_BUDGET —
-  // `npm run build` still measures under it (a thin margin; re-measure
-  // before adding more eager weight to this feature).
-  const reimportAllOpen = useApp((s) => s.reimportAllRows !== null || s.reimportAllBusy);
-  const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
-  const pendingRecipeOpen = useApp((s) => s.pendingRecipeApplication !== null);
-  const recipeManagerOpen = useRecipeManager((s) => s.open);
-  const recipeLibrary = useRecipeManager((s) => s.library);
-  const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
-  const sqliteQueryOpen = useSqliteQueryDialog((s) => s.open);
-  const shortcutsOpen = useApp((s) => s.shortcutsOpen);
-  const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
-  const prefsOpen = useApp((s) => s.prefsOpen);
-  const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
-  const relinkOpen = useRelinkPanel((s) => s.open);
-  const packProjectOpen = usePackProjectPanel((s) => s.open);
-  const recodeOpen = useRecodePanel((s) => s.open);
-  const figureDialogOpen = useFigureDialog((s) => s.open !== null);
-  const levelOrderOpen = useLevelOrderPanel((s) => s.open);
-  const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
-  const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen);
   // Heard while the dialog chunk is still unloaded -- the store owns the
   // listener so the Data command can dispatch before anything is mounted.
   useEffect(listenForSqliteQuery, []);
-
-  const sqliteQueryMounted = useKeepMountedAfterOpen(sqliteQueryOpen);
-  const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
-  const combineDialogMounted = useKeepMountedAfterOpen(combineDialogOpen);
-  const separateDialogMounted = useKeepMountedAfterOpen(separateDialogOpen);
-  const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
-  const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
-  const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
-  const prefsMounted = useKeepMountedAfterOpen(prefsOpen);
+  // `loaded()` as well: once the chunk is cached, a fresh mount renders the
+  // panels on its first render.
+  const panels = usePanelsLoaded() || Panels.loaded();
 
   return (
     <>
-      {annotationTextOpen && <AnnotationTextDialog />}
-      {splitDialogMounted && <SplitDatasetDialog />}
-      {combineDialogMounted && <CombineWorkbooksDialog />}
-      {separateDialogMounted && <SeparateWorksheetsDialog />}
-      {reimportAllOpen && <ReimportAllDialog />}
-      {quickPlotWithMounted && <QuickPlotWithDialog />}
-      {pendingRecipeOpen && <PlotRecipeApplyDialog />}
-      {recipeManagerOpen && !recipeLibrary && <RecipeManagerPanel />}
-      {recipeManagerOpen && recipeLibrary && <RecipeLibraryPanel />}
+      {panels && <Panels part="lead" />}
       <TooltipLayer />
-      {whatIsThisOn && <WhatIsThis />}
+      {panels && <Panels part="whatIsThis" />}
       <InteractionHints />
-      {sqliteQueryMounted && <SqliteQueryDialog />}
-      {curveFitOpen && <CurveFitPanel />}
-      {hysteresisOpen && <HysteresisPanel />}
-      {peaksOpen && <PeaksPanel />}
-      {reflectivityOpen && <ReflectivityPanel />}
-      {baselineOpen && <BaselinePanel />}
-      {calculatorsOpen && <CalculatorsPanel />}
-      {magToolsOpen && <MagToolsPanel />}
-      {rsmOpen && <RsmPanel />}
-      {roiCutsOpen && <RoiCutsPanel />}
-      {reductionsOpen && <ReductionsPanel />}
-      {digitizerOpen && <DigitizerView />}
-      {datasetMathOpen && <DatasetMathPanel />}
-      {resampleOpen && <ResamplePanel />}
-      {simsOpen && <SimsPanel />}
-      {reshapeOpen && <ReshapePanel />}
-      {metaFactorsOpen && <MetaFactorsPanel />}
-      {tabulateOpen && <TabulatePanel />}
-      {distributionOpen && <DistributionPanel />}
-      {fitYByXOpen && <FitYByXPanel />}
-      {outlierScreeningOpen && <OutlierScreeningPanel />}
-      {multivarOpen && <MultivarPanel />}
-      {statsTestsOpen && <StatsTestsPanel />}
-      {variabilityOpen && <VariabilityChartPanel />}
-      {extrasOpen && <AnalysisExtrasHost />}
-      {(signalProcessingOpen || openAnalysisResultId) && <SignalAnalysisPanels />}
-      {dataFilterOpen && <DataFilterPanel />}
-      {statsChooserOpen && <StatsChooserPanel />}
-      {peakWizardOpen && <PeakWizardPanel />}
-      {importWizardOpen && <ImportWizardPanel />}
-      {pipelineOpen && <PipelinePanel />}
-      {openReportId && <ReportPanel />}
-      {columnSwitcherOpen && <ColumnSwitcher />}
-      {figureBuilderOpen && <FigureBuilderView />}
-      {figurePageOpen && <FigurePageView />}
-      {graphBuilderOpen && <GraphBuilderPanel />}
-      {waterfallOpen && <WaterfallView />}
-      {reflViewOpen && <ReflView />}
-      {trashOpen && <TrashPanel />}
-      {searchOpen && <SearchPanel />}
-      {shortcutsMounted && <ShortcutsDialog />}
-      {helpOpen && <HelpDialog />}
-      {textFormatHelpMounted && <TextFormatHelp />}
-      {prefsMounted && <PreferencesDialog />}
-      {recoveryPending && <RecoveryChoiceDialog />}
-      {relinkOpen && <RelinkPanel />}
-      {packProjectOpen && <PackProjectPanel />}
-      {recodeOpen && <RecodePanel />}
-      {figureDialogOpen && <FigureDialogs />}
-      {levelOrderOpen && <LevelOrderPanel />}
-      {workbookPropertiesOpen && <WorkbookPropertiesDialog />}
-      {auxFigureOpen && <AuxFigurePanels />}
+      {panels && <Panels part="main" />}
       {/* LAST among the dialogs (R12): every dialog backdrop has the same
           z-index, so tree order is paint order, and the active modal is the
           one last in the document (lib/modalInert.ts). A confirmation or a
