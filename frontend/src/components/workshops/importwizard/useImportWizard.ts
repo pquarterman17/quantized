@@ -39,6 +39,9 @@ const DEBOUNCE_MS = 300;
 
 export interface ImportWizardState {
   file: File | null;
+  /** The picked file's text: the raw-lines view renders from it when the
+   *  preview request fails (UX audit 8 #7). */
+  text: string;
   settings: ImportSettingsWire | null;
   preview: ImportPreviewResponse | null;
   filters: ImportFilterWire[];
@@ -402,6 +405,7 @@ export function useImportWizard(): ImportWizardState {
 
   return {
     file,
+    text,
     settings,
     preview: displayPreview,
     filters,
