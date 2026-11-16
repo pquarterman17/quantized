@@ -95,7 +95,7 @@ function JoinFields({ r }: { r: ReshapeState }) {
         value={f.mode}
         onChange={(e) => r.setForm({ mode: e.target.value as JoinMode })}
       />
-      <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         Duplicate keys keep their first row. A text or categorical key matches by its text.
       </div>
     </>

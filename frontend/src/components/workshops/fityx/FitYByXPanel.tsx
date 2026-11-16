@@ -28,7 +28,7 @@ export default function FitYByXPanel() {
   return (
     <ToolWindow id="fit-y-by-x" title="Fit Y by X" width={420} onClose={() => setOpen(false)}>
       {!f.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to analyze.
         </div>
       ) : (

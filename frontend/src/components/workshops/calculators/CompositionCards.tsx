@@ -74,7 +74,7 @@ export function WeightAtomicCard() {
           at% → wt%
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Space-separated symbols and values in the same order; values are normalised to 100.
       </div>
       {resultLine(card.result)}
@@ -134,7 +134,7 @@ export function CoDepositionCard() {
           Calculate
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Molar flux ratios, smallest = 1. Each source is matched to its first non-oxygen element found in
         the target.
       </div>

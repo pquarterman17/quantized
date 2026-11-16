@@ -77,7 +77,7 @@ export const stackedPanels = "☰";
    *  (the former ⊕ drew larger than every other toolbar glyph). */
 export const actionInset = "◳";
 export const actionPolar = "✺";
-export const actionStatMode = "⌗";
+export const actionStatMode = "⊠";
 export const actionSavePng = "⤓";
 export const actionCopyData = "⧉";
 export const actionCopyFigure = "⎘";
@@ -92,7 +92,7 @@ export const plotStackedColumn = "◪";
 export const plotBox = "◫";
 export const plotHistogram = "▇";
 export const plotContour = "◎";
-export const plotViolin = "⧖";
+export const plotViolin = "⋈";
 export const plotDoubleY = "⇵";
 export const plotPolar = "◴";
 export const plotWaterfall = "≋";

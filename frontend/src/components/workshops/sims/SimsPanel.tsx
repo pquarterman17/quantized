@@ -229,7 +229,7 @@ function Preview({ r }: { r: SimsState }) {
         </div>
       )}
       {r.previewOnly && (
-        <div className="qzk-ds-meta" style={{ marginTop: 4, ...faint }}>
+        <div className="qzk-helptext" style={{ marginTop: 4, ...faint }}>
           Previewed on the loaded rows; the full data is processed when you create.
         </div>
       )}
@@ -274,7 +274,7 @@ function SimsWorkshop({ initialTab }: { initialTab: SimsTab }) {
   return (
     <ToolWindow id="sims" title="SIMS depth profile" width={380} onClose={close}>
       {!hasData ? (
-        <div className="qzk-ds-meta" style={faint}>Load a SIMS profile to process.</div>
+        <div className="qzk-helptext" style={faint}>Load a SIMS profile to process.</div>
       ) : (
         <>
           <SegmentedControl<SimsTab> options={TABS} value={tab} onChange={pick} />

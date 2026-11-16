@@ -27,7 +27,7 @@ export default function SimsOffsets() {
   const setSeriesStyle = useApp((s) => s.setSeriesStyle);
   const setYScale = useApp((s) => s.setYScale);
   const recordHistory = useApp((s) => s.recordHistory);
-  if (!active) return <div className="qzk-ds-meta" style={faint}>No plot to offset.</div>;
+  if (!active) return <div className="qzk-helptext" style={faint}>No plot to offset.</div>;
   const plotted = effectiveChannels(active.data, yKeys, xKey, active.channelRoles, order);
   const offsets = plotted.map((ch) => logOffsetDecades(styles[ch]?.logOffset));
   const set = (ch: number, k: number) => setSeriesStyle(ch, { logOffset: k });

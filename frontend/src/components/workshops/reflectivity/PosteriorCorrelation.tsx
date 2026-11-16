@@ -51,7 +51,7 @@ export default function PosteriorCorrelation({ posterior }: { posterior: SavedPo
     <summary className="qzk-field-lbl">
       Parameter correlation · {strongest ? `strongest |r| ${Math.abs(strongest.r).toFixed(2)}` : "no finite pairs"}
     </summary>
-    <p className="qzk-ds-meta">
+    <p className="qzk-helptext">
       Large |r| means the posterior lets two parameters trade off; it is a model-identifiability warning, not evidence that one parameter causes the other.
     </p>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
@@ -94,7 +94,7 @@ export default function PosteriorCorrelation({ posterior }: { posterior: SavedPo
           <span role="cell" style={MONO}>{pair.second}</span><span role="cell" style={MONO}>{fmtNum(pair.r)}</span>
         </div>)}
         {strong.length > 12 && <div className="qzk-ds-meta">{strong.length - 12} additional strong pairs are included in Copy/Export.</div>}
-      </div> : <p className="qzk-ds-meta">No finite off-diagonal pair reaches the warning threshold.</p>}
+      </div> : <p className="qzk-helptext">No finite off-diagonal pair reaches the warning threshold.</p>}
     </div>
   </details>;
 }

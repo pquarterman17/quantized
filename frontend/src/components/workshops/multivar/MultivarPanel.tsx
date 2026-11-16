@@ -35,7 +35,7 @@ export default function MultivarPanel() {
   return (
     <ToolWindow id="multivar" title="Multivariate" width={480} onClose={() => setOpen(false)}>
       {!m.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to explore.
         </div>
       ) : (

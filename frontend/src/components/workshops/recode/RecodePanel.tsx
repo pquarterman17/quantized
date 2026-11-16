@@ -100,7 +100,7 @@ export default function RecodePanel() {
             storage when it isn't yet — session-only, lost on reload/close
             (see store/recode.ts's header for why). The comment/plan-doc
             deferral doesn't reach the user; this line does. */}
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginBottom: 6 }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)", marginBottom: 6 }}>
           Saved mappings last for this browser session only — they don't
           persist with the project yet, and are lost on reload.
         </div>

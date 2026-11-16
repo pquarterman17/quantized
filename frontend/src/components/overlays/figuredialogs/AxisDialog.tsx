@@ -135,7 +135,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
         ))}
       </div>
       {!hasY2 && (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           No Y2 axis yet: put a series on the right axis (Channels ▸ Y2) to edit it here.
         </div>
       )}
@@ -152,7 +152,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
         />
       </Row>
       {current === "x" ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           To break the X axis, use Plot ▸ Layout ▸ Break x-axis at gaps…
         </div>
       ) : (

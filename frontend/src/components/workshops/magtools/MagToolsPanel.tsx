@@ -66,7 +66,7 @@ export default function MagToolsPanel() {
       />
 
       {!m.active && (
-        <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 12, color: "var(--text-faint)" }}>
           Select a dataset first.
         </div>
       )}

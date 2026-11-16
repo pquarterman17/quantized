@@ -66,7 +66,7 @@ export default function SubstratesTab() {
 
   if (error) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 12, color: "var(--text-faint)" }}>
         Substrate data unavailable (backend offline).
       </div>
     );

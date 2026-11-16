@@ -199,7 +199,7 @@ export default function CombineWorkbooksDialog() {
             );
           })}
         </div>
-        <div className="qzk-ds-meta" style={{ marginTop: 8 }}>
+        <div className="qzk-helptext" style={{ marginTop: 8 }}>
           Worksheet names in the new workbook:
         </div>
         <div className="qzk-combine-preview" style={{ display: "grid", gap: 2 }}>

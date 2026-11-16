@@ -131,7 +131,7 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
         </div>
       )}
       {marksFailed() && (style.connect || style.dropLines || style.sizeBy != null) && (
-        <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
+        <div className="qzk-helptext" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
           The spline / drop-line / size-by code could not be loaded, so this series is drawn plain. Reload to retry.
         </div>
       )}

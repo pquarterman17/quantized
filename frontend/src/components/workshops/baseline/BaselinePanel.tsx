@@ -183,7 +183,7 @@ export default function BaselinePanel() {
       </div>
 
       {!active && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
           Select a dataset first.
         </div>
       )}

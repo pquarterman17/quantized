@@ -106,7 +106,7 @@ export default function FitDataBinding({ fit }: { fit: ReflFitState }) {
   const { settings } = fit;
   if (fit.datasets.length === 0) {
     return (
-      <div className="qzk-ds-meta qzk-msg" role="note">
+      <div className="qzk-helptext qzk-msg" role="note">
         Import a reflectivity dataset (e.g. an NCNR .refl or .pnr) to fit the model to it.
       </div>
     );
@@ -201,7 +201,7 @@ export default function FitDataBinding({ fit }: { fit: ReflFitState }) {
         />
       </div>
       {lambdaMissing && (
-        <div className="qzk-ds-meta qzk-msg" role="alert" style={{ color: "var(--danger)" }}>
+        <div className="qzk-helptext qzk-msg" role="alert" style={{ color: "var(--danger)" }}>
           The X-ray wavelength is unknown for this dataset — enter λ to convert 2θ to Q.
         </div>
       )}

@@ -78,7 +78,7 @@ export default function ColorGradientDialog({ onClose }: { onClose: () => void }
         />
       </div>
       {draft.order === "value" && !byValue && (
-        <div className="qzk-ds-meta" role="status">Not every legend label has a distinct number; the plotted order is used.</div>
+        <div className="qzk-helptext" role="status">Not every legend label has a distinct number; the plotted order is used.</div>
       )}
       <ul aria-label="Curve colours" style={{ listStyle: "none", margin: 0, padding: 0, maxHeight: 180, overflowY: "auto" }}>
         {channels.map((ch) => (
@@ -88,9 +88,9 @@ export default function ColorGradientDialog({ onClose }: { onClose: () => void }
           </li>
         ))}
       </ul>
-      {kept > 0 && <div className="qzk-ds-meta">Curves with their own colour keep it; reset a curve's colour to join the gradient.</div>}
+      {kept > 0 && <div className="qzk-helptext">Curves with their own colour keep it; reset a curve's colour to join the gradient.</div>}
       {refused && (
-        <div className="qzk-ds-meta" role="status">
+        <div className="qzk-helptext" role="status">
           This view (grouped, faceted, stacked, polar, statistics, encoded or with pinned publication styles) keeps its own colours; the gradient applies when it is a plain overlay.
         </div>
       )}

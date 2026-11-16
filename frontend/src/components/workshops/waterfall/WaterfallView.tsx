@@ -69,7 +69,7 @@ export default function WaterfallView() {
   return (
     <ToolWindow id="waterfall" title="Waterfall" x={140} y={80} width={460} onClose={() => close(false)}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="qzk-ds-meta">
+        <div className="qzk-helptext">
           Stack one channel across datasets. Defaults to your selection; tick rows to include.
         </div>
 

@@ -160,7 +160,7 @@ export default function WilliamsonHallBatchSection({ fallbackWavelengthA, kFacto
     </button>
     {expanded && <div className="qzk-analysis-input-review-body">
       <p className="qzk-ds-meta">Each worksheet uses its published included peaks and recorded wavelength. K = {kFactor}; instrument broadening = {instrumentalBroadeningDeg}°.</p>
-      {selected.length < 2 ? <p className="qzk-ds-meta">Select at least two worksheets in the Library to compare them.</p> : <table className="qzk-analysis-batch-table">
+      {selected.length < 2 ? <p className="qzk-helptext">Select at least two worksheets in the Library to compare them.</p> : <table className="qzk-analysis-batch-table">
         <thead><tr><th>Worksheet</th><th>Status</th><th>Preflight / warning</th></tr></thead>
         <tbody>{shown.map((row) => <tr key={row.id}><td>{row.name}</td><td>{statusLabel(row.status)}</td><td>{row.detail ?? "—"}</td></tr>)}</tbody>
       </table>}
