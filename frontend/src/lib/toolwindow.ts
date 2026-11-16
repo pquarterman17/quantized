@@ -20,6 +20,14 @@ export interface ToolWindowLayout {
  *  `.qzk-win-title`'s padding + line height (shell.css). */
 export const TITLE_BAR_HEIGHT = 32;
 
+/** The status bar's height (shell.css: .qzk-app's last grid row). A floating
+ *  window's title bar is clamped above it, never under it (UX-F). */
+export const STATUS_BAR_HEIGHT = 24;
+
+/** Pointer travel (px) that turns a press on a DOCKED title bar into a drag
+ *  that floats the window (UX-F, store/toolDock.ts). */
+export const UNDOCK_DRAG = 6;
+
 export const MIN_WIDTH = 200;
 export const MIN_HEIGHT = 120;
 

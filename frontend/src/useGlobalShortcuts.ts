@@ -15,6 +15,7 @@ import { openFilePicker } from "./lib/openFilePicker";
 import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
+import { toggleInspector } from "./store/inspectorToggle";
 import { useApp } from "./store/useApp";
 
 /** Focus is in a tool window (`ToolWindow`'s `data-tool-window` frame): a
@@ -185,7 +186,7 @@ export function useGlobalShortcuts(): void {
           break;
         case "]":
           e.preventDefault();
-          s.toggleRight();
+          toggleInspector(); // floats a docked analysis window (UX-F)
           break;
         case "l":
           // ⌘⇧L toggles the theme (plain ⌘L is the browser address bar).
