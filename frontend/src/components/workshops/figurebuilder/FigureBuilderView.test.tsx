@@ -100,9 +100,38 @@ beforeEach(() => {
 describe("Publication Preview control names (review finding)", () => {
   it("names the Format and Style pickers and the DPI field", () => {
     render(<FigureBuilderView />);
-    expect(screen.getByRole("combobox", { name: "Figure format" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Figure format" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Figure style" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Figure DPI (raster)" })).toBeInTheDocument();
+  });
+});
+
+// UX-H: one export view — format as a segmented control, presets by name.
+describe("Publication Preview output controls (UX-H)", () => {
+  it("offers every backend format as a radio, in journal order, and sets it", () => {
+    render(<FigureBuilderView />);
+    const group = screen.getByRole("radiogroup", { name: "Figure format" });
+    const radios = Array.from(group.querySelectorAll('[role="radio"]')).map((r) => r.textContent);
+    expect(radios).toEqual(["PDF", "SVG", "PNG", "TIFF", "EPS"]);
+    expect(screen.getByRole("radio", { name: "PNG" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "SVG" }));
+    expect(figureState.setFmt).toHaveBeenCalledWith("svg");
+  });
+
+  it("shows the DPI field only for raster formats", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({ ...figureState, fmt: "pdf" } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+    expect(screen.queryByRole("textbox", { name: "Figure DPI (raster)" })).toBeNull();
+    expect(screen.getByText(/stay sharp at any size/)).toBeInTheDocument();
+  });
+
+  it("names presets for people, keeping the calibrated ids as values", () => {
+    render(<FigureBuilderView />);
+    const picker = screen.getByRole("combobox", { name: "Figure style" });
+    const aps = Array.from(picker.querySelectorAll("option")).find((o) => o.value === "aps");
+    expect(aps?.textContent).toBe("APS · single column · 8.6 × 6.5 cm");
+    fireEvent.change(picker, { target: { value: "nature" } });
+    expect(figureState.setStyle).toHaveBeenCalledWith("nature");
   });
 });
 
@@ -316,7 +345,7 @@ describe("Publication Preview role cues", () => {
 // Item 12: the DPI field must not silently snap an invalid/out-of-range
 // keystroke to 300, and must not commit a value the export request can't use.
 describe("Publication Preview DPI field", () => {
-  it("only commits DPI when the typed value is finite and within [10, 1200]", () => {
+  it("only commits DPI when the typed value is finite and within the backend's [50, 1200]", () => {
     render(<FigureBuilderView />);
     const dpiField = screen.getByDisplayValue("300") as HTMLInputElement;
 
@@ -327,7 +356,7 @@ describe("Publication Preview DPI field", () => {
     fireEvent.change(dpiField, { target: { value: "-5" } });
     expect(figureState.setDpi).not.toHaveBeenCalled();
 
-    fireEvent.change(dpiField, { target: { value: "5" } }); // below the 10 floor
+    fireEvent.change(dpiField, { target: { value: "30" } }); // below the backend's 50 floor
     expect(figureState.setDpi).not.toHaveBeenCalled();
 
     fireEvent.change(dpiField, { target: { value: "5000" } }); // above the 1200 ceiling

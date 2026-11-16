@@ -305,7 +305,7 @@ export function useFigureBuilder() {
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
   // Debounced PNG preview + hit-map — see usePreviewRender's module doc.
-  const { preview, hitmap, error, busy } = usePreviewRender(spec, canonical);
+  const { preview, hitmap, error, busy, previewDpi } = usePreviewRender(spec, canonical);
   // A window-target session outlives its target window closing/unfocusing
   // (windows.ts's closeWindow clears the common case, but a session can still
   // be left pointing at a background window — applyFigurePublicationEdit's
@@ -404,7 +404,7 @@ export function useFigureBuilder() {
     setXLabel: canonical ? (next: string) => setCanonicalView({ xAxisLabel: next }) : setXLabel,
     yLabel: canonicalView?.yAxisLabel ?? yLabel,
     setYLabel: canonical ? (next: string) => setCanonicalView({ yAxisLabel: next }) : setYLabel,
-    preview,
+    preview, previewDpi,
     error: canonicalReadiness?.state === "ready" || !canonicalReadiness
       ? error
       : canonicalReadiness.error,

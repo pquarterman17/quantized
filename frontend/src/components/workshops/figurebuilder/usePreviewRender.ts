@@ -19,9 +19,10 @@ import { useEffect, useState } from "react";
 
 import { renderFigureHitmap, type FigureSpec } from "../../../lib/api/figures";
 import type { FigureHitmap } from "../../../lib/previewmap";
+import { previewDpiFor } from "./previewSizing";
 
-/** Screen-resolution preview; the export uses the document's chosen DPI. */
-const PREVIEW_DPI = 110;
+// Screen-resolution preview, sized to the figure (previewSizing.ts); the
+// export uses the document's chosen DPI.
 const DEBOUNCE_MS = 300;
 
 export interface PreviewRender {
@@ -30,6 +31,9 @@ export interface PreviewRender {
   hitmap: FigureHitmap | null;
   error: string | null;
   busy: boolean;
+  /** The resolution `preview` was rendered at (its pixels / inch), so the
+   *  view can recover the figure's physical size from the hit-map's pixels. */
+  previewDpi: number | null;
 }
 
 export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): PreviewRender {
@@ -37,6 +41,7 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
   const [hitmap, setHitmap] = useState<FigureHitmap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewDpi, setPreviewDpi] = useState<number | null>(null);
 
   useEffect(() => {
     if (!spec) {
@@ -54,11 +59,13 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
     let cancelled = false;
     const controller = new AbortController();
     setBusy(true);
+    const dpi = previewDpiFor(spec);
     const timer = setTimeout(() => {
-      renderFigureHitmap({ ...spec, dpi: PREVIEW_DPI }, controller.signal)
+      renderFigureHitmap({ ...spec, dpi }, controller.signal)
         .then((map) => {
           if (cancelled) return;
           setHitmap(map);
+          setPreviewDpi(dpi);
           setPreview(`data:image/png;base64,${map.image}`);
           setError(null);
         })
@@ -76,5 +83,5 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
     };
   }, [canonical, spec]);
 
-  return { preview, hitmap, error, busy };
+  return { preview, hitmap, error, busy, previewDpi };
 }

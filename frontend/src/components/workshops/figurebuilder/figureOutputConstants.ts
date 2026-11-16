@@ -25,10 +25,30 @@ export const FIGURE_STYLES = [
 export const FIGURE_STYLE_DPI: Record<string, number> = {
   default: 200,
   aps: 600,
+  aps_double: 600,
   nature: 600,
+  nature_double: 600,
   thesis: 300,
   report: 300,
   web: 150,
   presentation: 150,
   poster: 150,
 };
+// Each preset's own figure size in cm (width, height), mirrored by hand from
+// the same table (fig_width_cm / fig_height_cm). Display only: the export
+// box / preset picker label and the preview's render resolution read it; the
+// backend applies the real values. A page size set in Page setup overrides it.
+export const FIGURE_STYLE_SIZE_CM: Record<string, readonly [number, number]> = {
+  default: [15.24, 10.16],
+  aps: [8.6, 6.5],
+  aps_double: [17.8, 6.5],
+  nature: [8.9, 6.0],
+  nature_double: [18.3, 6.0],
+  thesis: [15.0, 10.0],
+  report: [12.0, 8.5],
+  web: [16.0, 10.0],
+  presentation: [25.0, 18.0],
+  poster: [30.0, 22.0],
+};
+/** Formats rendered at the chosen DPI; the rest are vector (DPI ignored). */
+export const RASTER_FORMATS: readonly string[] = ["png", "tiff"];

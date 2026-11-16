@@ -273,7 +273,7 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
 
   // ── Export (real UI, real backend, real download) — the same series set
   //    and the same per-group labels appear in the exported artifact. ─────
-  await reopenedPreview.locator("select").first().selectOption("svg");
+  await reopenedPreview.getByRole("radio", { name: "SVG" }).click();
   const exportResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure",
   );
@@ -439,7 +439,7 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   const exportResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure",
   );
-  await runPaletteCommand(page, "Export figure");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   await expect(exportDialog).toBeVisible();
   await exportDialog.getByRole("button", { name: "Export" }).click();
   const response = await exportResponse;

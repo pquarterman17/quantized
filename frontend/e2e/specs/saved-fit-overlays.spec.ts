@@ -76,7 +76,7 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   expect(fitted.fitFor).toBe(fitted.firstDs);
 
   // ── Export: the fit series are marked, and the Y title is the screen's ──
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const dialog = page.getByRole("dialog", { name: "Export figure" });
   await dialog.getByLabel("Format").selectOption("svg");
   const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");

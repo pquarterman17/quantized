@@ -60,7 +60,7 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   await page.screenshot({ path: test.info().outputPath("axis-extras.png") });
 
   // ── The SVG export carries the same format and draws the labels ──
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const exportDialog = page.getByRole("dialog", { name: "Export figure" });
   await expect(exportDialog).toBeVisible();
   await exportDialog.getByLabel("Format").selectOption("svg");

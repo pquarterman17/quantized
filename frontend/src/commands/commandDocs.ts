@@ -70,7 +70,14 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Temporarily compose multiple plots into an aligned publication page, then export it.",
     keywords: "figure page multi panel composite",
   },
-  "export-figure": { description: "Export the current plot or composed page to a publication-ready image or vector file." },
+  "export-figure": {
+    description: "Open the export view: a large, true-size preview with named journal presets, then save as PDF, SVG, PNG, TIFF or EPS.",
+    keywords: "save figure pdf svg png tiff eps publication preview journal preset",
+  },
+  "export-figure-quick": {
+    description: "Export the current plot or composed page straight from a settings dialog, without the preview.",
+    keywords: "quick export figure pdf svg dialog power user",
+  },
   "export-origin": { description: "Export data and current plot settings as an Origin script plus accompanying data." },
   "export-origin-project": {
     description: "Save the selected datasets, or all of them, as workbooks in one Origin project.",

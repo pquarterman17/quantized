@@ -76,7 +76,7 @@ test("Axis dialog: a reciprocal top axis and a reversed Y axis, matched on scree
 
   // ── Export to SVG: the request carries the same axis formats, and the
   //    rendered SVG actually draws the top axis' title text. ──
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const exportDialog = page.getByRole("dialog", { name: "Export figure" });
   await expect(exportDialog).toBeVisible();
   await exportDialog.getByLabel("Format").selectOption("svg");

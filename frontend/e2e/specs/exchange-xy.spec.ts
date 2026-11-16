@@ -81,7 +81,7 @@ function svgText(svg: string): Record<string, [number, number, number]> {
 }
 
 async function exportSvg(page: Page): Promise<{ svg: string; body: { overrides?: { exchange_xy?: boolean } } }> {
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const dialog = page.getByRole("dialog", { name: "Export figure" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Format").selectOption("svg");

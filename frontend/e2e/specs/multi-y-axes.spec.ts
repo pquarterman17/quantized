@@ -103,7 +103,7 @@ test("Y3 and Y4 axes: assign, stack, format, zoom, export, refuse and fail close
   await expect.poll(async () => (await state(page)).yAxes[0].lim).toEqual([0, 10]);
 
   // ── The SVG export carries both axes, with Y3's look ──
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const exportDialog = page.getByRole("dialog", { name: "Export figure" });
   await exportDialog.getByLabel("Format").selectOption("svg");
   const request = page.waitForRequest((r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/export/figure");

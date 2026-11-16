@@ -85,7 +85,7 @@ test("Error columns ▸ Computed √Y: a linked error column, live on the plot a
 
   // The export carries the same bound error, as a symmetric Y error span
   // (lib/figureSpecSeries.ts::exportErrorSpans) aligned to the plotted series.
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const dialog = page.getByRole("dialog", { name: "Export figure" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Format").selectOption("svg");

@@ -6,6 +6,11 @@ import { fuzzy } from "../lib/fuzzy";
 import { defaultPlotView } from "../lib/plotview";
 import { useApp } from "../store/useApp";
 
+// UX-H: "Export figure…" routes views the preview cannot draw to the quick
+// dialog, which is lazily imported — stub it so no dialog opens.
+const quick = vi.hoisted(() => ({ run: vi.fn() }));
+vi.mock("../lib/exportFigureCommand", () => ({ runExportFigureCommand: quick.run }));
+
 // F2.1e fixture: minimal dataset shared by the no-focused-window canonical
 // tests below -- shape mirrors figureLifecycle.test.ts's own fixture.
 const sampleDataset = () => ({
@@ -148,6 +153,66 @@ describe("Publication Preview command", () => {
 
     command?.run();
     expect(setFigurePageOpen).toHaveBeenCalledWith(true);
+  });
+
+  // UX-H: one export view — Plot ▸ Export figure… opens the preview.
+  const runExportFigure = () => buildFileCommands(useApp.getState).find((item) => item.id === "export-figure")?.run();
+  const quickCalled = () => {
+    quick.run.mockReset();
+    return new Promise<void>((resolve) => quick.run.mockImplementation(async () => resolve()));
+  };
+
+  it.each([
+    ["an XY plot", {}],
+    ["a facet grid", { stackMode: true, facetKey: 0 }],
+  ])("Export figure… opens the Publication preview for %s", (_name, view) => {
+    quick.run.mockReset();
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
+    useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, ...view });
+    runExportFigure();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
+    expect(quick.run).not.toHaveBeenCalled();
+  });
+
+  it.each([["statMode"], ["polarMode"], ["stackMode"]])(
+    "Export figure… keeps the quick dialog for a view the preview cannot draw (%s)",
+    async (mode) => {
+      const called = quickCalled();
+      const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
+      useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, [mode]: true });
+      runExportFigure();
+      await called;
+      expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
+    },
+  );
+
+  it("Export figure… with no dataset lets the quick dialog refuse with its reason", async () => {
+    const called = quickCalled();
+    const setFigureBuilderOpen = vi.fn();
+    useApp.setState({ setFigureBuilderOpen });
+    runExportFigure();
+    await called;
+    expect(setFigureBuilderOpen).not.toHaveBeenCalled();
+  });
+
+  it("Export figure… brings an already-open export view back instead of refusing silently", () => {
+    quick.run.mockReset();
+    const setFigureBuilderOpen = vi.fn();
+    const session = { target: "new-editable" as const, windowId: null, baseline: {} as never, draft: {} as never };
+    useApp.setState({ datasets: [sampleDataset()], activeId: "d1", figurePublicationSession: session, setFigureBuilderOpen });
+    runExportFigure();
+    expect(setFigureBuilderOpen).toHaveBeenCalledWith(true);
+    expect(useApp.getState().figurePublicationSession).toBe(session);
+    expect(quick.run).not.toHaveBeenCalled();
+  });
+
+  it("keeps the quick dialog reachable as its own command", async () => {
+    const called = quickCalled();
+    const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === "export-figure-quick");
+    expect(command?.label).toBe("Export figure (quick dialog)…");
+    command?.run();
+    await called;
+    expect(quick.run).toHaveBeenCalledTimes(1);
   });
 
   // The F0.1/F0.4 renames must not orphan the legacy names in the palette or

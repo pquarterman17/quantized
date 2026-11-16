@@ -43,7 +43,7 @@ const X_LABEL = "t\\-(w) (s)"; // Origin: subscript w
 const Y_LABEL = "\\g(m)\\-(0)M\\+(2) (mV)"; // Origin: Greek mu, subscript 0, superscript 2
 
 async function exportAs(page: Page, fmt: "pdf" | "svg"): Promise<{ body: FigureBody; bytes: Buffer }> {
-  await runPaletteCommand(page, "Export figure…");
+  await runPaletteCommand(page, "Export figure (quick dialog)…");
   const dialog = page.getByRole("dialog", { name: "Export figure" });
   await expect(dialog).toBeVisible();
   // The dialog starts from the screen's own titles.
