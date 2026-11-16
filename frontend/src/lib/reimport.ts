@@ -7,6 +7,7 @@
 
 import { fetchBookData } from "./api";
 import { columnMetaList } from "./columnmeta";
+import { ROW_INDEXED_SIDECARS } from "./rowSidecars";
 import { isLazyBookEntry, isPrimaryBookMarker } from "./types";
 import { freshSheet, sheetNameOf } from "./workbookSheets";
 import type { BookSource, DataStruct, Dataset, LazyBookEntry, PrimaryBookMarker } from "./types";
@@ -91,20 +92,51 @@ export const reimportBaseCols = (ds: Dataset): number => Math.max(0, ds.data.lab
 
 const matchCache = new WeakMap<DataStruct, { base: DataStruct; same: boolean }>();
 
-/** Does worksheet `ds` still hold exactly the file rows `base` (the source watch's last
- *  install)? Decided on the FILE-derived part only, because other features rewrite `data`
- *  without being an edit: a fit()/fitval() refresh, sheet() and other formula columns
- *  (excluded: base columns only), a background-subtraction recalc (with corrections the
- *  file's rows are `ds.raw`, which a recalc never writes -- and a corrected sheet refuses
- *  cell edits). Identity first; values once per new data object (cached), not per poll. */
+/** The user-editable `metadata` a header or text edit writes: the X column's name and unit, the
+ *  categorical levels, and the row-indexed text sidecars. */
+const EDITABLE_META = ["x_column_long", "x_column_name", "x_column_unit", "cat_levels", ...ROW_INDEXED_SIDECARS];
+
+const sameJson = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/** Does worksheet `ds` still hold exactly what the file gave it, `base` (the source watch's
+ *  last install)? Decided on everything EXCEPT the formula columns, because other features
+ *  rewrite `data` without being an edit: a fit()/fitval() refresh, sheet() and other formula
+ *  columns, a background-subtraction recalc (with corrections the file's rows are `ds.raw`,
+ *  which a recalc never writes -- and a corrected sheet refuses edits). Compared: the base
+ *  columns' values, labels and units, and the user-editable metadata (EDITABLE_META), so a
+ *  header, unit or text edit is an edit too. Identity first; the rest once per new data
+ *  object (cached), not per poll. */
 export function holdsFileRows(ds: Dataset, base: DataStruct): boolean {
   const own = ds.corrections && ds.raw ? ds.raw : ds.data;
   if (own === base) return true;
   const hit = matchCache.get(own);
   if (hit && hit.base === base) return hit.same;
-  const same = own.time.length === base.time.length && rowsArePrefix(own, base, reimportBaseCols(ds));
+  const same = own.time.length === base.time.length && untouchedPrefix(ds, base);
   matchCache.set(own, { base, same });
   return same;
+}
+
+/** Are `ds`'s file rows and headers an UNTOUCHED prefix of `file` (same headers, its first
+ *  rows)? True for a worksheet that simply holds OLDER file data -- e.g. an undo past a step
+ *  that added a formula column -- as opposed to one the user edited. */
+export function untouchedPrefix(ds: Dataset, file: DataStruct): boolean {
+  const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+  const cols = reimportBaseCols(ds);
+  // Text sidecars hold one array per column, so an older prefix is compared row by row.
+  const sidecarsPrefix = ROW_INDEXED_SIDECARS.every((k) => {
+    const a = own.metadata?.[k] as Record<string, unknown[]> | undefined;
+    const b = file.metadata?.[k] as Record<string, unknown[]> | undefined;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return sameJson(a, b);
+    return sameJson(Object.keys(a).sort(), Object.keys(b).sort()) && Object.keys(a).every((c) => Array.isArray(a[c]) && Array.isArray(b[c]) && sameJson(a[c], b[c].slice(0, a[c].length)));
+  });
+  return (
+    own.time.length <= file.time.length &&
+    rowsArePrefix(own, file, cols) &&
+    sameJson(own.labels.slice(0, cols), file.labels.slice(0, cols)) &&
+    sameJson(own.units.slice(0, cols), file.units.slice(0, cols)) &&
+    EDITABLE_META.filter((k) => !(ROW_INDEXED_SIDECARS as readonly string[]).includes(k)).every((k) => sameJson(own.metadata?.[k], file.metadata?.[k])) &&
+    sidecarsPrefix
+  );
 }
 
 /** Does `fresh` only ADD rows to what `ds` holds, row for row (so row-indexed state -- excluded

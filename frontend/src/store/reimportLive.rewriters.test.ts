@@ -11,6 +11,8 @@ import { importLive, statSources, type LiveRead, type SourceStat } from "../lib/
 import { createWatcher, type Watcher } from "../lib/sourceWatch";
 import type { DataStruct, Dataset, FitSpec } from "../lib/types";
 import { addDerivedColumn } from "./derivedColumnRun";
+import { setColumnHeader } from "./worksheetColumns";
+import { growAndSetCell } from "./worksheetGrow";
 import { liveReimport } from "./reimportLive";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -124,5 +126,53 @@ describe("a real hand edit still diverges", () => {
     expect(await grow()).toBe(1);
     expect(labels().at(-1)).toBe("Auto-update replaced your edits");
     expect(replaced()).toHaveLength(1);
+  });
+});
+
+describe("header, unit and text edits are edits too (H2)", () => {
+  const cases: [string, () => void][] = [
+    ["a column unit", () => setColumnHeader("d1", 1, { unit: "A m2" })],
+    ["a column name", () => setColumnHeader("d1", 1, { label: "moment" })],
+    ["the X column's unit", () => setColumnHeader("d1", -1, { unit: "C" })],
+    ["a text cell (row-indexed sidecar)", () => {
+      const ds = live();
+      app().recordHistory("edit text cell");
+      useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, metadata: { ...ds.data.metadata, text_columns: { 2: ["note"] } } } }] });
+    }],
+  ];
+  for (const [kind, edit] of cases) {
+    it(`${kind}: replaced only as a labelled, undoable step`, async () => {
+      edit();
+      const edited = live().data;
+      expect(await grow()).toBe(1);
+      expect(labels().at(-1)).toBe("Auto-update replaced your edits");
+      expect(replaced()).toHaveLength(1);
+      app().undo();
+      expect(live().data).toBe(edited); // the edit comes back: its snapshot was not rebased
+    });
+  }
+});
+
+describe("history composes with the other history writers (H1)", () => {
+  it("growAndSetCell after an auto-update step folds only its own entries", async () => {
+    for (const name of ["a", "b", "c"]) app().renameDataset("d1", name);
+    app().setCellValue("d1", 0, 1, 999);
+    expect(await grow()).toBe(1); // "Auto-update replaced your edits"
+    const before = labels();
+    growAndSetCell("d1", live().data.time.length + 1, 1, 5);
+    expect(labels().slice(0, before.length)).toEqual(before); // the renames and the step survive
+    expect(labels()).toHaveLength(before.length + 1);
+    expect(app().history.every((e) => e.seq > 0)).toBe(true);
+  });
+});
+
+describe("older file data is not 'your edits' (undo past a formula-column add)", () => {
+  it("is replaced as a labelled step without the edits toast", async () => {
+    await addDerivedColumn("d1", { name: "twice", expr: "B * 2", propagate: false });
+    expect(await grow()).toBe(0);
+    app().undo(); // removes the column: back to the older rows of the file, no edits of the user's
+    expect(await grow()).toBe(1);
+    expect(labels().at(-1)).toBe("Auto-update (newer file data)");
+    expect(replaced()).toHaveLength(0);
   });
 });

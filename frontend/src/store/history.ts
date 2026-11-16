@@ -151,8 +151,9 @@ export interface HistorySlice {
    *  that is what stops an unrelated edit from being silently absorbed
    *  into someone else's asynchronous undo transaction (R6). A token that
    *  doesn't match the CURRENTLY active batch (stale, or no batch running
-   *  at all) is treated exactly like no token — recorded on its own. */
-  recordHistory: (label: string, batchToken?: HistoryBatchToken) => void;
+   *  at all) is treated exactly like no token — recorded on its own. `keepFuture`: a step that is
+   *  not the user's edit (the live source watch, store/reimportLive.ts) pushes WITHOUT clearing redo. */
+  recordHistory: (label: string, batchToken?: HistoryBatchToken, keepFuture?: boolean) => void;
   /** One undo entry per continuous EDITING RUN, for a control that fires on
    *  every event rather than once per gesture (Group S).
    *
@@ -316,7 +317,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
     viewHistory: [],
     viewFuture: [],
     historySuppressed: false,
-    recordHistory: (label, batchToken) => {
+    recordHistory: (label, batchToken, keepFuture) => {
       if (get().historySuppressed && batchToken !== undefined && batchToken === activeBatchToken) {
         if (batchPreSnapshot === null) {
           batchPreSnapshot = snapshotOf(get());
@@ -339,7 +340,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
       // batch from silently absorbing it (R6).
       set((s) => ({
         history: [...s.history, { label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
-        future: [],
+        future: keepFuture ? s.future : [],
       }));
     },
     recordHistoryCoalesced: (label, key) =>

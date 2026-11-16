@@ -46,10 +46,9 @@
 import { importLive, type LiveRead } from "../lib/api/sourceWatch";
 import { HttpError } from "../lib/api/http";
 import type { DataStruct, Dataset } from "../lib/types";
-import { HISTORY_DEPTH, type HistoryEntry } from "./history";
-import { snapshotOf } from "./historySnapshot";
+import type { HistoryEntry } from "./history";
 import { toast } from "./toasts";
-import { holdsFileRows, reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
+import { holdsFileRows, untouchedPrefix, reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
 import type { AppState } from "./useApp";
 
@@ -80,18 +79,13 @@ export type LiveReimport =
 /** A read that has not answered by now is abandoned (a share that dropped after its stat). */
 export const READ_TIMEOUT_MS = 120_000;
 
-/** Steps pushed here take NEGATIVE seqs: unique against history.ts's positive counter (which
- *  this module cannot reach), and seqs are only ever compared for equality. */
-let liveSeq = 0;
-
-/** Push a labelled undo step for the CURRENT state without clearing redo (rule 1) -- in ONE
- *  store write: `recordHistory` + restoring `future` would show subscribers a moment with redo
- *  empty, and store/projectFollowsHistory.ts prunes the records of entries that leave both
- *  stacks (a project swap waiting in redo would lose its record). */
-function pushStep(set: SliceSet, label: string): number {
-  const seq = -++liveSeq;
-  set((s) => ({ history: [...s.history, { label, snapshot: snapshotOf(s), seq }].slice(-HISTORY_DEPTH) }));
-  return seq;
+/** Push a labelled undo step for the CURRENT state without clearing redo (rule 1), in ONE
+ *  store write with history.ts's own seq: restoring `future` after a plain `recordHistory` would
+ *  show subscribers a moment with redo empty, and store/projectFollowsHistory.ts prunes the
+ *  records of entries that leave both stacks (a project swap waiting in redo would lose its). */
+function pushStep(get: SliceGet, label: string): number | undefined {
+  get().recordHistory(label, undefined, true);
+  return get().history.at(-1)?.seq;
 }
 
 /** Re-read `id`'s source file and install it in place. Never throws; on any
@@ -123,20 +117,25 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
       if (!read.held || own.time.length > freshRaw.time.length) stampSource(set, id, ds, read);
       return { ok: true, rows: own.time.length, reshaped: false, labelled: false, stamp: read.stamp, held: read.held, data: ds.data };
     }
-    const label = diverged
+    // Diverged but holding untouched OLDER file data (an undo past a formula-column add, say):
+    // nothing of the user's is replaced, so it is not called "your edits".
+    const edits = diverged && !untouchedPrefix(ds, freshRaw);
+    const label = edits
       ? "Auto-update replaced your edits"
+      : diverged
+        ? "Auto-update (newer file data)"
       : merge.shapeChanged
         ? "Auto-update (the file's shape changed)"
         : opts.base === null
           ? "Auto-update (first read of the file)"
           : null;
-    const stepSeq = label ? pushStep(set, label) : undefined;
+    const stepSeq = label ? pushStep(get, label) : undefined;
     applyReimportMerge(set, get, ds, merge, undefined, true);
     if (!read.held) stampSource(set, id, ds, read); // a held read is not the whole file
     const next = get().datasets.find((d) => d.id === id);
     if (next && opts.base && !merge.shapeChanged) rebaseHistory(set, ds, opts.base, next, stepSeq);
     // A reshape already toasts from applyReimportMerge ("changed shape on re-import").
-    if (label && (diverged || !merge.shapeChanged)) toast(diverged ? `Auto-update replaced your edits to "${ds.name}" with the file's newer data. Undo (Ctrl+Z) brings them back.` : `"${ds.name}" was updated from its file (undoable).`, "info");
+    if (label && (edits || !merge.shapeChanged)) toast(edits ? `Auto-update replaced your edits to "${ds.name}" with the file's newer data. Undo (Ctrl+Z) brings them back.` : `"${ds.name}" was updated from its file (undoable).`, "info");
     return { ok: true, rows: merge.newData.time.length, reshaped: merge.shapeChanged, labelled: label !== null, stamp: read.stamp, held: read.held, data: next?.data ?? merge.newData };
   } catch (e) {
     if (e instanceof HttpError && e.status === 409) return { ok: false, stale: true, error: e.message };
