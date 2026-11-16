@@ -525,12 +525,17 @@ fast. All the time was canvas raster ("(program)" in the CPU profile, the
 `CanvasRenderingContext2D::FinalizeFrame` / `Commit` trace events), twice
 per import. Non-ascending x turns off decimation, so the loop path
 (`fullLine`) stroked one 1.5-px path with a vertex per row. Every segment
-crossed the plot, and raster cost grows with the stroked area. The fix is in
-`lib/uplotLoopLine.ts`, which rides the region-decor startup chunk: a vertex
-at the same device pixel as the one before it is not emitted (the same
-pixels), and a line that covers its plot at least 16 times with vertices in
-at least half of its 8-px cells is stroked one device pixel wide (Skia's
-hairline path). Until that chunk lands, the builder draws every row in one call, which is the previous behaviour for small loops. Eager bundle 776.8 → 776.6 kB.
+crossed the plot, and raster cost grows with the stroked area. The stroke is
+now built by `lib/uplotLoopLine.ts` (it rides the region-decor startup chunk;
+the run and gap tiling stays eager in `lib/uplotSeries.ts`). A vertex at the
+same device pixel as the one before it is not emitted, which leaves the
+pixels identical. The line is stroked one device pixel wide (Skia's hairline
+path) only when at least 95% of the 8-px cells it touches are each covered
+16 times over. That holds for rows spread evenly over the whole plot. It does
+not hold for a Gaussian cloud, a random walk, or a loop or band, so those keep
+their width (tests pin all of them). Until the chunk lands, or if it fails,
+every run goes through uPlot's builder as before. Eager bundle
+776.8 → 776.8 kB.
 
 | File (drop → first paint) | Before | After |
 |---|---|---|

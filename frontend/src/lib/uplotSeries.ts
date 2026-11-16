@@ -60,16 +60,48 @@ export function buildSeriesDefs(
   const { seriesStyles } = args;
   ensureMarks(seriesStyles);
   const { accentColor, inkColor, inkDimColor, isDarkBg } = colors;
-  // Non-monotonic x: `fullLine` (lib/uplotLoopLine.ts, in the region-decor
-  // startup chunk) draws a line over the full acquisition order. Until that
-  // chunk lands (or if it never does) the builder draws every row in one call:
-  // exact below 4 rows per pixel, uPlot's ascending-x decimation above. The
-  // viewports rebuild once it lands (Stage/useLazyPlotParts). `fullPoints`
-  // does the same for markers.
-  const fullLine = (b: uPlot.Series.PathBuilder, own?: boolean): uPlot.Series.PathBuilder =>
-    (u, sidx, i0, i1) => {
-      const loop = regionDecor()?.fullLine;
-      return loop ? loop(b, own)(u, sidx, i0, i1) : b(u, sidx, 0, u.data[0].length - 1);
+  // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
+  // index window and draws the full acquisition order. See `linearPaths` docs.
+  // uPlot min/max-decimates a run of >= 4 points per pixel assuming ascending
+  // x, collapsing a dense descending spectrum to one vertical line: draw in
+  // runs short enough to stay exact, joined end to end. `bbox.width` is device
+  // px rounded to a HALF pixel (x.5 at a 125 %/150 % display), so the run is
+  // floored to a whole row count: a fractional run start reads undefined rows,
+  // uPlot's non-null scan answers -1 and the run sweeps from row 0, decimated.
+  // Gaps: uPlot breaks a line by CLIPPING the x interval a null run spans,
+  // which assumes ascending x — on a loop it cut holes into whatever curve
+  // crossed that interval (an overlay's block rows are all nulls). A loop
+  // breaks the line by not drawing across a null (or a value a log axis cannot
+  // place) and keeps no clip.
+  // `own` (the linear builder): once the region-decor startup chunk has landed,
+  // lib/uplotLoopLine.ts builds the stroke over the same runs, with a bounded
+  // raster cost (its header), and the builder gives only the first run's fill
+  // and band. Before that, every run is the builder's, as it always was.
+  const fullLine = (b: uPlot.Series.PathBuilder, own = false): uPlot.Series.PathBuilder =>
+    (u, sidx) => {
+      const ys = u.data[sidx] as readonly (number | null | undefined)[];
+      const last = u.data[0].length - 1;
+      const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
+      const log = (u.scales?.[u.series?.[sidx]?.scale ?? "y"]?.distr as number | undefined) === 3;
+      const drawable = (i: number) => { const y = ys[i]; return y != null && Number.isFinite(y) && !(log && y <= 0); };
+      const ll = own ? regionDecor() : null;
+      const ink = ll?.loopInk(u);
+      let out: uPlot.Series.Paths | null = null;
+      for (let s = 0; s <= last; s++) {
+        if (!drawable(s)) continue;
+        let e = s;
+        while (e < last && drawable(e + 1)) e++;
+        for (let i = s; ; i += run) {
+          const i1 = Math.min(e, i + run);
+          if (ink) ll!.strokeRows(u, sidx, i, i1, ink);
+          const p: uPlot.Series.Paths | null = ink && out ? null : b(u, sidx, i, i1);
+          if (p && out) (out.stroke as Path2D).addPath(p.stroke as Path2D);
+          else if (p) out = { ...p, clip: null };
+          if (i + run >= e) break;
+        }
+        s = e;
+      }
+      return !out ? b(u, sidx, 0, last) : ink ? ll!.finishLoop(out, ink, u, sidx) : out;
     };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);

@@ -29,7 +29,7 @@ export async function settleDecor(load: () => Promise<DecorModule>): Promise<Dec
   // Imported only on failure, as marksLoader does: a static import would pull the store into every
   // module that reaches this one.
   const { useApp } = await import("../store/useApp");
-  useApp.getState().setStatus("Error bars, shades, colour-mapped points and dense loop lines could not load; reload.", "danger");
+  useApp.getState().setStatus("Error bars, shades and colour-mapped points could not load; reload.", "danger");
   return null;
 }
 
