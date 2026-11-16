@@ -206,6 +206,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // MAIN_PLAN #42 named sample profiles — .dwk additive. Explicit, like
           // `collections`, so a previous project's profiles never leak in.
           savedSampleProfiles: ws.savedSampleProfiles ?? [],
+          savedRecodeMappings: ws.savedRecodeMappings ?? [], // gap audit 5 lane J: explicit, so one project's mappings never leak into the next
           // P1.3 wave 2 (Lane B/C integration fix): `plotRecipes` was already
           // serialized by the whole-state-spread save path (workspaceIO.ts /
           // useWorkspaceAutosave.ts) but never restored here — a load silently

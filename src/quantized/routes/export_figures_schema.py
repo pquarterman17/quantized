@@ -304,6 +304,9 @@ class TickFormatSpec(BaseModel):
     ticks: Literal["in", "out", "both"] | None = None
     size: float | None = Field(default=None, gt=0, le=72)
     base: Literal["e", "2"] | None = None
+    # Text around each numeric tick label (``calc.axis_extras``).
+    prefix: str | None = Field(default=None, max_length=12)
+    suffix: str | None = Field(default=None, max_length=12)
     # Y-axis breaks (``calc.axis_breaks``): elided ``[lo, hi]`` stretches of a
     # linear Y / Y2 axis. Validated there; an invalid entry is dropped.
     breaks: list[tuple[float, float]] | None = Field(default=None, max_length=4)

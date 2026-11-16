@@ -95,6 +95,7 @@ export type AutosaveState = Pick<
   // MAIN_PLAN #42: named sample profiles — persist (lib/workspace.ts), mutate
   // independently (store/sampleProfiles.ts), same class as `collections`.
   | "savedSampleProfiles"
+  | "savedRecodeMappings" // gap audit 5 lane J: saved Recode mappings persist (store/sampleProfiles.ts)
   | "fitModelCarry" // P2.7: a refused fit-model merge grows it on its own (store/workspaceHydration.ts)
   // Gap audit 5 lane C (review N2): the focused window's fit curve is SAVED
   // content now (`windowsForSave` folds it into the window's document), and
@@ -153,6 +154,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.mapViews === prev.mapViews &&
     state.collections === prev.collections &&
     state.savedSampleProfiles === prev.savedSampleProfiles &&
+    state.savedRecodeMappings === prev.savedRecodeMappings &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
     state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry &&
     state.fitOverlay === prev.fitOverlay &&
