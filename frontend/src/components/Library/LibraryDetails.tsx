@@ -346,7 +346,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
           </tbody>
         </table>
         {searching && rows.length === 0 && (
-          <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
+          <div className="qzk-helptext" style={{ padding: 8, textAlign: "center" }}>
             No matches
           </div>
         )}

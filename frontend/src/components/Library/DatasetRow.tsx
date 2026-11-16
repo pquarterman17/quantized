@@ -293,7 +293,7 @@ export default function DatasetRow({
           {folderCaptionEl}
           <Sparkline data={d.data} />
           <div className="qzk-ds-foot">
-            <span className="qzk-ds-meta" title={pendingTitle}>
+            <span className="qzk-meta" title={pendingTitle}>
               {pts} pts · {d.data.units[0] || "—"}
               {d.pending && " · …"}
             </span>

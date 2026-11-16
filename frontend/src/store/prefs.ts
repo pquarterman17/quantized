@@ -18,11 +18,29 @@ import type {
   ExcludedDisplay,
   OriginBookClickOpens,
   Theme,
+  ThemeMode,
 } from "./useApp";
 
 export const PREFS_KEY = "qz.prefs";
 
 const THEMES = ["dark", "light"];
+const THEME_MODES = ["system", "dark", "light"];
+
+/** The OS colour scheme, as a concrete theme. No matchMedia (jsdom, very old
+ *  webviews) or a throwing one falls back to dark, the app's historical look. */
+export function systemTheme(): Theme {
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+/** The theme the UI actually renders for a user's choice: "system" follows the
+ *  OS, an explicit "dark"/"light" is kept as-is. */
+export function resolveTheme(mode: ThemeMode): Theme {
+  return mode === "system" ? systemTheme() : mode;
+}
 // Exported for the folder-Properties colour picker (plan #13 sub-item 4) —
 // the SAME 5 design-token accent names the Appearance/Preferences accent
 // swatches use, so a folder's colour is drawn from one canonical palette.
@@ -55,7 +73,12 @@ export const LIBRARY_PANEL_WIDTH_DEFAULT = defaultLibraryPanelWidth(
 );
 
 export interface Prefs {
+  /** The EFFECTIVE theme (what <html data-theme> shows). Derived from
+   *  `themeMode`; every renderer reads this one. */
   theme: Theme;
+  /** The user's CHOICE: follow the OS ("system", the first-run default) or pin
+   *  dark/light. A legacy blob with only `theme` loads as that explicit pick. */
+  themeMode: ThemeMode;
   accent: Accent;
   density: Density;
   palette: string;
@@ -103,7 +126,8 @@ export interface Prefs {
 }
 
 export const PREF_DEFAULTS: Prefs = {
-  theme: "dark",
+  theme: "dark", // static fallback; loadPrefs resolves it from themeMode
+  themeMode: "system",
   accent: "violet",
   density: "regular",
   palette: "default",
@@ -148,8 +172,14 @@ export function loadPrefs(): Prefs {
     const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
     const num = (v: unknown, d: number, lo: number, hi: number) =>
       typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+    const themeMode: ThemeMode = THEME_MODES.includes(p.themeMode as string)
+      ? (p.themeMode as ThemeMode)
+      : THEMES.includes(p.theme as string)
+        ? (p.theme as ThemeMode)
+        : fb.themeMode;
     return {
-      theme: THEMES.includes(p.theme as string) ? (p.theme as Theme) : fb.theme,
+      theme: resolveTheme(themeMode),
+      themeMode,
       accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
       density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
       palette: normalizePalette(p.palette),
@@ -188,6 +218,7 @@ export function loadPrefs(): Prefs {
 export function prefsOf(s: AppState): Prefs {
   return {
     theme: s.theme,
+    themeMode: s.themeMode,
     accent: s.accent,
     density: s.density,
     palette: s.palette,

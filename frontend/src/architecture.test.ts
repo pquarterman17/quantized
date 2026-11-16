@@ -2310,6 +2310,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
   // persisted user preferences (own localStorage lifecycle via store/prefs.ts, not project edits)
   theme: "prefs",
+  themeMode: "prefs (user choice system|dark|light; `theme` is the effective value)",
   accent: "prefs",
   density: "prefs",
   palette: "prefs",

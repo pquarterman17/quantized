@@ -135,7 +135,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
         >
           Guided import for unfamiliar files…
         </button>
-        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
           Drop files anywhere here. Quantized plots the first usable columns;
           then drag columns onto X, Y, or Y2 to change them.
         </div>
@@ -273,12 +273,12 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
             2-D
           </button>
         </div>
-        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
           Examples are generated locally and never replace your files.
         </div>
       </div>
 
-      <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
         {health.error ? (
           <span role="alert" style={{ color: "var(--danger, #d33)" }}>
             ⚠ autosave is failing — use File ▸ Save workspace

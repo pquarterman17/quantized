@@ -71,7 +71,7 @@ export default function WeightingSection(p: Props) {
         </div>
       )}
       {p.weightNote && (
-        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--warning)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--warning)" }}>
           {p.weightNote}
         </div>
       )}

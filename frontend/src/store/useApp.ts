@@ -107,7 +107,7 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 // (the quick-fit debounce timer moved to store/gadget.ts with the slice.)
 
 // Theme … PrefKey moved with the pref fields to store/appearancePrefs.ts.
-export type { Accent, Density, ExcludedDisplay, OriginBookClickOpens, PrefKey, Theme } from "./appearancePrefs";
+export type { Accent, Density, ExcludedDisplay, OriginBookClickOpens, PrefKey, Theme, ThemeMode } from "./appearancePrefs";
 // Stage-tab routing lives in lib/stagetab (MAIN_PLAN #2 — the window slice
 // needs it without a runtime cycle); re-exported so existing imports hold.
 export { nextStageTab, plotIntentStageTab } from "../lib/stagetab";
