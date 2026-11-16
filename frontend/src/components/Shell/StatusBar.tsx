@@ -12,6 +12,7 @@ import { usePendingOps, type PendingOp } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 import { useShownDataset } from "../../store/useShownDataset";
 import { retryAutosaveRestoreNow } from "../../autosaveStartupRestore";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 
 /** Clock time of the last successful autosave, or "" when there isn't one. */
 function savedAtLabel(savedAt: number | null): string {
@@ -171,7 +172,7 @@ export default function StatusBar() {
           className="qzk-conn-stale"
           style={{ background: "none", border: "none", padding: 0, font: "inherit", cursor: "default" }}
           title={health.restoreError}
-          onClick={() => retryAutosaveRestoreNow() || void import("../../lib/lateRestore").then((m) => m.reofferLateRestore())}
+          onClick={() => retryAutosaveRestoreNow() || void runLazy("Loading restore prompt…", () => import("../../lib/lateRestore")).then((m) => m.reofferLateRestore(), onLoadFailure)}
         >
           {health.restoreKept ? "⚠ previous session kept — Replace or Discard" : "⚠ previous session not restored"}
         </button>
