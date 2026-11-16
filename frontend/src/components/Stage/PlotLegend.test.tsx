@@ -7,6 +7,7 @@ import { CHANNEL_DND, decodeChannelDrag } from "../../lib/dragaxis";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { displayPositions } from "../../lib/seriesStyleCycle";
 import type { DataStruct, SeriesStyle } from "../../lib/types";
+import { useFigureDialog } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
 
 const series: PlotSeriesSpec[] = [
@@ -36,6 +37,11 @@ beforeEach(() => {
     plotTool: "pointer",
   });
 });
+
+/** Put the legend box's top-left corner exactly under the press at (x, y). */
+function pressAtBoxOrigin(box: Element, x: number, y: number) {
+  setParentRect(box, { width: 60, height: 40, left: x, top: y });
+}
 
 function setParentRect(el: Element, rect: { width: number; height: number; left?: number; top?: number }) {
   const left = rect.left ?? 0;
@@ -160,6 +166,7 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
+    pressAtBoxOrigin(el, 50, 50); // the press is ON the box's top-left corner: no grab offset
     fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
@@ -171,10 +178,22 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 400, height: 200 });
     const content = container.querySelector(".qzk-legend-content") as HTMLElement;
+    pressAtBoxOrigin(container.querySelector(".qzk-legend") as HTMLElement, 80, 60);
     fireEvent.mouseDown(content, { clientX: 80, clientY: 60, button: 0 });
     fireEvent.mouseMove(document, { clientX: 200, clientY: 100 });
     fireEvent.mouseUp(document, { clientX: 200, clientY: 100 });
     expect(useApp.getState().legendXY).toEqual([0.5, 0.5]);
+  });
+
+  it("keeps the grip: the box moves by the pointer's travel, its corner does not jump to the cursor", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    setParentRect(el, { width: 60, height: 40, left: 40, top: 30 }); // box at (40, 30)
+    fireEvent.mouseDown(el, { clientX: 70, clientY: 50, button: 0 }); // grabbed 30 right / 20 below its corner
+    fireEvent.mouseMove(document, { clientX: 110, clientY: 80 }); // travelled (+40, +30)
+    fireEvent.mouseUp(document, { clientX: 110, clientY: 80 });
+    expect(useApp.getState().legendXY).toEqual([0.4, 0.6]); // corner now (80, 60) of 200 x 100
   });
 
   it("clamps the dragged fraction to [0, 1]", () => {
@@ -216,29 +235,32 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     expect(input).toHaveAccessibleName("Legend label for B");
   });
 
-  it("double-click on the box background resets to the nearest corner and clears legendXY", () => {
-    useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" }); // near the top-right -> "ne"
-    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    const el = container.querySelector(".qzk-legend") as HTMLElement;
-    fireEvent.doubleClick(el);
-    expect(useApp.getState().legendXY).toBeNull();
-    expect(useApp.getState().legendPos).toBe("ne");
-  });
-
-  it("double-click on the content body's empty space resets like the box background", () => {
+  it("double-click on the box background opens legend formatting and leaves the position alone", () => {
     useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" });
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    fireEvent.doubleClick(container.querySelector(".qzk-legend-content") as HTMLElement);
-    expect(useApp.getState().legendXY).toBeNull();
-    expect(useApp.getState().legendPos).toBe("ne");
+    fireEvent.doubleClick(container.querySelector(".qzk-legend") as HTMLElement);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
+    expect(useApp.getState().legendXY).toEqual([0.9, 0.1]);
+    useFigureDialog.setState({ open: null });
   });
 
-  it("double-click is a no-op when the legend has no free position to reset from", () => {
-    useApp.setState({ legendPos: "sw" });
+  it("a 1-2 px jitter between press and release is not a drag: the legend stays put", () => {
+    useApp.setState({ legendXY: null, history: [] });
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
-    fireEvent.doubleClick(el);
-    expect(useApp.getState().legendPos).toBe("sw"); // untouched — nothing to reset
+    fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 51, clientY: 51 });
+    fireEvent.mouseUp(document, { clientX: 51, clientY: 51 });
+    expect(useApp.getState().legendXY).toBeNull();
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("double-click on the content body's empty space opens legend formatting too", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    fireEvent.doubleClick(container.querySelector(".qzk-legend-content") as HTMLElement);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
+    useFigureDialog.setState({ open: null });
   });
 });
 
@@ -380,21 +402,12 @@ describe("PlotLegend frame anchor (decode #52 — faithful in-frame placement)",
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
+    pressAtBoxOrigin(el, 50, 50); // the press is ON the box's top-left corner: no grab offset
     fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
     expect(useApp.getState().legendXY).toEqual([0.5, 0.8]);
     expect(useApp.getState().legendFrameXY).toBeNull();
-  });
-
-  it("double-click clears the frame anchor, falling back to the pinned corner", () => {
-    useApp.setState({ legendFrameXY: [0.2, 0.8], legendXY: null, legendPos: "sw" });
-    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    const el = container.querySelector(".qzk-legend") as HTMLElement;
-    fireEvent.doubleClick(el);
-    expect(useApp.getState().legendFrameXY).toBeNull();
-    expect(useApp.getState().legendPos).toBe("sw"); // the corner the apply already pinned
-    expect(el).toHaveClass("sw");
   });
 });
 
@@ -461,6 +474,7 @@ describe("PlotLegend static mode (decode #52 — applied Origin figure)", () => 
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
     const el = container.querySelector(".qzk-legend") as HTMLElement;
+    pressAtBoxOrigin(el, 50, 50); // the press is ON the box's top-left corner: no grab offset
     fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
     fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
     fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });

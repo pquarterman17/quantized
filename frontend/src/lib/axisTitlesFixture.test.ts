@@ -239,7 +239,7 @@ function wire(spec: FigureSpec, axes: AxisKey[]): Partial<Record<AxisKey, Title>
     const st = spec.axis_label_styles?.[axis];
     const off = spec.axis_label_offsets?.[axis];
     return [axis, {
-      size: st?.size ?? null,
+      size: st?.size == null ? null : st.size / 0.75, // the wire is points; the Title is canvas px
       bold: st?.bold === true,
       italic: st?.italic === true,
       offset: off ? [off[0], off[1]] : [0, 0],
@@ -254,6 +254,13 @@ function fresh() {
 describe("axis-title Format + drag, screen == export", () => {
   it.each(FLAT)("canvas: $name", (c) => {
     expect(canvas(c)).toEqual(c.drawn);
+  });
+
+  it("the request sends the title size in POINTS (canvas px x 0.75), like an annotation's size", () => {
+    const c = CASES[1];
+    const sizes = request(c).axis_label_styles;
+    expect(sizes?.y?.size).toBe(15); // 20 px
+    expect(sizes?.x?.size).toBe(12); // 16 px
   });
 
   it.each(FLAT)("request: $name", (c) => {

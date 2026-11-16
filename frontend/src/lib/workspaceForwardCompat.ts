@@ -38,7 +38,11 @@ import type { DisplayBlock } from "./plotspec2";
 import type { RecipeMapView, RecipeVisual } from "./plotRecipeSchema";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
-import type { Dataset } from "./types";
+import type { FigureOverrides } from "./figureOverrides";
+import type { MapAnnotation } from "./mapView";
+import type { InsetView } from "./plotviewDecor";
+import type { StatMarks } from "./plotviewSanitize";
+import type { Annotation, Dataset, ReferenceStick, RefLine, RegionShade, Shape } from "./types";
 
 export type V034Class = "v034" | "gated" | "kept-by-034";
 type Classify<T> = Record<keyof T, V034Class>;
@@ -97,6 +101,73 @@ export const RECIPE_VISUAL: Classify<RecipeVisual> = {
   yAxes: G, yAxisOf: G,
 };
 
+// A text label. v0.34.0's two annotation sanitizers (plotviewDecor's, used by the
+// view, plot-spec decor and recipes, and figureOverridesSanitize's) pick known
+// keys, so a `dot` is dropped on open + save, and since an absent `dot` means
+// "draw the dot" the loss is permanent and undetectable: gated, and only
+// `dot: false` counts (see checkType). Measured against `git archive v0.34.0`.
+export const ANNOTATION: Classify<Annotation> = {
+  id: V, groupId: V, x: V, y: V, text: V, axis: V, size: V, anchor: V, frame: V,
+  dot: G,
+};
+// The annotation's text-box backing rect (`Annotation.frame`), in every 0.34 file.
+export const ANNOTATION_FRAME: Classify<NonNullable<Annotation["frame"]>> = { fill: V, stroke: V, opacity: V, pad: V };
+
+// The other persisted decoration elements. Each type existed in v0.34.0 with
+// exactly these keys (`git show v0.34.0:frontend/src/lib/...`), so a NEW key
+// fails `tsc` here until it is classified, instead of being credited to the
+// parent list field. The kitchen sink fills one `Required<T>` element of each.
+export const SHAPE: Classify<Shape> = {
+  id: V, groupId: V, kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
+};
+export const REF_LINE: Classify<RefLine> = { id: V, axis: V, value: V, label: V, groupId: V, groupLabel: V, stick: V };
+export const REGION_SHADE: Classify<RegionShade> = { id: V, x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, fullHeight: V };
+export const INSET_VIEW: Classify<InsetView> = { x: V, y: V, y2: V, yZoom: V, at: V, lines: V };
+export const STAT_MARKS: Classify<StatMarks> = {
+  points: V, jitter: V, jitterWidth: V, summary: V, errorBars: V, connectMeans: V, labelRotation: V, labelWrap: V,
+};
+// A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
+export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
+// The export-request object persisted in figure documents (publication deltas,
+// templates). `layers` is wire-only: sanitizeFigureOverrides never persists it.
+export type OvList<K extends keyof FigureOverrides> = NonNullable<FigureOverrides[K]> extends readonly (infer E)[] ? E : NonNullable<FigureOverrides[K]>;
+// The wire elements inside an overrides object (snake_case, no ids). Same story.
+export const OVERRIDE_SHAPE: Classify<OvList<"shapes">> = {
+  kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
+};
+export const OVERRIDE_REF_LINE: Classify<OvList<"ref_lines">> = { axis: V, value: V, label: V, group_id: V, group_label: V, stick: V };
+export const OVERRIDE_REGION_SHADE: Classify<OvList<"region_shades">> = { x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, full_height: V };
+export const OVERRIDE_INSET: Classify<OvList<"inset">> = { x: V, y: V, y2: V, at: V, lines: V };
+// Nested objects inside the elements above (and inside FigureOverrides), each a
+// v0.34 type whose keys 0.34's sanitizers pick by name: a new key on any of them
+// is lost on a 0.34 round trip unless classified here (tsc forces it).
+export const REFERENCE_STICK: Classify<ReferenceStick> = {
+  intensity: V, baseline: V, height: V, color: V, visible: V, showLabel: V,
+};
+export const OVERRIDE_STICK: Classify<NonNullable<OvList<"ref_lines">["stick"]>> = {
+  intensity: V, baseline: V, height: V, color: V, visible: V, show_label: V,
+};
+export const OVERRIDE_LEGEND: Classify<NonNullable<FigureOverrides["legend"]>> = { show: V, loc: V, frame: V, anchor: V, title: V };
+export const OVERRIDE_TICKS: Classify<NonNullable<FigureOverrides["ticks"]>> = { dir: V, len: V, minor: V };
+export const OVERRIDE_SPINES: Classify<NonNullable<FigureOverrides["spines"]>> = { top: V, right: V };
+/** `margins` and `page_pad` share one shape (asserted below). */
+export const OVERRIDE_BOX: Classify<NonNullable<FigureOverrides["margins"]>> = { left: V, right: V, top: V, bottom: V };
+type _Margins = keyof NonNullable<FigureOverrides["margins"]>;
+type _PagePad = keyof NonNullable<FigureOverrides["page_pad"]>;
+export const OVERRIDE_BOX_SHARED: [_Margins] extends [_PagePad] ? ([_PagePad] extends [_Margins] ? true : never) : never = true;
+export const FIGURE_OVERRIDES: Classify<FigureOverrides> = {
+  font_size: V, font_name: V, title_size: V, label_size: V, tick_size: V, legend_size: V, legend: V, ticks: V,
+  spines: V, x_lim: V, x_reversed: V, y_lim: V, y2_lim: V, margins: V, page_pad: V, grid: V, annotations: V,
+  x_breaks: V, shapes: V, ref_lines: V, region_shades: V, inset: V,
+  layers: K,
+};
+
+// The export-request element is a subset of Annotation: a new key must be one.
+type _OverrideAnnotationIsAnnotation = Exclude<
+  keyof NonNullable<FigureOverrides["annotations"]>[number],
+  keyof Annotation
+> extends never ? true : never;
+export const OVERRIDE_ANNOTATION_OK: _OverrideAnnotationIsAnnotation = true;
 // The per-dataset map view (`.dwk` `mapViews[datasetId]`). 0.34's
 // sanitizeMapView keeps only the five fields it knows, so the static 3-D view is
 // dropped on a 0.34 open + save (measured with the `git archive v0.34.0` procedure).
@@ -129,6 +200,25 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   ExportSeriesStyle: EXPORT_SERIES_STYLE,
   DisplayBlock: DISPLAY_BLOCK,
   RecipeVisual: RECIPE_VISUAL,
+  Annotation: ANNOTATION,
+  AnnotationFrame: ANNOTATION_FRAME,
+  Shape: SHAPE,
+  RefLine: REF_LINE,
+  RegionShade: REGION_SHADE,
+  InsetView: INSET_VIEW,
+  StatMarks: STAT_MARKS,
+  MapAnnotation: MAP_ANNOTATION,
+  FigureOverrides: FIGURE_OVERRIDES,
+  OverrideShape: OVERRIDE_SHAPE,
+  OverrideRefLine: OVERRIDE_REF_LINE,
+  OverrideRegionShade: OVERRIDE_REGION_SHADE,
+  OverrideInset: OVERRIDE_INSET,
+  ReferenceStick: REFERENCE_STICK,
+  OverrideStick: OVERRIDE_STICK,
+  OverrideLegend: OVERRIDE_LEGEND,
+  OverrideTicks: OVERRIDE_TICKS,
+  OverrideSpines: OVERRIDE_SPINES,
+  OverrideBox: OVERRIDE_BOX,
   MapViewState: MAP_VIEW,
   RecipeMapView: RECIPE_MAP_VIEW,
   Dataset: DATASET,
@@ -146,7 +236,10 @@ const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSI
 
 function checkType(o: unknown, type: string, found: Set<string>): void {
   if (!isObj(o)) return;
-  for (const k of GATED[type]) if (present(o[k])) found.add(`${type}.${k}`);
+  for (const k of GATED[type]) {
+    // `dot: false` is the only value that carries information (absent = true = dot).
+    if (type === "Annotation" && k === "dot" ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
+  }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
 }
 
@@ -170,6 +263,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
     if (Array.isArray(v)) {
       if (!v.length || typeof v[0] !== "object") return; // cells / numbers: nothing to find
       if (key === "seriesStyles") for (const st of v) checkType(st, "ExportSeriesStyle", found);
+      if (key === "annotations") for (const a of v) checkType(a, "Annotation", found);
       for (const x of v) visit(x, key);
       return;
     }

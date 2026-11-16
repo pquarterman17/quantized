@@ -79,6 +79,7 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
       const next: NonNullable<FigureOverrides["annotations"]>[number] = { x, y, text: annotation.text };
       if (finite(annotation.size) !== undefined && finite(annotation.size)! > 0) next.size = finite(annotation.size);
       if (annotation.anchor === "page") next.anchor = "page";
+      if (annotation.dot === false) next.dot = false;
       const frame = record(annotation.frame);
       if (frame) {
         const cleaned: NonNullable<typeof next.frame> = {};

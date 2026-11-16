@@ -16,7 +16,7 @@
 
 import type { HalfLim } from "./axisLim";
 import type { StoreGet } from "./exportActive";
-import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import { annotationSizePt, compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import { layersWire } from "./graphLayersWire";
 import { insetWire } from "./inset";
 import { marginFractions, pageSizeInches } from "./pageGeometry";
@@ -89,9 +89,10 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       x: a.x,
       y: a.y,
       text: a.text,
-      ...(a.size ? { size: a.size } : {}),
+      ...(a.size ? { size: annotationSizePt(a.size) } : {}),
       ...(a.anchor === "page" ? { anchor: "page" as const } : {}),
       ...(a.frame ? { frame: a.frame } : {}),
+      ...(a.dot === false ? { dot: false as const } : {}),
     }));
   // MAIN #27: drawn shapes, wire-shaped (no `id` — the render request needs no
   // identity, unlike the screen's editable list).

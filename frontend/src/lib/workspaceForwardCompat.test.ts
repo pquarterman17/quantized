@@ -16,7 +16,11 @@ import dwk034 from "./__fixtures__/workspace/v4-0.34.0.dwk.json";
 import { DEFAULT_MAP_VIEW } from "./mapView";
 import type { PlotWindow } from "./plotview";
 import type { SavedPlotSpec } from "./plotspec";
-import type { Dataset } from "./types";
+import type { FigureOverrides } from "./figureOverrides";
+import type { MapAnnotation } from "./mapView";
+import type { InsetView } from "./plotviewDecor";
+import type { StatMarks } from "./plotviewSanitize";
+import type { Annotation, Dataset, RefLine, RegionShade, Shape } from "./types";
 import {
   featuresV034WouldDrop,
   parseWorkspace,
@@ -26,7 +30,7 @@ import {
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type LoadedWorkspace,
 } from "./workspace";
-import { CLASSIFICATIONS, GATED_VALUES, SERIES_STYLE } from "./workspaceForwardCompat";
+import { CLASSIFICATIONS, GATED_VALUES, SERIES_STYLE, type OvList } from "./workspaceForwardCompat";
 
 const VIEWPORT = { width: 1600, height: 900 };
 const load = (): LoadedWorkspace => parseWorkspace(JSON.stringify(dwk034), VIEWPORT);
@@ -97,6 +101,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxes = [{ lim: null, scale: null, step: null, fmt: null, label: "R3", color: null }];
     v.yAxisOf = { [Object.keys(v.seriesStyles)[0] ?? "x0"]: 3 };
   },
+  "Annotation.dot": (ws) => editView(ws, (v) => { v.annotations = [...v.annotations, { id: "t", x: 1, y: 2, text: "note", dot: false }]; }),
   "MapViewState.view3d": (ws) => {
     ws.mapViews = { a: { ...DEFAULT_MAP_VIEW, view3d: { kind: "surface", elev: 40, azim: 25, zLabel: "Z", zUnit: "u", style: "nature", title: "T" } } };
   },
@@ -208,6 +213,27 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/\.seriesStyles\.[^.[\]]+$/, "SeriesStyle"],
   [/^\$\.savedPlotSpecs\[\]\.spec\.display$/, "DisplayBlock"],
   [/^\$\.plotRecipes\[\]\.visual$/, "RecipeVisual"],
+  // Decoration elements, ANCHORED to the parents that really hold them (a bare
+  // `.annotations[]` would also match a map view's pinned text, a different type).
+  [/\.(view|decor|decorations|overrides)\.annotations\[\]$/, "Annotation"],
+  [/\.mapViews\.[^.[\]]+\.annotations\[\]$/, "MapAnnotation"],
+  [/\.annotations\[\]\.frame$/, "AnnotationFrame"],
+  [/\.(view|decor|decorations)\.shapes\[\]$/, "Shape"],
+  [/\.(view|decor|decorations|visual)\.refLines\[\]$/, "RefLine"],
+  [/\.(view|decor|decorations)\.regionShades\[\]$/, "RegionShade"],
+  [/\.(view|decorations)\.inset$/, "InsetView"],
+  [/\.statMarks\.[^.[\]]+$/, "StatMarks"],
+  [/\.overrides$/, "FigureOverrides"],
+  [/\.overrides\.shapes\[\]$/, "OverrideShape"],
+  [/\.overrides\.ref_lines\[\]$/, "OverrideRefLine"],
+  [/\.overrides\.region_shades\[\]$/, "OverrideRegionShade"],
+  [/\.overrides\.inset$/, "OverrideInset"],
+  [/\.(view|decor|decorations|visual)\.refLines\[\]\.stick$/, "ReferenceStick"],
+  [/\.overrides\.ref_lines\[\]\.stick$/, "OverrideStick"],
+  [/\.overrides\.legend$/, "OverrideLegend"],
+  [/\.overrides\.ticks$/, "OverrideTicks"],
+  [/\.overrides\.spines$/, "OverrideSpines"],
+  [/\.overrides\.(margins|page_pad)$/, "OverrideBox"],
   [/^\$\.mapViews\.[^.[\]]+$/, "MapViewState"],
   [/^\$\.plotRecipes\[\]\.map$/, "RecipeMapView"],
 ];
@@ -232,7 +258,9 @@ function paths(v: unknown, p = "$", out = new Set<string>()): Set<string> {
   return out;
 }
 
-/** Why a new path is allowed, or null: the classified field it belongs to. */
+/** Why a new path is allowed, or null: the classified field it belongs to. The
+ *  NEAREST typed container wins, so a key under `annotations[].frame` is the
+ *  frame's own field, never credited to `Annotation.frame`. */
 function classify(path: string): string | null {
   const segs = path.split(/(?=\.)/); // keep the dots: "$", ".a", ".b[]", ...
   for (let i = segs.length - 1; i >= 1; i--) {
@@ -247,27 +275,162 @@ function classify(path: string): string | null {
   return null;
 }
 
+/** One fully populated element of every decoration array (`Required<T>`: a new
+ *  field fails `tsc` here until it is classified AND populated), so the sink
+ *  writes every sub-key and compares it, whatever the frozen 0.34 file held. */
+const FULL_FRAME: Required<NonNullable<Annotation["frame"]>> = { fill: "#fff", stroke: "#000", opacity: 0.5, pad: 3 };
+function populate(ws: LoadedWorkspace): void {
+  const annotation: Required<Annotation> = {
+    id: "pa", groupId: "g", x: 1, y: 2, text: "t", axis: 1, size: 12, anchor: "data", frame: FULL_FRAME, dot: false,
+  };
+  const shape: Required<Shape> = {
+    id: "ps", groupId: "g", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "data", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
+  };
+  const refLine: Required<RefLine> = {
+    id: "pr", axis: "x", value: 1, label: "l", groupId: "g", groupLabel: "gl",
+    stick: { intensity: 1, baseline: 0, height: 1, color: "#000", visible: true, showLabel: true },
+  };
+  const shade: Required<RegionShade> = { id: "pg", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, fullHeight: true };
+  const inset: Required<InsetView> = { x: [0, 1], y: [0, 1], y2: [0, 1], yZoom: true, at: [0.1, 0.1, 0.3, 0.3], lines: true };
+  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true };
+  editView(ws, (v) => {
+    v.annotations = [...v.annotations, annotation];
+    v.shapes = [...v.shapes, shape];
+    v.refLines = [...v.refLines, refLine];
+    v.regionShades = [...v.regionShades, shade];
+    v.inset = inset;
+    v.statMarks = { box: marks };
+  });
+  const mapNote: Required<MapAnnotation> = { id: "pm", x: 1, y: 2, text: "m", space: null };
+  ws.mapViews = { ...ws.mapViews, pop: { ...DEFAULT_MAP_VIEW, annotations: [mapNote] } };
+  const stick: Required<NonNullable<OvList<"ref_lines">["stick"]>> = {
+    intensity: 1, baseline: 0, height: 1, color: "#000", visible: true, show_label: true,
+  };
+  const box: Required<NonNullable<FigureOverrides["margins"]>> = { left: 0.1, right: 0.1, top: 0.1, bottom: 0.1 };
+  const ovAnnotation: Required<OvList<"annotations">> = { x: 1, y: 2, text: "t", size: 9, anchor: "page", frame: FULL_FRAME, dot: false };
+  const ovShape: Required<OvList<"shapes">> = {
+    kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
+  };
+  const ovRefLine: Required<OvList<"ref_lines">> = { axis: "x", value: 1, label: "l", group_id: "g", group_label: "gl", stick };
+  const ovShade: Required<OvList<"region_shades">> = { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, full_height: true };
+  const ovInset: Required<OvList<"inset">> = { x: [0, 1], y: [0, 1], y2: [0, 1], at: [0.1, 0.1, 0.3, 0.3], lines: true };
+  const legend: Required<NonNullable<FigureOverrides["legend"]>> = { show: true, loc: "best", frame: true, anchor: [0, 0], title: "t" };
+  const ticks: Required<NonNullable<FigureOverrides["ticks"]>> = { dir: "in", len: 3, minor: true };
+  const spines: Required<NonNullable<FigureOverrides["spines"]>> = { top: true, right: true };
+  const overrides: Required<Omit<FigureOverrides, "layers">> = {
+    font_size: 9, font_name: "Arial", title_size: 9, label_size: 9, tick_size: 9, legend_size: 9,
+    legend, ticks, spines,
+    x_lim: [0, 1], x_reversed: true, y_lim: [0, 1], y2_lim: [0, 1],
+    margins: box, page_pad: box, grid: true,
+    annotations: [ovAnnotation],
+    x_breaks: [[1, 2]],
+    shapes: [ovShape],
+    ref_lines: [ovRefLine],
+    region_shades: [ovShade],
+    inset: ovInset,
+  };
+  const doc = ws.figureDocs![0] as unknown as { publication?: { overrides?: unknown } };
+  doc.publication = { ...doc.publication, overrides };
+}
+
+/** The key paths a populated full-feature save adds over v0.34.0's own file that
+ *  no classification map accounts for, plus every classified field seen. */
+function sinkProblems(mutate?: (doc: unknown) => void): { problems: string[]; classified: string[] } {
+  const ws = load();
+  for (const edit of Object.values(FEATURES)) edit(ws);
+  populate(ws);
+  const json: unknown = JSON.parse(serializeWorkspace(ws));
+  mutate?.(json);
+  const head = paths(json);
+  const old034 = paths(dwk034);
+  const problems: string[] = [];
+  const classified: string[] = [];
+  for (const p of head) {
+    // `mapViews` and its per-dataset entries are v0.34 structure (P2.8), absent from the
+    // frozen 0.34 file only because it holds no map view; their FIELDS are classified.
+    if (old034.has(p) || p in KNOWN_034_PATHS || /^\$\.mapViews(\.[^.[\]]+)?$/.test(p) || /^\$\.figureDocs\[\]\.publication(\.overrides)?$/.test(p)) continue; // publication: v0.34 FigureDoc v2
+    const why = classify(p);
+    if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
+    else classified.push(why);
+  }
+  return { problems, classified };
+}
+
 describe("kitchen sink: no new key path escapes the classification maps", () => {
-  it("every path a full-feature save adds over v0.34.0's own file belongs to a classified field", () => {
-    const ws = load();
-    for (const edit of Object.values(FEATURES)) edit(ws);
-    const head = paths(JSON.parse(serializeWorkspace(ws)));
-    const old034 = paths(dwk034);
-    const problems: string[] = [];
-    const classified: string[] = [];
-    for (const p of head) {
-      // `mapViews` and its per-dataset entries are v0.34 structure (P2.8), absent from the
-      // frozen 0.34 file only because it holds no map view; their FIELDS are classified.
-      if (old034.has(p) || p in KNOWN_034_PATHS || /^\$\.mapViews(\.[^.[\]]+)?$/.test(p)) continue;
-      const why = classify(p);
-      if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
-      else classified.push(why);
-    }
+  it("every path a populated full-feature save adds over v0.34.0's own file belongs to a classified field", () => {
+    const { problems, classified } = sinkProblems();
     expect(problems).toEqual([]);
-    // Sanity: the walk saw the gated fields the edits added.
+    // Sanity: the walk saw the gated fields the edits added...
     expect(classified).toContain("DisplayBlock.ramp=gated");
     expect(classified).toContain("Dataset.linkedCurves=gated");
     expect(classified).toContain("MapViewState.view3d=gated");
     expect(classified).toContain("RecipeMapView.view3d=gated");
+    expect(classified).toContain("Annotation.dot=gated");
+    // ...and every populated decoration element, in every container, with no false positive on a v0.34 key.
+    for (const c of [
+      "Shape.x1=v034", "RefLine.axis=v034", "RegionShade.fullHeight=v034", "InsetView.lines=v034", "StatMarks.jitterWidth=v034",
+      "AnnotationFrame.pad=v034", "MapAnnotation.space=v034", "OverrideShape.dash=v034", "OverrideRefLine.group_label=v034",
+      "OverrideRegionShade.full_height=v034", "OverrideInset.at=v034", "FigureOverrides.page_pad=v034",
+      "ReferenceStick.showLabel=v034", "OverrideStick.show_label=v034", "OverrideLegend.title=v034", "OverrideTicks.minor=v034",
+      "OverrideSpines.right=v034", "OverrideBox.bottom=v034",
+    ]) expect(classified).toContain(c);
+  });
+
+  it("catches a new key under every modelled element, wherever the fixture is empty (real fixture, not synthetic)", () => {
+    interface Doc {
+      plotWindows: { view: PlotWindow["view"] }[];
+      mapViews: Record<string, { annotations: object[] }>;
+      figureDocs: { publication: { overrides: NonNullable<FigureOverrides> } }[];
+    }
+    const last = <T,>(a: T[]): T => a[a.length - 1];
+    const inject = (path: (d: Doc) => object | null | undefined) => (doc: unknown) => {
+      (path(doc as Doc) as Record<string, unknown>).newKey = 1;
+    };
+    const cases: Record<string, (d: Doc) => object | null | undefined> = {
+      "annotations[].frame": (d) => last(d.plotWindows[0].view.annotations).frame,
+      "annotations[]": (d) => last(d.plotWindows[0].view.annotations),
+      "shapes[]": (d) => last(d.plotWindows[0].view.shapes),
+      "refLines[]": (d) => last(d.plotWindows[0].view.refLines),
+      "regionShades[]": (d) => last(d.plotWindows[0].view.regionShades),
+      "inset": (d) => d.plotWindows[0].view.inset,
+      "statMarks.box": (d) => d.plotWindows[0].view.statMarks.box,
+      "mapViews.annotations[]": (d) => d.mapViews.pop.annotations[0],
+      "overrides.shapes[]": (d) => d.figureDocs[0].publication.overrides.shapes?.[0],
+      "overrides.annotations[].frame": (d) => d.figureDocs[0].publication.overrides.annotations?.[0].frame,
+      "overrides": (d) => d.figureDocs[0].publication.overrides,
+      "refLines[].stick": (d) => last(d.plotWindows[0].view.refLines).stick,
+      "overrides.ref_lines[].stick": (d) => d.figureDocs[0].publication.overrides.ref_lines?.[0].stick,
+      "overrides.legend": (d) => d.figureDocs[0].publication.overrides.legend,
+      "overrides.ticks": (d) => d.figureDocs[0].publication.overrides.ticks,
+      "overrides.spines": (d) => d.figureDocs[0].publication.overrides.spines,
+      "overrides.margins": (d) => d.figureDocs[0].publication.overrides.margins,
+      "overrides.page_pad": (d) => d.figureDocs[0].publication.overrides.page_pad,
+    };
+    for (const [name, at] of Object.entries(cases)) {
+      const { problems } = sinkProblems(inject(at));
+      expect(problems.some((p) => p.includes(".newKey")), `a new key under ${name}`).toBe(true);
+    }
+  });
+
+  it("a map view's pinned text is its own type, not an Annotation", () => {
+    expect(classify("$.mapViews.a.annotations[].space")).toBe("MapAnnotation.space=v034");
+    expect(classify("$.plotWindows[].view.annotations[].space")).toBe("UNCLASSIFIED Annotation.space");
+  });
+});
+
+describe("kitchen sink: the gate itself", () => {
+  const doc = (a: object) => ({ pages: [{ view: { seriesStyles: {}, yFmt: {}, annotations: [a] } }] });
+  const ann = { id: "a", x: 1, y: 1, text: "t" };
+
+  it("an annotation dot is reported only for dot:false (never for dot:true or absent)", () => {
+    expect(featuresV034WouldDrop(doc({ ...ann, dot: false }))).toEqual(["Annotation.dot"]);
+    expect(featuresV034WouldDrop(doc({ ...ann, dot: true }))).toEqual([]);
+    expect(featuresV034WouldDrop(doc(ann))).toEqual([]);
+  });
+
+  it("is found in a view, a plot-spec decor and recipe decorations alike", () => {
+    for (const root of ["$.plotWindows[].view", "$.plotRecipes[].visual.decorations", "$.savedPlotSpecs[].spec.decor", "$.figureDocs[].publication.overrides"]) {
+      expect(classify(`${root}.annotations[].dot`)).toBe("Annotation.dot=gated");
+    }
   });
 });

@@ -158,11 +158,11 @@
         },
         "axis_label_styles": {
           "x": {
-            "size": 16,
+            "size": 12,
             "italic": true
           },
           "y": {
-            "size": 20,
+            "size": 15,
             "bold": true
           }
         },
@@ -368,7 +368,7 @@
         },
         "axis_label_styles": {
           "y2": {
-            "size": 18,
+            "size": 13.5,
             "bold": true,
             "italic": true
           }
@@ -486,11 +486,11 @@
         },
         "axis_label_styles": {
           "x": {
-            "size": 16,
+            "size": 12,
             "italic": true
           },
           "y": {
-            "size": 20,
+            "size": 15,
             "bold": true
           }
         },

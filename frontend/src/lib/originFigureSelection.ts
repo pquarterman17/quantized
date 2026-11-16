@@ -15,6 +15,7 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
+export { figureMapState, queueFigureTernary } from "./originFigureMap";
 import type { StatPicks } from "./plotviewSanitize";
 import { statColRefs, type StatCols } from "./statPicks";
 import type {

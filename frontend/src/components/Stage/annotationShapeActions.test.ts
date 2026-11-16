@@ -14,6 +14,7 @@ import {
   annotationEditActions,
   annotationSizeActions,
   createAnnotationFromDialog,
+  duplicateAnnotation,
   shapeToggleActions,
   type AnnotationActionTarget,
   type ShapeActionTarget,
@@ -52,6 +53,40 @@ describe("annotationShapeActions — pin toggle conv gating", () => {
     const pin = annotationEditActions.find((a) => a.id === "annotation.pinToggle")!;
     const target: AnnotationActionTarget = { id: "a1", conv: CONV };
     expect(pin.hidden?.(target)).toBe(false);
+  });
+});
+
+describe("annotationShapeActions — anchor dot toggle and duplicate", () => {
+  const toggle = () => annotationEditActions.find((a) => a.id === "annotation.dotToggle")!;
+
+  it("'Show anchor dot' is checked unless dot is false, and flips it", () => {
+    expect(toggle().checked?.({ id: "a1", conv: null })).toBe(true); // absent = shown
+    toggle().run({ id: "a1", conv: null });
+    expect(useApp.getState().annotations[0].dot).toBe(false);
+    expect(toggle().checked?.({ id: "a1", conv: null })).toBe(false);
+    toggle().run({ id: "a1", conv: null });
+    expect(useApp.getState().annotations[0].dot).toBeUndefined();
+    expect(JSON.stringify(useApp.getState().annotations[0])).not.toContain("dot"); // saved without the key
+    expect(toggle().checked?.({ id: "a1", conv: null })).toBe(true);
+  });
+
+  it("duplicate keeps dot, frame, size and anchor, as one undo step", () => {
+    const src = { id: "a1", x: 1, y: 2, text: "Tc", dot: false, size: 14, anchor: "page" as const, frame: { opacity: 0.9 } };
+    useApp.setState({ annotations: [src] });
+    const id = duplicateAnnotation(src);
+    const copy = useApp.getState().annotations.find((a) => a.id === id)!;
+    expect(copy).toMatchObject({ x: 1, y: 2, text: "Tc", dot: false, size: 14, anchor: "page", frame: { opacity: 0.9 } });
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("duplicate keeps a y2-pinned label on y2 and in its group", () => {
+    const id = duplicateAnnotation({ id: "a1", x: 1, y: 2, text: "Tc", axis: 1, groupId: "g1" });
+    expect(useApp.getState().annotations.find((a) => a.id === id)).toMatchObject({ axis: 1, groupId: "g1" });
+  });
+
+  it("duplicating a legacy dotted label leaves `dot` unset (still dotted)", () => {
+    const id = duplicateAnnotation({ id: "a1", x: 1, y: 2, text: "Tc" });
+    expect("dot" in useApp.getState().annotations.find((a) => a.id === id)!).toBe(false);
   });
 });
 
@@ -127,6 +162,20 @@ describe("createAnnotationFromDialog", () => {
       expect.objectContaining({ id, x: 3, y: 4, text: "Tc onset" }),
     ]);
     expect(useApp.getState().selectedAnnotationId).toBe(id);
+  });
+
+  it("create + dot/size/frame patch is ONE undo step", async () => {
+    mockAskAnnotationText.mockResolvedValue("Note");
+    await createAnnotationFromDialog({ x: 1, y: 2, title: "Text box", size: 14, frame: { opacity: 0.9 } });
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().annotations).toEqual([]);
+  });
+
+  it("creates plain text with no anchor dot, and applies a size patch", async () => {
+    mockAskAnnotationText.mockResolvedValue("Note");
+    const id = await createAnnotationFromDialog({ x: 1, y: 2, title: "Text box", size: 14 });
+    expect(useApp.getState().annotations).toEqual([expect.objectContaining({ id, dot: false, size: 14 })]);
   });
 
   it("B1: flips the plot tool to pointer only when flipToPointer is set AND the create succeeds", async () => {

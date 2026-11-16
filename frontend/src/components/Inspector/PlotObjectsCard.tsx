@@ -19,6 +19,7 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { IconButton } from "../primitives/IconButton";
 import { Button } from "../primitives";
 import Card from "../primitives/Card";
+import { duplicateAnnotation } from "../Stage/annotationShapeActions";
 
 function openSeriesProperties(channel: number): void {
   const row = document.getElementById(`series-style-${channel}`) as HTMLDetailsElement | null;
@@ -49,7 +50,6 @@ export default function PlotObjectsCard() {
   const setY2Keys = useApp((s) => s.setY2Keys);
   const setSelectedAnnotationId = useApp((s) => s.setSelectedAnnotationId);
   const setSelectedShapeId = useApp((s) => s.setSelectedShapeId);
-  const addAnnotation = useApp((s) => s.addAnnotation);
   const removeAnnotation = useApp((s) => s.removeAnnotation);
   const addShape = useApp((s) => s.addShape);
   const removeShape = useApp((s) => s.removeShape);
@@ -244,7 +244,7 @@ export default function PlotObjectsCard() {
             onClick={() => { setSelection(new Set([annotationKey(a.id)])); setSelectedShapeId(null); setSelectedAnnotationId(a.id); }}
             style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}
           >{a.text}</button>
-          <IconButton aria-label={`Duplicate annotation ${ai + 1}`} title="Duplicate" onClick={() => addAnnotation(a.x, a.y, a.text)}>⧉</IconButton>
+          <IconButton aria-label={`Duplicate annotation ${ai + 1}`} title="Duplicate" onClick={() => duplicateAnnotation(a)}>⧉</IconButton>
           <IconButton aria-label={`Annotation ${ai + 1} properties`} title="Properties" onClick={() => { setSelectedAnnotationId(a.id); setStatus("Annotation selected; edit it in Annotations below"); }}>⚙</IconButton>
           <IconButton aria-label={`Delete annotation ${ai + 1}`} title="Delete" onClick={() => removeAnnotation(a.id)}>×</IconButton>
         </div>

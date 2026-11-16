@@ -259,6 +259,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       pointMask,
       pointUnder,
       layerContents: activeDs ? openLayerContents : undefined,
+      legendFormat: activeDs ? () => openFigureDialog({ kind: "legend" }) : undefined,
       colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
       ...(st.plotWindows.filter((w) => w.kind === "plot").length > 1 ? { linkXAxis: linkAxis("linkXAxisWith"), linkYAxis: linkAxis("linkYAxisWith") } : {}),
       openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),

@@ -448,6 +448,16 @@ describe("applySpecBlocks — decor block ('part C')", () => {
     expect(state.annotations[0]).toMatchObject({ x: 1, y: 2, text: "peak" });
   });
 
+  it("restores an annotation's `dot: false` (a text box keeps no dot after a spec reapply)", () => {
+    const { s, state } = makeFakeStore();
+    applySpecBlocks(
+      baseSpec({ decor: { annotations: [{ id: "a1", x: 1, y: 2, text: "box", dot: false }, { id: "a2", x: 3, y: 4, text: "pk" }] } }),
+      s,
+    );
+    expect(state.annotations[0].dot).toBe(false);
+    expect("dot" in state.annotations[1]).toBe(false);
+  });
+
   it("applies an annotation's size/anchor/frame via updateAnnotation, but never touches axis (no setter)", () => {
     const { s, fns } = makeFakeStore();
     applySpecBlocks(
