@@ -175,6 +175,36 @@
       "kind": "default",
       "via": "default",
       "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}, {"x": "A", "y": "D"}]
+    },
+    {
+      "name": "all-box figure of row-less curves opens one box per plotted column",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "", "y": "B", "plotType": "box"}, {"book": "Clean", "x": "", "y": "D", "plotType": "box"}]},
+      "selection": {"xKey": null, "yKeys": [0, 2]},
+      "stat": true,
+      "kind": "box",
+      "via": "stat",
+      "drawn": [{"x": null, "y": "B"}, {"x": null, "y": "D"}]
+    },
+    {
+      "name": "all-violin figure opens the Stat stage's violin",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "", "y": "C", "plotType": "violin"}]},
+      "selection": {"xKey": null, "yKeys": [1]},
+      "stat": true,
+      "kind": "violin",
+      "via": "stat",
+      "drawn": [{"x": null, "y": "C"}]
+    },
+    {
+      "name": "box and strip curves mixed stay on the XY stage",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "", "y": "B", "plotType": "box"}, {"book": "Clean", "x": "", "y": "C", "plotType": "strip"}]},
+      "selection": {"xKey": null, "yKeys": [0, 1]},
+      "stat": false,
+      "kind": "default",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
     }
   ]
 }
