@@ -3017,9 +3017,9 @@ match Origin (`docs/origin_re/validation_log.md`, 2026-11-15).
 - **Category-axis layers: the END separator ends `02` (2026-11-15,
   ORIGIN_PLOT_TYPE_PARITY item 6).** Box / violin / strip layers write
   `8x <id> <plen> 00 <flag> 01` before the Y span as usual but
-  `8x 35 08 00 00 02` after it. A third, retry-only pass of
+  `8x 35 08 00 00 02` after it. A fourth, retry-only pass of
   `_parse_real_record` admits `02` on the end separator only
-  (`opju_axis_real_form._SEP_END_02`); `02` on BOTH separators (59
+  (`opju_axis_sep_last.SEP_END_02`); `02` on BOTH separators (59
   workbook-embedded graph records) stays undecoded. Plot corpus: 30 / 33 box /
   violin / strip layers now decode, every one equal to Origin's
   `layer.x/y.from/to`; real corpus: 50 new layers in 9 files, 50 / 50 equal

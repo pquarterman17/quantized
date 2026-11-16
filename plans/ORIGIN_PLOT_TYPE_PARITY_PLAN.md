@@ -336,8 +336,8 @@ None open.
    - [x] ~~**Box, violin and strip: no graph layer recovered on 33 / 33**~~
          FIXED 2026-11-15 (`fix/plot-category-import`). Cause: a category
          layer's axis record ENDS with `8x 35 08 00 00 02` (`02`, not `01`);
-         a third, retry-only real-form pass admits `02` on the end separator
-         only (`opju_axis_real_form._SEP_END_02`; `02` on both separators --
+         a fourth, retry-only real-form pass admits `02` on the end separator
+         only (`opju_axis_sep_last.SEP_END_02`; `02` on both separators --
          59 workbook-embedded records -- stays undecoded). Curves: Origin
          plots these with no X column (`xof` = `_A`, record X id 0), so a
          206 / 219 curve is kept from its Y alone (`x == ""`, `plotType`)

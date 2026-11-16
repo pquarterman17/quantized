@@ -91,7 +91,7 @@ from quantized.io.origin_project.opju_axis_scale_flags import (
     _real_x_log_flag,
     _real_y_log_flag,
 )
-from quantized.io.origin_project.opju_axis_sep_last import SEP_LAST_FLAG8
+from quantized.io.origin_project.opju_axis_sep_last import SEP_END_02, SEP_LAST_FLAG8
 from quantized.io.origin_project.opju_axis_zero_slot import UnprovenSlot, resolve_elided
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
@@ -118,18 +118,6 @@ __all__: list[str] = []  # internal to the .opju figures subsystem; imported by 
 _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
 _SEP_WIDE = re.compile(
     rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0]\x01", re.DOTALL
-)
-# The END separator of a category-axis layer (box / violin / strip and the
-# box-family real files) ends in ``02``, not ``01``: ``80 35 08 00 00 02``
-# after an ordinary ``80 04 07 00 00 01`` first separator. Measured
-# 2026-11-15 on the plot corpus: all 30 box / violin / strip specimens whose
-# layer did not decode carry it, and the third pass below decodes every one
-# to Origin's own ``layer.x/y.from/to`` (oracle.json). Admitted ONLY on the
-# end separator, after a first separator ending ``01`` (a third, retry-only
-# pass): records with ``02`` on BOTH separators (workbook-embedded graphs)
-# stay undecoded.
-_SEP_END_02 = re.compile(
-    rb"[\x80\x81]..\x00[\x00\x01\x08\x30\x40\x41\x48\x80\x88\xc0]\x02", re.DOTALL
 )
 # Specimen-form record markers (moved with _parse_specimen_record from
 # figures_opju, 2026-07-06).
@@ -368,12 +356,12 @@ def _parse_real_record(
     need -- a record only ever reaches the wide pass after failing the
     strict one, so the retry can add parses but never change one (same for
     the third, last-byte ``09`` pass: ``opju_axis_sep_last``, and the fourth,
-    end-separator ``02`` pass: ``_SEP_END_02``)."""
+    end-separator ``02`` pass: ``opju_axis_sep_last.SEP_END_02``)."""
     passes = (
         (_SEP_STRICT, None, False),
         (_SEP_WIDE, None, True),
         (SEP_LAST_FLAG8, None, True),
-        (_SEP_WIDE, _SEP_END_02, True),
+        (_SEP_WIDE, SEP_END_02, True),
     )
     for sep_re, end_re, every in passes:
         try:
@@ -411,7 +399,7 @@ def _parse_real_record_sep(
     end_re: re.Pattern[bytes] | None = None,
 ) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
     """One separator-form attempt of `_parse_real_record` (see above); the end
-    separator matches ``end_re`` when given (`_SEP_END_02`), else ``sep_re``.
+    separator matches ``end_re`` when given (``SEP_END_02``), else ``sep_re``.
 
     With ``every`` (the wide retry only) each separator candidate is tried in
     order and the first whose record parses FULLY wins: the X span must
