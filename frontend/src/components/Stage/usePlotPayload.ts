@@ -249,7 +249,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
             peakOverlay: scaledPeakOverlay,
             derivOverlay: scaledDerivOverlay,
             selection,
-          }), p.active?.data) // UX8-C: a shared-unit graph's legend omits the unit
+          }), groupCol === null && !encoded ? p.active?.data : undefined) // UX8-C: shared-unit legend
         : null,
     // `offsetsKey` stands in for `p.seriesStyles` (finding 8: this O(rows)
     // memo must not recompose on a colour/marker-only edit) -- see its doc.

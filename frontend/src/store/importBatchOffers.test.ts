@@ -89,6 +89,15 @@ describe("batchOverlayOffer — generic files with one column shape", () => {
     expect(batchOverlayOffer(useApp.getState, ["a", "b"])).toBeNull();
   });
 
+  it("a batch that also qualifies for a folder offers it as a second action on the ONE toast", async () => {
+    useApp.setState({ datasets: [mh("MH_010K"), mh("MH_040K")] });
+    await presentBatchOutcome(useApp.getState, 2, ["MH_010K", "MH_040K"], undefined);
+    const toasts = useToasts.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].action?.label).toBe("Overlay");
+    expect(toasts[0].actions?.map((a) => a.label)).toEqual(['Create folder "MH_0"']);
+  });
+
   it("the toast does not call the files 'generic'", async () => {
     useApp.setState({ datasets: [mh("a"), mh("b")] });
     await presentBatchOutcome(useApp.getState, 2, ["a", "b"], undefined);

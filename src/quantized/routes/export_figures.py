@@ -368,7 +368,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     )
     # UX8-C: a shared-unit graph's LEGEND omits the unit, as on screen; the
     # auto axis titles keep reading the "label (unit)" names, as on screen.
-    on_axis = legend_unit_on_axis(ds.metadata)
+    on_axis = legend_unit_on_axis(ds.metadata, plot_series)
     names = apply_offset_disclosure_to_renames(
         series_names(plot_series, legends, unit_on_axis=on_axis), legends, offsets
     )

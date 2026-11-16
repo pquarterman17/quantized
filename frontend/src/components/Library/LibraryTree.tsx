@@ -220,6 +220,14 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     // handle Delete or bare arrows itself, so those are consumed here —
     // never left to reach the global handlers and act on an unrelated
     // dataset. Enter/Space/Tab pass untouched (button activation).
+    // UX8-C: Ctrl/Cmd+A selects every visible dataset row (Finder, Igor's
+    // Data Browser) -- from a row or a row's control; a text editor keeps its own.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a" && !isTextEditorTarget(e.target as Element)) {
+      e.preventDefault();
+      const all = visibleDatasetIds();
+      if (all.length > 0) useApp.getState().selectIds(all);
+      return;
+    }
     if (!fromContainer && isEditorTarget(e.target as Element)) {
       // U5: Escape from a nested control, or Escape/Enter closing an inline
       // editor (whose own handler already cancelled/committed), returns
@@ -238,14 +246,6 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
         e.preventDefault();
         focusRow(rows[rovingIdx], rovingIdx);
       }
-      return;
-    }
-    // UX8-C: Ctrl/Cmd+A selects every visible dataset row (Finder, Igor's
-    // Data Browser); an inline editor kept its own select-all above.
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a") {
-      e.preventDefault();
-      const all = visibleDatasetIds();
-      if (all.length > 0) useApp.getState().selectIds(all);
       return;
     }
     const key = fromContainer ? focusedKeyRef.current : keyOfRow(e.target as Element);

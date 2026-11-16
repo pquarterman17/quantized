@@ -70,6 +70,8 @@ test("ten same-shape files: batch offer, Shift-range of 10, Plot = one graph wit
   const offer = page.locator(".qzk-toast", { hasText: "10 files imported — overlay in one plot?" });
   await expect(offer).toBeVisible();
   await expect(offer.getByRole("button", { name: "Overlay" })).toBeVisible();
+  // The same-prefix folder offer rides the ONE toast as a second action.
+  await expect(offer.getByRole("button", { name: /^Create folder "MH/ })).toBeVisible();
 
   // (1) click the first row, Shift-click the last: all ten are selected.
   const rows = page.locator("[data-ds-id]");

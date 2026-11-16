@@ -99,6 +99,18 @@ export function batchOverlayOffer(
   return { technique, ids: datasets.map((d) => d.id) };
 }
 
+/** The "Create folder <prefix>" toast action for a batch folder offer. */
+function folderAction(
+  get: SliceGet,
+  offer: { prefix: string; ids: string[] },
+  targetFolderId: string | undefined,
+): { label: string; onClick: () => void } {
+  return {
+    label: `Create folder "${offer.prefix}"`,
+    onClick: () => createFolderForBatch(get, offer.prefix, offer.ids, targetFolderId),
+  };
+}
+
 /** Present the ONE batch-outcome toast for a just-finished import (`added`
  *  files landed, `createdIds` the datasets they produced) — ranked
  *  candidates, first match wins, per L0.46 above: overlay, then folder, then
@@ -122,21 +134,21 @@ export async function presentBatchOutcome(
   // (L0.46 — never stack two action toasts for one batch); the offer toast
   // states "imported" itself, so it replaces (not supplements) any other
   // toast below.
-  const folderOffer = offer || opts.suppressFolderOffer ? null : batchFolderOffer(get, createdIds, added);
+  const folderOffer = opts.suppressFolderOffer ? null : batchFolderOffer(get, createdIds, added);
   if (offer) {
     const kind = offer.technique === "generic" ? "" : `${offer.technique} `;
+    // UX8-C: still ONE toast (L0.46), but a batch that also qualifies for
+    // the folder offer gets it as a second action rather than losing it.
     toast(`${offer.ids.length} ${kind}files imported — overlay in one plot?`, "ok", {
       action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },
+      ...(folderOffer ? { actions: [folderAction(get, folderOffer, targetFolderId)] } : {}),
       ttlMs: TOAST_ACTION_TTL,
     });
     return;
   }
   if (folderOffer) {
     toast(`${folderOffer.ids.length} files imported — create folder "${folderOffer.prefix}"?`, "ok", {
-      action: {
-        label: `Create folder "${folderOffer.prefix}"`,
-        onClick: () => createFolderForBatch(get, folderOffer.prefix, folderOffer.ids, targetFolderId),
-      },
+      action: folderAction(get, folderOffer, targetFolderId),
       ttlMs: TOAST_ACTION_TTL,
     });
     return;

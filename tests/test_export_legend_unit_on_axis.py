@@ -59,7 +59,7 @@ def _payload(case: dict[str, Any]) -> dict[str, Any]:
 def test_series_names_follow_the_flag(case: dict[str, Any]) -> None:
     series = [PlotSeries(label=s[0], unit=s[1], values=np.zeros(2)) for s in case["series"]]
     legends = [s[2] for s in case["series"]]
-    flag = legend_unit_on_axis({"legend_unit_on_axis": True} if case["flag"] else {})
+    flag = legend_unit_on_axis({"legend_unit_on_axis": True} if case["flag"] else {}, series)
     assert series_names(series, legends, unit_on_axis=flag) == case["legend"]
 
 
@@ -71,13 +71,26 @@ def test_exported_legend_matches_the_screen(case: dict[str, Any]) -> None:
     entries = [e for e in _legend_entries(svg) if e.strip()]
     for want in case["legend"]:
         assert want in entries
-    if case["flag"]:
+    if case["flag"] and case["legend"][-1] == "MH_040K":
         assert "MH_040K (emu)" not in svg  # the derived "label (unit)" never appears
     assert "Moment (emu)" in svg  # the unit stays on the Y title
 
 
+def _s(unit: str) -> PlotSeries:
+    return PlotSeries(label="y", unit=unit, values=np.zeros(1))
+
+
 def test_only_a_literal_true_counts() -> None:
-    assert legend_unit_on_axis({"legend_unit_on_axis": True})
-    assert not legend_unit_on_axis({"legend_unit_on_axis": "true"})
-    assert not legend_unit_on_axis({})
-    assert not legend_unit_on_axis(None)
+    emu = [_s("emu"), _s("emu")]
+    assert legend_unit_on_axis({"legend_unit_on_axis": True}, emu)
+    assert not legend_unit_on_axis({"legend_unit_on_axis": "true"}, emu)
+    assert not legend_unit_on_axis({}, emu)
+    assert not legend_unit_on_axis(None, emu)
+
+
+def test_a_stale_flag_is_ignored() -> None:
+    # Review: a duplicated graph keeps the metadata but not its linked curves;
+    # a later "dM/dH (emu/Oe)" column must keep its unit in the export.
+    meta = {"legend_unit_on_axis": True}
+    assert not legend_unit_on_axis(meta, [_s("emu"), _s("emu/Oe")])
+    assert not legend_unit_on_axis(meta, [_s(""), _s("")])

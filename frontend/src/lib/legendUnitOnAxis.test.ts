@@ -42,13 +42,32 @@ describe("legendUnitOnAxis", () => {
     expect(out.series.map((s) => s.unit)).toEqual(["emu", "emu", "emu"]);
   });
 
-  // The shared wire fixture: the screen leg resolves a legend the way
-  // PlotLegend does (a rename, else the series' `legend`, else "label (unit)").
+  // The shared wire fixture. The screen leg resolves each row exactly as
+  // PlotLegend's `rowText` does: `labels?.[i] ?? seriesLabels[plotted[i]] ??
+  // defaultLabel(s)`, with `defaultLabel = s.legend ?? withUnit(label, unit)`
+  // (`seriesDisplayLabel`). A rename lives in `seriesLabels`, keyed by channel.
   it.each(CASES.map((c) => [c.name, c] as const))("shared fixture: %s", (_name, c) => {
     const p: PlotPayload = { ...payload, series: c.series.map(([label, unit]) => ({ label, unit })) };
     const out = legendUnitOnAxis(p, data(c.flag ? { legend_unit_on_axis: true } : {}));
-    const shown = out.series.map((s, i) => c.series[i][2] ?? seriesDisplayLabel(s.label, s.unit, s.legend));
-    expect(shown).toEqual(c.legend);
+    const plotted = c.series.map((_, i) => i);
+    const seriesLabels: Record<number, string> = Object.fromEntries(
+      c.series.flatMap(([, , rename], ch) => (rename === null ? [] : [[ch, rename]])),
+    );
+    const labels: (string | undefined)[] | undefined = undefined;
+    const defaultLabel = (s: PlotPayload["series"][number]) => seriesDisplayLabel(s.label, s.unit, s.legend);
+    const rowText = (s: PlotPayload["series"][number], i: number) =>
+      i < plotted.length ? ((labels as (string | undefined)[] | undefined)?.[i] ?? seriesLabels[plotted[i]] ?? defaultLabel(s)) : defaultLabel(s);
+    expect(out.series.map(rowText)).toEqual(c.legend);
+  });
+
+  // Review: a duplicated graph keeps the metadata but not its linked curves,
+  // so a later "dM/dH (emu/Oe)" column must NOT lose its unit.
+  it("ignores a stale flag: curves no longer sharing one unit keep label (unit)", () => {
+    const mixed: PlotPayload = {
+      ...payload,
+      series: [{ label: "MH_010K", unit: "emu" }, { label: "dM/dH", unit: "emu/Oe" }, { label: "fit", unit: "", overlay: true }],
+    };
+    expect(legendUnitOnAxis(mixed, data({ legend_unit_on_axis: true }))).toBe(mixed);
   });
 
   it("is the identity without the flag", () => {

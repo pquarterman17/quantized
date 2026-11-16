@@ -59,10 +59,9 @@ export interface DatasetSelectionSlice {
    *  Ctrl/Cmd click (written by the selection actions here: `setActive`, a
    *  one-row `selectIds`, `toggleSelected`). Tree mode's plain click selects
    *  WITHOUT moving `activeId`, so anchoring on `activeId` made "click row 1,
-   *  Shift-click row 10" select one row. Other paths (a window focus, an
-   *  import, a duplicate) set `selectedIds` without it, so `selectRange` only
-   *  trusts an anchor that is still selected — else the one selected row,
-   *  else `activeId`. */
+   *  Shift-click row 10" select one row. `selectRange` trusts it while it is
+   *  a live row of the range's order (even after a Ctrl-click deselected it,
+   *  as Finder does) — else the last selected row, else `activeId`. */
   selectionAnchorId: string | null;
   // WORKSHEET_PLAN item 15 ("origin book click opens…"): the Worksheet tab's
   // dataset override, set by `activateFromLibrary`'s worksheet-intent path
@@ -220,8 +219,8 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         const order = [...new Set(shown ?? s.datasets.map((d) => d.id))];
         const held = s.selectionAnchorId;
         const anchor =
-          (held != null && s.selectedIds.includes(held) ? held : null) ??
-          (s.selectedIds.length === 1 ? s.selectedIds[0] : null) ??
+          (held != null && order.includes(held) ? held : null) ??
+          [...s.selectedIds].reverse().find((x) => order.includes(x)) ??
           s.activeId ??
           id;
         const a = order.indexOf(anchor);

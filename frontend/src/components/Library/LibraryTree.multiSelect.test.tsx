@@ -3,7 +3,7 @@
 // plotted one -- so "click row 1, Shift-click row 10" selected ONE row, and
 // Ctrl+A selected nothing. Same harness wiring as LibraryTree.test.tsx.
 
-import { fireEvent, render } from "@testing-library/react";
+import { act, createEvent, fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import LibraryTree from "./LibraryTree";
@@ -86,6 +86,13 @@ describe("LibraryTree multi-selection (UX8-C)", () => {
     fireEvent.keyDown(row("m0"), { key: "A", metaKey: true });
     expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
     fireEvent.keyDown(row("m0"), { key: "A", ctrlKey: true, shiftKey: true }); // not select-all
+    expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
+    // From a row's own control (the "⋯" button) too, not the browser's select-all.
+    act(() => useApp.getState().selectIds(["m1"]));
+    const control = row("m0").querySelector("button")!;
+    const ev = createEvent.keyDown(control, { key: "a", ctrlKey: true });
+    fireEvent(control, ev);
+    expect(ev.defaultPrevented).toBe(true);
     expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
   });
 });

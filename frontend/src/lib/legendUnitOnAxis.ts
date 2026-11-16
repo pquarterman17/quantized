@@ -12,12 +12,21 @@
 import type { PlotPayload } from "./plotdata";
 import type { DataStruct } from "./types";
 
+type Series = PlotPayload["series"][number];
+const isCompanion = (s: Series): boolean => !!(s.muted || s.selected || s.band || s.overlay);
+
 /** `payload` with each data curve's legend set to its bare label when `data`
- *  carries the flag; companions and overlays are left alone. */
+ *  carries the flag AND every data curve really shares one non-empty unit --
+ *  the flag can outlive the curves it was set for (a duplicated graph keeps
+ *  the metadata, then gains a "dM/dH (emu/Oe)" column), so it is re-checked
+ *  on what is drawn. Companions and overlays are left alone. The caller
+ *  passes no `data` for a grouped or encoded payload, whose export branches
+ *  do not read the flag either. */
 export function legendUnitOnAxis(payload: PlotPayload, data: DataStruct | undefined): PlotPayload {
   if (data?.metadata?.legend_unit_on_axis !== true) return payload;
-  const series = payload.series.map((s) =>
-    s.legend !== undefined || s.muted || s.selected || s.band || s.overlay ? s : { ...s, legend: s.label },
-  );
+  const units = new Set(payload.series.filter((s) => !isCompanion(s)).map((s) => s.unit));
+  const [unit] = units;
+  if (units.size !== 1 || !unit) return payload;
+  const series = payload.series.map((s) => (s.legend !== undefined || isCompanion(s) ? s : { ...s, legend: s.label }));
   return { ...payload, series };
 }
