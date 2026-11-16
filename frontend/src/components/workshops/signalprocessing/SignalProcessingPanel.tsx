@@ -81,7 +81,7 @@ export default function SignalProcessingPanel() {
     setSigop(isSigopFilter(op) ? op : null);
     if (!isSigopFilter(op)) setSettings((c) => ({ ...c, operation: op as SignalSettings["operation"] }));
   };
-  useAppliedOperationSeed(pick);
+  useAppliedOperationSeed(pick, busy);
   const spectralOperation = isSpectralOperation(settings.operation) ? settings.operation : null;
   const spectral = spectralOperation !== null;
   const crossWorksheet = settings.operation === "correlation" && correlationMode === "two";

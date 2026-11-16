@@ -13,13 +13,20 @@ interface SignalOperationSeedState {
   op: string | null;
   /** Counts requests so asking for the same operation twice still re-applies. */
   nonce: number;
+  /** When it was requested; a request nobody consumed in `SEED_TTL_MS` is stale. */
+  at: number;
   request: (op: string) => void;
   clear: () => void;
 }
 
+/** A seed the panel never consumed (its lazy chunk failed to load) must not
+ *  surface minutes later on an unrelated open. */
+export const SEED_TTL_MS = 60_000;
+
 export const useSignalOperationSeed = create<SignalOperationSeedState>((set) => ({
   op: null,
   nonce: 0,
-  request: (op) => set((s) => ({ op, nonce: s.nonce + 1 })),
+  at: 0,
+  request: (op) => set((s) => ({ op, nonce: s.nonce + 1, at: Date.now() })),
   clear: () => set({ op: null }),
 }));

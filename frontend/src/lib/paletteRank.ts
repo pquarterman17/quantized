@@ -47,12 +47,30 @@ interface Prepared {
 
 const WORD = /[\p{L}\p{N}]+/gu;
 
+/** Words too common to say what a command DOES: ignored in descriptions, where
+ *  "the" in "Toggle the grid" would otherwise make "theme" and "then" match
+ *  half the registry. */
+const STOP = new Set(["the", "and", "for", "with", "that", "this", "from", "into", "its", "are", "any", "each", "one", "not", "can", "has", "was", "per", "via", "all", "your"]);
+
+/** Typed words that are filler ("smooth DATA", "set the column"): they add
+ *  score where they match but never rule a command out. Never optional when the
+ *  query is nothing but filler. */
+const FILLER = new Set(["data", "the", "a", "an", "of", "to", "my", "for", "and", "in", "on", "with", "it", "this", "that"]);
+
+/** The only endings a query word may add to a command word and still count as
+ *  the same word ("peaks", "fitted"), so "setup" is not "set" and "theme" is
+ *  not "the". */
+const INFLECTIONS = new Set(["s", "es", "ed"]);
+
 function words(text: string | undefined): Word[] {
   if (!text) return [];
   return Array.from(text.toLowerCase().matchAll(WORD), (m) => ({ w: m[0], start: m.index }));
 }
 
 const prepared = new WeakMap<Action, Prepared>();
+
+/** Description words that say something: three letters or more, not a stopword. */
+const meaningful = (ws: Word[]): Word[] => ws.filter((x) => x.w.length >= 3 && !STOP.has(x.w));
 
 function prepare(a: Action): Prepared {
   let p = prepared.get(a);
@@ -61,7 +79,7 @@ function prepare(a: Action): Prepared {
     p = {
       label,
       keywords: words(a.keywords),
-      description: words(a.description),
+      description: meaningful(words(a.description)),
       category: words(`${a.group} ${a.section ?? ""}`),
       labelText: label.map((x) => x.w).join(" "),
     };
@@ -76,6 +94,11 @@ export function queryTerms(query: string): string[] {
 }
 
 type Kind = "exact" | "stem" | "prefix";
+
+/** A match on the label's first word. Small on purpose: with the usage boost
+ *  (lib/paletteUsage.ts, below 3) it stays under the 5-point step between
+ *  sub-tiers, so neither can turn a stem into an exact match. */
+const FIRST_WORD = 2;
 
 /** Points for a word match in a field whose whole-word score is `exact`: a
  *  stem ("errors" for "error") is a little less, a prefix a little less again. */
@@ -93,7 +116,7 @@ function wordMatch(t: string, ws: readonly Word[]): { kind: Kind; at: number } |
   for (let i = 0; i < ws.length; i++) {
     const w = ws[i].w;
     if (w === t) return { kind: "exact", at: i };
-    if (stem < 0 && w.length >= 3 && t.length > w.length && t.length - w.length <= 2 && t.startsWith(w)) stem = i;
+    if (stem < 0 && w.length >= 3 && t.startsWith(w) && INFLECTIONS.has(t.slice(w.length))) stem = i;
     if (prefix < 0 && w.startsWith(t)) prefix = i;
   }
   if (stem >= 0) return { kind: "stem", at: stem };
@@ -110,7 +133,7 @@ function phraseIn(phrase: string, ws: readonly Word[]): boolean {
   });
 }
 
-function termScore(t: string, p: Prepared, hits: Set<number>): number {
+function termScore(t: string, p: Prepared, hits: Set<number>, fuzzyOk: boolean): number {
   if (t.length === 1) {
     // One letter is only ever the start of a label word ("y" in "Link Y axis"):
     // matching it anywhere else (descriptions, fuzzy) is noise.
@@ -122,7 +145,7 @@ function termScore(t: string, p: Prepared, hits: Set<number>): number {
   let direct = 0;
   const lm = wordMatch(t, p.label);
   if (lm) {
-    direct = points(lm.kind, 100) + (lm.at === 0 ? 10 : 0);
+    direct = points(lm.kind, 100) + (lm.at === 0 ? FIRST_WORD : 0);
     const { w, start } = p.label[lm.at];
     for (let k = 0; k < Math.min(t.length, w.length); k++) hits.add(start + k);
   }
@@ -141,16 +164,19 @@ function termScore(t: string, p: Prepared, hits: Set<number>): number {
     if (dm) best = Math.max(best, points(dm.kind, 30));
   }
   if (best < 20 && wordMatch(t, p.category)?.kind === "exact") best = 20;
-  if (best === 0 && t.length >= 3) {
+  if (best === 0 && fuzzyOk && t.length >= 3) {
     // Last resort: a typo-tolerant subsequence over the visible label, then
     // the hidden keywords. Never reached for a term that matched any word.
+    // The first typed letter must open a word: "theme" is not "the-n-ew-graph-M-E".
+    const opensWord = (text: string, h: readonly number[]): boolean => h.length > 0 && (h[0] === 0 || text[h[0] - 1] === " ");
     const f = fuzzy(t, p.labelText);
-    if (f) {
+    if (f && opensWord(p.labelText, f.hits)) {
       mapFuzzyHits(f.hits, p, hits);
       return 5 + Math.min(5, Math.max(0, f.score) / 4);
     }
-    const fk = fuzzy(t, p.keywords.map((x) => x.w).join(" "));
-    if (fk) return 3 + Math.min(2, Math.max(0, fk.score) / 8);
+    const kwText = p.keywords.map((x) => x.w).join(" ");
+    const fk = fuzzy(t, kwText);
+    if (fk && opensWord(kwText, fk.hits)) return 3 + Math.min(2, Math.max(0, fk.score) / 8);
   }
   return best;
 }
@@ -181,17 +207,25 @@ export function rankActions(
   const terms = queryTerms(query);
   if (terms.length === 0) return actions.map((a) => ({ a, score: 0, hits: [] }));
   const phrase = terms.join(" ");
+  // Filler words are optional, unless that would leave nothing to match.
+  const required = terms.some((t) => !FILLER.has(t)) ? terms.map((t) => !FILLER.has(t)) : terms.map(() => true);
+  // A loose subsequence may carry a one-word query, never one of several: it
+  // would let "set column values" through on "set" ~ "separate".
+  const fuzzyOk = terms.length === 1;
   const out: Ranked[] = [];
   for (const a of actions) {
     const p = prepare(a);
     const hits = new Set<number>();
     let score = 0;
     let ok = true;
-    for (const t of terms) {
-      const s = termScore(t, p, hits);
+    for (let i = 0; i < terms.length; i++) {
+      const s = termScore(terms[i], p, hits, fuzzyOk);
       if (s <= 0) {
-        ok = false;
-        break;
+        if (required[i]) {
+          ok = false;
+          break;
+        }
+        continue;
       }
       score += s;
     }

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { Z } from "../../lib/layers";
+
 /** Root popup: fixed to the viewport so panel overflow cannot clip it. */
 export function PopupBox({
   x,
@@ -38,7 +40,7 @@ export function PopupBox({
         else if (boxRef) (boxRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }}
       className={`qzk-menu-pop qzk-ctx${fit ? " fit" : ""}`}
-      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 2100 }}
+      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: Z.menu }}
       onContextMenu={(event) => event.preventDefault()}
       onClick={(event) => event.stopPropagation()}
     >
@@ -67,7 +69,7 @@ export function FlyoutBox({ children }: { children: React.ReactNode }) {
     <div
       ref={ref}
       className="qzk-menu-pop qzk-ctx"
-      style={{ position: "absolute", top: -4 + shiftY, zIndex: 2101, ...sidePos }}
+      style={{ position: "absolute", top: -4 + shiftY, zIndex: Z.menu + 1, ...sidePos }}
       onContextMenu={(event) => event.preventDefault()}
     >
       {children}

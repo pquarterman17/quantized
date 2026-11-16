@@ -61,12 +61,22 @@ function axisScale(id: string, axis: "x" | "y", scale: "linear" | "log", s: Stor
     group: "Plot",
     section: "Axes",
     label: `${log ? "Log" : "Linear"} ${A} scale`,
+    // "X"/"Y" axis, not vertical/horizontal: an exchanged axis keeps its own scale.
+    // On Y, a secondary axis with a scale of its own keeps it; one without follows.
     description: log
-      ? `Show the ${axis === "y" ? "vertical" : "horizontal"} axis on a logarithmic scale.`
-      : `Return the ${axis === "y" ? "vertical" : "horizontal"} axis to a linear scale.`,
+      ? `Show the ${A} axis on a logarithmic scale${axis === "y" ? "; a secondary Y axis with its own scale keeps it" : ""}.`
+      : `Return the ${A} axis to a linear scale${axis === "y" ? "; a secondary Y axis with its own scale keeps it" : ""}.`,
     keywords: log ? "logarithmic semilog loglog decades axis" : "reset axis normal",
     paletteOnly: true,
-    run: () => (axis === "y" ? s().setYScale(scale) : s().setXScale(scale)),
+    run: () => {
+      // Already there: no undo step and no macro line for a change that changes nothing.
+      if ((axis === "y" ? s().yScale : s().xScale) === scale) {
+        s().setStatus(`${A} axis is already ${scale}`);
+        return;
+      }
+      if (axis === "y") s().setYScale(scale);
+      else s().setXScale(scale);
+    },
   };
 }
 
@@ -109,7 +119,13 @@ export function buildDiscoveryCommands(s: StoreGet): Action[] {
         void import("../lib/revealInspectorCard").then(
           (m) =>
             m.revealInspectorCard("Error columns").then((found) => {
-              if (!found) toast("Select a dataset to edit its error bars.", "info");
+              if (found) return;
+              toast(
+                s().activeId
+                  ? "The Error columns card is not available for this dataset (it has no columns to bind)."
+                  : "Select a dataset to edit its error bars.",
+                "info",
+              );
             }),
           onLoadFailure,
         );

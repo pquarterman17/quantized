@@ -23,8 +23,14 @@ describe("revealInspectorCard", () => {
     expect(document.activeElement).toBe(target.querySelector("summary"));
   });
 
+  it("waits for a card that renders a few frames late (the lazy Inspector)", async () => {
+    const pending = revealInspectorCard("Error columns");
+    setTimeout(() => card("Error columns"), 40);
+    expect(await pending).toBe(true);
+  });
+
   it("reports a missing card so the caller can say why", async () => {
     card("Axes");
-    expect(await revealInspectorCard("Error columns")).toBe(false);
+    expect(await revealInspectorCard("Error columns", 2)).toBe(false);
   });
 });

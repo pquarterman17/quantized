@@ -143,7 +143,8 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     const byId = new Map(allActions.map((a) => [a.id, a]));
     const recent = recentIds(usage, RECENT_LIMIT).flatMap((id) => {
       const a = byId.get(id);
-      return a && !a.perEntity ? [a] : [];
+      // A destructive command is never offered as "repeat last": Ctrl+K, Enter would be one key from it.
+      return a && !a.perEntity && !a.danger ? [a] : [];
     });
     const seen = new Set(recent.map((a) => a.id));
     return [
@@ -201,7 +202,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   return (
     <div
-      className="qz-overlay-backdrop qz-cmdk-backdrop"
+      className="qz-overlay-backdrop"
       // preventDefault: the click's default focus move would otherwise land
       // on <body> after `close` has already put focus back on the opener.
       onMouseDown={(e) => {
@@ -250,6 +251,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   key={a.id}
                   id={`${listId}-${i}`}
                   role="option"
+                  // The name is the label alone; the outcome, category and shortcut are
+                  // the description (otherwise every span was run together into the name).
+                  aria-label={a.label}
+                  aria-describedby={`${listId}-${i}-d ${listId}-${i}-m`}
                   aria-selected={i === cursor}
                   className={`qz-cmdk-item${i === cursor ? " active" : ""}`}
                   onMouseEnter={() => setCursor(i)}
@@ -258,10 +263,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   <span className="qz-cmdk-copy">
                     <span>{highlight(a.label, hits)}</span>
                     {a.description && (
-                      <span className="qz-cmdk-desc">{a.description}</span>
+                      <span id={`${listId}-${i}-d`} className="qz-cmdk-desc">{a.description}</span>
                     )}
                   </span>
-                  <span className="qz-cmdk-meta">
+                  <span id={`${listId}-${i}-m`} className="qz-cmdk-meta">
                     {group !== a.group && <span className="qz-cmdk-cat">{a.group}</span>}
                     {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                   </span>

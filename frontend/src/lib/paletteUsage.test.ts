@@ -50,6 +50,10 @@ describe("palette usage", () => {
     expect(() => recordUse("x")).not.toThrow();
   });
 
+  it("stays under the 5-point sub-tier step even with the ranker's first-word bonus", () => {
+    expect(MAX_USAGE_BOOST + 2).toBeLessThan(5);
+  });
+
   it("boosts by frequency (logarithmically) and decays with age, never past the cap", () => {
     const now = 10 * 86_400_000;
     expect(usageBoost(undefined, now)).toBe(0);

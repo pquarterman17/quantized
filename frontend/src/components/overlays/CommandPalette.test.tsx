@@ -1,7 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -240,26 +236,21 @@ describe("CommandPalette ranked search and recents", () => {
     expect(localStorage.getItem("qz.paletteUsage")).toBeNull();
   });
 
-  it("stacks above floating tool windows (live check: it opened under Signal Processing)", async () => {
-    // lib/modalInert.ts stamps every open backdrop 101, 102, ... inline, which
-    // beat the stylesheet and left the palette under ToolWindow (200 + z). The
-    // stamp now keeps a backdrop's own higher stylesheet z-index. jsdom loads no
-    // stylesheet, so this applies the real rule from platform.css.
-    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../styles/platform.css"), "utf8");
-    const rule = /\.qz-cmdk-backdrop\s*\{[^}]*\}/.exec(css)?.[0] ?? "";
-    const z = Number(/z-index:\s*(\d+)/.exec(rule)?.[1]);
-    expect(z).toBeGreaterThan(200 + 100); // ToolWindow's base, with room for its focus order
-    expect(z).toBeLessThan(2000); // but under the toasts / menus layer
-    const style = document.head.appendChild(document.createElement("style"));
-    style.textContent = rule;
-    try {
-      render(<CommandPalette actions={[fit]} />);
-      const backdrop = document.querySelector<HTMLElement>(".qz-overlay-backdrop");
-      expect(backdrop).toHaveClass("qz-cmdk-backdrop");
-      await waitFor(() => expect(Number(backdrop?.style.zIndex)).toBeGreaterThanOrEqual(z));
-    } finally {
-      style.remove();
-    }
+  it("never offers a destructive command as a recent one", () => {
+    const danger = { id: "remove-all", group: "File", label: "Remove all…", danger: true, run: vi.fn() };
+    localStorage.setItem("qz.paletteUsage", JSON.stringify({ "remove-all": { n: 9, t: 99 }, grid: { n: 1, t: 5 } }));
+    render(<CommandPalette actions={[danger, other]} />);
+    expect(within(screen.getByRole("group", { name: "Recent" })).getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByRole("option", { name: "Toggle grid lines" }).closest('[role="group"]')).toHaveAccessibleName("Recent");
+  });
+
+  it("names an option by its label alone and describes it with the outcome, category and shortcut", () => {
+    render(<CommandPalette actions={[fit]} />);
+    type("curve");
+    const option = screen.getByRole("option", { name: "Curve fit…" });
+    const described = (option.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
+    expect(described.join(" ")).toContain("Fit a model to active data.");
+    expect(described.join(" ")).toContain("Analyze");
   });
 
   it("every typed word must match", () => {

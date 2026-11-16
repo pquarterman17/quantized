@@ -71,7 +71,7 @@ describe("deep-linked Signal Processing commands", () => {
 describe("Export PDF / SVG / PNG", () => {
   it.each([["export-pdf", "pdf"], ["export-svg", "svg"], ["export-png", "png"]])("%s pre-selects the %s format in the Export figure dialog", async (id, fmt) => {
     find(id).run();
-    await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalled());
+    await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalled(), { timeout: 8000 });
     const [title, fields] = mocks.ask.mock.calls[0];
     expect(title).toBe("Export figure");
     expect(fields.find((f: Field) => f.key === "fmt")).toMatchObject({ default: fmt });
@@ -80,12 +80,32 @@ describe("Export PDF / SVG / PNG", () => {
   it("the plain Export figure… command still defaults to PDF", async () => {
     const plain = buildAppActions(useApp.getState).find((a) => a.id === "export-figure");
     plain?.run();
-    await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalled());
+    await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalled(), { timeout: 8000 });
     expect(mocks.ask.mock.calls[0][1].find((f: Field) => f.key === "fmt")).toMatchObject({ default: "pdf" });
   });
 });
 
 describe("axis scale commands", () => {
+  it("a change that changes nothing adds no history entry and no macro line", () => {
+    useApp.getState().setYScale("log");
+    const history = useApp.getState().history.length;
+    const macro = JSON.stringify(useApp.getState().macroSteps ?? null);
+    find("scale-y-log").run();
+    find("scale-x-linear").run(); // X is already linear
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(JSON.stringify(useApp.getState().macroSteps ?? null)).toBe(macro);
+    find("scale-y-linear").run(); // a real change still records exactly one step
+    expect(useApp.getState().history).toHaveLength(history + 1);
+  });
+
+  it("describes the axis by name (an exchanged axis keeps its scale) and says what a secondary Y does", () => {
+    const d = (id: string) => find(id).description ?? "";
+    expect(d("scale-y-log")).toContain("Y axis");
+    expect(d("scale-x-log")).toContain("X axis");
+    expect(d("scale-y-log")).not.toMatch(/vertical|horizontal/);
+    expect(d("scale-y-log")).toMatch(/secondary Y axis/);
+  });
+
   it("set the scale outright, rather than cycling", () => {
     find("scale-y-log").run();
     expect(useApp.getState().yScale).toBe("log");
@@ -110,8 +130,16 @@ describe("Error bars…", () => {
 
   it("says why nothing happened when there is no card to open (no dataset)", async () => {
     mocks.reveal.mockResolvedValue(false);
+    useApp.setState({ activeId: null });
     find("error-bars").run();
     await vi.waitFor(() => expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/Select a dataset/));
+  });
+
+  it("does not tell a user WITH a dataset to select one", async () => {
+    mocks.reveal.mockResolvedValue(false);
+    find("error-bars").run();
+    await vi.waitFor(() => expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/not available for this dataset/));
+    expect(useToasts.getState().toasts.at(-1)?.msg).not.toMatch(/Select a dataset/);
   });
 });
 

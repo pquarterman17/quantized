@@ -20,9 +20,11 @@ export type UsageMap = Readonly<Record<string, UsageEntry>>;
 
 /** Entries kept; the least recently used are dropped past this. */
 const MAX_ENTRIES = 60;
-/** The boost never exceeds this, which is below the gap between two match
- *  tiers in `paletteRank.ts` — usage reorders WITHIN a tier, never across. */
-export const MAX_USAGE_BOOST = 9;
+/** The boost never exceeds this. Together with the ranker's first-word bonus
+ *  (2) it stays under 5, the smallest step between two match sub-tiers in
+ *  `paletteRank.ts` (exact 100 / stem 95 / prefix 90, keyword 50 / 45 / 40,
+ *  description 30 / 25 / 20): usage reorders WITHIN a sub-tier, never across. */
+export const MAX_USAGE_BOOST = 2.9;
 const HALF_LIFE_DAYS = 14;
 const DAY_MS = 86_400_000;
 

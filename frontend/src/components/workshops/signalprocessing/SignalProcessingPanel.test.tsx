@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
-import { useSignalOperationSeed } from "../../../store/signalOperationSeed";
+import { SEED_TTL_MS, useSignalOperationSeed } from "../../../store/signalOperationSeed";
 import { useApp } from "../../../store/useApp";
 import SignalProcessingPanel from "./SignalProcessingPanel";
 
@@ -326,6 +326,28 @@ describe("SignalProcessingPanel", () => {
     expect(screen.getByLabelText("Operation")).toHaveValue("derivative-first");
     act(() => useSignalOperationSeed.getState().request("integral"));
     expect(screen.getByLabelText("Operation")).toHaveValue("integral");
+  });
+
+  it("drops a seed nobody consumed for a minute (the panel chunk failed to load)", () => {
+    useSignalOperationSeed.getState().request("normalize-peak");
+    useSignalOperationSeed.setState({ at: Date.now() - SEED_TTL_MS - 1 });
+    render(<SignalProcessingPanel />);
+    expect(screen.getByLabelText("Operation")).toHaveValue("smooth");
+    expect(useSignalOperationSeed.getState().op).toBeNull();
+  });
+
+  it("queues a deep link that arrives while Create linked worksheet is running, instead of losing it", async () => {
+    let finish: (v: null) => void = () => undefined;
+    createSignalMock.mockImplementation(() => new Promise((r) => { finish = r; }));
+    render(<SignalProcessingPanel />);
+    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    act(() => useSignalOperationSeed.getState().request("integral"));
+    expect(screen.getByLabelText("Operation")).toHaveValue("smooth"); // held, not applied mid-commit
+    expect(useSignalOperationSeed.getState().op).toBe("integral"); // and not discarded
+    await act(async () => finish(null));
+    await waitFor(() => expect(screen.getByLabelText("Operation")).toHaveValue("integral"));
   });
 
   it("drops a seeded operation the panel does not offer instead of applying it", () => {

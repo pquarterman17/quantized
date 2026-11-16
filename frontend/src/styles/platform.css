@@ -3,19 +3,25 @@
    theme-web.css with fvd-* → qz-* renames; identical design tokens. The
    tool/results window frame reuses the kit's qzk-win* classes (shell.css). */
 
+/* ── z-index layers (mirror lib/layers.ts; layers.test.ts keeps them equal).
+   Bottom to top: tool windows 200..899, modal backdrops 1000.. (lib/modalInert
+   stamps open order), modal popovers 1500, toasts 1600, tooltips 2000,
+   context menus 2100. ── */
+:root {
+  --z-tool-base: 200;
+  --z-modal: 1000;
+  --z-modal-popover: 1500;
+  --z-toast: 1600;
+  --z-tooltip: 2000;
+  --z-menu: 2100;
+}
+
 /* ── overlay backdrop (modal scrim) ── */
 .qz-overlay-backdrop {
   position: fixed;
   inset: 0;
   background: rgb(0 0 0 / 0.35);
-  z-index: 100;
-}
-
-/* The palette sits above floating tool windows (ToolWindow is 200 + its focus
-   order): at the shared scrim's 100 it opened UNDER an open Signal Processing
-   window, where a deep-link command could not even be seen. */
-.qz-cmdk-backdrop {
-  z-index: 1500;
+  z-index: var(--z-modal);
 }
 
 /* ── centered glass dialog panel ── */
@@ -124,7 +130,7 @@
 }
 .qz-cmdk-cat {
   font-size: var(--font-size-sm);
-  color: var(--text-faint);
+  color: var(--text-muted);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   padding: 0 6px;
@@ -282,7 +288,7 @@
   bottom: 38px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 200;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -329,7 +335,7 @@
   bottom: 38px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 250;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -482,7 +488,7 @@
    (e.g. MenuBar) only sets [data-tip]/[data-tip-key]. ── */
 .qz-tip {
   position: fixed;
-  z-index: 2000;
+  z-index: var(--z-tooltip);
   display: flex;
   flex-direction: column;
   gap: 2px;
