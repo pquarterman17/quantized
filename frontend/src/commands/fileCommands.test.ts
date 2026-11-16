@@ -136,7 +136,8 @@ describe("File menu — export commands register exactly one pending op (no doub
     vi.unstubAllGlobals();
   });
 
-  // F2 (2026-09-13 round-2 review): "export-figure" is `void`-prefixed for
+  // F2 (2026-09-13 round-2 review): the quick figure-export dialog (now
+  // "export-figure-quick"; UX-H moved "export-figure" to the preview) is `void`-prefixed for
   // the identical reason (see fileCommands.ts) and was missing here too —
   // the same hole F1's fix closed for "export-page" alone. Sabotage: delete
   // the `void` at fileCommands.ts's "export-figure" run() and this fails.
@@ -145,7 +146,7 @@ describe("File menu — export commands register exactly one pending op (no doub
   // cancel-less wrap was its only entry.
   // "export-origin-project" (File ▸ Export Origin project (.opj)…) runs the
   // same runCancellable shape as export-consolidated.
-  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure", "export-consolidated", "export-origin-project"])(
+  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure-quick", "export-consolidated", "export-origin-project"])(
     "%s via runAction registers exactly one pendingOps entry, with a cancel callback",
     async (id) => {
       const cmd = buildFileCommands(useApp.getState).find((c) => c.id === id);

@@ -21,12 +21,15 @@ export function SegmentedControl<T extends string>({
   onChange,
   className,
   "aria-label": ariaLabel,
+  "aria-labelledby": labelledBy,
 }: {
   options: SegOption<T>[];
   value: T;
   onChange?: (value: T) => void;
   className?: string;
   "aria-label"?: string;
+  /** A visible label's id, so the visible text IS the group's name. */
+  "aria-labelledby"?: string;
 }) {
   const values = options.map((opt) => (typeof opt === "string" ? opt : opt.value) as T);
   const tabStop = Math.max(0, values.indexOf(value));
@@ -44,7 +47,7 @@ export function SegmentedControl<T extends string>({
   };
 
   return (
-    <div className={clsx("qz-seg", className)} role="radiogroup" aria-label={ariaLabel} onKeyDown={onKeyDown}>
+    <div className={clsx("qz-seg", className)} role="radiogroup" aria-label={ariaLabel} aria-labelledby={labelledBy} onKeyDown={onKeyDown}>
       {options.map((opt, i) => {
         const val = values[i];
         const label = typeof opt === "string" ? opt : opt.label;

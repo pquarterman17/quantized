@@ -77,8 +77,8 @@ describe("Export PDF / SVG / PNG", () => {
     expect(fields.find((f: Field) => f.key === "fmt")).toMatchObject({ default: fmt });
   });
 
-  it("the plain Export figure… command still defaults to PDF", async () => {
-    const plain = buildAppActions(useApp.getState).find((a) => a.id === "export-figure");
+  it("the plain quick dialog (Export figure (quick dialog)…) still defaults to PDF", async () => {
+    const plain = buildAppActions(useApp.getState).find((a) => a.id === "export-figure-quick"); // UX-H: "export-figure" opens the preview view
     plain?.run();
     await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalled(), { timeout: 8000 });
     expect(mocks.ask.mock.calls[0][1].find((f: Field) => f.key === "fmt")).toMatchObject({ default: "pdf" });

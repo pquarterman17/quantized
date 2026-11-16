@@ -25,10 +25,17 @@ export const FIGURE_STYLES = [
 export const FIGURE_STYLE_DPI: Record<string, number> = {
   default: 200,
   aps: 600,
+  aps_double: 600,
   nature: 600,
+  nature_double: 600,
   thesis: 300,
   report: 300,
   web: 150,
   presentation: 150,
   poster: 150,
 };
+// Each preset's size moved to lib/figurePresets.ts with the preset names
+// (shared by every preset picker); re-exported for existing importers.
+export { FIGURE_STYLE_SIZE_CM } from "../../../lib/figurePresets";
+/** Formats rendered at the chosen DPI; the rest are vector (DPI ignored). */
+export const RASTER_FORMATS: readonly string[] = ["png", "tiff"];

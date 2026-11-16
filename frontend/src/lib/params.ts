@@ -7,6 +7,8 @@ export interface ParamField {
   type: "number" | "select" | "boolean" | "text";
   default: number | string | boolean;
   options?: string[]; // for select
+  /** A select option's display text, by value (absent: the value itself). */
+  optionLabels?: Record<string, string>;
   hint?: string;
   /** Shown in an EMPTY number / text field: what a blank answer means
    *  (re-audit #15: the Export dialog's blank Width / Height gave no hint of

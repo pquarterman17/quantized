@@ -79,6 +79,9 @@ export interface FigurePublicationSession {
    *  still intact) but Apply is a dead end until the user Cancels and
    *  reopens — never cleared by further edits, only by a fresh session. */
   staleBaseline?: true;
+  /** The draft as last exported from this session (UX-H): closing right after
+   *  an export asks nothing (store/figureUnsavedEdits.figurePublicationDirty). */
+  exported?: FigureDocument;
 }
 
 export interface FigureLifecycleSlice {

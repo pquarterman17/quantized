@@ -14,6 +14,7 @@ import { effectiveChannels } from "../../../lib/plotdata";
 import { windowCyclesSeriesStyles } from "../../../lib/seriesStyleCycle";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
 import { libraryWindowLiveDrifted } from "../../../store/figurePublicationLibrary";
+import { figureDocumentsDiffer } from "../../../store/figureUnsavedEdits";
 import { plotWindowView } from "../../../store/windowDocuments";
 import type { AppState } from "../../../store/useApp";
 
@@ -163,4 +164,23 @@ export function sessionTickHints(state: Pick<AppState, "figurePublicationSession
   const session = state.figurePublicationSession;
   if (session === null || session.target !== "window" || session.windowId !== state.focusedWindowId) return null;
   return windowTickHints(state.editableFigures, session.windowId, session.draft); // none for a frozen or saved figure
+}
+
+/** UX-H: the export view's draft is a stale snapshot of its TARGET window —
+ *  that window's live document has moved on since the session began. Unlike
+ *  `selectSessionLiveDrifted` (Apply's question) focus is not an input: a
+ *  stale draft stays stale when another window takes focus. Only a `window`
+ *  session can be stale; a `library` or `new-editable` draft IS the document
+ *  it exports. Returns a boolean, so an unchanged answer re-renders nothing. */
+export function selectSessionExportStale(state: AppState): boolean {
+  const session = state.figurePublicationSession;
+  if (session === null || session.target !== "window") return false;
+  if (session.staleBaseline) return true; // Apply already found it stale
+  const window = state.plotWindows.find((candidate) => candidate.id === session.windowId);
+  const live = window ? liveWindowDocument(state, window) : null;
+  if (live === null || JSON.stringify(live) === JSON.stringify(session.baseline)) return false; // the cheap, common answer
+  // The document NAME is not plot content: an unfocused window's live
+  // document carries its raw title where the focused one shows the dataset's
+  // name, so moving focus alone must not read as "the plot changed".
+  return figureDocumentsDiffer({ ...live, name: "" }, { ...session.baseline, name: "" });
 }

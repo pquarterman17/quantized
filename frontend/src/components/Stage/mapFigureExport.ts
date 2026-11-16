@@ -36,6 +36,7 @@ import { sameMap3d } from "../../lib/mapView3d";
 import { effectiveColorLimits, minPositive } from "./mapRender";
 import { mapMarks } from "./mapSliceGeometry";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+import { presetLabels } from "../../lib/figurePresets";
 import { withUnit } from "../../lib/unitDisplay";
 
 const MPL_CMAP: Record<ColormapName, string> = {
@@ -218,7 +219,7 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
     },
     { key: "elev", label: "Elevation (°)", type: "number", default: v3?.elev ?? 30, hint: "3-D views: -90 to 90" },
     { key: "azim", label: "Azimuth (°)", type: "number", default: v3?.azim ?? -60, hint: "3-D views: -360 to 360" },
-    { key: "style", label: "Style", type: "select", default: v3?.style ?? "default", options: FIGURE_STYLES },
+    { key: "style", label: "Style", type: "select", default: v3?.style ?? "default", options: FIGURE_STYLES, optionLabels: presetLabels(FIGURE_STYLES) },
     { key: "title", label: "Title", type: "text", default: v3?.title ?? "" },
   ], { confirmLabel: "Export" });
   if (!params) return;
