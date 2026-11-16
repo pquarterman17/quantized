@@ -18,9 +18,11 @@
 //     "trace a path"), so the drawn pixels are unchanged.
 //  2. A line drawn one device pixel wide instead (Skia's hairline path, about
 //     20x cheaper per pixel and per segment) when nearly every
-//     `SPREAD_CELL`-px cell it touches is itself buried: its stroke in that
-//     cell covers the cell `SATURATED_COVERAGE` times over. Those cells are a
-//     solid block of the series colour at either width. A cloud that is dense
+//     (`BURIED_FRACTION`) `SPREAD_CELL`-px cell it touches is itself buried:
+//     its stroke in that cell covers the cell `SATURATED_COVERAGE` times
+//     over. Those cells are a solid block of the series colour at either
+//     width; the few that are not (the corners of an even spread) thin a
+//     little. A cloud that is dense
 //     in the middle and sparse at its edges (a Gaussian, a random walk), a
 //     band with edges (a noisy loop retraced many times) and an ordinary loop
 //     all have many touched cells that are not buried, so they keep their
@@ -32,8 +34,14 @@ import type uPlot from "uplot";
  *  a random-order stroke leaves about e^-16 of the cell uncovered at its own
  *  width and e^-11 at one pixel. */
 export const SATURATED_COVERAGE = 16;
-/** Fraction of the touched cells that must be buried for the 1-px stroke. */
-export const BURIED_FRACTION = 0.95;
+/** Fraction of the touched cells that must be buried for the 1-px stroke.
+ *  Random chords cover the plot's edges and corners less than its middle, so
+ *  an even 100k-row spread buries about 93% of its cells; a Gaussian cloud or
+ *  an OU walk buries 33-54% at 100k-1M rows (measured). At 0.9 the even spread
+ *  still thins at its corners: 3,013 of 374,269 inked pixels changed by more
+ *  than 32/255 (headless Chromium, 669 x 593 px), against 37,850 for a
+ *  Gaussian cloud, which this rule keeps at its own width. */
+export const BURIED_FRACTION = 0.9;
 /** Side (device px) of a coverage cell. */
 export const SPREAD_CELL = 8;
 

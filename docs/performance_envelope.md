@@ -530,12 +530,14 @@ now built by `lib/uplotLoopLine.ts` (it rides the region-decor startup chunk;
 the run and gap tiling stays eager in `lib/uplotSeries.ts`). A vertex at the
 same device pixel as the one before it is not emitted, which leaves the
 pixels identical. The line is stroked one device pixel wide (Skia's hairline
-path) only when at least 95% of the 8-px cells it touches are each covered
-16 times over. That holds for rows spread evenly over the whole plot. It does
-not hold for a Gaussian cloud, a random walk, or a loop or band, so those keep
-their width (tests pin all of them). Until the chunk lands, or if it fails,
-every run goes through uPlot's builder as before. Eager bundle
-776.8 → 776.8 kB.
+path) only when at least 90% of the 8-px cells it touches are each covered
+16 times over. Rows spread evenly over the plot bury about 93% of their cells
+at 100k rows. The corners are the exception, and there 3,013 of 374,269 inked
+pixels change by more than 32/255. A Gaussian cloud and an OU walk bury only
+33–54%, and loops and bands bury fewer still, so all of those keep their width
+(tests pin all of them). Until the chunk lands, or if it fails, every run goes
+through uPlot's builder as before. Eager bundle +0.1 kB (778.0 → 778.1 on main
+at the merge).
 
 | File (drop → first paint) | Before | After |
 |---|---|---|

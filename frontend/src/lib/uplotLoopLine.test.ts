@@ -263,7 +263,9 @@ describe("the one-pixel stroke of a buried plot", () => {
       path: new Path2D(), cols: 10,
       cells: Float32Array.from({ length: 100 }, (_, i) => (i < deep ? full * 50 : i < deep + shallow ? 1 : 0)),
     });
-    expect(buried(ink(95, 5), 1.5)).toBe(95 >= BURIED_FRACTION * 100);
+    expect(BURIED_FRACTION).toBe(0.9);
+    expect(buried(ink(90, 10), 1.5)).toBe(true);
+    expect(buried(ink(85, 15), 1.5)).toBe(false);
     expect(buried(ink(50, 50), 1.5)).toBe(false); // a huge total in half the cells
     expect(buried(ink(100, 0), 1)).toBe(false);
   });
