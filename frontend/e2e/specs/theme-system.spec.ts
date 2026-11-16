@@ -32,7 +32,7 @@ test.describe("OS dark", () => {
   test("first run opens dark; the onboarding help wraps in the UI font instead of truncating", async ({ page }) => {
     await gotoApp(page);
     expect(await theme(page)).toBe("dark");
-    const help = page.getByText("Drop files anywhere here.");
+    const help = page.getByText("Examples are generated locally");
     await expect(help).toBeVisible();
     const m = await help.evaluate((el) => {
       const cs = getComputedStyle(el);

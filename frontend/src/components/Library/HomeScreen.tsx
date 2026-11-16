@@ -10,13 +10,18 @@
 // state, so nothing here can disagree with the menus and panels that show the
 // same things elsewhere.
 //
+// UX8-I: ONE empty state. The first-run STAGE card owns "Import data… / Paste /
+// Open / Add demo / Import wizard…"; this panel used to repeat four of those
+// (two empty states, four overlapping entry points), so it now keeps only what
+// the stage card lacks: the "Try an example" chips plus the resume lists. The
+// Library header's own import icon is still one click away.
+//
 // Non-destructive by construction. A missing or offline source is SHOWN and
 // nothing more — no automatic cleanup, no "tidy up your recents", because a
 // share that is merely unmounted must never be treated as a deleted file.
 
 import { useEffect, useId, useState, useRef } from "react";
 import { flushSync } from "react-dom";
-import * as GLYPHS from "../../lib/glyphs";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
@@ -124,24 +129,6 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
     // Chromium orphans focus to <body> and the next Delete removes the
     // active dataset (lib/focusGuard.ts's incident class).
     <div ref={homeRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ padding: 10, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div>
-        <div className="qzk-menu-label">Start here</div>
-        <button className="qz-btn" onClick={onImport} style={{ width: "100%" }}>
-          {GLYPHS.importData} Import data…
-        </button>
-        <button
-          className="qzk-menu-item"
-          onClick={() => useApp.getState().setImportWizardOpen(true)}
-          style={{ width: "100%", marginTop: 4, textAlign: "center" }}
-        >
-          Import wizard…
-        </button>
-        <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-          Drop files anywhere here. Quantized plots the first usable columns;
-          then drag columns onto X, Y, or Y2 to change them.
-        </div>
-      </div>
-
       {recentProjects.length > 0 && (
         <div>
           <div className="qzk-menu-label">Recent projects</div>

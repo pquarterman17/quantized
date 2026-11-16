@@ -56,16 +56,13 @@ describe("stateBadge", () => {
 describe("HomeScreen", () => {
   const recent = [{ name: "scan.dat", size: 1, at: new Date().toISOString(), path: "/d/scan.dat" }];
 
-  it("always offers import", () => {
+  it("keeps ONE empty state: example chips only, no import buttons (UX8-I)", () => {
     render(<HomeScreen onImport={noop} />);
-    expect(screen.getByRole("button", { name: /Import data/ })).toBeInTheDocument();
-  });
-
-  it("offers the guided import path without mutating the library", () => {
-    render(<HomeScreen onImport={noop} />);
-    screen.getByRole("button", { name: /Import wizard/ }).click();
-    expect(useApp.getState().importWizardOpen).toBe(true);
-    expect(useApp.getState().datasets).toEqual([]);
+    // the first-run stage card owns Import data... / Import wizard...
+    expect(screen.queryByRole("button", { name: /Import data/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Import wizard/ })).toBeNull();
+    expect(screen.queryByText("Start here")).toBeNull();
+    for (const name of ["1-D", "Grouped", "2-D"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
   });
 
   it("reopens recent projects through the established safe reopen path", () => {

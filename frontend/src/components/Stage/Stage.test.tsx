@@ -36,9 +36,9 @@ vi.mock("./EmptyProjectStage", async (importOriginal) => {
 // c0 repeat like grid axes); `ds(2)` is an ordinary 1-D sweep.
 // UX-D: the long-form grid is 3 x 3 -- the gate needs >=3 levels per axis (a
 // 2 x 2 table is covered explicitly by the "2 x 2" test below).
-const makeDs = (nChannels: number): Dataset => {
+const makeDs = (nChannels: number, scattered = false): Dataset => {
   const gridded = nChannels >= 3;
-  const time = gridded ? [0, 0, 0, 1, 1, 1, 2, 2, 2] : [0, 1, 2, 3];
+  const time = gridded ? [0, 0, 0, 1, 1, 1, 2, 2, 2] : scattered ? [0.3, 1.7, 0.9, 2.2, 0.1] : [0, 1, 2, 3];
   return {
     id: "d1",
     name: "d.dat",
@@ -162,12 +162,19 @@ describe("Map tab visibility", () => {
   });
 
   it("offers 'View as scattered map' for a three-column dataset that is not a grid, and it opens Map", async () => {
-    useApp.setState({ datasets: [ds(2)], activeId: "d1", stageTab: "plot" });
+    useApp.setState({ datasets: [makeDs(2, true)], activeId: "d1", stageTab: "plot" });
     render(<Stage />);
     expect(screen.queryByText("Map")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "View as scattered map" }));
     expect(await screen.findByText("map-canvas")).toBeInTheDocument();
     expect(useApp.getState().stageTab).toBe("map");
+  });
+
+  it("does not offer the scattered fallback for a monotonic 1-D sweep such as M(T) (UX8-I)", () => {
+    useApp.setState({ datasets: [ds(2)], activeId: "d1", stageTab: "plot" });
+    render(<Stage />);
+    expect(screen.getByText("Plot")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View as scattered map" })).toBeNull();
   });
 
   it("does not offer the scattered fallback for a real grid", () => {
