@@ -61,8 +61,8 @@ test("defaults Next ×3 converge on an XRD scan, with the Y range on the data", 
   await dropFileOnto(page, page.locator(".qzk-library"), XRD);
   await waitForDatasetCount(page, 1);
 
-  await runPaletteCommand(page, "Peak Analyzer");
-  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
+  await runPaletteCommand(page, "Peak analyzer");
+  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak analyzer", { exact: true }) });
   await expect(panel).toBeVisible();
   const next = panel.getByRole("button", { name: "Next →" });
 
