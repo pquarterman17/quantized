@@ -82,7 +82,7 @@ describe("windowMenu — label parity with useWindowCommands.ts's palette action
     expect(byId["window.pin"]).toBe("Pin Window (toggle)");
     expect(byId["window.linkCycle"]).toBe("Link Window Group (1 / 2 / 3 / Off)");
     expect(byId["window.bgCycle"]).toBe("Window Background (Theme / Light / Dark)");
-    expect(byId["window.close"]).toBe("Close Window");
+    expect(byId["window.close"]).toBe("Close window");
   });
 });
 

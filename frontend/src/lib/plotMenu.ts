@@ -225,7 +225,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     // (and a Custom… one into Plot Details' full picker) sits beside it.
     const details = ctx.openDetails;
     items.push({
-      label: "Color",
+      label: "Colour",
       submenu: [
         ...PALETTE.map((c) => ({ label: c.title, run: () => ctx.setColor(s.channel, c.value), checked: s.style.color === c.value })),
         ...(details ? [{ separator: true as const }, { label: "Custom…", run: () => details(s.channel) }] : []),

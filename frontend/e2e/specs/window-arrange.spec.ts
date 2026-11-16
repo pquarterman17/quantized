@@ -78,17 +78,17 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     expect(windows[0].winState).toBe("maximized");
 
     // ── New Graph Window x2 -> 3 windows total ─────────────────────────────
-    await runPaletteCommand(page, "New Graph Window");
+    await runPaletteCommand(page, "New graph window");
     await expect.poll(async () => (await readWindows(page)).length).toBe(2);
     windows = await readWindows(page);
     expect(windows.every((window) => window.winState === "normal")).toBe(true);
     expect(rectsOverlap(windows[0].geometry, windows[1].geometry)).toBe(false);
-    await runPaletteCommand(page, "New Graph Window");
+    await runPaletteCommand(page, "New graph window");
     await expect.poll(async () => (await readWindows(page)).length).toBe(3);
 
     // ── Tile Windows: every visible window becomes "normal" and the
     //    resulting geometries form a non-overlapping grid. ─────────────────
-    await runPaletteCommand(page, "Tile Windows");
+    await runPaletteCommand(page, "Tile windows");
     await expect.poll(async () => (await readWindows(page)).every((w) => w.winState === "normal")).toBe(true);
     windows = await readWindows(page);
     expect(windows).toHaveLength(3);
@@ -103,7 +103,7 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     //    index*CASCADE_STEP for BOTH x and y, so every window's x equals its
     //    own y, x/y strictly increase down the (array-order) list, and every
     //    window keeps the same size). ────────────────────────────────────
-    await runPaletteCommand(page, "Cascade Windows");
+    await runPaletteCommand(page, "Cascade windows");
     await expect
       .poll(async () => {
         const ws = await readWindows(page);
@@ -188,7 +188,7 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     //    the F1.4 discard gate must stay out of the routine MDI close
     //    (close is undoable; the gate fires only for saved-figure drift). ──
     await focusedTitlebar.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Close window", exact: true }).click();
     await expect.poll(async () => (await readWindows(page)).length).toBe(2);
   });
 });

@@ -124,7 +124,7 @@ test("the plot dock keeps every tool reachable and the default legend clears it 
 
 test("a default Graph Window's dock keeps every tool reachable @core", async ({ page }) => {
   await loadPlot(page);
-  await runPaletteCommand(page, "New Graph Window");
+  await runPaletteCommand(page, "New graph window");
   const docks = page.locator(".qzk-plotwin .qzk-float-tools");
   await expect(docks.first()).toBeVisible();
   for (const dock of await docks.all()) await expectEveryToolReachable(page, dock);
@@ -487,7 +487,7 @@ for (const size of [{ width: 1000, height: 700 }, { width: 800, height: 600 }]) 
         }),
       )
       .toBe(true);
-    await runPaletteCommand(page, "New Graph Window");
+    await runPaletteCommand(page, "New graph window");
     const rows = page.locator("[data-ds-id]");
     await rows.nth(0).click();
     await rows.nth(1).click({ modifiers: ["Control"] });

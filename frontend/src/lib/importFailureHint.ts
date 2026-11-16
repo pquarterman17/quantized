@@ -10,6 +10,7 @@
 // failures carry their own, format-specific advice in the server's message.
 
 import { plural } from "./plural";
+import { isMacPlatform } from "./shortcutFormat";
 
 /** Binary containers the wizard cannot read, by lower-cased extension. */
 const BINARY_EXTS: ReadonlySet<string> = new Set([
@@ -23,10 +24,10 @@ const BINARY_EXTS: ReadonlySet<string> = new Set([
 
 /** The hint for a failed import of `name`: the wizard for a text-like file,
  *  nothing for a binary container (its error already says what to do). */
-export function importFailureHint(name: string): string {
+export function importFailureHint(name: string, isMac: boolean = isMacPlatform()): string {
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
-  return BINARY_EXTS.has(ext) ? "" : " — try the Import wizard (⌘K → Import wizard…)";
+  return BINARY_EXTS.has(ext) ? "" : ` — try the Import wizard (${isMac ? "⌘K" : "Ctrl+K"} → Import wizard…)`;
 }
 
 /** The batch summary for status and toast. A parse failure is the wizard's

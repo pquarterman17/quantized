@@ -90,7 +90,7 @@ describe("PlotToolbar — overflow menu (GUI audit P1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toolbar Options" }));
     const menu = screen.getByRole("menu");
     // Toggles render as menuitemcheckbox, plain actions as menuitem: match text.
-    for (const name of ["Reset View", "Smart Auto-scale", "Stack Channels", "Magnifier Inset", "Polar Plot", "Statistics View", "Save PNG", "Copy Data", "Copy Figure", "Snapshot Window"]) {
+    for (const name of ["Reset view", "Smart auto-scale", "Stack channels", "Magnifier inset", "Polar plot", "Statistics view", "Save PNG", "Copy data", "Copy figure", "Snapshot window"]) {
       expect(within(menu).getByText(new RegExp(name))).toBeInTheDocument();
     }
     fireEvent.click(within(menu).getByText(/Save PNG/));
@@ -101,10 +101,10 @@ describe("PlotToolbar — overflow menu (GUI audit P1)", () => {
     stubLayout(500);
     render(<PlotToolbar {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Toolbar Options" }));
-    const item = screen.getByText(/Reset View/).closest("button");
+    const item = screen.getByText(/Reset view/).closest("button");
     expect(item).toHaveAttribute("aria-disabled", "true");
     // ...and its reason, as the item's description rather than only a title.
-    expect(item).toHaveAccessibleName(/Reset View/);
+    expect(item).toHaveAccessibleName(/Reset view/);
     expect(item).toHaveAccessibleDescription("Nothing to reset — the view is already at its default extents");
   });
 

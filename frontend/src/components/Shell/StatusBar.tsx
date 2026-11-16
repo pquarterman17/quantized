@@ -44,6 +44,7 @@ function useVisiblePendingOps(): PendingOp[] {
 
 export default function StatusBar() {
   const status = useApp((s) => s.status);
+  const statusDanger = useApp((s) => s.statusDanger);
   const connected = useConnection((s) => s.connected);
   const count = useApp((s) => s.datasets.length);
   const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
@@ -53,7 +54,7 @@ export default function StatusBar() {
   return (
     <footer className="qzk-statusbar">
       <span className="qzk-conn">
-        <StatusDot tone={connected ? "ok" : "warn"} />
+        <StatusDot tone={!connected ? "warn" : statusDanger !== null && statusDanger === status ? "danger" : "ok"} />
         {/* The result of most commands lands here: a polite live region,
             mounted while empty, and exempt from a dialog's background inert
             (R12) like the two regions below. */}

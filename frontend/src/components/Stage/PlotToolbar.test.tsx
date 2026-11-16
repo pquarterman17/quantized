@@ -108,7 +108,7 @@ describe("PlotToolbar — shape dock flyout (MAIN #27)", () => {
 describe("PlotToolbar — accessibility (GUI_INTERACTION_PLAN #7)", () => {
   it("gives every tool button an aria-label naming the tool", () => {
     render(<PlotToolbar {...props} />);
-    for (const name of ["Pointer", "Zoom", "Pan", "Data Cursor", "Measure", "Integrate", "Peak / FWHM"]) {
+    for (const name of ["Pointer", "Zoom", "Pan", "Data cursor", "Measure", "Integrate", "Peak / FWHM"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
   });
@@ -123,14 +123,14 @@ describe("PlotToolbar — accessibility (GUI_INTERACTION_PLAN #7)", () => {
   it("marks mode toggles (stack/inset/polar/stats) with aria-pressed reflecting store state", () => {
     useApp.setState({ insetMode: true, polarMode: false });
     render(<PlotToolbar {...props} />);
-    expect(screen.getByRole("button", { name: "Magnifier Inset" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Polar Plot" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Magnifier inset" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Polar plot" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("does NOT set aria-pressed on plain action buttons (they aren't toggles)", () => {
     render(<PlotToolbar {...props} />);
     expect(screen.getByRole("button", { name: "Save PNG" })).not.toHaveAttribute("aria-pressed");
-    expect(screen.getByRole("button", { name: "Copy Data" })).not.toHaveAttribute("aria-pressed");
+    expect(screen.getByRole("button", { name: "Copy data" })).not.toHaveAttribute("aria-pressed");
   });
 
   it("groups buttons under named ARIA groups (Navigate/Inspect/Analyze/Annotate/View/Export)", () => {
@@ -155,17 +155,17 @@ describe("PlotToolbar — accessibility (GUI_INTERACTION_PLAN #7)", () => {
 });
 
 describe("PlotToolbar — disabled-with-reason (GUI_INTERACTION_PLAN #7)", () => {
-  it("disables Reset View when there is nothing to reset (no xLim/yLim set)", () => {
+  it("disables Reset view when there is nothing to reset (no xLim/yLim set)", () => {
     render(<PlotToolbar {...props} />);
-    const btn = screen.getByRole("button", { name: "Reset View" });
+    const btn = screen.getByRole("button", { name: "Reset view" });
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("data-tip-desc", "Nothing to reset — the view is already at its default extents");
   });
 
-  it("enables Reset View once a manual x or y limit is set", () => {
+  it("enables Reset view once a manual x or y limit is set", () => {
     useApp.setState({ xLim: [0, 10] });
     render(<PlotToolbar {...props} />);
-    const btn = screen.getByRole("button", { name: "Reset View" });
+    const btn = screen.getByRole("button", { name: "Reset view" });
     expect(btn).not.toBeDisabled();
     expect(btn).toHaveAttribute("data-tip-desc", "Restore the default zoom and pan");
     expect(btn).not.toHaveAttribute("aria-describedby");
@@ -175,27 +175,27 @@ describe("PlotToolbar — disabled-with-reason (GUI_INTERACTION_PLAN #7)", () =>
     // A disabled button is not a Tab stop: a reason only in the tooltip is
     // out of a keyboard or screen-reader user's reach.
     render(<PlotToolbar {...props} />);
-    expect(screen.getByRole("button", { name: "Reset View" })).toHaveAccessibleDescription(
+    expect(screen.getByRole("button", { name: "Reset view" })).toHaveAccessibleDescription(
       "Nothing to reset — the view is already at its default extents",
     );
-    expect(screen.getByRole("button", { name: "Copy Figure" })).toHaveAccessibleDescription(
+    expect(screen.getByRole("button", { name: "Copy figure" })).toHaveAccessibleDescription(
       "Clipboard image copy isn't supported in this browser",
     );
   });
 
-  it("disables Copy Figure when the browser has no Clipboard image API (jsdom's default)", () => {
+  it("disables Copy figure when the browser has no Clipboard image API (jsdom's default)", () => {
     render(<PlotToolbar {...props} />);
-    const btn = screen.getByRole("button", { name: "Copy Figure" });
+    const btn = screen.getByRole("button", { name: "Copy figure" });
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("data-tip-desc", "Clipboard image copy isn't supported in this browser");
   });
 
-  it("runs the publication Copy Figure action directly from the toolbar", () => {
+  it("runs the publication Copy figure action directly from the toolbar", () => {
     const copy = vi.fn();
     Object.defineProperty(navigator, "clipboard", { value: { write: vi.fn() }, configurable: true });
     vi.stubGlobal("ClipboardItem", class {});
     render(<PlotToolbar {...props} onCopyFigure={copy} />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy Figure" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy figure" }));
     expect(copy).toHaveBeenCalledTimes(1);
   });
 });
@@ -229,7 +229,7 @@ describe("PlotToolbar — toolbar options flyout + persisted group-label prefs",
 // it cleared the facet INTO the plain per-channel stack. It now reads the
 // layout on screen and, when one is showing, turns it off in one undo entry.
 describe("PlotToolbar — the Stack toggle follows the multi-panel layout (S1 a)", () => {
-  const stackBtn = () => screen.getByRole("button", { name: "Stack Channels" });
+  const stackBtn = () => screen.getByRole("button", { name: "Stack channels" });
   const savedBreakWindow = () =>
     useApp.setState({
       plotWindows: [
@@ -303,13 +303,13 @@ describe("PlotToolbar — the Stack toggle follows the multi-panel layout (S1 a)
 });
 
 describe("PlotToolbar on a horizontal bar graph (the plot turned on its side)", () => {
-  it("keeps Pointer, Zoom and Data Cursor; the pointer-driven tools are disabled with the reason", () => {
+  it("keeps Pointer, Zoom and Data cursor; the pointer-driven tools are disabled with the reason", () => {
     useApp.setState({ seriesStyles: { 0: { bars: "horizontal" } } });
     render(<PlotToolbar {...props} />);
-    for (const name of ["Pointer", "Zoom", "Data Cursor"]) {
+    for (const name of ["Pointer", "Zoom", "Data cursor"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${name}`) })).toBeEnabled();
     }
-    for (const name of ["Pan", "Measure", "Region Stats", "Select Rows", "Integrate", "Peak / FWHM", "Gadget"]) {
+    for (const name of ["Pan", "Measure", "Region stats", "Select rows", "Integrate", "Peak / FWHM", "Live fit / quick analysis"]) {
       const btn = screen.getByRole("button", { name: new RegExp(`^${name.replace("/", "\\/")}`) });
       expect(btn).toBeDisabled();
       expect(btn.closest("[title]")?.getAttribute("title") ?? btn.getAttribute("aria-describedby") ?? "").not.toBe("");
@@ -327,18 +327,18 @@ describe("PlotToolbar on a horizontal bar graph (the plot turned on its side)", 
 // Gap audit 4 G19 review L4: the multi-panel stage draws no lasso, so the
 // tool is disabled there with its reason, and a picked lasso falls back to
 // zoom with a status message rather than silently doing nothing.
-describe("Lasso Mask in a multi-panel layout", () => {
+describe("Lasso mask in a multi-panel layout", () => {
   it("is disabled with the reason, and an active lasso falls back to zoom with a status", () => {
     useApp.setState({ stackMode: true, plotTool: "lasso", status: "" });
     render(<PlotToolbar {...props} />);
-    expect(screen.getByRole("button", { name: /^Lasso Mask/ })).toBeDisabled();
-    expect(document.body.textContent ?? "").toContain("Lasso Mask works on a single graph");
+    expect(screen.getByRole("button", { name: /^Lasso mask/ })).toBeDisabled();
+    expect(document.body.textContent ?? "").toContain("Lasso mask works on a single graph");
     expect(useApp.getState().plotTool).toBe("zoom");
-    expect(useApp.getState().status).toMatch(/Lasso Mask works on a single graph/);
+    expect(useApp.getState().status).toMatch(/Lasso mask works on a single graph/);
   });
 
   it("is enabled on a single graph", () => {
     render(<PlotToolbar {...props} />);
-    expect(screen.getByRole("button", { name: /^Lasso Mask/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Lasso mask/ })).toBeEnabled();
   });
 });

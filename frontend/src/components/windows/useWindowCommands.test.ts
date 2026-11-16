@@ -92,7 +92,7 @@ describe("useWindowCommands — published registry entries", () => {
     expect(action("window-close").shortcut).toBe("⌘⇧W");
   });
 
-  it("'New Graph Window' creates + focuses a new window bound to the active dataset", () => {
+  it("'New graph window' creates + focuses a new window bound to the active dataset", () => {
     useApp.setState({ stageTab: "map" });
     renderHook(() => useWindowCommands());
     act(() => action("window-new").run());
@@ -129,14 +129,14 @@ describe("useWindowCommands — published registry entries", () => {
     expect(s.stageTab).toBe("plot");
   });
 
-  it("'Close Window' closes the focused window and refocuses a survivor", async () => {
+  it("'Close window' closes the focused window and refocuses a survivor", async () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-close").run());
     await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]));
     expect(useApp.getState().focusedWindowId).toBe("w2");
   });
 
-  it("'Close Window' is a no-op on the last surviving window (the ≥1-window invariant)", () => {
+  it("'Close window' is a no-op on the last surviving window (the ≥1-window invariant)", () => {
     useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
     renderHook(() => useWindowCommands());
     act(() => action("window-close").run());
@@ -237,7 +237,7 @@ describe("useWindowCommands — published registry entries", () => {
     expect(useApp.getState().focusedWindowId).toBe("w2"); // highest z — last in z-order
   });
 
-  it("'Tile Windows' / 'Cascade Windows' are published and re-lay-out the visible windows", () => {
+  it("'Tile windows' / 'Cascade windows' are published and re-lay-out the visible windows", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
       focusedWindowId: "w1",
@@ -395,13 +395,13 @@ describe("useWindowCommands — Snapshot to New Window (item 11)", () => {
 });
 
 describe("useWindowCommands — keyboard shortcuts", () => {
-  it("⌘⇧N / Ctrl+⇧N triggers New Graph Window", () => {
+  it("⌘⇧N / Ctrl+⇧N triggers New graph window", () => {
     renderHook(() => useWindowCommands());
     act(() => press("n", { meta: true, shift: true }));
     expect(useApp.getState().plotWindows).toHaveLength(3);
   });
 
-  it("⌘⇧W triggers Close Window", async () => {
+  it("⌘⇧W triggers Close window", async () => {
     renderHook(() => useWindowCommands());
     act(() => press("w", { ctrl: true, shift: true }));
     await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w2"]));

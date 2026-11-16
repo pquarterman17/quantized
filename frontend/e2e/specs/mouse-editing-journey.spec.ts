@@ -242,7 +242,7 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   const focusedTitlebar = page.locator(".qzk-plotwin.focused .qzk-plotwin-titlebar");
   await expect(focusedTitlebar).toBeVisible();
   await focusedTitlebar.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Close window", exact: true }).click();
   await expect
     .poll(() => page.evaluate(
       (id) => (window as unknown as { __qz: { useApp: { getState: () => { plotWindows: { id: string }[] } } } })

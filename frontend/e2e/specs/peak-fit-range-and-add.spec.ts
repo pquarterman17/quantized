@@ -3,7 +3,7 @@
 // 0.4, and a Lorentzian at 44 deg, FWHM 0.6, on a sloped background):
 //
 //  1. "Peak Fitting ▸ Fit this range" — brush an x-range around the 44-deg
-//     peak with Select Rows, right-click the plot, pick the entry: the Peak
+//     peak with Select rows, right-click the plot, pick the entry: the Peak
 //     Analyzer opens on step 2 with that range applied and the ONE peak inside
 //     it found. With nothing selected the entry is disabled and says why.
 //  2. Direct add — find both peaks, delete the second from the model table,
@@ -74,8 +74,8 @@ test.describe("Peak Analyzer — Fit this range + direct add", () => {
     await expect(entry).toHaveAttribute("title", /select an x-range first/);
     await page.keyboard.press("Escape");
 
-    // Brush 42..46 with Select Rows.
-    await page.getByRole("button", { name: "Select Rows" }).click();
+    // Brush 42..46 with Select rows.
+    await page.getByRole("button", { name: "Select rows" }).click();
     const from = await pixelAt(page, lim, 42);
     const to = await pixelAt(page, lim, 46);
     await page.mouse.move(from.x, from.y);

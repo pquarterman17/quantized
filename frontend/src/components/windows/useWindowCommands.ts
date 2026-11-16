@@ -231,7 +231,7 @@ export function useWindowCommands(): void {
             onLoadFailure,
           ),
       },
-      { id: "window-new", group: "Window", label: "New Graph Window", shortcut: "⌘⇧N", run: newGraphWindow },
+      { id: "window-new", group: "Window", label: "New graph window", shortcut: "⌘⇧N", run: newGraphWindow },
       {
         id: "window-duplicate",
         group: "Window",
@@ -239,7 +239,7 @@ export function useWindowCommands(): void {
         shortcut: "⌘⇧D",
         run: duplicateFocusedWindow,
       },
-      { id: "window-close", group: "Window", label: "Close Window", shortcut: "⌘⇧W", run: closeFocusedWindow },
+      { id: "window-close", group: "Window", label: "Close window", shortcut: "⌘⇧W", run: closeFocusedWindow },
       {
         id: "window-snapshot",
         group: "Window",
@@ -258,8 +258,8 @@ export function useWindowCommands(): void {
         label: "Open Map in Window",
         run: () => openDocumentWindow("map"),
       },
-      { id: "window-tile", group: "Window", label: "Tile Windows", run: tileWindows },
-      { id: "window-cascade", group: "Window", label: "Cascade Windows", run: cascadeWindows },
+      { id: "window-tile", group: "Window", label: "Tile windows", run: tileWindows },
+      { id: "window-cascade", group: "Window", label: "Cascade windows", run: cascadeWindows },
       {
         id: "window-bg-cycle",
         group: "Window",

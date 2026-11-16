@@ -13,4 +13,10 @@ describe("importFailureHint", () => {
     expect(importFailureHint("scan.csv")).toContain("Import wizard");
     expect(importFailureHint("noext")).toContain("Import wizard");
   });
+
+  it("names the platform shortcut and never shows the Mac glyph off macOS (UX-Q)", () => {
+    expect(importFailureHint("scan.csv", false)).toContain("Ctrl+K");
+    expect(importFailureHint("scan.csv", false)).not.toContain("⌘");
+    expect(importFailureHint("scan.csv", true)).toContain("⌘K");
+  });
 });
