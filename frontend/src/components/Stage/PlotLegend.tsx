@@ -222,17 +222,27 @@ export default function PlotLegend({
         // legend is a faithful read-only Origin block. `interactive` gates
         // every handler + the reorder arrows below in one place.
         const interactive = isChannel && !legendStatic;
-        const onClick = interactive
+        const onToggle = interactive
           ? () => {
               if (!isHidden && visibleCount <= 1) return;
               toggleHidden(channel);
             }
           : undefined;
+        // UX-A: with the Pointer tool a row click SELECTS its curve (the lazy
+        // PlotSelectionLayer reads `data-channel`); visibility is the swatch's
+        // own toggle, or Alt+click on the row. Other tools keep click-toggles.
+        const onClick = interactive
+          ? (e: React.MouseEvent) => {
+              if (tool !== "pointer" || e.altKey) onToggle?.();
+            }
+          : undefined;
+        const labelId = `${titleId}-r${i}`;
         const draggable = interactive && !!active;
         return (
           <div
             className="it"
             key={s.label}
+            data-channel={interactive ? channel : undefined}
             draggable={draggable}
             onDragStart={
               draggable
@@ -260,7 +270,9 @@ export default function PlotLegend({
             }
             title={
               interactive
-                ? "Click to hide/show · double-click to rename · drag onto an axis band · right-click for more"
+                ? tool === "pointer"
+                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click to rename · drag onto an axis band · right-click for more"
+                  : "Click to hide/show · double-click to rename · drag onto an axis band · right-click for more"
                 : undefined
             }
             style={{
@@ -268,22 +280,33 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            {/* The show/hide toggle as a keyboard control: a checkbox named by
-                its series. Space/Enter run the row's click (same last-visible
-                guard); Shift+F10 opens the row's menu, where Rename lives. */}
+            {/* The show/hide toggle: the swatch, a checkbox named by its
+                series. Click or Space/Enter toggles (same last-visible guard);
+                Shift+F10 opens the row's menu, where Rename lives. */}
             <span
               className="qzk-legend-toggle"
               role={interactive ? "checkbox" : undefined}
               aria-checked={interactive ? !isHidden : undefined}
+              aria-labelledby={interactive ? labelId : undefined}
               tabIndex={interactive ? 0 : undefined}
+              onClick={
+                interactive
+                  ? (e) => {
+                      e.stopPropagation(); // the row's own click must not toggle again
+                      onToggle?.();
+                    }
+                  : undefined
+              }
               onKeyDown={(e) => {
                 if (e.key !== " " && e.key !== "Enter") return;
                 e.preventDefault();
-                onClick?.();
+                onToggle?.();
               }}
             >
               <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} filled={s.selected} />
-              {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
+            </span>
+            {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
+            <span className="qzk-legend-label" id={labelId}>
               <RichText text={text} />
             </span>
             {interactive && plotted.length > 1 && (

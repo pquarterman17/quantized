@@ -200,6 +200,7 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   //    direct manipulation on the plot itself, not a properties panel). ───
   const legendRow0 = page.locator(".qzk-stage .qzk-legend .it").first();
   await expect(legendRow0).toContainText("Signal (V)");
+  const hiddenBefore = await page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { hiddenChannels: number[] } } } }).__qz.useApp.getState().hiddenChannels);
   await legendRow0.dblclick();
   const legendInput = page.locator(".qzk-stage .qzk-legend input.qz-input");
   await expect(legendInput).toBeVisible();
@@ -209,6 +210,10 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { seriesLabels: Record<number, string> } } } }).__qz.useApp.getState().seriesLabels[0]))
     .toBe("Renamed Signal");
+  // UX-A legend contract: with the Pointer tool the row's clicks SELECT its
+  // curve (the halo names it) and never hide it — visibility is the swatch.
+  await expect(page.locator(".qzk-selection-halo")).toHaveAttribute("data-selection", "series:0");
+  expect(await page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { hiddenChannels: number[] } } } }).__qz.useApp.getState().hiddenChannels)).toEqual(hiddenBefore);
 
   // ── Save through the real File menu (same path A3/A4 use) ──────────────
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
