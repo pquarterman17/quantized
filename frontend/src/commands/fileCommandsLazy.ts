@@ -42,7 +42,7 @@ import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
 import { runCancellable } from "../store/pendingOpActions";
-import { beginRemoveAll, cancelRemoveAll, rememberRemovedProject, removeAllUndoBlock } from "../store/removeAllProject";
+import { followProjectHistory, noteProjectLockRelease, removeAllUndoBlock } from "../store/projectFollowsHistory";
 import { closeProjectLockAwaitable } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
 import { historyTop, toastWithUndo } from "../lib/undoToast";
@@ -197,16 +197,8 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
   // Re-check at commit time: an import may have started while the
   // confirmation dialog was open.
   if (rejectIfImportRunning()) return;
-  const project = s().currentProject;
-  beginRemoveAll();
-  try {
-    s().clearAll();
-  } catch (e) {
-    cancelRemoveAll();
-    throw e;
-  }
-  const released = closeProjectLockAwaitable(); // after the clear: a throwing clear keeps the loaded project's lock
-  // The project follows this entry's undo/redo from here (store/removeAllProject).
-  rememberRemovedProject(project, released);
+  followProjectHistory(); // before the entry is pushed: the project follows this Remove all's undo/redo
+  s().clearAll();
+  noteProjectLockRelease(closeProjectLockAwaitable()); // after the clear: a throwing clear keeps the loaded project's lock
   toastWithUndo("removed all datasets", "ok", historyTop(), removeAllUndoBlock);
 }

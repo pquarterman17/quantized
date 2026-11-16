@@ -12,6 +12,8 @@ import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock } from "../store/projectLock";
 import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
 import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
+import { followProjectHistory } from "../store/projectFollowsHistory";
+import { readOnlyOpenReason } from "../store/projectLockPaths";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 import { closeRelinkPanel } from "../store/relinkPanel";
@@ -102,13 +104,6 @@ function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior
   })();
 }
 
-/** Why a project opened read-only, with the next step (shared with Undo of Remove all). */
-export function readOnlyOpenReason(status: string): string {
-  return status === "held-by-other-stale"
-    ? "another (unresponsive) instance has this project open — Take Over Editing is available"
-    : "another instance has this project open for editing — opened read-only";
-}
-
 /** DEFECT A fix (2026-08-21, Sol audit item P1-6): record a Recent Projects
  *  entry ONLY once a native open is actually APPLIED to the session, never
  *  before. The native read itself (lib/openWorkspaceCommand.ts's
@@ -156,6 +151,7 @@ export function recordNativeOpen(native: ProjectIdentity | undefined): void {
  *  ordering matters. */
 function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectIdentity | undefined, skipLayout: boolean): boolean {
   if (rejectIfImportRunning()) return false;
+  followProjectHistory(); // BEFORE the entry is pushed: it records the project this open replaces
   s().recordHistory(skipLayout ? "open workspace without layout" : "open workspace");
   // C1 (review F4): an open relink panel refers to the OUTGOING project's
   // datasets, and the backend independently revokes its directory grants at

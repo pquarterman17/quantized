@@ -50,8 +50,14 @@ export function toastWithUndo(msg: string, kind: ToastKind, top: HistoryTop | un
         const s = useApp.getState();
         if (s.history.at(-1)?.seq !== top.seq) {
           const undone = s.future.at(-1)?.label === top.label && s.history.length === top.depth - 1;
+          // Undo then Redo re-pushes the entry under a fresh seq: same label, same depth.
+          const redone = s.history.length === top.depth && s.history.at(-1)?.label === top.label;
           toast(
-            undone ? "Already undone." : "Can't undo that here — other edits came after it. Use Edit ▸ Undo or the Trash.",
+            undone
+              ? "Already undone."
+              : redone
+                ? "Already redone — use Edit ▸ Undo to undo it again."
+                : "Can't undo that here — other edits came after it. Use Edit ▸ Undo or the Trash.",
             "info",
           );
           return;
