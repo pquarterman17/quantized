@@ -208,7 +208,9 @@ function fitLines(n: number, p: Record<string, unknown>, label: string): Emit {
     `${I}x, y = np.asarray(${x}, dtype=float), np.asarray(data.column(${p.yKey}), dtype=float)`,
     `${I}keep = np.isfinite(x) & np.isfinite(y)`,
   ];
-  const range = Array.isArray(p.range) && p.range.length === 2 ? p.range : null;
+  // lib/fitStepDecode.ts keeps only two finite, ordered numbers.
+  const r = p.range;
+  const range = Array.isArray(r) && r.length === 2 && r.every((v) => typeof v === "number" && Number.isFinite(v)) && r[0] <= r[1] ? r : null;
   if (range) lines.push(`${I}keep &= (x >= ${py(range[0])}) & (x <= ${py(range[1])})  # the recorded fit window`);
   if (!recorded) {
     lines.push(
@@ -254,13 +256,15 @@ function expressionLines(step: PipelineStep, g: Gen): Emit {
   if (p.derived === true) return { lines: [], changesData: true, unmapped: "derived columns (units and error propagation) are evaluated only in the app" };
   const problem = headlessFormulaProblem(p.expr);
   if (problem) return { lines: [], changesData: true, unmapped: `formula ${JSON.stringify(p.expr)} is evaluated only in the app: ${problem}` };
-  const lines = g.formulas.length ? [] : [`${I}base = data  # the worksheet before its formula columns`];
-  const at = step.label.startsWith("Edit column") ? g.formulas.indexOf(p.name) : -1;
-  if (at >= 0) lines.push(`${I}formulas[${at}] = (${py(p.name)}, ${py(p.expr)})  # the edited formula`);
-  else {
-    lines.push(`${I}formulas.append((${py(p.name)}, ${py(p.expr)}))`);
-    g.formulas.push(p.name);
+  // An edit records only the NEW name and formula (a rename loses the old
+  // name), and the app's own Run pipeline re-adds it as a column: refused,
+  // like quantized/recipe_run.py's is_formula_edit.
+  if (step.code.startsWith("qz.editColumn(") || step.label.startsWith("Edit column")) {
+    return { lines: [], changesData: true, unmapped: "an edited formula column cannot be replayed exactly (its record holds only the new name and formula)" };
   }
+  const lines = g.formulas.length ? [] : [`${I}base = data  # the worksheet before its formula columns`];
+  lines.push(`${I}formulas.append((${py(p.name)}, ${py(p.expr)}))`);
+  g.formulas.push(p.name);
   if (typeof p.errorOf === "string") lines.push(comment(`bound as column ${p.errorOf}'s error bars in the app; the binding is not applied here`));
   lines.push(`${I}data = qz.add_formula_columns(base, formulas)`);
   return { lines, changesData: true };
@@ -349,6 +353,9 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     body.push("", comment(`${n}. ${step.label}`));
     if (!step.enabled) {
       body.push(comment("(turned off in the pipeline; not run)"), ...appLine(step));
+      // As the app's Run pipeline: every later step was recorded on this
+      // transform's output, which does not exist (executeSteps' blockedBy).
+      if (step.kind === "transform" && !stoppedAt) stoppedAt = n;
       return;
     }
     if (stoppedAt) {

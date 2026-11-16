@@ -68,11 +68,7 @@ def test_every_unreplayable_step_is_listed_up_front() -> None:
     steps = [
         _step("expression", "Add column t", {"name": "t", "expr": "if(A > 0, A, 0)"}),
         _step("expression", "Add column u", {"name": "u", "expr": "A*2", "derived": True}),
-        _step(
-            "correction",
-            "Corrections",
-            {"params": {}, "bg": {"datasetId": "d", "interp": "linear"}},
-        ),
+        _step("expression", "Edit column t", {"name": "t", "expr": "A"}),
         _step("fit", "Weighted", {"model": "Linear", "yKey": 0, "weight": {"mode": "column"}}),
         _step("fit", "Template", {"model": "Linear", "fitTemplate": {}}),
         _step("transform", "Join", {"op": "join"}),
@@ -84,10 +80,47 @@ def test_every_unreplayable_step_is_listed_up_front() -> None:
     ]
     probs = recipe_problems(parse_recipe(_recipe(*steps)))
     assert [p.split(" (")[0] for p in probs] == [f"step {n}" for n in range(1, 8)]
-    assert "--background" in probs[2]
-    assert len(recipe_problems(parse_recipe(_recipe(*steps)), has_background=True)) == 6
+    assert "edited formula" in probs[2]
     with pytest.raises(ValueError, match="cannot run headless"):
         run_recipe(parse_recipe(_recipe(*steps)), qz.DataStruct.create([0.0], [1.0]))
+
+
+def test_one_background_file_per_background_step_in_order() -> None:
+    def bg_step(interp: str) -> dict[str, Any]:
+        bg = {"datasetId": "d", "interp": interp}
+        return _step("correction", "Corrections", {"params": {}, "bg": bg})
+
+    recipe = parse_recipe(_recipe(bg_step("linear"), bg_step("linear")))
+    assert "2 background-subtraction step(s)" in recipe_problems(recipe, backgrounds=1)[0]
+    assert recipe_problems(recipe, backgrounds=2) == []
+    data = qz.DataStruct.create([0.0, 1.0, 2.0], [10.0, 10.0, 10.0])
+    first = qz.DataStruct.create([0.0, 2.0], [1.0, 1.0])
+    second = qz.DataStruct.create([0.0, 2.0], [3.0, 3.0])
+    run = run_recipe(recipe, data, backgrounds=[first, second])
+    # Each correction starts from the uncorrected base: the LAST one (second) wins.
+    np.testing.assert_allclose(run.data.column(0), [7.0, 7.0, 7.0])
+    with pytest.raises(ValueError, match="background"):
+        run_recipe(recipe, data, backgrounds=[first])
+
+
+def test_a_disabled_transform_blocks_every_later_step() -> None:
+    off = {
+        **_step("transform", "Resample", {"op": "resample", "mode": "n_points"}),
+        "enabled": False,
+    }
+    run = run_recipe(parse_recipe(_recipe(off, FIT)), qz.DataStruct.create([0.0, 1.0], [1.0, 2.0]))
+    assert run.fits == [] and "follows the disabled step 1" in run.log[1]
+
+
+def test_a_reversed_or_partial_fit_window_fits_every_row() -> None:
+    x = np.linspace(0.0, 10.0, 101)
+    data = qz.DataStruct.create(x, 1.0 + 2.0 * x)
+    for rng in ([5, 1], [0, None], [None, 3]):
+        step = _step("fit", "Fit", {"model": "Linear", "yKey": 0, "p0": None, "range": rng})
+        run = run_recipe(parse_recipe(_recipe(step)), data)
+        assert "fit 101 points" in run.log[0], rng
+    step = _step("fit", "Fit", {"model": "Linear", "yKey": 0, "p0": None, "range": [2, 4]})
+    assert "fit 21 points" in run_recipe(parse_recipe(_recipe(step)), data).log[0]
 
 
 def test_run_replays_formulas_corrections_and_the_fit() -> None:
@@ -95,19 +128,18 @@ def test_run_replays_formulas_corrections_and_the_fit() -> None:
     data = qz.DataStruct.create(x, 2.0 + 40.0 * np.exp(-0.5 * ((x - 4.0) / 0.8) ** 2), labels=["s"])
     steps = [
         _step("import", "Import a.csv", {"name": "a.csv"}),
-        _step("expression", "Add column t", {"name": "t", "expr": "A * 2"}),
-        _step("expression", "Edit column t", {"name": "t", "expr": "A * 3"}),
+        _step("expression", "Add column t", {"name": "t", "expr": "A * 3"}),
         _step("correction", "Corrections", {"params": {"yOff": 2}, "bg": None}),
         _step("ui", "Sort", {}, code='qz.sortRows("d", 0, "asc")'),
         _step("ui", "Log", {}, code='qz.setYScale("log")'),
         FIT,
     ]
     run = run_recipe(parse_recipe(_recipe(*steps)), data)
-    assert run.data.labels == ("s", "t")  # the edit replaced the formula
+    assert run.data.labels == ("s", "t")
     np.testing.assert_allclose(run.data.column(1), 3 * (data.column(0) - 2))  # recomputed after
     assert len(run.warnings) == 1 and "not replayed" in run.warnings[0]
     ((label, fit),) = run.fits
-    assert label == "7. Fit Gaussian" and fit["params"][1] == pytest.approx(4.0, abs=1e-6)
+    assert label == "6. Fit Gaussian" and fit["params"][1] == pytest.approx(4.0, abs=1e-6)
     assert extract_outputs(["A", "μ", "σ", "R2"], fit)[3] == fit["R2"]
     assert all(math.isnan(v) for v in extract_outputs(["A", "R2"], None))
 

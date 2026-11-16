@@ -212,15 +212,40 @@ describe("pipelineToPython", () => {
       imported(),
       makeStep("expression", "Add column t", "", { name: "t", expr: "A*2 + x" }),
       makeStep("correction", "Corrections", "", { params: { yOff: 1 }, bg: null }),
-      makeStep("expression", "Edit column t", "", { name: "t", expr: "A*3" }),
+      makeStep("expression", "Add column u", "", { name: "u", expr: "B*3" }),
       makeStep("reset", "Reset corrections", ""),
     ]);
     expect(s).not.toContain("NOT REPRODUCED");
     expect(s).toContain("    formulas = []  # the formula columns");
     expect(s).toContain('    base = data  # the worksheet before its formula columns\n    formulas.append(("t", "A*2 + x"))\n    data = qz.add_formula_columns(base, formulas)');
     expect(s).toContain('    base = qz.apply_corrections(raw, {"yOff": 1})\n    data = qz.add_formula_columns(base, formulas)');
-    expect(s).toContain('    formulas[0] = ("t", "A*3")  # the edited formula');
+    expect(s).toContain('    formulas.append(("u", "B*3"))\n    data = qz.add_formula_columns(base, formulas)');
     expect(s).toContain("    base = raw\n    data = qz.add_formula_columns(base, formulas)");
+  });
+
+  it("refuses an edited formula column: its record holds only the new name (a rename loses the old)", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column r", "", { name: "r", expr: "A/B" }),
+      makeStep("expression", "Edit column ratio", 'qz.editColumn("ratio", "A/B*2")', { name: "ratio", expr: "A/B*2" }),
+      later(),
+    ]);
+    expect(s).toContain("NOT REPRODUCED: an edited formula column cannot be replayed exactly");
+    expect(s).not.toContain("qz.apply_corrections");
+  });
+
+  it("a turned-off transform stops the replay: later steps were recorded on its output", () => {
+    const off = { ...makeStep("transform", "Resample", "", { op: "resample", mode: "n_points", nPoints: 50, method: "linear" }), enabled: false };
+    const s = pipelineToPython([imported(), off, makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, p0: null })]);
+    expect(s).toContain("# not run: it follows step 2");
+    expect(s).not.toContain("fit_model");
+  });
+
+  it("applies only a finite, ordered fit window, as the app decodes it", () => {
+    for (const range of [[5, 1], [0, null], [Number.NaN, 2]]) {
+      const s = pipelineToPython([imported(), makeStep("fit", "Fit", "", { model: "Linear", yKey: 0, p0: null, range })]);
+      expect(s, JSON.stringify(range)).not.toContain("the recorded fit window");
+    }
   });
 
   it("reproduces a background subtraction from a file the script asks for", () => {

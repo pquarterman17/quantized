@@ -17,12 +17,15 @@ import { compileFormula } from "./formula";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { tokenize } from "./formulaTokenize";
 
+/** calc/column_formula.py MAX_LEN. */
+const MAX_LEN = 10000;
 const OPS = new Set(["+", "-", "*", "/", "//", "%", "^", "**", "(", ")", ","]);
 /** Row-aware / special forms the app parses before the plain table. */
 const APP_ONLY = new Set(["if", "where", "row", "lag", "diff", "cumsum", "col", "sheet", "fit", "fitval"]);
 
 /** Why `expr` is outside the headless subset, or null. */
 export function headlessFormulaProblem(expr: string): string | null {
+  if (expr.length > MAX_LEN) return `it is longer than ${MAX_LEN} characters`;
   let toks;
   try {
     toks = tokenize(expr);

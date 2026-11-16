@@ -51,7 +51,7 @@ Env = Mapping[str, Vec]
 Fn = Callable[[Env], Vec]
 Tok = tuple[str, str | float]
 
-MAX_LEN = 2000
+MAX_LEN = 10000  # lib/formulaHeadless.ts refuses the same
 _TOKEN = re.compile(
     r"\s*(?:(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)"
     r"|(?:(?:np|numpy|math)\.)?([A-Za-z_]\w*)|(\*\*|//|[-+*/%^(),]))"
@@ -107,26 +107,27 @@ def _js_pow(a: Vec, b: Vec) -> Vec:
     return np.asarray(np.where(odd, np.nan, r), dtype=float)
 
 
-def _at_digits(op: Callable[[Vec], Vec], name: str) -> Callable[..., Vec]:
+_NAN = np.asarray(np.nan)
+
+
+def _at_digits(op: Callable[[Vec], Vec]) -> Callable[..., Vec]:
     """``floor(v)`` / ``floor(v, n)`` (numpy.round's scaling), as
-    ``lib/formulaFuncs.ts`` ``atDigits``."""
+    ``lib/formulaFuncs.ts`` ``atDigits``. Where the app throws for a row (a
+    digits value that is not a whole number, or infinite), that row is NaN --
+    the app's cell for a row whose evaluation failed."""
 
     def call(*args: Vec) -> Vec:
+        if not args:
+            return _NAN
         if len(args) == 1:
             return np.asarray(op(args[0]), dtype=float)
-        if len(args) != 2:
-            raise ValueError(f"{name}() takes 1 or 2 arguments")
-        v, n = args
-        finite = np.isfinite(n)
-        if np.any(finite & (n != np.round(n))):
-            raise ValueError(f"{name}(): digits must be a whole number")
+        v, n = args[0], args[1]
         with np.errstate(all="ignore"):
-            nn = np.where(finite, n, 0.0)
+            whole = np.isfinite(n) & (n == np.round(n))
+            nn = np.where(whole, n, 0.0)
             scale = np.power(10.0, np.abs(nn))
-            pos = op(v * scale) / scale
-            neg = op(v / scale) * scale
-            out = np.where(nn >= 0, pos, neg)
-        return np.asarray(np.where(np.isnan(n), np.nan, out), dtype=float)
+            out = np.where(nn >= 0, op(v * scale) / scale, op(v / scale) * scale)
+        return np.asarray(np.where(whole, out, np.nan), dtype=float)
 
     return call
 
@@ -156,10 +157,12 @@ def _hypot(*args: Vec) -> Vec:
     return np.asarray(np.where(inf, np.inf, out), dtype=float)
 
 
+# JavaScript arity: a missing argument is undefined (the result NaN) and
+# extra arguments are ignored -- Math.sin(a, b) is sin(a), Math.atan2(a) NaN.
 def _unary(f: Callable[[Vec], Vec]) -> Callable[..., Vec]:
     def call(*args: Vec) -> Vec:
-        if len(args) != 1:
-            raise ValueError("this function takes one argument")
+        if not args:
+            return _NAN
         with np.errstate(all="ignore"):
             return np.asarray(f(args[0]), dtype=float)
 
@@ -168,8 +171,8 @@ def _unary(f: Callable[[Vec], Vec]) -> Callable[..., Vec]:
 
 def _binary(f: Callable[[Vec, Vec], Vec]) -> Callable[..., Vec]:
     def call(*args: Vec) -> Vec:
-        if len(args) != 2:
-            raise ValueError("this function takes two arguments")
+        if len(args) < 2:
+            return _NAN
         with np.errstate(all="ignore"):
             return np.asarray(f(args[0], args[1]), dtype=float)
 
@@ -198,32 +201,18 @@ _FUNCS: dict[str, Callable[..., Vec]] = {
     "sqrt": _unary(np.sqrt),
     "abs": _unary(np.abs),
     "sign": _unary(np.sign),
-    "floor": _at_digits(np.floor, "floor"),
-    "ceil": _at_digits(np.ceil, "ceil"),
+    "floor": _at_digits(np.floor),
+    "ceil": _at_digits(np.ceil),
     "hypot": _hypot,
     "min": _reduce(np.minimum, np.inf),
     "max": _reduce(np.maximum, -np.inf),
     "pow": _binary(_js_pow),
 }
-_KEYWORDS = {
-    "and",
-    "or",
-    "not",
-    "if",
-    "where",
-    "row",
-    "rows",
-    "lag",
-    "diff",
-    "cumsum",
-    "col",
-    "sheet",
-}
 
 
 def _tokens(src: str) -> list[Tok]:
     if len(src) > MAX_LEN:
-        raise ValueError("expression too long")
+        raise ValueError(f"longer than {MAX_LEN} characters")
     out: list[Tok] = []
     pos = 0
     text = src.rstrip()
@@ -327,7 +316,7 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         return base
 
     def call(name: str) -> Fn:
-        if name in _KEYWORDS or name not in _FUNCS:
+        if name not in _FUNCS:
             raise ValueError(f'the function "{name}" is evaluated only in the app')
         nxt = toks[pos + 1] if pos + 1 < len(toks) else None
         bare = peek()
@@ -384,10 +373,17 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
     return fn, refs
 
 
+def _compiled(src: str) -> tuple[Fn, list[str]]:
+    try:
+        return _compile(src)
+    except RecursionError as exc:  # pathological nesting: refused, never a crash
+        raise ValueError("nested too deeply") from exc
+
+
 def formula_problem(expr: str) -> str | None:
     """Why ``expr`` is outside the headless subset, or ``None``."""
     try:
-        _compile(expr)
+        _compiled(expr)
     except ValueError as err:
         return str(err)
     return None
@@ -400,17 +396,20 @@ def _env(data: DataStruct) -> dict[str, Vec]:
     return env
 
 
+def _evaluate(env: Mapping[str, Vec], n_points: int, n_channels: int, expr: str) -> Vec:
+    fn, refs = _compiled(expr)
+    for name in refs:
+        if name not in env:
+            raise ValueError(f'unknown variable "{name}": the data has {n_channels} columns')
+    out = np.asarray(fn(env), dtype=float)
+    return np.asarray(np.broadcast_to(out, (n_points,)), dtype=float).copy()
+
+
 def evaluate_formula(data: DataStruct, expr: str) -> Vec:
     """One formula over every row of ``data``: a float vector the length of
     ``data.time``. Raises ``ValueError`` for a formula outside the subset (the
     module doc) or a letter past the last column."""
-    fn, refs = _compile(expr)
-    env = _env(data)
-    for name in refs:
-        if name not in env:
-            raise ValueError(f'unknown variable "{name}": the data has {data.n_channels} columns')
-    out = np.asarray(fn(env), dtype=float)
-    return np.asarray(np.broadcast_to(out, (data.n_points,)), dtype=float).copy()
+    return _evaluate(_env(data), data.n_points, data.n_channels, expr)
 
 
 def add_formula_columns(
@@ -420,20 +419,27 @@ def add_formula_columns(
     """Append one column per ``(name, expr)`` (or ``{"name", "expr"[, "unit"]}``)
     in order, each formula seeing ``x``, the data's columns and every column
     appended before it -- the app's computed columns (``applyFormulas``)."""
-    out = data
+    if not formulas:
+        return data
+    env = _env(data)
+    cols: list[Vec] = []
+    labels, units = list(data.labels), list(data.units)
     for f in formulas:
         if isinstance(f, Mapping):
             name, expr, unit = str(f["name"]), str(f["expr"]), str(f.get("unit", ""))
         else:
             name, expr, unit = str(f[0]), str(f[1]), ""
-        col = evaluate_formula(out, expr)
-        out = DataStruct.create(
-            out.time,
-            np.column_stack([out.values, col]) if out.n_channels else col.reshape(-1, 1),
-            labels=[*out.labels, name],
-            units=[*out.units, unit],
-            metadata=out.metadata,
-            cat_levels=out.cat_levels,
-            level_order=out.level_order,
-        )
-    return out
+        col = _evaluate(env, data.n_points, data.n_channels + len(cols), expr)
+        env[channel_letter(data.n_channels + len(cols))] = col
+        cols.append(col)
+        labels.append(name)
+        units.append(unit)
+    return DataStruct.create(
+        data.time,
+        np.column_stack([data.values, *cols]),
+        labels=labels,
+        units=units,
+        metadata=data.metadata,
+        cat_levels=data.cat_levels,
+        level_order=data.level_order,
+    )

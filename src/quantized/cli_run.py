@@ -10,9 +10,9 @@ registry (as ``quantized.api.load``), the steps are replayed headless
 (:mod:`quantized.recipe_run`: the same ``quantized.api`` calls the app's
 exported pipeline script makes) and the result is written to ``--out``:
 
-* the processed data, one ``<input stem> - <recipe name>.csv`` (or
-  ``.xlsx``) per input -- or, with ``--format dwk``, ONE ``<recipe name>.dwk`` project holding every
-  processed dataset (and the summary sheet), to open in the app;
+* the processed data, one ``<input stem> - <recipe name>.csv`` (or ``.xlsx``)
+  per input -- or, with ``--format dwk``, ONE ``<recipe name>.dwk`` project
+  holding every processed dataset (and the summary sheet), to open in the app;
 * the summary sheet the template declares (its ``outputs``: the last fit's
   parameters and R2, one row per input, as the app's template batch builds
   it), ``<recipe name> summary.csv``, when the recipe has outputs;
@@ -20,8 +20,12 @@ exported pipeline script makes) and the result is written to ``--out``:
   every channel), rendered by the server's own exporter;
 * ``run-report.json``: every input's status, step log and warnings.
 
+A background subtraction reads its background from ``--background FILE``,
+given once per background-subtraction step, in step order, read as loaded.
+
 Fail closed: a recipe with a step that cannot replay headless (a formula
-outside the supported subset, a two-input transform, a weighted fit, ...) is
+outside the supported subset, a two-input transform, a weighted fit, a missing
+or extra ``--background``, ...) is
 refused before any file is read, with every such step named; a step that fails
 on one input fails that input (reported, nothing written for it) and the run
 goes on. Nothing is overwritten unless ``--overwrite``, and no output is ever
@@ -115,7 +119,12 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True, help="output folder (created)")
     p.add_argument("--format", choices=_FORMATS, default="csv", help="processed data format")
     p.add_argument("--figures", choices=_FIGURES, help="also write one figure per input")
-    p.add_argument("--background", help="the background file a background-subtraction step uses")
+    p.add_argument(
+        "--background",
+        action="append",
+        default=[],
+        help="background file: one per background-subtraction step, in step order",
+    )
     p.add_argument("--overwrite", action="store_true", help="replace existing outputs")
     return p
 
@@ -128,7 +137,7 @@ def run_command(argv: list[str]) -> int:
     except (OSError, ValueError) as exc:
         print(f"qz run: {args.recipe}: {exc}", file=sys.stderr)
         return 2
-    problems = recipe_problems(recipe, has_background=bool(args.background))
+    problems = recipe_problems(recipe, backgrounds=len(args.background))
     if problems:
         print(
             f"qz run: {recipe.name!r} cannot run headless (nothing was read or written):",
@@ -141,14 +150,13 @@ def run_command(argv: list[str]) -> int:
     if unmatched or not files:
         print(f"qz run: no input matches {', '.join(unmatched) or args.inputs}", file=sys.stderr)
         return 2
-    background = None
-    protect: list[Path] = [*files, Path(args.recipe)]
-    if args.background:
-        protect.append(Path(args.background))
+    protect: list[Path] = [*files, Path(args.recipe), *(Path(b) for b in args.background)]
+    backgrounds: list[DataStruct] = []
+    for bg_path in args.background:
         try:
-            background = qz.load(args.background)
+            backgrounds.append(qz.load(bg_path))
         except Exception as exc:  # noqa: BLE001 - any reader failure is a usage error here
-            print(f"qz run: background {args.background}: {exc}", file=sys.stderr)
+            print(f"qz run: background {bg_path}: {exc}", file=sys.stderr)
             return 2
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -165,7 +173,7 @@ def run_command(argv: list[str]) -> int:
     for path, prefix in zip(files, _unique_stems(files, recipe.name), strict=True):
         entry: dict[str, Any] = {"input": str(path), "outputs": []}
         try:
-            run = run_recipe(recipe, qz.load(path), background=background)
+            run = run_recipe(recipe, qz.load(path), backgrounds=backgrounds)
             last = run.fits[-1][1] if run.fits else None
             entry.update(status="ok", log=run.log, warnings=run.warnings)
             rows.append((path.name, extract_outputs(recipe.outputs, last), None))

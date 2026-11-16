@@ -14,10 +14,13 @@ What replays (step ``kind`` -> call):
 * ``import``      the input slot: the file given on the command line;
 * ``correction``  ``apply_corrections`` on the UNcorrected base, then the
                   formula columns are recomputed on top (the app's order); a
-                  background subtraction uses the ``background`` dataset;
+                  background subtraction uses the next of ``backgrounds`` (one
+                  file per such step, in step order);
 * ``reset``       back to that base (formula columns recomputed);
 * ``expression``  a formula column (``add_formula_columns``), when the
                   formula is in the headless subset (``calc/column_formula``);
+                  an EDITED formula is refused (its record carries only the
+                  new name, and the app's batch re-adds it as a new column);
 * ``fit``         ``fit_model`` on the recorded channels, X range, starts,
                   bounds and held parameters;
 * ``transform``   ``resample`` (n points / step / range) via
@@ -31,7 +34,10 @@ FAIL CLOSED. :func:`recipe_problems` lists every enabled step that cannot be
 replayed headless (a formula outside the subset, a derived column with units,
 a transform with a second input, a weighted fit, ...). ``qz run`` refuses the
 whole recipe when there is one -- it never writes numbers that differ from the
-app's. Disabled steps are skipped, as in the app.
+app's. Disabled steps are skipped, as in the app, and every step after a
+disabled transform too (it was recorded on that transform's output). A step
+that fails fails the whole input (the app's batch keeps going and flags the
+row; headless, nothing half-done is written).
 
 Not recorded by the app and so not replayed: rows excluded or filtered in the
 app (every row is used) and error-column bindings set by hand.
@@ -56,6 +62,7 @@ __all__ = [
     "Recipe",
     "RecipeRun",
     "extract_outputs",
+    "is_formula_edit",
     "parse_recipe",
     "recipe_problems",
     "run_recipe",
@@ -134,21 +141,35 @@ def _enabled(step: Mapping[str, Any]) -> bool:
     return step.get("enabled") is not False
 
 
-def _step_problem(step: Mapping[str, Any], has_background: bool) -> str | None:
+def is_formula_edit(step: Mapping[str, Any]) -> bool:
+    """An "Edit column" recording: ``params`` carry the NEW name and formula
+    only (a rename loses the old name), and the app's own batch replays it as
+    an added column. Neither can be reproduced faithfully, so it is refused."""
+    code, label = str(step.get("code", "")), str(step.get("label", ""))
+    return code.startswith("qz.editColumn(") or label.startswith("Edit column")
+
+
+def _background_steps(recipe: Recipe) -> int:
+    return sum(
+        1
+        for s in recipe.steps
+        if _enabled(s) and s["kind"] == "correction" and s["params"].get("bg")
+    )
+
+
+def _step_problem(step: Mapping[str, Any]) -> str | None:
     """Why ``step`` cannot replay headless, or ``None``."""
     kind = step["kind"]
     p: Mapping[str, Any] = step["params"]
     if kind == "expression":
         if not isinstance(p.get("name"), str) or not isinstance(p.get("expr"), str):
             return "this worksheet operation has no headless equivalent"
+        if is_formula_edit(step):
+            return "an edited formula column (re-record the pipeline with the final formula)"
         if p.get("derived") is True:
             return "a derived column (units / error propagation) is evaluated only in the app"
         problem = formula_problem(str(p["expr"]))
         return f"formula {p['expr']!r}: {problem}" if problem else None
-    if kind == "correction":
-        if p.get("bg") and not has_background:
-            return "it subtracts a background dataset: give its file with --background"
-        return None
     if kind == "fit":
         if p.get("fitTemplate") is not None:
             return "a Curve Fit template step has no headless equivalent yet"
@@ -173,15 +194,23 @@ def _step_problem(step: Mapping[str, Any], has_background: bool) -> str | None:
     return None
 
 
-def recipe_problems(recipe: Recipe, *, has_background: bool = False) -> list[str]:
-    """``"step N (label): why"`` for every enabled step that cannot replay."""
+def recipe_problems(recipe: Recipe, *, backgrounds: int = 0) -> list[str]:
+    """``"step N (label): why"`` for every enabled step that cannot replay,
+    plus a background-file count that does not match the recipe's
+    background-subtraction steps (one file per step, in step order)."""
     out: list[str] = []
     for n, step in enumerate(recipe.steps, start=1):
         if not _enabled(step):
             continue
-        why = _step_problem(step, has_background)
+        why = _step_problem(step)
         if why:
             out.append(f"step {n} ({step['label']}): {why}")
+    need = _background_steps(recipe)
+    if need != backgrounds:
+        out.append(
+            f"the recipe has {need} background-subtraction step(s): give that many "
+            f"--background files, one per step in order ({backgrounds} given)"
+        )
     return out
 
 
@@ -195,7 +224,16 @@ def _fit(data: DataStruct, p: Mapping[str, Any]) -> tuple[dict[str, Any], int]:
         x, y = np.asarray(data.time, dtype=float), np.asarray(data.column(0), dtype=float)
     keep = np.isfinite(x) & np.isfinite(y)
     rng = p.get("range")
-    if isinstance(rng, list) and len(rng) == 2:
+    # lib/fitStepDecode.ts: only two finite, ordered numbers, and only for a
+    # step that recorded its channels; anything else fits every row.
+    if (
+        isinstance(p.get("yKey"), int)
+        and isinstance(rng, list)
+        and len(rng) == 2
+        and all(isinstance(v, int | float) and not isinstance(v, bool) for v in rng)
+        and all(math.isfinite(v) for v in rng)
+        and rng[0] <= rng[1]
+    ):
         keep &= (x >= float(rng[0])) & (x <= float(rng[1]))
     if not keep.any():
         raise ValueError("no finite X/Y pairs are available to fit")  # the app's message
@@ -229,23 +267,31 @@ def _transform(data: DataStruct, p: Mapping[str, Any]) -> tuple[DataStruct, list
 
 
 def run_recipe(
-    recipe: Recipe, data: DataStruct, *, background: DataStruct | None = None
+    recipe: Recipe, data: DataStruct, *, backgrounds: Sequence[DataStruct] = ()
 ) -> RecipeRun:
-    """Replay ``recipe`` on ``data`` (the module doc). Raises ``ValueError``
-    when the recipe has a step :func:`recipe_problems` lists, or a step fails
-    (the message names it) -- a half-replayed result is never returned."""
-    problems = recipe_problems(recipe, has_background=background is not None)
+    """Replay ``recipe`` on ``data`` (the module doc). ``backgrounds``: one
+    dataset per background-subtraction step, in step order. Raises
+    ``ValueError`` when the recipe has a problem :func:`recipe_problems` lists,
+    or a step fails (the message names it) -- a half-replayed result is never
+    returned."""
+    problems = recipe_problems(recipe, backgrounds=len(backgrounds))
     if problems:
         raise ValueError("cannot run headless: " + "; ".join(problems))
     run = RecipeRun(data=data)
     raw = base = data
     formulas: list[tuple[str, str]] = []
+    bg_next = 0
+    blocked = ""
     for n, step in enumerate(recipe.steps, start=1):
         label = f"{n}. {step['label']}"
         p: Mapping[str, Any] = step["params"]
         kind = step["kind"]
-        if not _enabled(step):
-            run.log.append(f"{label}: disabled, not run")
+        if not _enabled(step) or blocked:
+            # As executeSteps: a step after a disabled transform was recorded
+            # on that transform's output, which does not exist -- not run.
+            run.log.append(f"{label}: not run ({blocked or 'disabled'})")
+            if kind == "transform" and not blocked:
+                blocked = f"it follows the disabled step {n}"
             continue
         try:
             if kind == "import":
@@ -259,16 +305,13 @@ def run_recipe(
                     )
                 continue
             if kind == "expression":
-                name, expr = str(p["name"]), str(p["expr"])
-                hit = next((i for i, f in enumerate(formulas) if f[0] == name), None)
-                if hit is not None and str(step["label"]).startswith("Edit column"):
-                    formulas[hit] = (name, expr)
-                else:
-                    formulas.append((name, expr))
+                formulas.append((str(p["name"]), str(p["expr"])))
                 if isinstance(p.get("errorOf"), str):
                     run.warnings.append(f"{label}: computed; its error-bar binding is not applied")
             elif kind == "correction":
-                bg = background if p.get("bg") else None
+                bg = None
+                if p.get("bg"):
+                    bg, bg_next = backgrounds[bg_next], bg_next + 1
                 interp = str(p["bg"].get("interp", "linear")) if bg is not None else "linear"
                 base = qz.apply_corrections(
                     raw, dict(p.get("params") or {}), bg_dataset=bg, bg_interp=interp

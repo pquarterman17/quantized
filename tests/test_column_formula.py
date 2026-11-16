@@ -81,12 +81,29 @@ def _ds() -> DataStruct:
         ("np.sqrt(16) + math.pi - numpy.pi", 4.0),
         ("hypot(3, 4) + sign(-2) + floor(2.7) + ceil(2.1) + log2(8)", 12.0),
         ("floor(2.345, 2)", 2.34),
+        ("sin(0, 99) + cos(0, 1, 2)", 1.0),  # JS: extra arguments ignored
         ("ceil(1234, -2)", 1300.0),
         ("max(1, 5, 3) - min(2, 7)", 3.0),
     ],
 )
 def test_scalar_semantics(expr: str, want: float) -> None:
     assert evaluate_formula(_ds(), expr)[0] == pytest.approx(want, rel=1e-15)
+
+
+def test_javascript_arity_and_failed_rows_are_nan() -> None:
+    d = _ds()
+    for expr in ("atan2(A)", "pow(A)", "floor()", "sqrt()"):
+        assert np.isnan(evaluate_formula(d, expr)).all(), expr
+    # A row the app cannot evaluate (digits not whole, or infinite) is NaN there only.
+    np.testing.assert_array_equal(evaluate_formula(d, "floor(x * 1.25, B)"), [1.25, 2.0, math.nan])
+    assert np.isnan(evaluate_formula(d, "floor(x, 1 / 0)")).all()
+    assert np.isnan(evaluate_formula(d, "floor(x, 0.5)")).all()
+
+
+def test_length_and_nesting_limits_refuse_not_crash() -> None:
+    assert formula_problem("1+" * 4999 + "1") is None
+    assert "longer than 10000" in str(formula_problem("1+" * 5000 + "1"))
+    assert "nested too deeply" in str(formula_problem("(" * 3000 + "1" + ")" * 3000))
 
 
 def test_javascript_ieee_results() -> None:

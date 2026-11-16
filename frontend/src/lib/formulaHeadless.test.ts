@@ -58,6 +58,12 @@ const CASES = [
   "np.sqrt(abs(A)) * numpy.pi + math.e",
   "nan + 1",
   "(A + B) * (C - x) / (1 + x^2)",
+  // A row the app cannot evaluate (digits not a whole number, or infinite) is NaN.
+  "floor(A, C)",
+  "ceil(x, 1 / 0)",
+  // JavaScript arity: extra arguments ignored, a missing one gives NaN.
+  "sin(A, B) + cos(x, 1, 2)",
+  "atan2(A) + pow(B) + floor() + sqrt()",
 ];
 
 const REFUSED = [
@@ -91,6 +97,9 @@ describe("headless formula subset", () => {
   it("accepts every element-wise case and refuses every app-only form", () => {
     for (const expr of CASES) expect(headlessFormulaProblem(expr), expr).toBeNull();
     for (const expr of REFUSED) expect(headlessFormulaProblem(expr), expr).not.toBeNull();
+    // The Python side's length limit (calc/column_formula.py MAX_LEN), here too.
+    expect(headlessFormulaProblem("1+".repeat(5000) + "1")).toMatch(/longer than 10000/);
+    expect(headlessFormulaProblem("1+".repeat(4999) + "1")).toBeNull();
   });
 
   it("pins the app's own numbers for tests/test_column_formula.py", () => {
