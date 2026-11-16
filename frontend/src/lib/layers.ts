@@ -2,6 +2,8 @@
 //
 //   tool windows        200 .. 899    (ToolWindow; focus order, renumbered
 //                                      before it can reach the next band)
+//   file-drop overlay   900           (window-wide drop target: above every
+//                                      tool window, below any modal)
 //   modal backdrops     1000 .. 1499  (lib/modalInert.ts stamps open order)
 //   modal popovers      1500          (SymbolPalette: belongs to a dialog)
 //   toasts / badges     1600
@@ -18,6 +20,8 @@ export const Z = {
   toolBase: 200,
   /** Highest z a tool window can reach. */
   toolMax: 899,
+  /** The window-wide file-drop highlight (styles/fileDrop.css). */
+  fileDrop: 900,
   modalBase: 1000,
   modalPopover: 1500,
   toast: 1600,

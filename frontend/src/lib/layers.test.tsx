@@ -26,7 +26,8 @@ beforeEach(() => {
 
 describe("layer constants", () => {
   it("are ordered tool < modal < popover < toast < tooltip < menu", () => {
-    expect(Z.toolMax).toBeLessThan(Z.modalBase);
+    expect(Z.toolMax).toBeLessThan(Z.fileDrop);
+    expect(Z.fileDrop).toBeLessThan(Z.modalBase);
     expect(Z.modalBase + 499).toBeLessThan(Z.modalPopover); // room for 500 stacked modals
     expect(Z.modalPopover).toBeLessThan(Z.toast);
     expect(Z.toast).toBeLessThan(Z.tooltip);
@@ -35,6 +36,7 @@ describe("layer constants", () => {
 
   it("match the CSS custom properties the stylesheet paints with", () => {
     expect(cssVar("z-tool-base")).toBe(Z.toolBase);
+    expect(cssVar("z-file-drop")).toBe(Z.fileDrop);
     expect(cssVar("z-modal")).toBe(Z.modalBase);
     expect(cssVar("z-modal-popover")).toBe(Z.modalPopover);
     expect(cssVar("z-toast")).toBe(Z.toast);
@@ -47,6 +49,8 @@ describe("layer constants", () => {
     expect(rule("\\.qz-overlay-backdrop")).toBe("z-modal");
     expect(rule("\\.qz-tip")).toBe("z-tooltip");
     expect(rule("\\.qzk-toaster")).toBe("z-toast");
+    const dropCss = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../styles/fileDrop.css"), "utf8");
+    expect(/\.qzk-filedrop\s*\{[^}]*z-index:\s*var\(--z-file-drop\)/.test(dropCss)).toBe(true);
   });
 });
 

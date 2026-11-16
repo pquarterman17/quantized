@@ -34,6 +34,20 @@ export const mapGateVersion = (): number => version;
 /** Cheap synchronous rejections shared by `canRenderMap` / `ensureMapGate`. */
 const tooSmall = (d: DataStruct): boolean => d.labels.length + 1 < 3 || d.values.length < 4;
 
+/** True when `canRenderMap(data)` is already its FINAL answer: decided
+ *  synchronously (no data, parser-flagged, too small, scattered XYZ) or the
+ *  lazy grid gate has classified this DataStruct. False only while the gate
+ *  has not run yet -- a "no" from `canRenderMap` then means "not known yet",
+ *  and a surface that names availability (the plot-type gallery, the Analysis
+ *  Center) must say it is checking rather than call the type unavailable. */
+export function mapGateResolved(data: DataStruct | null | undefined): boolean {
+  if (!data || data.metadata["is2D"] === true || tooSmall(data) || data.metadata["scatteredXYZ"] === true) return true;
+  return gate.has(data);
+}
+
+/** Shown while the lazy grid gate is still classifying a dataset. */
+export const MAP_GATE_CHECKING = "Checking whether the data forms an X/Y grid…";
+
 /** Resolve the grid gate for a dataset (loads the lazy engine once), memoised
  *  per DataStruct. Resolves to `canRenderMap(data)`'s final answer. */
 export function ensureMapGate(data: DataStruct | null | undefined): Promise<boolean> {
