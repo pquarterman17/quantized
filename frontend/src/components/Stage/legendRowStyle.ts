@@ -4,6 +4,7 @@
 // look different depending on which window has focus.
 
 import { resolveDrawColor } from "../../lib/contrastColor";
+import { fitLineWidth, isFitSeries } from "../../lib/fitOverlayStyle";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { SeriesStyle } from "../../lib/types";
@@ -12,6 +13,8 @@ import type { SeriesStyle } from "../../lib/types";
 const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
 /** A fit band's legend sample: the dashed edge `uplotSeries` draws. */
 const BAND_SAMPLE: SeriesStyle = { width: 1, line: "dashed" };
+/** A fit curve's legend sample: the thinner dashed line `uplotSeries` draws. */
+const FIT_SAMPLE: SeriesStyle = { width: fitLineWidth(1.5), line: "dashed" };
 /** The canvas' selected-row companion: line-free 7px accent-filled circles. */
 const SELECTED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 7 };
 
@@ -47,7 +50,9 @@ export function legendRowStyle(
       ? EXCLUDED_SAMPLE
       : s.band
         ? BAND_SAMPLE
-        : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
+        : isFitSeries(s) && !styleList?.[i]
+          ? FIT_SAMPLE
+          : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
   // Gap audit 4 review L9: a literal symbol edge / fill colour gets the canvas'
   // contrast check too (`uplotSeries` resolves them for `symbolPoints`).
   const lit = (c?: string) => (c && !c.startsWith("--") ? resolveDrawColor(c, isDarkBg, inkColor) : c);

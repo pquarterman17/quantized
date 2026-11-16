@@ -53,6 +53,7 @@ import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "./overlaySpecShape";
+import { fitLineWidth, traceWithFit } from "./fitOverlayStyle";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
 import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
@@ -209,9 +210,9 @@ function appendOverlays(
     if (!o || o.y.length < n) return []; // placement already dropped another dataset's
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
     return [
-      { label, legend: label, y: o.y, points, band: 0, factor: factorFor(o) },
+      { label, legend: label, y: o.y, points, band: 0, fit: label === FIT_SERIES_LABEL, factor: factorFor(o) },
       ...edges.map((e, k) => ({
-        label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1, factor: factorFor(o),
+        label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1, fit: false, factor: factorFor(o),
       })),
     ];
   });
@@ -250,7 +251,16 @@ function appendOverlays(
   const traced = traceSeriesStyles(base, lineKeys, sources.defaultTrace, {}) ?? base;
   const widened =
     lineWidthSeriesStyles(traced, lineKeys, canvasLineWidth(view.plotTemplate, sources.defaultLineWidth)) ?? traced;
-  const styles = widened.map((st, i) => (present[i].points || present[i].band ? base[i] : st));
+  // The fit is a thinner DASHED line whatever the default trace (lib/fitOverlayStyle: the canvas' rule).
+  const fitWidth = fitLineWidth(canvasLineWidth(view.plotTemplate, sources.defaultLineWidth));
+  const styles = widened.map((st, i) =>
+    present[i].fit ? { ...base[i], line: "dashed" as const, width: fitWidth }
+      : present[i].points || present[i].band ? base[i] : st);
+  // ... and while it is shown, data without a style of its own gets markers, as on the canvas.
+  const own = spec.series_styles ?? keys.map(() => null);
+  const dataStyles = present.some((o) => o.fit) && traceWithFit(sources.defaultTrace, true) !== sources.defaultTrace
+    ? traceSeriesStyles(own, keys, "Line + markers", view.seriesStyles) ?? own
+    : own;
   const pad = <T>(list: T[] | undefined, v: T): T[] | undefined => (list ? [...list, ...present.map(() => v)] : undefined);
   return {
     ...spec,
@@ -261,7 +271,7 @@ function appendOverlays(
       units: [...spec.dataset.units, ...present.map(() => "")],
     },
     y_keys: [...keys, ...lineKeys],
-    series_styles: [...(spec.series_styles ?? keys.map(() => null)), ...styles],
+    series_styles: [...dataStyles, ...styles],
     ...(spec.error_spans ? { error_spans: pad(spec.error_spans, null) } : {}),
     ...(spec.waterfall_offsets ? { waterfall_offsets: pad(spec.waterfall_offsets, 0) } : {}),
     ...(spec.waterfall_x_offsets ? { waterfall_x_offsets: pad(spec.waterfall_x_offsets, 0) } : {}),

@@ -10,13 +10,15 @@
 // the same layer from the new fit as one undo step.
 //
 // Number format: a parameter with a usable error reads "value ± error", the
-// error to two significant figures and the value rounded to the same decimal
-// place (1.234 ± 0.012); a value/error pair at a very large or small
+// error rounded by the PDG rule (lib/fitValueFormat.ts, shared with the Curve
+// Fit panel: one or two significant figures) and the value rounded to the same
+// decimal place (1.234 ± 0.012); a value/error pair at a very large or small
 // magnitude shares one exponent, (1.23 ± 0.04)e-5. A parameter without an
 // error (a fixed one, or a failed covariance) prints its value to four
 // significant figures with no "±". A missing number is an en dash.
 
 import { DEFAULT_LAYER_AT, MAX_TABLE_COLS, MAX_TABLE_ROWS, type TableLayer } from "./graphLayersSanitize";
+import { fmtR2, roundToError } from "./fitValueFormat";
 import type { CalcResult } from "./types";
 
 const DASH = "–";
@@ -31,24 +33,11 @@ export function valueWithError(v: unknown, e: unknown, fixed = false): string {
   if (!fin(v)) return DASH;
   if (fixed) return `${plain(v, 4)} (fixed)`;
   if (!fin(e) || e <= 0) return `${plain(v, 4)} (no error)`;
-  // One exponent for the pair, from the larger of the two.
-  const top = Math.max(Math.abs(v), e);
-  const mag = wide(top) ? Math.floor(Math.log10(top)) : 0;
-  const s = 10 ** mag;
-  const ve = v / s;
-  const ee = e / s;
-  // Two significant figures of the error set the decimals of both.
-  const dec = 1 - Math.floor(Math.log10(ee));
+  const r = roundToError(v, e);
   // So small an error against the value that no decimals can show both.
-  if (dec > 20) return `${plain(v, 4)} ± ${e.toExponential(1)}`;
-  let out: string;
-  if (dec >= 0) out = `${ve.toFixed(dec)} ± ${ee.toFixed(dec)}`;
-  else {
-    // An error of 100 or more: round both to its second significant figure.
-    const unit = 10 ** -dec;
-    out = `${Math.round(ve / unit) * unit} ± ${Math.round(ee / unit) * unit}`;
-  }
-  return mag === 0 ? out : `(${out})e${mag}`;
+  if (!r) return `${plain(v, 4)} ± ${e.toExponential(1)}`;
+  const out = `${r.value} ± ${r.error}`;
+  return r.mag === 0 ? out : `(${out})e${r.mag}`;
 }
 
 /** A statistic to `sig` significant figures, exponent when very large or small. */
@@ -82,7 +71,7 @@ export function singleFitTable(names: readonly string[], result: CalcResult, wan
   const errors = Array.isArray(result.errors) ? (result.errors as unknown[]) : [];
   const rows: string[][] = [["Parameter", "Value"]];
   params.forEach((v, i) => rows.push([names[i] ?? `p${i}`, valueWithError(v, errors[i], fixed?.[i] === true)]));
-  if (want.r2) rows.push(["R²", plain(result.R2, 5)]);
+  if (want.r2) rows.push(["R²", fmtR2(result.R2)]);
   if (want.chiSqRed) rows.push(["Reduced χ²", plain(result.chiSqRed)]);
   if (want.chiSq) rows.push(["χ²", plain(result.chiSq)]);
   if (want.n) rows.push(["N", plain(result.nPoints, 6)]);
