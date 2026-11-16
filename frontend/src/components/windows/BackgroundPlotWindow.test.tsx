@@ -14,6 +14,7 @@ import { render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFigureDocument, figureDocumentToPlotView } from "../../lib/figureDocument";
+import { captureFit } from "../../lib/figureOverlays";
 import { defaultPlotView, type PlotView } from "../../lib/plotview";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -153,6 +154,15 @@ describe("BackgroundPlotWindow", () => {
     expect(opts.plugins).toHaveLength(2);
   });
 
+  it("draws an exchanged view turned, as the focused window does (X vertical, Y along the bottom)", async () => {
+    render(<BackgroundPlotWindow dataset={DATASET} view={{ ...noBoxView(), exchangeXY: true }} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { scales: { x: { ori?: number }; y: { ori?: number } }; axes: { side?: number }[] };
+    expect(opts.scales.x.ori).toBe(1);
+    expect(opts.scales.y.ori).toBe(0);
+    expect(opts.axes[0].side).toBe(3); // X axis on the left
+  });
+
   it("ignores the singleton store's tool overlays entirely (decision #2 — focused-window-only)", async () => {
     // A background window must NEVER show a fit/peak/baseline/deriv overlay
     // even if the LIVE singleton happens to have one set (e.g. from whatever
@@ -163,6 +173,24 @@ describe("BackgroundPlotWindow", () => {
     const data = created[0].data as unknown[][];
     // Only x + the one data channel — no extra "fit" series column appended.
     expect(data).toHaveLength(2);
+  });
+
+  it("draws its FIGURE's saved fit (lane C, review #6) -- as its page panel and exports do -- unless stale", async () => {
+    const view = { ...defaultPlotView(), yKeys: [0] };
+    const fit = { datasetId: "d1", binding: SINGLE_X, y: [11, 21, 31, 41] };
+    const document = createFigureDocument({ id: "f", name: "F", datasetId: "d1", view, overlays: captureFit(fit, DATASET) });
+    useApp.setState({ staleFits: [] });
+    const { unmount } = render(<BackgroundPlotWindow dataset={DATASET} view={view} document={document} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0].data as unknown[][]).toHaveLength(3); // x + the channel + the saved fit
+    expect((created[0].data as unknown[][])[2]).toEqual([11, 21, 31, 41]);
+    unmount();
+    created.length = 0;
+    useApp.setState({ staleFits: ["d1"] });
+    render(<BackgroundPlotWindow dataset={DATASET} view={view} document={document} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0].data as unknown[][]).toHaveLength(2);
+    useApp.setState({ staleFits: [] });
   });
 
   it("reflects the window's OWN view (e.g. yScale) rather than the live singleton", async () => {

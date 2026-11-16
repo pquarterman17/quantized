@@ -173,9 +173,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "contour-scattered": { description: "Interpolate scattered X, Y, Z points onto a grid and show them as a map." },
   "function-plot": { description: "Plot y = f(x; parameters) over an x range as a live, editable curve." },
   "plot-recipe-manager": { description: "Browse every saved recipe and template.", keywords: "plot recipes manager" },
-  autoscale: { description: "Reset zoom and restore automatic limits around the plotted data." },
+  autoscale: { description: "Reset zoom and restore automatic limits around the plotted data.", keywords: "rescale" },
   "view-back": { description: "Return to the preceding zoom or pan state." },
   "view-forward": { description: "Move forward to the next zoom or pan state." },
+  "exchange-xy": { description: "Turn the graph on its side so X runs up the left and Y along the bottom, each axis keeping its own title, scale, limits and format (box zoom only while turned; not for maps, polar, statistics, stacked, faceted or broken-axis graphs, insets, top axes or Y3+ axes)", keywords: "swap flip rotate transpose horizontal vertical depth profile" },
   xLog: { description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales." },
   xTickFormat: { description: "Change horizontal-axis labels between automatic, fixed, scientific, and engineering notation." },
   grid: { description: "Show or hide major plot grid lines." },
@@ -214,6 +215,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "layer contents curves add remove reorder rebind plot dataset book",
   },
   // ── commands/plotStyleCommands.ts ──
+  "legend-format": { description: "Show or hide the legend, pick its corner, rename its entries.", keywords: "legend labels entries position corner" },
   "color-gradient": { description: "Spread a colormap across the graph's curves.", keywords: "color colour colormap ramp increment" },
   // ── commands/plotCommands.ts ──
   "link-x-axis": {

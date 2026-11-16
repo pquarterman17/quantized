@@ -44,6 +44,15 @@ function selectAllFromCell(pos: number, col: number) {
   return id;
 }
 
+describe("worksheet Ctrl+A then Ctrl+Q (audit-6 lane O)", () => {
+  it("Ctrl+Q (Set Column Values) leaves the select-all block alone, like Ctrl+C", () => {
+    selectAllFromCell(2, 0);
+    expect(cellAt(5, 0)).toHaveAttribute("aria-selected", "true");
+    key("q", { ctrlKey: true });
+    expect(cellAt(5, 0)).toHaveAttribute("aria-selected", "true");
+  });
+});
+
 describe("worksheet Ctrl+A", () => {
   it("selects everything, keeps the active cell where it was, and copies the full block", async () => {
     let clip = "";

@@ -13,7 +13,21 @@ export function launchPath(query = "harness"): string {
   return `/?${query}&token=${process.env.QZ_API_TOKEN ?? ""}`;
 }
 
+const noPicker = new WeakSet<Page>();
+
 export async function gotoApp(page: Page): Promise<void> {
+  // Lane O: a browser Save As opens Chromium's File System Access picker when
+  // the page has one, and that native dialog never resolves under automation.
+  // Specs assert the save through its download, so hide the picker (for every
+  // load of this page, reloads included) and take the download fallback --
+  // the same path Firefox/Safari users get. The picker path is unit-tested
+  // (src/store/workspaceIO.browserSave.test.ts).
+  if (!noPicker.has(page)) {
+    noPicker.add(page);
+    await page.addInitScript(() => {
+      delete (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker;
+    });
+  }
   await page.goto(launchPath());
   await expect(page.locator(".qzk-library")).toBeVisible();
   await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz));

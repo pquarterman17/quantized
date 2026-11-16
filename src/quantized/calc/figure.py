@@ -49,7 +49,7 @@ from .figure_marks import (
     fill_xy,
     warn_marks_not_drawn,
 )
-from .figure_orient import TransposedAxes, oriented
+from .figure_orient import TransposedAxes, oriented, validate_exchange
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
@@ -195,7 +195,7 @@ def draw_series_axes(
     """
     artists: list[Any] = []
     drops: list[DropLine] = []
-    ax = oriented(ax, series_styles)  # horizontal bars: x and y exchanged (figure_orient)
+    ax = oriented(ax, series_styles, bool(ov.get("exchange_xy")))  # bars / exchange_xy
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
         yv = np.asarray(y, dtype=float)
@@ -345,6 +345,7 @@ def _render_impl(
         series_styles = apply_greyscale(series_styles, len(series))
     ov = dict(overrides or {})
     _validate_overrides(ov)
+    validate_exchange(ov, x_fmt=x_fmt, y_fmt=y_fmt, y2_fmt=y2_fmt, extra_y=extra_y)
     # Typography overrides folded into the preset once (calc.figure_fonts):
     # every downstream reader of st's font/title/legend sizes agrees.
     st = effective_style(figure_style(style), ov)

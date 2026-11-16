@@ -51,8 +51,21 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(STORE, { keyPath: "at" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    let blocked = false;
+    req.onsuccess = () => {
+      // An open that succeeds after `onblocked` already failed it has no
+      // caller left: close it, or it would hold the store open (review F8).
+      if (blocked) req.result.close();
+      else resolve(req.result);
+    };
     req.onerror = () => reject(req.error ?? new Error("IndexedDB open failed"));
+    // Another tab holds an older connection open across a version change:
+    // the open would wait for it indefinitely (review R4). Fail now, with
+    // the remedy, rather than stall the autosave queue.
+    req.onblocked = () => {
+      blocked = true;
+      reject(new Error("the autosave store is blocked by another quantized tab — close the other tabs, then autosave resumes"));
+    };
   });
 }
 

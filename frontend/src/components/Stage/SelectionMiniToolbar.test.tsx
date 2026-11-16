@@ -2,10 +2,18 @@
 // consumer. Same render/store-seed convention as ToolHud.test.tsx.
 
 import { fireEvent, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "../../store/useApp";
 import SelectionMiniToolbar from "./SelectionMiniToolbar";
+import { loadObjectMenus } from "./objectMenusLoader";
+
+// The object menus load on demand (bundle diet slice 30); the app warms them
+// once a plot has an object to act on, so a gesture finds them loaded. Load
+// them up front the same way, so the menus here open on the gesture's frame.
+beforeAll(async () => {
+  await loadObjectMenus();
+});
 
 beforeEach(() => {
   useApp.setState({

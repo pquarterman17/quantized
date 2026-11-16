@@ -162,3 +162,12 @@ describe("CurveFitPanel — saved-model picker stays current", () => {
     expect(picker()).toHaveValue("custom:");
   });
 });
+
+describe("CurveFitPanel — a backend that is down (soak item 7)", () => {
+  it("names the cause instead of a bare \"Failed to fetch\"", async () => {
+    vi.mocked(fitModel).mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<CurveFitPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Fit" }));
+    expect(await screen.findByText(/Failed to fetch — the qz server is not responding/)).toBeInTheDocument();
+  });
+});

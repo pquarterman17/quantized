@@ -119,6 +119,14 @@ describe("SnapshotPlotWindow (item 11) — static frozen rendering", () => {
     expect(container.textContent).toContain("Snapshot — ds1");
   });
 
+  it("draws an exchanged view turned (X vertical), as the live window does", async () => {
+    useApp.setState({ plotWindows: [snapWin({ view: { ...defaultPlotView(), exchangeXY: true } })], focusedWindowId: null });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const opts = created[0].opts as { scales: { x: { ori?: number } } };
+    expect(opts.scales.x.ori).toBe(1);
+  });
+
   it("FROZEN MEANS FROZEN: toggling row exclusion changes the live window but never the snapshot", async () => {
     useApp.setState({ plotWindows: [win(), snapWin()], focusedWindowId: "w1" });
     render(<WindowCanvas />);

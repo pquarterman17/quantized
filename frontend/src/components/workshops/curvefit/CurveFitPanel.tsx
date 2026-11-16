@@ -42,6 +42,7 @@ import { xErrorChannel } from "./xErrorChannel";
 import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
 import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
 import CurveFitBatchSection from "./CurveFitBatchSection";
+import { connectionHint } from "../../../lib/importFailureHint";
 
 // Each its own chunk, fetched only when shown.
 const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "Templates");
@@ -314,8 +315,8 @@ export default function CurveFitPanel() {
         </div>
       )}
       {error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--danger)" }}>
-          {error}
+        <div className="qzk-ds-meta qzk-msg" style={{ marginTop: 10, color: "var(--danger)" }}>
+          {error}{connectionHint(error)}
         </div>
       )}
       {!byActive && <FitConvergenceWarning result={guessOnly ? null : result} />}

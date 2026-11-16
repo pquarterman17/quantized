@@ -244,6 +244,22 @@ describe("annotationPlugin", () => {
     expect(texts[0].x).toBeGreaterThan(50); // label offset to the right of the dot
   });
 
+  // Audit 6 M: the anchor dot is opt-out per annotation. `dot: false` (a plain
+  // text box) draws the label with no arc; absent keeps the legacy dot.
+  it("draws no anchor dot for `dot: false`, but still draws the label", () => {
+    const { texts, dots } = drawAnn([{ id: "t", x: 50, y: 30, text: "Note", dot: false }]);
+    expect(dots).toHaveLength(0);
+    expect(texts.map((t) => t.text)).toEqual(["Note"]);
+  });
+
+  it("keeps the dot when `dot` is absent or true (saved figures keep their look)", () => {
+    const { dots } = drawAnn([
+      { id: "a", x: 50, y: 30, text: "old" },
+      { id: "b", x: 40, y: 30, text: "explicit", dot: true },
+    ]);
+    expect(dots).toHaveLength(2);
+  });
+
   // Regression (Origin PNR.opj repro): uPlot's own left-Y-axis label draw
   // leaves `ctx.textAlign = "right"` resident on the shared canvas context
   // (see annotationPlugin's docstring); the plugin must set "left" itself on

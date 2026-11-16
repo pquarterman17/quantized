@@ -76,6 +76,11 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
             v = margins.get(side)
             if v is not None and not 0.0 <= float(v) <= 1.0:
                 raise ValueError("margins are figure fractions in [0, 1]")
+    if ov.get("exchange_xy") is not None:  # Plot > Exchange X-Y axes (calc.figure_orient)
+        if not isinstance(ov["exchange_xy"], bool):
+            raise ValueError("exchange_xy must be true or false")
+        if ov["exchange_xy"] and ov.get("x_breaks"):
+            raise ValueError("exchange_xy is not supported together with x_breaks")
     validate_page_pad(ov.get("page_pad"))  # Page setup margins (calc.figure_layout)
     validate_typography(ov)  # per-element font sizes (calc.figure_fonts)
     breaks = ov.get("x_breaks")
@@ -234,8 +239,9 @@ def _apply_overrides(
     _apply_ref_lines(ax, ov.get("ref_lines"))
 
     for i, ann in enumerate(ov.get("annotations", [])):
-        # MAIN #18: a per-annotation `size` (the pointer tool's corner-handle
-        # font-size resize, screen px) wins over the property panel's global
+        # MAIN #18: a per-annotation `size` (points on the wire: the view->
+        # override mapper converts the canvas px, the pointer tool's corner-handle
+        # font-size resize) wins over the property panel's global
         # font_size override -- matches the screen, where each annotation's
         # OWN size (Annotation.size) always overrides the plot's base font.
         size = ann.get("size")
@@ -277,7 +283,10 @@ def _apply_overrides(
         # The canvas marks every annotation's anchor with a 3 px dot and sets
         # the label 6 px right of it, its bottom 2 px above (uplotOverlays'
         # annotationLayout); 1 CSS px = 0.75 pt.
-        _anchor_dot(fig, ax, i, x, y, page=ann.get("anchor") == "page")
+        # `dot: false` (new plain text / text boxes) hides it, as on screen;
+        # absent = dot, so every older figure keeps its look.
+        if ann.get("dot") is not False:
+            _anchor_dot(fig, ax, i, x, y, page=ann.get("anchor") == "page")
         ax.annotate(
             safe_mathtext_label(str(ann.get("text", ""))),
             xy=(x, y),

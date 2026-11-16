@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from quantized.calc.figure_orient import validate_exchange
 from quantized.calc.figure_overrides import _validate_overrides
 
 if TYPE_CHECKING:
@@ -50,6 +51,10 @@ def _validate_panel_overrides(n: int, p: PagePanel) -> None:
             "remove the per-panel margins override"
         )
     _validate_overrides(ov)
+    try:  # the same refusals as a single figure (an inset, breaks, a top axis ...)
+        validate_exchange(ov, x_fmt=p.x_fmt, y_fmt=p.y_fmt, y2_fmt=p.y2_fmt)
+    except ValueError as exc:
+        raise ValueError(f"panel {n}: {exc}") from exc
     if p.y2_mask is not None and len(p.y2_mask) != len(p.series):
         raise ValueError(f"panel {n}: y2_mask must have the same length as series")
     # F4.4 follow-up: a facet panel's own render (calc.figure_page_facets)

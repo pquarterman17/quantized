@@ -914,7 +914,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // OriginFigureFidelity joined lib/originFidelityTypes.ts (re-exported, no
   // importer changed), funding `OriginFigure.curve_sheet_notes`; the pin is
   // unchanged. (The reader branch's own 934 -> 901 move is subsumed.)
-  "/lib/types.ts": 821,
+  "/lib/types.ts": 694,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
   // (re-exported, no importer moved), funding the three optional encoding zones;
@@ -2026,6 +2026,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   plotTemplate: "named template, not channel-indexed",
   showAxisBox: "display toggle, not channel-indexed",
   xReversed: "x axis direction toggle, not channel-indexed",
+  exchangeXY: "display toggle (Plot > Exchange X-Y axes), not channel-indexed",
   stackMode: "display toggle, not channel-indexed",
   insetMode: "display toggle, not channel-indexed",
   inset: "the magnifier's source region (data coords) + placement fractions, not channel-indexed",
@@ -2161,6 +2162,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   graphBuilderSeed: "seeded spec from another workflow; consumed on use, not persistent",
   quickFigureBuilderDatasetId: "Quick Figure Builder source target; transient UI state cleared on cancel",
   quickFigureBuilderSeed: "Quick Figure Builder caller-provided draft assignments; transient UI state cleared on cancel",
+  quickFigureBuilderOverlays: "Quick Figure Builder caller-provided saved-fit curve for the created figure; transient UI state cleared on cancel",
 
   recipeSourcesComplete: "workspace recipe-source fidelity (P3.5); DERIVED at project load, never user-edited — there is nothing to undo TO, and restoring a stale `true` over a genuine `false` would re-certify sources the load actually lost",
 
@@ -2781,6 +2783,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // the qfit gadget frame (a tool-activation-only plugin) behind the same
     // getter seam. Plus the Plot menu's graph-template and dialog bodies.
     { module: "/lib/axisExtras.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./axisExtras")' },
+    // Soak-fix lane (2026-11-15): the autosave's working half (generation
+    // rules, backends, the on-hide stash) loads with the startup restore, and
+    // the presence socket's stale-token probe on its first close.
+    { module: "/lib/autosaveCore.ts", loader: "/lib/autosave.ts", call: 'import("./autosaveCore")' },
+    { module: "/lib/staleSession.ts", loader: "/lib/lifecycle.ts", call: 'import("./staleSession")' },
+    // ...and the late-restore Append / Replace / Discard prompt (review 3).
+    { module: "/lib/lateRestore.ts", loader: "/lib/autosaveRestoreApply.ts", call: 'import("./lateRestore")' },
+    { module: "/lib/autosaveRestoreApply.ts", loader: "/autosaveStartupRestore.ts", call: 'import("./lib/autosaveRestoreApply")' },
     { module: "/lib/uplotGadgets.ts", loader: "/lib/axisExtrasHook.ts", call: 'import("./uplotGadgets")' },
     // SLICE 27 (2026-11-14): the tool-dock plugin family (pan, cursor readout,
     // measure, region statistics, integrate, FWHM), warmed by the plot
@@ -2812,6 +2822,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/datasetListEdits.ts",
       call: 'import("./duplicateDatasetRun")',
     },
+    // SLICE 30 (2026-11-15): three more async store-action bodies, the
+    // `.dwk` parse entry point once a file is picked, and the plot-object
+    // menus (warmed once a plot has an annotation or a shape; the registry
+    // actions they gather are in DRAGGED_OUT).
+    {
+      module: "/store/derivedWorksheetCreate.ts",
+      loader: "/store/derivedWorksheets.ts",
+      call: 'import("./derivedWorksheetCreate")',
+    },
+    { module: "/store/pasteDataRun.ts", loader: "/store/dataIntake.ts", call: 'import("./pasteDataRun")' },
+    { module: "/store/appendWorkspaceRun.ts", loader: "/store/workspaceHydration.ts", call: 'import("./appendWorkspaceRun")' },
+    { module: "/lib/parseWorkspaceFile.ts", loader: "/lib/openWorkspaceCommand.ts", call: 'import("./parseWorkspaceFile")' },
+    { module: "/components/Stage/objectMenus.tsx", loader: "/components/Stage/objectMenusLoader.ts", call: 'import("./objectMenus")' },
     {
       // SLICE 17: the Take Over Editing / Open as Copy bodies.
       module: "/commands/projectLockRun.ts",
@@ -3678,6 +3701,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // loads it when a default is set (commands/plotCommands.ts warmDefaultGraphTemplate).
     "/lib/defaultGraphTemplate.ts",
     "/lib/graphFormat.ts",
+    // SLICE 30 (2026-11-15): the annotation/shape registry actions, which the
+    // object menus, the right-click plot menu and the ⌘K palette (all lazy)
+    // import statically.
+    "/components/Stage/annotationShapeActions.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

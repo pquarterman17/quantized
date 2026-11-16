@@ -3,6 +3,7 @@
 // many ordinary recipe applications; it does not introduce a second mapping
 // engine or guess at missing columns.
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
+import type { FigureOverlays } from "../lib/figureOverlays";
 import { createPageDocument } from "../lib/pageDocumentActions";
 import type { PageDocument } from "../lib/pageDocument";
 import { PAGE_MAX_GRID } from "../lib/figurepage";
@@ -166,6 +167,8 @@ export interface BuildBatchFigureArtifactsInput {
   columns: number | "auto";
   nextFigureId: () => string;
   nextPageId: () => string;
+  /** Each dataset's saved fit, regenerated for its figure (store/batchFigureFits). */
+  overlays?: ReadonlyMap<string, FigureOverlays>;
 }
 
 export interface BatchFigureArtifacts {
@@ -186,6 +189,8 @@ export function commitBatchFigureArtifacts(artifacts: BatchFigureArtifacts): Bat
   const firstPage = artifacts.pages[0] ?? null;
   const pageOpened = firstPage !== null && !state.figurePageOpen;
   state.recordHistory(`build ${artifacts.figures.length} figure${artifacts.figures.length === 1 ? "" : "s"}`);
+  const fitted = artifacts.figures.filter((figure) => figure.overlays?.fit).length;
+  const withFits = fitted ? ` (${fitted} with ${fitted === 1 ? "its" : "their"} saved fit)` : "";
   useApp.setState((current) => ({
     editableFigures: [...current.editableFigures, ...artifacts.figures],
     ...(firstPage
@@ -201,7 +206,7 @@ export function commitBatchFigureArtifacts(artifacts: BatchFigureArtifacts): Bat
             : {}),
         }
       : {}),
-    status: `created ${artifacts.figures.length} editable figure${artifacts.figures.length === 1 ? "" : "s"}${artifacts.pages.length === 1 ? ` and page "${artifacts.pages[0].name}"` : artifacts.pages.length > 1 ? ` and ${artifacts.pages.length} pages` : ""}`,
+    status: `created ${artifacts.figures.length} editable figure${artifacts.figures.length === 1 ? "" : "s"}${withFits}${artifacts.pages.length === 1 ? ` and page "${artifacts.pages[0].name}"` : artifacts.pages.length > 1 ? ` and ${artifacts.pages.length} pages` : ""}`,
   }));
   return { pageOpened };
 }
@@ -227,6 +232,7 @@ export function buildBatchFigureArtifacts(input: BuildBatchFigureArtifactsInput)
       facetKey: mapping.facetKey,
       errors: mapping.errors,
       axisBreaks: visual.axisBreaks,
+      overlays: input.overlays?.get(row.datasetId),
     }));
   }
 

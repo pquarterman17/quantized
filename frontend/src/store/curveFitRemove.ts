@@ -14,6 +14,7 @@
 import { isFitResultForDataset } from "../lib/fitAnalysisResultLive";
 import { isCurveFitOverlay, rememberCurveFitOverlay } from "./curveFitOverlay";
 import { useApp } from "./useApp";
+import { overlaysNow } from "./windowOverlaysLazy";
 import { announceRetainedFit, restoreFitted, retainedFit, retainedFits } from "./curveFitSession";
 
 let watching = false;
@@ -87,6 +88,9 @@ export function showRetainedCurve(datasetId: string): void {
   if (!kept?.overlay || kept.removed || s.activeId !== datasetId || s.fitOverlay?.datasetId === datasetId) return;
   const live = s.datasets.find((d) => d.id === datasetId);
   if (restoreFitted(s.datasets, datasetId) === null || live?.data.time.length !== kept.overlay.y.length) return;
+  // Window-scoped fits (gap audit 5 lane C, review N4): never onto a window
+  // other than the one that drew it (another window on the same worksheet).
+  if (overlaysNow()?.mayDraw(s.focusedWindowId, kept.overlay) === false) return;
   rememberCurveFitOverlay(kept.overlay);
   s.setFitOverlay(kept.overlay);
 }

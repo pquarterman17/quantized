@@ -74,7 +74,7 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         const picked = await chooseExcludedRows(
           (greyExcluded) => withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
             autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
-            defaultLineWidth: useApp.getState().defaultLineWidth,
+            defaultLineWidth: useApp.getState().defaultLineWidth, staleFits: useApp.getState().staleFits,
           }), deps.tickHints),
           excludedChoiceMatters,
           useApp.getState().excludedDisplay,

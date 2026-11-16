@@ -143,7 +143,7 @@ export default function AnalysisResultFigures({ result, disabled = false, disabl
     {!!bindings.length && <><p className="qz-analysis-caption">{sourceOnly
       ? "These actions plot the recorded source curve only. The peak table and CSV preserve fitted values; a reusable fitted curve is not stored in this result."
       : fitted
-        ? "Open plot and Send to report regenerate the fitted curve from the saved model and parameters. Build source figure starts an editable draft from the recorded source curve; editable figures do not yet store fit overlays."
+        ? "Open plot and Send to report regenerate the fitted curve from the saved model and parameters. Build source figure starts an editable draft from the recorded source curve, and the saved figure keeps the fitted curve on pages and in exports."
       : `Figures use the result’s recorded ${result.outputs.length ? "output" : "source"} and channels. Build figure opens an editable draft; Send to report captures the configured plot.`}</p>
     {bindings.map((binding, index) => <FigureCard key={`${binding.datasetId}-${index}`} result={result} index={index} savedBinding={binding} onOpen={onOpen} onBuild={onBuild} onReport={onReport} onRefit={onRefit} />)}</>}
   </div>;

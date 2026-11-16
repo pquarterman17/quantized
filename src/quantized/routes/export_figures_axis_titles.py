@@ -29,7 +29,7 @@ class AxisLabelStyle(BaseModel):
 
     size: float | None = Field(
         default=None, gt=0, le=200,
-        description="Font size: the screen's CSS px, read as points (the annotation `size` rule).",
+        description="Font size in points (the Stage sends canvas px x 0.75, as for an annotation).",
     )
     bold: bool | None = None
     italic: bool | None = None

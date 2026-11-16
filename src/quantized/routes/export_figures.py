@@ -26,7 +26,7 @@ from functools import partial
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import Field, field_validator
+from pydantic import Field, StrictBool, field_validator, model_validator
 
 from quantized.calc.axis_dates import x_is_datetime
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
@@ -78,6 +78,7 @@ from quantized.routes.export_figures_labels import (
 from quantized.routes.export_figures_polar import PolarFields, refuse_polar, render_polar_request
 from quantized.routes.export_figures_render import flat_render_kwargs as _flat_render_kwargs
 from quantized.routes.export_figures_schema import (
+    ANALYSIS_OVERLAYS_DOC,
     LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
     SVG_TEXT_AS_PATHS_DOC,
@@ -86,6 +87,7 @@ from quantized.routes.export_figures_schema import (
     FigureFacet,
     TickFormatSpec,
     _ResolvedFigure,
+    check_overlay_flags,
     reject_document_only_style_keys,
 )
 
@@ -246,6 +248,9 @@ class FigureRequest(
         default=None, description=WATERFALL_X_OFFSETS_DOC
     )
     log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
+    analysis_overlays: list[StrictBool] | None = Field(
+        default=None, description=ANALYSIS_OVERLAYS_DOC
+    )
     svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
@@ -257,6 +262,14 @@ class FigureRequest(
     # live with the list itself, in `export_figures_schema`. Declared on this
     # model, so the page route inherits it through `PagePanelSpec.figure`.
     _no_document_keys = field_validator("series_styles")(reject_document_only_style_keys)
+
+    @model_validator(mode="after")
+    def _overlay_flags_align(self) -> FigureRequest:
+        """Review #10: one ``analysis_overlays`` flag per ``y_keys`` entry, or a
+        422 -- an appender that forgot to pad would otherwise mislabel the
+        auto title silently."""
+        check_overlay_flags(self)
+        return self
 
 
 def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _ResolvedFigure:
@@ -351,8 +364,9 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         series_names(plot_series, legends), legends, req.log_offsets
     )
     x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
-    y_label = solo_axis_label(req.y_label, names, plot_series, 0)
-    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1)
+    overlays = req.analysis_overlays  # never in an auto title (lane K)
+    y_label = solo_axis_label(req.y_label, names, plot_series, 0, overlays)
+    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1, overlays)
     series: list[tuple[str, Any]] = apply_waterfall_offsets(
         [(name, s.values) for name, s in zip(names, plot_series, strict=True)],
         req.waterfall_offsets,

@@ -50,7 +50,6 @@
 // ordering. Written and run GREEN against the pre-extraction code in
 // useApp.ts, and passes byte-unchanged against this module.
 
-import { recomputeFormulaData } from "./computedColumns";
 import { bookDefaultHiddenChannels, defaultErrKeys } from "../lib/errorbars";
 import { migrateGroupsToFolders } from "../lib/foldertree";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
@@ -61,13 +60,14 @@ import { nextStageTab } from "../lib/stagetab";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
-import { nextDatasetId, nextFolderId } from "./idSeq";
+import { nextFolderId } from "./idSeq";
 import { carryGrewFrom, grownCarry } from "./recipeFidelity";
 import { loadedMapViews } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
-import { notifyMigrationWarnings, toast } from "./toasts";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { focusTransientReset, mainWindow } from "./windows";
-import { nextWorkbookId } from "./workbookIds";
+import { loadWindowOverlays } from "./windowOverlaysLazy";
+import { announceWorkspaceReplace } from "./workspaceReplace";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -92,10 +92,16 @@ export interface WorkspaceHydrationSlice {
   // state) — the File ▸ Remove all command. Moved here from useApp.ts
   // (2026-09-25, P2.5) because it IS loadWorkspace with an empty workspace.
   clearAll: () => void;
+  /** Identity of the current document: a fresh value on every loadWorkspace (Open, restore, Remove
+   *  all), restored by undo/redo. The browser save handle is bound to it (lib/browserFileHandle.ts). */
+  docEpoch: number;
 }
+
+let epochSeq = 0; // unique across undo, so a restored old epoch can never collide with a new one
 
 export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): WorkspaceHydrationSlice {
   return {
+    docEpoch: 0,
     // Replace the whole library with a restored workspace (from a .dwk file).
     // Resets every per-dataset view (channels, styles, axis limits) and drops the
     // overlays/markers tied to the old datasets — same hygiene as setActive.
@@ -160,6 +166,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           ? hydrateView(plotWindows.find((w) => w.id === focusedWindowId)!.view)
           : null;
         return {
+          docEpoch: ++epochSeq,
           datasets,
           folders: migrated.folders,
           // MUST be explicit — `set()` merges a PARTIAL state, so omitting this
@@ -210,7 +217,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           fitModelCarry: ws.fitModelCarry ?? [], // P2.7: THIS project's unreadable fit models, never the previous one's
           visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
           activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
-          quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null, // transient UI (like worksheetId) — never resumes on a fresh load
+          quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null, quickFigureBuilderOverlays: null, // transient UI (like worksheetId) — never resumes on a fresh load
           separatePreview: null, // PR J transient dialog state — never resumes on a fresh load
           // L0.33: transient staging/report state — never resumes on a fresh
           // load, same class as separatePreview above (a stale row would name
@@ -280,6 +287,12 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
       });
       adoptFitModels(ws, set, get);
       relinkLoadedGraphs(ws.datasets);
+      // Gap audits 5 C / 6 K: the focused figure's saved overlays back on its
+      // canvas, else its dataset's saved fit redrawn from its parameters (lazy).
+      // Either chunk failing (the module, or the redraw it fetches) only
+      // means no fit is put back: never an unhandled rejection.
+      void loadWindowOverlays().then((m) => m.restoreOverlays()).catch(() => undefined);
+      announceWorkspaceReplace();
     },
     appendWorkspace: (ws) => (relinkLoadedGraphs(ws.datasets), runAppendWorkspace(set, get, ws)),
     // Reuses loadWorkspace's "replace everything" reset (clears per-dataset
@@ -321,7 +334,7 @@ function relinkLoadedGraphs(datasets: WorkspaceToLoad["datasets"]): void {
   if (datasets.some((d) => d.linkedCurves)) void import("./linkedCurvesSync").then((m) => m.watchLinkedCurves(), () => undefined);
 }
 
-function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void {
+export function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void {
   // P2.5 box 4: the project's saved templates / transformation recipes join
   // the local library by the same rule (lib/templatesProject.ts; no carry).
   if (ws.projectTemplates?.length) void workspaceCodecOrReport("Adding the project's templates", noop).then((c) => c?.adoptProjectTemplates(ws));
@@ -366,50 +379,11 @@ async function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorksp
     return false;
   }
   // Load before recording history: a rotated/missing lazy chunk must leave
-  // the project and its undo stack completely untouched.
-  const { mergeWorkspace } = await runLazy(
+  // the project and its undo stack completely untouched. The merge engine
+  // and the commit below arrive together (bundle diet slice 30).
+  const { appendWorkspaceRun } = await runLazy(
     "Loading project append…",
-    () => import("../lib/workspaceMerge"),
+    () => import("./appendWorkspaceRun"),
   );
-  get().recordHistory("append workspace");
-  const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
-  const { datasets: mergedDatasets, renamed, workbooks, analysisResults, droppedSheetRefs } = mergeWorkspace(
-    get().datasets,
-    ws,
-    nextDatasetId,
-    currentWorkbookIds,
-    nextWorkbookId,
-    get().analysisResults,
-  );
-  const wbNote =
-    workbooks.length > 0
-      ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
-      : "";
-  // A sheet("Name", …) link whose worksheet was not in the appended project
-  // is cut: re-evaluate those columns so they show the error, and say so.
-  const datasets = droppedSheetRefs
-    ? mergedDatasets.map((d) => (d.formulas?.some((f) => f.sheets?.some((b) => b.id === null)) ? recomputeFormulaData(d) : d))
-    : mergedDatasets;
-  const cutNote = droppedSheetRefs
-    ? ` — ${droppedSheetRefs} sheet() formula link${droppedSheetRefs === 1 ? "" : "s"} pointed outside the appended project and ${droppedSheetRefs === 1 ? "was" : "were"} cut`
-    : "";
-  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}${cutNote}`;
-  // P2.7: the appended file's unaccepted fit models JOIN the carry (which
-  // un-certifies the Recipe Library, store/recipeFidelity.ts's
-  // `recipeSourcesWhole`) in the same set() as its datasets.
-  const carry = ws.fitModelCarry ?? [];
-  set({
-    datasets,
-    workbooks: [...get().workbooks, ...workbooks],
-    analysisResults: [...get().analysisResults, ...analysisResults],
-    status: msg,
-    ...(carry.length ? { fitModelCarry: grownCarry(get().fitModelCarry, carry) } : {}),
-  });
-  toast(msg, droppedSheetRefs ? "danger" : "ok");
-  adoptFitModels(ws, set, get);
-  // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
-  // parsed) has no status-line fold here at all — this never routes through
-  // loadWorkspace — so the toast is its only surface.
-  notifyMigrationWarnings(ws.migrationWarnings);
-  return true;
+  return appendWorkspaceRun(set, get, ws, n);
 }

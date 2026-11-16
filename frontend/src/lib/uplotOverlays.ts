@@ -533,6 +533,7 @@ export function annotationAnchorConversions(
   const overCss = canvasToOverCss({ x: layout.px, y: layout.py }, { width: canvasW, height: canvasH }, rootRect, overRect);
   const hasY2 = u.scales.y2 != null;
   const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
+  // Upright only: annotation drag editing (the one caller) is switched off on a turned plot (uplotOrient.orientArgs), so x is the horizontal position here.
   const toData = { x: u.posToVal(overCss.x, "x"), y: u.posToVal(overCss.y, yScale) };
   return { toPage, toData };
 }
@@ -903,9 +904,11 @@ export function annotationPlugin(
           // Frame (MAIN #27 "text box") draws BEHIND the dot+text, padded
           // around the same box the hit-test/selection outline use.
           if (a.text && a.frame) drawAnnotationFrame(ctx, annotationBox(layout), a.frame, color, opts?.paperColor ?? "transparent");
-          ctx.beginPath();
-          ctx.arc(px, py, 3, 0, Math.PI * 2);
-          ctx.fill();
+          if (a.dot !== false) {
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
           if (a.text) {
             if (layout.rich) {
               // Reuse the SAME shared canvas renderer the axis-label plugin

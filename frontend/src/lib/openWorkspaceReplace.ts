@@ -4,6 +4,7 @@
 // general 500-line ceiling), the same way lib/exportFigureCommand.ts
 // already carries a command's body out of the curated command list.
 
+import { commitOpened } from "./browserFileHandle";
 import { canRelease } from "../lib/lockState";
 import { rejectIfImportRunning } from "./importRunningGuard";
 import { plural } from "./plural";
@@ -181,6 +182,7 @@ function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectI
   // `setCurrentProject` flips `useApp.currentProject` — see
   // `reserveLockForSwitch`'s doc for why the ordering itself is the fix.
   s().setCurrentProject(native ?? null);
+  if (!native) commitOpened(ws.fileName); // browser Open: adopt the file's name, drop the old Save handle
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
   registerWithLockStateMachine(native, priorLock);
   recordNativeOpen(native); // DEFECT A — see recordNativeOpen's doc

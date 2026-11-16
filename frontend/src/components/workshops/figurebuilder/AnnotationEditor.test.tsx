@@ -28,7 +28,9 @@ describe("AnnotationEditor — label de-densification (item 9)", () => {
     const visibleLabels = Array.from(container.querySelectorAll("label.qzk-field-lbl")).map(
       (el) => el.textContent,
     );
-    expect(visibleLabels).toEqual([...FIELDS, ...FIELDS]);
+    // The font size is a POINT value on the export wire, so its visible label says so.
+    const visible = FIELDS.map((f) => (f === "font size" ? "font size (pt)" : f));
+    expect(visibleLabels).toEqual([...visible, ...visible]);
   });
 });
 

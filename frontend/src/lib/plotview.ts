@@ -141,6 +141,7 @@ export interface PlotView {
   plotTemplate: string;
   showAxisBox: boolean;
   xReversed: boolean; // x high-to-low (IR wavenumber): uPlot dir -1, export x_reversed
+  exchangeXY: boolean; // Plot > Exchange X-Y axes: the layer turns on its side (uplotOrient / calc.figure_orient)
   stackMode: boolean;
   insetMode: boolean;
   /** The inset's source region + placement (null = never drawn: the screen
@@ -227,7 +228,7 @@ export function defaultPlotView(): PlotView {
     axisLabelOffsets: {},
     axisLabelStyles: {},
     plotTemplate: "screen",
-    showAxisBox: true, xReversed: false,
+    showAxisBox: true, xReversed: false, exchangeXY: false,
     stackMode: false,
     insetMode: false, inset: null, layers: [],
     polarMode: false,

@@ -24,11 +24,15 @@ export interface PlotRect {
  *   - directly left of it     → "y"     (the primary Y-axis gutter)
  *   - directly right of it    → "y2"    (only when a secondary axis exists)
  *   - anywhere else / corners → "outside"
- *  A right edge without a y2 scale falls through to "outside" (no y2 to edit). */
-export function axisZoneAt(cx: number, cy: number, rect: PlotRect, hasY2: boolean): AxisZone {
+ *  A right edge without a y2 scale falls through to "outside" (no y2 to edit).
+ *  `turned` swaps the gutters (see the body). */
+export function axisZoneAt(cx: number, cy: number, rect: PlotRect, hasY2: boolean, turned = false): AxisZone {
   const inX = cx >= rect.left && cx <= rect.right;
   const inY = cy >= rect.top && cy <= rect.bottom;
   if (inX && inY) return "plot";
+  // A TURNED plot (horizontal bars, Exchange X-Y): Y along the bottom, X up the
+  // left, Y2 across the top, nothing on the right.
+  if (turned) return inX && cy > rect.bottom ? "y" : inY && cx < rect.left ? "x" : inX && hasY2 ? "y2" : "outside";
   if (inX && cy > rect.bottom) return "x";
   if (inY && cx < rect.left) return "y";
   if (inY && cx > rect.right) return hasY2 ? "y2" : "outside";

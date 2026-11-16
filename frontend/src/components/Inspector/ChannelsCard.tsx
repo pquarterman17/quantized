@@ -31,6 +31,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const y2Keys = useApp((s) => s.y2Keys);
   const setY2Keys = useApp((s) => s.setY2Keys);
   const yAxes = useApp((s) => s.yAxes), yAxisOf = useApp((s) => s.yAxisOf);
+  const exchanged = useApp((s) => s.exchangeXY); // Y3+ is not drawn on an exchanged plot (lib/exchangeXY.ts)
   const errKeys = useApp((s) => s.errKeys);
   const setErrKey = useApp((s) => s.setErrKey);
   const setErrorRoles = useApp((s) => s.setErrorRoles);
@@ -124,7 +125,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   // The axis a channel draws on: an extra axis that exists, else Y2 / Y1 (an
   // orphan assignment draws on Y1 -- lib/multiY.ts).
   const axisOf = (i: number): number => (yAxisOf[i] !== undefined && yAxisOf[i] - 3 < yAxes.length ? yAxisOf[i] : y2.has(i) ? 2 : 1);
-  const axisChoices = [1, 2, ...yAxes.map((_, k) => k + 3), ...(yAxes.length < MAX_EXTRA_Y ? [yAxes.length + 3] : [])];
+  const axisChoices = [1, 2, ...yAxes.map((_, k) => k + 3), ...(yAxes.length < MAX_EXTRA_Y && !exchanged ? [yAxes.length + 3] : [])];
   const moveAxis = (i: number, n: number) => {
     // Keep at least one visible channel on the primary axis.
     if (n !== 1 && axisOf(i) === 1 && selected.filter((x) => x !== xKey && axisOf(x) === 1).length <= 1) {

@@ -6208,7 +6208,7 @@ export interface components {
             italic?: boolean | null;
             /**
              * Size
-             * @description Font size: the screen's CSS px, read as points (the annotation `size` rule).
+             * @description Font size in points (the Stage sends canvas px x 0.75, as for an annotation).
              */
             size?: number | null;
         };
@@ -8077,6 +8077,11 @@ export interface components {
         };
         /** FigureRequest */
         FigureRequest: {
+            /**
+             * Analysis Overlays
+             * @description Per-plotted-series flag, aligned to `y_keys` (gap audit 6 lane K): true marks an ANALYSIS OVERLAY the client appended -- a fit curve, its band edges, an estimated baseline or peak markers (`frontend/src/lib/figureSpecOverlays.ts`). It is drawn and named in the legend like any series, but never feeds an automatic Y / Y2 title: the canvas titles its axes from the plotted channels alone, so a fitted 'signal' exported as 'signal, fit, 95% CI low'. Absent = no overlays; otherwise exactly one flag per `y_keys` entry (422 if not). See `routes.export_figures_labels.solo_axis_label`.
+             */
+            analysis_overlays?: boolean[] | null;
             /**
              * Axis Label Offsets
              * @description Per-axis dragged title offset `[dx, dy]` in screen CSS px (x right, y DOWN), read as points like every other screen-px size on this request.

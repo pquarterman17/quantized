@@ -34,6 +34,7 @@ import { nextFigureId } from "./figureLifecycle";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
+import { overlaysNow } from "./windowOverlaysLazy";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -85,6 +86,14 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
       const boundId = overlay?.id ?? dataset.id;
       const name = dedupeWindowTitle(pieces.name, state.editableFigures.map((f) => f.name));
       const windowId = state.createWindow(boundId, pieces.view, name); // the gesture's one recordHistory
+      // A saved result's fit (Build source figure) rides along only onto the very
+      // worksheet it was evaluated on -- never onto a per-series-X overlay copy.
+      // ...and only when the mapping the user confirmed still draws it (its Y
+      // shown on its own X): a section never placed would only be "left out".
+      const offered = state.quickFigureBuilderDatasetId === datasetId && boundId === datasetId
+        ? state.quickFigureBuilderOverlays ?? undefined
+        : undefined;
+      const overlays = offered && overlaysNow()?.placedSection(offered, dataset, pieces.view);
       const document = createFigureDocument({
         id,
         name,
@@ -96,6 +105,7 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
         // Grouping role must ride the explicit argument to reach the legend.
         groupKey: pieces.view.groupKey,
         errors: pieces.errors,
+        overlays,
       });
       set((current) => ({
         ...(overlay ? { datasets: [...current.datasets, overlay] } : {}),

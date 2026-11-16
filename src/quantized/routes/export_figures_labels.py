@@ -105,6 +105,7 @@ def solo_axis_label(
     names: Sequence[str],
     series: Sequence[PlotSeries],
     axis: int,
+    overlays: Sequence[bool] | None = None,
 ) -> str:
     """A Y axis' title: the caller's override, else the ONE series on that
     axis named exactly as the legend names it, else what its series share
@@ -114,10 +115,18 @@ def solo_axis_label(
     channel is what keeps a renamed solo series' axis title equal to its
     legend text -- the same rule ``uplotOpts.buildOpts``'s ``soloLabel``
     applies on screen, where the axis title is literally ``labels[idx]``.
+
+    ``overlays`` (``FigureRequest.analysis_overlays``, aligned to ``series``)
+    marks the client's fit / band / baseline / peak series: they never count,
+    as on the canvas, whose title comes from the plotted channels alone.
     """
     if explicit is not None:
         return explicit
-    idxs = [i for i, s in enumerate(series) if s.axis == axis]
+    flags = list(overlays or [])
+    idxs = [
+        i for i, s in enumerate(series)
+        if s.axis == axis and not (i < len(flags) and flags[i])
+    ]
     if len(idxs) == 1:
         return names[idxs[0]]
     return shared_axis_title([series[i] for i in idxs])

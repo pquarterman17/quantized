@@ -92,3 +92,19 @@ describe("Analysis reporting", () => {
     expect(components).toMatch(/@container[^\{]*max-width:\s*620px[^\{]*\{[^}]*\.qz-analysis-reporting-grid/);
   });
 });
+
+describe("Tool window body (soak: 0 px error lines)", () => {
+  it("never shrinks a scrolling body's children, so status and error lines keep their height", () => {
+    // ~75 workshop status/error lines are `qzk-ds-meta` (overflow: hidden,
+    // so an automatic minimum height of 0). Without this rule an overflowing
+    // Curve Fit / Peaks panel squeezed "Failed to fetch" to 0 px.
+    expect(bodiesFor(":where(.qzk-win-body) > *")).toMatch(/flex-shrink:\s*0/);
+    expect(bodiesFor(".qzk-win-body")).toMatch(/overflow-y:\s*auto/);
+  });
+
+  it("no stylesheet rule lets a qzk-ds-meta line shrink again", () => {
+    const all = [...rules, ...flatRules(readComponentsCss())];
+    const metaBodies = all.filter((r) => /\.qzk-ds-meta\b/.test(r.selector)).map((r) => r.body).join(";");
+    expect(metaBodies).not.toMatch(/flex-shrink:\s*[1-9]|flex:\s*(1|auto)\b/);
+  });
+});

@@ -19,6 +19,8 @@ export interface BatchFigureExportOptions {
   defaultTrace?: DefaultTrace;
   defaultLineWidth?: number;
   greyExcluded?: ExcludedRowsGhoster;
+  /** Datasets whose saved fit is out of date: their figures draw no fit. */
+  staleFits?: readonly string[];
 }
 
 /** Build each batch member through the canonical FigureDocument adapter.
@@ -41,6 +43,7 @@ export function batchFigureSpecs(
       defaultTrace: options.defaultTrace,
       defaultLineWidth: options.defaultLineWidth,
       greyExcluded: options.greyExcluded,
+      staleFits: options.staleFits,
     });
   });
 }

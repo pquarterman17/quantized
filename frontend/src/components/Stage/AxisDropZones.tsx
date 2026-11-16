@@ -17,6 +17,7 @@ import { useRef, useState } from "react";
 import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "../../lib/dragaxis";
 import { dropOntoGraph, isLibraryDrag } from "./graphDrop";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
+import { turnedOf } from "../../lib/uplotOrient";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -42,6 +43,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
   const [depth, setDepth] = useState(0);
   const [zone, setZone] = useState<AxisZone | null>(null);
   const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0); // #6: Y2's band opens its dialog only when drawn
+  const turned = useApp(turnedOf); // the bands name the axis they sit on
 
   const isChannelDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(CHANNEL_DND);
   // Gap audit 3 N1: a Library dataset / book dropped on the graph adds curves.
@@ -55,6 +57,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
     return resolveAxisZone(
       { width: rect.width, height: rect.height },
       { x: e.clientX - rect.left, y: e.clientY - rect.top },
+      turned,
     );
   };
 
@@ -73,7 +76,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
         // the boxes and point are read now, while the event is current.
         const [o, r, x, y] = [over.getBoundingClientRect(), root.getBoundingClientRect(), e.clientX, e.clientY];
         // With Y3+ (gap audit 4 G11) the right-hand axis hit opens its own settings.
-        void runLazy("Loading the axis dialog…", () => import("./axisAtPoint")).then((m) => m.openAxisAt(o, r, x, y, hasY2, root), onLoadFailure);
+        void runLazy("Loading the axis dialog…", () => import("./axisAtPoint")).then((m) => m.openAxisAt(o, r, x, y, hasY2, root, turned), onLoadFailure);
       }}
       onDragEnter={(e) => {
         if (isGraphDrop(e)) return void (e.preventDefault(), setAdding(true));
@@ -118,9 +121,9 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
       {adding && <div className="qzk-graph-drop-add" aria-hidden="true">+ Add as curves</div>}
       {depth > 0 && (
         <div className="qzk-axis-drop-zones" aria-hidden="true">
-          <div className={`qzk-axis-zone x${zone === "x" ? " active" : ""}`} />
-          <div className={`qzk-axis-zone y${zone === "y" ? " active" : ""}`} />
-          <div className={`qzk-axis-zone y2${zone === "y2" ? " active" : ""}`} />
+          <div className={`qzk-axis-zone x${zone === (turned ? "y" : "x") ? " active" : ""}`} />
+          <div className={`qzk-axis-zone y${zone === (turned ? "x" : "y") ? " active" : ""}`} />
+          <div className={`qzk-axis-zone y2${turned ? " top" : ""}${zone === "y2" ? " active" : ""}`} />
         </div>
       )}
     </div>

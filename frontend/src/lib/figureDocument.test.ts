@@ -374,3 +374,27 @@ describe("FigureDocument v2", () => {
     })).toThrow("cannot own a frozen data snapshot");
   });
 });
+
+// Gap audit 5 lane C: the analysis-overlay section rides every facade commit
+// while the document stays bound to the same dataset, and nowhere else.
+describe("FigureDocument overlays", () => {
+  const overlays = { rows: "abc", fit: { binding: { yKey: 0, xKey: null }, y: [1.5, 2.5] } };
+  const document = createFigureDocument({ id: "f", name: "F", datasetId: "d1", view: defaultPlotView(), overlays });
+
+  it("is absent unless given, so a document without one serializes as before", () => {
+    const plain = createFigureDocument({ id: "f", name: "F", datasetId: "d1", view: defaultPlotView() });
+    expect(plain).not.toHaveProperty("overlays");
+    expect(serializeFigureDocument(plain)).not.toContain("overlays");
+  });
+
+  it("survives a view commit and a rename, and is dropped on a rebind to another dataset", () => {
+    const view = { ...defaultPlotView(), plotTitle: "edited" };
+    expect(updateFigureDocumentFromPlotView(document, { view, name: "G" }).overlays).toEqual(overlays);
+    expect(updateFigureDocumentFromPlotView(document, { view, datasetId: "d1" }).overlays).toEqual(overlays);
+    expect(updateFigureDocumentFromPlotView(document, { view, datasetId: "d2" })).not.toHaveProperty("overlays");
+  });
+
+  it("round-trips through serialize / deserialize", () => {
+    expect(deserializeFigureDocument(serializeFigureDocument(document))?.overlays).toEqual(overlays);
+  });
+});

@@ -181,6 +181,8 @@ export interface WorkspaceState {
 /** A parsed workspace — every field populated (folder tree defaults to empty,
  *  active/selection defaulted from the datasets). Assignable to WorkspaceState. */
 export interface LoadedWorkspace {
+  /** Browser Open only: the picked file's name, so a later download is named after it. */
+  fileName?: string;
   datasets: Dataset[];
   folders: FolderNode[];
   /** Always populated — derived (v1-v3) or sanitized+reconciled (v4). See
@@ -383,9 +385,18 @@ export function parseWorkspace(
   // Legacy Publication Preview FigureDocs stay unchanged until F2 preserves their unsupported overrides.
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
   // Graph layers are validated in full here (origin gap audit 3 #15).
-  const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings).map(withValidFigureLayers);
+  const parsedFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings);
+  const editableFigures = parsedFigures.map(withValidFigureLayers);
+  const noExchange = (name: string) => `${name}: Exchange X–Y axes was turned off (it cannot be combined with this graph's inset, breaks, top axis, extra Y axes or layout)`;
+  for (const [i, f] of editableFigures.entries()) {
+    if (parsedFigures[i].plot.view.exchangeXY && !f.plot.view.exchangeXY) migrationWarnings.push(noExchange(`figure "${f.name}"`));
+  }
   const pages = sanitizePageDocuments(o.pages);
-  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport).map(withValidLayers);
+  const parsedWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport);
+  const plotWindows = parsedWindows.map(withValidLayers);
+  for (const [i, w] of plotWindows.entries()) {
+    if (parsedWindows[i].view.exchangeXY && !w.view.exchangeXY) migrationWarnings.push(noExchange(`graph "${w.title || `Graph ${i + 1}`}"`));
+  }
   const focusedWindowId =
     typeof o.focusedWindowId === "string" &&
     plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")

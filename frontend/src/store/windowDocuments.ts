@@ -10,6 +10,9 @@ import { errKeysFromBindings, type ErrorBinding } from "../lib/errorRoles";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import { reboundWindowTitle } from "../lib/plotWindows";
 import type { Dataset } from "../lib/types";
+import { snapshotView } from "../lib/plotview";
+import type { AppState } from "./useApp";
+import { overlaysNow } from "./windowOverlaysLazy";
 
 const figureIdForWindow = (windowId: string): string => `figure-${windowId}`;
 
@@ -115,6 +118,8 @@ export function createPlotWindowDocument(
     axisBreaks: options.resetAxisBreaks ? undefined : previous?.plot.axisBreaks,
     output: previous?.output,
     publication: previous?.publication,
+    // Row-aligned to the bound dataset (lib/figureOverlays.ts): kept only while it stays bound.
+    overlays: previous?.bindings.datasetId === datasetId ? previous?.overlays : undefined,
   });
 }
 
@@ -156,6 +161,28 @@ export function syncPlotWindow(
     view: figureDocumentToPlotView(document),
     document,
   };
+}
+
+/** The focused window committed: its live view (`syncPlotWindow`) and the
+ *  fit its canvas draws (store/windowOverlays), into its document. */
+export function commitFocusedWindow(w: PlotWindow, s: AppState, record = true): PlotWindow {
+  const synced = syncPlotWindow(w, snapshotView(s));
+  return overlaysNow()?.commit(synced, s, record) ?? synced;
+}
+
+/** `s.plotWindows` with the focused window's document holding the fit its
+ *  canvas draws -- what an undo step must snapshot, or undoing a window step
+ *  restores a document without the fit (review N3). The view is NOT synced
+ *  here: the snapshot keeps the live view separately (`snapshotView`) -- but
+ *  the fit's placement is checked against that LIVE view, not the document's
+ *  stale one, or a fit on a column plotted since focus is lost (review 3 R1). */
+export function windowsWithLiveFit(s: AppState): AppState["plotWindows"] {
+  const i = s.plotWindows.findIndex((w) => w.id === s.focusedWindowId);
+  const doc = i < 0 ? null : overlaysNow()?.snapshotDocument(s.plotWindows[i]!, s);
+  // Only `overlays` differs (the view stays the window's own), so no deep
+  // copy: this runs on EVERY undo step while a fit is shown (review 3 L4).
+  // The section object is the module's immutable per-curve capture.
+  return doc ? s.plotWindows.map((x, j) => (j === i ? { ...x, document: doc } : x)) : s.plotWindows;
 }
 
 /** Replace a plot window's canonical document and regenerate every legacy

@@ -170,10 +170,11 @@ function applyDecorBlock(decor: DecorBlock | undefined, s: StoreGet): void {
     for (const a of state.annotations) state.removeAnnotation(a.id);
     for (const a of decor.annotations) {
       const id = state.addAnnotation(a.x, a.y, a.text);
-      const patch: Partial<Pick<Annotation, "size" | "anchor" | "frame">> = {};
+      const patch: Partial<Pick<Annotation, "size" | "anchor" | "frame" | "dot">> = {};
       if (a.size !== undefined) patch.size = a.size;
       if (a.anchor !== undefined) patch.anchor = a.anchor;
       if (a.frame !== undefined) patch.frame = a.frame;
+      if (a.dot !== undefined) patch.dot = a.dot;
       if (Object.keys(patch).length > 0) state.updateAnnotation(id, patch);
       // a.axis: no setter accepts it anywhere — see module doc.
     }

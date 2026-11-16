@@ -10,6 +10,7 @@ import { nextStageTab, type StageTab } from "../lib/stagetab";
 // rebind helpers are imported back for addDataset (setActive's live in
 // ./datasetSelection).
 import { analysisResultReset, createWindowsSlice, datasetViewDefaults, retargetPassiveRebind, type WindowsSlice } from "./windows";
+import { noteCallerStageTab } from "./windowFocus";
 import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
@@ -390,7 +391,7 @@ export const useApp = create<AppState>((set, get) => ({
   // (store/computedColumns.ts) — see AppState's extends list.
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
-  setStageTab: (stageTab) => set({ stageTab }),
+  setStageTab: (stageTab) => (noteCallerStageTab(), set({ stageTab })),
   // (setTheme … setPref moved to createAppearancePrefsSlice, spread above.)
   // (the PlotView-settings action implementations moved to
   // store/plotViewSettings.ts — composed via createPlotViewSettingsSlice

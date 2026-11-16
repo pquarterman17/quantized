@@ -6,6 +6,12 @@
 import type { LegendPos } from "./plotview";
 import { compactOverrides } from "./figureOverridesSanitize";
 
+/** An annotation's `size` is screen px (the canvas unit); every export override
+ *  is points, so the view->override mappers convert here (CSS px = 0.75 pt,
+ *  like the anchor-dot offsets). One unit on the wire: a stored override,
+ *  publication delta or template never needs a unit flag. */
+export const annotationSizePt = (px: number): number => px * 0.75;
+
 export interface FigureOverrides {
   font_size?: number;
   font_name?: string;
@@ -21,6 +27,8 @@ export interface FigureOverrides {
   x_lim?: [number | null, number | null];
   /** x drawn high-to-low (`PlotView.xReversed`): matplotlib invert_xaxis. */
   x_reversed?: boolean;
+  /** X and Y exchanged (`PlotView.exchangeXY`): the figure turns on its side (calc/figure_orient.py). */
+  exchange_xy?: boolean;
   y_lim?: [number | null, number | null];
   /** Fixed secondary (right) Y-axis range — the twinx counterpart of
    *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`
@@ -57,7 +65,9 @@ export interface FigureOverrides {
     anchor?: "page";
     /** MAIN #27 "text box": a bbox behind the text —
      *  `calc.figure_overrides._apply_overrides`'s `ann.get("frame")` branch. */
-    frame?: { fill?: string; stroke?: string; opacity?: number; pad?: number };
+    frame?: NonNullable<import("./types").Annotation["frame"]>;
+    /** `false` hides the anchor dot (absent = dot, the legacy look). */
+    dot?: false;
   }[];
   /** Manual axis breaks (gap #21, export-side): elided `[lo, hi]` x-ranges,
    *  rendered as twinned panels with diagonal break glyphs

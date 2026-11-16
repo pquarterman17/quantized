@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../overlays/ConfirmDialog";
+import { RENAME_ACTIVE_EVENT } from "../../lib/renameActive";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import DatasetRow from "./DatasetRow";
@@ -631,6 +632,48 @@ describe("DatasetRow derived marking for a reflectivity fit curve (P2.2 slice 3)
     expect(screen.getByTitle(/Derived worksheet — source: sample\.dat/)).toBeInTheDocument();
     expect(screen.getByTitle(/pipeline: reflectivity fit #3/)).toBeInTheDocument();
     expect(curve.derivedFrom).toBeUndefined();
+  });
+
+  const askRename = (id: string | null) => {
+    const ask = { id, hit: false };
+    act(() => void window.dispatchEvent(new CustomEvent(RENAME_ACTIVE_EVENT, { detail: ask })));
+    return ask;
+  };
+
+  it("F2 opens the inline rename on the row the event names, whether or not it is the plotted one", () => {
+    useApp.setState({ datasets: [plain, sheet1], activeId: "plain" });
+    render(
+      <>
+        <DatasetRow dataset={plain} {...baseProps} active />
+        <DatasetRow dataset={sheet1} {...baseProps} />
+      </>,
+    );
+    expect(screen.queryByLabelText(/^Rename "/)).toBeNull();
+    expect(askRename("sheet1").hit).toBe(true);
+    expect(screen.getByLabelText('Rename "XRD:Book4"')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Rename "sample.dat"')).toBeNull();
+  });
+
+  it("F2 opens exactly one box when the same dataset is listed twice (tree + smart folder)", () => {
+    // A second box would steal focus and blur-commit the first (a stale draft that undoes the rename).
+    const renameDataset = vi.fn();
+    useApp.setState({ datasets: [plain], activeId: "plain", renameDataset });
+    render(
+      <>
+        <DatasetRow dataset={plain} {...baseProps} active />
+        <DatasetRow dataset={plain} {...baseProps} active />
+      </>,
+    );
+    askRename("plain");
+    expect(screen.getAllByLabelText('Rename "sample.dat"')).toHaveLength(1);
+    expect(renameDataset).not.toHaveBeenCalled();
+  });
+
+  it("F2 for a dataset with no mounted row is left unclaimed", () => {
+    useApp.setState({ datasets: [plain], activeId: "plain" });
+    render(<DatasetRow dataset={plain} {...baseProps} active />);
+    expect(askRename("elsewhere").hit).toBe(false);
+    expect(screen.queryByLabelText(/^Rename "/)).toBeNull();
   });
 
   it("shows no mark (and does not throw) for a malformed provenance record", () => {

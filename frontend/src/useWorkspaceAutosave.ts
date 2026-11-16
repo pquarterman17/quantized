@@ -74,20 +74,17 @@
 //    `autosavePausedReported`'s own doc.
 
 import { useEffect } from "react";
-import { autosaveHealth, loadAutosaveGeneration, saveAutosave } from "./lib/autosave";
+import { autosaveHealth, saveAutosave, stashAutosave } from "./lib/autosave";
+import { startAutosaveRestore } from "./autosaveStartupRestore";
 import { hasDesktopShell } from "./lib/desktopBridge";
-import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryChoice";
-import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
+import type { WorkspaceState } from "./lib/workspace";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
 import { BROWSER_AUTOSAVE_LOCK_PATH } from "./store/projectLockPaths";
-import { useRecentProjects } from "./store/recentProjects";
-import { useRecoveryChoice } from "./store/recoveryChoice";
-import { notifyMigrationWarnings, toast } from "./store/toasts";
-import { shouldAutosave } from "./store/autosaveTrigger";
+import { toast } from "./store/toasts";
+import { applyingRestore, shouldAutosave } from "./store/autosaveTrigger";
 import { useApp } from "./store/useApp";
-import { stageWorkspaceRestore } from "./store/windowHydration";
 
 /** Synthetic, stable "project path" for the shared browser autosave slot —
  *  see this module's header. Exported so App.tsx's install effect and this
@@ -265,6 +262,9 @@ function autosavePausedCause(): { key: string; message: string } {
  *  (the same "never trust a snapshot from before the debounce elapsed"
  *  discipline `store/workspaceIO.ts`'s `runSaveWorkspace` already uses for
  *  its own quick-save gate). Exported for direct testing. */
+/** Saves started and not yet settled: a page closing mid-save stashes too. */
+let savesInFlight = 0;
+
 export async function flushAutosaveNow(): Promise<void> {
   if (autosaveGateBlocked()) {
     const cause = autosavePausedCause();
@@ -275,14 +275,13 @@ export async function flushAutosaveNow(): Promise<void> {
     return;
   }
   resetAutosavePausedReporting(); // silent — the save below reports the real "resumed" outcome
-  const s = useApp.getState();
-  // `windowsForSave()` freezes the FOCUSED window's live view into its
-  // record first (the plan's "save is one of the three sanctioned snapshot
-  // points") — never persist `s.plotWindows` raw. Item 5's
-  // `captureTechniqueView` does the same freshening for the technique
-  // memory map (workspaceIO.ts's explicit Save uses the identical call).
-  const techniqueViewMemory = captureTechniqueView(s.datasets.find((d) => d.id === s.activeId), s, s.techniqueViewMemory);
-  const ok = await saveAutosave({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+  savesInFlight++;
+  let ok: boolean;
+  try {
+    ok = await saveAutosave(workspaceForSave());
+  } finally {
+    savesInFlight--;
+  }
   // #32: report through the store so the warning PERSISTS until the next
   // SUCCESS, instead of a status line that scrolls away.
   reportAutosaveHealth(autosaveHealth());
@@ -298,9 +297,15 @@ export async function flushAutosaveNow(): Promise<void> {
   }
 }
 
-function lastKnownProject(): LastProjectRef | null {
-  const entry = useRecentProjects.getState().recentProjects[0];
-  return entry ? { name: entry.name, path: entry.path, at: Date.parse(entry.at) } : null;
+/** What an autosave writes. `windowsForSave()` freezes the FOCUSED window's
+ *  live view into its record first (the plan's "save is one of the three
+ *  sanctioned snapshot points") — never persist `s.plotWindows` raw. Item 5's
+ *  `captureTechniqueView` does the same freshening for the technique memory
+ *  map (workspaceIO.ts's explicit Save uses the identical call). */
+function workspaceForSave(): WorkspaceState {
+  const s = useApp.getState();
+  const techniqueViewMemory = captureTechniqueView(s.datasets.find((d) => d.id === s.activeId), s, s.techniqueViewMemory);
+  return { ...s, plotWindows: s.windowsForSave(), techniqueViewMemory };
 }
 
 // `AutosaveState` + `shouldAutosave` live in store/autosaveTrigger.ts (moved
@@ -310,56 +315,10 @@ export { shouldAutosave, type AutosaveState } from "./store/autosaveTrigger";
 export function useWorkspaceAutosave(): void {
   const setStatus = useApp((s) => s.setStatus);
 
-  // Restore the autosaved library once on startup (before any new import).
-  useEffect(() => {
-    // Async since #32 (IndexedDB has no sync mode). `cancelled` guards the
-    // StrictMode double-invoke and an unmount mid-read — restoring into a
-    // torn-down store would clobber whatever the user did in between.
-    let cancelled = false;
-    // Read how the PREVIOUS session ended before marking this one active —
-    // installSessionMarker overwrites the flag.
-    const priorEnd = priorSessionEnd();
-    const teardown = installSessionMarker();
-    void loadAutosaveGeneration().then((picked) => {
-      if (cancelled || !picked?.workspace.datasets.length) return;
-      const { workspace: restored, at: autosaveAt } = picked;
-      // P1.2 box 5: only when there IS a named last project AND the
-      // candidate is actually newer does silent auto-restore stop being
-      // safe — see lib/recoveryChoice.ts's header for the full reasoning.
-      const lastProject = lastKnownProject();
-      if (shouldOfferRecoveryChoice(autosaveAt, lastProject)) {
-        useRecoveryChoice.getState().offerRecovery({
-          workspace: restored,
-          autosaveAt,
-          datasetCount: restored.datasets.length,
-          lastProject: lastProject as LastProjectRef,
-        });
-        return;
-      }
-      useApp.getState().loadWorkspace(restored);
-      stageWorkspaceRestore(useApp.getState().plotWindows, useApp.getState().focusedWindowId);
-      const n = restored.datasets.length;
-      const what = `${n} dataset${n === 1 ? "" : "s"}`;
-      if (priorEnd === "unclean") {
-        setStatus(`recovered ${what} after an unexpected close`);
-        toast(`Recovered ${what} after an unexpected close — check your latest edits`, "info");
-      } else {
-        // BUG-010: this setStatus overwrites loadWorkspace's own
-        // migrationNotice status-line fold — the toast below is the only
-        // channel that survives it (both branches restore silently, so
-        // neither has any other confirmation surface for it).
-        setStatus(`restored ${what} from autosave`);
-      }
-      notifyMigrationWarnings(restored.migrationWarnings);
-    }, (e: unknown) => {
-      // Rejects only when the lazy `.dwk` codec chunk won't load (lib/workspaceCodecLazy.ts) — the autosave is intact.
-      if (!cancelled) toast(`Couldn't restore the autosaved library (${e instanceof Error ? e.message : "load failed"}) — reload to try again`, "danger");
-    });
-    return () => {
-      cancelled = true;
-      teardown();
-    };
-  }, [setStatus]);
+  // Restore the autosaved library once on startup (before any new import):
+  // retried while its code will not load, never applied over the user's
+  // work (./autosaveStartupRestore.ts).
+  useEffect(() => startAutosaveRestore(setStatus), [setStatus]);
 
   // Debounced autosave whenever the library changes (identity comparisons).
   useEffect(() => {
@@ -382,7 +341,7 @@ export function useWorkspaceAutosave(): void {
       // focused window via `windowsForSave()` below.
       // The helper compares the complete serialized workspace slice, including
       // reports, figure docs, macro steps, Origin figures, and recalc mode.
-      if (!shouldAutosave(state, prev)) return;
+      if (applyingRestore() || !shouldAutosave(state, prev)) return; // a restore is not an edit (review 3 R2)
       // P1.2 box 1: the SAME comparison that decides "worth autosaving"
       // also decides "the project no longer matches disk" — reusing it here
       // is what keeps the title bar's dirty marker from ever disagreeing
@@ -391,13 +350,41 @@ export function useWorkspaceAutosave(): void {
       // setCurrentProject call, which runs after this subscriber fires (see
       // store/project.ts's header on why ordering there is safe).
       useApp.getState().markProjectDirty();
+      stashedNow = false;
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        void flushAutosaveNow();
-      }, 800);
+      timer = setTimeout(flushPending, 800);
     });
+    // Soak test: an edit made inside the debounce window was lost when the
+    // tab closed or reloaded. Leaving the page (pagehide, or hidden — the last
+    // event a mobile/bfcache page reliably gets) with an edit pending, or a
+    // save still in flight, does two things:
+    //  1. stashes the state SYNCHRONOUSLY (`stashAutosave`) — the async
+    //     IndexedDB save does not outlive a closing page;
+    //  2. starts the pending async save at once — a page that stays alive (a
+    //     tab switch) then has it in IndexedDB too, and that save folds the
+    //     stash into the rotation (lib/autosave.ts).
+    // Each happens once per state: `stashedNow` holds until the next edit, and
+    // a cleared timer leaves nothing for a second hide event or the timer.
+    let stashedNow = false;
+    function flushPending(): void {
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = undefined;
+      void flushAutosaveNow();
+    }
+    const onHide = (e: Event) => {
+      if (e.type !== "pagehide" && document.visibilityState !== "hidden") return;
+      if ((timer !== undefined || savesInFlight > 0) && !stashedNow && !autosaveGateBlocked()) {
+        stashedNow = stashAutosave(workspaceForSave());
+      }
+      flushPending();
+    };
+    const off = new AbortController(), opts = { signal: off.signal };
+    window.addEventListener("pagehide", onHide, opts);
+    document.addEventListener("visibilitychange", onHide, opts);
     return () => {
       clearTimeout(timer);
+      off.abort();
       unsub();
     };
   }, []);

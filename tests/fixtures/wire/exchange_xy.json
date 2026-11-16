@@ -1,0 +1,41 @@
+{
+  "about": "Plot > Exchange X-Y axes (PlotView.exchangeXY, overrides.exchange_xy): the layer turns on its side, so X runs up the LEFT and Y along the BOTTOM, and each quantity keeps its own title, scale, limits, direction AND autoscaled range (the data must land inside the exported axes). Both legs read this table: frontend/src/lib/exchangeXY.test.ts (the screen's uPlot options and the refusals) and tests/test_calc_figure_exchange_xy.py (the exported matplotlib figure). `vertical` is the axis that must end up on the left in both. `data` is drawn in every case; `conflicts` name what exchange_xy must be refused with, in either order.",
+  "cases": [
+    {
+      "name": "SIMS depth profile: depth up the side, log counts along the bottom",
+      "x": { "title": "Depth (nm)", "scale": "linear", "lim": [0, 120], "reversed": false },
+      "y": { "title": "Counts (c/s)", "scale": "log", "lim": [10, 1000000] },
+      "data": { "x": [1, 10, 100], "y": [20, 300, 5000] },
+      "vertical": "x"
+    },
+    {
+      "name": "reversed log X keeps its direction and scale on the vertical axis",
+      "x": { "title": "Wavenumber (cm^-1)", "scale": "log", "lim": [400, 4000], "reversed": true },
+      "y": { "title": "Absorbance", "scale": "linear", "lim": [0, 2] },
+      "data": { "x": [500, 1000, 3000], "y": [0.2, 1.1, 0.7] },
+      "vertical": "x"
+    },
+    {
+      "name": "no limits set: scales and titles still follow their axes",
+      "x": { "title": "Time (s)", "scale": "linear", "lim": null, "reversed": false },
+      "y": { "title": "Signal (V)", "scale": "linear", "lim": null },
+      "data": { "x": [0, 50, 100], "y": [1000, 1500, 2000] },
+      "vertical": "x"
+    },
+    {
+      "name": "no limits, log counts with zeros: the zero COUNTS gap, the zero DEPTH stays",
+      "x": { "title": "Depth (nm)", "scale": "linear", "lim": null, "reversed": false },
+      "y": { "title": "Counts (c/s)", "scale": "log", "lim": null },
+      "data": { "x": [0, 10, 20, 30], "y": [0, 100, 1000, 10] },
+      "vertical": "x"
+    },
+    {
+      "name": "no limits, both log: each axis ranges over its own data",
+      "x": { "title": "Field (Oe)", "scale": "log", "lim": null, "reversed": false },
+      "y": { "title": "Moment (emu)", "scale": "log", "lim": null },
+      "data": { "x": [2, 20, 200], "y": [0.003, 0.5, 40] },
+      "vertical": "x"
+    }
+  ],
+  "conflicts": ["inset", "y breaks", "y2 breaks", "top x axis", "y3+ axes", "x breaks"]
+}

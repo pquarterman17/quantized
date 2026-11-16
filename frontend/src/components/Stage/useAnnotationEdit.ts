@@ -8,27 +8,17 @@
 // toggle, Size +/−, Delete) now come from the shared registry
 // (`annotationShapeActions`) via `buildMenuItems` — defined once, reused by
 // the ⌘K palette and the selection mini-toolbar. Only the Frame submenu (a
-// parameterized picker, not a discrete action) stays hand-built here.
+// parameterized picker, not a discrete action) is hand-built. Both are built
+// in ./objectMenus, loaded on demand (bundle diet slice 30).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { buildMenuItems } from "../../lib/contextActions";
 import { useEscapeSurface } from "../../lib/escapeStack";
-import { cssVar, type BuildOptsArgs } from "../../lib/uplotOpts";
-import type { Annotation } from "../../lib/types";
+import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
-import {
-  annotationDeleteAction,
-  annotationEditActions,
-  annotationSizeActions,
-  editAnnotationText,
-  type AnnotationConv,
-} from "./annotationShapeActions";
-
-/** MAIN #27 "text box" Frame opacity submenu steps — same 25/50/75/100%
- *  shape as the Shape object menu's Opacity submenu (`useShapeEdit`). */
-const FRAME_OPACITY_STEPS = [0.25, 0.5, 0.75, 1] as const;
+import type { AnnotationConv } from "./annotationShapeActions";
+import { cancelPendingObjectMenu, preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
 
 export interface AnnotationMenuState {
   x: number;
@@ -67,62 +57,16 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
     Boolean(selectedAnnotationId),
   );
 
-  // MAIN #27 "text box": set/replace the frame wholesale (a preset click) or
-  // patch just its opacity (the Opacity submenu, preserving any existing
-  // fill/stroke — e.g. Solid + a later opacity pick keeps the surface fill).
-  const setFrame = (id: string, frame: Annotation["frame"]) => updateAnnotation(id, { frame });
-  const setFrameOpacity = (id: string, opacity: number) => {
-    const a = useApp.getState().annotations.find((x) => x.id === id);
-    updateAnnotation(id, { frame: { ...(a?.frame ?? {}), opacity } });
-  };
-
-  const openMenu = (id: string, clientX: number, clientY: number, conv: AnnotationConv) => {
-    const a = useApp.getState().annotations.find((x) => x.id === id);
-    const frameOpacity = a?.frame?.opacity ?? 1;
-    const target = { id, conv };
-    setMenu({
-      x: clientX,
-      y: clientY,
-      items: [
-        { header: a?.text || "Annotation" },
-        ...buildMenuItems(annotationEditActions, target),
-        // Frame: a parameterized picker (presets + an opacity submenu) — stays
-        // hand-built, spliced between the registry blocks (the datasetRowMenu
-        // "Move to …" precedent).
-        {
-          label: "Frame",
-          submenu: [
-            { label: "None", checked: !a?.frame, run: () => setFrame(id, undefined) },
-            {
-              label: "Subtle",
-              checked: !!a?.frame && a.frame.fill === undefined,
-              run: () => setFrame(id, { opacity: 0.15 }),
-            },
-            {
-              label: "Solid",
-              checked: !!a?.frame?.fill,
-              // A canvas fillStyle needs a RESOLVED color, not a live
-              // var(--x) reference — read the surface token NOW.
-              run: () => setFrame(id, { fill: cssVar("--surface-2") || "#2a2a33", opacity: 1 }),
-            },
-            { separator: true },
-            {
-              label: "Opacity",
-              disabled: !a?.frame,
-              submenu: FRAME_OPACITY_STEPS.map((pct) => ({
-                label: `${Math.round(pct * 100)}%`,
-                checked: Math.abs(frameOpacity - pct) < 1e-6,
-                run: () => setFrameOpacity(id, pct),
-              })),
-            },
-          ],
-        },
-        ...buildMenuItems(annotationSizeActions, target),
-        { separator: true },
-        ...buildMenuItems([annotationDeleteAction], target),
-      ],
-    });
-  };
+  // The menu's items (the registry actions plus the Frame picker) are built
+  // in ./objectMenus, which loads on demand (bundle diet slice 30). A gesture
+  // that waited for that load is dropped if the tool has left pointer mode.
+  const toolRef = useRef(tool);
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
+  const stillPointer = () => toolRef.current === "pointer";
+  const openMenu = (id: string, clientX: number, clientY: number, conv: AnnotationConv) =>
+    withObjectMenus((m) => setMenu({ x: clientX, y: clientY, items: m.annotationMenuItems(id, conv) }), stillPointer);
 
   // Stable across annotation content edits (MAIN #8f reasoning): only the
   // tool switching in/out of pointer mode, or the list going empty<->non-
@@ -135,7 +79,7 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
       onSelect: setSelectedAnnotationId,
       onMove: (id, x, y) => updateAnnotation(id, { x, y }),
       onResize: (id, size) => updateAnnotation(id, { size }),
-      onEditText: editAnnotationText,
+      onEditText: (id) => withObjectMenus((m) => m.editAnnotationText(id), stillPointer),
       onContextMenu: openMenu,
       // Empty-canvas double-click → reset zoom (owner ask 2026-07-11). The
       // store half: clear committed limits so an applied Origin figure's
@@ -151,5 +95,17 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, hasAnnotations, selectedAnnotationId, setSelectedAnnotationId, updateAnnotation]);
 
-  return { bridge, menu, closeMenu: () => setMenu(null) };
+  // Warm the object menus once there is an annotation to act on.
+  useEffect(() => {
+    if (bridge) preloadObjectMenus();
+  }, [bridge]);
+
+  return {
+    bridge,
+    menu,
+    closeMenu: () => {
+      cancelPendingObjectMenu();
+      setMenu(null);
+    },
+  };
 }

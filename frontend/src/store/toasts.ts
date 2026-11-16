@@ -25,6 +25,9 @@ export interface Toast {
   msg: string;
   kind: ToastKind;
   action?: ToastAction;
+  /** Several choices (the late-restore prompt's Append / Replace / Discard);
+   *  rendered after `action`, each dismissing like it. */
+  actions?: ToastAction[];
 }
 
 /** Optional extras beyond message + kind. `ttlMs` overrides the default
@@ -33,6 +36,7 @@ export interface Toast {
  *  `TOAST_ACTION_TTL` rather than `TOAST_TTL`. */
 export interface ToastOptions {
   action?: ToastAction;
+  actions?: ToastAction[];
   ttlMs?: number;
 }
 
@@ -132,12 +136,12 @@ export const useToasts = create<ToastsState>((set) => ({
       lastErrorAt = Date.now();
     }
     set((s) => ({
-      toasts: [...s.toasts, { id, msg, kind, action: opts?.action }].slice(-MAX),
+      toasts: [...s.toasts, { id, msg, kind, action: opts?.action, actions: opts?.actions }].slice(-MAX),
     }));
     // An action toast lives long enough to act on even when the caller does not
     // say so (BUG-009's Re-import offer relies on this: importing the constant
     // there broke the many suites that `vi.mock` this module with `toast` alone).
-    setTimeout(() => expire(id), opts?.ttlMs ?? (opts?.action ? TOAST_ACTION_TTL : TOAST_TTL));
+    setTimeout(() => expire(id), opts?.ttlMs ?? (opts?.action || opts?.actions ? TOAST_ACTION_TTL : TOAST_TTL));
   },
   dismiss: (id) => {
     held.delete(id);

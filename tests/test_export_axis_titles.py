@@ -91,7 +91,8 @@ def _check(fig: Any, home: Any, drawn: dict[str, Any], style: str) -> None:
     assert set(drawn) <= set(titles)
     for axis, want in drawn.items():
         label, ax = titles[axis]
-        size = want["size"] if want["size"] is not None else preset.font_size
+        # `drawn` is the canvas (px); the wire and matplotlib are points (x 0.75).
+        size = want["size"] * 0.75 if want["size"] is not None else preset.font_size
         assert label.get_fontsize() == pytest.approx(size), axis
         assert (label.get_fontweight() == "bold") is want["bold"], axis
         assert (label.get_fontstyle() == "italic") is want["italic"], axis
@@ -152,7 +153,7 @@ def test_a_break_figure_draws_each_title_as_its_panels_do(
     for axis, want in case["drawn"].items():
         label, ax = titles[axis]
         home = plain_titles[axis][0]
-        size = want["size"] if want["size"] is not None else home.get_fontsize()
+        size = want["size"] * 0.75 if want["size"] is not None else home.get_fontsize()
         assert label.get_fontsize() == pytest.approx(size), axis
         assert (label.get_fontweight() == "bold") is want["bold"], axis
         assert (label.get_fontstyle() == "italic") is want["italic"], axis

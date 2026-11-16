@@ -137,7 +137,10 @@ export interface PlotMenuContext {
   pointUnder?: { row: number; excluded: boolean; toggle: () => void; refused?: string };
   /** Gap audit 3 N1: open Layer Contents for this graph. */
   layerContents?: () => void;
+  /** Exchange X-Y axes (lib/exchangeXY.ts): on/off, why it cannot be (disabled entry), the toggle. */
+  exchange?: { on: boolean; blocker?: string; toggle: () => void };
   colorGradient?: () => void; // gap audit 4 G1
+  legendFormat?: () => void; // audit 6 M: the Legend dialog
   /** Gap audit 3 N3: link this graph's X axis with other graph windows. */
   linkXAxis?: () => void;
   /** Gap audit 4 G19: "Link Y axis with…" (present with another graph window). */
@@ -328,6 +331,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
       // decode #52: a clean read-only block (Origin apply) vs the full
       // interactive legend; the user flips it back after an Origin apply.
       { label: "Static (Origin) legend", run: () => ctx.setLegendStatic(!ctx.legendStatic), checked: ctx.legendStatic, disabled: !ctx.showLegend },
+      ...(ctx.legendFormat ? [{ label: "Legend formatting…", run: ctx.legendFormat }] : []),
       { separator: true },
       ...LEGEND_OPTS.map((o) => ({
         label: o.label,
@@ -338,6 +342,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     ],
   });
   items.push({ label: ctx.showGrid ? "Hide grid" : "Show grid", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
+  const ex = ctx.exchange;
+  if (ex) items.push({ label: "Exchange X–Y axes", run: ex.toggle, checked: ex.on, disabled: !!ex.blocker, title: ex.blocker });
   if (ctx.layerContents) items.push({ label: "Layer Contents…", run: ctx.layerContents });
   if (ctx.colorGradient) items.push({ label: "Colour gradient…", run: ctx.colorGradient });
   if (ctx.linkXAxis) items.push({ label: "Link X axis with…", run: ctx.linkXAxis });

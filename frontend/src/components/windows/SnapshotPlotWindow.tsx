@@ -79,6 +79,7 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
       showGrid={view.showGrid}
       axisBox={view.showAxisBox}
       xReversed={view.xReversed}
+      exchangeXY={view.exchangeXY}
       fontSize={resolveTemplate(view.plotTemplate).fontSize}
       baseLineWidth={canvasLineWidth(view.plotTemplate, defaultLineWidth)}
       defaultTrace={defaultTrace}
