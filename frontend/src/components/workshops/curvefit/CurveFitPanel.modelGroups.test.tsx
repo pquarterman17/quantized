@@ -40,15 +40,12 @@ describe("CurveFitPanel — the model list is grouped by Origin category (re-aud
     });
     render(<CurveFitPanel />);
     const picker = await screen.findByRole("combobox", { name: "Model" });
-    // The "Add a model to compare" picker lists the SAME models, so an unscoped
-    // role query finds the option twice whenever both pickers have populated
-    // (it flaked under full-suite load, where they do before the first poll).
-    // Force that state first -- both pickers populated -- then assert on the
-    // Model picker alone, which is what this test is about.
-    const compare = await screen.findByRole("combobox", { name: "Add a model to compare" });
-    await within(compare).findByRole("option", { name: "Exponential Decay (= ExpDec1)" });
-    expect(screen.getAllByRole("option", { name: "Exponential Decay (= ExpDec1)" })).toHaveLength(2);
-    await within(picker).findByRole("option", { name: "Exponential Decay (= ExpDec1)" });
+    // The "Add a model to compare" picker lists the same models, so an unscoped
+    // role query can find an option twice once both pickers have populated
+    // (it flaked under full-suite load). Assert on the Model picker alone.
+    await within(picker).findByRole("option", { name: "ExpDec1" });
+    // Both twins listed: same curve, different parameters (e2e and Quick Fit pick this one by value).
+    expect(within(picker).getByRole("option", { name: "Exponential Decay (ExpDec1's curve; A, τ, C)" })).toHaveValue("Exponential Decay");
     const groups = [...picker.querySelectorAll("optgroup")].map((g) => g.label);
     expect(groups).toEqual(["Polynomial", "Exponential", "Custom equations"]);
     expect((picker as HTMLSelectElement).value).toBe("Linear");

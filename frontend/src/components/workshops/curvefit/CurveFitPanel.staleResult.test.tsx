@@ -37,6 +37,7 @@ const DATA: DataStruct = {
 const two = (name: string) => ({ name, category: "x", paramNames: ["a", "b"], nParams: 2, p0: [1, 0], lb: [], ub: [] });
 
 beforeEach(() => {
+  localStorage.clear(); // the picker lists recently picked models twice (Recent group)
   vi.clearAllMocks();
   vi.mocked(listFitModels).mockResolvedValue({ models: [two("Linear"), two("Exponential")] });
   vi.mocked(fitModel).mockResolvedValue({ params: [10, 0], errors: [0.1, 0.2], R2: 1, RMSE: 0, yFit: [10, 20, 30, 40] });

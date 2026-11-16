@@ -46,6 +46,7 @@ const BY_DATA: DataStruct = {
 };
 
 beforeEach(() => {
+  localStorage.clear(); // the picker lists recently picked models twice (Recent group)
   vi.clearAllMocks();
   vi.mocked(listFitModels).mockResolvedValue({
     models: [{ name: "Linear", category: "polynomial", paramNames: ["m", "b"], nParams: 2, p0: [1, 0], lb: [], ub: [] }],

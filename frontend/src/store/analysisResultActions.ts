@@ -370,7 +370,10 @@ export async function recalculateFitAnalysisResult(
     // Records the X this re-fit actually read, never a fallback guess (I3, `withReadProvenance`).
     current.setFitSpec(sourceId, stampRecompute(withReadProvenance(spec, read), fitted));
     if (overlayWasVisible) useApp.setState({
-      fitOverlay: nextOverlay ? { datasetId: sourceId, binding: read, y: nextOverlay } : null,
+      // A Curve Fit curve stays one (its dashed look, lib/fitOverlayStyle.ts); another tool's stays plain.
+      fitOverlay: nextOverlay
+        ? { datasetId: sourceId, binding: read, y: nextOverlay, ...(current.fitOverlay?.curveFit ? { curveFit: true as const } : {}) }
+        : null,
     });
     publishFitAnalysisResult(sourceId);
     announceFitRecomputed({
