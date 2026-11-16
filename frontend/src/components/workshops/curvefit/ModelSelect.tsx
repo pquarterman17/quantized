@@ -8,8 +8,8 @@
 // select walks straight through it. While a search is typed the select opens as
 // a listbox of the matches: ArrowDown moves from the search box into it and
 // arrowing there selects without leaving the search; Enter, a click or leaving
-// the list commits (clears the search). Enter in the box picks the first match,
-// Escape clears the search.
+// the list commits (clears the search). Enter in the box picks the first match;
+// Escape clears the search and puts back the model chosen before it began.
 
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 
@@ -32,6 +32,8 @@ export default function ModelSelect({
   onChange: (value: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  /** The model selected when the current search began (Escape restores it). */
+  const before = useRef(value);
   const recentsSnap = useSyncExternalStore(subscribeRecents, recentsKey);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLSelectElement>(null);
@@ -47,6 +49,11 @@ export default function ModelSelect({
       first: hits.groups[0]?.options[0]?.value ?? hits.custom[0]?.value,
     };
   }, [groups, custom, query, value, recentsSnap, searching]);
+  /** Escape: undo a choice arrowed to during the search, then clear it. */
+  const cancel = () => {
+    setQuery("");
+    if (value !== before.current) onChange(before.current);
+  };
   const rows = shown.groups.reduce((n, g) => n + g.options.length + 1, 0) + shown.custom.length + 1;
 
   return (
@@ -59,7 +66,10 @@ export default function ModelSelect({
         placeholder="Search models…"
         value={query}
         style={{ width: "100%", marginBottom: 4 }}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          if (!searching) before.current = value;
+          setQuery(e.target.value);
+        }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" && searching) {
             e.preventDefault();
@@ -73,7 +83,7 @@ export default function ModelSelect({
           } else if (e.key === "Escape" && query !== "") {
             e.preventDefault();
             e.stopPropagation();
-            setQuery("");
+            cancel();
           }
         }}
       />
@@ -96,7 +106,8 @@ export default function ModelSelect({
           if ((e.key === "Escape" || e.key === "Enter") && searching) {
             e.preventDefault();
             e.stopPropagation();
-            setQuery("");
+            if (e.key === "Escape") cancel();
+            else setQuery("");
           }
         }}
       >

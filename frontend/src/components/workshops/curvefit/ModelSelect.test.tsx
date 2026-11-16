@@ -108,6 +108,28 @@ describe("ModelSelect", () => {
     expect(box).toHaveValue("");
     expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument();
   });
+  it("Escape in the listbox undoes an arrowed choice, then clears the search", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ModelSelect groups={GROUPS} custom={CUSTOM} value="Linear" onChange={onChange} />);
+    const box = screen.getByRole("searchbox", { name: "Search models" });
+    fireEvent.change(box, { target: { value: "exp" } });
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.change(screen.getByRole("listbox", { name: "Model" }), { target: { value: "ExpDec1" } });
+    rerender(<ModelSelect groups={GROUPS} custom={CUSTOM} value="ExpDec1" onChange={onChange} />);
+    fireEvent.change(screen.getByRole("listbox", { name: "Model" }), { target: { value: "ExpDec2" } });
+    rerender(<ModelSelect groups={GROUPS} custom={CUSTOM} value="ExpDec2" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByRole("listbox", { name: "Model" }), { key: "Escape" });
+    expect(onChange.mock.calls).toEqual([["ExpDec1"], ["ExpDec2"], ["Linear"]]);
+    expect(box).toHaveValue("");
+  });
+  it("Escape without an arrowed choice only clears the search", () => {
+    const { onChange } = picker();
+    const box = screen.getByRole("searchbox", { name: "Search models" });
+    fireEvent.change(box, { target: { value: "gauss" } });
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(box).toHaveValue("");
+  });
   it("a click on a filtered option, or leaving the list, commits the search", () => {
     picker();
     const box = screen.getByRole("searchbox", { name: "Search models" });
