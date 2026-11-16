@@ -184,17 +184,46 @@ def convert_mag_units(
 def _interp_crossing(
     x: NDArray[np.float64], y: NDArray[np.float64], target_y: float
 ) -> float:
-    """x where y crosses target_y (steepest crossing wins). Port of interpCrossing."""
+    """x where y crosses target_y (steepest crossing wins). Port of interpCrossing.
+
+    A sample landing EXACTLY on ``target_y`` is a crossing too, at that sample's
+    x. MATLAB's strict ``dy(i)*dy(i+1) < 0`` test (ported verbatim before) sees
+    a product of 0 on both sides of such a sample and drops the crossing, so a
+    field sweep logged at exactly H = 0 reported no remanence (Mr NaN) and a
+    grid that hits M = 0 reported no coercivity. Intent is ported, not the bug.
+    A run of exact-target samples counts once (mean x), and only when its
+    nearest neighbours straddle the target (or the run ends the array); a touch
+    (``+, 0, +``) is not a crossing. Strict pairs never involve a zero sample,
+    so nothing is double counted.
+    """
     dy = y - target_y
-    cross = np.flatnonzero(dy[:-1] * dy[1:] < 0)
-    if cross.size == 0:
+    n = dy.size
+    x_cross: list[float] = []
+    slopes: list[float] = []
+    for i in np.flatnonzero(dy[:-1] * dy[1:] < 0):
+        x_cross.append(float(x[i] - dy[i] * (x[i + 1] - x[i]) / (dy[i + 1] - dy[i])))
+        slopes.append(float(abs(dy[i + 1] - dy[i]) / max(abs(x[i + 1] - x[i]), _EPS)))
+    zero = np.flatnonzero(dy == 0)
+    if zero.size:
+        breaks = np.flatnonzero(np.diff(zero) > 1)
+        for a, b in zip(
+            np.concatenate([[zero[0]], zero[breaks + 1]]),
+            np.concatenate([zero[breaks], [zero[-1]]]),
+            strict=True,
+        ):
+            lo, hi = int(a) - 1, int(b) + 1
+            if lo >= 0 and hi < n and not dy[lo] * dy[hi] < 0:
+                continue  # touch, or a NaN neighbour: not a crossing
+            if lo < 0 and hi >= n:
+                continue  # all samples on target: no defined crossing
+            i0, i1 = max(lo, int(a)), min(hi, int(b))
+            slope = float(abs(dy[i1] - dy[i0]) / max(abs(x[i1] - x[i0]), _EPS))
+            if math.isfinite(slope):
+                x_cross.append(float(np.mean(x[a : b + 1])))
+                slopes.append(slope)
+    if not x_cross:
         return float("nan")
-    x_cross = np.empty(cross.size)
-    slopes = np.empty(cross.size)
-    for ci, i in enumerate(cross):
-        x_cross[ci] = x[i] - dy[i] * (x[i + 1] - x[i]) / (dy[i + 1] - dy[i])
-        slopes[ci] = abs(dy[i + 1] - dy[i]) / max(abs(x[i + 1] - x[i]), _EPS)
-    return float(x_cross[int(np.argmax(slopes))])
+    return x_cross[int(np.argmax(slopes))]
 
 
 def _compute_fwhm(x: NDArray[np.float64], y: NDArray[np.float64], peak_idx: int) -> float:
@@ -393,7 +422,15 @@ def hysteresis_analysis(
                 warnings.append("Loop may not be saturated (high-field M still varying)")
                 break
 
-    squareness = float(np.fmin(mr_mean / max(ms_mean, _EPS), 1.0))
+    # Squareness = Mr/Ms, capped at 1 (MATLAB min). MATLAB's min ignores NaN, so
+    # a loop with no H=0 crossing (Mr NaN) reported a perfectly square 1; the
+    # port inherited that via np.fmin. Undefined inputs now give NaN honestly.
+    if math.isfinite(mr_mean) and math.isfinite(ms_mean) and ms_mean > 0:
+        squareness = min(mr_mean / ms_mean, 1.0)
+    else:
+        squareness = float("nan")
+        why = "no H=0 crossing (Mr)" if not math.isfinite(mr_mean) else "no saturation (Ms)"
+        warnings.append(f"Squareness undefined: {why}")
 
     sfd = {"peakH": float("nan"), "peakdMdH": float("nan"), "fwhm": float("nan")}
     dmdh_asc: NDArray[np.float64] = np.array([])

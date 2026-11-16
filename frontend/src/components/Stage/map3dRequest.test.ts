@@ -17,7 +17,7 @@ const payload = {
   zMin: 1, zMax: 6, xLabel: "Qx", yLabel: "Qz", zLabel: "Intensity", xUnit: "A", yUnit: "A", zUnit: "cps",
 } as unknown as MapPayload;
 
-const V: Map3dView = { kind: "surface", elev: 40, azim: 25, zLabel: "", zUnit: "", style: "default", title: "My title" };
+const V: Map3dView = { kind: "surface", elev: 40, azim: 25, zLabel: "", zUnit: "", style: "default", title: "My title", zoom: 1, dropLines: false };
 const view = (v3: Map3dView | undefined): MapExportView => ({
   cmap: "magma", logZ: false, colorLimits: [1, 8], contour: { on: true, levelCount: 8, scale: "linear" }, view3d: v3,
   marks: { slices: [{ id: "s", kind: "h", a: { x: 1, y: 0.5 }, width: 0, space: "angular" }], annotations: [], space: "angular" },

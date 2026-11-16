@@ -1,7 +1,6 @@
-// The Map stage's static 3-D view: the server's matplotlib render of the
-// surface / 3-D scatter / 3-D waterfall, shown over the 2-D canvas. Lazy (only
-// mounted while a 3-D view is chosen). Static by design -- an interactive
-// rotating view is a later lane and needs no dependency here.
+// The Map stage's static 3-D view ("Export preview" in `Map3D/Map3dStageView`):
+// the server's matplotlib render of the surface / 3-D scatter / 3-D waterfall.
+// Lazy (only mounted when asked for). The interactive view is `Map3D/`.
 //
 // The picture is `POST /api/export/map-figure` with the EXPORT's own body
 // (`mapFigureBody` + `view3dOptions`) and only `fmt: "png"`, so ⤓ exports
