@@ -154,7 +154,7 @@ export default function ReferencePatternSection() {
 
   return (
     <div style={{ marginTop: 10 }}>
-      <div className="qzk-ds-meta" style={hint}>
+      <div className="qzk-helptext" style={hint}>
         Import a trusted 2θ/intensity stick pattern (CSV, TSV, XY, or text). Raw data are not changed.
       </div>
       <label className="qzk-field-lbl" style={{ display: "flex", gap: 6, marginTop: 10 }}>

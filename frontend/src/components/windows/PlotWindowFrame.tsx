@@ -257,7 +257,7 @@ export default function PlotWindowFrame({
             className="qzk-plotwin-kind"
             title={`${win.panel?.layout ?? "grid"} panel — ${(win.panel?.datasetIds ?? []).length} dataset(s)`}
           >
-            <Badge tone="accent">⊞ {win.panel?.layout ?? "grid"}</Badge>
+            <Badge tone="accent">{win.panel?.layout ?? "grid"} layout</Badge>
           </span>
         )}
         {datasetName && <span className="qzk-plotwin-badge">{datasetName}</span>}

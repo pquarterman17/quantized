@@ -70,10 +70,10 @@ export default function NormalizationPane({ n }: { n: MagNormalizationState }) {
           </>
         )}
       </div>
-      {notField && <div className="qzk-ds-meta qz-mag-muted">The x axis is not a field, so it is not converted.</div>}
+      {notField && <div className="qzk-helptext qz-mag-muted">The x axis is not a field, so it is not converted.</div>}
 
       {n.basis === "none" ? (
-        <div className="qzk-ds-meta qz-mag-muted">Raw moment: no sample quantity is used.</div>
+        <div className="qzk-helptext qz-mag-muted">Raw moment: no sample quantity is used.</div>
       ) : (
         <>
           <div className="qz-mag-geometry">
@@ -91,7 +91,7 @@ export default function NormalizationPane({ n }: { n: MagNormalizationState }) {
           </div>
           <div className="qz-mag-profile-row">
             <Button size="sm" disabled={!n.active} onClick={n.fillFromMetadata}>Use metadata values</Button>
-            <span className="qzk-ds-meta qz-mag-muted">Fills only what the metadata states; never picks the basis.</span>
+            <span className="qzk-helptext qz-mag-muted">Fills only what the metadata states; never picks the basis.</span>
           </div>
           <SavedProfilesRow saved={n.profiles.saved} onSave={n.saveProfile} onLoad={n.loadProfile} onDelete={n.profiles.remove} />
         </>
@@ -115,7 +115,7 @@ export default function NormalizationPane({ n }: { n: MagNormalizationState }) {
       {n.notice && <div className="qzk-ds-meta qz-mag-muted">{n.notice}</div>}
       {n.warning && <div className="qzk-ds-meta qz-mag-warn">{n.warning}</div>}
       {n.error && <div className="qzk-ds-meta qz-mag-error">{n.error}</div>}
-      <div className="qzk-ds-meta qz-mag-muted">
+      <div className="qzk-helptext qz-mag-muted">
         Apply never edits the imported data: it writes a new dataset whose provenance records every input with its
         entered unit and canonical value, the basis, the output unit and the formula.
       </div>

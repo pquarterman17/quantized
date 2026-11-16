@@ -74,19 +74,19 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                 </div>
                 <div className="qzk-analysis-input-fields">
                   <label>X
-                    <select value={keyValue(item.xKey)} onChange={(event) => applyPatch(item, { xKey: Number(event.target.value) < 0 ? null : Number(event.target.value) }, index === 0)}>
+                    <select className="qz-select" value={keyValue(item.xKey)} onChange={(event) => applyPatch(item, { xKey: Number(event.target.value) < 0 ? null : Number(event.target.value) }, index === 0)}>
                       <option value="-1">{String(dataset.data.metadata.x_column_name ?? "X / time")}</option>
                       {columns.map((column) => <option key={column.column} value={column.column}>{column.label}</option>)}
                     </select>
                   </label>
                   <label>{singleY ? "Y" : "Primary Y"}
-                    <select value={yValue} onChange={(event) => applyPatch(item, { yKeys: [Number(event.target.value)] }, index === 0)}>
+                    <select className="qz-select" value={yValue} onChange={(event) => applyPatch(item, { yKeys: [Number(event.target.value)] }, index === 0)}>
                       {yValue < 0 && <option value="-1" disabled>No response available</option>}
                       {columns.map((column) => <option key={column.column} value={column.column}>{column.label}</option>)}
                     </select>
                   </label>
                   <label>Y uncertainty
-                    <select value={item.errorKeys[yValue] ?? -1} onChange={(event) => {
+                    <select className="qz-select" value={item.errorKeys[yValue] ?? -1} onChange={(event) => {
                       const error = Number(event.target.value);
                       const errorKeys = { ...item.errorKeys };
                       if (error < 0) delete errorKeys[yValue]; else errorKeys[yValue] = error;
@@ -104,7 +104,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                     </select>
                   </label>
                   {allowFactor && <label>Run by
-                    <select value={item.factorKeys[0] ?? -1} onChange={(event) => {
+                    <select className="qz-select" value={item.factorKeys[0] ?? -1} onChange={(event) => {
                       const factor = Number(event.target.value);
                       updateItem(item.datasetId, { factorKeys: factor < 0 ? [] : [factor] });
                     }}>

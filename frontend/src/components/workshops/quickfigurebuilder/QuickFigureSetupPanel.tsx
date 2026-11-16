@@ -97,51 +97,51 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
       </div>
       <div className="qzk-quick-setup-grid">
         <Field label="Plot style">
-          <select value={style} onChange={(event) => onStyle(event.target.value as QuickPlotStyle)}>
+          <select className="qz-select" value={style} onChange={(event) => onStyle(event.target.value as QuickPlotStyle)}>
             <option value="line">Line</option>
             <option value="scatter">Scatter</option>
             <option value="line-symbol">Line + symbol</option>
           </select>
         </Field>
         <Field label="Colour preset" reason={paletteReason}>
-          <select value={setup.palette} disabled={grouped} aria-describedby={by(0)} onChange={(event) => onSetup({ palette: event.target.value })}>
+          <select className="qz-select" value={setup.palette} disabled={grouped} aria-describedby={by(0)} onChange={(event) => onSetup({ palette: event.target.value })}>
             {PALETTES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </Field>
         <Field label="Line width" reason={lineReason}>
-          <select value={setup.lineWidth} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineWidth: Number(event.target.value) })}>
+          <select className="qz-select" value={setup.lineWidth} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineWidth: Number(event.target.value) })}>
             {LINE_WIDTHS.map((w) => <option key={w} value={w}>{w} px</option>)}
           </select>
         </Field>
         <Field label="Line style" reason={lineReason}>
-          <select value={setup.lineStyle} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineStyle: event.target.value as QuickFigureSetup["lineStyle"] })}>
+          <select className="qz-select" value={setup.lineStyle} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineStyle: event.target.value as QuickFigureSetup["lineStyle"] })}>
             {LINE_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
         <Field label="Marker" reason={markerReason}>
-          <select value={setup.markerShape} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerShape: event.target.value as QuickFigureSetup["markerShape"] })}>
+          <select className="qz-select" value={setup.markerShape} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerShape: event.target.value as QuickFigureSetup["markerShape"] })}>
             {MARKER_SHAPES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
         <Field label="Marker size" reason={markerReason}>
-          <select value={setup.markerSize} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerSize: Number(event.target.value) })}>
+          <select className="qz-select" value={setup.markerSize} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerSize: Number(event.target.value) })}>
             {MARKER_SIZES.map((s) => <option key={s} value={s}>{s} px</option>)}
           </select>
         </Field>
         <Field label="X axis">
-          <select value={setup.xScale} onChange={(event) => onSetup({ xScale: event.target.value as QuickFigureSetup["xScale"] })}>
+          <select className="qz-select" value={setup.xScale} onChange={(event) => onSetup({ xScale: event.target.value as QuickFigureSetup["xScale"] })}>
             <option value="linear">Linear</option>
             <option value="log">Log</option>
           </select>
         </Field>
         <Field label="Y axis">
-          <select value={setup.yScale} onChange={(event) => onSetup({ yScale: event.target.value as QuickFigureSetup["yScale"] })}>
+          <select className="qz-select" value={setup.yScale} onChange={(event) => onSetup({ yScale: event.target.value as QuickFigureSetup["yScale"] })}>
             <option value="linear">Linear</option>
             <option value="log">Log</option>
           </select>
         </Field>
         <Field label="Legend">
-          <select
+          <select className="qz-select"
             value={setup.showLegend ? setup.legendPos : "off"}
             onChange={(event) => {
               const value = event.target.value;

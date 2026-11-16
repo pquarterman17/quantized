@@ -26,7 +26,7 @@ export default function TernaryPanel() {
   return (
     <ToolWindow id="ternary" title="Ternary diagram" width={560} onClose={() => setOpen(false)}>
       {!t.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset with three composition columns.
         </div>
       ) : (

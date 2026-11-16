@@ -75,8 +75,7 @@ async function fit(res: PeakModelFitResponse) {
   step("Find peaks");
   await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
   stubModelFit(res);
-  step("Fit & review");
-  fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+  step("Fit & review"); // step ④ fits on entry (UX audit 7 lane UX-I)
   await screen.findByLabelText("fit metrics");
 }
 

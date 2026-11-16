@@ -217,7 +217,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
           title="Back to a single overlaid plot"
           onClick={() => setStackMode(false)}
         >
-          ▤
+          ◻
         </button>
         {/* #54: spatial multi-panel fit — aspect-preserving letterbox vs fill.
             Only shown for a decoded spatial arrangement (the only mode that

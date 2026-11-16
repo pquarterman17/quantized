@@ -94,7 +94,7 @@ export default function LegendDialog({ onClose }: { onClose: () => void }) {
           </li>
         ))}
       </ul>
-      <div className="qzk-ds-meta">Overlay, linked-curve and fit rows are renamed in the legend itself (double-click the row).</div>
+      <div className="qzk-helptext">Overlay, linked-curve and fit rows are renamed in the legend itself (double-click the row).</div>
       <div style={{ display: "flex", gap: 6, justifyContent: "space-between", marginTop: 4 }}>
         <button type="button" className="qz-btn qz-ghost" disabled={!free} onClick={resetPosition}>Reset position</button>
         <span style={{ display: "flex", gap: 6 }}>

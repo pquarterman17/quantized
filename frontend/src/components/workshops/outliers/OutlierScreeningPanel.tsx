@@ -25,7 +25,7 @@ export default function OutlierScreeningPanel() {
   return (
     <ToolWindow id="outlier-screening" title="Outlier screening" width={420} onClose={() => setOpen(false)}>
       {!o.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to screen.
         </div>
       ) : (

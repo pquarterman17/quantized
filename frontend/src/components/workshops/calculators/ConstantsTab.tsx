@@ -40,7 +40,7 @@ export default function ConstantsTab() {
 
   if (error) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 12, color: "var(--text-faint)" }}>
         Constants unavailable (backend offline).
       </div>
     );

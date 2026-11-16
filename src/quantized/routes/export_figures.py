@@ -30,6 +30,7 @@ from pydantic import Field, StrictBool, field_validator, model_validator
 
 from quantized.calc.axis_dates import x_is_datetime
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
+from quantized.calc.figure_overlay_scale import mark_overlay_styles
 from quantized.calc.figure_warnings import collect_figure_warnings
 from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
 from quantized.calc.plot_waterfall_x import apply_waterfall_x_offsets
@@ -372,6 +373,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         req.waterfall_offsets,
     )
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
+    styles = mark_overlay_styles(styles, overlays)  # never in the autoscale (figure_overlay_scale)
     y2_mask = [s.axis == 1 for s in plot.series]
     spans = scale_error_spans(req.error_spans, req.log_offsets)  # finding 3
     x, series, styles, spans = apply_waterfall_x_offsets(  # Origin's X step: one x block per series

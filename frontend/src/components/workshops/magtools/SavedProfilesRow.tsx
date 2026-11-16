@@ -31,7 +31,7 @@ export function SavedProfilesRow(props: {
         <Button size="sm" onClick={() => { props.onSave(name); setName(""); }}>Save profile</Button>
       </div>
       {saved.length === 0 ? (
-        <div className="qzk-ds-meta qz-mag-muted">No saved profiles yet. A saved profile is only ever applied when you load it here.</div>
+        <div className="qzk-helptext qz-mag-muted">No saved profiles yet. A saved profile is only ever applied when you load it here.</div>
       ) : (
         <div className="qz-mag-profile-row">
           <Select

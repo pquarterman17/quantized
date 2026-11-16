@@ -318,7 +318,7 @@ export default function CurveFitPanel() {
 
       <TabPanel id="results" tab={tab}>
         {!active && (
-          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+          <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
             Select a dataset to fit.
           </div>
         )}

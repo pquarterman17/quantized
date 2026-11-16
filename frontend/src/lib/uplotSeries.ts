@@ -12,6 +12,7 @@ import { FIT_DASH, fitLineWidth, isFitSeries, traceWithFit } from "./fitOverlayS
 import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
+import { offAutoscale } from "./overlayAutoscale";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
 import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
@@ -237,6 +238,10 @@ export function buildSeriesDefs(
   // `fill: {vs: channel}` — see uplotFill.resolveFillBands's doc for the
   // "vs must be currently plotted" fallback.
   const bands = resolveFillBands(args.plotted ?? [], seriesStyles ?? [], (i) => strokes[i] ?? accentColor);
+  // Analysis overlays stay out of the Y autoscale (lib/overlayAutoscale.ts).
+  offAutoscale(payload.series, args.hidden).forEach((off, i) => {
+    if (off) seriesArr[i + 1]!.auto = false;
+  });
   payload.series.forEach((s, i) => {
     if (s.band && s.band % 2) bands.push({ series: [i + 2, i + 1], fill: translucent(strokes[i]!, s.band > 2 ? 10 : 20) });
   });

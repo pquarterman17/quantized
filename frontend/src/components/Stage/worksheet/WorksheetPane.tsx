@@ -296,7 +296,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         </div>
       )}
       {hasOriginReportSheets(ds.data) && (
-        <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
           This sheet has Origin report-sheet columns not shown here — see Inspector › Origin provenance.
         </div>
       )}

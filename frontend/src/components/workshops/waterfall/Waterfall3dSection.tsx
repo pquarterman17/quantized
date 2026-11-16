@@ -50,7 +50,7 @@ export default function Waterfall3dSection({ series, channel, xLabel, zLabel }: 
       <div style={ROW}>
         <label className="qzk-field">
           <span>Depth by</span>
-          <select className="qz-input" aria-label="Depth by" value={depth} onChange={(e) => setDepth(e.target.value as DepthBy)}>
+          <select className="qz-select" aria-label="Depth by" value={depth} onChange={(e) => setDepth(e.target.value as DepthBy)}>
             <option value="index">Curve order</option>
             <option value="number">Number in name</option>
           </select>

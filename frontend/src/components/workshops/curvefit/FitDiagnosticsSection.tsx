@@ -110,7 +110,7 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
       {diag && (
         <div style={{ marginTop: 6 }}>
           <DataTable columns={["diagnostic", "value"]} rows={rowsFor(diag, result)} />
-          <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+          <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
             AIC = 2k − 2 ln L (Gaussian likelihood on the fit&apos;s weighted χ²), the same value the fit reports.
           </div>
         </div>

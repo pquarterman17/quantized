@@ -74,7 +74,7 @@ export default function ResidualPlotsSection({
     >
       <summary className="qzk-field-lbl">Residual plots</summary>
       {open && !plots && (
-        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
           This fit returned no residuals.
         </div>
       )}

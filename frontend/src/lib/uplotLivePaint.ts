@@ -73,6 +73,7 @@ export function livePaintOf({ series, bands }: { series: readonly uPlot.Series[]
       ? String(s.sorted)
       : [
           s.scale,
+          s.auto, // hiding a series can move an overlay in/out of the autoscale
           s.points?.show,
           s.points?.size,
           !!s.points?.paths,

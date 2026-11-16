@@ -31,7 +31,7 @@ export default function StepEditor({
       <div className="qzk-step-editor">
         <code className="qzk-step-code">{step.code}</code>
         {step.kind === "correction" && (
-          <div className="qzk-ds-meta" style={faint}>
+          <div className="qzk-helptext" style={faint}>
             Re-runs these corrections on the active dataset. Edit by re-recording.
           </div>
         )}

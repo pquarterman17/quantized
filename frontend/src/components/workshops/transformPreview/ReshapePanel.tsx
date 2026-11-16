@@ -42,7 +42,7 @@ function Preview({ r }: { r: ReshapeState }) {
         <li style={{ fontWeight: 600 }}>{`Result “${c.name}”: ${size(c.preview.resultRows ?? c.data.time.length, c.data.labels.length)} (plus X)`}</li>
       </ul>
       {r.previewOnly && (
-        <div className="qzk-ds-meta" style={faint}>
+        <div className="qzk-helptext" style={faint}>
           Preview only: counted on the loaded preview of a book that is still loading; the full data is used when you create.
         </div>
       )}
@@ -69,7 +69,7 @@ function ReshapeWorkshop() {
   return (
     <ToolWindow id="reshape" title="Reshape & combine" width={380} onClose={r.close}>
       {!r.datasets.length ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Load a dataset first.</div>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Load a dataset first.</div>
       ) : (
         <>
           <label className="qzk-field-lbl">Operation</label>

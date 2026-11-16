@@ -164,7 +164,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
   if (!active) {
     return (
       <Card title="Corrections" defaultOpen={false} helpTopic="Pipeline">
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Add a dataset to apply corrections.
         </div>
       </Card>

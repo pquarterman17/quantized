@@ -53,7 +53,7 @@ export default function ReflectivityFftSection() {
 
   if (!active) {
     return (
-      <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+      <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
         Select a reflectivity dataset (x vs R) first.
       </div>
     );

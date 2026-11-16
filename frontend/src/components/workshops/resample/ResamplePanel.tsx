@@ -89,7 +89,7 @@ function Preview({ r }: { r: ResampleState }) {
         ))}
       </ul>
       {r.previewOnly && (
-        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
           Counted on the loaded preview; the full data is resampled when you create.
         </div>
       )}
@@ -120,7 +120,7 @@ function ResampleWorkshop() {
         style={{ marginBottom: 8 }}
       />
       {tool === "reduce" ? <ReduceXYSection onClose={r.close} /> : !r.datasets.length ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Load a dataset to resample.</div>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Load a dataset to resample.</div>
       ) : (
         <>
           <label className="qzk-field-lbl">Datasets to resample</label>
@@ -173,7 +173,7 @@ function ResampleWorkshop() {
           </div>
 
           {n > 0 ? <Preview r={r} /> : (
-            <div className="qzk-ds-meta" style={{ ...gap, color: "var(--text-faint)" }}>Tick at least one dataset.</div>
+            <div className="qzk-helptext" style={{ ...gap, color: "var(--text-faint)" }}>Tick at least one dataset.</div>
           )}
 
           {(r.blockedByUnits || r.unitsAcknowledged) && (

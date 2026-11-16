@@ -6,6 +6,7 @@
 import { fmtNum } from "../../../lib/format";
 import { Button, Select } from "../../primitives";
 import ModelParamTable from "./ModelParamTable";
+import { backgroundDropped, freeCount, freeParamWarning } from "./peakDefaults";
 import { MODEL_BACKGROUNDS, MODEL_SHAPES, type ModelBackground, type ModelShape } from "./peakModelParams";
 import type { FitEngine } from "./useModelFit";
 import type { PeakWizardState } from "./usePeakWizard";
@@ -51,11 +52,13 @@ export function SetupProblems({ problems }: { problems: string[] }) {
 export default function ModelSetupView({ w }: { w: PeakWizardState }) {
   const m = w.model;
   const peaks = w.candidates.filter((c) => c.included);
+  const heavy = freeParamWarning(freeCount(m.setup.params), w.points);
+  const bgAuto = backgroundDropped(w.recipe.fit, w.recipe.baseline.method !== "none");
   return (
     <>
       <EngineSelect w={w} />
       {peaks.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 8 }}>
+        <div className="qzk-helptext" style={{ ...faint, marginTop: 8 }}>
           Find or add peaks (step 2) to build the model.
         </div>
       ) : (
@@ -98,7 +101,8 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
               </tbody>
             </table>
           </div>
-          {[m.shapeNote, m.bgNote].filter(Boolean).map((note) => (
+          {[m.shapeNote, bgAuto ? "Background starts at None: the step-1 baseline is already subtracted." : m.bgNote]
+            .filter(Boolean).map((note) => (
             <div key={note} className="qzk-ds-meta qzk-msg" style={{ ...faint, marginTop: 4 }}>
               {note}
             </div>
@@ -127,8 +131,13 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
           </div>
           <ModelParamTable model={m} />
           <SetupProblems problems={m.problems} />
+          {heavy && (
+            <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--warn)", marginTop: 6 }}>
+              {heavy}
+            </div>
+          )}
           {/* Wraps: .qzk-ds-meta alone is one ellipsized line (re-audit #16). */}
-          <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6, whiteSpace: "normal" }}>
+          <div className="qzk-helptext" style={{ ...faint, marginTop: 6, whiteSpace: "normal" }}>
             Seeded from the detected peaks; your edits save with the recipe. Blank min/max = open
             (widths stay positive, η in [0, 1]).
           </div>

@@ -51,7 +51,6 @@ export default function CompareDistributionsTable({
           onClick={() => onSelect(f.dist as DistFamily)}
           style={{
             all: "unset",
-            cursor: "pointer",
             fontWeight: isSelected ? 700 : 400,
             color: isSelected ? "var(--accent)" : "inherit",
           }}

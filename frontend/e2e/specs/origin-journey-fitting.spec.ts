@@ -147,7 +147,7 @@ test.describe("Origin journey: fitting and peaks", () => {
     await next.click(); // -> 3 Model
     await expect(pa.getByText("Fit engine", { exact: false }).first()).toBeVisible();
     await next.click(); // -> 4 Fit & review
-    await pa.getByRole("button", { name: "Fit", exact: true }).click();
+    // step ④ fits on entry (UX audit 7 lane UX-I)
     await expect(pa.getByText(/converged/)).toBeVisible({ timeout: 20_000 });
     // Centres at 36 and 44 degrees (the fixture's peaks), each with an error.
     const centres = await pa

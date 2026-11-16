@@ -97,7 +97,7 @@ export default function PlotSpecBar({
 
       <Card title="Saved plot recipes" count={specs.length || undefined} defaultOpen={false}>
         {sorted.length === 0 ? (
-          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+          <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
             No saved plot recipes yet — map columns below, then Save.
           </div>
         ) : (

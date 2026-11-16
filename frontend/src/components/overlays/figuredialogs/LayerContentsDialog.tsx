@@ -95,7 +95,7 @@ export default function LayerContentsDialog({ onClose }: { onClose: () => void }
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 420 }}>
       <div className="qzk-ds-meta">{target.name}</div>
       <h3 style={{ margin: "4px 0" }}>Curves</h3>
-      {rows.length === 0 && <p className="qzk-ds-meta">No curves — add one below.</p>}
+      {rows.length === 0 && <p className="qzk-helptext">No curves — add one below.</p>}
       <ol style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
         {rows.map((r, i) => {
           const name = `Curve ${i + 1}`;
@@ -126,7 +126,7 @@ export default function LayerContentsDialog({ onClose }: { onClose: () => void }
 
       <h3 style={{ margin: "4px 0" }}>Add</h3>
       {sources.length === 0 ? (
-        <p className="qzk-ds-meta">No other dataset to take a curve from.</p>
+        <p className="qzk-helptext">No other dataset to take a curve from.</p>
       ) : (
         <>
           <CurveSourcePicker label="New curve" sources={sources} value={adding} onChange={pickAdd} />

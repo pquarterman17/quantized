@@ -59,7 +59,12 @@ export default function PeakWizardPanel() {
       ? `peak find failed (${w.findError}) — retry it or add a peak, then continue`
       : "no peaks to fit — find or add at least one peak first";
   // Step ② -> ③ and ③ -> ④ (a model-table "×" can delete the last peak in ③).
-  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : null;
+  // Step ④ -> ⑤ (Next or the chip) waits for a running fit (it used to move
+  // on mid-fit). Only the model engine's fit can be cancelled.
+  const fitting = w.step === 3 && (w.model.busy || w.fitBusy);
+  const fittingWhy = w.model.busy ? "fitting — wait for it to finish, or cancel it" : "fitting — wait for it to finish";
+  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : fitting ? fittingWhy : null;
+  const chipBlock = (i: number) => ((i === 2 || i === 3) && noPeaks ? noPeaksWhy : i === 4 && fitting ? fittingWhy : null);
 
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,
@@ -86,21 +91,21 @@ export default function PeakWizardPanel() {
         </div>
       )}
       {mode === "batch" ? null : !w.active ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to analyze.
         </div>
       ) : (
         <>
           {/* Step chips: click to jump (state persists across steps). One
-              line (UX-F): an inactive chip's label shortens with an ellipsis
-              before the row would wrap; the full label is its tooltip. */}
+              line (UX-F): an inactive chip shows only its number (shell.css);
+              its label stays its accessible name and tooltip. */}
           <div className="qzk-wizard-steps">
             {WIZARD_STEPS.map((label, i) => (
               <button
                 key={label}
                 className={`qzk-wizard-step${i === w.step ? " qzk-active" : ""}`}
-                disabled={(i === 2 || i === 3) && noPeaks}
-                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : label}
+                disabled={chipBlock(i) !== null}
+                title={chipBlock(i) ?? label}
                 onClick={() => w.setStep(i)}
               >
                 <span className="qzk-wizard-num">{i + 1}</span> {label}

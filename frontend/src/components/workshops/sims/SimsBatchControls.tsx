@@ -34,7 +34,7 @@ export default function SimsBatchControls({ state: r }: { state: SimsState }) {
               </div>
             ))}
           </div>
-          <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
+          <div className="qzk-helptext" style={{ ...faint, marginTop: 4 }}>
             Preview uses the Profile above. Every profile is checked first, and any warnings on the others are shown for review before anything is created. Each output is new; originals stay unchanged.
           </div>
         </div>

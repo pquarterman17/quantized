@@ -115,7 +115,7 @@ export default function EquationModelPanel({ initial }: Props) {
       </div>
 
       {!eq.active && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
           Select a dataset to fit.
         </div>
       )}

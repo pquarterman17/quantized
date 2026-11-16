@@ -4,6 +4,8 @@
 // "Start from fit" copies the fitted values into the step-③ start values.
 
 import { Button } from "../../primitives";
+import FitProgress from "./FitProgress";
+import { freeCount } from "./peakDefaults";
 import ModelFitPreview from "./ModelFitPreview";
 import ModelFitResults from "./ModelFitResults";
 import { SetupProblems } from "./ModelSetupView";
@@ -15,10 +17,11 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
   const m = w.model;
   const r = m.result;
   const n = m.setup.shapes.length;
+  const free = freeCount(m.setup.params);
   return (
     <>
       <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 6 }}>
-        {n} peak(s) · {m.setup.background} background · {m.setup.params.filter((p) => p.vary && !p.tie).length} free
+        {n} peak(s) · {m.setup.background} background · {free} free
         parameters (edit them in step 3)
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -54,6 +57,7 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
           </Button>
         )}
       </div>
+      <FitProgress w={w} free={free} />
       {r && !m.busy && m.publishBlock && !m.published && (
         <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
           Not publishable: {m.publishBlock}
@@ -80,7 +84,7 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         </div>
       )}
       {r && m.stale && (
-        <div className="qzk-ds-meta" style={{ color: "var(--warn)", marginTop: 6 }}>
+        <div className="qzk-helptext" style={{ color: "var(--warn)", marginTop: 6 }}>
           The parameters changed since this fit — its curves are off the plot and it cannot be
           integrated or reported until you Re-fit.
         </div>
