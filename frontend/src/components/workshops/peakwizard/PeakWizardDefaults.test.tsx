@@ -5,9 +5,10 @@
 // the time limit, blocks Next while fitting, and offers "Fit the 8 strongest
 // peaks". Real postJSON over a stubbed fetch; every wait is on rendered STATE.
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_RECIPE, loadRecipesChecked, saveRecipe as persistRecipe } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
 import { requestPeakFitRange, usePeakFitRange } from "../../../store/peakFitRange";
 import { useApp } from "../../../store/useApp";
@@ -99,7 +100,7 @@ describe("step ① baseline default", () => {
     await waitFor(() => expect(baselineSelect()).toHaveValue("snip"));
   });
 
-  it("keeps None on a flat linear trace, and never overrides the user's None", async () => {
+  it("keeps None on a flat linear trace", async () => {
     stubFetch();
     open(flat);
     await act(async () => {});
@@ -114,6 +115,19 @@ describe("step ① baseline default", () => {
     fireEvent.change(baselineSelect(), { target: { value: "none" } });
     await act(async () => {});
     expect(baselineSelect()).toHaveValue("none");
+    expect(screen.queryByText(/was chosen because/)).not.toBeInTheDocument();
+    // ...and a later dataset does not override it either.
+    act(() => useApp.setState({ datasets: [decaying, { ...decaying, id: "d2" }], activeId: "d2" }));
+    await act(async () => {});
+    expect(baselineSelect()).toHaveValue("none");
+  });
+
+  it("decides afresh per dataset: a flat one after a decaying one goes back to None", async () => {
+    stubFetch();
+    open(decaying);
+    await waitFor(() => expect(baselineSelect()).toHaveValue("snip"));
+    act(() => useApp.setState({ datasets: [decaying, { ...flat, id: "d2" }], activeId: "d2" }));
+    await waitFor(() => expect(baselineSelect()).toHaveValue("none"));
     expect(screen.queryByText(/was chosen because/)).not.toBeInTheDocument();
   });
 
@@ -140,6 +154,32 @@ describe("step ③ background and load", () => {
     expect(screen.getByRole("combobox", { name: "background" })).toHaveValue("none");
     expect(screen.getByText(/Background starts at None: the step-1 baseline is already subtracted/)).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "background" }), { target: { value: "linear" } });
+    expect(screen.getByRole("combobox", { name: "background" })).toHaveValue("linear");
+  });
+
+  it("a saved recipe carries the effective background, so the batch runner fits what the wizard showed", async () => {
+    stubFetch();
+    open(decaying);
+    await waitFor(() => expect(useApp.getState().baselineOverlay?.datasetId).toBe("d1"));
+    step("Report");
+    fireEvent.change(screen.getByPlaceholderText("recipe name"), { target: { value: "xrd" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const saved = loadRecipesChecked().recipes.find((r) => r.name === "xrd")!;
+    expect(saved.baseline.method).toBe("snip");
+    expect(saved.fit.background).toBe("none");
+  });
+
+  it("an older recipe's unset background keeps its saved meaning (the degree), baseline or not", async () => {
+    persistRecipe({ ...DEFAULT_RECIPE, name: "old", baseline: { ...DEFAULT_RECIPE.baseline, method: "als" } });
+    stubFetch();
+    open(flat);
+    fireEvent.change(screen.getAllByRole("combobox").find((c) => within(c).queryByRole("option", { name: "old" }))!, {
+      target: { value: "old" },
+    });
+    await waitFor(() => expect(baselineSelect()).toHaveValue("als"));
+    step("Find peaks");
+    await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
+    step("Model");
     expect(screen.getByRole("combobox", { name: "background" })).toHaveValue("linear");
   });
 
@@ -171,6 +211,7 @@ describe("step ④ fits on entry", () => {
     const next = screen.getByRole("button", { name: "Next →" });
     expect(next).toBeDisabled();
     expect(next).toHaveAttribute("title", "fitting — wait for it to finish, or cancel it");
+    expect(screen.getByText("Report", { selector: ".qzk-wizard-step" }).closest("button")).toBeDisabled();
     await act(async () => pendingFit?.(true));
     await screen.findByLabelText("fit metrics");
     expect(screen.getByRole("button", { name: "Next →" })).toBeEnabled();

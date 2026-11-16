@@ -23,7 +23,7 @@ import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
 import { segmentYErr } from "./modelFitWeights";
 import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
-import { STRONGEST_PEAKS, weakerThanStrongest } from "./peakDefaults";
+import { effectiveFit, loadedRecipe, savedFit, STRONGEST_PEAKS, weakerThanStrongest } from "./peakDefaults";
 import { useAutoBaseline, useFitOnEntry } from "./usePeakDefaults";
 
 import { fitMultiPeak } from "../../../lib/api/peaks";
@@ -359,12 +359,9 @@ export function usePeakWizard(): PeakWizardState {
     [active, segment, errKeys],
   );
   // ③ No extra fitted background once a baseline was subtracted, unless the
-  // user picks one (an explicit `fit.background` always wins).
+  // user picks one (./peakDefaults `effectiveFit`; saved explicitly below).
   const baselineOn = recipe.baseline.method !== "none";
-  const modelFit = useMemo(
-    () => (baselineOn && recipe.fit.background === null ? { ...recipe.fit, background: "none" as const } : recipe.fit),
-    [baselineOn, recipe.fit],
-  );
+  const modelFit = useMemo(() => effectiveFit(recipe.fit, baselineOn), [baselineOn, recipe.fit]);
   const model = useModelFit({
     active, segment, workingY, yErr, baseline, baselineOn,
     peaks: included, model: recipe.model, fit: modelFit, setFit,
@@ -385,7 +382,9 @@ export function usePeakWizard(): PeakWizardState {
     [modelResult, classicResult],
   );
   // ④ fits on entry; "Fit the 8 strongest" re-arms it (after useModelFit: see ./usePeakDefaults).
-  const refit = useFitOnEntry(step, included.length > 0, model, { busy: fitBusy, hasResult: fitResult !== null, run: runFit });
+  const refit = useFitOnEntry(step, included.length > 0, model, {
+    busy: fitBusy, hasResult: fitResult !== null, hasError: fitError !== null, run: runFit,
+  });
   const fitStrongest = () => {
     if (model.busy) model.cancel();
     for (const i of weakerThanStrongest(candidates, STRONGEST_PEAKS)) cands.togglePeak(i);
@@ -409,7 +408,9 @@ export function usePeakWizard(): PeakWizardState {
     }
     const named = { ...recipe, name };
     try {
-      setRecipes(persistRecipe(named));
+      // The effective background goes in explicitly: the batch runner fits
+      // what the wizard showed (./peakDefaults `savedFit`).
+      setRecipes(persistRecipe({ ...named, fit: savedFit(named) }));
     } catch (e) {
       toast(`recipe not saved — ${e instanceof Error ? e.message : "storage refused it"}`, "danger");
       return;
@@ -425,7 +426,7 @@ export function usePeakWizard(): PeakWizardState {
     // that is already gone records nothing.
     recordUse({ kind: "peak", scope: "global", id: r.name });
     auto.touched(); // a recipe's baseline is a choice
-    setRecipe(r);
+    setRecipe(loadedRecipe(r)); // an unset background keeps its saved meaning
     cands.clearCandidates();
     setAside.current.clear();
     setFitResult(null);

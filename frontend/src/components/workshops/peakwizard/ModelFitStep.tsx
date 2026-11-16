@@ -5,6 +5,7 @@
 
 import { Button } from "../../primitives";
 import FitProgress from "./FitProgress";
+import { freeCount } from "./peakDefaults";
 import ModelFitPreview from "./ModelFitPreview";
 import ModelFitResults from "./ModelFitResults";
 import { SetupProblems } from "./ModelSetupView";
@@ -16,7 +17,7 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
   const m = w.model;
   const r = m.result;
   const n = m.setup.shapes.length;
-  const free = m.setup.params.filter((p) => p.vary && !p.tie).length;
+  const free = freeCount(m.setup.params);
   return (
     <>
       <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 6 }}>

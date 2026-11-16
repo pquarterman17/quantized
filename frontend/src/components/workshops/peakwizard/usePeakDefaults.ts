@@ -2,8 +2,8 @@
 // #8, lane UX-I; the pure rules are ./peakDefaults):
 //
 //  * useAutoBaseline: once per dataset, while the user has not chosen a
-//    baseline (nor applied a recipe), start step ① from SNIP when the plot is
-//    log-Y or the trace decays. `settled` is false until that decision is
+//    baseline (nor applied a recipe) in this panel, start step ① from SNIP
+//    when the plot is log-Y or the trace decays, else from None. `settled` is false until that decision is
 //    made, so the wizard's automatic peak finds wait for it rather than run on
 //    the raw trace a moment before the baseline arrives.
 //  * useFitOnEntry: step ④ runs the fit on entry (Origin's Peak Analyzer
@@ -43,13 +43,15 @@ export function useAutoBaseline({ activeId, y, yLog, method, apply }: AutoBaseli
   const touchedRef = useRef(false);
   useEffect(() => {
     if (!activeId || !y || decidedFor === activeId) return; // decided on data, never on its absence
-    const pick = !touchedRef.current && method === "none" ? suggestedBaseline(y, yLog) : null;
-    if (pick) {
-      apply(pick);
-      setChosen(pick);
-    }
     setDecidedFor(activeId);
-  }, [activeId, decidedFor, y, yLog, method, apply]);
+    // Each dataset decides afresh while the method is still the default or an
+    // earlier automatic pick: a flat dataset after a decaying one goes back
+    // to None rather than inherit (and mis-explain) the other's SNIP.
+    if (touchedRef.current || (method !== "none" && method !== chosen)) return;
+    const pick = suggestedBaseline(y, yLog);
+    if ((pick ?? "none") !== method) apply(pick ?? "none");
+    setChosen(pick);
+  }, [activeId, decidedFor, y, yLog, method, chosen, apply]);
   const touched = useCallback(() => {
     touchedRef.current = true;
     setChosen(null);
@@ -61,6 +63,7 @@ export function useAutoBaseline({ activeId, y, yLog, method, apply }: AutoBaseli
 export interface ClassicFit {
   busy: boolean;
   hasResult: boolean;
+  hasError: boolean;
   run: () => Promise<void>;
 }
 
@@ -80,7 +83,7 @@ export function useFitOnEntry(step: number, hasPeaks: boolean, m: ModelFitState,
       // change that reset the model this commit, so those are about to clear.
       const showing = !!(m.result || m.error || m.notice || m.publishNote);
       if (!m.busy && !m.publishing && !(armed === "entry" && showing) && m.problems.length === 0) void m.run();
-    } else if (!classic.busy && !classic.hasResult) {
+    } else if (!classic.busy && !classic.hasResult && !(armed === "entry" && classic.hasError)) {
       void classic.run();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per arming, with this render's model

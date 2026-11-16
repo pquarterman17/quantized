@@ -6,7 +6,7 @@
 import { fmtNum } from "../../../lib/format";
 import { Button, Select } from "../../primitives";
 import ModelParamTable from "./ModelParamTable";
-import { freeParamWarning } from "./peakDefaults";
+import { backgroundDropped, freeCount, freeParamWarning } from "./peakDefaults";
 import { MODEL_BACKGROUNDS, MODEL_SHAPES, type ModelBackground, type ModelShape } from "./peakModelParams";
 import type { FitEngine } from "./useModelFit";
 import type { PeakWizardState } from "./usePeakWizard";
@@ -52,9 +52,8 @@ export function SetupProblems({ problems }: { problems: string[] }) {
 export default function ModelSetupView({ w }: { w: PeakWizardState }) {
   const m = w.model;
   const peaks = w.candidates.filter((c) => c.included);
-  const heavy = freeParamWarning(m.setup.params.filter((p) => p.vary && !p.tie).length, w.points);
-  // ./usePeakWizard's effective model: no fitted background over a subtracted baseline.
-  const bgAuto = w.recipe.fit.background === null && w.recipe.baseline.method !== "none";
+  const heavy = freeParamWarning(freeCount(m.setup.params), w.points);
+  const bgAuto = backgroundDropped(w.recipe.fit, w.recipe.baseline.method !== "none");
   return (
     <>
       <EngineSelect w={w} />

@@ -12,7 +12,9 @@
 //  * Step ④: the time limit, and which peaks "Fit the N strongest" keeps.
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
-import type { PeakBaselineMethod } from "../../../lib/peakwizard";
+import type { PeakBaselineMethod, PeakRecipe } from "../../../lib/peakwizard";
+import type { PeakRecipeFit } from "../../../lib/peakRecipeFit";
+import { backgroundFromDegree, type ModelParam } from "./peakModelParams";
 
 /** The model fit's time limit: `routes/peaks.py`'s `deadline_s` default (the
  *  wizard never sends one). */
@@ -48,6 +50,30 @@ export function decays(y: readonly number[]): boolean {
 export function suggestedBaseline(y: readonly number[], yLog: boolean): PeakBaselineMethod | null {
   return yLog || decays(y) ? "snip" : null;
 }
+
+/** Step ③'s background rule: with a baseline subtracted and no background
+ *  picked (`fit.background` null), the wizard fits none. A SAVED recipe always
+ *  carries its background explicitly (see `savedFit` / `loadedRecipe`), so
+ *  the batch runner, which reads null as the recipe's degree, fits the same. */
+export const backgroundDropped = (fit: PeakRecipeFit, baselineOn: boolean): boolean =>
+  baselineOn && fit.background === null;
+
+/** The fit section the wizard's model engine actually fits. */
+export function effectiveFit(fit: PeakRecipeFit, baselineOn: boolean): PeakRecipeFit {
+  return backgroundDropped(fit, baselineOn) ? { ...fit, background: "none" } : fit;
+}
+
+/** The recipe as saved: its effective background made explicit. */
+export const savedFit = (r: PeakRecipe): PeakRecipeFit => effectiveFit(r.fit, r.baseline.method !== "none");
+
+/** A loaded recipe whose background is unset keeps the meaning it was saved
+ *  with (the recipe's degree), never the newer "none over a baseline" rule. */
+export function loadedRecipe(r: PeakRecipe): PeakRecipe {
+  return r.fit.background === null ? { ...r, fit: { ...r.fit, background: backgroundFromDegree(r.model.bgDegree) } } : r;
+}
+
+/** Free parameters of a model table (varying, untied). */
+export const freeCount = (params: readonly ModelParam[]): number => params.filter((p) => p.vary && !p.tie).length;
 
 /** Is a model with `free` parameters over `points` points likely to hit the
  *  time limit? */
