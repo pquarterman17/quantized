@@ -73,6 +73,8 @@ function pageState(over: Record<string, unknown> = {}) {
     layout: { rowGap: null, colGap: null, linkX: false, linkY: false, alignLabels: false, resizeMode: "constrained" },
     setLayout: vi.fn(),
     windowSources: [],
+    datasetSources: [],
+    assignDataset: vi.fn(),
     docSources: [],
     figureSources: [],
     pageDocument: null,

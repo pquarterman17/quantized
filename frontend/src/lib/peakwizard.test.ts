@@ -169,7 +169,10 @@ describe("recipe v2 — migration, round trip, fail closed", () => {
   });
 
   it("a recipe saved before the Advanced find settings existed loads with its find section unchanged, silently", () => {
-    localStorage.setItem("qz.peakRecipes", JSON.stringify([{ ...edited, name: "pre-advanced" }]));
+    // The find section every recipe had then (the old defaults: no prominence
+    // floor, 20 peaks, no strict flag).
+    const find = { snr_threshold: 3, min_prominence: 0, max_peaks: 20 };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([{ ...edited, name: "pre-advanced", find }]));
     const { recipes, warnings } = loadRecipesChecked();
     expect(warnings).toEqual([]);
     expect(recipes[0].find).toEqual({ snr_threshold: 3, min_prominence: 0, max_peaks: 20 });

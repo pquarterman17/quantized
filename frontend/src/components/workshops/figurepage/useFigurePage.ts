@@ -42,7 +42,9 @@ import {
 } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
 import { createPageDocument } from "../../../lib/pageDocumentActions";
+import { is2DMap } from "../../../lib/mapdata";
 import { displayedWindowTitle } from "../../../lib/plotview";
+import { openNewGraph } from "../../../store/windowDefaults";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
@@ -129,6 +131,28 @@ export function useFigurePage() {
         .map((document) => ({ kind: "figure", id: document.id, name: document.name })),
     [editableFigures, datasetIds],
   );
+
+  // UX8-C: every plottable dataset is a source too, not only the ones that
+  // happen to have an open window (4 datasets offered 1 source). Picking one
+  // binds the slot to that dataset's plot window, opening one (unfocused)
+  // when none exists, so the slot renders through the same "window" path.
+  const datasetSources = useMemo(
+    () => datasets.filter((d) => !is2DMap(d.data)).map((d) => ({ id: d.id, name: d.name })),
+    [datasets],
+  );
+  function assignDataset(datasetId: string): void {
+    // No free (or selected) slot: open nothing (a stray window + undo step).
+    if (selected === null && !slots.some((slot) => slot.source === null)) {
+      setStatus("every slot is full: select one to replace, or add a row/column");
+      return;
+    }
+    const s = useApp.getState();
+    const shown = s.plotWindows.find((w) => w.kind === "plot" && w.datasetId === datasetId);
+    const winId = shown?.id ?? openNewGraph(s, datasetId);
+    const after = useApp.getState();
+    const win = after.plotWindows.find((w) => w.id === winId);
+    if (win) assignToNext({ kind: "window", id: win.id, name: displayedWindowTitle(win, after.datasets) });
+  }
 
   /** Per-slot LIVE status (F3.2): re-checked every render against the current
    *  session state, so a source that dies (window closed, figdoc deleted, its
@@ -347,6 +371,8 @@ export function useFigurePage() {
     setSelected,
     assign,
     assignToNext,
+    datasetSources,
+    assignDataset,
     moveSlot,
     clear,
     setSlotLabel,

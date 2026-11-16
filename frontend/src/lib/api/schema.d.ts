@@ -4063,6 +4063,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/source-watch/stat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stat Sources
+         * @description The state and change stamp of each watched source file, in request order.
+         *
+         *     A path whose volume is at its cap is submitted again as soon as a slot
+         *     frees (a healthy volume's stats finish in microseconds), until the answer
+         *     deadline; only then is it reported ``pending``. The request POLLS its
+         *     stats' futures (every ``_RETRY_S``) instead of awaiting wrapped ones: a
+         *     wrapper adds a done-callback to the thread's future, and a hung stat shared
+         *     by every poll would collect one per request for as long as it hangs.
+         */
+        post: operations["stat_sources_api_source_watch_stat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spectral/fft": {
         parameters: {
             query?: never;
@@ -8844,6 +8871,16 @@ export interface components {
              * @default false
              */
             full_books?: boolean;
+            /**
+             * Hold Partial
+             * @default true
+             */
+            hold_partial?: boolean;
+            /**
+             * Live
+             * @default false
+             */
+            live?: boolean;
             /** Path */
             path: string;
         };
@@ -11470,6 +11507,28 @@ export interface components {
              * @default 1.5418
              */
             xray_wavelength?: number;
+        };
+        /** SourceStat */
+        SourceStat: {
+            /** Path */
+            path: string;
+            /** Stamp */
+            stamp?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ok" | "missing" | "denied" | "outside" | "not_file" | "offline" | "pending" | "invalid";
+        };
+        /** SourceStatRequest */
+        SourceStatRequest: {
+            /** Paths */
+            paths: string[];
+        };
+        /** SourceStatResponse */
+        SourceStatResponse: {
+            /** Entries */
+            entries: components["schemas"]["SourceStat"][];
         };
         /** SpectralWorkbenchRequest */
         SpectralWorkbenchRequest: {
@@ -18988,6 +19047,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stat_sources_api_source_watch_stat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceStatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceStatResponse"];
                 };
             };
             /** @description Validation Error */

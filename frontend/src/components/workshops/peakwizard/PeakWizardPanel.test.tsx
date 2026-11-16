@@ -115,7 +115,7 @@ describe("PeakWizardPanel", () => {
     await waitFor(() => expect(screen.getByText(/R² =/)).toBeInTheDocument());
     expect(fitMock).toHaveBeenCalledTimes(1);
     expect(fitMock).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "Gaussian", link_mode: "None" }),
+      expect.objectContaining({ model: "Pseudo-Voigt", link_mode: "None" }), // an XRD scan's default (UX8-D)
     );
 
     // ⑤ report

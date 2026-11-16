@@ -7637,6 +7637,16 @@
             "title": "Full Books",
             "type": "boolean"
           },
+          "hold_partial": {
+            "default": true,
+            "title": "Hold Partial",
+            "type": "boolean"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
+          },
           "path": {
             "title": "Path",
             "type": "string"
@@ -14328,6 +14338,79 @@
           "density"
         ],
         "title": "SldRequest",
+        "type": "object"
+      },
+      "SourceStat": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "stamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamp"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "missing",
+              "denied",
+              "outside",
+              "not_file",
+              "offline",
+              "pending",
+              "invalid"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "state"
+        ],
+        "title": "SourceStat",
+        "type": "object"
+      },
+      "SourceStatRequest": {
+        "properties": {
+          "paths": {
+            "items": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "SourceStatRequest",
+        "type": "object"
+      },
+      "SourceStatResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/SourceStat"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "SourceStatResponse",
         "type": "object"
       },
       "SpectralWorkbenchRequest": {
@@ -25270,6 +25353,48 @@
         "summary": "Formula",
         "tags": [
           "sld"
+        ]
+      }
+    },
+    "/api/source-watch/stat": {
+      "post": {
+        "description": "The state and change stamp of each watched source file, in request order.\n\nA path whose volume is at its cap is submitted again as soon as a slot\nfrees (a healthy volume's stats finish in microseconds), until the answer\ndeadline; only then is it reported ``pending``. The request POLLS its\nstats' futures (every ``_RETRY_S``) instead of awaiting wrapped ones: a\nwrapper adds a done-callback to the thread's future, and a hung stat shared\nby every poll would collect one per request for as long as it hangs.",
+        "operationId": "stat_sources_api_source_watch_stat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceStatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceStatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stat Sources",
+        "tags": [
+          "import"
         ]
       }
     },

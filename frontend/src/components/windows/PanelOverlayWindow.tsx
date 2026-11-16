@@ -1,4 +1,4 @@
-// The "Overlay in one plot" composite window content (MAIN_PLAN #19 v1): ONE
+// The "Panel: overlay (separate scales)" composite window content (MAIN_PLAN #19 v1): ONE
 // viewport showing every panel dataset merged onto a shared union-x axis
 // (`lib/panelwindow.buildOverlayPayload` — pure, non-destructive, reads each
 // dataset through `lib/rowstate.analysisData` so exclusion/filter (#50/#53)

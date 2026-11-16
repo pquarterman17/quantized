@@ -122,6 +122,25 @@ describe("PanelPlotWindow — row/column/grid layouts render N viewports", () =>
     await waitFor(() => expect(created.length).toBe(2));
     expect(container.querySelectorAll(".qzk-panel-cell")).toHaveLength(2);
   });
+
+  // UX8-C: M(T), XRD, Raman and M(H) in one grid all drew on the field range.
+  it("links the cells' X only when every cell plots the same X quantity and unit", async () => {
+    const withX = (d: Dataset, name: string, unit: string): Dataset => ({
+      ...d,
+      data: { ...d.data, metadata: { x_column_name: name, x_column_unit: unit } },
+    });
+    const syncKeys = () => created.map((c) => (c.opts as { cursor?: { sync?: { key?: string } } }).cursor?.sync?.key);
+    const same = [withX(A, "Field", "Oe"), withX(B, "Field", "Oe")];
+    const { unmount } = render(<PanelPlotWindow win={win({ panel: { datasetIds: ["a", "b"], layout: "grid" } })} datasets={same} />);
+    await waitFor(() => expect(created.length).toBe(2));
+    expect(syncKeys()).toEqual(["qz-panel-pw1", "qz-panel-pw1"]);
+    unmount();
+    created.length = 0;
+    const mixed = [withX(A, "Temperature", "K"), withX(B, "2Theta", "deg")];
+    render(<PanelPlotWindow win={win({ panel: { datasetIds: ["a", "b"], layout: "grid" } })} datasets={mixed} />);
+    await waitFor(() => expect(created.length).toBe(2));
+    expect(syncKeys()).toEqual([undefined, undefined]);
+  });
 });
 
 describe("PanelCell — display-only changes keep each cell's live uPlot", () => {
