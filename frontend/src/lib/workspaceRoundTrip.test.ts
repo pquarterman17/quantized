@@ -120,9 +120,25 @@ describe("PlotView.exchangeXY (Plot > Exchange X-Y axes) survives a save/reopen"
     expect(back.view).toMatchObject({ xScale: "log", xReversed: true }); // each axis keeps its own state
   });
 
+  it("an untitled graph is named by its position in the notice, not as an empty string", () => {
+    const view = { ...defaultPlotView(), exchangeXY: true, insetMode: true };
+    const win: PlotWindow = {
+      id: "w1", kind: "plot", title: "", datasetId: "d1", geometry: { x: 1, y: 2, w: 300, h: 200 },
+      z: 1, winState: "normal", view, bg: "theme", linkGroup: null, pinned: false,
+    };
+    const warnings = roundTrip({ datasets: [ds], plotWindows: [win], focusedWindowId: "w1" }).migrationWarnings;
+    expect(warnings.join()).toMatch(/graph "Graph 1": Exchange X–Y axes was turned off/);
+  });
+
+  it("an editable figure that loses the exchange says so, by its name", () => {
+    const doc = createFigureDocument({ id: "f9", name: "Fig A", datasetId: "d1", view: { ...defaultPlotView(), exchangeXY: true, insetMode: true }, groupKey: null, facetKey: null });
+    const warnings = roundTrip({ datasets: [ds], editableFigures: [doc] } as never).migrationWarnings;
+    expect(warnings.join()).toMatch(/figure "Fig A": Exchange X–Y axes was turned off/);
+  });
+
   it("a file holding it beside an inset reopens un-exchanged, the inset kept (the pair is refused)", () => {
     const back = save({ ...defaultPlotView(), exchangeXY: true, insetMode: true });
-    expect(lastWarnings.join()).toMatch(/Exchange X–Y axes was turned off/); // never silent
+    expect(lastWarnings.join()).toMatch(/graph "W": Exchange X–Y axes was turned off/); // never silent
     expect(back.view.exchangeXY).toBe(false);
     expect(back.document?.plot.view.exchangeXY).toBe(false);
     expect(back.view.insetMode).toBe(true);

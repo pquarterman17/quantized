@@ -48,24 +48,24 @@ async function screenTitles(page: Page, texts: string[]): Promise<Record<string,
 /** The numeric tick labels the canvas drew left of the plot area (the vertical axis), as numbers. */
 const screenVerticalTicks = (page: Page): Promise<number[]> =>
   page.evaluate(() => {
-    type Op = { op: string; text?: string; x?: number };
+    type Op = { op: string; text?: string; x?: number; y?: number };
     const canvas = document.querySelector(".qzk-stage canvas") as HTMLCanvasElement;
     const draws = (window as unknown as { __qzDraw: { log: (c: HTMLCanvasElement) => Op[] } }).__qzDraw.log(canvas);
     const c = canvas.getBoundingClientRect();
     const over = document.querySelector(".qzk-stage .u-over")!.getBoundingClientRect();
     const k = canvas.width / c.width;
     return draws
-      .filter((o) => o.op === "text" && /^-?[\d.]+$/.test(o.text ?? "") && c.left + o.x! / k <= over.left)
-      .map((o) => Number(o.text));
+      .filter((o) => o.op === "text" && /^-?[\d.,]+$/.test(o.text ?? "") && c.left + o.x! / k < over.left - 3) // right-aligned beside the plot (the bottom axis' first label is centred ON its edge)
+      .map((o) => Number((o.text ?? "").replace(/,/g, "")));
   });
 
 /** The numeric tick labels of the SVG's leftmost label column (the vertical axis). */
 function svgVerticalTicks(svg: string): number[] {
-  const re = /<text[^>]* x="([\d.]+)" y="[\d.]+" transform="rotate\(-?0[^"]*"[^>]*>(-?[\d.]+)<\/text>/g;
+  const re = /<text[^>]* x="([\d.]+)" y="[\d.]+" transform="rotate\(-?0[^"]*"[^>]*>(-?[\d.,]+)<\/text>/g;
   const cols = new Map<number, number[]>();
   for (const m of svg.matchAll(re)) {
     const x = Math.round(Number(m[1]));
-    cols.set(x, [...(cols.get(x) ?? []), Number(m[2])]);
+    cols.set(x, [...(cols.get(x) ?? []), Number(m[2].replace(/,/g, ""))]);
   }
   return cols.get(Math.min(...cols.keys())) ?? [];
 }
@@ -222,4 +222,26 @@ test("Exchange X-Y axes is blocked by a saved x-break in the window's document, 
   await setBreak([[20, 30]]);
   await expect.poll(() => exchanged(page)).toBe(false);
   await expect(page.getByText(/Exchange X–Y axes turned off/).first()).toBeVisible();
+});
+
+test("Upright vertical bars with error bars export over their values, as the screen ranges them (not from zero)", async ({ page }) => {
+  test.setTimeout(90_000);
+  await installCanvasRecorder(page);
+  const csv = test.info().outputPath("bars-err.csv");
+  await (await import("node:fs/promises")).mkdir(test.info().outputDir, { recursive: true });
+  await (await import("node:fs/promises")).writeFile(csv, "x,v,e\n1,1000,1\n2,1004,1\n3,1002,1\n4,1008,1\n5,1010,1\n");
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), csv);
+  await waitForDatasetCount(page, 1);
+  await page.evaluate(() => {
+    const store = (window as unknown as { __qz: { useApp: { setState: (p: unknown) => void } } }).__qz.useApp;
+    store.setState({ xKey: null, yKeys: [0], errKeys: { 0: 1 }, seriesStyles: { 0: { bars: "vertical" } } });
+  });
+  await expect.poll(async () => (await screenVerticalTicks(page)).length).toBeGreaterThan(2);
+  const screenTicks = await screenVerticalTicks(page);
+  const { svg } = await exportSvg(page);
+  const exportTicks = svgVerticalTicks(svg);
+  expect(Math.min(...screenTicks)).toBeGreaterThan(900); // the screen does not range to zero
+  expect(Math.min(...exportTicks)).toBeGreaterThan(900); // nor does the export (it used to run 0..1200)
+  expect(Math.max(...exportTicks)).toBeLessThan(1100);
 });

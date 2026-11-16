@@ -188,7 +188,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       checked: () => s().exchangeXY,
       disabled: () => !!xyWhy(s),
       disabledReason: () => xyWhy(s),
-      run: () => void (xyWhy(s) || xy!.toggleExchangeXY(useApp)),
+      run: () => { const why = xyWhy(s); if (why) toast(why); else xy!.toggleExchangeXY(useApp); }, // a palette pick of a blocked one says why
     },
     {
       id: "grid",

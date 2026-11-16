@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import uPlot from "uplot";
 
 import { buildPlotCommands } from "../commands/plotCommands";
+import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { exchangeAxisClash, exchangeBlocker, type ExchangeState } from "./exchangeXY";
 import { viewOverrides } from "./figureViewOverrides";
@@ -178,8 +179,10 @@ describe("the command and the store", () => {
     const a = command();
     expect(on(a)).toBe(true);
     expect((a.disabledReason as () => string)()).toBe("Not available for polar plots");
+    useToasts.setState({ toasts: [] });
     a.run();
     expect(useApp.getState().exchangeXY).toBe(false);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual(["Not available for polar plots"]); // the palette says why
   });
 
   it("the magnifier inset command is off while exchanged (it does not turn), with the reason", () => {

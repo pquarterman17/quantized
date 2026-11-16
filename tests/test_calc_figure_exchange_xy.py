@@ -186,12 +186,44 @@ def test_lines_beside_horizontal_bars_autoscale_on_the_turned_axes_too() -> None
     assert ax.lines, "the line series is drawn"
     assert max(ax.get_xlim()) >= 2000  # horizontal axis = the line's Y values
     assert 100 <= max(ax.get_ylim()) <= 150  # vertical axis = X (0..100)
-    # every bar is visible: each lies inside the axes (the category axis and the values)
+    # every bar is visible: its value tip is inside the value axis, its centre on the
+    # category axis (the screen ranges that to the data, so an end bar pokes out, as there)
     (hlo, hhi), (vlo, vhi) = sorted(ax.get_xlim()), sorted(ax.get_ylim())
     assert ax.patches
     for bar in ax.patches:
-        assert hlo <= bar.get_x() and bar.get_x() + bar.get_width() <= hhi
-        assert vlo <= bar.get_y() and bar.get_y() + bar.get_height() <= vhi
+        assert hlo <= bar.get_x() + bar.get_width() <= hhi
+        assert vlo <= bar.get_y() + bar.get_height() / 2 <= vhi
+
+
+_VALUES = np.array([1000.0, 1004.0, 1002.0, 1008.0, 1010.0])
+
+
+def _vertical_bars(extra: str) -> Any:
+    """Upright vertical bars at 1000..1010 with error bars, or beside a line."""
+    fig, ax = plt.subplots()
+    series = [("B", _VALUES)] + ([("L", _VALUES + 1.0)] if extra == "line" else [])
+    bars: dict[str, Any] = {"bars": "vertical"}
+    styles: list[dict[str, Any] | None] = [bars] + ([None] if extra == "line" else [])
+    spans = [{"y": {"plus": [1.0] * 5, "minus": [1.0] * 5}}] if extra == "errors" else None
+    draw_series_axes(
+        fig, ax, np.arange(1.0, 6.0), series, st=figure_style("default"), ov={},
+        series_styles=styles, error_spans=spans,
+    )
+    return ax
+
+
+@pytest.mark.parametrize(
+    ("extra", "expect"), [("errors", (997.0, 1013.0)), ("line", (999.0, 1012.0))]
+)
+def test_vertical_bars_with_errors_or_a_line_range_over_their_values_only(
+    extra: str, expect: tuple[float, float]
+) -> None:
+    """Regression (main's limits): the bar baseline (0) and widths must not enter the
+    autoscale -- the screen ranges to the series values and error ends, and the category
+    axis to the data (1..5)."""
+    ax = _vertical_bars(extra)
+    assert ax.get_ylim() == pytest.approx(expect, abs=1.5)
+    assert ax.get_xlim() == pytest.approx((1.0, 5.0))
 
 
 def test_exchange_with_axis_breaks_fails_closed() -> None:

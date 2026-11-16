@@ -533,6 +533,7 @@ export function annotationAnchorConversions(
   const overCss = canvasToOverCss({ x: layout.px, y: layout.py }, { width: canvasW, height: canvasH }, rootRect, overRect);
   const hasY2 = u.scales.y2 != null;
   const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
+  // Upright only: annotation drag editing (the one caller) is switched off on a turned plot (uplotOrient.orientArgs), so x is the horizontal position here.
   const toData = { x: u.posToVal(overCss.x, "x"), y: u.posToVal(overCss.y, yScale) };
   return { toPage, toData };
 }
