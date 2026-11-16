@@ -3,6 +3,7 @@ confined like ``/api/parsers/import``; hung shares are contained per volume."""
 
 from __future__ import annotations
 
+import errno
 import os
 import threading
 from pathlib import Path
@@ -34,16 +35,16 @@ def _drain() -> None:
 
 def test_the_stamp_changes_on_append_and_on_a_same_size_replacement(tmp_path: Path) -> None:
     f = tmp_path / "run.dat"
-    f.write_text("a,b\n1,2\n", encoding="utf-8")
+    f.write_bytes(b"a,b\n1,2\n")  # bytes: text mode writes CRLF on Windows
     (first,) = _stat(str(f))
     assert first["state"] == "ok"
     st = f.stat()
     assert first["stamp"] == f"{st.st_mtime_ns}:8:{st.st_ino}:{st.st_ctime_ns}"
-    with f.open("a", encoding="utf-8") as fh:
-        fh.write("3,4\n")
+    with f.open("ab") as fh:
+        fh.write(b"3,4\n")
     assert _stat(str(f))[0]["stamp"] != first["stamp"]
     g = tmp_path / "y.dat"
-    g.write_text("a,b\n9,9\n7,7\n", encoding="utf-8")
+    g.write_bytes(b"a,b\n9,9\n7,7\n")
     before = _stat(str(f))[0]["stamp"]
     os.replace(g, f)  # same size, new inode
     assert _stat(str(f))[0]["stamp"] != before
@@ -180,3 +181,38 @@ def test_a_hung_share_never_starves_a_healthy_volume(
     finally:
         release.set()
     _drain()
+
+
+def test_volume_keys_split_on_either_separator(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(source_watch, "_mount_points", lambda: ())
+    assert source_watch._volume_key("\\Volumes\\Lab\\run\\a.dat") == "\\Volumes\\Lab"
+
+
+@pytest.mark.parametrize("err", [OSError(errno.EINVAL, "bad"), OSError(errno.EIO, "bad")])
+def test_a_bad_name_is_invalid_and_an_io_error_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, err: OSError
+) -> None:
+    f = tmp_path / "x.dat"
+    f.write_bytes(b"1\n")
+
+    def boom(*_a: object, **_k: object) -> os.stat_result:
+        raise err
+
+    monkeypatch.setattr(source_watch.os, "stat", boom)
+    want = "invalid" if err.errno == errno.EINVAL else "offline"
+    assert _stat(str(f))[0]["state"] == want
+
+
+def test_a_windows_bad_name_error_is_invalid_not_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = tmp_path / "x.dat"
+    f.write_bytes(b"1\n")
+    err = OSError(errno.EIO, "name too long")
+    err.winerror = 206  # type: ignore[attr-defined]
+
+    def boom(*_a: object, **_k: object) -> os.stat_result:
+        raise err
+
+    monkeypatch.setattr(source_watch.os, "stat", boom)
+    assert _stat(str(f))[0]["state"] == "invalid"

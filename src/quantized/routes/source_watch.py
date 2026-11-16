@@ -44,6 +44,7 @@ from __future__ import annotations
 import asyncio
 import errno
 import os
+import re
 import stat as stat_mod
 import threading
 import time
@@ -123,8 +124,16 @@ def _volume_key(path: str) -> str:
     for mount in _mount_points():
         if path == mount or path.startswith(mount.rstrip("/") + "/"):
             return mount
-    parts = [p for p in rest.split(os.sep) if p]
-    return os.sep + os.sep.join(parts[:2])
+    # Split on both separators: a POSIX-style path seen on Windows (or the
+    # reverse) must still key on its first two components.
+    sep = rest[0] if rest[:1] in ("/", "\\") else os.sep
+    parts = [p for p in re.split(r"[\\/]+", rest) if p]
+    return sep + sep.join(parts[:2])
+
+
+# Windows "the name itself is bad" errors (invalid name, bad pathname, name
+# too long): a malformed path, not a dropped share, so never "offline".
+_WIN_BAD_NAME = frozenset({123, 161, 206})
 
 
 def _stat_one(path: str) -> SourceStat:
@@ -149,7 +158,10 @@ def _stat_one(path: str) -> SourceStat:
     except ValueError:
         return SourceStat(path=path, state="invalid")
     except OSError as exc:
-        if exc.errno in (errno.ENAMETOOLONG, errno.ELOOP):
+        if (
+            exc.errno in (errno.ENAMETOOLONG, errno.ELOOP, errno.EINVAL)
+            or getattr(exc, "winerror", None) in _WIN_BAD_NAME
+        ):
             return SourceStat(path=path, state="invalid")
         return SourceStat(path=path, state="offline")  # ESTALE / EIO / a dropped share
     if not stat_mod.S_ISREG(st.st_mode):
