@@ -18,6 +18,16 @@ Pure calc layer. Two pieces both fitters need, owned once:
   unit norm, which makes the test independent of parameter units; refl_fit
   keeps the raw Jacobian of its bound-normalised parameters.
 
+The solve runs with BLAS pinned to ONE thread (``threadpoolctl``). TRF takes
+an SVD of the tall, skinny Jacobian (points x free) every iteration; with
+OpenBLAS's default thread count on a loaded machine those SVDs oversubscribe
+the cores and spin: a 6474 x 60 SVD measured ~3 s on 4 threads against 17 ms
+on one (load average ~7, 2026-11-16), so a 20-peak XRD fit that converges in
+~3.5 s stopped unconverged at its 10 s deadline. One thread is also the faster
+choice on an idle machine at these sizes. The pin is refcounted across
+overlapping fits (:mod:`quantized.calc._blas_pin`); while any fit holds it,
+other BLAS work in the process runs single-threaded too.
+
 Each fitter keeps its own scaling, threshold, warning text and reporting.
 """
 
@@ -32,6 +42,8 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares
+
+from quantized.calc._blas_pin import single_thread_blas
 
 __all__ = ["BoundedFit", "FitAborted", "pinv_covariance", "solve_bounded"]
 
@@ -98,8 +110,9 @@ def solve_bounded(
         return fit
     fit.t_end = None if deadline_s is None else time.monotonic() + deadline_s
     try:
-        sol = least_squares(fit.tracked, x0, bounds=bounds, method="trf",
-                            x_scale="jac", max_nfev=max_nfev)
+        with single_thread_blas():  # see the module doc and calc._blas_pin
+            sol = least_squares(fit.tracked, x0, bounds=bounds, method="trf",
+                                x_scale="jac", max_nfev=max_nfev)
     except _Deadline:
         fit.x, fit.success, fit.status = fit.best_x, False, "deadline"
         fit.message = f"stopped at the {deadline_s:g} s time limit"

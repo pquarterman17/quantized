@@ -19,6 +19,7 @@
 import type uPlot from "uplot";
 
 import type { ErrorSpan } from "./errorbars";
+import { offAutoscale } from "./overlayAutoscale";
 import type { PlotPayload } from "./plotdata";
 
 /** One series' drawn bars on one scale ("x", or Y axis 0/1): the bar ends at
@@ -154,8 +155,9 @@ export function fullYExtents(
 ): [number, number] | null {
   let min = Infinity;
   let max = -Infinity;
+  const off = offAutoscale(payload.series, hidden); // overlays never range (lib/overlayAutoscale.ts)
   payload.series.forEach((s, i) => {
-    if ((s.axis ?? 0) !== axis || hidden?.[i]) return;
+    if ((s.axis ?? 0) !== axis || hidden?.[i] || off[i]) return;
     for (const v of payload.data[i + 1] ?? []) {
       if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
       if (v < min) min = v;

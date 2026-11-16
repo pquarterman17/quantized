@@ -85,6 +85,12 @@ export function StepRangeBaseline({ w }: { w: PeakWizardState }) {
           {w.baselineError}
         </div>
       )}
+      {w.autoBaseline && (
+        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
+          {w.autoBaseline.toUpperCase()} was chosen because the data is log-scaled or decays. Choose None to fit
+          the raw signal.
+        </div>
+      )}
       {b.method !== "none" && !w.baselineBusy && !w.baselineError && (
         <div className="qzk-helptext" style={{ ...faint, marginTop: 6 }}>
           Baseline previewed on the plot; later steps fit the subtracted signal.

@@ -123,7 +123,9 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   const fresh = await (await browser.newContext()).newPage();
   await gotoApp(fresh);
   await fresh.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await chooseFiles(fresh, () => fresh.getByText("Open workspace (.dwk)…", { exact: true }).click(), savedPath!);
+  // The menu item, not the empty-project stage's own "Open workspace" button (#719), which a
+  // fresh context also shows once it renders.
+  await chooseFiles(fresh, () => fresh.getByRole("menuitem", { name: "Open workspace (.dwk)…" }).click(), savedPath!);
   await waitForDatasetCount(fresh, 2);
   await expect.poll(async () => (await snap(fresh)).fitFor, { timeout: 15_000 }).not.toBeNull();
   expect((await snap(fresh)).band).toBeGreaterThan(0);
@@ -159,7 +161,7 @@ test("a Peak Analyzer fit (with its fitted background) survives a reload with no
   await panel.getByRole("button", { name: "Find peaks", exact: true }).click();
   await expect(panel.getByRole("checkbox")).toHaveCount(2, { timeout: 15_000 });
   await panel.locator(".qzk-wizard-step", { hasText: "Fit & review" }).click();
-  await panel.getByRole("button", { name: "Fit", exact: true }).click();
+  // step ④ fits on entry (UX audit 7 lane UX-I)
   await expect(panel.getByLabel("fit metrics")).toBeVisible({ timeout: 20_000 });
   // No other edit: the fit alone triggers the autosave (review N2).
   await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, background: true });

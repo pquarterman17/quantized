@@ -273,7 +273,7 @@ def _series_values(ax: Any) -> NDArray[np.float64]:
     with heavy_imports("quantized.calc.figure_autoscale"):
         from quantized.calc.figure_autoscale import _values  # shares the scan
 
-    pts, _ends = _values(list(ax) if isinstance(ax, (list, tuple)) else [ax], 1)
+    pts, _ends = _values(list(ax) if isinstance(ax, (list, tuple)) else [ax], 1, value_axis=True)
     return pts
 
 

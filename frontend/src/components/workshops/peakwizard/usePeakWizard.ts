@@ -23,6 +23,8 @@ import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
 import { segmentYErr } from "./modelFitWeights";
 import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
+import { effectiveFit, loadedRecipe, savedFit, STRONGEST_PEAKS, weakerThanStrongest } from "./peakDefaults";
+import { useAutoBaseline, useFitOnEntry } from "./usePeakDefaults";
 
 import { fitMultiPeak } from "../../../lib/api/peaks";
 import { dropGapRows } from "../../../lib/api/finitePairs";
@@ -32,6 +34,7 @@ import {
   loadRecipesChecked,
   saveRecipe as persistRecipe,
   subtractBaseline,
+  type PeakBaselineMethod,
   type PeakRecipe,
 } from "../../../lib/peakwizard";
 import {
@@ -72,6 +75,9 @@ export interface PeakWizardState {
   recipe: PeakRecipe;
   patchRecipe: (p: DeepPartialRecipe) => void;
   // ① baseline preview
+  /** The baseline method chosen automatically (./usePeakDefaults), while it
+   *  is still the recipe's; null once the user picks one. */
+  autoBaseline: PeakBaselineMethod | null;
   baselineBusy: boolean;
   baselineError: string | null;
   // ② candidates
@@ -92,7 +98,12 @@ export interface PeakWizardState {
    *  actual bridge via the store's `peakWizardEdit` (null exactly when this is
    *  false). */
   markerEditActive: boolean;
+  /** Points in the working segment (the fit's N). */
+  points: number;
   // ④ fit
+  /** Keep only the strongest included peaks and fit again (step ④'s offer
+   *  when the time limit is likely). */
+  fitStrongest: () => void;
   fitBusy: boolean;
   fitError: string | null;
   fitResult: MultiFitResult | null;
@@ -130,6 +141,7 @@ export function usePeakWizard(): PeakWizardState {
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
+  const yLog = useApp((s) => s.yScale === "log");
 
   const [step, setStep] = useState(0);
   const [recipe, setRecipe] = useState<PeakRecipe>(DEFAULT_RECIPE);
@@ -150,7 +162,9 @@ export function usePeakWizard(): PeakWizardState {
   }, [stored]);
   const [recipeRev, setRecipeRev] = useState(0);
 
+  const baselineTouched = useRef<() => void>(() => {});
   const patchRecipe = useCallback((p: DeepPartialRecipe) => {
+    if (p.baseline) baselineTouched.current();
     setRecipe((r) => ({
       ...r,
       ...(p.range ? { range: { ...r.range, ...p.range } } : {}),
@@ -214,6 +228,18 @@ export function usePeakWizard(): PeakWizardState {
     };
   }, [active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi]);
 
+  // ① starts from SNIP on a log-Y or decaying trace (./usePeakDefaults); the
+  // automatic finds below wait until that is decided.
+  const applyAutoBaseline = useCallback((method: PeakBaselineMethod) => {
+    setRecipe((r) => ({ ...r, baseline: { ...r.baseline, method } }));
+    setFitResult(null); // as any recipe change: results made under the old method are stale
+    setIntegrateResult(null);
+  }, []);
+  const auto = useAutoBaseline({
+    activeId: active?.id ?? null, x: segment?.x ?? null, y: segment?.y ?? null, step, yLog,
+    method: recipe.baseline.method, apply: applyAutoBaseline,
+  });
+  baselineTouched.current = auto.touched;
   const { baseline, baselineBusy, baselineError } = usePeakBaseline(
     active,
     segment,
@@ -258,7 +284,7 @@ export function usePeakWizard(): PeakWizardState {
     setPendingFind({ datasetId: active.id, lo: rangeRequest.lo, hi: rangeRequest.hi });
   }, [rangeRequest, active, patchRecipe]);
   useEffect(() => {
-    if (!pendingFind) return;
+    if (!pendingFind || !auto.settled) return;
     const asked = active?.id === pendingFind.datasetId
       && recipe.range.lo === pendingFind.lo && recipe.range.hi === pendingFind.hi;
     if (!asked || !segment) {
@@ -269,7 +295,7 @@ export function usePeakWizard(): PeakWizardState {
     } else if (baselineError) {
       setPendingFind(null);
     }
-  }, [pendingFind, active, recipe.range.lo, recipe.range.hi, recipe.baseline.method, segment, baseline, baselineError, runFind]);
+  }, [pendingFind, auto.settled, active, recipe.range.lo, recipe.range.hi, recipe.baseline.method, segment, baseline, baselineError, runFind]);
 
   // Origin's Peak analyzer finds peaks on reaching the find step: arm one find
   // when the step is entered with no candidates, and fire it once the working
@@ -281,7 +307,7 @@ export function usePeakWizard(): PeakWizardState {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- armed on entering the step only
   }, [step]);
   useEffect(() => {
-    if (!autoFind) return;
+    if (!autoFind || !auto.settled) return;
     if (!segment) {
       setAutoFind(false);
     } else if (segment.x.length === 0 || recipe.baseline.method === "none" || baseline !== null) {
@@ -290,7 +316,7 @@ export function usePeakWizard(): PeakWizardState {
     } else if (baselineError) {
       setAutoFind(false);
     }
-  }, [autoFind, segment, recipe.baseline.method, baseline, baselineError, runFind]);
+  }, [autoFind, auto.settled, segment, recipe.baseline.method, baseline, baselineError, runFind]);
 
   // ④ Simultaneous fit of the included candidates.
   const runFit = useCallback(async () => {
@@ -336,9 +362,13 @@ export function usePeakWizard(): PeakWizardState {
     () => (segment ? segmentYErr(active, segment.yKey, errKeys[segment.yKey], segment.kept) : null),
     [active, segment, errKeys],
   );
+  // ③ No extra fitted background once a baseline was subtracted, unless the
+  // user picks one (./peakDefaults `effectiveFit`; saved explicitly below).
+  const baselineOn = recipe.baseline.method !== "none";
+  const modelFit = useMemo(() => effectiveFit(recipe.fit, baselineOn), [baselineOn, recipe.fit]);
   const model = useModelFit({
-    active, segment, workingY, yErr, baseline, baselineOn: recipe.baseline.method !== "none",
-    peaks: included, model: recipe.model, fit: recipe.fit, setFit,
+    active, segment, workingY, yErr, baseline, baselineOn,
+    peaks: included, model: recipe.model, fit: modelFit, setFit,
     xKey: segX, recipeName: recipe.name, baselineMethod: recipe.baseline.method,
   });
   // Step ⑤ reads the ACTIVE engine's CURRENT fit only: a stale model result
@@ -355,6 +385,15 @@ export function usePeakWizard(): PeakWizardState {
     () => (modelResult ? modelPeaksForIntegrate(modelResult) : classicResult?.peaks.length ? classicResult.peaks : null),
     [modelResult, classicResult],
   );
+  // ④ fits on entry; "Fit the 8 strongest" re-arms it (after useModelFit: see ./usePeakDefaults).
+  const refit = useFitOnEntry(step, included.length > 0, model, {
+    busy: fitBusy, hasResult: fitResult !== null, hasError: fitError !== null, run: runFit,
+  });
+  const fitStrongest = () => {
+    if (model.busy) model.cancel();
+    for (const i of weakerThanStrongest(candidates, STRONGEST_PEAKS)) cands.togglePeak(i);
+    refit();
+  };
   const { runIntegrate, reportBusy, toReport } = usePeakWizardOutput({
     active, segment, workingY, fitted, candidates, classicResult, modelResult,
     report: recipe.report, integrateResult, setIntegrateResult, setBusy: setFitBusy, setError: setFitError,
@@ -373,7 +412,9 @@ export function usePeakWizard(): PeakWizardState {
     }
     const named = { ...recipe, name };
     try {
-      setRecipes(persistRecipe(named));
+      // The effective background goes in explicitly: the batch runner fits
+      // what the wizard showed (./peakDefaults `savedFit`).
+      setRecipes(persistRecipe({ ...named, fit: savedFit(named) }));
     } catch (e) {
       toast(`recipe not saved — ${e instanceof Error ? e.message : "storage refused it"}`, "danger");
       return;
@@ -388,7 +429,8 @@ export function usePeakWizard(): PeakWizardState {
     // P3.5 "recently used" — after the existence guard, so applying a recipe
     // that is already gone records nothing.
     recordUse({ kind: "peak", scope: "global", id: r.name });
-    setRecipe(r);
+    auto.touched(); // a recipe's baseline is a choice
+    setRecipe(loadedRecipe(r)); // an unset background keeps its saved meaning
     cands.clearCandidates();
     setAside.current.clear();
     setFitResult(null);
@@ -405,6 +447,7 @@ export function usePeakWizard(): PeakWizardState {
     back: () => setStep((s) => Math.max(s - 1, 0)),
     recipe,
     patchRecipe,
+    autoBaseline: auto.chosen,
     baselineBusy,
     baselineError,
     candidates,
@@ -416,6 +459,8 @@ export function usePeakWizard(): PeakWizardState {
     removeModelPeak: cands.removeModelPeak,
     addPeakAt: cands.addPeakAt,
     markerEditActive: cands.markerEditActive,
+    points: segment?.x.length ?? 0,
+    fitStrongest,
     fitBusy,
     fitError,
     fitResult,

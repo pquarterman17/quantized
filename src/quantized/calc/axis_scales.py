@@ -309,7 +309,7 @@ def _in_domain_values(ax: Any, which: str, unit: str) -> NDArray[np.float64]:
     with heavy_imports("quantized.calc.figure_autoscale"):
         from quantized.calc.figure_autoscale import _values  # shares the scan
 
-    pts, _ends = _values([ax], 0 if which == "x" else 1)
+    pts, _ends = _values([ax], 0 if which == "x" else 1, value_axis=which == "y")
     k = _scale(unit)
     return np.asarray(pts[(pts > 0) & (pts < k)], dtype=float)
 
