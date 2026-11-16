@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { remapDatasetChannels } from "./channelRemap";
-import { assembleLinkedCurves, linkedGraphMask, sanitizeLinkedCurves } from "./linkedCurves";
+import { assembleLinkedCurves, linkedGraphMask, linkedGraphYTitle, sanitizeLinkedCurves } from "./linkedCurves";
 import type { Dataset } from "./types";
 
 const ds = (id: string, time: number[], cols: number[][], labels: string[], meta = {}): Dataset => ({
@@ -32,8 +32,39 @@ describe("assembleLinkedCurves", () => {
     expect(out.values.map((r) => r[1])).toEqual([NaN, NaN, NaN, NaN, 7, 8]);
     expect(out.labels).toEqual(["loop: M", "scan"]);
     expect(out.metadata.column_comments).toEqual({ c0: "M", c1: "M" }); // the source quantity
-    expect(out.units).toEqual(["emu", "emu"]);
+    expect(out.units).toEqual(["emu", "emu"]); // units stay on the data (UX8-C)
+    expect(out.metadata.legend_unit_on_axis).toBe(true); // display-only legend flag
     expect([out.metadata.x_column_long, out.metadata.x_column_unit]).toEqual(["H (emu) / T (K)", ""]);
+  });
+
+  // UX8-C: the overlay legend read "MH_010K.csv (emu)" ten times.
+  it("names a curve by its source's file stem, and flags (never strips) one shared unit", () => {
+    const named = (id: string, name: string, unit: string): Dataset => ({
+      id,
+      name,
+      data: { time: [0, 1], values: [[1], [2]], labels: ["Moment"], units: [unit], metadata: {} },
+    });
+    const curve = (id: string) => ({ datasetId: id, xKey: null, yKey: 0, label: id, labelFrom: "name" as const });
+    const a = named("a", "MH_010K.csv", "emu");
+    const b = named("b", "MH_040K.csv", "emu");
+    const out = assembleLinkedCurves([curve("a"), curve("b")], [a, b]);
+    expect(out.labels).toEqual(["MH_010K", "MH_040K"]);
+    expect(out.units).toEqual(["emu", "emu"]);
+    expect(out.metadata.legend_unit_on_axis).toBe(true);
+    expect(linkedGraphYTitle([curve("a"), curve("b")], [a, b])).toBe("Moment (emu)");
+    // Mixed units keep each column's own unit (and the legend shows it).
+    const c = named("c", "RT.csv", "ohm");
+    const mixed = assembleLinkedCurves([curve("a"), curve("c")], [a, c]);
+    expect(mixed.units).toEqual(["emu", "ohm"]);
+    expect(mixed.metadata.legend_unit_on_axis).toBeUndefined();
+    // Two stems that would collide keep their full names (labels stay unique),
+    // and a decimal in a name is not an extension.
+    const d = named("d", "MH_010K.txt", "emu");
+    expect(assembleLinkedCurves([curve("a"), curve("d")], [a, d]).labels).toEqual(["MH_010K.csv", "MH_010K.txt"]);
+    const e = named("e", "Sample 1.5", "emu");
+    expect(assembleLinkedCurves([curve("e"), curve("a")], [e, a]).labels).toEqual(["Sample 1.5", "MH_010K"]);
+    const f = named("f", "S1.MT", "emu");
+    expect(assembleLinkedCurves([curve("f"), curve("a")], [f, a]).labels).toEqual(["S1.MT", "MH_010K"]);
   });
 
   it("a source's excluded rows are the graph's mask on the same points (gap audit 3 N2)", () => {

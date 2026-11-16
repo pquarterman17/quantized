@@ -307,11 +307,29 @@ describe("import / export", () => {
     expect(loadPeakRecipes()[0]).toEqual(original);
   });
 
+  // UX8-D: the wizard's default recipe carries strict_prominence; a recipe
+  // saved with the defaults must re-import with it (and one without, without).
+  it("round-trips the strict prominence flag, and leaves it absent when absent", () => {
+    for (const strict of [true, false, undefined]) {
+      localStorage.clear();
+      const { strict_prominence: _drop, ...rest } = DEFAULT_RECIPE.find;
+      const original: PeakRecipe = { ...DEFAULT_RECIPE, name: `strict ${strict}`, find: strict === undefined ? rest : { ...rest, strict_prominence: strict } };
+      savePeakRecipe(original);
+      const exported = exportNameKeyed("peak", original.name);
+      if (!exported.ok) throw new Error("export failed");
+      localStorage.clear();
+      expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
+      expect(loadPeakRecipes()[0]).toEqual(original);
+      expect("strict_prominence" in loadPeakRecipes()[0]!.find).toBe(strict !== undefined);
+    }
+  });
+
   it("refuses an Advanced find field that is present but unusable, naming it", () => {
     const file = (find: Record<string, unknown>) => JSON.stringify({ ...DEFAULT_RECIPE, name: "x", find: { ...DEFAULT_RECIPE.find, ...find } });
     expect(importNameKeyed("peak", file({ sensitivity: "extreme" }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.sensitivity)" });
     expect(importNameKeyed("peak", file({ bg_poly_degree: 2.5 }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.bg_poly_degree)" });
     expect(importNameKeyed("peak", file({ bg_iterative: "yes" }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.bg_iterative)" });
+    expect(importNameKeyed("peak", file({ strict_prominence: 1 }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.strict_prominence)" });
     expect(importNameKeyed("peak", file({ max_width_deg: -1 }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.max_width_deg)" });
   });
 

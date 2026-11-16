@@ -50,7 +50,9 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
     // panel or replayed as a pipeline step it is guessed from THAT data, not
     // frozen at this model's seeded default.
     rows: p.paramRows.map((r, i) => (auto.has(i) ? { ...r, start: "" } : r)),
-    ...(selectionRange ? { range: { lo: selectionRange.lo, hi: selectionRange.hi } } : {}),
+    // The automatic visible-x range is where the plot happened to be zoomed,
+    // not a choice: a template never carries it (UX8-D, ./FitRangeBar).
+    ...(selectionRange && selectionRange.source !== "visible x range" ? { range: { lo: selectionRange.lo, hi: selectionRange.hi } } : {}),
   };
   const apply = (t: FitTemplateSettings): boolean => {
     if (!p.models.some((m) => m.name === t.model)) {

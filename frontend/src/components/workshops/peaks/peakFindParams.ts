@@ -29,6 +29,7 @@ export const DEFAULT_PEAK_FIND: Readonly<PeakFindParams> = Object.freeze({
   max_window_deg: 2,
   bg_poly_degree: 4,
   bg_iterative: false,
+  strict_prominence: false,
 });
 
 /** The fields of `p` that differ from the defaults — the request extras. */

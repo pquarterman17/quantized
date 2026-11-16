@@ -65,6 +65,22 @@ export function panelSyncKey(windowId: string): string {
   return `qz-panel-${windowId}`;
 }
 
+/** The quantity a panel cell's X axis shows: its default X (the `time`
+ *  column's name and unit, as `buildColumns` labels it — a cell always plots
+ *  the default view). */
+function defaultXQuantity(ds: Dataset): string {
+  const m = ds.data.metadata ?? {};
+  return `${String(m.x_column_long || m.x_column_name || "x")}\0${String(m.x_column_unit ?? "")}`;
+}
+
+/** UX8-C: whether a composite window's cells may share one X range (its
+ *  private sync group). Only when every cell plots the same X quantity and
+ *  unit: a grid of M(T), XRD, Raman and M(H) drew all four on the field
+ *  range, three of them as vertical spikes. */
+export function panelsShareX(datasets: readonly Dataset[]): boolean {
+  return new Set(datasets.map(defaultXQuantity)).size <= 1;
+}
+
 // ── Drag-to-rearrange cells within a composite window (MAIN_PLAN #19
 // drag-follow-up) ────────────────────────────────────────────────────────
 // The grab surface is each PanelCell's header row (window furniture, like an

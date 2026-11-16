@@ -42,7 +42,9 @@ import FitConvergenceWarning from "./FitConvergenceWarning";
 import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
-import { curveFitStatus } from "./curveFitStatus";
+import { curveFitStatus, isLinearFamily, poorFit } from "./curveFitStatus";
+import FitRangeBar from "./FitRangeBar";
+import { isSinglePeakModel } from "./fitRange";
 import { reportPrefs } from "../../../store/curveFitSession";
 import { useCurveFit } from "./useCurveFit";
 import { useFitTemplateBinding } from "./useFitTemplateBinding";
@@ -237,6 +239,10 @@ export default function CurveFitPanel() {
     <CurveFitModelPicker groups={modelGroups} custom={customOptions} value={modelName} onChange={setModelName}
       globalMode={globalMode} onGlobalMode={() => setGlobalMode((v) => !v)} />
   );
+  // The fit range (UX8-D): only the registry fit reads it; the bar stays mounted to take its ranges out.
+  const fitCtx = { linear: isLinearFamily(registryModel?.category), weights: fitData?.weights };
+  const fitted = !globalMode && !isCustom && !!result && !guessOnly && !resultStale;
+  const rangeBar = <FitRangeBar active={active} enabled={!globalMode && !isCustom} fitted={fitted} offer={!globalMode && !isCustom && (isSinglePeakModel(registryModel?.category) || (fitted && !!poorFit(result!, fitCtx)))} />;
 
   if (globalMode) {
     const reg = models.find((m) => m.name === modelName);
@@ -244,7 +250,7 @@ export default function CurveFitPanel() {
       ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses.map((g) => g ?? 1), lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
       : (reg ?? null);
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={floatingX(360, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} />}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={floatingX(360, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
         <AnalysisInputReview toolId="curvefit" singleY />
         <GlobalFitSection model={globalModel} />
       </ToolWindow>
@@ -255,7 +261,7 @@ export default function CurveFitPanel() {
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} />}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
         <AnalysisInputReview toolId="curvefit" singleY />
         <EquationModelPanel
           key={modelName}
@@ -267,11 +273,12 @@ export default function CurveFitPanel() {
   }
 
   const status = curveFitStatus({
-    hasData: active != null, busy, guessing: runKind === "guess", error, result, guessOnly, stale: resultStale, byLevels: byActive ? byLevels.length : 0, byBusy,
+    hasData: active != null, busy, guessing: runKind === "guess", error, result, guessOnly, stale: resultStale, byLevels: byActive ? byLevels.length : 0, byBusy, context: fitCtx,
   });
   const header = (
     <CurveFitHeader
       modelPicker={modelPicker}
+      range={rangeBar}
       fit={{
         disabled: !active || busy,
         fitting: busy && runKind === "fit",

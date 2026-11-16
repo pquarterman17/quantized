@@ -1,0 +1,105 @@
+{
+  "about": "UX8-C: a graph whose curves share one unit carries metadata.legend_unit_on_axis; its legend names each curve WITHOUT the unit (the Y title carries it), the data keeps its units, and a legend rename still wins verbatim. Both legs read this table: frontend/src/lib/legendUnitOnAxis.test.ts (on-screen legend) and tests/test_export_legend_unit_on_axis.py (PDF/SVG export).",
+  "cases": [
+    {
+      "name": "flagged graph drops the shared unit",
+      "flag": true,
+      "series": [
+        [
+          "MH_010K",
+          "emu",
+          null
+        ],
+        [
+          "MH_040K",
+          "emu",
+          null
+        ]
+      ],
+      "legend": [
+        "MH_010K",
+        "MH_040K"
+      ]
+    },
+    {
+      "name": "a rename still wins on a flagged graph",
+      "flag": true,
+      "series": [
+        [
+          "MH_010K",
+          "emu",
+          "10 K loop (emu)"
+        ],
+        [
+          "MH_040K",
+          "emu",
+          null
+        ]
+      ],
+      "legend": [
+        "10 K loop (emu)",
+        "MH_040K"
+      ]
+    },
+    {
+      "name": "unflagged graph keeps label (unit)",
+      "flag": false,
+      "series": [
+        [
+          "MH_010K",
+          "emu",
+          null
+        ],
+        [
+          "RT",
+          "ohm",
+          null
+        ]
+      ],
+      "legend": [
+        "MH_010K (emu)",
+        "RT (ohm)"
+      ]
+    },
+    {
+      "name": "a stale flag (a duplicated graph gained another unit) is ignored",
+      "flag": true,
+      "series": [
+        [
+          "MH_010K",
+          "emu",
+          null
+        ],
+        [
+          "dM/dH",
+          "emu/Oe",
+          null
+        ]
+      ],
+      "legend": [
+        "MH_010K (emu)",
+        "dM/dH (emu/Oe)"
+      ]
+    },
+    {
+      "name": "a flag over unitless curves is ignored",
+      "flag": true,
+      "series": [
+        [
+          "a",
+          "",
+          null
+        ],
+        [
+          "b",
+          "",
+          null
+        ]
+      ],
+      "legend": [
+        "a",
+        "b"
+      ]
+    }
+  ]
+}

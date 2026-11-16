@@ -16,10 +16,13 @@
 //    It MUST be called after useModelFit in the same component: its effect
 //    then runs after the model's own reset-on-change effect in the same
 //    commit, so the run it starts is never the one that reset cancels.
+//  * useAutoShape: the recipe's peak shape follows the dataset (pseudo-Voigt
+//    on XRD / Raman, ./peakDefaults `defaultPeakShape`) until the user picks
+//    a shape or applies a recipe.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { PeakBaselineMethod } from "../../../lib/peakwizard";
+import { DEFAULT_RECIPE, type PeakBaselineMethod } from "../../../lib/peakwizard";
 import { suggestedBaseline } from "./peakDefaults";
 import type { ModelFitState } from "./useModelFit";
 
@@ -68,6 +71,21 @@ export function useAutoBaseline({ activeId, x, y, step, yLog, method, apply }: A
   }, []);
   // Nothing to find on without data, so no find waits on a decision then.
   return { settled: !activeId || !x || !y || decidedFor === activeId, chosen: chosen === method ? chosen : null, touched };
+}
+
+/** `pick`: the dataset's default shape (null without one). Returns `touched`. */
+export function useAutoShape(pick: string | null, shape: string, apply: (shape: string) => void): () => void {
+  const touchedRef = useRef(false);
+  const last = useRef<string | null>(null); // the shape this hook last set
+  useEffect(() => {
+    // Never over a shape someone else set (a recipe applied, a pick).
+    if (pick === null || touchedRef.current || shape !== (last.current ?? DEFAULT_RECIPE.model.shape)) return;
+    last.current = pick;
+    if (pick !== shape) apply(pick);
+  }, [pick, shape, apply]);
+  return useCallback(() => {
+    touchedRef.current = true;
+  }, []);
 }
 
 export interface ClassicFit {

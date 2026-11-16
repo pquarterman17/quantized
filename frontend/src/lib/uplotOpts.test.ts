@@ -5,6 +5,7 @@ import { gadgetPlugins, loadGadgetPlugins, loadToolPlugins, toolPlugins } from "
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 import { isFixedXRange } from "./uplotXRange";
+import { regionDecorSettled } from "./regionDecorLoader";
 import { displayPositions } from "./seriesStyleCycle";
 import type { DefaultTrace, SeriesStyle } from "./types";
 
@@ -1156,13 +1157,18 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
     expect((asc.series?.[0] as { sorted?: number }).sorted).toBe(1);
   });
 
-  it("wraps the line paths to draw the full acquisition order", () => {
+  it("wraps the line paths to draw the full acquisition order", async () => {
+    await regionDecorSettled; // the loop drawing rides this startup chunk (lib/uplotLoopLine.ts)
     const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom", linearPaths: spyLinear });
     const s = opts.series?.[1] as { paths?: (u: unknown, si: number, i0: number, i1: number) => unknown };
     expect(s.paths).toBeDefined();
     // uPlot would call with a collapsed window (e.g. 2..2); the wrapper must
     // forward the full index range instead.
-    const fakeU = { data: loop.data, bbox: { width: 600 } }; // a real instance always has a bbox and y data
+    const fakeU = { // a real instance always has a bbox, y data, series and scales
+      data: loop.data, bbox: { left: 0, top: 0, width: 600, height: 400 },
+      series: [{ scale: "x" }, { scale: "y", width: 1 }], scales: { x: { ori: 0 }, y: { ori: 1 } },
+      valToPos: (v: number) => v,
+    };
     s.paths!(fakeU, 1, 2, 2);
     expect(spyLinear).toHaveBeenCalledWith(fakeU, 1, 0, 4);
   });
