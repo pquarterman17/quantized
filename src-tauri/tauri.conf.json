@@ -16,7 +16,8 @@
         "minWidth": 960,
         "minHeight": 600,
         "url": "loading.html",
-        "backgroundColor": "#15131b"
+        "backgroundColor": "#15131b",
+        "dragDropEnabled": false
       }
     ],
     "security": {

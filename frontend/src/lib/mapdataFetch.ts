@@ -19,7 +19,7 @@
 // importer of what moved is lazy.
 
 import { mapSeries } from "./api";
-import { repeats } from "./mapdata";
+import { repeats } from "./mapGate";
 import type { DataStruct, MapResponse } from "./types";
 
 // RSM_CUTS_PLAN item 16: regridNearest is documented O(nx·ny·N) brute force
