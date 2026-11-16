@@ -52,6 +52,7 @@ import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { plural } from "../lib/plural";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Technique } from "../lib/types";
+import { presentFirstPlot } from "./firstPlotNotice";
 import { batchFolderOffer, createFolderForBatch } from "./importTargetFolder";
 import { TOAST_ACTION_TTL, toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -168,6 +169,8 @@ export async function presentBatchOutcome(
         });
         return;
       }
+      // UX8-A: say what the first plot chose (map, log Y, columns left off).
+      if (await presentFirstPlot(get, `imported ${added} file${plural(added)}`, createdIds[0])) return;
     } catch {
       // Fall through to the plain toast below.
     }

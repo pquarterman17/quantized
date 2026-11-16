@@ -79,6 +79,7 @@ import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "
 import type { DataStruct, Dataset } from "../lib/types";
 import type { PlotView } from "../lib/plotview";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { withFirstPlot } from "./firstPlotNotice";
 import type { HistoryBatchToken } from "./history";
 import { useRelink } from "./relink";
 import { toast } from "./toasts";
@@ -140,6 +141,7 @@ export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw:
     }
     newData = await applyCorrectionsApi(req);
   }
+  newData = withFirstPlot({ ...ds, data: newData }).data; // UX8-A: picked again for the fresh columns
   const columnsChanged = reimportColumnsChanged(ds, freshRaw);
   const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
   // perf(reimport): only fetched when actually needed, during this async
