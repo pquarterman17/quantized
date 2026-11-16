@@ -93,13 +93,19 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
             <Map3dPreview payload={payload} fresh={fresh} view3d={view3d} cmap={cmap} logZ={logZ} colorLimits={colorLimits} top={0} data={data} keys={keys} />
           </div>
         </div>
-      ) : !scene ? (
-        <div role="status" className="qzk-helptext" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-          Building 3-D view…
-        </div>
-      ) : "error" in scene ? (
-        <div role="alert" className="qzk-helptext" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "var(--danger)" }}>
-          3-D view not drawn — {scene.error}
+      ) : !scene || "error" in scene ? (
+        // The mode switch stays reachable: the server render may still draw it.
+        <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateRows: "auto 1fr" }}>
+          <div style={{ ...ROW, padding: "4px 8px", gap: 8 }}>{modeSelect}</div>
+          {!scene ? (
+            <div role="status" className="qzk-helptext" style={{ display: "grid", placeItems: "center" }}>
+              Building 3-D view…
+            </div>
+          ) : (
+            <div role="alert" className="qzk-helptext" style={{ display: "grid", placeItems: "center", color: "var(--danger)" }}>
+              3-D view not drawn — {scene.error}
+            </div>
+          )}
         </div>
       ) : (
         <Map3dCanvas

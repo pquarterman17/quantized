@@ -185,6 +185,13 @@ function buildScene(b: MapFigureSpec): Scene3d | { error: string } {
     if (fin(v)) n++;
   }));
   if (n < 4) return { error: `a 3-D surface needs at least 4 finite grid cells; found ${n}` };
+  const ok = (k: number) => Number.isFinite(zs[k]);
+  let quad = false;
+  for (let j = 0; j < ny - 1 && !quad; j++) for (let i = 0; i < nx - 1 && !quad; i++) {
+    const k = j * nx + i;
+    quad = ok(k) && ok(k + 1) && ok(k + nx) && ok(k + nx + 1);
+  }
+  if (!quad) return { error: "a 3-D surface needs at least one grid cell with four finite corners" };
   const xs = Float64Array.from(xa), ys = Float64Array.from(ya);
   return { kind: "surface", ...base(b, [xs], [ys], [zs.filter(Number.isFinite)]), xs, ys, zs };
 }

@@ -17,7 +17,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 ### Changed
 
 - 3-D map exports are now **orthographic** (no perspective, as in MATLAB and on
-  screen), draw the surface at full grid resolution, fit the axes to the data
+  screen), draw the surface at full grid resolution (up to 500 cells a side), fit the axes to the data
   without padding, and no longer depth-shade scatter points. Re-exporting an
   older 3-D figure therefore looks slightly different from the earlier file.
 

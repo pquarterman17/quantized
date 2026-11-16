@@ -169,32 +169,91 @@ def test_drop_lines_on_a_dense_cloud_are_thinned_like_the_screen(
     assert len(segs) <= DROP_LINES_MAX
 
 
-@pytest.mark.parametrize("kind", ["surface", "scatter3d"])
-def test_a_zoomed_plot_is_cropped_at_its_column_not_drawn_under_the_colour_bar(kind: str) -> None:
+
+
+def _render(monkeypatch: pytest.MonkeyPatch, body: dict[str, Any]) -> tuple[Any, np.ndarray]:
+    """The saved figure and its PNG pixels (RGB, 0..1)."""
     import io
 
     import matplotlib.image as mpimg
 
-    from quantized.calc.figure_map3d import plot_column
+    ax = _axes(monkeypatch, {**body, "fmt": "png"})
+    fig = ax.figure
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=fig.dpi)
+    return fig, np.asarray(mpimg.imread(io.BytesIO(buf.getvalue()), format="png")[..., :3])
 
-    n = 60
+
+def _masks(fig: Any) -> dict[str, Any]:
+    """The layout's masks by side (figure fractions)."""
+    from matplotlib.patches import Rectangle
+
+    out: dict[str, Any] = {}
+    for r in fig.artists:
+        if not isinstance(r, Rectangle):
+            continue
+        x, y, w, h = r.get_x(), r.get_y(), r.get_width(), r.get_height()
+        side = "bar" if x + w >= 0.999 and h >= 0.999 else "title" if y + h >= 0.999 else "note"
+        out[side] = (x, y, w, h)
+    return out
+
+
+def _grid_body(kind: str, n: int, **extra: Any) -> dict[str, Any]:
     z = np.add.outer(np.linspace(0, 1, n), np.linspace(0, 2, n))
-    body = {
-        **CASES[0]["request"], "kind": kind, "view_zoom": 3.0, "title": "T",
-        "x_axis": list(range(n)), "y_axis": list(range(n)), "z_grid": z.tolist(),
+    return {
+        **CASES[0]["request"], "kind": kind, "x_axis": list(range(n)), "y_axis": list(range(n)),
+        "z_grid": z.tolist(), **extra,
     }
-    r = client.post("/api/export/map-figure", json=body)
-    assert r.status_code == 200, r.text
-    img = mpimg.imread(io.BytesIO(r.content), format="png")[..., :3]
+
+
+@pytest.mark.parametrize("kind", ["surface", "scatter3d"])
+def test_a_zoomed_plot_is_cropped_at_its_column_never_under_the_bar_title_or_note(
+    monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    body = _grid_body(kind, 60, view_zoom=3.0, title="T", note="sampled note")
+    fig, img = _render(monkeypatch, body)
     h, w = img.shape[:2]
-    right, top = plot_column(True, True)
-    # The gutter between the plot column and the colour bar (which starts at
-    # right + 0.03), full height: background only.
-    gutter = img[:, int((right + 0.004) * w): int((right + 0.026) * w)]
-    assert np.all(gutter > 0.99)
-    # The title strip above the column holds only the centred title: its left
-    # quarter is background.
-    strip = img[: int((1 - top) * h) - 2, : int(0.25 * right * w)]
-    assert np.all(strip > 0.99)
+    masks = _masks(fig)
+    assert set(masks) == {"bar", "title", "note"}
+    cax = next(a for a in fig.axes if a.name != "3d")
+    right = masks["bar"][0]
+    # The gutter between the plot column and the bar: background only.
+    x0, x1 = int(right * w) + 2, int(cax.get_position().x0 * w) - 2
+    assert x1 > x0 and np.all(img[:, x0:x1] > 0.99)
+    # Title strip (left of the centred title) and note strip (right of the
+    # left-aligned note): background only.
+    _, ty, _, _ = masks["title"]
+    assert np.all(img[: int((1 - ty) * h) - 2, : int(0.2 * right * w)] > 0.99)
+    _, _, _, nh = masks["note"]
+    assert np.all(img[h - int(nh * h) + 2:, int(0.7 * right * w): int(right * w) - 2] > 0.99)
     # ...while the zoomed plot itself reaches the column's edge.
-    assert not np.all(img[:, int((right - 0.02) * w)] > 0.99)
+    assert not np.all(img[:, int(right * w) - 6] > 0.99)
+
+
+@pytest.mark.parametrize(("w_in", "h_in"), [(None, None), (3.0, 4.0), (8.0, 2.5)])
+def test_the_colour_bar_ticks_and_label_fit_on_the_figure(
+    monkeypatch: pytest.MonkeyPatch, w_in: float | None, h_in: float | None
+) -> None:
+    body = _grid_body("surface", 20, z_label="Magnetisation (emu)", title="A longer title")
+    body["z_grid"] = (np.asarray(body["z_grid"]) * -1e-4).tolist()
+    if w_in:
+        body |= {"width_in": w_in, "height_in": h_in}
+    fig, _ = _render(monkeypatch, body)
+    renderer = fig.canvas.get_renderer()
+    cax = next(a for a in fig.axes if a.name != "3d")
+    assert cax.get_tightbbox(renderer).x1 <= fig.bbox.x1 + 0.5
+    title = next(t for t in fig.texts if t.get_text() == "A longer title")
+    bb = title.get_window_extent(renderer)
+    _, ty, _, _ = _masks(fig)["title"]
+    assert bb.y0 >= ty * fig.bbox.height - 0.5 and bb.y1 <= fig.bbox.height + 0.5
+
+
+def test_a_surface_with_no_complete_cell_is_refused_with_a_reason() -> None:
+    z = np.full((4, 4), np.nan)
+    for i in range(4):
+        z[i, i] = 1.0  # 4 finite cells, but on a diagonal: no quad has 4 corners
+    body = _grid_body("surface", 4)
+    body["z_grid"] = [[None if np.isnan(v) else v for v in row] for row in z]
+    r = client.post("/api/export/map-figure", json=body)
+    assert r.status_code == 422
+    assert "four finite corners" in r.text

@@ -14,7 +14,6 @@ from typing import Any
 
 import matplotlib
 import numpy as np
-from matplotlib.patches import Rectangle
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
 
@@ -33,9 +32,6 @@ __all__ = [
     "set_log_zticks",
     "set_view",
     "tight_limits",
-    "axes_3d",
-    "crop_3d",
-    "plot_column",
     "DROP_LINES_MAX",
     "SURFACE_MAX_CELLS",
     "draw_surface",
@@ -77,14 +73,6 @@ SURFACE_MAX_CELLS = 500
 # solid wall, not a reading aid.
 DROP_LINES_MAX = 5_000
 
-# The 3-D figure's layout, in figure fractions: the axes rectangle (matplotlib
-# squares the 3-D projection inside it) and, with a colour bar, the bar's own
-# axes to its right. FIXED, not tight_layout: tight_layout measures a zoomed
-# box's overflow as "content" and shrinks the axes to fit it, so a zoom-2 export
-# came out barely larger than zoom 1 -- the screen magnifies, and so must this.
-# The colour bar and the title each get their own column/strip OUTSIDE the plot
-# column, which crops the plot (crop_3d): nothing is drawn under them.
-_CB_FRAC = 0.20
 
 
 def _stepped(n: int, step: int) -> NDArray[np.intp]:
@@ -108,61 +96,22 @@ def draw_surface(
     grid = np.stack([xg, yg, zg], axis=-1)  # (my, mx, 3)
     quads = np.stack([grid[:-1, :-1], grid[:-1, 1:], grid[1:, 1:], grid[1:, :-1]], axis=2)
     quads = quads[np.isfinite(quads[..., 2]).all(axis=2)]  # (n, 4, 3)
+    if not len(quads):
+        raise ValueError(
+            "a 3-D surface needs at least one grid cell with four finite corners"
+            + (f" (drawn every {step} cells on a grid this large)" if step > 1 else "")
+        )
     pc = Poly3DCollection(
         quads, cmap=cmap, linewidth=0, antialiased=True, rasterized=True, zsort="average"
     )
     pc.set_array(quads[..., 2].mean(axis=1))
     ax.add_collection3d(pc, autolim=False)
-    fin = zg[np.isfinite(zg)]
+    zq = quads[..., 2]
     ax.auto_scale_xyz(
         [float(x.min()), float(x.max())], [float(y.min()), float(y.max())],
-        [float(fin.min()), float(fin.max())], had_data=False,
+        [float(zq.min()), float(zq.max())], had_data=False,
     )
     return pc
-
-
-def plot_column(colorbar: bool, title: bool) -> tuple[float, float]:
-    """The plot's own column, as (right, top) figure fractions from (0, 0): the
-    colour bar has the column to its right and the title the strip above."""
-    return 1.0 - (_CB_FRAC if colorbar else 0.0), 0.90 if title else 0.96
-
-
-def axes_3d(fig: Any, colorbar: bool, title: bool) -> Any:
-    """The 3-D axes, laid out fixed inside the plot column (matplotlib squares
-    the projection within it)."""
-    right, top = plot_column(colorbar, title)
-    return fig.add_axes((0.03, 0.04, right - 0.05, top - 0.04), projection="3d")
-
-
-def crop_3d(fig: Any, ax: Any, colorbar: bool, title: str, title_size: float) -> Any:
-    """Crop a (zoomed) 3-D plot at its column, as the screen crops at its plot
-    area: the marks are clipped to the column, and the panes, grid and axis
-    text past it are covered by a figure-coloured mask, so nothing is drawn
-    under the colour bar or the title. Returns the colour bar's axes (in its
-    own column, right of the mask) or None. Call after every mark is drawn."""
-    right, top = plot_column(colorbar, bool(title))
-    clip = Rectangle((0.0, 0.0), right, top, transform=fig.transFigure)
-    for artist in [*ax.collections, *ax.lines]:
-        artist.set_clip_path(clip)
-    z = ax.get_zorder()
-    bg = fig.get_facecolor()
-
-    def mask(x0: float, y0: float, w: float, h: float) -> None:
-        fig.add_artist(Rectangle(
-            (x0, y0), w, h, transform=fig.transFigure, facecolor=bg, edgecolor="none",
-            zorder=z + 0.5,
-        ))
-
-    cax = None
-    if colorbar:
-        mask(right, 0.0, 1.0 - right, 1.0)
-        cax = fig.add_axes((right + 0.03, 0.15, 0.025, 0.70))
-        cax.set_zorder(z + 1)
-    if title:
-        mask(0.0, top, right, 1.0 - top)
-        fig.text(right / 2, (top + 1.0) / 2, title, ha="center", va="center",
-                 fontsize=title_size, zorder=z + 1)
-    return cax
 
 
 def tight_limits(ax: Any) -> None:
@@ -197,10 +146,6 @@ def set_view(ax: Any, elev: float, azim: float, zoom: float) -> None:
     ax.set_proj_type("ortho")
     ax.set_box_aspect((4, 4, 3), zoom=zoom)
     tight_limits(ax)
-    # Marks are cropped at the plot column (crop_3d), not at matplotlib's
-    # axes square: the screen crops a zoomed plot at its plot area.
-    for artist in [*ax.collections, *ax.lines]:
-        artist.set_clip_on(True)
 
 
 def check_extent(*arrays: NDArray[np.float64]) -> None:

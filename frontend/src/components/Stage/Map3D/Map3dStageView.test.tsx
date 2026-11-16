@@ -1,5 +1,6 @@
 // The Map stage's INTERACTIVE 3-D view (gap audit 5, items 3d/3e): it opens by
-// default, draws nothing server-side, and each settled gesture is ONE undoable
+// default (a 3-D scatter here: the offline regrid of the 4x4 test data is too
+// sparse for a surface quad), draws nothing server-side, and each settled gesture is ONE undoable
 // write of the camera into the map's 3-D view -- which ⤓ then exports.
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -54,7 +55,7 @@ beforeEach(() => {
   vi.mocked(renderMapFigure).mockClear();
   useApp.getState().loadWorkspace({ datasets: [grid("scan")], activeId: "scan" });
   useApp.setState({ mapViews: EMPTY_MAP_VIEWS, mapRes: 50, status: "" });
-  useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface" });
+  useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "scatter3d" });
 });
 
 const view3d = () => mapViewFor(useApp.getState().mapViews, "scan").view3d;
@@ -62,7 +63,7 @@ const shown = () => document.querySelector("[data-map3d-angles]")?.textContent ?
 /** The plot, once the (offline) grid has settled: a regrid rebuilds the scene and remounts the canvas. */
 const plot = async () => {
   await waitFor(() => expect(useApp.getState().status).toMatch(/offline grid/));
-  return screen.findByRole("application", { name: /Surface of Signal/ });
+  return screen.findByRole("application", { name: /3-D scatter of Signal/ });
 };
 
 describe("Map stage interactive 3-D", () => {
@@ -86,12 +87,12 @@ describe("Map stage interactive 3-D", () => {
     expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 }); // nothing written mid-gesture
     expect(shown()).toMatch(/elevation 45°, azimuth -50°, zoom 1\.10×/);
     await act(() => new Promise((r) => setTimeout(r, COMMIT_IDLE_MS + 100)));
-    expect(view3d()).toMatchObject({ elev: 45, azim: -50, zoom: 1.1, kind: "surface" });
+    expect(view3d()).toMatchObject({ elev: 45, azim: -50, zoom: 1.1, kind: "scatter3d" });
     expect(undoDepth()).toBe(before + 1);
 
     fireEvent.click(screen.getByTitle(/^Export map/));
     await waitFor(() => expect(useApp.getState().status).toBe("exported scan_map.pdf"));
-    expect(vi.mocked(exportMapFigure).mock.calls[0]![0]).toMatchObject({ kind: "surface", view_elev: 45, view_azim: -50, view_zoom: 1.1 });
+    expect(vi.mocked(exportMapFigure).mock.calls[0]![0]).toMatchObject({ kind: "scatter3d", view_elev: 45, view_azim: -50, view_zoom: 1.1 });
     // The export dialog offered the same angles as its defaults.
     const fields = vi.mocked(askParams).mock.calls[0]![1];
     expect(fields.find((f) => f.key === "elev")?.default).toBe(45);
@@ -135,7 +136,7 @@ describe("Map stage interactive 3-D", () => {
   });
 
   it("an undo during a pending gesture wins (the pending write is dropped)", async () => {
-    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface", elev: 20 });
+    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "scatter3d", elev: 20 });
     render(<MapStage />);
     const el = await plot();
     fireEvent.keyDown(el, { key: "ArrowRight" });
@@ -191,7 +192,7 @@ describe("Map stage interactive 3-D", () => {
   });
 
   it("Reset view returns to the default camera; the panel's angle fields follow the stored view", async () => {
-    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface", elev: 10, azim: 100, zoom: 2 });
+    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "scatter3d", elev: 10, azim: 100, zoom: 2 });
     render(<MapStage />);
     await plot();
     expect(shown()).toMatch(/elevation 10°, azimuth 100°, zoom 2\.00×/);

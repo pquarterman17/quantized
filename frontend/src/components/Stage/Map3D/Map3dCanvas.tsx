@@ -141,7 +141,9 @@ export default function Map3dCanvas({ scene, view: stored, onCommit, home, child
           const r = hostRef.current?.getBoundingClientRect();
           if (!set || !r || !frame) return;
           const px = e.clientX - r.left, py = e.clientY - r.top;
-          const i = inPlot(frame, px, py) ? pick(set, px, py) : null;
+          const hit = inPlot(frame, px, py) ? pick(set, px, py) : null;
+          // A vertex the clip hides (past the plot's edge) is not read either.
+          const i = hit !== null && inPlot(frame, set.sx[hit], set.sy[hit]) ? hit : null;
           setHover(i === null ? null : { i, x: set.sx[i], y: set.sy[i] });
         }}
         onPointerUp={orbit.onPointerUp}

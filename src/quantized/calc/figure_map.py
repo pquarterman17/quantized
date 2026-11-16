@@ -29,13 +29,11 @@ from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_map3d import (
     MAX_SCATTER_POINTS,
-    axes_3d,
     check_angles,
     check_curve_inputs,
     check_extent,
     check_grid_3d,
     check_zoom,
-    crop_3d,
     decimate,
     draw_curves,
     draw_drop_lines,
@@ -45,6 +43,7 @@ from quantized.calc.figure_map3d import (
     set_view,
     step_rows,
 )
+from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -273,9 +272,8 @@ def render_map_figure(
         # call differs (3-D projection vs. a plain 2-D subplot).
         fig = new_figure(figsize=figsize)
         cax: Any = None
-        bar3d = colorbar and kind in ("surface", "scatter3d")  # a waterfall has no bar
         if kind in _3D_KINDS:
-            ax = axes_3d(fig, bar3d, bool(title))
+            ax = axes_3d(fig)
         else:
             ax = fig.subplots()
         mappable = _draw(
@@ -296,9 +294,9 @@ def render_map_figure(
             ax.set_aspect("equal", adjustable="box")
         if kind not in _3D_KINDS:
             _draw_marks(ax, lines or [], labels or [], st.font_size)
-        if kind in _3D_KINDS:
-            cax = crop_3d(fig, ax, bar3d, title, st.title_font_size)
-        elif title:
+        if kind in _3D_KINDS and colorbar and mappable is not None:
+            cax = colorbar_axes(fig)  # a waterfall has no bar
+        if title and kind not in _3D_KINDS:
             ax.set_title(title)
         if x_label:
             ax.set_xlabel(x_label)
@@ -316,9 +314,13 @@ def render_map_figure(
             if colorbar_log10:
                 ticks = log_decade_ticks(*mappable.get_clim())
                 cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])
-        if kind not in _3D_KINDS:  # 3-D: a fixed layout (figure_map3d.axes_3d)
+        if kind in _3D_KINDS:  # a fixed, measured layout (figure_map3d_layout)
+            note_3d = safe_mathtext_label(note) if note else ""
+            finish_3d(fig, ax, cax, title, st.title_font_size, note_3d, st.font_size * 0.7)
+        else:
             fig.tight_layout()
-        if note:  # after tight_layout: a footnote must not shrink the axes
+        # After tight_layout: a footnote must not shrink the axes.
+        if note and kind not in _3D_KINDS:
             fig.text(
                 0.01, 0.005, safe_mathtext_label(note), fontsize=st.font_size * 0.7, va="bottom"
             )
@@ -439,12 +441,7 @@ def _draw(
     xg, yg = np.meshgrid(x, y)  # (ny, nx)
     if kind == "surface":
         return draw_surface(ax, x, y, z, cmap)
-    if kind == "scatter3d":
-        finite = np.isfinite(z)
-        sc = ax.scatter(
-            xg[finite], yg[finite], z[finite], c=z[finite], cmap=cmap, s=6, depthshade=True
-        )
-        return sc
+    # (a grid scatter3d never reaches here: render_map_figure flattens it to points)
     # waterfall: one profile line per y-row, stacked in depth
     line_cmap = matplotlib.colormaps[cmap]
     rows = step_rows(z, max_lines)  # rows with data only, evenly stepped

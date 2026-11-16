@@ -11,7 +11,7 @@ import { sceneFromBody, type LineScene, type PointScene, type SurfaceScene } fro
 
 const GRID: MapFigureSpec = {
   x_axis: [0, 1, 2], y_axis: [10, 20, 30],
-  z_grid: [[1, 2, 3], [4, null, 6], [7, 8, 9]],
+  z_grid: [[null, 2, 3], [4, 5, 6], [7, 8, 9]],
   kind: "surface", cmap: "RdBu_r", x_label: "H (T)", y_label: "T (K)", z_label: "M (emu)",
 };
 
@@ -19,9 +19,9 @@ describe("sceneFromBody", () => {
   it("a surface keeps gaps as NaN and spans the drawn data", () => {
     const s = sceneFromBody(GRID) as SurfaceScene;
     expect(s.kind).toBe("surface");
-    expect(Number.isNaN(s.zs[4])).toBe(true);
-    expect([s.x.lo, s.x.hi, s.y.lo, s.y.hi, s.z.lo, s.z.hi]).toEqual([0, 2, 10, 30, 1, 9]);
-    expect(s.clim).toEqual([1, 9]);
+    expect(Number.isNaN(s.zs[0])).toBe(true);
+    expect([s.x.lo, s.x.hi, s.y.lo, s.y.hi, s.z.lo, s.z.hi]).toEqual([0, 2, 10, 30, 2, 9]);
+    expect(s.clim).toEqual([2, 9]);
     expect(s.cmap).toBe("rdbu"); // matplotlib's RdBu_r is the canvas' rdbu
     expect([s.x.label, s.y.label, s.z.label]).toEqual(["H (T)", "T (K)", "M (emu)"]);
   });
@@ -29,14 +29,14 @@ describe("sceneFromBody", () => {
   it("explicit colour limits are the colour range; the z axis still spans the data", () => {
     const s = sceneFromBody({ ...GRID, z_limits: [0, 20], colorbar_log10: true }) as SurfaceScene;
     expect(s.clim).toEqual([0, 20]);
-    expect([s.z.lo, s.z.hi]).toEqual([1, 9]);
+    expect([s.z.lo, s.z.hi]).toEqual([2, 9]);
     expect(s.log10).toBe(true);
   });
 
   it("a grid scatter is its finite cells in row order (as the route meshgrids them)", () => {
     const s = sceneFromBody({ ...GRID, kind: "scatter3d", drop_lines: true }) as PointScene;
-    expect(Array.from(s.pz)).toEqual([1, 2, 3, 4, 6, 7, 8, 9]);
-    expect(Array.from(s.py)).toEqual([10, 10, 10, 20, 20, 30, 30, 30]);
+    expect(Array.from(s.pz)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(Array.from(s.py)).toEqual([10, 10, 20, 20, 20, 30, 30, 30]);
     expect(s.drop).toBe(true);
   });
 
@@ -66,6 +66,7 @@ describe("sceneFromBody", () => {
 
   it("refuses what the route refuses, with its reason", () => {
     expect(sceneFromBody({ ...GRID, z_grid: [[1, null, null], [null, null, null], [null, null, 2]] })).toEqual({ error: "a 3-D surface needs at least 4 finite grid cells; found 2" });
+    expect(sceneFromBody({ ...GRID, z_grid: [[1, null, 2], [null, 3, null], [4, null, 5]] })).toEqual({ error: "a 3-D surface needs at least one grid cell with four finite corners" });
     expect(sceneFromBody({ ...GRID, kind: "waterfall", z_grid: [[1, 2, 3], [null, 1, null], [null, null, null]] })).toMatchObject({ error: expect.stringMatching(/at least 2 curves/) });
   });
 });
