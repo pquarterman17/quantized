@@ -10,11 +10,11 @@ folds into the override bag as ONE per-axis map (``routes.export_figures_schema
     {"x": {"size": 14, "bold": True, "italic": False, "offset": [dx, dy]},
      "y": {...}, "y2": {...}}
 
-Units follow the export's standing screen-px convention: a CSS px value rides
-the wire verbatim and is read as a typographic POINT, as an annotation's
-``size`` (``figure_overrides``), a series' ``marker_size`` and a line
-``width`` already are. So ``size`` is the title's font size in points and
-``offset`` moves it ``dx`` pt right and ``dy`` pt DOWN (the screen's y
+Units: ``size`` is the title's font size in POINTS (the Stage converts its
+canvas px, x 0.75, exactly as it does an annotation's ``size``). ``offset``
+still follows the export's screen-px convention (a CSS px value read as a
+typographic POINT, like a series' ``marker_size`` and a line ``width``), so it
+moves it ``dx`` pt right and ``dy`` pt DOWN (the screen's y
 direction), keeping a moved title the same number of its own font sizes away
 from where it started. The move is a display-space translation laid over the
 label's own transform, so it survives matplotlib re-placing the label at draw

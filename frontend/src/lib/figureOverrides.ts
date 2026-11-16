@@ -63,7 +63,7 @@ export interface FigureOverrides {
     anchor?: "page";
     /** MAIN #27 "text box": a bbox behind the text —
      *  `calc.figure_overrides._apply_overrides`'s `ann.get("frame")` branch. */
-    frame?: { fill?: string; stroke?: string; opacity?: number; pad?: number };
+    frame?: NonNullable<import("./types").Annotation["frame"]>;
     /** `false` hides the anchor dot (absent = dot, the legacy look). */
     dot?: false;
   }[];

@@ -42,7 +42,7 @@ import type { FigureOverrides } from "./figureOverrides";
 import type { MapAnnotation } from "./mapView";
 import type { InsetView } from "./plotviewDecor";
 import type { StatMarks } from "./plotviewSanitize";
-import type { Annotation, Dataset, RefLine, RegionShade, Shape } from "./types";
+import type { Annotation, Dataset, ReferenceStick, RefLine, RegionShade, Shape } from "./types";
 
 export type V034Class = "v034" | "gated" | "kept-by-034";
 type Classify<T> = Record<keyof T, V034Class>;
@@ -130,7 +130,7 @@ export const STAT_MARKS: Classify<StatMarks> = {
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
 // The export-request object persisted in figure documents (publication deltas,
 // templates). `layers` is wire-only: sanitizeFigureOverrides never persists it.
-type OvList<K extends keyof FigureOverrides> = NonNullable<FigureOverrides[K]> extends readonly (infer E)[] ? E : NonNullable<FigureOverrides[K]>;
+export type OvList<K extends keyof FigureOverrides> = NonNullable<FigureOverrides[K]> extends readonly (infer E)[] ? E : NonNullable<FigureOverrides[K]>;
 // The wire elements inside an overrides object (snake_case, no ids). Same story.
 export const OVERRIDE_SHAPE: Classify<OvList<"shapes">> = {
   kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
@@ -138,6 +138,23 @@ export const OVERRIDE_SHAPE: Classify<OvList<"shapes">> = {
 export const OVERRIDE_REF_LINE: Classify<OvList<"ref_lines">> = { axis: V, value: V, label: V, group_id: V, group_label: V, stick: V };
 export const OVERRIDE_REGION_SHADE: Classify<OvList<"region_shades">> = { x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, full_height: V };
 export const OVERRIDE_INSET: Classify<OvList<"inset">> = { x: V, y: V, y2: V, at: V, lines: V };
+// Nested objects inside the elements above (and inside FigureOverrides), each a
+// v0.34 type whose keys 0.34's sanitizers pick by name: a new key on any of them
+// is lost on a 0.34 round trip unless classified here (tsc forces it).
+export const REFERENCE_STICK: Classify<ReferenceStick> = {
+  intensity: V, baseline: V, height: V, color: V, visible: V, showLabel: V,
+};
+export const OVERRIDE_STICK: Classify<NonNullable<OvList<"ref_lines">["stick"]>> = {
+  intensity: V, baseline: V, height: V, color: V, visible: V, show_label: V,
+};
+export const OVERRIDE_LEGEND: Classify<NonNullable<FigureOverrides["legend"]>> = { show: V, loc: V, frame: V, anchor: V, title: V };
+export const OVERRIDE_TICKS: Classify<NonNullable<FigureOverrides["ticks"]>> = { dir: V, len: V, minor: V };
+export const OVERRIDE_SPINES: Classify<NonNullable<FigureOverrides["spines"]>> = { top: V, right: V };
+/** `margins` and `page_pad` share one shape (asserted below). */
+export const OVERRIDE_BOX: Classify<NonNullable<FigureOverrides["margins"]>> = { left: V, right: V, top: V, bottom: V };
+type _Margins = keyof NonNullable<FigureOverrides["margins"]>;
+type _PagePad = keyof NonNullable<FigureOverrides["page_pad"]>;
+export const OVERRIDE_BOX_SHARED: [_Margins] extends [_PagePad] ? ([_PagePad] extends [_Margins] ? true : never) : never = true;
 export const FIGURE_OVERRIDES: Classify<FigureOverrides> = {
   font_size: V, font_name: V, title_size: V, label_size: V, tick_size: V, legend_size: V, legend: V, ticks: V,
   spines: V, x_lim: V, x_reversed: V, y_lim: V, y2_lim: V, margins: V, page_pad: V, grid: V, annotations: V,
@@ -196,6 +213,12 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   OverrideRefLine: OVERRIDE_REF_LINE,
   OverrideRegionShade: OVERRIDE_REGION_SHADE,
   OverrideInset: OVERRIDE_INSET,
+  ReferenceStick: REFERENCE_STICK,
+  OverrideStick: OVERRIDE_STICK,
+  OverrideLegend: OVERRIDE_LEGEND,
+  OverrideTicks: OVERRIDE_TICKS,
+  OverrideSpines: OVERRIDE_SPINES,
+  OverrideBox: OVERRIDE_BOX,
   MapViewState: MAP_VIEW,
   RecipeMapView: RECIPE_MAP_VIEW,
   Dataset: DATASET,

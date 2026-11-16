@@ -303,9 +303,9 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
       expect(t, `annotation ${an.text}`).toBeDefined();
       expect(near(t!.x!, fx(an.x), 12 * p.dpr) && near(t!.y!, fy(an.y), 12 * p.dpr), `${an.text} anchored`).toBe(true);
     }
-    // anchor dots: the peak label ("onset") draws its 3 px dot at the anchor, the text box ("plateau", dot:false) draws none
+    // anchor dots (arc radius 3 in canvas device px at any dpr, uplotOverlays): the peak label ("onset") draws its 3 px dot at the anchor, the text box ("plateau", dot:false) draws none
     const dots = p.ops.flatMap((o) => o.arcs);
-    const dotAt = (x: number, y: number) => dots.some(([ax0, ay0, r]) => near(ax0, x, 2 * p.dpr) && near(ay0, y, 2 * p.dpr) && near(r, 3 * p.dpr, 1));
+    const dotAt = (x: number, y: number) => dots.some(([ax0, ay0, r]) => near(ax0, x, 2 * p.dpr) && near(ay0, y, 2 * p.dpr) && near(r, 3, 1));
     expect(dotAt(fx(1), fy(0.5)), "onset anchor dot").toBe(true);
     expect(dotAt(fx(4), fy(2.5)), "plateau (dot:false) draws no anchor dot").toBe(false);
     const seg = (o: DrawOp, x0: number, y0: number, x1: number, y1: number) =>

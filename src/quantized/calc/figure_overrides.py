@@ -234,8 +234,9 @@ def _apply_overrides(
     _apply_ref_lines(ax, ov.get("ref_lines"))
 
     for i, ann in enumerate(ov.get("annotations", [])):
-        # MAIN #18: a per-annotation `size` (the pointer tool's corner-handle
-        # font-size resize, screen px) wins over the property panel's global
+        # MAIN #18: a per-annotation `size` (points on the wire: the view->
+        # override mapper converts the canvas px, the pointer tool's corner-handle
+        # font-size resize) wins over the property panel's global
         # font_size override -- matches the screen, where each annotation's
         # OWN size (Annotation.size) always overrides the plot's base font.
         size = ann.get("size")

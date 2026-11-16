@@ -207,7 +207,7 @@ export interface FigureSpec {
   log_offsets?: number[];
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
-  /** Axis-title Format (`PlotView.axisLabelStyles`); size in CSS px, read as points. */
+  /** Axis-title Format (`PlotView.axisLabelStyles`); size in points (canvas px x 0.75). */
   axis_label_styles?: Partial<Record<AxisKey, AxisLabelStyle>>;
   /** The axis titles' dragged offsets (`PlotView.axisLabelOffsets`), `[dx, dy]`
    *  CSS px, x right / y DOWN, read as points. */

@@ -30,7 +30,7 @@ import {
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type LoadedWorkspace,
 } from "./workspace";
-import { CLASSIFICATIONS, GATED_VALUES, SERIES_STYLE } from "./workspaceForwardCompat";
+import { CLASSIFICATIONS, GATED_VALUES, SERIES_STYLE, type OvList } from "./workspaceForwardCompat";
 
 const VIEWPORT = { width: 1600, height: 900 };
 const load = (): LoadedWorkspace => parseWorkspace(JSON.stringify(dwk034), VIEWPORT);
@@ -228,6 +228,12 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/\.overrides\.ref_lines\[\]$/, "OverrideRefLine"],
   [/\.overrides\.region_shades\[\]$/, "OverrideRegionShade"],
   [/\.overrides\.inset$/, "OverrideInset"],
+  [/\.(view|decor|decorations|visual)\.refLines\[\]\.stick$/, "ReferenceStick"],
+  [/\.overrides\.ref_lines\[\]\.stick$/, "OverrideStick"],
+  [/\.overrides\.legend$/, "OverrideLegend"],
+  [/\.overrides\.ticks$/, "OverrideTicks"],
+  [/\.overrides\.spines$/, "OverrideSpines"],
+  [/\.overrides\.(margins|page_pad)$/, "OverrideBox"],
   [/^\$\.mapViews\.[^.[\]]+$/, "MapViewState"],
   [/^\$\.plotRecipes\[\]\.map$/, "RecipeMapView"],
 ];
@@ -297,18 +303,31 @@ function populate(ws: LoadedWorkspace): void {
   });
   const mapNote: Required<MapAnnotation> = { id: "pm", x: 1, y: 2, text: "m", space: null };
   ws.mapViews = { ...ws.mapViews, pop: { ...DEFAULT_MAP_VIEW, annotations: [mapNote] } };
+  const stick: Required<NonNullable<OvList<"ref_lines">["stick"]>> = {
+    intensity: 1, baseline: 0, height: 1, color: "#000", visible: true, show_label: true,
+  };
+  const box: Required<NonNullable<FigureOverrides["margins"]>> = { left: 0.1, right: 0.1, top: 0.1, bottom: 0.1 };
+  const ovAnnotation: Required<OvList<"annotations">> = { x: 1, y: 2, text: "t", size: 9, anchor: "page", frame: FULL_FRAME, dot: false };
+  const ovShape: Required<OvList<"shapes">> = {
+    kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
+  };
+  const ovRefLine: Required<OvList<"ref_lines">> = { axis: "x", value: 1, label: "l", group_id: "g", group_label: "gl", stick };
+  const ovShade: Required<OvList<"region_shades">> = { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, full_height: true };
+  const ovInset: Required<OvList<"inset">> = { x: [0, 1], y: [0, 1], y2: [0, 1], at: [0.1, 0.1, 0.3, 0.3], lines: true };
+  const legend: Required<NonNullable<FigureOverrides["legend"]>> = { show: true, loc: "best", frame: true, anchor: [0, 0], title: "t" };
+  const ticks: Required<NonNullable<FigureOverrides["ticks"]>> = { dir: "in", len: 3, minor: true };
+  const spines: Required<NonNullable<FigureOverrides["spines"]>> = { top: true, right: true };
   const overrides: Required<Omit<FigureOverrides, "layers">> = {
     font_size: 9, font_name: "Arial", title_size: 9, label_size: 9, tick_size: 9, legend_size: 9,
-    legend: { show: true, loc: "best", frame: true, anchor: [0, 0], title: "t" },
-    ticks: { dir: "in", len: 3, minor: true }, spines: { top: true, right: true },
+    legend, ticks, spines,
     x_lim: [0, 1], x_reversed: true, y_lim: [0, 1], y2_lim: [0, 1],
-    margins: { left: 0.1, right: 0.1, top: 0.1, bottom: 0.1 }, page_pad: { left: 0.1, right: 0.1, top: 0.1, bottom: 0.1 }, grid: true,
-    annotations: [{ x: 1, y: 2, text: "t", size: 9, anchor: "page", frame: FULL_FRAME, dot: false }],
+    margins: box, page_pad: box, grid: true,
+    annotations: [ovAnnotation],
     x_breaks: [[1, 2]],
-    shapes: [{ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true }],
-    ref_lines: [{ axis: "x", value: 1, label: "l", group_id: "g", group_label: "gl", stick: { intensity: 1, baseline: 0, height: 1, color: "#000", visible: true, show_label: true } }],
-    region_shades: [{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, full_height: true }],
-    inset: { x: [0, 1], y: [0, 1], y2: [0, 1], at: [0.1, 0.1, 0.3, 0.3], lines: true },
+    shapes: [ovShape],
+    ref_lines: [ovRefLine],
+    region_shades: [ovShade],
+    inset: ovInset,
   };
   const doc = ws.figureDocs![0] as unknown as { publication?: { overrides?: unknown } };
   doc.publication = { ...doc.publication, overrides };
@@ -352,6 +371,8 @@ describe("kitchen sink: no new key path escapes the classification maps", () => 
       "Shape.x1=v034", "RefLine.axis=v034", "RegionShade.fullHeight=v034", "InsetView.lines=v034", "StatMarks.jitterWidth=v034",
       "AnnotationFrame.pad=v034", "MapAnnotation.space=v034", "OverrideShape.dash=v034", "OverrideRefLine.group_label=v034",
       "OverrideRegionShade.full_height=v034", "OverrideInset.at=v034", "FigureOverrides.page_pad=v034",
+      "ReferenceStick.showLabel=v034", "OverrideStick.show_label=v034", "OverrideLegend.title=v034", "OverrideTicks.minor=v034",
+      "OverrideSpines.right=v034", "OverrideBox.bottom=v034",
     ]) expect(classified).toContain(c);
   });
 
@@ -377,6 +398,13 @@ describe("kitchen sink: no new key path escapes the classification maps", () => 
       "overrides.shapes[]": (d) => d.figureDocs[0].publication.overrides.shapes?.[0],
       "overrides.annotations[].frame": (d) => d.figureDocs[0].publication.overrides.annotations?.[0].frame,
       "overrides": (d) => d.figureDocs[0].publication.overrides,
+      "refLines[].stick": (d) => last(d.plotWindows[0].view.refLines).stick,
+      "overrides.ref_lines[].stick": (d) => d.figureDocs[0].publication.overrides.ref_lines?.[0].stick,
+      "overrides.legend": (d) => d.figureDocs[0].publication.overrides.legend,
+      "overrides.ticks": (d) => d.figureDocs[0].publication.overrides.ticks,
+      "overrides.spines": (d) => d.figureDocs[0].publication.overrides.spines,
+      "overrides.margins": (d) => d.figureDocs[0].publication.overrides.margins,
+      "overrides.page_pad": (d) => d.figureDocs[0].publication.overrides.page_pad,
     };
     for (const [name, at] of Object.entries(cases)) {
       const { problems } = sinkProblems(inject(at));
