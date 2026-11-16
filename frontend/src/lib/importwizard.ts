@@ -266,7 +266,8 @@ export function resolveImportFilter(
       return {
         ok: false,
         unmatched: [],
-        reason: `saved ${label} line (line ${line}) appears to be data in this file (data starts at line ${naturalDataStart})`,
+        // 1-based, like the wizard's line fields and raw-lines gutter (the wire is 0-based).
+        reason: `saved ${label} line (line ${line + 1}) appears to be data in this file (data starts at line ${naturalDataStart + 1})`,
       };
     }
   }
@@ -277,7 +278,7 @@ export function resolveImportFilter(
       return {
         ok: false,
         unmatched: [],
-        reason: `saved label line (line ${labelLine}) parses as numeric data in this file, not a legend-label row`,
+        reason: `saved label line (line ${labelLine + 1}) parses as numeric data in this file, not a legend-label row`,
       };
     }
   }

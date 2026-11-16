@@ -1,6 +1,6 @@
 """P1.6 Part C: categorical import safeguards.
 
-``delimited._encode_categorical`` encodes raw text cells as float codes plus
+``_column_kind.encode_categorical`` encodes raw text cells as float codes plus
 a lossless level table (first-appearance order) with NO guards -- a column
 mistakenly marked ``categorical`` that is actually continuous numeric/free
 text yields close to one level per row: a useless channel and a level table
@@ -57,7 +57,8 @@ from typing import Any
 
 import numpy as np
 
-from quantized.io.delimited import _encode_categorical
+from quantized.io._column_kind import encode_categorical as _encode_categorical
+from quantized.io._column_kind import levels_only
 
 __all__ = [
     "MAX_CATEGORICAL_COLLISIONS",
@@ -188,14 +189,7 @@ def _levels_only(cells: Sequence[str]) -> tuple[str, ...]:
     (~0.67s -> ~1.25s). `parse_import` still calls the full
     `_encode_categorical` below -- it needs the codes to build the channel.
     """
-    levels: list[str] = []
-    seen: set[str] = set()
-    for raw in cells:
-        text = raw.strip()
-        if text and text not in seen:
-            seen.add(text)
-            levels.append(text)
-    return tuple(levels)
+    return levels_only(cells)  # NaN spellings are missing, not levels
 
 
 def categorical_level_problems_only(

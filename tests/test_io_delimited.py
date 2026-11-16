@@ -316,7 +316,7 @@ def test_categorical_round_trip_through_dict(tmp_path: Path) -> None:
 def test_encode_categorical_columns_matches_encode_categorical_unmodified() -> None:
     """The guard layer never changes `_encode_categorical`'s own output --
     same codes, same levels, same first-appearance order."""
-    from quantized.io.delimited import _encode_categorical
+    from quantized.io._column_kind import encode_categorical as _encode_categorical
     from quantized.io.import_categorical_guards import encode_categorical_columns
 
     cells = ["B", "A", "B", "A", "C"]

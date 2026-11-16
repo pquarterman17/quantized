@@ -37,6 +37,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
+import ConnectionBanner from "./components/Shell/ConnectionBanner";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
 import { lazyRegion, useRegionLoaded } from "./lib/lazyRegion";
@@ -116,6 +117,7 @@ export default function AppOverlays() {
       <ParamDialog />
       <ConfirmDialog />
       <Toaster />
+      <ConnectionBanner />
     </>
   );
 }

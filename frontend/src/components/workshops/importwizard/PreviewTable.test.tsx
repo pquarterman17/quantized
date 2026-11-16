@@ -22,12 +22,21 @@ const PREVIEW: ImportPreviewResponse = {
   comments: [],
 };
 
+/** The raw-lines row showing `text` (its delimiters are highlight spans, so
+ *  the text is split over several nodes). */
+function rawLine(text: string): HTMLElement {
+  const rows = [...document.querySelectorAll<HTMLElement>("[data-raw-line]")];
+  const row = rows.find((r) => r.lastElementChild?.textContent === text);
+  if (!row) throw new Error(`no raw line ${text}`);
+  return row;
+}
+
 describe("PreviewTable", () => {
   it("renders every raw line numbered, and the resolved column headers + data row", () => {
     render(
       <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
     );
-    for (const line of PREVIEW.raw_lines) expect(screen.getByText(line)).toBeInTheDocument();
+    for (const line of PREVIEW.raw_lines) expect(rawLine(line)).toBeInTheDocument();
     expect(screen.getByDisplayValue("Temp")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Moment")).toBeInTheDocument();
     expect(screen.getByDisplayValue("K")).toBeInTheDocument();
@@ -40,8 +49,8 @@ describe("PreviewTable", () => {
     render(
       <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
     );
-    const header = screen.getByText("Temp,Moment").closest("div")!;
-    const units = screen.getByText("(K),(emu)").closest("div")!;
+    const header = rawLine("Temp,Moment");
+    const units = rawLine("(K),(emu)");
     expect(header.getAttribute("style")).toContain("background");
     expect(units.getAttribute("style")).toContain("background");
     expect(header.getAttribute("style")).not.toBe(units.getAttribute("style"));
@@ -57,8 +66,8 @@ describe("PreviewTable", () => {
     render(
       <PreviewTable preview={withLabel} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
     );
-    const label = screen.getByText("T1,M1").closest("div")!;
-    const header = screen.getByText("Temp,Moment").closest("div")!;
+    const label = rawLine("T1,M1");
+    const header = rawLine("Temp,Moment");
     expect(label.getAttribute("style")).toContain("background");
     expect(label.getAttribute("style")).not.toBe(header.getAttribute("style"));
   });
@@ -161,5 +170,18 @@ describe("PreviewTable", () => {
       <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
     );
     expect(screen.queryByText(/decimal comma/)).not.toBeInTheDocument();
+  });
+});
+
+describe("PreviewTable raw lines (UX audit 8 #7)", () => {
+  it("numbers lines from 1 and highlights the delimiter in each", () => {
+    render(
+      <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    const header = rawLine("Temp,Moment");
+    expect(header).toHaveAttribute("data-raw-line", "2"); // header_line 1 is line 2
+    expect(header.firstElementChild).toHaveTextContent("2");
+    expect(header.querySelectorAll("[data-delim]")).toHaveLength(1);
+    expect(rawLine("# header comment").querySelectorAll("[data-delim]")).toHaveLength(0);
   });
 });

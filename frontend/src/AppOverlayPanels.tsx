@@ -59,7 +59,7 @@
 // null`), so its conversion adds one — a behavior-preserving change, not a
 // violation of that byte-identical rule.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { useApp } from "./store/useApp";
 import { usePackProjectPanel } from "./store/packProjectPanel";
 import { useRecoveryChoice } from "./store/recoveryChoice";
@@ -85,7 +85,7 @@ import { useTransformPreviewDialog } from "./store/transformPreviewDialog";
 import { useRecipeManager } from "./store/recipeManager";
 import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
 import { useAuxFigureStore } from "./components/workshops/ternary/auxFigureStore";
-import { lazyRegion as lazyPanel } from "./lib/lazyRegion";
+import { lazyRegion } from "./lib/lazyRegion";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
@@ -96,7 +96,12 @@ import { lazyRegion as lazyPanel } from "./lib/lazyRegion";
  *  localhost — the chunk arrives in a frame or two, and a spinner would
  *  flash more than it informs. `label` names the panel in the fallback and
  *  the console log (review finding #6: 52 panels sharing one "Panel" label
- *  left no way to tell which one failed). */
+ *  left no way to tell which one failed); the card itself says "This tool
+ *  couldn't load" and floats, so it never pushes the status bar (UX audit 8 #9). */
+function lazyPanel<P extends object>(load: () => Promise<{ default: ComponentType<P> }>, label: string) {
+  return lazyRegion(load, label, null, true);
+}
+
 /** Load an on-demand dialog only after its first opening, then leave it mounted
  * while closed. That preserves local dialog state (for example Preferences'
  * active tab) exactly as the former eager mount did. */

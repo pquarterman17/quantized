@@ -24,6 +24,17 @@ describe("importFailureHeadline", () => {
     expect(h).toBe("Couldn't read garbage.dat — the format wasn't recognised.");
     expect(h).not.toMatch(/parser|registered/);
   });
+  it.each([
+    ["empty.csv", "empty.csv: file empty or only comments: empty.csv", "Couldn't read empty.csv — the file is empty."],
+    ["h.csv", "h.csv: no data rows: the file holds only a header (h.csv)", "Couldn't read h.csv — it has a header but no data rows."],
+    [
+      "eu.csv",
+      "eu.csv: Column 'T' in eu.csv writes numbers like '2,000', where the comma could be a decimal or a thousands separator ('1,500' is 1.5 or 1500); pick the decimal separator (Point or Comma) in the Import Wizard.",
+      "Couldn't read eu.csv — its commas could be decimals or thousands separators — pick the decimal separator in the import wizard.",
+    ],
+  ])("names the backend's reason for %s in plain words (UX audit 8 #7)", (name, technical, headline) => {
+    expect(importFailureHeadline(name, technical)).toBe(headline);
+  });
   it("names a down server as the cause, not the file", () => {
     expect(importFailureHeadline("a.csv", "a.csv: Failed to fetch")).toMatch(/not responding/);
   });
@@ -103,5 +114,57 @@ describe("toastImportFailure", () => {
     act(() => toastImportFailure("broken.opju", "broken.opju: corrupt project"));
     expect(screen.queryByRole("button", { name: "Open import wizard" })).toBeNull();
     expect(screen.getByRole("button", { name: "Details" })).toBeInTheDocument();
+  });
+});
+
+describe("several failures (UX audit 8 #9)", () => {
+  const fail = (name: string) => toastImportFailure(name, `${name}: file empty or only comments: ${name}`);
+
+  it("two failures stay two toasts, each a rectangle with a × button", () => {
+    render(<Toaster />);
+    act(() => ["a.csv", "b.csv"].forEach(fail));
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(2);
+    expect(alerts[0]).toHaveClass("rect");
+    expect(screen.getAllByRole("button", { name: "Dismiss notification" })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "Dismiss notification" })[0]);
+    expect(useToasts.getState().toasts).toHaveLength(1);
+  });
+
+  it("three failures render as one grouped toast; Show lists them, × dismisses them all", () => {
+    render(<Toaster />);
+    act(() => ["a.csv", "b.csv", "c.csv"].forEach(fail));
+    const grouped = screen.getByRole("alert");
+    expect(grouped).toHaveTextContent("3 files couldn't be read");
+    expect(screen.queryByText(/Couldn't read a\.csv/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect(screen.getAllByRole("alert")).toHaveLength(3);
+    expect(screen.getByText(/Couldn't read a\.csv — the file is empty/)).toBeInTheDocument();
+    cleanup();
+    useToasts.setState({ toasts: [] });
+    render(<Toaster />);
+    act(() => ["d.csv", "e.csv", "f.csv"].forEach(fail));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss notification" }));
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+
+  it("Show from a hovered, focused group lifts its holds (the toasts still time out) and parks focus on the stack", () => {
+    vi.useFakeTimers();
+    try {
+      render(<Toaster />);
+      act(() => ["a.csv", "b.csv", "c.csv"].forEach(fail));
+      const grouped = screen.getByRole("alert");
+      fireEvent.mouseEnter(grouped);
+      const show = screen.getByRole("button", { name: "Show" });
+      act(() => show.focus());
+      fireEvent.click(show);
+      expect(screen.getAllByRole("alert")).toHaveLength(3);
+      // Not stranded on <body>, where Delete removes the active dataset.
+      expect(document.activeElement).not.toBe(document.body);
+      act(() => void vi.advanceTimersByTime(60_000));
+      expect(useToasts.getState().toasts).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
