@@ -110,7 +110,7 @@ export const SERIES_STYLE: Classify<SeriesStyle> = {
 
 export const AXIS_FORMAT: Classify<AxisFormat> = {
   mode: V, digits: V, divide: V, minor: V, ticks: V, size: V, base: V, breaks: V,
-  prob: G, custom: G, cross: G, reverse: G, rotate: G, offset: G, grid: G, top: G,
+  prob: G, custom: G, cross: G, reverse: G, rotate: G, offset: G, grid: G, top: G, prefix: G, suffix: G,
 };
 
 // Publication (export) styles ARE sanitized by 0.34: new keys are dropped.
@@ -232,12 +232,20 @@ export const DATASET: Classify<Dataset> = {
   linkedCurves: G, columnProps: G, hiddenCols: G, frozenCols: G,
 };
 
+// Top-level `.dwk` keys added after v0.34.0. 0.34's parseWorkspace builds its
+// result field by field, so an unknown top-level key is dropped on open + save
+// (measured: its parse and serialize name every key and have no
+// `savedRecodeMappings`): a saved Recode mapping would be lost, so it is gated.
+// (Top-level keys 0.34 already carried are not listed.)
+export const WORKSPACE_TOP: Classify<{ savedRecodeMappings: unknown }> = { savedRecodeMappings: G };
+
 /** Every classification map by type name (the test's ratchet reads this). */
 export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V034Class>>>> = {
   PlotView: PLOT_VIEW,
   PlotWindow: PLOT_WINDOW,
   SeriesStyle: SERIES_STYLE,
   AxisFormat: AXIS_FORMAT,
+  Workspace: WORKSPACE_TOP,
   ExportSeriesStyle: EXPORT_SERIES_STYLE,
   DisplayBlock: DISPLAY_BLOCK,
   RecipeVisual: RECIPE_VISUAL,
@@ -290,6 +298,7 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
 export function featuresV034WouldDrop(doc: unknown): string[] {
   const found = new Set<string>();
   if (!isObj(doc)) return [];
+  checkType(doc, "Workspace", found);
   // Typed containers, by path. Dataset cells (`data`/`raw`) are never walked.
   const datasets = Array.isArray(doc.datasets) ? doc.datasets : [];
   for (const d of datasets) checkType(d, "Dataset", found);
