@@ -3721,6 +3721,72 @@ lifecycle) would need their signatures made async first.
 **Pin:** unmoved, as in slices 28-29: the reclaimed bytes are headroom for
 the queued branches, not a lock-in.
 
+### Slice 31 — the panel family loads after mount, pin UNMOVED — **DONE (2026-11-16)**
+
+**Measured net eager delta −19,082 B — pin unchanged at 816,042 B**
+
+Main sat 2,359 B under the pin with roughly +2.5 kB of pending lanes queued.
+Exact bytes, `npm ci`, `node_modules/.vite` wiped, `npx tsc -b --force`,
+`npm run build` (entry chunk + Rolldown runtime):
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `b3da5769` (parent, main after #722) | 813,683 | — |
+| + flag-gated panels and dialogs -> `AppOverlayPanels.tsx`, loaded after mount (first cut) | 794,394 | −19,289 |
+| + review round: retry on the next gesture via `useRegionLoaded(…, attempt)` | 794,601 | +207 |
+| this slice | 794,601 | **−19,082** |
+
+The new after-mount chunk `AppOverlayPanels-*.js` is 24,617 B.
+
+#### How it was found
+
+The slice-30 method (graph dump plugin, sourcemap profile, bytes each eager
+module alone keeps reachable). `AppOverlays.tsx` ranked first among modules
+that render nothing at first paint: 13,590 B of its own and 17,723 B
+dominated. Its own bytes were the ~60 `lazyPanel()` declarations (each a
+`__vitePreload` call with its dependency index list) and their open-flag
+selectors. The saving is larger than the profile's figure because the entry
+chunk's `__vite__mapDeps` table, which no sourcemap segment covers, no longer
+lists the panel chunks' files.
+
+#### The move
+
+- `AppOverlays.tsx` was renamed to `AppOverlayPanels.tsx` (history follows
+  it) and its render split into three parts (the dialogs before
+  TooltipLayer, WhatIsThis, and the rest), with the selectors and the
+  keep-mounted state of each part in its own component. Mount lines and
+  `lazyPanel()` calls are byte-identical.
+- The new `AppOverlays.tsx` is the eager shell App already mounts: ParamDialog
+  and ConfirmDialog (promise APIs eager code awaits), Toaster, TooltipLayer,
+  InteractionHints (its listener and the first-run card) and the SQLite
+  dialog's open listener. It fetches the panel module from a mount effect and
+  renders the three parts around its own overlays in the original DOM order,
+  Param/Confirm/Toaster still last (R12).
+- A flag set before the chunk lands is read when it does. The shell loads
+  through `useRegionLoaded`, so the commit is `flushSync`ed (BUG-031); the
+  hook gained an optional `attempt` argument so an always-wanted region can
+  load again. A failed load shows a danger toast (at most one per 10 s), and
+  the next pointer or key press anywhere loads again, so the gesture that
+  opens a panel is also the one that retries. Nothing else depends on the
+  chunk.
+- Trade-off: a panel opened before the chunk lands (the first milliseconds
+  after mount, or a startup recovery prompt) waits for two fetches in a row,
+  the panels module and then its own chunk.
+
+#### Guards and tests
+
+- SEAMS entry `/AppOverlayPanels.tsx` <- `/AppOverlays.tsx`.
+- `AppOverlays.panelsLoad.test.tsx` forces both races behind a gated mock:
+  a failed load toasts, a key press reloads, and a panel opened while the
+  retried load is in flight mounts once it lands (red with the retry made a
+  no-op, and with the gesture listener removed). A source-order test pins
+  the three parts' positions and Param/Confirm/Toaster last.
+- The raw-source mount assertions (Split, Text formatting, Help, Reductions,
+  aux-figure, upload-cache) read `AppOverlayPanels.tsx`.
+
+**Pin:** unmoved, as in slices 28-30: the reclaimed bytes are headroom for
+the queued branches, not a lock-in.
+
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and

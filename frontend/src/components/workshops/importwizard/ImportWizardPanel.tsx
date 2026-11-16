@@ -2,7 +2,7 @@
 // settings -> live preview (re-guessed on every edit, debounced) -> Import
 // lands a new library dataset named after the file, Cancel (the window's
 // close control) leaves zero state behind (ImportWizardPanel only mounts
-// while open, AppOverlays.tsx). "Save as filter…" persists the confirmed
+// while open, AppOverlayPanels.tsx). "Save as filter…" persists the confirmed
 // settings under a name + glob (io.import_filters) so a returning file of the
 // same shape imports with zero dialogs next time; the picker at the top
 // re-applies one of those saved settings — REFUSING (P1.6 item 4) rather than

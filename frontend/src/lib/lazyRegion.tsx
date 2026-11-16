@@ -217,8 +217,16 @@ export function lazyRegion<P extends object>(
  *  control behind the backdrop and nothing trapping Tab. A sync-lane
  *  commit flushes its passive effects before it returns, so the region
  *  arrives whole, in the task that paints it. Pinned by
- *  `components/overlays/lazyDialogPaintFocus.test.tsx`. */
-export function useRegionLoaded<P>(region: PreloadableRegion<P>, wanted: boolean, onFail: () => void): boolean {
+ *  `components/overlays/lazyDialogPaintFocus.test.tsx`.
+ *
+ *  `attempt` (bundle diet slice 31) lets a caller whose `wanted` never turns
+ *  false ask again after a failure: a new value starts a new load. */
+export function useRegionLoaded<P>(
+  region: PreloadableRegion<P>,
+  wanted: boolean,
+  onFail: () => void,
+  attempt = 0,
+): boolean {
   const [ready, setReady] = useState(region.loaded);
   useEffect(() => {
     if (!wanted || ready) return;
@@ -239,6 +247,6 @@ export function useRegionLoaded<P>(region: PreloadableRegion<P>, wanted: boolean
     // `onFail` is deliberately not a dependency: a fresh closure per render
     // must not restart an in-flight load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [region, wanted, ready]);
+  }, [region, wanted, ready, attempt]);
   return ready;
 }

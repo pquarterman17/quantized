@@ -10,7 +10,7 @@
 // columns only).
 //
 // BUNDLE SPLIT (bundle-size ratchet — scripts/check-bundle-size.mjs, the
-// store/packProjectPanel.ts precedent): WorksheetPane.tsx and AppOverlays.tsx
+// store/packProjectPanel.ts precedent): WorksheetPane.tsx and AppOverlayPanels.tsx
 // only ever touch the TINY store/levelOrderPanel.ts (an open flag + the
 // column identity), never store/levelOrder.ts — that heavy store (`lib/
 // recode.ts`'s `resolveRecodeChannel`, the commit/permutation logic) is
