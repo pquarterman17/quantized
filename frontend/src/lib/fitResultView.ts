@@ -99,6 +99,6 @@ export function fitResultTsv(i: FitResultInput): string {
 export function fitResultMarkdown(i: FitResultInput): string {
   const v = fitResultView(i);
   const md = (head: string[], rows: string[][]) =>
-    [head, head.map(() => "---"), ...rows].map((r) => `| ${r.map((c) => c.replace(/\|/g, "\\|")).join(" | ")} |`).join("\n");
+    [head, head.map(() => "---"), ...rows].map((r) => `| ${r.map((c) => c.replace(/\\/g, "\\\\").replace(/\|/g, "\\|")).join(" | ")} |`).join("\n");
   return [md(v.paramColumns, v.paramRows), md(["Statistic", "Value"], v.statRows), ...v.notes.map((n) => `> ${n}`)].join("\n\n");
 }
