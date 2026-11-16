@@ -228,7 +228,7 @@ body {
 .qzk-library-tile-copy { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; }
 .qzk-library-tile-copy strong { overflow: hidden; color: var(--text); font-size: var(--font-size-sm); text-overflow: ellipsis; white-space: nowrap; }
 .qzk-library-tile-copy span, .qzk-library-tile-copy em { color: var(--text-faint); font-size: var(--type-nano); font-style: normal; }
-.qzk-library-tile-copy em { color: var(--warning, #d9a53f); }
+.qzk-library-tile-copy em { color: var(--warn); }
 .qzk-tile-table { height: 126px; overflow: hidden; padding: 9px; background: var(--surface-2); font: var(--type-nano) var(--font-mono); }
 .qzk-tile-table-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border-bottom: 1px solid var(--border-soft); }
 .qzk-tile-table-row span { overflow: hidden; padding: 5px 6px; color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
@@ -1386,7 +1386,7 @@ body {
 .qzk-step-code { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-dim); word-break: break-all; }
 
 /* Recalc staleness badge (#4). */
-.qzk-stale-dot { flex-shrink: 0; color: var(--warning, #d9a53f); font-size: 9px; cursor: pointer; }
+.qzk-stale-dot { flex-shrink: 0; color: var(--warn); font-size: 9px; cursor: pointer; }
 
 /* Quick Figure Builder: a focused main-workspace transaction, not a modal. */
 .qzk-technique-workspace { container-type: inline-size; flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: clamp(18px, 2.4vw, 34px); background: var(--surface-0); }
