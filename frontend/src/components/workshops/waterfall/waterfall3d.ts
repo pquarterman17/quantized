@@ -18,6 +18,8 @@ export interface Curve3dOptions {
   depth: DepthBy;
   elev: number;
   azim: number;
+  /** The interactive view's zoom (0.5..3); the export draws the same. */
+  zoom?: number;
   cmap: string;
   style: string;
   title: string;
@@ -59,6 +61,7 @@ export function curveWaterfallBody(series: readonly WaterfallSeries[], o: Curve3
       kind: "waterfall",
       view_elev: o.elev,
       view_azim: o.azim,
+      view_zoom: o.zoom ?? 1,
       cmap: o.cmap,
       fmt,
       style: o.style,

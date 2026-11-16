@@ -1,5 +1,7 @@
-// The waterfall workshop's 3-D section: the preview is the server render of the
-// same body the export sends; a refusal reads as a reason.
+// The waterfall workshop's 3-D section: the export preview is the server render
+// of the same body the export sends; a refusal reads as a reason; the
+// interactive view (the default) renders nothing server-side and its settled
+// camera is what the export sends.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +18,8 @@ import Waterfall3dSection from "./Waterfall3dSection";
 
 const S = (label: string, y: number[]): WaterfallSeries => ({ id: label, label, x: [0, 1, 2], y, range: 1 });
 const two = [S("a 10", [1, 2, 3]), S("b 20", [4, 5, 6])];
+/** The section opens interactive (lane G); the server render is "Export preview". */
+const showExportPreview = () => fireEvent.change(screen.getByLabelText("3-D view mode"), { target: { value: "static" } });
 
 beforeEach(() => {
   vi.mocked(exportMapFigure).mockClear();
@@ -26,6 +30,7 @@ beforeEach(() => {
 describe("Waterfall3dSection", () => {
   it("previews the server render and exports the same request in the chosen format", async () => {
     render(<Waterfall3dSection series={two} channel="Signal" />);
+    showExportPreview();
     const img = await screen.findByAltText("3-D waterfall preview");
     expect(img.getAttribute("src")).toMatch(/^data:/);
     const preview = vi.mocked(renderMapFigure).mock.calls.at(-1)![0];
@@ -39,6 +44,7 @@ describe("Waterfall3dSection", () => {
 
   it("depth by number in name; one curve is refused with the reason and nothing is requested", async () => {
     const { rerender } = render(<Waterfall3dSection series={two} channel="Signal" />);
+    showExportPreview();
     fireEvent.change(screen.getByLabelText("Depth by"), { target: { value: "number" } });
     await screen.findByAltText("3-D waterfall preview");
     expect(vi.mocked(renderMapFigure).mock.calls.at(-1)![0].curves?.map((c) => c.depth)).toEqual([10, 20]);
@@ -51,6 +57,7 @@ describe("Waterfall3dSection", () => {
 
   it("angles commit on blur/Enter, not per keystroke; a blank or out-of-range angle is invalid, not 0", async () => {
     render(<Waterfall3dSection series={two} channel="Signal" />);
+    showExportPreview();
     await screen.findByAltText("3-D waterfall preview");
     const elev = screen.getByLabelText("Elevation (°)");
     vi.mocked(renderMapFigure).mockClear();
@@ -66,5 +73,17 @@ describe("Waterfall3dSection", () => {
     fireEvent.keyDown(elev, { key: "Enter" });
     await waitFor(() => expect(vi.mocked(renderMapFigure).mock.calls.at(-1)?.[0].view_elev).toBe(45));
     expect(vi.mocked(renderMapFigure).mock.calls.every((c) => c[0].view_elev !== 0)).toBe(true);
+  });
+
+  it("opens interactive: no server render until asked; the export carries the on-screen zoom", async () => {
+    render(<Waterfall3dSection series={two} channel="Signal" />);
+    const plot = screen.getByRole("application", { name: /3-D waterfall of Signal/ });
+    fireEvent.keyDown(plot, { key: "ArrowLeft" });
+    fireEvent.keyDown(plot, { key: "+" });
+    await waitFor(() => expect((screen.getByLabelText("Azimuth (°)") as HTMLInputElement).value).toBe("-55"));
+    expect(renderMapFigure).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Export 3-D PDF"));
+    await waitFor(() => expect(useApp.getState().status).toBe("exported waterfall3d_Signal.pdf"));
+    expect(vi.mocked(exportMapFigure).mock.calls[0]![0]).toMatchObject({ view_elev: 30, view_azim: -55, view_zoom: 1.1 });
   });
 });

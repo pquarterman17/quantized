@@ -202,7 +202,7 @@ export default function MapToolbar(props: MapToolbarProps) {
         aria-label="3-D view"
         aria-expanded={show3d}
         className={`qzk-tool-btn${on3d || show3d ? " active" : ""}`}
-        title="3-D view — Surface, 3-D scatter or 3-D waterfall as a static server-rendered figure (elevation, azimuth, z label)"
+        title="3-D view — Surface, 3-D scatter or 3-D waterfall: drag to rotate, wheel to zoom; ⤓ exports the view on screen"
         onClick={() => setShow3d((v) => !v)}
       >
         3D
