@@ -7,7 +7,8 @@ the data now name the columns when they fit the table exactly AND have
 structure (the data's delimiter, a 2+-space gap or bracketed units). Prose,
 dates, versions, rules and units-only lines do not, and the old Col1/Col2
 names stand -- including a single-spaced ``# x y``, which cannot be told from
-prose. The comment itself is still kept in ``metadata["comments"]``.
+prose. A structured row of unit symbols (``# V  A``) with no name row above
+it names the columns (I-V curves). The comment itself is still kept in ``metadata["comments"]``.
 
 MATLAB parity: ``+parser/importCSV.m`` never names columns from a comment
 line -- a deliberate, additive divergence (PORT_CHECKLIST, generic CSV).
@@ -76,7 +77,11 @@ def test_fixture_columns_are_named_from_the_comment(
         ("# Field (Oe)\tMoment (emu)\n1\t2\n3\t4\n", "Field", ["Moment"]),
         ("# x,y,z\n1,2,3\n3,5,6\n", "x", ["y", "z"]),  # savetxt(delimiter=",")
         ("# x  y\n1 2\n3 4\n", "x", ["y"]),  # gnuplot, aligned
-        ("# H M\n# Oe emu\n1 2\n3 4\n", "H", ["M"]),  # a names + units pair
+        ("# H  M\n# Oe emu\n1 2\n3 4\n", "H", ["M"]),  # a names + units pair
+        # Unit symbols ARE names when nothing names them (an I-V curve).
+        ("# V  A\n1 2\n3 4\n", "V", ["A"]),
+        ("# T\tC\n1\t2\n3\t4\n", "T", ["C"]),
+        ("# m  s\n1 2\n3 4\n", "m", ["s"]),
         ("% time  signal\n1 2\n3 4\n", "time", ["signal"]),  # MATLAB-style comment
         ("## T [K]  M [emu]\n\n1 2\n3 4\n", "T", ["M"]),  # blank line, "##"
         ("# H (Oe) M (emu)\n1 2\n3 4\n", "H", ["M"]),  # units glue to their names
@@ -124,8 +129,14 @@ def test_comment_header_names_columns(
         "# ***\t***\n1\t2\n3\t4\n",
         # Units are not names.
         "# K Ohm\n1 2\n3 4\n",
-        "# K  Ohm\n1 2\n3 4\n",
-        "# Oe\temu\n1\t2\n3\t4\n",
+        # Prose cut at a wide gap or tab, and key<TAB>value preambles.
+        "# Hysteresis loop  field cooled\n1 2\n3 4\n",
+        "# Operator\tJS\n1\t2\n3\t4\n",
+        "# Operator\tJ.S.\n1\t2\n3\t4\n",
+        "# made by  the script\n1 2\n3 4\n",
+        # A single-spaced name line does not lend structure to a units row.
+        "# Sample A\n# Oe emu\n1 2\n3 4\n",
+        "# Temperature dependence\n# K Ohm\n1 2\n3 4\n",
     ],
 )
 def test_free_text_comment_is_not_a_header(tmp_path: Path, text: str) -> None:
@@ -155,12 +166,16 @@ def test_units_line_under_names() -> None:
     assert got is not None and got.names == ["Temperature", "Moment"]
     assert got.units == ["K", "emu"]
     assert got.names_with_units() == ["Temperature (K)", "Moment (emu)"]
-    # "# H M" over "# Oe emu": the units name the units, never the columns.
-    pair = comment_header("# H M\n# Oe emu\n1 2\n", " ", 2)
+    # "# H  M" over "# Oe emu": the units row names the units, not the columns.
+    pair = comment_header("# H  M\n# Oe emu\n1 2\n", " ", 2)
     assert pair is not None and pair.names == ["H", "M"] and pair.units == ["Oe", "emu"]
-    # A units row with prose (or nothing) above it promotes nothing.
+    # The name row needs structure of its own; single-spaced, it promotes nothing.
+    assert comment_header("# H M\n# Oe emu\n1 2\n", " ", 2) is None
     assert comment_header("# Hysteresis loop.\n# Oe emu\n1 2\n", " ", 2) is None
-    assert comment_header("# Oe  emu\n1 2\n", " ", 2) is None
+    # Alone, a STRUCTURED row of unit symbols is names; bracketed it never is.
+    alone = comment_header("# Oe  emu\n1 2\n", " ", 2)
+    assert alone is not None and alone.names == ["Oe", "emu"] and alone.units == []
+    assert comment_header("# (Oe)  (emu)\n1 2\n", " ", 2) is None
     plain = comment_header("# Created  by\n# x  y\n1 2\n", " ", 2)
     assert plain is not None and plain.names == ["x", "y"] and plain.units == []
 

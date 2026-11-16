@@ -284,14 +284,14 @@ def _strong(cells: Sequence[str]) -> bool:
 
 
 def _point_decimal(cell: str) -> bool:
-    """A point-decimal number that cannot be European thousands grouping
-    (``"10.5"``, ``"1.5e-3"`` -- not ``"1.234"``)."""
-    return (
-        "." in cell
-        and "," not in cell
-        and not _THOUSANDS_RE.match(cell)
-        and _is_numeric_like(cell)
-    )
+    """A number written with a ``.`` and no ``,`` (``"10.5"``, ``"1.5e-3"``,
+    and ``"1.234"`` too).
+
+    ``"1.234"`` COULD be a European grouped integer, but ``auto`` reads it
+    point-style (it parses), so declaring the file European beside it would
+    leave that column 1000x off. A European file with dot-grouped integers
+    therefore fails closed and asks for the separator."""
+    return "." in cell and "," not in cell and _is_numeric_like(cell)
 
 
 def _settled_by_file(
@@ -309,9 +309,10 @@ def _settled_by_file(
     * the delimiter is ``;`` or tab (with ``,`` the comma is a delimiter,
       and whitespace says nothing about locale);
     * some converted column PROVES the decimal comma (`_strong`); and
-    * no cell ANYWHERE is a point decimal (`_point_decimal`): ``10.5``
-      beside ``1,234`` means the comma is US thousands grouping, and the
-      European reading would be 1000x too small.
+    * no cell ANYWHERE is a dotted number (`_point_decimal`): ``10.5``
+      beside ``1,234`` means the comma is US thousands grouping, and a
+      ``1.234`` column would stay point-read beside a European one -- either
+      way some column would be 1000x off.
 
     Every data row is inspected, so evidence at the end of a file counts as
     much as at the start. A ``;`` file whose ``1,234`` column sits beside

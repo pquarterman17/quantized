@@ -107,6 +107,10 @@ def test_point_choice_is_unchanged_by_evidence(tmp_path: Path) -> None:
         "Angle\tCounts\tPeak\n10.5\t1,234\t1,1\n11.0\t2,345\t2,0\n",
         # "0,1" would prove it, but "0.5" in the next column says otherwise.
         "Field\tMoment\tIdx\n1,000\t0.5\t0,1\n2,000\t0.6\t0,2\n",
+        # A dotted column that COULD be European grouping ("1.234") is still
+        # read point-style, so the file cannot be declared European beside it.
+        "N;T;R\n1.234;2,000;0,5\n2.345;3,000;0,6\n",
+        "Angle\tCounts\tR\n20.125\t1,234\t0,5\n20.250\t2,345\t0,6\n",
         # A point decimal at the very END of the file still counts.
         "A;B\n" + "".join(f"{k},500;0,{k}5\n" for k in range(1, 50)) + "9,000;0.5\n",
     ],
