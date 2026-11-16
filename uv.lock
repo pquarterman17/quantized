@@ -2891,7 +2891,7 @@ requires-dist = [
     { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'origin-com'" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "statsmodels", marker = "extra == 'stats'", specifier = ">=0.14" },
-    { name = "threadpoolctl", specifier = ">=3.1" },
+    { name = "threadpoolctl", specifier = ">=3.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
     { name = "xlrd", specifier = ">=2.0.2" },
 ]

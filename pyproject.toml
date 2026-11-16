@@ -22,7 +22,7 @@ dependencies = [
     # BSD-3-Clause, pure Python: pins BLAS to one thread around the bounded
     # least-squares solver (calc/_bounded_lsq.py), whose tall-skinny SVDs run
     # ~100x slower when OpenBLAS threads oversubscribe a loaded machine.
-    "threadpoolctl>=3.1",
+    "threadpoolctl>=3.8",
 ]
 
 [project.urls]

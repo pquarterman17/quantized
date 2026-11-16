@@ -24,8 +24,9 @@ OpenBLAS's default thread count on a loaded machine those SVDs oversubscribe
 the cores and spin: a 6474 x 60 SVD measured ~3 s on 4 threads against 17 ms
 on one (load average ~7, 2026-11-16), so a 20-peak XRD fit that converges in
 ~3.5 s stopped unconverged at its 10 s deadline. One thread is also the faster
-choice on an idle machine at these sizes. The limit is process-wide while it
-is held, so other BLAS work in the process runs single-threaded meanwhile.
+choice on an idle machine at these sizes. The pin is refcounted across
+overlapping fits (:mod:`quantized.calc._blas_pin`); while any fit holds it,
+other BLAS work in the process runs single-threaded too.
 
 Each fitter keeps its own scaling, threshold, warning text and reporting.
 """
@@ -41,23 +42,13 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares
-from threadpoolctl import ThreadpoolController
+
+from quantized.calc._blas_pin import single_thread_blas
 
 __all__ = ["BoundedFit", "FitAborted", "pinv_covariance", "solve_bounded"]
 
 Residuals = Callable[[NDArray[np.float64]], NDArray[np.float64]]
 Status = Literal["converged", "not_converged", "deadline", "no_free"]
-
-_controller: ThreadpoolController | None = None
-
-
-def _blas() -> ThreadpoolController:
-    """The process's BLAS pools, inspected once (each inspection walks the
-    loaded libraries, ~ms)."""
-    global _controller
-    if _controller is None:
-        _controller = ThreadpoolController()
-    return _controller
 
 
 class _Deadline(Exception):
@@ -119,7 +110,7 @@ def solve_bounded(
         return fit
     fit.t_end = None if deadline_s is None else time.monotonic() + deadline_s
     try:
-        with _blas().limit(limits=1, user_api="blas"):  # see the module doc
+        with single_thread_blas():  # see the module doc and calc._blas_pin
             sol = least_squares(fit.tracked, x0, bounds=bounds, method="trf",
                                 x_scale="jac", max_nfev=max_nfev)
     except _Deadline:
