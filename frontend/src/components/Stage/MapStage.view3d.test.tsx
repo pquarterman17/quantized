@@ -1,6 +1,7 @@
 // MapStage static 3-D (gap-5 lane F): the toolbar's 3-D panel chooses the view,
-// the stage shows the SERVER's render of it, and ⤓ sends the SAME request in the
-// chosen format. Scaffolding mirrors MapStage.export.test.tsx.
+// the stage's "Export preview" shows the SERVER's render of it (the default is
+// the interactive canvas, lane G: `Map3D/`), and ⤓ sends the SAME request in
+// the chosen format. Scaffolding mirrors MapStage.export.test.tsx.
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +57,10 @@ beforeEach(() => {
 });
 
 const view3d = () => mapViewFor(useApp.getState().mapViews, "scan").view3d;
+const V3 = { zoom: 1, dropLines: false } as const;
+/** The 3-D view opens interactive (lane G); the server render is "Export preview". */
+const showExportPreview = async () =>
+  fireEvent.change(await screen.findByLabelText("3-D view mode"), { target: { value: "static" } });
 
 describe("MapStage static 3-D", () => {
   it("shows no 3-D render (and loads nothing) until a 3-D view is chosen", async () => {
@@ -84,6 +89,7 @@ describe("MapStage static 3-D", () => {
     fireEvent.keyDown(azim, { key: "Enter" });
     expect(view3d()).toMatchObject({ kind: "scatter3d", elev: 55, azim: 15 });
 
+    await showExportPreview();
     const img = await screen.findByAltText("3-D map preview");
     // The app's CSP allows only 'self' and data: images -- a blob: URL is blocked.
     expect(img.getAttribute("src")).toMatch(/^data:/);
@@ -139,11 +145,12 @@ describe("MapStage static 3-D", () => {
   });
 
   it("a 3-D scatter of scattered data previews and exports the ORIGINAL points", async () => {
-    useApp.getState().setMapView3d("scan", { kind: "scatter3d", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" });
+    useApp.getState().setMapView3d("scan", { kind: "scatter3d", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", ...V3 });
     vi.mocked(askParams).mockImplementation(async (_t, fields) => ({
       ...Object.fromEntries(fields.map((f) => [f.key, f.default])), fmt: "svg",
     }));
     render(<MapStage />);
+    await showExportPreview();
     await screen.findByAltText("3-D map preview");
     const preview = vi.mocked(renderMapFigure).mock.calls.at(-1)![0];
     // the offline regrid is not the measured grid: the 16 source rows go out, no z_grid
@@ -159,13 +166,14 @@ describe("MapStage static 3-D", () => {
 
   it("a stale preview is dimmed, marked busy and not described until the new picture arrives", async () => {
     let finish: (b: Blob) => void = () => {};
-    useApp.getState().setMapView3d("scan", { kind: "surface", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" });
+    useApp.getState().setMapView3d("scan", { kind: "surface", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", ...V3 });
     render(<MapStage />);
+    await showExportPreview();
     await screen.findByAltText("3-D map preview");
     const host = () => document.querySelector("[data-map3d-preview]")!;
     expect(host().getAttribute("aria-busy")).toBe("false");
     vi.mocked(renderMapFigure).mockImplementationOnce(() => new Promise<Blob>((r) => { finish = r; }));
-    act(() => useApp.getState().setMapView3d("scan", { kind: "surface", elev: 60, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" }));
+    act(() => useApp.getState().setMapView3d("scan", { kind: "surface", elev: 60, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", ...V3 }));
     // the new render is in flight: the old picture stays, dimmed and flagged, with no caption for the new inputs
     await waitFor(() => expect(host().getAttribute("aria-busy")).toBe("true"));
     expect(screen.getByAltText("3-D map preview")).toBeTruthy();
@@ -191,8 +199,9 @@ describe("MapStage static 3-D", () => {
 
   it("a server refusal (too few points) is shown as the reason, not a blank view", async () => {
     vi.mocked(renderMapFigure).mockRejectedValueOnce(new Error("a 3-D waterfall needs at least 2 curves"));
-    useApp.getState().setMapView3d("scan", { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "" });
+    useApp.getState().setMapView3d("scan", { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", ...V3 });
     render(<MapStage />);
+    await showExportPreview();
     expect((await screen.findByRole("alert")).textContent).toMatch(/at least 2 curves/);
   });
 });
