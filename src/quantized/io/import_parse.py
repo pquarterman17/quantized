@@ -29,7 +29,13 @@ import numpy as np
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
-from quantized.io._delimiter_vote import _COMMA_NUMBER_RE, data_section_start, vote_lines
+from quantized.io._comment_header import comment_header
+from quantized.io._delimiter_vote import (
+    _COMMA_NUMBER_RE,
+    COMMENT_CHARS,
+    data_section_start,
+    vote_lines,
+)
 from quantized.io._origin_ascii_header import origin_ascii_rows
 from quantized.io.delimited import _extract_units, _split_lines
 
@@ -221,6 +227,14 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
         header_line = data_start - 1
     header_line, units_line = (_uncommented(lines, i) for i in (header_line, units_line))
     names = _resolve_names(tokens, header_line, n_cols)
+    # A header written as a comment ("# Qz (1/A)  R"): direct import's rule
+    # (`_comment_header`), offered as the column names -- the wizard still
+    # never takes a comment line as its header row.
+    if header_line is None and units_line is None and origin is None:
+        above = lines[section:data_start]
+        if all(not ln.strip() or ln.strip()[0] in COMMENT_CHARS for ln in above):
+            promoted = comment_header(lines, delim, n_cols)
+            names = promoted.names_with_units() if promoted else names
     return header_line, units_line, data_start, names, _guess_roles(data_rows, n_cols)
 
 
@@ -265,9 +279,9 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     notes: list[str] = []
     if dc.uses_decimal_path(decimal, delim, "," in text):
         comma_cols = dc.resolve_decimal_columns(
-            "this file", names, matrix, data_tokens, decimal=decimal
+            "this file", names, matrix, data_tokens, decimal=decimal, delim=delim, notes=notes
         )
-        notes = dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
+        notes += dc.stray_comma_notes(names, matrix, data_tokens, converted=comma_cols)
     elif delim == "," and '"' in text:  # quoted grouped numbers (`_quoted_numbers`)
         notes = qn.ungroup_columns(names, matrix, data_tokens)
         notes += dc.stray_comma_notes(names, matrix, data_tokens, separator_choice=False)

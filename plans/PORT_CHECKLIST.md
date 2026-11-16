@@ -40,6 +40,13 @@ density↔SLD toggle, user plot templates.)
 - [x] SIMS depth profile — `+parser/importSIMS.m` — golden `2a7a538` (shared exact + paired interp 1e-9)
 - ~~AFM — `+parser/importAFM.m`~~ — **out of scope → fermiviewer** (AFM topography/phase images)
 - [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
+  - Intentional divergences (UX8-B, 2026-11-16; additive, golden unchanged): (1) a `#`/`%` comment line directly
+    above the data that tokenizes to the data width as non-numeric names (`# Qz (1/A)  R`, numpy `savetxt`, gnuplot)
+    names the columns (`io/_comment_header.py`; free-text comments still fall back to Col1/Col2; the line stays in
+    `metadata["comments"]`) — `importCSV.m` treats every comment line as preamble. (2) Under `decimal="auto"`, a
+    `;`/tab file whose ambiguous `2,000` column sits beside an unambiguous decimal-comma column reads both as decimal
+    comma, with a note (`_decimal_comma.resolve_decimal_columns`); all-ambiguous files still fail closed. MATLAB
+    reference not re-read for this change (sibling checkout unavailable); behaviour inferred from the existing port.
 - [x] Excel — `+parser/importExcel.m` → `io/excel.py` (openpyxl) — golden `ce228ba`
 - [x] Header parsing / auto-detect — `+parser/parseColHeader.m` → `io/base.parse_col_header`/`resolve_column`
 - [x] Auto-dispatch + registry — `+parser/importAuto.m`, `+parser/resolveParser.m` → `io/registry.py` (single map + sniffers; `import_auto` drives `/api/parsers/import`)

@@ -20,6 +20,7 @@ from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
 from quantized.io._column_marker import MARKER, apply_marker, find_marker
+from quantized.io._comment_header import comment_header
 from quantized.io._data_section import _split_lines as _split_lines  # re-export
 from quantized.io._delimited_fast import (
     LazyTokenRows,
@@ -190,10 +191,15 @@ def import_csv(
     if origin_rows is not None:
         header_row, units_row = origin_rows.header, origin_rows.units
     header_unclear = origin_ascii_ambiguous(scoring_rows, data_start, n_data_cols)
+    # A header written as a comment ("# Qz (1/A)  R", `_comment_header`).
+    promoted = None
+    if header_row < 0 and data_start == 0 and origin_rows is None:
+        head = text.removeprefix("\ufeff")[:65536].splitlines()  # not a 1M-row split
+        promoted = comment_header(head, delim, n_data_cols)
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
-        col_headers = [f"Col{k + 1}" for k in range(n_data_cols)]
+        col_headers = promoted.names if promoted else [f"Col{k + 1}" for k in range(n_data_cols)]
     if len(col_headers) < n_data_cols:
         col_headers += [f"Col{k + 1}" for k in range(len(col_headers), n_data_cols)]
     elif len(col_headers) > n_data_cols:
@@ -201,7 +207,7 @@ def import_csv(
     col_headers = [h if h.strip() else f"Col{k + 1}" for k, h in enumerate(col_headers)]
     n_cols = len(col_headers)
 
-    row_units: list[str] = []
+    row_units: list[str] = list(promoted.units) if promoted else []
     if units_row >= 0:
         utok = [u.strip() for u in lazy_tokens[units_row]]
         for k in range(n_cols):
@@ -234,9 +240,11 @@ def import_csv(
         # it is already a `Sequence[Sequence[str]]`.
         data_tokens = data_tokens_list
     comma_cols: list[int] = []
+    dc_notes: list[str] = []  # ambiguous columns resolved by the file's evidence
     if comma_path:
         comma_cols = dc.resolve_decimal_columns(
-            path.name, col_headers, matrix, data_tokens, decimal=decimal
+            path.name, col_headers, matrix, data_tokens, decimal=decimal, delim=delim,
+            notes=dc_notes,
         )
     elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
@@ -432,6 +440,8 @@ def import_csv(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
+    if promoted:
+        notes.append(f"Column names read from the comment line '{promoted.lines[0]}'.")
     if header_unclear:  # say so: the rows were read conservatively
         notes.append(AMBIGUOUS_HEADER_NOTE.format(names=header_row + 1, units=units_row + 1))
     if comma_cols:
@@ -440,7 +450,7 @@ def import_csv(
         decimal_meta, decimal_note = dc.decimal_metadata(shown)
         metadata.update(decimal_meta)
         notes.append(decimal_note)
-    notes.extend(comma_notes)
+    notes.extend([*dc_notes, *comma_notes])
     if time_promoted:
         if time_idx in categorical_idx:
             notes.append(
