@@ -72,6 +72,25 @@ describe("auto ticks: the ×10ⁿ factor", () => {
     expect(texts).toEqual([{ text: "×10⁴", align: "right" }, { text: "×10⁻³", align: "left" }]);
   });
 
+  it("a tight range gets no factor; a single tick still does, at the export's zero increment", () => {
+    expect(autoTickExponent([1000.001, 1000.002])).toBeNull();
+    expect(autoTickExponent([0.00025])).toBe(-4);
+    const { u } = fakePlot();
+    expect(labelsOn(u, [0.00025])).toEqual(["3"]); // mantissa 0.25 at 0 decimals, as the export's incr 0
+  });
+
+  it("a Y factor rides above a shown top X axis instead of under it", () => {
+    const { u, texts } = fakePlot();
+    const ys: number[] = [];
+    (u.ctx as unknown as { fillText: (t: string, x: number, y: number) => void }).fillText = (_t, _x, y) => { ys.push(y); };
+    labelsOn(u, [0, 0.001, 0.002], 1);
+    drawAutoFactors(u);
+    (u.axes as unknown[]).push({ side: 0, size: 30, font: "12px mono", stroke: "#111" });
+    drawAutoFactors(u);
+    expect(texts).toEqual([]);
+    expect(ys[0] - ys[1]).toBe(30);
+  });
+
   it("reserves a top band while the Y scale spans a ×10ⁿ range", () => {
     const { u } = fakePlot();
     const scales = { y: { min: 0, max: 1 } };

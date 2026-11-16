@@ -15,7 +15,7 @@
 
 import type uPlot from "uplot";
 
-import { divideFont, divideLabelSpot, reserveDivideBand, type AxisSide } from "./axisDivideLabel";
+import { divideFont, divideLabelSpot, reserveDivideBand, topAxisLift, type AxisSide } from "./axisDivideLabel";
 import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisExtrasContext } from "./axisBreakExtras";
 import type { AxisBreak } from "./axisBreaks";
 import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
@@ -197,7 +197,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
             // axis' own tick font (lib/axisDivideLabel.ts): inside the corner
             // it was small and under the legend.
             const f = divideFont(axis.font, pr);
-            const at = divideLabelSpot(side as AxisSide, { left, top, width, height }, pr, f.px);
+            const at = divideLabelSpot(side as AxisSide, { left, top, width, height }, pr, f.px, topAxisLift(u, pr));
             ctx.font = f.font;
             ctx.textAlign = at.align;
             ctx.textBaseline = at.baseline;

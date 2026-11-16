@@ -10,7 +10,7 @@
 
 import type uPlot from "uplot";
 
-import { divideFont, divideLabelSpot, divideTopPadding, type AxisSide } from "./axisDivideLabel";
+import { divideFont, divideLabelSpot, divideTopPadding, topAxisLift, type AxisSide } from "./axisDivideLabel";
 import { logDecadeLabels, sup } from "./logTicks";
 import { decimalsForIncrement, pow10 } from "./ticks";
 import type { AxisFormat } from "./types";
@@ -27,9 +27,17 @@ export const timesTen = (n: number): string => `×10${sup(n)}`;
  *  `calc/tick_multiplier.py`'s `auto_tick_exponent`, pinned by the shared
  *  fixture tests/fixtures/wire/tick_multiplier.json. */
 export function autoTickExponent(ticks: readonly (number | null | undefined)[]): number | null {
-  let max = 0;
-  for (const v of ticks) if (v != null && Number.isFinite(v)) max = Math.max(max, Math.abs(v));
+  let max = 0, lo = Infinity, hi = -Infinity;
+  for (const v of ticks) {
+    if (v == null || !Number.isFinite(v)) continue;
+    max = Math.max(max, Math.abs(v));
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
   if (!(max > 0)) return null;
+  // A tight range far from zero (1000.001..1000.002): its mantissas would need
+  // more than 5 digits, so no factor -- the export's offset text is off too.
+  if (hi > lo && (hi - lo) / max < 1e-3) return null;
   const n = Math.floor(Math.log10(max) + 1e-9);
   return n <= -3 || n >= 4 ? n : null;
 }
@@ -128,7 +136,9 @@ const autoValues = (pad: boolean, multiplier: boolean): TickValues => (u, splits
     else map.set(axisIdx, n);
   }
   if (n != null) {
-    const k = pow10(n), d = Math.min(20, decimalsForIncrement(incr / k));
+    // One tick: the export's increment is 0 (no second value to diff), so the
+    // mantissa decimals agree rather than following uPlot's foundIncr.
+    const k = pow10(n), d = Math.min(20, decimalsForIncrement(splitsIncrement(splits, 0) / k));
     return splits.map((v) => (v == null ? null : trueMinus(stripNegZero((v / k).toFixed(d)))));
   }
   const nf = autoNumberFormat(decimalsForIncrement(incr), pad);
@@ -187,7 +197,7 @@ export function drawAutoFactors(u: uPlot): void {
     const axis = u.axes[idx];
     if (!drawn(axis)) continue;
     const at = divideFont(axis.font, pr);
-    const spot = divideLabelSpot((axis.side ?? (idx === 0 ? 2 : 3)) as AxisSide, u.bbox, pr, at.px);
+    const spot = divideLabelSpot((axis.side ?? (idx === 0 ? 2 : 3)) as AxisSide, u.bbox, pr, at.px, topAxisLift(u, pr));
     const stroke = axis.stroke as unknown;
     ctx.fillStyle = typeof stroke === "function" ? String((stroke as (u: uPlot, i: number) => unknown)(u, idx)) : String(stroke ?? "#000");
     ctx.font = at.font;

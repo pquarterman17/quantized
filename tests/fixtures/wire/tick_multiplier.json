@@ -8,6 +8,8 @@
     {"name": "reaches 1e-2 exactly: no factor", "ticks": [0, 0.005, 0.01], "labels": ["0.000", "0.005", "0.010"], "factor": null},
     {"name": "below 1e4: no factor, no grouping", "ticks": [0, 2000, 4000, 6000, 8000], "labels": ["0", "2000", "4000", "6000", "8000"], "factor": null},
     {"name": "temperature: unchanged", "ticks": [0, 100, 200, 300], "labels": ["0", "100", "200", "300"], "factor": null},
-    {"name": "true minus without a factor", "ticks": [-3, -2, -1, 0], "labels": ["−3", "−2", "−1", "0"], "factor": null}
+    {"name": "true minus without a factor", "ticks": [-3, -2, -1, 0], "labels": ["−3", "−2", "−1", "0"], "factor": null},
+    {"name": "tight range far from zero: full labels, no factor", "ticks": [1000.001, 1000.0012, 1000.0014, 1000.0016, 1000.0018, 1000.002], "labels": ["1000.0010", "1000.0012", "1000.0014", "1000.0016", "1000.0018", "1000.0020"], "factor": null},
+    {"name": "tight tiny range: full labels, no factor", "ticks": [0.0010001, 0.0010002, 0.0010003], "labels": ["0.0010001", "0.0010002", "0.0010003"], "factor": null}
   ]
 }

@@ -39,12 +39,15 @@ def times_ten(n: int) -> str:
 
 def auto_tick_exponent(ticks: Iterable[float]) -> int | None:
     """The order of magnitude of the largest |tick|, when it is at most -3 or
-    at least 4 (ticks all below 1e-2, or reaching 1e4); else ``None``."""
-    peak = 0.0
-    for v in ticks:
-        if math.isfinite(v):
-            peak = max(peak, abs(v))
+    at least 4 (ticks all below 1e-2, or reaching 1e4); else ``None``. Also
+    ``None`` for a tight range (span / |max| < 1e-3)."""
+    finite = [float(v) for v in ticks if math.isfinite(v)]
+    peak = max((abs(v) for v in finite), default=0.0)
     if not peak > 0:
+        return None
+    # A tight range far from zero (1000.001..1000.002): its mantissas would
+    # need more than 5 digits, so no factor -- the screen skips it too.
+    if max(finite) > min(finite) and (max(finite) - min(finite)) / peak < 1e-3:
         return None
     n = math.floor(math.log10(peak) + 1e-9)
     return n if n <= -3 or n >= 4 else None
@@ -83,6 +86,8 @@ class AutoTickFormatter(ScalarFormatter):
 
     def __init__(self) -> None:
         super().__init__()
+        # Never matplotlib's own offset ("+1e3" with "0.0010" labels): the screen draws full labels.
+        self.set_useOffset(False)
         self.multiplier = True
         self._exp: int | None = None
         self._incr = 0.0

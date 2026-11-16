@@ -85,7 +85,11 @@ describe("columnFormatter", () => {
     expect(fmtCol([250.5, 0.00001553, -0.5])).toEqual(["250.5000", "0.00001553", "-0.5000"]);
     expect(fmtCol([0.0016, 0.0012, NaN])).toEqual(["0.001600", "0.001200", "—"]);
     // A fixed column never prints a real tiny value as zero...
-    expect(fmtCol([250.5, 1.5e-9])[1]).toBe("0.000000001500");
+    expect(fmtCol([2.5, 1.5e-7])[1]).toBe("0.0000001500");
+    // ...but one needing more than ~12 decimals, or spanning > 9 decades, goes exponential.
+    expect(fmtCol([5, 3e-25])).toEqual(["5.000e+0", "3.000e-25"]);
+    expect(fmtCol([250.5, 1.5e-9])).toEqual(["2.505e+2", "1.500e-9"]);
+    expect(fmtCol([0.5, 1e-10])).toEqual(["5.000e-1", "1.000e-10"]);
     // ...and a column whose large values need decimals stays fixed throughout.
     expect(fmtCol([10000.5, 10000.6, 0.00001, 0.5])).toEqual(["10000.5", "10000.6", "0.00001000", "0.5000"]);
   });

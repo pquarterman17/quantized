@@ -42,7 +42,8 @@ const expCell: CellFormatter = (v) => (v == null || !Number.isFinite(v) ? "—" 
 const fixedCell: CellFormatter = (v) => {
   if (v == null || !Number.isFinite(v)) return "—";
   const a = Math.abs(v);
-  return v.toFixed(a > 0 && a < 0.1 ? Math.min(20, 3 - Math.floor(Math.log10(a))) : 4);
+  const d = a > 0 && a < 0.1 ? 3 - Math.floor(Math.log10(a)) : 4;
+  return d > 20 ? v.toExponential(3) : v.toFixed(d); // never zeros where the value lives past 20 places
 };
 
 /** One column's formatter (`at(r)` reads row r of `n`, in data order), with
@@ -67,7 +68,10 @@ export function columnFormatter(n: number, at: (r: number) => number | undefined
     if (a > maxAbs) maxAbs = a;
     if (a > 0 && a < minNonZero) minNonZero = a;
   }
-  const plain = maxAbs >= BIG || (maxAbs < 1 && minNonZero < 1e-3) ? expCell : fixedCell;
+  // Also exponential when fixed would need more than ~12 decimals for the
+  // smallest value, or the column spans more than 9 decades ([5, 3e-25]).
+  const wide = minNonZero < 1e-9 || maxAbs / minNonZero > 1e9;
+  const plain = maxAbs >= BIG || (maxAbs < 1 && minNonZero < 1e-3) || wide ? expCell : fixedCell;
   if (maxLarge === 0) return plain;
   if (allInt) return (v) => (v != null && Number.isFinite(v) && Math.abs(v) < FULL ? v.toFixed(0) : fmtCell(v));
 
