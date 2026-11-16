@@ -8,7 +8,7 @@
 import type uPlot from "uplot";
 
 import { resolveDrawColor } from "./contrastColor";
-import { FIT_DASH, fitLineWidth, isFitSeries } from "./fitOverlayStyle";
+import { FIT_DASH, fitLineWidth, isFitSeries, traceWithFit } from "./fitOverlayStyle";
 import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
@@ -108,7 +108,8 @@ export function buildSeriesDefs(
   // EXACT stroke its "from" series draws with, including the literal-colour
   // contrast substitution above.
   const strokes: string[] = [];
-  const fitShown = payload.series.some(isFitSeries);
+  // The data's default trace while the Curve Fit's curve is shown (markers, row-capped).
+  const dataTrace = traceWithFit(args.defaultTrace ?? "Line", payload.series.some(isFitSeries), payload.data[0].length) ?? "Line";
   const seriesArr: uPlot.Series[] = [
     // x series: declare its sort order so uPlot autoscales correctly. Ascending
     // (the common case: temperature/2θ/time) keeps the fast endpoint path;
@@ -174,7 +175,7 @@ export function buildSeriesDefs(
       // A fit curve nobody styled is a thinner dashed LINE, and data nobody styled gets markers
       // while a fit is shown, so the fit cannot hide it (lib/fitOverlayStyle.ts; the export agrees).
       const fitCurve = isFitSeries(s) && !seriesStyles?.[i];
-      const trace = seriesTrace(style, fitCurve ? "Line" : fitShown && !s.overlay && (args.defaultTrace ?? "Line") === "Line" ? "Line + markers" : args.defaultTrace ?? "Line"); // an explicit style opts out
+      const trace = seriesTrace(style, fitCurve ? "Line" : s.overlay ? (args.defaultTrace ?? "Line") : dataTrace); // an explicit style opts out
       const lineW = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
       const width = fitCurve ? fitLineWidth(lineW) : lineW;
       const dash = fitCurve ? FIT_DASH : style?.line ? DASH[style.line] : undefined;

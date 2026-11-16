@@ -231,6 +231,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
         datasetId: ds.id,
         binding: { yKey: members[i]!.yKey, xKey: d.xKey },
         y: memberOverlay(ds, d.pairs, fit.yFit[i] ?? []),
+        curveFit: true,
       }));
       setShown(null);
       setResult({ fit, members, overlays });

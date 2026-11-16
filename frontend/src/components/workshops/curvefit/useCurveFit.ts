@@ -422,7 +422,7 @@ export function useCurveFit(): CurveFitState {
           const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
           const aligned = restoreGapRows(yFit, pairs);
           const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-          const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: localXy.yKey, xKey: fitXKey }, y };
+          const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: localXy.yKey, xKey: fitXKey }, y, curveFit: true };
           rememberCurveFitOverlay(overlay);
           setFitOverlay(overlay);
           retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null, overlay);

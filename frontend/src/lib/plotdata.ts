@@ -41,6 +41,7 @@ export interface PlotSeriesSpec {
   /** An analysis overlay (fit, baseline, peaks, dy/dx), not a data curve:
    *  it never names the Y axis (lib/sharedAxisTitle.ts's `drawnOnAxis`). */
   overlay?: boolean;
+  fit?: boolean; // the Curve Fit panel's own curve (FitOverlay.curveFit): lib/fitOverlayStyle.ts
 }
 
 export interface PlotPayload {
@@ -447,7 +448,7 @@ export function withFitOverlay(
   return {
     ...payload,
     data: [...payload.data, y, ...edges] as uPlot.AlignedData,
-    series: [...payload.series, { label: "fit", unit: "", overlay: true }, ...edges.map((_, k) => {
+    series: [...payload.series, { label: "fit", unit: "", overlay: true, ...(overlay.curveFit ? { fit: true } : {}) }, ...edges.map((_, k) => {
       const e = overlay.band![k]!;
       return { label: e.label, unit: "", band: k + 1, ...(e.legend !== undefined ? { legend: e.legend } : {}) };
     })],

@@ -210,7 +210,7 @@ function appendOverlays(
     if (!o || o.y.length < n) return []; // placement already dropped another dataset's
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
     return [
-      { label, legend: label, y: o.y, points, band: 0, fit: label === FIT_SERIES_LABEL, factor: factorFor(o) },
+      { label, legend: label, y: o.y, points, band: 0, fit: label === FIT_SERIES_LABEL && !!o.curveFit, factor: factorFor(o) },
       ...edges.map((e, k) => ({
         label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1, fit: false, factor: factorFor(o),
       })),
@@ -258,7 +258,7 @@ function appendOverlays(
       : present[i].points || present[i].band ? base[i] : st);
   // ... and while it is shown, data without a style of its own gets markers, as on the canvas.
   const own = spec.series_styles ?? keys.map(() => null);
-  const dataStyles = present.some((o) => o.fit) && traceWithFit(sources.defaultTrace, true) !== sources.defaultTrace
+  const dataStyles = traceWithFit(sources.defaultTrace, present.some((o) => o.fit), spec.dataset.values.length) !== sources.defaultTrace
     ? traceSeriesStyles(own, keys, "Line + markers", view.seriesStyles) ?? own
     : own;
   const pad = <T>(list: T[] | undefined, v: T): T[] | undefined => (list ? [...list, ...present.map(() => v)] : undefined);
