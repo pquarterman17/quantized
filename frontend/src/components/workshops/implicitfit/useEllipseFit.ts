@@ -92,6 +92,15 @@ export function useEllipseFit(): EllipseFitState {
           semi_major: live.res.semi_major,
           semi_minor: live.res.semi_minor,
           angle_deg: live.res.angle_deg,
+          se: {
+            center_x: live.res.center_x_se,
+            center_y: live.res.center_y_se,
+            semi_major: live.res.semi_major_se,
+            semi_minor: live.res.semi_minor_se,
+            angle_deg: live.res.angle_deg_se,
+          },
+          rms: live.res.rms,
+          arc_coverage_deg: live.res.arc_coverage_deg,
         },
       },
     };

@@ -22,7 +22,7 @@ const DATA: DataStruct = {
 
 const RESULT: EllipseResult = {
   n_points: 4, geometric: true, converged: true, center_x: 3, center_y: -2, semi_major: 5, semi_minor: 2, angle_deg: 30,
-  center_x_se: 0.01, center_y_se: 0.02, semi_major_se: 0.03, semi_minor_se: 0.04, angle_deg_se: 0.5, rms: 0.05,
+  center_x_se: 0.01, center_y_se: 0.02, semi_major_se: 0.03, semi_minor_se: 0.04, angle_deg_se: 0.5, rms: 0.05, arc_coverage_deg: 350,
   algebraic: { center_x: 3, center_y: -2, semi_major: 5, semi_minor: 2, angle_deg: 30 }, residuals: [0, 0, 0, 0],
   curve_x: [1, 2, 3, 1], curve_y: [1, 2, 0, 1],
 };
@@ -43,6 +43,13 @@ describe("EllipseFitPanel", () => {
     expect(row).toHaveTextContent("30");
     expect(row).toHaveTextContent("0.5");
     expect(screen.getByRole("img", { name: /fitted ellipse/ })).toBeInTheDocument();
+  });
+
+  it("warns when the points cover only a short arc", async () => {
+    ellipseMock.mockResolvedValueOnce({ ...RESULT, arc_coverage_deg: 95 });
+    render(<EllipseFitPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Fit ellipse" }));
+    expect(await screen.findByText(/cover only about 95° of the curve/)).toBeInTheDocument();
   });
 
   it("switches to the algebraic method", async () => {
@@ -67,5 +74,6 @@ describe("EllipseFitPanel", () => {
     const added = useApp.getState().datasets.find((d) => d.name === "loop (fitted ellipse)")!;
     expect(added.data.time).toEqual([1, 2, 3, 1]);
     expect(added.data.values.map((r) => r[0])).toEqual([1, 2, 0, 1]);
+    expect(added.data.metadata["ellipse_fit"]).toMatchObject({ se: { center_x: 0.01, semi_major: 0.03, angle_deg: 0.5 }, rms: 0.05 });
   });
 });

@@ -165,3 +165,24 @@ def test_tauc_route_alpha_pairs_with_energy_when_alpha_is_negative(client: TestC
     d = r.json()
     assert len(d["energy"]) == len(d["alpha"]) == len(d["tauc"])
     assert np.allclose(np.array(d["tauc"]), (np.array(d["alpha"]) * np.array(d["energy"])) ** 2)
+
+
+def test_tauc_route_absorbance_in_wavenumbers_gives_the_same_gap(client: TestClient) -> None:
+    eg = 2.35
+    e = np.linspace(1.6, 3.4, 250)
+    alpha = np.sqrt(np.where(e > eg, 1e5 * (e - eg), 0.0)) / e
+    absorbance = alpha * 1e-4  # arbitrary scale: only proportional to alpha
+    wavenumber = e / 1.239841984e-4
+    r = client.post(
+        "/api/optical-gap/tauc",
+        json={
+            "x": wavenumber.tolist(),
+            "y": absorbance.tolist(),
+            "x_unit": "cm-1",
+            "signal": "absorbance",
+            "e_min": 2.6,
+            "e_max": 3.2,
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["eg"] == pytest.approx(eg, abs=1e-5)

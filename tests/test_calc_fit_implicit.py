@@ -113,3 +113,22 @@ def test_standard_errors_are_absent_not_zero_when_unidentifiable() -> None:
     r = fit_ellipse(x, y)
     assert np.isnan(r["semi_major_se"]) and np.isnan(r["center_x_se"])
     assert r["semi_major"] == pytest.approx(TRUE[2], abs=1e-6)
+
+
+def test_exact_circle_loses_only_the_angle_standard_error() -> None:
+    t = np.random.default_rng(0).uniform(0, 2 * np.pi, 120)
+    rng = np.random.default_rng(1)
+    x = 2 + 3 * np.cos(t) + rng.normal(0, 0.02, t.size)
+    y = -1 + 3 * np.sin(t) + rng.normal(0, 0.02, t.size)
+    r = fit_ellipse(x, y)
+    assert np.isnan(r["angle_deg_se"])
+    for key in ("center_x_se", "center_y_se", "semi_major_se", "semi_minor_se"):
+        assert 0 < r[key] < 0.05, key
+    assert r["semi_major"] == pytest.approx(3.0, abs=0.05)
+
+
+def test_arc_coverage_reports_how_much_of_the_curve_the_points_span() -> None:
+    full = fit_ellipse(*_sample(np.linspace(0, 2 * np.pi, 60, endpoint=False)))
+    assert full["arc_coverage_deg"] > 340
+    arc = fit_ellipse(*_sample(np.linspace(0.2, 1.7, 60), sigma=0.01))
+    assert 70 < arc["arc_coverage_deg"] < 125

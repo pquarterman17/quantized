@@ -34,10 +34,9 @@ export interface SurfaceFitResult {
   errors: (number | null)[];
   inference: ParamInference[];
   level: number;
-  /** The finite (x, y, z) triples the fit used, with the model surface. */
-  x: number[];
-  y: number[];
-  z: number[];
+  /** Parameters held by lower == upper: fitted none, no error, not in the DoF. */
+  fixed: boolean[];
+  /** Model surface at the finite (x, y, z) rows that were sent, same order. */
   z_fit: number[];
   residuals: number[];
   r2: number | null;
@@ -60,11 +59,14 @@ export const surfaceFit = (
 
 export type TransitionKind = "direct" | "direct-forbidden" | "indirect" | "indirect-forbidden";
 
+export type TaucXUnit = "eV" | "meV" | "cm-1" | "nm" | "A" | "um";
+export type TaucSignal = "alpha" | "absorbance" | "transmittance";
+
 export interface TaucBody {
   x: number[];
   y: number[];
-  x_unit: "eV" | "nm";
-  signal: "alpha" | "transmittance";
+  x_unit: TaucXUnit;
+  signal: TaucSignal;
   percent?: boolean;
   thickness_nm?: number;
   kind: TransitionKind;
@@ -78,7 +80,11 @@ export interface TaucResult {
   label: string;
   gamma: number;
   eg: number;
+  /** Standard error; for an auto window it includes the spread over neighbouring windows. */
   eg_se: number | null;
+  eg_se_fit: number | null;
+  /** Spread of Eg over neighbouring windows (auto window only). */
+  eg_window_sd: number | null;
   eg_lcl: number | null;
   eg_ucl: number | null;
   level: number;
@@ -113,6 +119,8 @@ export interface EllipseResult {
   semi_minor_se: number | null;
   angle_deg_se: number | null;
   rms: number;
+  /** Degrees of the curve the points span (360 = all the way round). */
+  arc_coverage_deg: number;
   algebraic: { center_x: number; center_y: number; semi_major: number; semi_minor: number; angle_deg: number };
   residuals: number[];
   curve_x: number[];

@@ -9,8 +9,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.calc.optical_gap import (
+    absorbance_to_alpha,
     absorption_from_transmittance,
-    energy_from_wavelength_nm,
+    energy_from_x,
     tauc_fit,
 )
 from quantized.routes._errors import CALC_ERRORS
@@ -26,8 +27,9 @@ class TaucRequest(BaseModel):
 
     x: list[float]
     y: list[float]
-    x_unit: Literal["eV", "nm"] = "eV"
-    signal: Literal["alpha", "transmittance"] = "alpha"
+    x_unit: Literal["eV", "meV", "cm-1", "nm", "A", "um"] = "eV"
+    # absorbance: alpha only up to a constant unless a thickness is given
+    signal: Literal["alpha", "absorbance", "transmittance"] = "alpha"
     percent: bool = False  # transmittance / reflectance given in percent
     thickness_nm: float | None = None
     reflectance: list[float] | None = None
@@ -44,9 +46,12 @@ def tauc(req: TaucRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="x and y must have the same length")
     try:
         x = np.asarray(req.x, dtype=float)
-        energy = energy_from_wavelength_nm(x) if req.x_unit == "nm" else x
+        energy = energy_from_x(x, req.x_unit)
         y = np.asarray(req.y, dtype=float)
-        if req.signal == "transmittance":
+        if req.signal == "absorbance":
+            d_cm = None if req.thickness_nm is None else req.thickness_nm * 1e-7
+            y = absorbance_to_alpha(y, d_cm)
+        elif req.signal == "transmittance":
             if req.thickness_nm is None:
                 raise ValueError("thickness is required to convert transmittance to absorption")
             k = 0.01 if req.percent else 1.0

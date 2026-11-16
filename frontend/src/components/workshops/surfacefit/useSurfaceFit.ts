@@ -15,11 +15,13 @@ import {
   type SurfaceFitResult,
   type SurfaceModelInfo,
 } from "../../../lib/api/analysisExtras";
+import { copyText } from "../../../lib/clipboard";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import type { DataStruct } from "../../../lib/types";
+import type { Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { surfaceResultText } from "./surfaceFitText";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
-import { useLoadColumns, parseField, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
+import { useLoadColumns, mapDefaults, parseField, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
 export interface SurfaceFitState {
   hasData: boolean;
@@ -43,13 +45,19 @@ export interface SurfaceFitState {
   fit: () => Promise<void>;
   resetGuess: () => void;
   addFittedSurface: () => void;
+  /** The finite rows the fit ran on (what the residual map and the output draw from). */
+  points: { x: number[]; y: number[]; z: number[] } | null;
+  guessing: boolean;
+  copyResults: (markdown: boolean) => Promise<void>;
   labels: { x: string; y: string; z: string };
 }
 
 const fmtStart = (v: number): string => String(Number(v.toPrecision(6)));
 
 /** Default picks: X axis, first channel, second channel (a map's X, Y, Z). */
-function defaults(cols: PickColumn[]): [number, number, number] {
+function defaults(cols: PickColumn[], ds: Dataset | null): [number, number, number] {
+  const map = mapDefaults(ds);
+  if (map) return map;
   const n = cols.length;
   return [cols[0]?.index ?? -1, cols[Math.min(1, n - 1)]?.index ?? -1, cols[Math.min(2, n - 1)]?.index ?? -1];
 }
@@ -61,7 +69,7 @@ export function useSurfaceFit(): SurfaceFitState {
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
 
-  const [picks, setPicks] = useState<[number, number, number]>(() => defaults(columns));
+  const [picks, setPicks] = useState<[number, number, number]>(() => defaults(columns, active));
   const [models, setModels] = useState<SurfaceModelInfo[]>([]);
   const [modelName, setModelName] = useState("Plane");
   const [p0, setP0] = useState<string[]>([]);
@@ -69,15 +77,17 @@ export function useSurfaceFit(): SurfaceFitState {
   const [upper, setUpper] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stored, setStored] = useState<{ key: string; res: SurfaceFitResult } | null>(null);
+  const [stored, setStored] = useState<{ key: string; res: SurfaceFitResult; x: number[]; y: number[]; z: number[] } | null>(null);
+  const [guessing, setGuessing] = useState(false);
   const seq = useRef(0);
 
   const model = models.find((m) => m.name === modelName) ?? models[0] ?? null;
-  const [xCol, yCol, zCol] = picks.map((p, i) => validPick(columns, p, defaults(columns)[i])) as [number, number, number];
+  const [xCol, yCol, zCol] = picks.map((p, i) => validPick(columns, p, defaults(columns, active)[i])) as [number, number, number];
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
   const key = `${active?.id}:${fingerprint}:${xCol}:${yCol}:${zCol}:${model?.name}`;
   // A result describes the inputs it ran on; any change to them retires it.
-  const result = stored && stored.key === key ? stored.res : null;
+  const live = stored && stored.key === key ? stored : null;
+  const result = live?.res ?? null;
   const hasData = !!active && columns.length >= 3;
 
   useEffect(() => {
@@ -94,18 +104,19 @@ export function useSurfaceFit(): SurfaceFitState {
   // A new dataset resets the picks; a changed column list keeps them on their
   // columns (or resets one whose column is gone, with a toast).
   useEffect(() => {
-    setPicks(defaults(columns));
+    setPicks(defaults(columns, active));
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
   useFollowColumnPicks(active, (follow) => {
-    const d = defaults(columns);
+    const d = defaults(columns, active);
     setPicks((p) => p.map((c, i) => follow(c) ?? d[i]) as [number, number, number]);
   });
 
   function resetGuess(): void {
     if (!active || !model || !hasData) return;
     const mine = ++seq.current;
+    setGuessing(true);
     void (async () => {
       try {
         const got = await load(active.id, [xCol, yCol, zCol]);
@@ -119,6 +130,8 @@ export function useSurfaceFit(): SurfaceFitState {
         setError(null);
       } catch (e) {
         if (mine === seq.current) setError(e instanceof Error ? e.message : "could not guess starting values");
+      } finally {
+        if (mine === seq.current) setGuessing(false);
       }
     })();
   }
@@ -162,7 +175,7 @@ export function useSurfaceFit(): SurfaceFitState {
       if (!got) return;
       const [x, y, z] = got.columns;
       const res = await surfaceFit({ x, y, z, model: model.name, p0: start as number[], lower: lo, upper: hi });
-      setStored({ key, res });
+      setStored({ key, res, x, y, z });
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "surface fit failed");
@@ -174,22 +187,40 @@ export function useSurfaceFit(): SurfaceFitState {
   const labels = { x: pickLabel(columns, xCol), y: pickLabel(columns, yCol), z: pickLabel(columns, zCol) };
 
   function addFittedSurface(): void {
-    if (!result || !active) return;
+    if (!result || !live || !active) return;
     const d = active.data;
     const data: DataStruct = {
-      time: result.x,
-      values: result.y.map((yy, i) => [yy, result.z_fit[i], result.z[i], result.residuals[i]]),
+      time: live.x,
+      values: live.y.map((yy, i) => [yy, result.z_fit[i], live.z[i], result.residuals[i]]),
       labels: [labels.y, `${labels.z} (fit)`, labels.z, `${labels.z} residual`],
       units: [pickUnit(d, yCol), pickUnit(d, zCol), pickUnit(d, zCol), pickUnit(d, zCol)],
       metadata: {
         x_column_name: labels.x,
         x_column_unit: pickUnit(d, xCol),
-        surface_fit: { model: result.model_name, params: result.params, r2: result.r2 },
+        surface_fit: {
+          model: result.model_name,
+          param_names: result.param_names,
+          params: result.params,
+          errors: result.errors,
+          ci_level: result.level,
+          ci_low: result.inference.map((r) => r.lcl),
+          ci_high: result.inference.map((r) => r.ucl),
+          fixed: result.fixed,
+          r2: result.r2,
+          rmse: result.rmse,
+          dof: result.dof,
+        },
         ...(d.metadata?.["scatteredXYZ"] === true ? { scatteredXYZ: true } : {}),
       },
     };
     addDataset({ id: nextDatasetId(), name: `${active.name} (${result.model_name} fit)`, data });
     setStatus(`added the ${result.model_name} fitted surface (${result.n_points} points)`);
+  }
+
+  async function copyResults(markdown: boolean): Promise<void> {
+    if (!result) return;
+    const ok = await copyText(surfaceResultText(result, markdown));
+    setStatus(ok ? `copied the fit results (${markdown ? "Markdown" : "TSV, paste into Excel"})` : "clipboard unavailable");
   }
 
   return {
@@ -214,6 +245,9 @@ export function useSurfaceFit(): SurfaceFitState {
     fit,
     resetGuess,
     addFittedSurface,
+    points: live ? { x: live.x, y: live.y, z: live.z } : null,
+    guessing,
+    copyResults,
     labels,
   };
 }

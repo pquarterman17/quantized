@@ -18,7 +18,9 @@ interface Props {
   height?: number;
 }
 
-const PAD = { l: 12, r: 12, t: 12, b: 12 };
+const PAD = { l: 46, r: 12, t: 10, b: 30 };
+
+const tick = (v: number): string => String(Number(v.toPrecision(3)));
 
 /** Largest absolute residual (>0), the half-range of the colour scale. */
 export function residualScale(r: number[]): number {
@@ -88,7 +90,27 @@ export default function SurfaceResidualMap({ x, y, residuals, xLabel, yLabel, he
       const py = PAD.t + ph - (y[i] - y0) * sy;
       ctx.fillRect(px - cw / 2, py - ch / 2, cw, ch);
     }
-  }, [x, y, residuals, scale, height, theme]);
+    // Axis ends and names, in the design tokens' ink.
+    const css = getComputedStyle(canvas);
+    ctx.fillStyle = css.getPropertyValue("--text-dim").trim() || "currentColor";
+    ctx.font = `10px ${css.getPropertyValue("--font-mono").trim() || "monospace"}`;
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillText(tick(x0), PAD.l, height - PAD.b + 14);
+    ctx.textAlign = "right";
+    ctx.fillText(tick(x1), PAD.l + pw, height - PAD.b + 14);
+    ctx.textAlign = "center";
+    ctx.fillText(xLabel, PAD.l + pw / 2, height - 4);
+    ctx.textAlign = "right";
+    ctx.fillText(tick(y0), PAD.l - 6, PAD.t + ph);
+    ctx.fillText(tick(y1), PAD.l - 6, PAD.t + 9);
+    ctx.save();
+    ctx.translate(10, PAD.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center";
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }, [x, y, residuals, scale, height, theme, xLabel, yLabel]);
 
   return (
     <canvas

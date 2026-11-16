@@ -160,20 +160,46 @@ def _param_cov(q: _F, x: _F, y: _F) -> _F | None:
     d = np.asarray(jb.multiply(jb).sum(axis=0)).ravel()  # diag of Jb^T Jb
     atb = np.asarray(jb.T @ ja)  # (n, 5)
     schur = ja.T @ ja - (atb.T / np.where(d > 0, d, np.inf)) @ atb
-    # A near-singular matrix (a short arc, an almost circular shape whose tilt is
-    # free) has no usable covariance: report none rather than a huge or zero SE.
-    dg = np.diag(schur)
-    if not (np.all(np.isfinite(schur)) and np.all(dg > 0)):
+    # A near-singular matrix (a short arc) has no usable covariance: report none
+    # rather than a huge or zero SE. An (almost) exact circle has a free tilt:
+    # only the angle is then undetermined, so the other four keep their SEs.
+    cov = _invert_cov(schur, s2, range(5))
+    if cov is None and abs(q[2] - q[3]) <= 1e-3 * abs(q[2]):
+        sub = _invert_cov(schur, s2, range(4))
+        if sub is not None:
+            cov = np.full((5, 5), np.nan)
+            cov[:4, :4] = sub
+    return cov
+
+
+def _invert_cov(schur: _F, s2: float, idx: range) -> _F | None:
+    """``s2 * inv(schur[idx, idx])`` or None when that block is unusable."""
+    ix = list(idx)
+    block = schur[np.ix_(ix, ix)]
+    dg = np.diag(block)
+    if not (np.all(np.isfinite(block)) and np.all(dg > 0)):
         return None
-    if np.linalg.cond(schur / np.sqrt(np.outer(dg, dg))) > 1e12:  # unit-free conditioning
+    if np.linalg.cond(block / np.sqrt(np.outer(dg, dg))) > 1e12:  # unit-free conditioning
         return None
     try:
-        cov = s2 * np.linalg.inv(schur)
+        cov = s2 * np.linalg.inv(block)
     except np.linalg.LinAlgError:
         return None
     if np.any(np.diag(cov) < 0):
         return None
     return np.asarray(cov, dtype=float)
+
+
+def _arc_coverage_deg(p: _F, x: _F, y: _F) -> float:
+    """Angular extent (deg, 0-360) of the points around the ellipse: 360 minus
+    the largest gap between neighbouring points in the curve parameter."""
+    cx, cy, a, b, th = p
+    cth, sth = math.cos(th), math.sin(th)
+    u = (x - cx) * cth + (y - cy) * sth
+    v = -(x - cx) * sth + (y - cy) * cth
+    t = np.sort(np.arctan2(v / b, u / a))
+    gaps = np.diff(np.r_[t, t[0] + 2.0 * math.pi])
+    return float(360.0 - math.degrees(float(gaps.max())))
 
 
 def fit_ellipse(
@@ -217,6 +243,7 @@ def fit_ellipse(
     }
 
     nan = math.nan
+    coverage = _arc_coverage_deg(p_alg, xa, ya)
     out: dict[str, Any] = {"algebraic": algebraic, "n_points": int(n), "geometric": bool(geometric)}
     if not geometric:
         p, cov, converged = p_alg, None, True
@@ -243,6 +270,10 @@ def fit_ellipse(
         converged = bool(res.success)
         cov = _param_cov(np.asarray(res.x, dtype=float), xa, ya)
         p, cov = _normalise_axes(p, cov)
+        if cov is not None and p[2] - p[3] < 2.0 * math.hypot(cov[2, 2] ** 0.5, cov[3, 3] ** 0.5):
+            # The axes cannot be told apart from a circle, whose tilt is free.
+            cov = cov.copy()
+            cov[4, :] = cov[:, 4] = math.nan
         # At the optimum each point's own curve parameter is its foot point, so
         # the final residual pairs are the orthogonal distances.
         dist = np.hypot(res.fun[0::2], res.fun[1::2])
@@ -263,6 +294,7 @@ def fit_ellipse(
             "rms": float(np.sqrt(np.mean(dist**2))),
             "residuals": dist,
             "converged": converged,
+            "arc_coverage_deg": coverage,
         }
     )
     return out

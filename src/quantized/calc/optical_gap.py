@@ -34,7 +34,9 @@ from quantized.calc.constants import constants as _constants
 __all__ = [
     "TRANSITIONS",
     "absorption_from_transmittance",
+    "absorbance_to_alpha",
     "energy_from_wavelength_nm",
+    "energy_from_x",
     "tauc_fit",
     "tauc_transform",
 ]
@@ -67,6 +69,43 @@ def energy_from_wavelength_nm(wavelength_nm: ArrayLike) -> NDArray[np.float64]:
     with np.errstate(divide="ignore", invalid="ignore"):
         out = np.where(wl > 0, _HC_EV_NM / wl, np.nan)
     return np.asarray(out, dtype=float)
+
+
+#: x-axis unit -> how to get photon energy (eV): ("scale", eV per unit) for
+#: energy-like units, ("wavelength", nm per unit) for wavelength-like ones.
+_X_UNITS: dict[str, tuple[str, float]] = {
+    "eV": ("scale", 1.0),
+    "meV": ("scale", 1e-3),
+    "cm-1": ("scale", _HC_EV_NM * 1e-7),  # wavenumber: E = hc * nu
+    "nm": ("wavelength", 1.0),
+    "A": ("wavelength", 0.1),  # angstrom
+    "um": ("wavelength", 1e3),
+}
+
+
+def energy_from_x(x: ArrayLike, unit: str) -> NDArray[np.float64]:
+    """Photon energy (eV) from an axis in ``eV``, ``meV``, ``cm-1`` (wavenumber),
+    ``nm``, ``A`` (angstrom) or ``um``."""
+    try:
+        kind, k = _X_UNITS[unit]
+    except KeyError:
+        raise ValueError(f"unknown x unit {unit!r}; choose one of {sorted(_X_UNITS)}") from None
+    v = np.asarray(x, dtype=float)
+    return np.asarray(v * k if kind == "scale" else energy_from_wavelength_nm(v * k), dtype=float)
+
+
+def absorbance_to_alpha(
+    absorbance: ArrayLike, thickness_cm: float | None = None
+) -> NDArray[np.float64]:
+    """Absorbance A (base 10) -> alpha. With a thickness, alpha = ln(10) A / d
+    (1/cm); without one alpha is only proportional to A, which is enough for the
+    Tauc gap (a constant factor changes the slope, not the intercept)."""
+    a = np.asarray(absorbance, dtype=float)
+    if thickness_cm is None:
+        return a
+    if not (math.isfinite(thickness_cm) and thickness_cm > 0):
+        raise ValueError("thickness must be positive and finite")
+    return np.asarray(math.log(10.0) * a / thickness_cm, dtype=float)
 
 
 def absorption_from_transmittance(
@@ -190,6 +229,37 @@ def _auto_window(e: NDArray[np.float64], y: NDArray[np.float64]) -> tuple[float,
     return float(es[lo]), float(es[hi])
 
 
+#: Window variants for the auto-window uncertainty: the lower edge moves by
+#: these fractions of the window width, the upper edge by minus these.
+_LO_SHIFTS = (-0.2, 0.0, 0.2, 0.4)
+_HI_SHIFTS = (0.0, 0.2, 0.4)
+
+
+def _window_spread(
+    e: NDArray[np.float64], y: NDArray[np.float64], lo: float, hi: float
+) -> tuple[float, int]:
+    """Sample standard deviation of Eg over neighbouring windows, and how many
+    windows were usable. The straight section has no sharp edges, so which
+    window was picked moves Eg by more than the within-window SE says."""
+    width = hi - lo
+    egs: list[float] = []
+    for dl in _LO_SHIFTS:
+        for dh in _HI_SHIFTS:
+            a, b_ = lo + dl * width, hi - dh * width
+            win = (e >= a) & (e <= b_)
+            if int(win.sum()) < 5 or not a < b_:
+                continue
+            try:
+                f = _line_fit(e[win], y[win])
+            except ValueError:
+                continue
+            if f["slope"] > 0:
+                egs.append(-f["intercept"] / f["slope"])
+    if len(egs) < 3:
+        return math.nan, len(egs)
+    return float(np.std(egs, ddof=1)), len(egs)
+
+
 def tauc_fit(
     energy_ev: ArrayLike,
     alpha: ArrayLike,
@@ -240,7 +310,15 @@ def tauc_fit(
     eg = -b / m
     # delta method: Eg = -b/m
     var_eg = (fit["var_b"] / m**2) + (b**2 * fit["var_m"] / m**4) - 2.0 * b * fit["cov_mb"] / m**3
-    eg_se = math.sqrt(var_eg) if math.isfinite(var_eg) and var_eg >= 0 else math.nan
+    eg_se_fit = math.sqrt(var_eg) if math.isfinite(var_eg) and var_eg >= 0 else math.nan
+    eg_se = eg_se_fit
+    window_sd = math.nan
+    if auto:
+        # The window was chosen from the data, so the within-window SE alone is
+        # too narrow: combine it with the spread over neighbouring windows.
+        window_sd, _n_windows = _window_spread(ef, yf, lo, hi)
+        if math.isfinite(window_sd):
+            eg_se = math.sqrt(eg_se_fit**2 + window_sd**2)
     dof = fit["dof"]
     t_crit = float(stats.t.ppf(1.0 - (1.0 - level) / 2.0, dof)) if dof >= 1 else math.nan
     half = t_crit * eg_se
@@ -251,6 +329,8 @@ def tauc_fit(
         "gamma": _gamma(kind),
         "eg": float(eg),
         "eg_se": eg_se,
+        "eg_se_fit": eg_se_fit,
+        "eg_window_sd": window_sd,
         "eg_lcl": float(eg - half) if math.isfinite(half) else math.nan,
         "eg_ucl": float(eg + half) if math.isfinite(half) else math.nan,
         "level": level,

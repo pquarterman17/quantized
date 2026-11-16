@@ -90,7 +90,7 @@ export default function SurfaceFitPanel() {
           )}
 
           <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <Button variant="primary" size="sm" disabled={f.busy || !f.model} onClick={() => void f.fit()}>
+            <Button variant="primary" size="sm" disabled={f.busy || f.guessing || !f.model} title={f.guessing ? "Estimating start values…" : undefined} onClick={() => void f.fit()}>
               {f.busy ? "Fitting…" : "Fit"}
             </Button>
             <Button size="sm" disabled={f.busy || !f.model} title="Re-estimate the start values from the data" onClick={f.resetGuess}>
@@ -112,7 +112,7 @@ export default function SurfaceFitPanel() {
                   rows={r.param_names.map((name, i) => [
                     name,
                     fmt(r.params[i]),
-                    fmt(r.inference[i]?.error),
+                    r.fixed[i] ? "fixed" : fmt(r.inference[i]?.error),
                     fmt(r.inference[i]?.lcl),
                     fmt(r.inference[i]?.ucl),
                   ])}
@@ -143,7 +143,7 @@ export default function SurfaceFitPanel() {
 
               <div style={{ marginTop: 12 }}>
                 <div className="qzk-field-lbl">Residual map (data − model)</div>
-                <SurfaceResidualMap x={r.x} y={r.y} residuals={r.residuals} xLabel={f.labels.x} yLabel={f.labels.y} />
+                {f.points && <SurfaceResidualMap x={f.points.x} y={f.points.y} residuals={r.residuals} xLabel={f.labels.x} yLabel={f.labels.y} />}
                 <div className="qzk-ds-meta" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <span style={{ fontFamily: "var(--font-mono)" }}>−{fmt(residualScale(r.residuals))}</span>
                   <span aria-hidden="true" style={{ flex: 1, height: 8, background: RAMP, borderRadius: 2 }} />
@@ -151,7 +151,13 @@ export default function SurfaceFitPanel() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <Button size="sm" title="Copy the results as tab-separated text (pastes into Excel)" onClick={() => void f.copyResults(false)}>
+                  Copy
+                </Button>
+                <Button size="sm" title="Copy the results as a Markdown table" onClick={() => void f.copyResults(true)}>
+                  Copy MD
+                </Button>
                 <Button size="sm" title="Add X, Y, the fitted Z, the data Z and the residual as a new dataset" onClick={f.addFittedSurface}>
                   Add fitted surface as dataset
                 </Button>

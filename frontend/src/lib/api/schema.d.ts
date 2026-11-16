@@ -12072,7 +12072,7 @@ export interface components {
              * @default alpha
              * @enum {string}
              */
-            signal?: "alpha" | "transmittance";
+            signal?: "alpha" | "absorbance" | "transmittance";
             /** Thickness Nm */
             thickness_nm?: number | null;
             /** X */
@@ -12082,7 +12082,7 @@ export interface components {
              * @default eV
              * @enum {string}
              */
-            x_unit?: "eV" | "nm";
+            x_unit?: "eV" | "meV" | "cm-1" | "nm" | "A" | "um";
             /** Y */
             y: number[];
         };

@@ -19,10 +19,15 @@ import { TRANSITIONS, useOpticalGap } from "./useOpticalGap";
 
 const X_UNITS = [
   { value: "eV", label: "Photon energy (eV)" },
+  { value: "meV", label: "Photon energy (meV)" },
+  { value: "cm-1", label: "Wavenumber (cm⁻¹)" },
   { value: "nm", label: "Wavelength (nm)" },
+  { value: "A", label: "Wavelength (Å)" },
+  { value: "um", label: "Wavelength (µm)" },
 ];
 const SIGNALS = [
   { value: "alpha", label: "Absorption coefficient α (1/cm)" },
+  { value: "absorbance", label: "Absorbance A (∝ α)" },
   { value: "transmittance", label: "Transmittance T" },
 ];
 const SCALES = [
@@ -51,7 +56,7 @@ export default function OpticalGapPanel() {
             </div>
             <div>
               <label className="qzk-field-lbl">X is</label>
-              <Select aria-label="X quantity" options={X_UNITS} value={g.xUnit} onChange={(e) => g.setXUnit(e.target.value as "eV" | "nm")} />
+              <Select aria-label="X quantity" options={X_UNITS} value={g.xUnit} onChange={(e) => g.setXUnit(e.target.value as typeof g.xUnit)} />
             </div>
             <div>
               <label className="qzk-field-lbl">Spectrum Y</label>
@@ -59,10 +64,19 @@ export default function OpticalGapPanel() {
             </div>
             <div>
               <label className="qzk-field-lbl">Y is</label>
-              <Select aria-label="Y quantity" options={SIGNALS} value={g.signal} onChange={(e) => g.setSignal(e.target.value as "alpha" | "transmittance")} />
+              <Select aria-label="Y quantity" options={SIGNALS} value={g.signal} onChange={(e) => g.setSignal(e.target.value as typeof g.signal)} />
             </div>
           </div>
 
+          {g.signal === "absorbance" && (
+            <div className="qzk-helptext" style={{ marginTop: 8 }}>
+              The gap does not depend on the scale of α, so absorbance works as is. Give a thickness to put α in 1/cm.
+              <div style={{ marginTop: 6 }}>
+                <label className="qzk-field-lbl">Thickness (nm), optional</label>
+                <NumberField aria-label="Film thickness (nm)" value={g.thickness} width={84} onChange={g.setThickness} />
+              </div>
+            </div>
+          )}
           {g.signal === "transmittance" && (
             <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
               <div>
@@ -116,6 +130,12 @@ export default function OpticalGapPanel() {
                 <DataTable
                   columns={["stat", "value"]}
                   rows={[
+                    ...(r.auto_window && r.eg_window_sd !== null
+                      ? [
+                          ["SE from the line fit (eV)", fmt(r.eg_se_fit)],
+                          ["spread over neighbouring windows (eV)", fmt(r.eg_window_sd)],
+                        ]
+                      : []),
                     [`${pct} interval (eV)`, `${fmt(r.eg_lcl)} to ${fmt(r.eg_ucl)}`],
                     ["fit window (eV)", `${fmt(r.e_min)} to ${fmt(r.e_max)}${r.auto_window ? " (auto)" : ""}`],
                     ["points in fit", String(r.n_fit)],
@@ -124,6 +144,11 @@ export default function OpticalGapPanel() {
                   ]}
                 />
               </div>
+              {r.auto_window && (
+                <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+                  The window was detected from the data, so ± and the interval include how far Eg moves between neighbouring windows.
+                </div>
+              )}
               {r.r2 !== null && r.r2 < 0.98 && (
                 <div className="qzk-ds-meta" role="status" style={{ marginTop: 6, color: "var(--warn)" }}>
                   The line fits the window poorly (R² {fmt(r.r2)}). Narrow the range to the straight part of the edge.

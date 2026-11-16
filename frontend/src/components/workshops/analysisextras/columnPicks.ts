@@ -65,3 +65,21 @@ export function useLoadColumns(): (
 
 /** Parse a number field: "" -> null; otherwise the number, NaN when invalid. */
 export const parseField = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+
+/** X, Y, Z picks for a parser-flagged 2-D map (an RSM): the two named axes and
+ *  the default value channel (Intensity), not the first three columns, which
+ *  for an RSM are 2Theta, Omega, Intensity in whatever order the file had.
+ *  Null when the dataset is not a map or the names do not resolve. */
+export function mapDefaults(ds: Dataset | null): [number, number, number] | null {
+  const d = ds?.data;
+  if (!d || d.metadata?.["is2D"] !== true) return null;
+  const at = (name: unknown): number => (typeof name === "string" ? d.labels.indexOf(name) : -1);
+  const dv = d.metadata["default_value_channels"];
+  let z = Array.isArray(dv) && typeof dv[0] === "number" ? dv[0] : at("Intensity");
+  if (z < 0 || z >= d.labels.length) z = -1;
+  const a1 = at(d.metadata["axis1_name"]);
+  let a2 = at(d.metadata["axis2_name"]);
+  if (a2 < 0) a2 = at("2Theta");
+  if (z < 0 || a1 < 0 || a2 < 0 || a1 === a2 || z === a1 || z === a2) return null;
+  return [a2, a1, z];
+}

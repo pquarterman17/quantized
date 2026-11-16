@@ -91,13 +91,18 @@ export default function EllipseFitPanel() {
                   Standard errors could not be estimated (too few points, or the points do not constrain the ellipse).
                 </div>
               )}
+              {r.arc_coverage_deg < 270 && (
+                <div className="qzk-ds-meta" role="status" style={{ marginTop: 6, color: "var(--warn)" }}>
+                  The points cover only about {Math.round(r.arc_coverage_deg)}° of the curve. A short arc fits many ellipses almost equally well, so trust the standard errors, not just the values.
+                </div>
+              )}
               {r.semi_minor / r.semi_major > 0.97 && (
                 <div className="qzk-ds-meta" role="status" style={{ marginTop: 6 }}>
                   The shape is nearly a circle, so its tilt angle is not well defined.
                 </div>
               )}
               <div style={{ marginTop: 10 }}>
-                <EllipsePlot x={e.points.x} y={e.points.y} curveX={r.curve_x} curveY={r.curve_y} center={[r.center_x, r.center_y]} />
+                <EllipsePlot x={e.points.x} y={e.points.y} curveX={r.curve_x} curveY={r.curve_y} cx={r.center_x} cy={r.center_y} />
               </div>
               <div style={{ marginTop: 10 }}>
                 <Button size="sm" title="Add the fitted ellipse as a dataset to overlay on the points" onClick={e.addEllipse}>

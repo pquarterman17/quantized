@@ -12,11 +12,12 @@ interface Props {
   y: number[];
   curveX: number[];
   curveY: number[];
-  center: [number, number];
+  cx: number;
+  cy: number;
   height?: number;
 }
 
-export default function EllipsePlot({ x, y, curveX, curveY, center, height = 220 }: Props) {
+export default function EllipsePlot({ x, y, curveX, curveY, cx: centerX, cy: centerY, height = 220 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
@@ -35,9 +36,18 @@ export default function EllipsePlot({ x, y, curveX, curveY, center, height = 220
     const ink = css.getPropertyValue("--series-1").trim() || css.getPropertyValue("--text").trim();
     const line = css.getPropertyValue("--accent").trim() || ink;
 
-    const xs = [...x, ...curveX];
-    const ys = [...y, ...curveY];
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    // Loops, not Math.min(...array): a big point cloud overflows the argument limit.
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const grow = (xs: number[], ys: number[]): void => {
+      for (let i = 0; i < xs.length; i++) {
+        if (xs[i] < x0) x0 = xs[i];
+        if (xs[i] > x1) x1 = xs[i];
+        if (ys[i] < y0) y0 = ys[i];
+        if (ys[i] > y1) y1 = ys[i];
+      }
+    };
+    grow(x, y);
+    grow(curveX, curveY);
     const pad = 12;
     // One scale for both axes: the larger of the two data spans fills the canvas.
     const k = Math.min((w - 2 * pad) / Math.max(x1 - x0, 1e-300), (height - 2 * pad) / Math.max(y1 - y0, 1e-300));
@@ -60,14 +70,14 @@ export default function EllipsePlot({ x, y, curveX, curveY, center, height = 220
     curveX.forEach((v, i) => (i === 0 ? ctx.moveTo(px(v), py(curveY[i])) : ctx.lineTo(px(v), py(curveY[i]))));
     ctx.stroke();
     ctx.lineWidth = 1.5;
-    const cx = px(center[0]), cy = py(center[1]);
+    const cx = px(centerX), cy = py(centerY);
     ctx.beginPath();
     ctx.moveTo(cx - 5, cy);
     ctx.lineTo(cx + 5, cy);
     ctx.moveTo(cx, cy - 5);
     ctx.lineTo(cx, cy + 5);
     ctx.stroke();
-  }, [x, y, curveX, curveY, center, height, theme, accent]);
+  }, [x, y, curveX, curveY, centerX, centerY, height, theme, accent]);
 
   return (
     <canvas

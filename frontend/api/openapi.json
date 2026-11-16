@@ -15969,6 +15969,7 @@
             "default": "alpha",
             "enum": [
               "alpha",
+              "absorbance",
               "transmittance"
             ],
             "title": "Signal",
@@ -15996,7 +15997,11 @@
             "default": "eV",
             "enum": [
               "eV",
-              "nm"
+              "meV",
+              "cm-1",
+              "nm",
+              "A",
+              "um"
             ],
             "title": "X Unit",
             "type": "string"

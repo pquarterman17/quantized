@@ -104,3 +104,57 @@ def test_returned_curves_stay_aligned_when_noisy_alpha_goes_negative() -> None:
     r = tauc_fit(e, alpha, "direct", e_min=2.7, e_max=3.2)
     assert len(r["energy"]) == len(r["alpha"]) == len(r["tauc"]) < e.size
     assert r["tauc"] == pytest.approx((r["alpha"] * r["energy"]) ** 2)
+
+
+def _auto_misses(noise: float, n: int = 200) -> tuple[float, float]:
+    """Fraction of seeded auto-window fits whose Eg is more than 1.96 reported
+    standard errors from the truth: with the combined SE, and with the
+    within-window SE alone."""
+    miss = miss_fit = done = 0
+    for seed in range(n):
+        e, alpha = _edge(2.0, noise=noise, seed=seed)
+        try:
+            r = tauc_fit(e, alpha, "direct")
+        except ValueError:  # a noise spike left no rising edge: an error, not a wrong gap
+            continue
+        done += 1
+        d = abs(r["eg"] - EG)
+        miss += d > 1.96 * r["eg_se"]
+        miss_fit += d > 1.96 * r["eg_se_fit"]
+    return miss / done, miss_fit / done
+
+
+def test_auto_window_interval_includes_the_window_choice() -> None:
+    # Seeded Monte Carlo (deterministic). The within-window SE alone misses the
+    # truth far more often than its nominal 5 %; including the spread over
+    # neighbouring windows brings the miss rate back near it.
+    miss, miss_fit = _auto_misses(0.05)
+    assert miss_fit > 0.10
+    assert miss < 0.08
+    miss10, _ = _auto_misses(0.10)
+    assert miss10 < 0.20
+
+
+def test_user_window_keeps_the_plain_fit_se() -> None:
+    e, alpha = _edge(2.0, noise=0.01, seed=2)
+    r = tauc_fit(e, alpha, "direct", e_min=2.6, e_max=3.2)
+    assert r["eg_se"] == r["eg_se_fit"] and np.isnan(r["eg_window_sd"])
+    auto = tauc_fit(e, alpha, "direct")
+    assert auto["eg_se"] > auto["eg_se_fit"] > 0 and auto["eg_window_sd"] > 0
+
+
+def test_x_units_convert_to_the_same_energy() -> None:
+    from quantized.calc.optical_gap import absorbance_to_alpha, energy_from_x
+
+    e = 2.5
+    wl_nm = 1239.841984 / e
+    assert energy_from_x([e * 1000], "meV")[0] == pytest.approx(e)
+    assert energy_from_x([wl_nm], "nm")[0] == pytest.approx(e, rel=1e-7)
+    assert energy_from_x([wl_nm * 10], "A")[0] == pytest.approx(e, rel=1e-7)
+    assert energy_from_x([wl_nm / 1000], "um")[0] == pytest.approx(e, rel=1e-7)
+    assert energy_from_x([1e7 / wl_nm], "cm-1")[0] == pytest.approx(e, rel=1e-6)
+    with pytest.raises(ValueError, match="unknown x unit"):
+        energy_from_x([1.0], "furlong")
+    # absorbance: ln(10) A / d with a thickness, proportional (unchanged) without
+    assert absorbance_to_alpha([0.5], 1e-5)[0] == pytest.approx(np.log(10) * 0.5 / 1e-5)
+    assert absorbance_to_alpha([0.5])[0] == 0.5

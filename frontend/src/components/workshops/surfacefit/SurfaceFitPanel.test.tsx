@@ -29,7 +29,7 @@ const RESULT: SurfaceFitResult = {
     { value: 1, error: 0.2, t: 5, prob: 0.01, lcl: 0.4, ucl: 1.6 },
     { value: 1, error: 0.3, t: 3, prob: 0.05, lcl: 0.1, ucl: 1.9 },
   ],
-  level: 0.95, x: [0, 1, 0, 1], y: [0, 0, 1, 1], z: [1, 2, 3, 5], z_fit: [1, 3, 2, 4], residuals: [0, -1, 1, 1],
+  level: 0.95, fixed: [false, false, false], z_fit: [1, 3, 2, 4], residuals: [0, -1, 1, 1],
   r2: 0.9, rmse: 0.5, chi_sq_red: 0.25, n_points: 4, n_free: 3, dof: 1, exit_flag: 1,
 };
 
@@ -106,6 +106,41 @@ describe("SurfaceFitPanel", () => {
     expect(guessMock).not.toHaveBeenCalled();
   });
 
+  it("defaults an RSM to its two named axes and the Intensity channel", async () => {
+    const rsm: DataStruct = {
+      time: [10, 11, 10, 11],
+      values: [[10, 0.1, 5, 1, 1], [11, 0.1, 6, 1, 1], [10, 0.2, 7, 1, 1], [11, 0.2, 8, 1, 1]],
+      labels: ["2Theta", "Omega", "Intensity", "Qx", "Qz"],
+      units: ["deg", "deg", "counts", "", ""],
+      metadata: { is2D: true, axis1_name: "Omega", axis2_name: "2Theta", default_value_channels: [2], x_column_name: "2-Theta" },
+    };
+    useApp.setState({ datasets: [{ id: "r", name: "rsm", data: rsm }], activeId: "r" });
+    render(<SurfaceFitPanel />);
+    expect(screen.getByLabelText("X column")).toHaveValue("0"); // 2Theta
+    expect(screen.getByLabelText("Y column")).toHaveValue("1"); // Omega
+    expect(screen.getByLabelText("Z column")).toHaveValue("2"); // Intensity
+    await waitFor(() => expect(screen.getByLabelText("Start a")).toHaveValue("1.5"));
+    expect(guessMock).toHaveBeenCalledWith(expect.objectContaining({ z: [5, 6, 7, 8] }));
+  });
+
+  it("marks a held parameter, copies the results and disables Fit while the guess runs", async () => {
+    fitMock.mockResolvedValue({ ...RESULT, fixed: [false, false, true], inference: [RESULT.inference[0], RESULT.inference[1], { value: 1, error: null, t: null, prob: null, lcl: null, ucl: null }], dof: 2 });
+    let release: (v: unknown) => void = () => undefined;
+    guessMock.mockReturnValue(new Promise((r) => (release = r)));
+    render(<SurfaceFitPanel />);
+    await screen.findByLabelText("Start a"); // the model catalog has loaded, the guess is in flight
+    await waitFor(() => expect(screen.getByRole("button", { name: "Fit" })).toBeDisabled());
+    act(() => release({ param_names: ["a", "b", "c"], p0: [1.5, 0.5, 0.25] }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Fit" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    await screen.findByText("fixed");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    fireEvent.click(screen.getByRole("button", { name: "Copy MD" }));
+    await waitFor(() => expect(useApp.getState().status).toMatch(/copied the fit results/));
+    expect(writeText.mock.calls[0][0]).toContain("| c | 1 | fixed |");
+  });
+
   it("adds the fitted surface as a map-able dataset", async () => {
     render(<SurfaceFitPanel />);
     await waitFor(() => expect(screen.getByLabelText("Start a")).toHaveValue("1.5"));
@@ -116,6 +151,10 @@ describe("SurfaceFitPanel", () => {
     expect(added.data.labels).toEqual(["Y", "Z (fit)", "Z", "Z residual"]);
     expect(added.data.values[1]).toEqual([0, 3, 2, -1]);
     expect(added.data.metadata["x_column_name"]).toBe("X");
+    const meta = added.data.metadata["surface_fit"] as { errors: number[]; ci_low: number[]; ci_level: number };
+    expect(meta.errors).toEqual([0.1, 0.2, 0.3]);
+    expect(meta.ci_low).toEqual([1.7, 0.4, 0.1]);
+    expect(meta.ci_level).toBe(0.95);
   });
 
   it("asks for a dataset with three columns", () => {

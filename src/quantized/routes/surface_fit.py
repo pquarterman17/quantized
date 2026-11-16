@@ -99,6 +99,7 @@ def fit(req: SurfaceFitRequest) -> dict[str, Any]:
             lower=_bound(req.lower, -np.inf),
             upper=_bound(req.upper, np.inf),
             max_iter=req.max_iter,
+            linear=True,
         )
         dof = int(res["n_points"] - res["n_free"])
         inference = parameter_inference(res["params"], res["errors"], dof, req.level)
@@ -107,9 +108,6 @@ def fit(req: SurfaceFitRequest) -> dict[str, Any]:
             "dof": dof,
             "level": req.level,
             "inference": inference,
-            "x": x,
-            "y": y,
-            "z": z,
         }
         return to_jsonable(out)  # type: ignore[no-any-return]
     except CALC_ERRORS as exc:

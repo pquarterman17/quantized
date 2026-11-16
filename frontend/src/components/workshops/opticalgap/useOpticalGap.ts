@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { taucFit, type TaucResult, type TransitionKind } from "../../../lib/api/analysisExtras";
+import { taucFit, type TaucResult, type TaucSignal, type TaucXUnit, type TransitionKind } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
@@ -27,10 +27,10 @@ export interface OpticalGapState {
   yCol: number;
   setXCol: (i: number) => void;
   setYCol: (i: number) => void;
-  xUnit: "eV" | "nm";
-  setXUnit: (u: "eV" | "nm") => void;
-  signal: "alpha" | "transmittance";
-  setSignal: (s: "alpha" | "transmittance") => void;
+  xUnit: TaucXUnit;
+  setXUnit: (u: TaucXUnit) => void;
+  signal: TaucSignal;
+  setSignal: (s: TaucSignal) => void;
   percent: boolean;
   setPercent: (p: boolean) => void;
   thickness: string;
@@ -49,10 +49,15 @@ export interface OpticalGapState {
   addTaucData: () => void;
 }
 
-/** Wavelength-like X: a "nm" unit, or values that cannot be photon energies in eV. */
-function guessXUnit(unit: string, x: number[]): "eV" | "nm" {
-  if (/nm/i.test(unit)) return "nm";
+/** X quantity from the column's unit, else from its values (a number above 30
+ *  cannot be a photon energy in eV, so it is read as a wavelength in nm). */
+export function guessXUnit(unit: string, x: number[]): TaucXUnit {
+  if (/mev/i.test(unit)) return "meV";
   if (/ev/i.test(unit)) return "eV";
+  if (/cm(\^?[-\u2212\u207b]\s*1|\u207b\u00b9)|1\s*\/\s*cm/i.test(unit)) return "cm-1";
+  if (/nm/i.test(unit)) return "nm";
+  if (/[\u00c5\u212b]|^\s*a(ng|\b)/i.test(unit)) return "A";
+  if (/[\u00b5\u03bcu]m|micron/i.test(unit)) return "um";
   return maxFinite(x) > 30 ? "nm" : "eV";
 }
 
@@ -65,15 +70,16 @@ function maxFinite(v: readonly number[]): number {
 }
 
 /** What the Y column holds, from its name and unit only (values cannot tell a
- *  0-100 absorption coefficient from a percent transmittance). Anything not
- *  recognised stays absorption, the plain-reading default. */
-export function guessSignal(label: string, unit: string, y: number[]): { signal: "alpha" | "transmittance"; percent: boolean } {
+ *  0-100 absorption coefficient from a percent transmittance). Absorbance is its
+ *  own choice (alpha only up to a constant); a reflectance column is never read
+ *  as transmittance. Anything not recognised stays absorption. */
+export function guessSignal(label: string, unit: string, y: number[]): { signal: TaucSignal; percent: boolean } {
   const text = `${label} ${unit}`;
-  const absorption = /absor|alpha|α|cm/i.test(text);
-  const trans = !absorption && (/transmi|%/i.test(text) || /^T(\b|$)/.test(label.trim()));
-  if (!trans) return { signal: "alpha", percent: false };
-  const top = maxFinite(y);
-  return { signal: "transmittance", percent: unit.includes("%") || top > 1.5 };
+  if (/reflect/i.test(text)) return { signal: "alpha", percent: false };
+  if (/absorbance|^\s*(abs|a)\s*$/i.test(label)) return { signal: "absorbance", percent: false };
+  if (/absor|alpha|\u03b1|cm/i.test(text)) return { signal: "alpha", percent: false };
+  if (!(/transmi|%/i.test(text) || /^T(\b|$)/.test(label.trim()))) return { signal: "alpha", percent: false };
+  return { signal: "transmittance", percent: unit.includes("%") || maxFinite(y) > 1.5 };
 }
 
 export function useOpticalGap(): OpticalGapState {
@@ -84,8 +90,8 @@ export function useOpticalGap(): OpticalGapState {
   const load = useLoadColumns();
 
   const [picks, setPicks] = useState<[number, number]>([-1, 0]);
-  const [xUnit, setXUnit] = useState<"eV" | "nm">("eV");
-  const [signal, setSignal] = useState<"alpha" | "transmittance">("alpha");
+  const [xUnit, setXUnit] = useState<TaucXUnit>("eV");
+  const [signal, setSignal] = useState<TaucSignal>("alpha");
   const [percent, setPercent] = useState(false);
   const [thickness, setThickness] = useState("");
   const [kind, setKind] = useState<TransitionKind>("direct");
@@ -156,7 +162,7 @@ export function useOpticalGap(): OpticalGapState {
         x_unit: xUnit,
         signal,
         percent,
-        thickness_nm: signal === "transmittance" ? (t as number) : undefined,
+        thickness_nm: signal === "transmittance" ? (t as number) : signal === "absorbance" && t ? t : undefined,
         kind,
         e_min: lo ?? undefined,
         e_max: hi ?? undefined,
@@ -174,16 +180,30 @@ export function useOpticalGap(): OpticalGapState {
 
   function addTaucData(): void {
     if (!result || !active) return;
+    const t = parseField(thickness);
     const order = result.energy.map((_, i) => i).sort((a, b) => result.energy[a] - result.energy[b]);
     const data: DataStruct = {
       time: order.map((i) => result.energy[i]),
       values: order.map((i) => [result.alpha[i], result.tauc[i]]),
-      labels: ["α", yLabel],
-      units: ["cm⁻¹", ""],
+      // Absorbance without a thickness gives alpha only up to a constant: no unit claimed.
+      labels: [signal === "absorbance" && !t ? "α (∝ A)" : "α", yLabel],
+      units: [signal === "absorbance" && !t ? "" : "cm⁻¹", ""],
       metadata: {
         x_column_name: "Photon energy",
         x_column_unit: "eV",
-        tauc: { transition: result.kind, eg: result.eg, eg_se: result.eg_se },
+        tauc: {
+          transition: result.kind,
+          eg: result.eg,
+          eg_se: result.eg_se,
+          eg_se_fit: result.eg_se_fit,
+          eg_window_sd: result.eg_window_sd,
+          ci_level: result.level,
+          eg_low: result.eg_lcl,
+          eg_high: result.eg_ucl,
+          window: [result.e_min, result.e_max],
+          auto_window: result.auto_window,
+          r2: result.r2,
+        },
       },
     };
     addDataset({ id: nextDatasetId(), name: `${active.name} (Tauc, ${result.label.toLowerCase()})`, data });
