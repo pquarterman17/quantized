@@ -29,6 +29,7 @@ from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_map3d import (
     MAX_SCATTER_POINTS,
+    axes_3d,
     check_angles,
     check_curve_inputs,
     check_extent,
@@ -37,6 +38,7 @@ from quantized.calc.figure_map3d import (
     decimate,
     draw_curves,
     draw_drop_lines,
+    draw_surface,
     parse_curves,
     set_log_zticks,
     set_view,
@@ -269,7 +271,11 @@ def render_map_figure(
         # one per branch, with the SAME arguments): only the axes-creation
         # call differs (3-D projection vs. a plain 2-D subplot).
         fig = new_figure(figsize=figsize)
-        ax: Any = fig.add_subplot(projection="3d") if kind in _3D_KINDS else fig.subplots()
+        cax: Any = None
+        if kind in _3D_KINDS:
+            ax, cax = axes_3d(fig, colorbar, bool(title))
+        else:
+            ax = fig.subplots()
         mappable = _draw(
             ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
             label_contours, contour_source=contour_source,
@@ -299,13 +305,15 @@ def render_map_figure(
         if colorbar_log10 and kind in _3D_KINDS:
             set_log_zticks(ax, log_decade_ticks)
         if colorbar and mappable is not None:
-            # A 3-D z axis sits on the right: pad the bar clear of its label.
-            pad = 0.12 if kind in _3D_KINDS else 0.05
-            cb = fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8, pad=pad)
+            cb = (
+                fig.colorbar(mappable, cax=cax, label=z_label or None) if cax is not None
+                else fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+            )
             if colorbar_log10:
                 ticks = log_decade_ticks(*mappable.get_clim())
                 cb.set_ticks([k for k, _ in ticks], labels=[label for _, label in ticks])
-        fig.tight_layout()
+        if kind not in _3D_KINDS:  # 3-D: a fixed layout (figure_map3d.axes_3d)
+            fig.tight_layout()
         if note:  # after tight_layout: a footnote must not shrink the axes
             fig.text(
                 0.01, 0.005, safe_mathtext_label(note), fontsize=st.font_size * 0.7, va="bottom"
@@ -385,7 +393,8 @@ def _draw(
         return None
     if contour_source == "points" and kind == "scatter3d":
         # The measured points themselves, coloured by z -- no grid, no resampling.
-        return ax.scatter(x, y, z, c=z, cmap=cmap, s=6, depthshade=True)
+        # No depth shading: the screen colours every point by z alone.
+        return ax.scatter(x, y, z, c=z, cmap=cmap, s=6, depthshade=False)
     if contour_source == "points":
         # x/y/z are flat, equal-length scattered arrays here (not a grid) --
         # Delaunay-triangulate the cloud and contour straight off the
@@ -425,7 +434,7 @@ def _draw(
     # 3-D kinds (the camera is set once, by set_view, after drawing)
     xg, yg = np.meshgrid(x, y)  # (ny, nx)
     if kind == "surface":
-        return ax.plot_surface(xg, yg, z, cmap=cmap, linewidth=0, antialiased=True)
+        return draw_surface(ax, x, y, z, cmap)
     if kind == "scatter3d":
         finite = np.isfinite(z)
         sc = ax.scatter(

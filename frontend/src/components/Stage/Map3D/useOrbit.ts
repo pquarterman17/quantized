@@ -7,7 +7,12 @@
 // on. A pending commit is FLUSHED as soon as the pointer or focus leaves the
 // plot (so ⤓ clicked right after a key press exports the new view) and on
 // unmount; a stored-view change from elsewhere (undo, the panel's fields)
-// while one is pending wins and cancels it. `moving` is true during a gesture
+// while one is pending wins and cancels it -- except the global Undo / Redo
+// KEYS, which flush the pending gesture first (a capture-phase listener runs
+// before the app's shortcut), so Ctrl+Z undoes that gesture as one step
+// instead of discarding it. During a DRAG the stored view is not followed
+// (the drag owns the camera until release); an undo then lands on release's
+// commit as the next step. `moving` is true during a gesture
 // and briefly after, which the renderer uses to draw the decimated scene.
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -55,6 +60,16 @@ export function useOrbit(stored: View3d, onCommit: (v: View3d) => void, reset: V
       setView(stored);
     }
   }, [stored]);
+
+  // Ctrl/Cmd+Z, Ctrl+Y, Ctrl+Shift+Z anywhere: commit the pending gesture
+  // first, so the undo it triggers undoes THAT gesture as one step.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key) && commitTimer.current) commitNow();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [commitNow]);
 
   // Unmounting (e.g. switching to "Export preview") keeps the gesture.
   useEffect(() => () => {

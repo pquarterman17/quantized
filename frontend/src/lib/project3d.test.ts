@@ -60,12 +60,14 @@ describe("project3d", () => {
     expect(camera({ ...HOME, zoom: 2 }, 600, 400).scale).toBe(2 * camera(HOME, 600, 400).scale);
   });
 
-  it("projects the centre to the screen centre; nearer points have larger depth", () => {
+  it("frames the box as matplotlib does (centre 1/74 of the side up-right); nearer points have larger depth", () => {
     const c = camera(HOME, 600, 400);
-    expect(project(c, 0, 0, 0)).toEqual([300, 200, 0]);
+    const p = project(c, 0, 0, 0);
+    expect(p[0]).toBeCloseTo(300 + 400 / 74, 9);
+    expect(p[1]).toBeCloseTo(200 - 400 / 74, 9);
     expect(project(c, ...c.eye)[2]).toBeCloseTo(1, 12);
     // Up on screen is DOWN in canvas px.
-    expect(project(c, 0, 0, 0.3)[1]).toBeLessThan(200);
+    expect(project(c, 0, 0, 0.3)[1]).toBeLessThan(p[1]);
   });
 
   it("maps a data range onto the box side; a flat range sits mid-box", () => {

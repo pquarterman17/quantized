@@ -58,7 +58,12 @@ beforeEach(() => {
 });
 
 const view3d = () => mapViewFor(useApp.getState().mapViews, "scan").view3d;
-const plot = () => screen.findByRole("img", { name: /Surface of Signal/ });
+const shown = () => document.querySelector("[data-map3d-angles]")?.textContent ?? "";
+/** The plot, once the (offline) grid has settled: a regrid rebuilds the scene and remounts the canvas. */
+const plot = async () => {
+  await waitFor(() => expect(useApp.getState().status).toMatch(/offline grid/));
+  return screen.findByRole("application", { name: /Surface of Signal/ });
+};
 
 describe("Map stage interactive 3-D", () => {
   it("opens interactive and asks the server for nothing", async () => {
@@ -79,7 +84,7 @@ describe("Map stage interactive 3-D", () => {
     fireEvent.keyDown(el, { key: "ArrowUp", shiftKey: true });
     fireEvent.keyDown(el, { key: "+" });
     expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 }); // nothing written mid-gesture
-    expect(screen.getByText(/elevation 45°, azimuth -50°, zoom 1\.10×/)).toBeTruthy();
+    expect(shown()).toMatch(/elevation 45°, azimuth -50°, zoom 1\.10×/);
     await act(() => new Promise((r) => setTimeout(r, COMMIT_IDLE_MS + 100)));
     expect(view3d()).toMatchObject({ elev: 45, azim: -50, zoom: 1.1, kind: "surface" });
     expect(undoDepth()).toBe(before + 1);
@@ -94,7 +99,7 @@ describe("Map stage interactive 3-D", () => {
 
     act(() => useApp.getState().undo());
     expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 });
-    await waitFor(() => expect(screen.getByText(/elevation 30°, azimuth -60°, zoom 1\.00×/)).toBeTruthy());
+    await waitFor(() => expect(shown()).toMatch(/elevation 30°, azimuth -60°, zoom 1\.00×/));
   });
 
   it("a drag is one undo step, written on release", async () => {
@@ -139,11 +144,39 @@ describe("Map stage interactive 3-D", () => {
     expect(view3d()).toMatchObject({ elev: 30, azim: -60 });
   });
 
+  it("Ctrl+Z within the commit delay undoes THAT gesture as one step (it is flushed first, not lost)", async () => {
+    render(<MapStage />);
+    const el = await plot();
+    const before = useApp.getState().history.length;
+    fireEvent.keyDown(el, { key: "ArrowLeft" });
+    fireEvent.keyDown(el, { key: "ArrowLeft" });
+    // the app's Undo shortcut: the capture listener commits the gesture first
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(view3d()?.azim).toBe(-50);
+    expect(useApp.getState().history.length).toBe(before + 1);
+    act(() => useApp.getState().undo());
+    await act(() => new Promise((r) => setTimeout(r, COMMIT_IDLE_MS + 100)));
+    expect(view3d()?.azim).toBe(-60); // the gesture is undone and stays undone
+  });
+
+  it("screen readers hear the committed view, not every pointer move", async () => {
+    render(<MapStage />);
+    const el = await plot();
+    const live = () => document.querySelector("[data-map3d-announce]")!.textContent;
+    expect(live()).toMatch(/azimuth -60°/);
+    fireEvent.pointerDown(el, { pointerId: 5, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 5, buttons: 1, clientX: 120, clientY: 100 });
+    expect(live()).toMatch(/azimuth -60°/); // moving: not announced
+    expect(shown()).toMatch(/azimuth -70°/); // the visible readout follows
+    fireEvent.pointerUp(el, { pointerId: 5, clientX: 120, clientY: 100 });
+    await waitFor(() => expect(live()).toMatch(/azimuth -70°/));
+  });
+
   it("Reset view returns to the default camera; the panel's angle fields follow the stored view", async () => {
     useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface", elev: 10, azim: 100, zoom: 2 });
     render(<MapStage />);
     await plot();
-    expect(screen.getByText(/elevation 10°, azimuth 100°, zoom 2\.00×/)).toBeTruthy();
+    expect(shown()).toMatch(/elevation 10°, azimuth 100°, zoom 2\.00×/);
     fireEvent.click(screen.getByRole("button", { name: "Reset 3-D view" }));
     expect(view3d()).toMatchObject({ elev: 30, azim: -60, zoom: 1 });
   });

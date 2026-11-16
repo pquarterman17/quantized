@@ -77,7 +77,7 @@ describe("Waterfall3dSection", () => {
 
   it("opens interactive: no server render until asked; the export carries the on-screen zoom", async () => {
     render(<Waterfall3dSection series={two} channel="Signal" />);
-    const plot = screen.getByRole("img", { name: /3-D waterfall of Signal/ });
+    const plot = screen.getByRole("application", { name: /3-D waterfall of Signal/ });
     fireEvent.keyDown(plot, { key: "ArrowLeft" });
     fireEvent.keyDown(plot, { key: "+" });
     await waitFor(() => expect((screen.getByLabelText("Azimuth (°)") as HTMLInputElement).value).toBe("-55"));

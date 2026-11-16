@@ -9,6 +9,13 @@
 //     drop line from each point to the floor under it.
 //   * lines: one polyline per waterfall curve, painted far to near.
 //
+// LIMITS of the painter's algorithm (recorded, not hidden): quads are ordered
+// by MEAN depth, so two quads that interpenetrate, or a long thin quad behind a
+// short one, can paint in the wrong order -- matplotlib's own `zsort="average"`
+// makes the same choice, so screen and export err alike. Points use a true
+// z-buffer and have no such case; waterfall curves are ordered whole, by mean
+// depth.
+//
 // INTERACTION BUDGET: while the view is moving (`fast`), a surface is drawn on
 // a grid strided to at most FAST_CELLS cells a side and a cloud to at most
 // FAST_POINTS points; the full scene is drawn once the view settles. Both are
@@ -21,6 +28,9 @@ import type { LineScene, PointScene, Scene3d, SurfaceScene } from "./scene3d";
 
 export const FAST_CELLS = 64;
 export const FAST_POINTS = 20_000;
+/** Drop lines on more points are thinned evenly (every k-th point), as the
+ *  export thins them (`calc/figure_map3d.py` DROP_LINES_MAX). */
+export const DROP_LINES_MAX = 5_000;
 
 /** Every pickable vertex as drawn: screen px, depth, and its data index. */
 export interface PickSet {
@@ -161,12 +171,13 @@ function drawPoints(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene, fast
   const r = Math.max(1, Math.round((n > 20_000 ? 1.5 : n > 2_000 ? 2.2 : 3) * dpr));
   const r2 = r * r, rin2 = (r - 1) * (r - 1);
   const floor = f.map[2](s.z.lo);
+  const dropStep = Math.ceil(n / DROP_LINES_MAX);
   if (s.drop) ctx.beginPath();
   let drawn = 0;
   for (let i = 0; i < n; i += step) {
     const bx = f.map[0](s.px[i]), by = f.map[1](s.py[i]);
     const [sx, sy, d] = project(f.cam, bx, by, f.map[2](s.pz[i]));
-    if (s.drop) {
+    if (s.drop && i % dropStep === 0) {
       const g = project(f.cam, bx, by, floor);
       ctx.moveTo(g[0], g[1]);
       ctx.lineTo(sx, sy);
@@ -281,7 +292,11 @@ function withProjection(f: Frame, x: Float64Array, y: Float64Array, z: Float64Ar
 
 /** The vertex under (px, py): among those within `radius` px, the nearest on
  *  screen of the ones at the FRONT (within 0.03 box units of the nearest
- *  depth), so a hover never reads a point hidden behind the surface. */
+ *  depth), so a hover never reads a point hidden behind the surface. A
+ *  HEURISTIC, not a ray cast: it picks vertices, not the surface between them
+ *  (a hover mid-quad reads its nearest front corner), and a near-vertical fold
+ *  thinner than 0.03 box units can read either sheet. A linear scan, fine to
+ *  ~1e6 vertices; it is rebuilt only when the view settles. */
 export function pick(set: PickSet, px: number, py: number, radius = 10): number | null {
   const r2 = radius * radius;
   let front = -Infinity;

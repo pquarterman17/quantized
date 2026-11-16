@@ -114,24 +114,28 @@ export default function Map3dCanvas({ scene, view: stored, onCommit, home, child
   useEffect(() => setHover(null), [scene, view]);
 
   const readout = hover && picks.current && hover.i < picks.current.x.length ? picks.current : null;
-  const angles = `elevation ${Math.round(view.elev)}°, azimuth ${Math.round(view.azim)}°, zoom ${view.zoom.toFixed(2)}×`;
+  const say = (v: View3d) => `elevation ${Math.round(v.elev)}°, azimuth ${Math.round(v.azim)}°, zoom ${v.zoom.toFixed(2)}×`;
+  const angles = say(view);
   return (
     <div data-map3d-interactive="" style={{ position: "absolute", inset: 0, display: "grid", gridTemplateRows: "auto 1fr", background: "var(--axes-bg)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "4px 8px", fontSize: 11 }}>
         <button type="button" className="qz-btn" onClick={orbit.resetView} title="Reset view (0 or Home)" aria-label="Reset 3-D view">
           {actionReset} Reset view
         </button>
-        <span className="qzk-helptext" aria-live="polite" data-map3d-angles="">{angles}</span>
+        <span className="qzk-helptext" data-map3d-angles="">{angles}</span>
+        {/* Announced once per COMMITTED view, never per pointer move. */}
+        <span className="qz-sr-only" aria-live="polite" data-map3d-announce="">{say(stored)}</span>
         {children}
         <span className="qzk-helptext" style={{ marginLeft: "auto" }}>Drag to rotate · wheel to zoom · arrow keys, +/−, 0</span>
       </div>
       <div
         ref={hostRef}
-        role="img"
+        role="application"
+        aria-roledescription="3-D plot"
         tabIndex={0}
-        aria-label={`${label}: ${angles}. Drag or use the arrow keys to rotate, the wheel or plus and minus to zoom, 0 to reset.`}
+        aria-label={`${label}. Drag or use the arrow keys to rotate, the wheel or plus and minus to zoom, 0 to reset.`}
         className="qzk-map3d-host"
-        style={{ position: "relative", minHeight: 0, overflow: "hidden", touchAction: "none", cursor: "default", outlineOffset: -2 }}
+        style={{ position: "relative", minHeight: 0, overflow: "hidden", touchAction: "none", cursor: "default" }}
         onPointerDown={orbit.onPointerDown}
         onPointerMove={(e) => {
           if (orbit.onPointerMove(e)) return;

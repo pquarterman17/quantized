@@ -26,6 +26,8 @@ import { BOX, camera, clampView, keyStep, orbit, zoomBy, type View3d } from "../
 import { mapFigureBody } from "../mapFigureExport";
 import { view3dOptions } from "../map3dRequest";
 import { withCamera } from "./Map3dStageView";
+import { frameFor } from "./render3dAxes";
+import { sceneFromBody, type Scene3d } from "./scene3d";
 
 const FIXTURE = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -70,13 +72,47 @@ function edges(v: View3d): number[][] {
   return e.map(([a, b]) => [a / s, b / s]);
 }
 
+/** The box's projected width and height, in units of the axes square's side
+ *  (`camera`'s min(w, h)): what the export's box must measure on its figure. */
+function extent(v: View3d): number[] {
+  const side = 400;
+  const c = camera(v, side, side);
+  const xs: number[] = [], ys: number[] = [];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    const p = [sx * BOX[0] / 2, sy * BOX[1] / 2, sz * BOX[2] / 2];
+    xs.push(c.right[0] * p[0] + c.right[1] * p[1] + c.right[2] * p[2]);
+    ys.push(c.up[0] * p[0] + c.up[1] * p[1] + c.up[2] * p[2]);
+  }
+  return [xs, ys].map((a) => ((Math.max(...a) - Math.min(...a)) * c.scale) / side);
+}
+
+/** Where DATA points land in the box: each point's screen offset from the
+ *  box's low corner, in units of the x edge's on-screen length. A padded
+ *  matplotlib autoscale (5% margins) moves every one of these. */
+const PROBES: [number, number, number][] = [[0, 10, 1], [2, 30, 9], [1, 20, 4], [2, 10, 3]];
+function placement(v: View3d, scene: Scene3d): number[][] {
+  const f = frameFor(scene, v, 800, 600);
+  const at = (b: number[]) => [
+    f.cam.right[0] * b[0] + f.cam.right[1] * b[1] + f.cam.right[2] * b[2],
+    f.cam.up[0] * b[0] + f.cam.up[1] * b[1] + f.cam.up[2] * b[2],
+  ];
+  const o = at([-BOX[0] / 2, -BOX[1] / 2, -BOX[2] / 2]);
+  const ex = at([BOX[0] / 2, -BOX[1] / 2, -BOX[2] / 2]);
+  const len = Math.hypot(ex[0] - o[0], ex[1] - o[1]);
+  return PROBES.map(([x, y, z]) => {
+    const p = at([f.map[0](x), f.map[1](y), f.map[2](z)]);
+    return [(p[0] - o[0]) / len, (p[1] - o[1]) / len];
+  });
+}
+
 function fresh() {
   return {
     cases: CASES.map(({ name, steps }) => {
       const view = run(steps);
       const v3 = withCamera({ ...DEFAULT_MAP3D, kind: "surface" }, view);
       const request = mapFigureBody(P, { cmap: "viridis", logZ: false, colorLimits: null, contour: { on: false, levelCount: 0, scale: "linear" }, view3d: v3 }, view3dOptions(v3, "png", "fixture"));
-      return { name, view, edges: edges(view), request };
+      const scene = sceneFromBody(request) as Scene3d;
+      return { name, view, edges: edges(view), extent: extent(view), probes: PROBES, placement: placement(view, scene), request };
     }),
   };
 }

@@ -103,6 +103,7 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
         </div>
       ) : (
         <Map3dCanvas
+          key={datasetId ?? ""}
           scene={scene}
           view={cam}
           home={HOME}

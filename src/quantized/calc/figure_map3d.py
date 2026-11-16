@@ -14,7 +14,7 @@ from typing import Any
 
 import matplotlib
 import numpy as np
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from numpy.typing import NDArray
 
 __all__ = [
@@ -31,6 +31,11 @@ __all__ = [
     "parse_curves",
     "set_log_zticks",
     "set_view",
+    "tight_limits",
+    "axes_3d",
+    "DROP_LINES_MAX",
+    "SURFACE_MAX_CELLS",
+    "draw_surface",
     "step_rows",
 ]
 
@@ -61,6 +66,87 @@ def check_zoom(zoom: float) -> None:
         raise ValueError(f"view_zoom must be a finite number from {ZOOM_MIN} to {ZOOM_MAX}")
 
 
+# The screen draws a surface at full grid resolution (matplotlib's plot_surface
+# would sample 50 x 50). Beyond this many cells a side both step the grid alike.
+SURFACE_MAX_CELLS = 500
+# Drop lines on more points than this are thinned evenly (every k-th point),
+# here and on screen (`render3dMarks.ts` DROP_LINES_MAX): 50k grey lines are a
+# solid wall, not a reading aid.
+DROP_LINES_MAX = 5_000
+
+# The 3-D figure's layout, in figure fractions: the axes rectangle (matplotlib
+# squares the 3-D projection inside it) and, with a colour bar, the bar's own
+# axes to its right. FIXED, not tight_layout: tight_layout measures a zoomed
+# box's overflow as "content" and shrinks the axes to fit it, so a zoom-2 export
+# came out barely larger than zoom 1 -- the screen magnifies, and so must this.
+_CB_FRAC = 0.20
+
+
+def _stepped(n: int, step: int) -> NDArray[np.intp]:
+    """0, step, 2*step, ... and always the last index (`render3dMarks.stepped`)."""
+    return np.unique(np.append(np.arange(0, n - 1, step), n - 1))
+
+
+def draw_surface(
+    ax: Any, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64], cmap: str
+) -> Any:
+    """The surface as the screen draws it (`render3dMarks.surfaceQuads`): one quad
+    per grid cell, coloured by its corners' mean z, and NO quad touching a gap
+    (plot_surface instead keeps the cell's finite corners as a triangle).
+    Painted far to near by mean depth (matplotlib's ``zsort="average"`` is the
+    screen's painter's algorithm). Rasterized like the heatmap's mesh: one
+    vector polygon per cell seams in every viewer."""
+    step = max(1, math.ceil(max(x.size, y.size) / SURFACE_MAX_CELLS))
+    xi, yi = _stepped(x.size, step), _stepped(y.size, step)
+    xg, yg = np.meshgrid(x[xi], y[yi])
+    zg = z[np.ix_(yi, xi)]
+    grid = np.stack([xg, yg, zg], axis=-1)  # (my, mx, 3)
+    quads = np.stack([grid[:-1, :-1], grid[:-1, 1:], grid[1:, 1:], grid[1:, :-1]], axis=2)
+    quads = quads[np.isfinite(quads[..., 2]).all(axis=2)]  # (n, 4, 3)
+    pc = Poly3DCollection(
+        quads, cmap=cmap, linewidth=0, antialiased=True, rasterized=True, zsort="average"
+    )
+    pc.set_array(quads[..., 2].mean(axis=1))
+    ax.add_collection3d(pc, autolim=False)
+    fin = zg[np.isfinite(zg)]
+    ax.auto_scale_xyz(
+        [float(x.min()), float(x.max())], [float(y.min()), float(y.max())],
+        [float(fin.min()), float(fin.max())], had_data=False,
+    )
+    return pc
+
+
+def axes_3d(fig: Any, colorbar: bool, title: bool) -> tuple[Any, Any]:
+    """The 3-D axes and (with ``colorbar``) the colour bar's axes, laid out
+    fixed; the bar is drawn OVER a zoomed box, as the screen's is."""
+    right = 1.0 - (_CB_FRAC if colorbar else 0.0)
+    top = 0.90 if title else 0.96
+    ax = fig.add_axes((0.03, 0.04, right - 0.05, top - 0.04), projection="3d")
+    cax = None
+    if colorbar:
+        cax = fig.add_axes((right + 0.01, 0.15, 0.025, 0.70))
+        cax.set_zorder(ax.get_zorder() + 1)
+    return ax, cax
+
+
+def tight_limits(ax: Any) -> None:
+    """Axis limits at exactly the drawn data's extent -- the screen's box --
+    instead of matplotlib's padded autoscale (5% margins), so a surface meets
+    the walls and drop lines reach the floor in both. A flat range is padded as
+    the screen pads it (5% of the value, or 0.5 at zero)."""
+    def span(lo: float, hi: float) -> tuple[float, float]:
+        if not (math.isfinite(lo) and math.isfinite(hi)):
+            return 0.0, 1.0
+        if hi > lo:
+            return lo, hi
+        pad = abs(lo) * 0.05 or 0.5
+        return lo - pad, hi + pad
+
+    ax.set_xlim(*span(*ax.xy_dataLim.intervalx))
+    ax.set_ylim(*span(*ax.xy_dataLim.intervaly))
+    ax.set_zlim(*span(*ax.zz_dataLim.intervalx))
+
+
 def set_view(ax: Any, elev: float, azim: float, zoom: float) -> None:
     """The interactive view's camera on a 3-D axes: the same elevation and
     azimuth, an ORTHOGRAPHIC projection (the screen view has no perspective;
@@ -74,6 +160,11 @@ def set_view(ax: Any, elev: float, azim: float, zoom: float) -> None:
     ax.view_init(elev=max(-pole, min(pole, elev)), azim=azim)
     ax.set_proj_type("ortho")
     ax.set_box_aspect((4, 4, 3), zoom=zoom)
+    tight_limits(ax)
+    # The screen crops a zoomed plot at the canvas edge, not at an axes square
+    # (the panes and grid already overflow it): let the marks overflow too.
+    for artist in [*ax.collections, *ax.lines]:
+        artist.set_clip_on(False)
 
 
 def check_extent(*arrays: NDArray[np.float64]) -> None:
@@ -183,6 +274,9 @@ def draw_drop_lines(
     if z.size == 0:
         return
     floor = float(np.min(z))
+    if z.size > DROP_LINES_MAX:
+        keep = np.arange(0, z.size, math.ceil(z.size / DROP_LINES_MAX))
+        x, y, z = x[keep], y[keep], z[keep]
     base = np.column_stack([x, y, np.full(z.size, floor)])
     segs = np.stack([base, np.column_stack([x, y, z])], axis=1)
     ax.add_collection3d(Line3DCollection(segs, colors="0.45", linewidths=0.4, alpha=0.5))

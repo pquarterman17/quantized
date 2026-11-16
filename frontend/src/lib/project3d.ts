@@ -31,8 +31,13 @@ export interface View3d {
 export const BOX: Vec3 = [1, 1, 0.75];
 /** The zoom the view and the export accept (calc/figure_map3d ZOOM_MIN/MAX). */
 export const ZOOM_RANGE: readonly [number, number] = [0.5, 3];
-/** The box's bounding-sphere radius: the fit that never clips at zoom 1. */
-const RADIUS = 0.5 * Math.hypot(BOX[0], BOX[1], BOX[2]);
+/** matplotlib's own fit, measured (`ax.get_proj()` on a square 3-D axes, any
+ *  angle): px per box unit = MPL_FIT x the axes square's side x zoom, and the box
+ *  centre sits 1/74 of the side right of and above the square's centre. The
+ *  export's axes square and this view's frame therefore hold the box at the
+ *  same size and place (`tests/test_export_map3d_view.py` checks within 3%). */
+export const MPL_FIT = 0.6435006476173286;
+const MPL_SHIFT = 1 / 74;
 
 const DEG = Math.PI / 180;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -97,8 +102,10 @@ export interface Camera {
   cy: number;
 }
 
-/** The camera for `v`, fitted into a w x h px area centred at (cx, cy). */
+/** The camera for `v` in a w x h px area centred at (cx, cy): matplotlib's
+ *  framing of its square axes of side min(w, h). */
 export function camera(v: View3d, w: number, h: number, cx = w / 2, cy = h / 2): Camera {
+  const side = Math.max(1, Math.min(w, h));
   const e = v.elev * DEG;
   const a = v.azim * DEG;
   const se = Math.sin(e), ce = Math.cos(e), sa = Math.sin(a), ca = Math.cos(a);
@@ -106,9 +113,9 @@ export function camera(v: View3d, w: number, h: number, cx = w / 2, cy = h / 2):
     right: [-sa, ca, 0],
     up: [-se * ca, -se * sa, ce],
     eye: [ce * ca, ce * sa, se],
-    scale: (v.zoom * Math.max(1, Math.min(w, h))) / (2 * RADIUS),
-    cx,
-    cy,
+    scale: v.zoom * MPL_FIT * side,
+    cx: cx + MPL_SHIFT * side,
+    cy: cy - MPL_SHIFT * side,
   };
 }
 

@@ -6,7 +6,20 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Interactive 3-D view** on the Map tab (and in the waterfall workshop):
+  drag to rotate, wheel to zoom, arrow keys / +/− / 0 from the keyboard, and a
+  hover readout of x/y/z for surfaces, 3-D scatter (optional drop lines) and
+  3-D waterfalls. The export draws the angle and zoom on screen. A workspace
+  saving a 3-D view still saves as `.dwk` version 6.
+
 ### Changed
+
+- 3-D map exports are now **orthographic** (no perspective, as in MATLAB and on
+  screen), draw the surface at full grid resolution, fit the axes to the data
+  without padding, and no longer depth-shade scatter points. Re-exporting an
+  older 3-D figure therefore looks slightly different from the earlier file.
 
 - Theme: Preferences > Appearance now offers "Follow system" alongside Dark and
   Light, and the page picks the OS colour scheme before first paint (no dark
