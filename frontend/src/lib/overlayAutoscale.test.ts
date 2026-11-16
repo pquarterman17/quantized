@@ -18,6 +18,7 @@ import uPlot from "uplot";
 
 import "./uplotPaths"; // provides uPlot's range helpers, as every canvas loads it
 
+import { seriesExtent } from "./axisBreakExtras";
 import { offAutoscale } from "./overlayAutoscale";
 import { composeDisplayPayload, type DisplayCompose, type PlotPayload } from "./plotdata";
 import type { AxisScale } from "./types";
@@ -97,6 +98,11 @@ describe("analysis overlays never change the autoscaled Y range", () => {
     expect(offAutoscale(p.series)).toEqual([false, false]);
     const opts = buildOpts(p, { width: 600, height: 400, tool: "zoom", onReadout: vi.fn(), xScale: "linear", yScale: "linear" });
     expect(opts.series[2]?.auto).not.toBe(false);
+  });
+
+  it("a Y break's gap is sized from the data alone, as the autoscale is", () => {
+    const p = compose(base(), overlays);
+    expect(seriesExtent(p, 0)).toEqual([Math.min(...Y), Math.max(...Y)]);
   });
 
   it("with every data series hidden, the overlays range the axis again", () => {

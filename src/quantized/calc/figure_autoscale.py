@@ -57,6 +57,7 @@ from matplotlib.container import BarContainer, ErrorbarContainer
 from numpy.typing import NDArray
 
 from quantized.calc.figure_orient import TransposedAxes
+from quantized.calc.figure_overlay_scale import is_overlay
 from quantized.calc.figure_ticks import _pow10
 
 __all__ = [
@@ -242,15 +243,26 @@ def mask_nonpositive(ax: Any, axis: str) -> None:
 
 def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Point coordinates and error-bar end coordinates (index ``i``: 0 = the
-    real x coordinate) across ``axes``, finite only."""
+    real x coordinate) across ``axes``, finite only. Analysis overlays count
+    only when no data series is drawn on these axes
+    (:mod:`quantized.calc.figure_overlay_scale`, the canvas'
+    ``lib/overlayAutoscale.ts``)."""
     pts: list[NDArray[np.float64]] = []
     ends: list[NDArray[np.float64]] = []
+    over: list[NDArray[np.float64]] = []
+    data_drawn = False
     for a in axes:
         caps = {id(cap) for c in a.containers if isinstance(c, ErrorbarContainer) for cap in c[1]}
         for line in a.lines:
             if line.get_transform() == a.transData:
                 xy = np.asarray(line.get_xydata(), dtype=float)
-                (ends if id(line) in caps else pts).append(xy[:, i])
+                if id(line) in caps:
+                    ends.append(xy[:, i])
+                elif is_overlay(line):
+                    over.append(xy[:, i])
+                else:
+                    pts.append(xy[:, i])
+                    data_drawn = True
         # Bars drawn beside lines: each bar's VALUE-axis tip is data (a vertical bar's top,
         # a horizontal one's right end) -- never its zero baseline or its width, which the
         # screen does not range to either.
@@ -266,9 +278,13 @@ def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.fl
                 if r.get_data_transform() == a.transData
             ]
             pts.append(np.asarray(tips, dtype=float))
+            data_drawn = data_drawn or bool(tips)
         for c in a.collections:
             if isinstance(c, PathCollection):
-                pts.append(np.asarray(c.get_offsets(), dtype=float).reshape(-1, 2)[:, i])
+                (over if is_overlay(c) else pts).append(
+                    np.asarray(c.get_offsets(), dtype=float).reshape(-1, 2)[:, i]
+                )
+                data_drawn = data_drawn or not is_overlay(c)
             elif isinstance(c, LineCollection):
                 for seg in c.get_segments():
                     ends.append(np.asarray(seg, dtype=float).reshape(-1, 2)[:, i])
@@ -277,7 +293,8 @@ def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.fl
         v = np.concatenate(parts) if parts else np.empty(0)
         return np.asarray(v[np.isfinite(v)], dtype=float)
 
-    return cat(pts), cat(ends)
+    # An overlay alone on its axes still ranges them, as on the canvas.
+    return cat(pts if data_drawn else pts + over), cat(ends)
 
 
 def shared_autoscale(ax: Any, axis: str, scale: str) -> None:

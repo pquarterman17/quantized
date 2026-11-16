@@ -30,6 +30,7 @@ from numpy.typing import NDArray
 
 from quantized.calc.figure_bars import draw_series
 from quantized.calc.figure_colorscatter import MARKER_CODES
+from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_warnings import note_figure_warning
@@ -138,7 +139,24 @@ def draw_marked_series(
     bars: bool = True,
 ) -> tuple[Any, Any]:
     """``(artist, colour)`` for one series, honouring ``connect`` and
-    ``size_by`` on top of :func:`draw_series` (bars / the plain line)."""
+    ``size_by`` on top of :func:`draw_series` (bars / the plain line). An
+    analysis overlay's artist is tagged so it never drives the autoscale
+    (``calc.figure_overlay_scale``)."""
+    artist, color = _draw_marked(ax, xv, yv, label, kw, spec, bars=bars)
+    tag_overlay(artist, spec)
+    return artist, color
+
+
+def _draw_marked(
+    ax: Any,
+    xv: NDArray[np.float64],
+    yv: NDArray[np.float64],
+    label: str,
+    kw: dict[str, Any],
+    spec: Mapping[str, Any] | None,
+    *,
+    bars: bool,
+) -> tuple[Any, Any]:
     if not spec or (bars and spec.get("bars")):
         return draw_series(ax, xv, yv, label, kw, spec) if bars else _plain(ax, xv, yv, label, kw)
     kw = dict(kw)

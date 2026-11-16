@@ -52,6 +52,7 @@ from quantized.calc.figure_legend_order import (
     tag_series_slots,
 )
 from quantized.calc.figure_marks import warn_marks_not_drawn
+from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -209,6 +210,7 @@ def render_breaks_impl(
             drawn = ax.plot(x[shown], yv, label=label, **kw)
             for line in drawn:
                 apply_symbol_details(line, spec)  # gap audit 4 G10, as on the flat plot
+                tag_overlay(line, spec)  # never drives the shared autoscale
             artists.extend(drawn)
         tag_series_slots(artists)  # the legend's waterfall row order
         panel_spans = _slice_spans(error_spans, np.flatnonzero(shown))

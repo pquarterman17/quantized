@@ -12,9 +12,12 @@
 // `lib/logGaps.ts`). An overlay alone on its axis (the ROI gadget's dy/dx on
 // the secondary Y) still ranges that axis, or it would have no range at all.
 //
-// Two consumers: `uplotSeries.buildSeriesDefs` (uPlot's own scan, via
-// `series.auto = false`) and `uplotErrorRange.fullYExtents` (the full-scan
-// path for a non-monotonic X, which also feeds `lib/canvasLims.ts`).
+// Consumers: `uplotSeries.buildSeriesDefs` (uPlot's own scan, via
+// `series.auto = false`), `uplotErrorRange.fullYExtents` (the full-scan path
+// for a non-monotonic X, which also feeds `lib/canvasLims.ts`) and
+// `axisBreakExtras.seriesExtent` (a Y break's gap). The export applies the
+// same rule (`calc/figure_overlay_scale.py`, to its autoscale and its Y-break
+// sizing); `overlayAutoscaleFixture.test.ts` pins screen == export.
 
 import type { PlotSeriesSpec } from "./plotdata";
 

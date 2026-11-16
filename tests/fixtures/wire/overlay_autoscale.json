@@ -1,0 +1,358 @@
+{
+  "about": "UX audit 7 #8 (lane UX-I): analysis overlays never drive the Y autoscale. `want` is the Y view the canvas draws (the data's alone); the backend leg asserts the exported axes land there. Legs: frontend/src/lib/overlayAutoscaleFixture.test.ts and tests/test_export_overlay_autoscale.py.",
+  "cases": [
+    {
+      "name": "log Y: a fitted linear background diving through zero",
+      "request": {
+        "dataset": {
+          "time": [
+            5,
+            15,
+            25,
+            35,
+            45,
+            55,
+            65,
+            75,
+            85
+          ],
+          "values": [
+            [
+              80,
+              78.4,
+              37.5
+            ],
+            [
+              52,
+              50.96,
+              32.5
+            ],
+            [
+              400,
+              392,
+              27.5
+            ],
+            [
+              30,
+              29.4,
+              22.5
+            ],
+            [
+              24,
+              23.52,
+              17.5
+            ],
+            [
+              120,
+              117.6,
+              12.5
+            ],
+            [
+              17,
+              16.66,
+              7.5
+            ],
+            [
+              15,
+              14.7,
+              2.5
+            ],
+            [
+              14,
+              13.719999999999999,
+              -2.5
+            ]
+          ],
+          "labels": [
+            "I",
+            "fit",
+            "baseline"
+          ],
+          "units": [
+            "cps",
+            "",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2
+        ],
+        "x_scale": "linear",
+        "y_scale": "log",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "fit",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "baseline",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          },
+          "ticks": {
+            "minor": true
+          }
+        },
+        "transparent": false,
+        "filename": "scan",
+        "analysis_overlays": [
+          false,
+          true,
+          true
+        ]
+      },
+      "want": [
+        10,
+        1000
+      ]
+    },
+    {
+      "name": "linear Y: a baseline far below the data",
+      "request": {
+        "dataset": {
+          "time": [
+            5,
+            15,
+            25,
+            35,
+            45,
+            55
+          ],
+          "values": [
+            [
+              60,
+              -40
+            ],
+            [
+              72,
+              -30
+            ],
+            [
+              95,
+              -20
+            ],
+            [
+              70,
+              -10
+            ],
+            [
+              64,
+              0
+            ],
+            [
+              61,
+              10
+            ]
+          ],
+          "labels": [
+            "I",
+            "baseline"
+          ],
+          "units": [
+            "cps",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "baseline",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "scan",
+        "analysis_overlays": [
+          false,
+          true
+        ]
+      },
+      "want": [
+        56,
+        99
+      ]
+    },
+    {
+      "name": "linear Y: a fit band whose lower edge runs below the data",
+      "request": {
+        "dataset": {
+          "time": [
+            5,
+            15,
+            25,
+            35,
+            45,
+            55
+          ],
+          "values": [
+            [
+              60,
+              61,
+              5,
+              70
+            ],
+            [
+              72,
+              71,
+              6,
+              80
+            ],
+            [
+              95,
+              94,
+              7,
+              100
+            ],
+            [
+              70,
+              71,
+              8,
+              80
+            ],
+            [
+              64,
+              63,
+              9,
+              70
+            ],
+            [
+              61,
+              61,
+              10,
+              70
+            ]
+          ],
+          "labels": [
+            "I",
+            "fit",
+            "95% CI low",
+            "95% CI high"
+          ],
+          "units": [
+            "cps",
+            "",
+            "",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "fit",
+            "width": 1.5
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "95% confidence band",
+            "line": "dashed",
+            "width": 1,
+            "fill": {
+              "vs": 3
+            }
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "",
+            "line": "dashed",
+            "width": 1
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "scan",
+        "analysis_overlays": [
+          false,
+          true,
+          true,
+          true
+        ]
+      },
+      "want": [
+        56,
+        99
+      ]
+    }
+  ]
+}

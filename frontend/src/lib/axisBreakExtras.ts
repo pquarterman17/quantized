@@ -12,6 +12,7 @@
 import type uPlot from "uplot";
 
 import { breakAutoRange, breakBackward, breakForward, breakGap, breakTicks, type AxisBreak } from "./axisBreaks";
+import { offAutoscale } from "./overlayAutoscale";
 
 type ValuesFn = Extract<NonNullable<uPlot.Axis["values"]>, (...args: never[]) => unknown>;
 
@@ -20,7 +21,7 @@ export interface AxisExtrasContext {
   /** The scales object `buildOpts` is about to return (edited in place). */
   scales: uPlot.Scales;
   /** The drawn payload: `data[0]` is x, then one column per series. */
-  payload: { data: ArrayLike<ArrayLike<number | null | undefined>>; series: readonly { axis?: number }[] };
+  payload: { data: ArrayLike<ArrayLike<number | null | undefined>>; series: readonly { axis?: number; overlay?: boolean; band?: number }[] };
   /** Per axis (x, y, y2): a typed limit ranges it, so no auto range applies. */
   typed: readonly boolean[];
   /** Per axis: the typed major increment, if any. */
@@ -43,12 +44,15 @@ export interface AxisExtrasContext {
   breakMarks?: boolean;
 }
 
-/** Finite min/max of every series riding axis `on` (0 = y, 1 = y2), or null. */
+/** Finite min/max of every series riding axis `on` (0 = y, 1 = y2), or null.
+ *  Analysis overlays are left out as the autoscale leaves them out
+ *  (lib/overlayAutoscale.ts; the export's `axis_breaks._series_values` too). */
 export function seriesExtent(payload: AxisExtrasContext["payload"], on: 0 | 1, hidden?: readonly boolean[]): [number, number] | null {
   let lo = Infinity;
   let hi = -Infinity;
+  const off = offAutoscale(payload.series, hidden);
   for (let s = 1; s < payload.data.length; s++) {
-    if ((payload.series[s - 1]?.axis ?? 0) !== on || hidden?.[s - 1]) continue;
+    if ((payload.series[s - 1]?.axis ?? 0) !== on || hidden?.[s - 1] || off[s - 1]) continue;
     const col = payload.data[s];
     for (let r = 0; r < col.length; r++) {
       const v = col[r];
