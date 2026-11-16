@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct, ImportFilterWire, ImportPreviewResponse, ImportSettingsWire } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useWizardHandoff } from "../../../lib/importFailureToast";
 import ParamDialog from "../../overlays/ParamDialog";
 import ImportWizardPanel from "./ImportWizardPanel";
 
@@ -33,6 +34,9 @@ vi.mock("../../../lib/api/importFilters", async (importOriginal) => ({
   saveImportFilter: saveImportFilterMock,
   deleteImportFilter: deleteImportFilterMock,
 }));
+
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: confirmMock }));
 
 const SETTINGS: ImportSettingsWire = {
   delimiter: "auto",
@@ -565,5 +569,28 @@ describe("ImportWizardPanel", () => {
     await waitFor(() =>
       expect(importPreviewMock).toHaveBeenCalledWith(expect.any(String), SETTINGS, 30),
     );
+  });
+});
+
+describe("ImportWizardPanel — hand-off from a failed import (UX-C)", () => {
+  it("opens already previewing the file the failed import handed over", async () => {
+    render(<ImportWizardPanel />);
+    act(() => useWizardHandoff.setState({ file: new File(["Temp,Moment\n300,0.0012\n"], "garbage.dat") }));
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    expect(screen.getByText("garbage.dat")).toBeInTheDocument();
+    expect(useWizardHandoff.getState().file).toBeNull(); // consumed, so a re-open does not replay it
+  });
+
+  it("asks before replacing a wizard that already has a file open, and keeps it on decline", async () => {
+    confirmMock.mockResolvedValue(false);
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText("run1.dat")).toBeInTheDocument());
+    act(() => useWizardHandoff.setState({ file: new File(["x,y\n1,2\n"], "other.dat") }));
+    await waitFor(() => expect(useWizardHandoff.getState().file).toBeNull()); // taken up (state), then asked
+    await act(async () => {});
+    expect(confirmMock).toHaveBeenCalled();
+    expect(screen.getByText("run1.dat")).toBeInTheDocument();
+    expect(screen.queryByText("other.dat")).toBeNull();
   });
 });

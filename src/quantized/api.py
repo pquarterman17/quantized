@@ -35,6 +35,19 @@ the command line is the batch form of the second call)::
     report = qz.convert_origin_project("legacy.opj", "out", "xlsx")
     qz.save_table(books[0], "first_book.csv")      # Long Name + Units header rows
 
+Example — a saved project, its datasets, and the app's own data operations::
+
+    ws = qz.read_workspace("run42.dwk")           # no app; refuses a newer version
+    sweep = ws.dataset("sweep.dat").data           # as the app shows it
+    smooth = qz.smooth(sweep, method="savitzky-golay", window=5)   # DataStruct in, out
+    dmdh = qz.derivative(sweep, channels=[0])        # unit becomes emu/Oe
+    with_ratio = qz.add_formula_columns(sweep, [("ratio", "A / B")])
+    binned = qz.bin_average(sweep, bin_width=0.5)   # Reduce XY (a new, smaller dataset)
+    on_grid = qz.resample(sweep, mode="n_points", n_points=200).data
+
+``qz run recipe.json FILES…`` re-runs an analysis template saved in the app on
+new files (``quantized.cli_run``; ``docs/headless-recipes.md``).
+
 A pipeline recorded in the app exports as a Python script built on this module
 (``Export script`` in the Pipeline panel; ``docs/pipeline-studio-replay.md``).
 
@@ -52,6 +65,21 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+# ── Smoothing, derivative, normalize, resample, signal ops, Reduce XY ──────
+from quantized.api_data import (
+    cumulative_integral,
+    derivative,
+    despike,
+    hilbert_envelope,
+    log_derivative,
+    lowess,
+    median_filter,
+    normalize,
+    resample,
+    smooth,
+)
+from quantized.calc.aggregate import dataset_algebra
+
 # ── Data contract + file loading ──────────────────────────────────────────
 from quantized.calc.backgrounds import (
     anchor_baseline,
@@ -67,8 +95,12 @@ from quantized.calc.baseline import (
     fit_region_background,
 )
 
+# ── Formula columns (the element-wise subset of the app's language) ───────
+from quantized.calc.column_formula import add_formula_columns, evaluate_formula
+
 # ── Corrections ────────────────────────────────────────────────────────────
 from quantized.calc.corrections import apply_corrections
+from quantized.calc.curve_average import average_curves
 
 # ── Publication rendering (matplotlib) ─────────────────────────────────────
 from quantized.calc.figure import render_figure
@@ -78,13 +110,16 @@ from quantized.calc.figure_statplots import render_statplot_figure
 # ── Curve & peak fitting ───────────────────────────────────────────────────
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_holds import check_held_starts
+from quantized.calc.fit_implicit import fit_ellipse
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import curve_fit
+from quantized.calc.optical_gap import tauc_fit
 from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_fit import fit_single_peak
 from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_multifit import fit_multi_peak
 from quantized.calc.peaks import find_peaks_robust
+from quantized.calc.reduce_xy import average_duplicates, bin_average, keep_every_nth
 
 # ── Reporting ──────────────────────────────────────────────────────────────
 from quantized.calc.report import (
@@ -105,6 +140,7 @@ from quantized.calc.report_emit import (
     from_stats_table,
 )
 from quantized.calc.report_emit_peaks import from_multipeak_fit
+from quantized.calc.signal_ops import run_signal_op
 
 # ── Statistical plots ──────────────────────────────────────────────────────
 from quantized.calc.statplots import (
@@ -145,14 +181,36 @@ from quantized.calc.stats_tests import (
     sign_test,
     wilcoxon_signed_rank,
 )
+from quantized.calc.surface_fit import surface_fit
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
 from quantized.io.datastruct_table import write_table
+from quantized.io.error_seed import seed_error_roles
 from quantized.io.origin_convert import convert_origin_project as _convert_origin_project
 from quantized.io.origin_project import read_origin_books as _read_origin_books
 from quantized.io.registry import import_auto as load
 from quantized.io.report_export import figure_target, format_value_error, to_html, to_latex
 from quantized.io.report_export import render_report as _render_report_io
+from quantized.io.workspace_dwk_read import Workspace, WorkspaceDataset, WorkspaceVersionError
+from quantized.io.workspace_dwk_read import read_workspace as _read_workspace
+
+
+def read_workspace(path: str | Path) -> Workspace:
+    """Every dataset of a saved Quantized project (``.dwk``), no app needed.
+
+    Returns a :class:`~quantized.io.workspace_dwk_read.Workspace`:
+    ``datasets`` (each a ``WorkspaceDataset`` with ``name``, ``data`` -- the
+    worksheet as the app shows it, a DataStruct --, ``raw`` (the uncorrected
+    base), ``formulas``, ``corrections``, ``folder_path``, ``source_path``,
+    ``notes``, ``tags``), ``active``, the recorded ``pipeline`` and
+    ``warnings``. ``ws.dataset("name or id")`` picks one.
+
+    A project saved by a NEWER Quantized (a version this build does not know)
+    is refused with ``WorkspaceVersionError`` (a ``ValueError``) naming both
+    versions, never half-read; a malformed dataset refuses the file, as the
+    app refuses it. See ``quantized.io.workspace_dwk_read``.
+    """
+    return _read_workspace(path)
 
 
 def read_origin_books(path: str | Path) -> list[DataStruct]:
@@ -327,11 +385,40 @@ __all__ = [
     "read_origin_books",
     "convert_origin_project",
     "save_table",
+    "read_workspace",
+    "Workspace",
+    "WorkspaceDataset",
+    "WorkspaceVersionError",
+    "seed_error_roles",
+    # formula columns (gap audit 5 #6: what the exported script replays)
+    "evaluate_formula",
+    "add_formula_columns",
+    # smoothing / derivative / normalize (MATLAB +utilities ports, golden)
+    "smooth",
+    "derivative",
+    "log_derivative",
+    "cumulative_integral",
+    "normalize",
+    # resample + signal operations + Reduce XY + dataset math
+    "resample",
+    "run_signal_op",
+    "median_filter",
+    "despike",
+    "lowess",
+    "hilbert_envelope",
+    "bin_average",
+    "average_duplicates",
+    "keep_every_nth",
+    "dataset_algebra",
+    "average_curves",
     # fitting
     "curve_fit",
     "fit_model",
     "fit_single_peak",
     "fit_multi_peak",
+    "surface_fit",
+    "fit_ellipse",
+    "tauc_fit",
     "find_peaks_robust",
     "integrate_peaks",
     "batch_integrate_peaks",

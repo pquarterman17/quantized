@@ -6,6 +6,7 @@
 // not a workaround.
 
 import { toast } from "../store/toasts";
+import { toastRemoved } from "./datasetRemoval";
 import { useApp } from "../store/useApp";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { multiSelected } from "./multiSelected";
@@ -17,8 +18,9 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     destructive: true,
     confirm: (t) => ({ title: `Remove "${t.dataset.name}"?`, confirmLabel: "Remove" }),
     run: (t) => {
+      const since = useApp.getState().history.at(-1)?.seq;
       useApp.getState().removeDataset(t.dataset.id);
-      toast(`removed ${t.dataset.name}`);
+      toastRemoved(`removed ${t.dataset.name}`, since);
     },
   },
   {
@@ -29,8 +31,9 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     confirm: (t) => ({ title: `Remove ${t.selectedIds.length} datasets?`, confirmLabel: "Remove" }),
     run: (t) => {
       const n = t.selectedIds.length;
+      const since = useApp.getState().history.at(-1)?.seq;
       useApp.getState().removeSelected();
-      toast(`removed ${n} datasets`);
+      toastRemoved(`removed ${n} datasets`, since);
     },
   },
   // P3.7: the explicit, warned Trash BYPASS — "Remove" above stays the

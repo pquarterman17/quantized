@@ -46,6 +46,7 @@ const base: AutosaveState = {
   baselineOverlay: null,
   mapViews: EMPTY_MAP_VIEWS, // P2.8 — the per-dataset durable map views (untouched)
   savedSampleProfiles: [], // MAIN_PLAN #42 — named sample profiles (untouched)
+  savedRecodeMappings: [], // gap audit 5 lane J — saved Recode mappings (untouched)
   datasets: [],
   folders: [],
   activeId: null,

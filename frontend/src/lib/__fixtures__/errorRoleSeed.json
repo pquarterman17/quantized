@@ -1,0 +1,481 @@
+{
+ "cases": [
+  {
+   "name": "label guess",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "M",
+     "M_err"
+    ],
+    "units": [
+     "emu",
+     "emu"
+    ],
+    "metadata": {}
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  },
+  {
+   "name": "label guess, unit mismatch",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "M",
+     "M_err"
+    ],
+    "units": [
+     "emu",
+     "Oe"
+    ],
+    "metadata": {}
+   },
+   "roles": null
+  },
+  {
+   "name": "several values",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1,
+      1,
+      1
+     ],
+     [
+      2,
+      2,
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "R",
+     "dR",
+     "Q",
+     "dQ"
+    ],
+    "units": [
+     "",
+     "",
+     "1/A",
+     "1/A"
+    ],
+    "metadata": {}
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    },
+    {
+     "channel": 3,
+     "target": 2,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  },
+  {
+   "name": "x error",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "signal",
+     "x_err"
+    ],
+    "units": [
+     "",
+     "K"
+    ],
+    "metadata": {
+     "xUnit": "K"
+    }
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  },
+  {
+   "name": "x error, unit mismatch",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "signal",
+     "x_err"
+    ],
+    "units": [
+     "",
+     "s"
+    ],
+    "metadata": {
+     "xUnit": "K"
+    }
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  },
+  {
+   "name": "nothing to guess",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "a",
+     "b"
+    ],
+    "units": [
+     "",
+     ""
+    ],
+    "metadata": {}
+   },
+   "roles": null
+  },
+  {
+   "name": "parser declared",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1,
+      1
+     ],
+     [
+      2,
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "R",
+     "col2",
+     "col3"
+    ],
+    "units": [
+     "",
+     "",
+     ""
+    ],
+    "metadata": {
+     "error_roles": [
+      {
+       "channel": 1,
+       "target": 0,
+       "axis": "y",
+       "side": "both"
+      },
+      {
+       "channel": 2,
+       "target": 2,
+       "axis": "y",
+       "side": "both"
+      },
+      {
+       "channel": 9,
+       "target": 0,
+       "axis": "y",
+       "side": "both"
+      },
+      {
+       "channel": 2,
+       "target": -1,
+       "axis": "x",
+       "side": "+"
+      }
+     ]
+    }
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    },
+    {
+     "channel": 2,
+     "target": -1,
+     "axis": "x",
+     "side": "+"
+    }
+   ]
+  },
+  {
+   "name": "parser declared, none valid",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "M",
+     "M_err"
+    ],
+    "units": [
+     "emu",
+     "emu"
+    ],
+    "metadata": {
+     "error_roles": [
+      {
+       "channel": 5
+      }
+     ]
+    }
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  },
+  {
+   "name": "origin designations",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1,
+      1
+     ],
+     [
+      2,
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "A",
+     "B",
+     "C"
+    ],
+    "units": [
+     "",
+     "",
+     ""
+    ],
+    "metadata": {
+     "origin_column_names": [
+      "A",
+      "B",
+      "C",
+      "D"
+     ],
+     "column_designations": {
+      "A": "X",
+      "B": "Y",
+      "C": "Y-error",
+      "D": "X-error"
+     }
+    }
+   },
+   "roles": [
+    {
+     "channel": 2,
+     "target": 1,
+     "axis": "y",
+     "side": "both"
+    },
+    {
+     "channel": 3,
+     "target": 1,
+     "axis": "x",
+     "side": "both"
+    }
+   ]
+  },
+  {
+   "name": "origin, no error column",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "M",
+     "M_err"
+    ],
+    "units": [
+     "emu",
+     "emu"
+    ],
+    "metadata": {
+     "origin_column_names": [
+      "T",
+      "M",
+      "M_err"
+     ],
+     "column_designations": {
+      "T": "X",
+      "M": "Y",
+      "M_err": "Y"
+     }
+    }
+   },
+   "roles": []
+  },
+  {
+   "name": "origin, names only",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "M",
+     "M_err"
+    ],
+    "units": [
+     "emu",
+     "emu"
+    ],
+    "metadata": {
+     "origin_column_names": [
+      "T",
+      "M",
+      "M_err"
+     ],
+     "column_designations": {}
+    }
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  }
+ ]
+}

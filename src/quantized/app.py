@@ -48,6 +48,7 @@ from quantized.routes import (
     export_page,
     export_statplots,
     export_table,
+    fit_implicit,
     fitting,
     fitting_bumps,
     fitting_global,
@@ -58,6 +59,7 @@ from quantized.routes import (
     jobs_api,
     magnetic,
     magnetometry,
+    optical_gap,
     optics,
     parsers,
     peaks,
@@ -83,6 +85,7 @@ from quantized.routes import (
     structures,
     substrates,
     superconductor,
+    surface_fit,
     thermal,
     thin_film,
     transform,
@@ -272,6 +275,9 @@ def create_app(
     application.include_router(aggregate.router)
     application.include_router(transform.router)
     application.include_router(sims.router)
+    application.include_router(surface_fit.router)
+    application.include_router(optical_gap.router)
+    application.include_router(fit_implicit.router)
     application.include_router(calc.router)
     application.include_router(workbook_transfer.router)
 

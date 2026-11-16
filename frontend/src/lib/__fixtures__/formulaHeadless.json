@@ -1,0 +1,445 @@
+{
+ "data": {
+  "time": [
+   -2,
+   -0.5,
+   0,
+   0.25,
+   1,
+   3,
+   10
+  ],
+  "values": [
+   [
+    4,
+    -3,
+    1
+   ],
+   [
+    0,
+    2,
+    -1
+   ],
+   [
+    -7,
+    0,
+    0.5
+   ],
+   [
+    1,
+    -1,
+    "NaN"
+   ],
+   [
+    "NaN",
+    5,
+    2
+   ],
+   [
+    2.5,
+    "Infinity",
+    -2
+   ],
+   [
+    -1,
+    1e-300,
+    7
+   ]
+  ],
+  "labels": [
+   "Moment",
+   "Field",
+   "T"
+  ]
+ },
+ "cases": [
+  {
+   "expr": "A + B * C - x",
+   "app": [
+    3,
+    -1.5,
+    -7,
+    "NaN",
+    "NaN",
+    "-Infinity",
+    -11
+   ]
+  },
+  {
+   "expr": "A / B",
+   "app": [
+    -1.3333333333333333,
+    0,
+    "-Infinity",
+    -1,
+    "NaN",
+    0,
+    -9.999999999999999e+299
+   ]
+  },
+  {
+   "expr": "x / 0",
+   "app": [
+    "-Infinity",
+    "-Infinity",
+    "NaN",
+    "Infinity",
+    "Infinity",
+    "Infinity",
+    "Infinity"
+   ]
+  },
+  {
+   "expr": "-A^2 + A**2",
+   "app": [
+    32,
+    0,
+    98,
+    2,
+    "NaN",
+    12.5,
+    2
+   ]
+  },
+  {
+   "expr": "2^3^2 - 2**-1",
+   "app": [
+    511.5,
+    511.5,
+    511.5,
+    511.5,
+    511.5,
+    511.5,
+    511.5
+   ]
+  },
+  {
+   "expr": "A // C",
+   "app": [
+    4,
+    0,
+    -14,
+    "NaN",
+    "NaN",
+    -2,
+    -1
+   ]
+  },
+  {
+   "expr": "A % C",
+   "app": [
+    0,
+    0,
+    0,
+    "NaN",
+    "NaN",
+    0.5,
+    -1
+   ]
+  },
+  {
+   "expr": "-7 % C",
+   "app": [
+    0,
+    0,
+    0,
+    "NaN",
+    -1,
+    -1,
+    0
+   ]
+  },
+  {
+   "expr": "A ** C",
+   "app": [
+    4,
+    "Infinity",
+    "NaN",
+    "NaN",
+    "NaN",
+    0.16,
+    -1
+   ]
+  },
+  {
+   "expr": "1 ** C + pow(B, 0.5)",
+   "app": [
+    "NaN",
+    2.414213562373095,
+    1,
+    "NaN",
+    3.23606797749979,
+    "Infinity",
+    1
+   ]
+  },
+  {
+   "expr": "pow(-1, B)",
+   "app": [
+    -1,
+    1,
+    1,
+    -1,
+    -1,
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "sqrt(A) + log(B)",
+   "app": [
+    "NaN",
+    0.6931471805599453,
+    "NaN",
+    "NaN",
+    "NaN",
+    "Infinity",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "ln(abs(x)) + log10(abs(C)) + log2(abs(A))",
+   "app": [
+    2.6931471805599454,
+    "-Infinity",
+    "-Infinity",
+    "NaN",
+    "NaN",
+    2.721570379219453,
+    3.147683133008303
+   ]
+  },
+  {
+   "expr": "sin(x) * cos(A) + tan(B) + atan2(A, B) + atan(C) + asin(C) + acos(x / 10)",
+   "app": [
+    7.079549178952335,
+    -3.3998427084574,
+    0.9872463845991051,
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "arcsin(C) + arccos(C) + arctan(A) + sinh(C) + cosh(C) + tanh(A)",
+   "app": [
+    6.614225118661041,
+    1.938675767966339,
+    0.7906199883603475,
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "exp(C) + sign(A) + abs(B)",
+   "app": [
+    6.718281828459045,
+    2.3678794411714423,
+    0.6487212707001282,
+    "NaN",
+    "NaN",
+    "Infinity",
+    1095.6331584284585
+   ]
+  },
+  {
+   "expr": "floor(A) + ceil(B) + floor(x * 3.7, 1) + ceil(A / 3, 2) + floor(1234.5, -2)",
+   "app": [
+    1194.94,
+    1200.1,
+    1190.67,
+    1201.24,
+    "NaN",
+    "Infinity",
+    1236.67
+   ]
+  },
+  {
+   "expr": "hypot(A, B) + hypot(A, B, C)",
+   "app": [
+    10.099019513592784,
+    4.23606797749979,
+    14.0178344238091,
+    "NaN",
+    "NaN",
+    "Infinity",
+    8.071067811865476
+   ]
+  },
+  {
+   "expr": "min(A, B) + max(A, B, C) + min(pi)",
+   "app": [
+    4.141592653589793,
+    5.141592653589793,
+    -3.358407346410207,
+    "NaN",
+    "NaN",
+    "Infinity",
+    9.141592653589793
+   ]
+  },
+  {
+   "expr": "max() + min()",
+   "app": [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "min(A, nan) + max(x, B)",
+   "app": [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "np.sqrt(abs(A)) * numpy.pi + math.e",
+   "app": [
+    9.00146713563863,
+    2.718281828459045,
+    11.030154710525126,
+    5.859874482048838,
+    "NaN",
+    7.685575961357095,
+    5.859874482048838
+   ]
+  },
+  {
+   "expr": "nan + 1",
+   "app": [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "(A + B) * (C - x) / (1 + x^2)",
+   "app": [
+    0.6,
+    -0.8,
+    -3.5,
+    "NaN",
+    "NaN",
+    "-Infinity",
+    0.0297029702970297
+   ]
+  },
+  {
+   "expr": "floor(A, C)",
+   "app": [
+    4,
+    0,
+    "NaN",
+    "NaN",
+    "NaN",
+    0,
+    -1
+   ]
+  },
+  {
+   "expr": "ceil(x, 1 / 0)",
+   "app": [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "sin(A, B) + cos(x, 1, 2)",
+   "app": [
+    -1.1729493318550706,
+    0.8775825618903728,
+    0.34301340128121094,
+    1.8103834065185413,
+    "NaN",
+    -0.391520352496489,
+    -1.6805425138843488
+   ]
+  },
+  {
+   "expr": "atan2(A) + pow(B) + floor() + sqrt()",
+   "app": [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN"
+   ]
+  },
+  {
+   "expr": "A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A",
+   "app": [
+    4000,
+    0,
+    -7000,
+    1000,
+    "NaN",
+    2500,
+    -1000
+   ]
+  },
+  {
+   "expr": "B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B - x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x",
+   "app": [
+    1.8739277038847965e+286,
+    4.149515568880993e+180,
+    0,
+    -149,
+    "Infinity",
+    "Infinity",
+    -6000
+   ]
+  }
+ ],
+ "refused": [
+  "A > 0",
+  "if(A > 0, A, 0)",
+  "where(A > 0, 1, 2)",
+  "A > 0 ? 1 : 2",
+  "A[2]",
+  "col(\"Moment\") * 2",
+  "Moment * 2",
+  "sheet(\"Other\", A)",
+  "fit(\"Gaussian\", \"xc\")",
+  "mean(A)",
+  "min(A)",
+  "max(x)",
+  "row()",
+  "cumsum(A)",
+  "lag(A)",
+  "diff(A)",
+  "round(A)",
+  "rnd()",
+  "interp(x, A, B)",
+  "A and B",
+  "not A",
+  "A\n+ 1",
+  "A +\r1",
+  "1e400 + A",
+  "Ａ + 1",
+  "٣ + A"
+ ]
+}

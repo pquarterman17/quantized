@@ -11,7 +11,9 @@ import { plural } from "./plural";
 import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock } from "../store/projectLock";
 import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
-import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
+import { closeProjectLock, noteProjectLockRelease, pendingProjectLockRelease, reserveProjectLock } from "../store/projectLockLifecycle";
+import { followProjectHistory } from "../store/projectFollowsHistory";
+import { readOnlyOpenReason } from "../store/projectLockPaths";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 import { closeRelinkPanel } from "../store/relinkPanel";
@@ -90,19 +92,21 @@ function rollbackLockReservation(prior: PriorLock | null): void {
  *  `reserveLockForSwitch` has already overwritten by the time this runs). */
 function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior: PriorLock | null): void {
   if (!native || !prior) return;
+  const prev = prior.state;
+  // Registered SYNCHRONOUSLY, so an undo / quick re-open of the project just left
+  // waits for this release before re-acquiring it (store/projectLockLifecycle).
+  const earlier = pendingProjectLockRelease();
+  const released =
+    prev.path && prev.path !== native.path && canRelease(prev.record, prev.instanceId)
+      ? prev.provider.release(prev.path, prev.record?.token ?? "").catch(() => false)
+      : Promise.resolve();
+  noteProjectLockRelease(Promise.all([earlier, released]));
   void (async () => {
-    const prev = prior.state;
-    if (prev.path && prev.path !== native.path && canRelease(prev.record, prev.instanceId)) {
-      await prev.provider.release(prev.path, prev.record?.token ?? "").catch(() => false);
-    }
+    await Promise.all([earlier, released]); // incl. a still-pending release of the path being (re)opened
     if (prior.op && !isCurrentProjectLockOperation(prior.op)) return;
     const result = await useProjectLock.getState().openProject(native.path);
     if (!result.readOnly) return;
-    const reason =
-      result.status === "held-by-other-stale"
-        ? "another (unresponsive) instance has this project open — Take Over Editing is available"
-        : "another instance has this project open for editing — opened read-only";
-    toast(`"${native.name}": ${reason}`, "info");
+    toast(`"${native.name}": ${readOnlyOpenReason(result.status)}`, "info");
   })();
 }
 
@@ -153,6 +157,7 @@ export function recordNativeOpen(native: ProjectIdentity | undefined): void {
  *  ordering matters. */
 function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectIdentity | undefined, skipLayout: boolean): boolean {
   if (rejectIfImportRunning()) return false;
+  followProjectHistory(); // BEFORE the entry is pushed: it records the project this open replaces
   s().recordHistory(skipLayout ? "open workspace without layout" : "open workspace");
   // C1 (review F4): an open relink panel refers to the OUTGOING project's
   // datasets, and the backend independently revokes its directory grants at

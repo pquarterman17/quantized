@@ -27,7 +27,9 @@ Example — connect, import a file, apply a correction, fit it::
 
 What it cannot do: reach the project open in the app. The server keeps no
 workbook state the API exposes — the open project's worksheets live in the
-browser tab — so this client can neither list, read nor write them. To redo
+browser tab — so this client can neither list, read nor write them. A SAVED
+project is readable, though: :meth:`QuantizedClient.read_workspace` reads the
+``.dwk`` file itself (no request). To redo
 an analysis outside the app, export the pipeline (Pipeline panel ▸ Export
 script): that writes a Python script on :mod:`quantized.api` which re-runs the
 recorded steps in-process from the input files and saves the result
@@ -57,7 +59,7 @@ import os
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     import httpx
@@ -68,6 +70,10 @@ except ImportError as exc:  # pragma: no cover - exercised only without the extr
     ) from exc
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
+
+if TYPE_CHECKING:
+    from quantized.io.workspace_dwk_read import Workspace
 
 __all__ = ["QuantizedClient", "QuantizedClientError", "QuantizedConnectionError"]
 
@@ -229,6 +235,22 @@ class QuantizedClient:
         """
         payload = self._post("/api/parsers/import", json={"path": str(path)})
         return DataStruct.from_dict(payload)
+
+    # ── Saved projects ─────────────────────────────────────────────────
+
+    def read_workspace(self, path: str | Path) -> Workspace:
+        """Read a saved project (``.dwk``) on THIS machine: every dataset as a
+        :class:`DataStruct` plus its name, folder, formulas and corrections
+        (:func:`quantized.api.read_workspace`). No request is made -- the
+        server keeps no project state, so the file itself is the project.
+        Feed a dataset to any method here, e.g.
+        ``client.apply_corrections(ws.dataset("scan").data, {...})``. A
+        project from a newer Quantized is refused (``WorkspaceVersionError``).
+        """
+        with heavy_imports("quantized.io.workspace_dwk_read"):
+            from quantized.io.workspace_dwk_read import read_workspace
+
+        return read_workspace(path)
 
     # ── Corrections ────────────────────────────────────────────────────
 

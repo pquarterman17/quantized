@@ -39,7 +39,8 @@ beforeEach(() => {
   vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   vi.clearAllMocks();
   useApp.setState({ datasets: [catDataset()], activeId: "d1" });
-  useRecode.setState({ open: false, datasetId: null, channel: null, mapping: { groups: [] }, newColumnName: "", savedMappings: [] });
+  useRecode.setState({ open: false, datasetId: null, channel: null, mapping: { groups: [] }, newColumnName: "" });
+  useApp.setState({ savedRecodeMappings: [] });
 });
 
 describe("openRecode", () => {
@@ -315,7 +316,7 @@ describe("saveMapping / applySavedMapping — save + reapply with refusal (J2 it
     useRecode.getState().openRecode("d1", 0);
     useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
     useRecode.getState().saveMapping("Pass/Fail grouping");
-    expect(useRecode.getState().savedMappings).toHaveLength(1);
+    expect(useApp.getState().savedRecodeMappings).toHaveLength(1);
 
     // Open on a second categorical column with the SAME levels (a different
     // dataset in practice, simplified here to a second column).
@@ -334,7 +335,7 @@ describe("saveMapping / applySavedMapping — save + reapply with refusal (J2 it
       ],
     }));
     useRecode.getState().openRecode("d1", 1);
-    const id = useRecode.getState().savedMappings[0].id;
+    const id = useApp.getState().savedRecodeMappings[0].id;
     useRecode.getState().applySavedMapping(id);
     expect(useRecode.getState().mapping.groups).toEqual([{ newLabel: "Passing", from: ["Pass", "OK"] }]);
   });
@@ -343,7 +344,7 @@ describe("saveMapping / applySavedMapping — save + reapply with refusal (J2 it
     useRecode.getState().openRecode("d1", 0);
     useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
     useRecode.getState().saveMapping("Pass/Fail grouping");
-    const id = useRecode.getState().savedMappings[0].id;
+    const id = useApp.getState().savedRecodeMappings[0].id;
 
     // Reopen on a column whose levels don't include "OK".
     useApp.setState((s) => ({
@@ -354,5 +355,26 @@ describe("saveMapping / applySavedMapping — save + reapply with refusal (J2 it
     useRecode.getState().applySavedMapping(id);
     expect(useRecode.getState().mapping).toBe(draftBefore); // unchanged — refused
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/OK/), "danger");
+  });
+});
+
+describe("saved mappings persist with the project (gap audit 5 lane J, L5)", () => {
+  it("saving and deleting are undoable project edits", () => {
+    useRecode.getState().openRecode("d1", 0);
+    useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
+    useRecode.getState().saveMapping("grouping");
+    const id = useApp.getState().savedRecodeMappings[0].id;
+    useRecode.getState().deleteMapping(id);
+    expect(useApp.getState().savedRecodeMappings).toEqual([]);
+    useApp.getState().undo();
+    expect(useApp.getState().savedRecodeMappings.map((m) => m.name)).toEqual(["grouping"]);
+    useApp.getState().undo();
+    expect(useApp.getState().savedRecodeMappings).toEqual([]);
+  });
+
+  it("deleting an id that is not there records no history step", () => {
+    const before = useApp.getState().history.length;
+    useRecode.getState().deleteMapping("nope");
+    expect(useApp.getState().history).toHaveLength(before);
   });
 });

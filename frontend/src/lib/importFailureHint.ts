@@ -37,6 +37,33 @@ export function connectionHint(message: string): string {
   return /invalid API token/i.test(message) ? " — qz was relaunched; reload this page" : "";
 }
 
+/** Whether the Import wizard can help with a failed import of `name`: a
+ *  text-like file whose failure reached a parser (not a down server / stale
+ *  token, and not a binary container). */
+export function wizardCanRead(name: string, message = ""): boolean {
+  const kind = failureKind(message, name);
+  return (kind === "unrecognised" || kind === "parse") && !isBinaryName(name);
+}
+
+export const isBinaryName = (name: string): boolean => {
+  const dot = name.lastIndexOf(".");
+  return BINARY_EXTS.has(dot >= 0 ? name.slice(dot).toLowerCase() : "");
+};
+
+/** What kind of failure an error message describes: only the last two reached
+ *  a parser, so only those are the file's content and worth the wizard. */
+export type FailureKind = "server" | "missing" | "denied" | "servererror" | "unrecognised" | "parse";
+export function failureKind(error: string, name = ""): FailureKind {
+  // The batch error is "<file name>: <message>": classify the message only, or a
+  // file called "permission_slip.dat" would read as a permission failure.
+  const message = name && error.startsWith(`${name}: `) ? error.slice(name.length + 2) : error;
+  if (connectionHint(message)) return "server";
+  if (/\b(file|path|directory)\b[^:]{0,40}\bnot found|no such file|enoent|\b(http|status)[ :]*404\b|404 not found/i.test(message)) return "missing";
+  if (/permission denied|eacces|\b(http|status)[ :]*403\b|403 forbidden|access is denied/i.test(message)) return "denied";
+  if (/internal server error|\bhttp 5\d\d\b|\b5\d\d (error|server)/i.test(message)) return "servererror";
+  return /no parser registered/i.test(message) ? "unrecognised" : "parse";
+}
+
 /** The hint for a failed import of `name`: the wizard for a text-like file,
  *  nothing for a binary container (its error already says what to do).
  *  Soak-test fix: a failure that never reached a parser is not the file's
@@ -47,9 +74,7 @@ export function connectionHint(message: string): string {
 export function importFailureHint(name: string, message = "", isMac: boolean = isMacPlatform()): string {
   const cause = connectionHint(message);
   if (cause) return cause;
-  const dot = name.lastIndexOf(".");
-  const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
-  return BINARY_EXTS.has(ext) ? "" : ` — try the Import wizard (${formatShortcut(PALETTE_SHORTCUT, isMac)} → Import wizard…)`;
+  return !wizardCanRead(name, message) ? "" : ` — try the Import wizard (${formatShortcut(PALETTE_SHORTCUT, isMac)} → Import wizard…)`;
 }
 
 /** The batch summary for status and toast. A parse failure is the wizard's

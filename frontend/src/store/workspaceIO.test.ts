@@ -513,12 +513,19 @@ describe("saveWorkspaceToFile — desktop shell", () => {
 // no dialog; "Save As" (the describe blocks above) always prompts. This is
 // the ⌘S / Ctrl+S routing itself, exercised at the store-action level (the
 // keyboard binding is covered separately).
+
+/** A project that is current AND has its lock bound to its path — the state every real open leaves. */
+function openedProject(p: { name: string; path: string }): void {
+  useApp.getState().setCurrentProject(p);
+  useProjectLock.setState({ path: p.path, status: "held-by-me", openedAsCopy: false });
+}
+
 describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
   it("writes directly to the known path — no save dialog", async () => {
     const dialog = vi.fn();
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: dialog, write_project_file: write });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
 
     await useApp.getState().saveWorkspace();
 
@@ -534,7 +541,7 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });
     useApp.setState({ datasets: [PACKED_DATASET] });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
 
     await useApp.getState().saveWorkspace();
 
@@ -550,7 +557,7 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     const write = vi.fn(async () => ({ ok: true, path: "workspace.dwk" }));
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });
     useApp.setState({ datasets: [PACKED_DATASET] });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "workspace.dwk" });
 
     await useApp.getState().saveWorkspace();
 
@@ -567,7 +574,7 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
       write_project_file: write,
       path_status: async () => ({ state: "offline", path: "/mnt/share/workspace.dwk" }),
     });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/mnt/share/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/mnt/share/workspace.dwk" });
     useApp.getState().markProjectDirty();
 
     await useApp.getState().saveWorkspace();
@@ -585,7 +592,7 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
       write_project_file: write,
       path_status: async () => ({ state: "missing", path: "/proj/workspace.dwk" }),
     });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     await useApp.getState().saveWorkspace();
     expect(write).toHaveBeenCalledOnce();
   });
@@ -595,7 +602,7 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
       save_file_dialog: vi.fn(),
       write_project_file: async () => ({ ok: true, path: "/proj/workspace.dwk" }),
     });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     useApp.getState().markProjectDirty();
 
     await useApp.getState().saveWorkspace();
@@ -608,7 +615,7 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
       save_file_dialog: vi.fn(),
       write_project_file: async () => ({ ok: false, error: "disk full" }),
     });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     useApp.getState().markProjectDirty();
 
     await useApp.getState().saveWorkspace();
@@ -670,7 +677,7 @@ describe("saveWorkspace — a write-time declared-source refusal is reported as 
         error: "refusing to write — that path is a data source of this workspace",
       }),
     });
-    useApp.setState({ currentProject: { name: "workspace.dwk", path: "/proj/workspace.dwk" } });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
 
     await useApp.getState().saveWorkspace();
 
@@ -684,7 +691,7 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
   it("refuses and leaves the project dirty when the lock is held read-only for this exact path", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     useApp.getState().markProjectDirty();
     useProjectLock.setState({ status: "held-by-other-live", path: "/proj/workspace.dwk", openedAsCopy: false });
 
@@ -695,7 +702,7 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
     expect(useApp.getState().status).toMatch(/read-only|take over/i);
   });
 
-  it("proceeds normally when the lock tracks a DIFFERENT path (the lock system hasn't opined on this project)", async () => {
+  it("REFUSES (fails closed) when the lock tracks a DIFFERENT path — a half-switched project must never write ungated", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });
     useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
@@ -703,13 +710,42 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
 
     await useApp.getState().saveWorkspace();
 
-    expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String), "");
+    expect(write).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/not locked for editing here/);
+  });
+
+  it("REFUSES when a project is current but the lock tracks nothing (undo/open moved one without the other)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    await useApp.getState().saveWorkspace();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("says the lock was lost (not that another instance holds it) when the bound lock is merely unlocked", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    useProjectLock.setState({ status: "unlocked", path: "/proj/workspace.dwk", openedAsCopy: false });
+    await useApp.getState().saveWorkspace();
+    expect(write).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/lock was lost/);
+    expect(useApp.getState().status).not.toMatch(/another instance/);
+  });
+
+  it("an explicit Open as Copy session (writable, lock-less by design) is not refused", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    useProjectLock.setState({ status: "unlocked", path: null, openedAsCopy: true });
+    await useApp.getState().saveWorkspace();
+    expect(write).toHaveBeenCalledOnce();
   });
 
   it("proceeds normally when this instance holds the lock (held-by-me)", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     // Genuinely acquire (not just poke the cached `status` field) — this
     // writes a real record into the provider naming THIS instance, which
     // the token this test asserts below actually came from.
@@ -738,7 +774,7 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
       save_file_dialog: vi.fn(),
       write_project_file: vi.fn(async () => ({ ok: false, error: "lock lost" })),
     });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     useApp.getState().markProjectDirty();
     await useProjectLock.getState().openProject("/proj/workspace.dwk"); // genuinely held-by-me
 
@@ -775,7 +811,7 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
       save_file_dialog: vi.fn(),
       write_project_file: vi.fn(async () => ({ ok: false, error: "lock lost" })),
     });
-    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    openedProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     useApp.getState().markProjectDirty();
     await useProjectLock.getState().openProject("/proj/workspace.dwk"); // genuinely held-by-me
 

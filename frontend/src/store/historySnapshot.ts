@@ -96,6 +96,7 @@ export interface HistorySnapshot {
   // rename/re-query/delete is an undoable project edit, same class as
   // `quickPlotTemplates`/`smartFolders` right above.
   collections: AppState["collections"];
+  savedRecodeMappings: AppState["savedRecodeMappings"]; // gap audit 5 lane J, same class as the profiles below
   savedSampleProfiles: AppState["savedSampleProfiles"]; // MAIN_PLAN #42 named sample profiles, same class as `collections`
   // P2.7 follow-up — the opened project's fit-model records this build could
   // not accept, written back into the .dwk on save. PROJECT state, so it
@@ -146,6 +147,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     plotRecipes: s.plotRecipes,
     collections: s.collections,
     savedSampleProfiles: s.savedSampleProfiles,
+    savedRecodeMappings: s.savedRecodeMappings,
     fitModelCarry: s.fitModelCarry,
     macroSteps: s.macroSteps,
     techniqueViewMemory: s.techniqueViewMemory,

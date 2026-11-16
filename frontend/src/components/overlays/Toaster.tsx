@@ -32,6 +32,10 @@ export default function Toaster() {
   // removes the active dataset: return it, else to this Delete-absorbing root.
   const onAction = (t: Toast, a: ToastAction) => (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+    if (a.keep) {
+      a.onClick();
+      return;
+    }
     const btn = e.currentTarget;
     const back = cameFrom.current.get(t.id);
     a.onClick();

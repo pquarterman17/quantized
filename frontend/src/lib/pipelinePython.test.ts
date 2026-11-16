@@ -13,6 +13,9 @@ import { describe, expect, it } from "vitest";
 
 import { fitParamsForEdit, pipelineToPython, pipelineToScript, py } from "./pipeline";
 import { makeStep, type PipelineStep } from "./pipelineStep";
+import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
+import { resampleParamsOf } from "./transformResample";
+import { sigopParamsOf } from "./transformSigop";
 
 const FIXTURE = join(__dirname, "__fixtures__", "pipelineScript.py");
 
@@ -56,7 +59,7 @@ describe("pipelineToPython", () => {
     expect(s).toContain("import quantized.api as qz");
     expect(s).toContain(`RECORDED_INPUTS = [${JSON.stringify(NAME)}]`);
     expect(s).toContain("data = qz.load(args.inputs[0])");
-    expect(s).toContain('data = qz.apply_corrections(raw, {"yOff": -2, "yScale": 0.5})');
+    expect(s).toContain('data = qz.apply_corrections(raw, {"yOff": -2, "yScale": 0.5}, error_bindings=roles)');
     expect(s).toContain(
       'fit = qz.fit_model("Gaussian", x[keep], y[keep], p0=[30, 5.2, 1], lower=[0, None, 0.01], upper=[None, None, None], fixed=[False, False, True])',
     );
@@ -142,7 +145,7 @@ describe("pipelineToPython", () => {
   ])("a view-only ui step %j does not stop the replay", (code) => {
     const s = pipelineToPython([imported(), makeStep("ui", "view", code), later()]);
     expect(s).toContain("# display setting only");
-    expect(s).toContain('data = qz.apply_corrections(raw, {"xOff": 1})');
+    expect(s).toContain('data = qz.apply_corrections(raw, {"xOff": 1}, error_bindings=roles)');
   });
 
   it("loads an Origin project with qz.load: its primary book, as the app activates (M4)", () => {
@@ -185,20 +188,158 @@ describe("pipelineToPython", () => {
     expect(s).toContain("load its file");
   });
 
-  it("comments out what it cannot reproduce: formula, paste, background, row selection", () => {
-    const formula = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2" }), later()]);
-    expect(formula).toContain("NOT REPRODUCED: formula columns are evaluated only in the app");
-    expect(formula).not.toContain("qz.apply_corrections");
+  it("comments out what it cannot reproduce: app-only formulas, derived columns, paste, row selection", () => {
+    for (const expr of ["if(A > 0, A, 0)", "mean(A)", 'col("Moment")', "Moment * 2", "A[2]", "row()"]) {
+      const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
+      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app`);
+      expect(s, expr).not.toContain("qz.apply_corrections");
+    }
+    const derived = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true })]);
+    expect(derived).toContain("NOT REPRODUCED: derived columns (units and error propagation)");
+    const frozen = pipelineToPython([imported(), makeStep("expression", "Freeze Copy of a", "", { id: "ds-9" })]);
+    expect(frozen).toContain("NOT REPRODUCED: this worksheet operation has no quantized.api equivalent");
     const paste = pipelineToPython([makeStep("import", "Paste pasted data 1", 'qz.pasteData("pasted data 1")', { name: "pasted data 1" })]);
     expect(paste).toContain("NOT REPRODUCED: pasted data has no file to load");
-    const bg = pipelineToPython([
-      imported(),
-      makeStep("correction", "Corrections", "", { params: {}, bg: { datasetId: "ds-2", interp: "linear" } }),
-    ]);
-    expect(bg).toContain("NOT REPRODUCED: it subtracts a background dataset");
     const rows = pipelineToPython([imported(), makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, rowIds: [1, 2, 3] })]);
     expect(rows).toContain("NOT REPRODUCED: it fitted an explicit row selection");
     expect(rows).not.toContain("fit_model");
+    for (const op of ["join", "merge", "stack", "split", "algebra", "signal"]) {
+      expect(pipelineToPython([imported(), makeStep("transform", op, "", { op })])).toContain(`NOT REPRODUCED: the ${op} transform has no quantized.api equivalent`);
+    }
+    const match = pipelineToPython([imported(), makeStep("transform", "Resample", "", { op: "resample", mode: "match", method: "linear" })]);
+    expect(match).toContain("NOT REPRODUCED: a resample onto another dataset's x");
+  });
+
+  it("reproduces element-wise formula columns, recomputed after every later correction (gap audit 5 #6)", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column t", "", { name: "t", expr: "A*2 + x" }),
+      makeStep("correction", "Corrections", "", { params: { yOff: 1 }, bg: null }),
+      makeStep("expression", "Add column u", "", { name: "u", expr: "B*3" }),
+      makeStep("reset", "Reset corrections", ""),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain("    formulas = []  # the formula columns");
+    expect(s).toContain('    base = data  # the worksheet before its formula columns\n    formulas.append(("t", "A*2 + x"))\n    data = qz.add_formula_columns(base, formulas)');
+    expect(s).toContain('    base = qz.apply_corrections(raw, {"yOff": 1}, error_bindings=roles)\n    data = qz.add_formula_columns(base, formulas)');
+    expect(s).toContain('    formulas.append(("u", "B*3"))\n    data = qz.add_formula_columns(base, formulas)');
+    expect(s).toContain("    base = raw\n    data = qz.add_formula_columns(base, formulas)");
+  });
+
+  it("refuses an edited formula column: its record holds only the new name (a rename loses the old)", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column r", "", { name: "r", expr: "A/B" }),
+      makeStep("expression", "Edit column ratio", 'qz.editColumn("ratio", "A/B*2")', { name: "ratio", expr: "A/B*2" }),
+      later(),
+    ]);
+    expect(s).toContain("NOT REPRODUCED: an edited formula column cannot be replayed exactly");
+    expect(s).not.toContain("qz.apply_corrections");
+  });
+
+  it("corrects with the error-column roles the app seeds on import; a transform output has none", () => {
+    const s = pipelineToPython([
+      imported(),
+      later(),
+      makeStep("transform", "Median", "", { op: "sigop", method: "median", channels: [0], args: { window: 3 } }),
+      later(),
+    ]);
+    expect(s).toContain("    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import");
+    expect(s).toContain("    roles = None  # with no error-column roles, as in the app");
+    expect(s.indexOf("roles = None")).toBeLessThan(s.lastIndexOf("error_bindings=roles"));
+  });
+
+  it("the script's sigop validation is the app's sigopParamsOf, case by case", () => {
+    const cases: Record<string, unknown>[] = [
+      { method: "median", channels: [0, 1], args: { window: 5 } },
+      { method: "warp", channels: [0] },
+      { method: "median", channels: [0.5] },
+      { method: "median", channels: "0" },
+      { method: "despike", channels: [0], args: { window: { n: 3 } } },
+      { method: "ifft", channels: [], args: { magnitudeChannel: 1, phaseChannel: 1 } },
+      { method: "ifft", channels: [], args: { magnitudeChannel: 0, phaseChannel: 1 } },
+      { method: "reduce-nth", args: { n: 2 } },
+    ];
+    for (const raw of cases) {
+      const run = (f: () => unknown) => { try { return f(); } catch (e) { return (e as Error).message; } };
+      const app = run(() => { const { op: _op, ...rest } = sigopParamsOf({ op: "sigop", ...raw }); return rest; });
+      expect(run(() => sigopScriptParams(raw)), JSON.stringify(raw)).toEqual(app);
+    }
+  });
+
+  it("the script's resample validation is the app's resampleParamsOf, case by case", () => {
+    const cases: Record<string, unknown>[] = [
+      { mode: "n_points", nPoints: 50, method: "pchip", outOfRange: "clip", sortUnsorted: true },
+      { mode: "n_points", nPoints: 1.5 },
+      { mode: "step", step: 0.5, nPoints: 99 },
+      { mode: "step" },
+      { mode: "range", start: 0, stop: 10, step: 1, acceptedXUnits: ["K", "Oe"] },
+      { mode: "range", start: 0, stop: Infinity, step: 1 },
+      { mode: "step", step: 1, method: "cubic" },
+      { mode: "step", step: 1, outOfRange: "drop" },
+      { mode: "step", step: 1, acceptedXUnits: ["K"] },
+      { mode: "warp" },
+    ];
+    for (const raw of cases) {
+      const run = (f: () => unknown) => { try { return f(); } catch (e) { return (e as Error).message; } };
+      const app = run(() => { const { op: _op, acceptedXUnits: _a, ...rest } = resampleParamsOf({ op: "resample", ...raw }); return rest; });
+      expect(run(() => resampleScriptParams(raw)), JSON.stringify(raw)).toEqual(app);
+    }
+  });
+
+  it("validates a transform's recorded settings as the app's replay does", () => {
+    for (const params of [
+      { op: "resample", mode: "n_points", nPoints: 1, method: "linear" },
+      { op: "resample", mode: "step", method: "cubic", step: 1 },
+      { op: "sigop", method: "warp", channels: [0] },
+      { op: "sigop", method: "ifft", channels: [], args: { magnitudeChannel: 1, phaseChannel: 1 } },
+    ]) {
+      const s = pipelineToPython([imported(), makeStep("transform", "T", "", params)]);
+      expect(s, JSON.stringify(params)).toContain("NOT REPRODUCED: its recorded settings are invalid");
+    }
+    const step = pipelineToPython([imported(), makeStep("transform", "R", "", { op: "resample", mode: "step", step: 0.5, nPoints: 99, method: "linear" })]);
+    expect(step).toContain('qz.resample(data, mode="step", step=0.5, method="linear"'); // only the mode's own keys
+  });
+
+  it("a turned-off transform stops the replay: later steps were recorded on its output", () => {
+    const off = { ...makeStep("transform", "Resample", "", { op: "resample", mode: "n_points", nPoints: 50, method: "linear" }), enabled: false };
+    const s = pipelineToPython([imported(), off, makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, p0: null })]);
+    expect(s).toContain("# not run: it follows step 2");
+    expect(s).not.toContain("fit_model");
+  });
+
+  it("applies only a finite, ordered fit window, as the app decodes it", () => {
+    for (const range of [[5, 1], [0, null], [Number.NaN, 2]]) {
+      const s = pipelineToPython([imported(), makeStep("fit", "Fit", "", { model: "Linear", yKey: 0, p0: null, range })]);
+      expect(s, JSON.stringify(range)).not.toContain("the recorded fit window");
+    }
+  });
+
+  it("reproduces a background subtraction from a file the script asks for", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("correction", "Corrections", "", { params: {}, bg: { datasetId: "ds-2", interp: "pchip" } }),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain('parser.add_argument("--background", action="append"');
+    expect(s).toContain("if len(args.background) != 1:");
+    expect(s).toContain("    background = qz.load(args.background[0])");
+    expect(s).toContain('data = qz.apply_corrections(raw, {}, bg_dataset=background, bg_interp="pchip", error_bindings=roles)');
+    expect(s).toContain("protect=args.inputs + args.background");
+  });
+
+  it("reproduces resample and signal / Reduce XY transforms on the current data", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column t", "", { name: "t", expr: "A*2" }),
+      makeStep("transform", "Median", "", { op: "sigop", method: "median", channels: [0, 1], args: { window: 5 } }),
+      makeStep("transform", "Resample", "", { op: "resample", mode: "n_points", nPoints: 50, method: "pchip", outOfRange: "nan", sortUnsorted: false }),
+      later(),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain('    data = qz.run_signal_op(data, "median", [0, 1], {"window": 5}).data\n    raw = data  # a new dataset: its own base\n    roles = None  # with no error-column roles, as in the app\n    formulas = []');
+    expect(s).toContain('    data = qz.resample(data, mode="n_points", n_points=50, method="pchip", out_of_range="nan", unsorted="refuse").data');
+    expect(s).toContain('    data = qz.apply_corrections(raw, {"xOff": 1}, error_bindings=roles)'); // no formulas left to recompute
   });
 });
 

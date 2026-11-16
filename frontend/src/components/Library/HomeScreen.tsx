@@ -134,7 +134,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
           onClick={() => useApp.getState().setImportWizardOpen(true)}
           style={{ width: "100%", marginTop: 4, textAlign: "center" }}
         >
-          Guided import for unfamiliar files…
+          Import wizard…
         </button>
         <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
           Drop files anywhere here. Quantized plots the first usable columns;

@@ -16,6 +16,8 @@ published figure reads like the canvas:
 * ``size`` -- tick-label font size in points.
 * ``base`` -- ``"e"`` on a log axis: Origin's "Ln" scale, majors at powers of
   e labelled ``e^n``.
+* ``prefix`` / ``suffix`` -- text around every numeric tick label ("$",
+  " K", "%"); a custom-text label stays literal (``_AffixFormatter``).
 * ``breaks`` -- ``[lo, hi]`` stretches elided from a linear Y axis
   (``calc.axis_breaks``); ignored on X, whose breaks are paneled.
 * ``base: "2"``, ``prob`` and ``custom`` -- gap audit 4 G17's log2 and
@@ -75,6 +77,42 @@ class _DividedFormatter(Formatter):
         return divide_offset_text(self.divide)
 
 
+def _escape_math(text: str) -> str:
+    """Affix text is literal on screen, so a "$" must not open mathtext."""
+    return text.replace("$", r"\$")
+
+
+class _AffixFormatter(Formatter):
+    """Wraps an axis' formatter so each non-blank label reads
+    ``prefix + label + suffix``."""
+
+    def __init__(self, inner: Formatter, prefix: str, suffix: str) -> None:
+        self.inner = inner
+        self.prefix = _escape_math(prefix)
+        self.suffix = _escape_math(suffix)
+
+    def set_axis(self, axis: Any) -> None:
+        super().set_axis(axis)
+        self.inner.set_axis(axis)
+
+    def set_locs(self, locs: Any) -> None:
+        super().set_locs(locs)
+        self.inner.set_locs(locs)
+
+    def __call__(self, x: float, pos: int | None = None) -> str:
+        label = str(self.inner(x, pos))
+        return f"{self.prefix}{label}{self.suffix}" if label else label
+
+    def get_offset(self) -> str:
+        return str(self.inner.get_offset())
+
+
+def _affix(v: Any) -> str:
+    """An affix as the screen draws it: at most 12 characters, backslashes dropped
+    (one before a ``$`` would turn the escaped dollar into mathtext)."""
+    return v.replace("\\", "")[:12] if isinstance(v, str) else ""
+
+
 def _ln_label(v: float, _pos: int | None = None) -> str:
     """A natural-log axis' major label: ``e`` with a superscript exponent."""
     return "e" + str(int(round(math.log(v)))).translate(_SUPERSCRIPT) if v > 0 else ""
@@ -98,6 +136,11 @@ def _apply_one(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any
         # notation of its own; a plain "%g" label is what the screen shows.
         keep = inner if type(inner).__module__.startswith("quantized") else None
         axis.set_major_formatter(_DividedFormatter(keep, divide))
+    prefix, suffix = _affix(fmt.get("prefix")), _affix(fmt.get("suffix"))
+    if prefix or suffix:
+        axis.set_major_formatter(_AffixFormatter(axis.get_major_formatter(), prefix, suffix))
+        if scale == "log":  # a log axis labels some minor ticks too
+            axis.set_minor_formatter(_AffixFormatter(axis.get_minor_formatter(), prefix, suffix))
     minor = fmt.get("minor")
     if isinstance(minor, int) and 0 < minor <= 20 and scale == "linear":
         axis.set_minor_locator(AutoMinorLocator(minor + 1))
