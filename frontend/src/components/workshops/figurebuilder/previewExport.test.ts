@@ -121,3 +121,29 @@ describe("exportPreviewFigure draws the Preferences default trace", () => {
     expect(vi.mocked(buildFigureSpecFromDocument).mock.calls.at(-1)?.[3]).toMatchObject({ defaultTrace: "Scatter" });
   });
 });
+
+// UX-H review item 2: the export view reports an overlay its figure leaves
+// out, as the quick dialog does — never a silent drop.
+describe("exportPreviewFigure reports dropped overlays (UX-H)", () => {
+  const ready = { state: "ready" as const, data: DATA, spec: SPEC };
+  it("tells the user which overlays the figure could not carry", async () => {
+    vi.mocked(buildFigureSpecFromDocument).mockImplementationOnce((_d, _ds, _stem, o) => {
+      o?.onDroppedOverlays?.(["Exponential Decay fit"]);
+      return { fmt: "pdf" } as FigureSpec;
+    });
+    vi.mocked(exportFigure).mockResolvedValueOnce(undefined);
+    const d = deps({ canonicalDocument: DOC, canonicalReadiness: ready, canonicalDataset: { id: "d1", name: "scan.dat", data: DATA } });
+    await exportPreviewFigure(d);
+    expect(d.statuses[0]).toMatch(/^exported scan\.svg — .*Exponential Decay fit/);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toBe(d.statuses[0]);
+  });
+
+  it("marks the session's draft as exported so closing asks nothing", async () => {
+    vi.mocked(exportFigure).mockResolvedValueOnce(undefined);
+    const session = { target: "window" as const, windowId: "w1", baseline: DOC, draft: DOC };
+    useApp.setState({ figurePublicationSession: session });
+    await exportPreviewFigure(deps({ canonicalDocument: DOC, canonicalReadiness: ready, canonicalDataset: { id: "d1", name: "scan.dat", data: DATA } }));
+    expect(useApp.getState().figurePublicationSession?.exported).toBe(DOC);
+    useApp.setState({ figurePublicationSession: null });
+  });
+});

@@ -82,8 +82,7 @@ async function findTwoPeaks() {
 
 async function fitWith(res: PeakModelFitResponse | { detail: string }, status = 200) {
   stubModelFit(status, res);
-  step("Fit & review");
-  fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+  step("Fit & review"); // step ④ fits on entry (UX audit 7 lane UX-I)
 }
 
 describe("Peak analyzer — model engine setup (step 3)", () => {
@@ -291,11 +290,11 @@ describe("Peak analyzer — model fit results (step 4)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fit" }));
     const next = await screen.findByRole("button", { name: /Next/ });
     await waitFor(() => expect(next).toBeDisabled());
-    expect(next).toHaveAttribute("title", "peak fit running…");
+    expect(next).toHaveAttribute("title", "fitting — wait for it to finish, or cancel it");
     // The step chips are gated by the same rule: no way out but the fit's own step.
     const chip = screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }).closest("button")!;
     expect(chip).toBeDisabled();
-    expect(chip).toHaveAttribute("title", "peak fit running…");
+    expect(chip).toHaveAttribute("title", "fitting — wait for it to finish, or cancel it");
     expect(screen.getByRole("button", { name: /Back/ })).toBeDisabled();
   });
 

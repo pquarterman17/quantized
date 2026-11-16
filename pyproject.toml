@@ -19,6 +19,10 @@ dependencies = [
     "periodictable>=1.7",
     "platformdirs>=4.10.0",
     "xlrd>=2.0.2",
+    # BSD-3-Clause, pure Python: pins BLAS to one thread around the bounded
+    # least-squares solver (calc/_bounded_lsq.py), whose tall-skinny SVDs run
+    # ~100x slower when OpenBLAS threads oversubscribe a loaded machine.
+    "threadpoolctl>=3.8",
 ]
 
 [project.urls]
@@ -169,7 +173,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "xlrd.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "win32clipboard", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "xlrd.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "win32clipboard", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*", "threadpoolctl"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

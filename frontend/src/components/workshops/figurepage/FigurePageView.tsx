@@ -41,7 +41,8 @@ import { PAGE_LABEL_FORMATS, PAGE_LABEL_POSITIONS } from "../../../lib/figurepag
 import type { PanelSource } from "../../../lib/figurepageActions";
 import { PAGE_RESIZE_MODES } from "../../../lib/pageDocument";
 import { useApp } from "../../../store/useApp";
-import { FIGURE_FORMATS, FIGURE_STYLES } from "../figurebuilder/useFigureBuilder";
+import { FIGURE_FORMATS } from "../figurebuilder/useFigureBuilder";
+import { presetOptions } from "../../../lib/figurePresets";
 import SlotGrid, { PANEL_SOURCE_MIME } from "./SlotGrid";
 import { useFigurePage } from "./useFigurePage";
 
@@ -202,7 +203,7 @@ export default function FigurePageView() {
           </div>
           <label className="qzk-field-lbl">Style</label>
           <Select
-            options={FIGURE_STYLES.map((v) => ({ value: v, label: v }))}
+            options={presetOptions(p.style)}
             value={p.style}
             onChange={(e) => p.setStyle(e.target.value)}
           />

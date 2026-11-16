@@ -20,6 +20,7 @@ import type { FigureSpec } from "./api/figures";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { overlayDropTracker } from "./overlayDropNotice";
+import { PRESET_ORDER, presetLabels } from "./figurePresets";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import { defaultPageSetup } from "./pageGeometry";
@@ -44,10 +45,6 @@ export const GREYSCALE_FIELD: ParamField = {
   hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
 };
 
-/** The publication style presets the dialog offers — exported so "Send
- *  figure to report…" (lib/sendFigureToReport.ts) offers the SAME list. */
-export const FIGURE_STYLES = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
-
 /** Format, style and DPI — the dialog's first three fields, and all a stat
  *  plot's export takes (its titles come from the stage). */
 const OUTPUT_FIELDS: ParamField[] = [
@@ -64,7 +61,8 @@ const OUTPUT_FIELDS: ParamField[] = [
     label: "Style",
     type: "select",
     default: "default",
-    options: FIGURE_STYLES,
+    options: [...PRESET_ORDER],
+    optionLabels: presetLabels(),
     hint: "Publication preset: sets font, size, line width, grid",
   },
   {

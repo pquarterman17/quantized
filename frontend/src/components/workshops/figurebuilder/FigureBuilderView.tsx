@@ -1,25 +1,53 @@
-// Figure builder workshop — view. A draggable ToolWindow with the publication
-// parameters on the left (format / style preset / DPI / title / axis labels) and
-// a live, server-rendered WYSIWYG preview on the right. Thin: all state + the
-// preview/export wiring live in the hook.
+// Figure builder workshop — view. The ONE export view (UX audit 7, lane
+// UX-H: "Export figure…" and "Publication preview…" both open it): the output
+// and publication parameters on the left (format / named preset / DPI for
+// raster / title / axis labels / property groups) and a large, true-aspect,
+// server-rendered WYSIWYG preview with a Fit / 100 % toggle and cm rulers on
+// the right (PreviewStage). Thin: all state + the preview/export wiring live
+// in the hook.
 
 import { useEffect, useState } from "react";
 
 import { xColumnLabel } from "./canonicalChannels";
-import PreviewOverlay from "./PreviewOverlay";
-import PreviewWarnings from "./PreviewWarnings";
+import ExportFooter from "./ExportFooter";
+import FigureOutputControls from "./FigureOutputControls";
+import PreviewStage from "./PreviewStage";
+import { renderedSizeCm } from "./previewSizing";
 import PropertyPanels from "./PropertyPanels";
+import { useLiveRebase } from "./useLiveRebase";
 import { cancelPublicationPreview } from "../../windows/figureLifecycleUi";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import RichLabelInput from "../../primitives/RichLabelInput";
+import { clampToolWindowPos, TITLE_BAR_HEIGHT } from "../../../lib/toolwindow";
 import { useApp } from "../../../store/useApp";
-import { FIGURE_FORMATS, FIGURE_STYLES, useFigureBuilder } from "./useFigureBuilder";
+import { useFigureBuilder } from "./useFigureBuilder";
+
+const WINDOW_ID = "figurebuilder";
+/** Below this a stored width predates the large preview (the window used to
+ *  open at 560 px, which left a ~300 px thumbnail): widen it on open. A
+ *  width the user chose above it is kept. */
+const LEGACY_WIDTH = 600;
+/** A remembered explicit height below this would squeeze the preview pane. */
+const MIN_HEIGHT = 560;
+const SETTINGS_WIDTH = 260;
+/** Why Export is off for a draft whose plot moved on under its own edits. */
+const STALE_EXPORT =
+  "the plot changed after this preview opened, and the preview has edits of its own — Cancel and reopen to export the plot as it is now";
+
+/** Wide enough for a >= 600 px preview at 1440 px, never wider than the
+ *  viewport allows beside the Library. */
+function defaultWidth(): number {
+  const vw = typeof window === "undefined" ? 1440 : window.innerWidth;
+  return Math.round(Math.max(LEGACY_WIDTH, Math.min(1120, vw - 300)));
+}
 
 export default function FigureBuilderView() {
   const setOpen = useApp((s) => s.setFigureBuilderOpen);
+  const storedLayout = useApp((s) => s.toolWindowLayout?.[WINDOW_ID]);
+  const setLayout = useApp((s) => s.setToolWindowLayout);
   const f = useFigureBuilder();
   const [figName, setFigName] = useState("");
   const [figLive, setFigLive] = useState(true);
@@ -29,26 +57,36 @@ export default function FigureBuilderView() {
     : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
   const detachedCanonical = f.publicationTarget === "new-editable";
-  const exportDisabled = f.canonical && !f.canExport;
+  const exportDisabledReason = !f.canonical || f.canExport ? null
+    : f.exportStale ? STALE_EXPORT : f.error ?? "figure is not ready to export";
+  const onClose = () => (f.canonical ? void cancelPublicationPreview() : setOpen(false));
+  const sizeCm = f.hitmap && f.previewDpi ? renderedSizeCm(f.hitmap.width, f.hitmap.height, f.previewDpi) : null;
+  useLiveRebase(Boolean(f.exportStale));
 
-  // DPI keeps its own in-progress text (PropertyNumberField's pattern):
-  // an invalid or out-of-range keystroke must not immediately snap back to
-  // the last committed value while the user is still typing.
-  const [dpiText, setDpiText] = useState(String(f.dpi));
-  const committedDpiText = String(f.dpi);
+  // Once per open: a window remembered at the old thumbnail width reopens
+  // wide enough for the preview (ToolWindow's default only applies when no
+  // layout was ever stored).
   useEffect(() => {
-    setDpiText(committedDpiText);
-  }, [committedDpiText]);
+    const short = storedLayout?.height != null && storedLayout.height < MIN_HEIGHT;
+    if (storedLayout && (storedLayout.width < LEGACY_WIDTH || short) && setLayout) {
+      const width = storedLayout.width < LEGACY_WIDTH ? defaultWidth() : storedLayout.width;
+      // Re-clamp: ToolWindow's own mount clamp ran at the OLD width, and the
+      // whole title bar must stay on screen (lib/toolwindow.ts).
+      const pos = clampToolWindowPos(storedLayout.x, storedLayout.y, width, TITLE_BAR_HEIGHT, { width: window.innerWidth, height: window.innerHeight });
+      setLayout(WINDOW_ID, { ...storedLayout, ...pos, width, height: short ? null : storedLayout.height });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? void cancelPublicationPreview() : setOpen(false)}>
+    <ToolWindow id={WINDOW_ID} title={title} width={defaultWidth()} onClose={onClose}>
       {!f.data && !canonicalFailure ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to preview a figure.
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ width: 200, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <div style={{ width: SETTINGS_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }}>
             <div
               role="note"
               aria-label="Publication preview behavior"
@@ -61,35 +99,7 @@ export default function FigureBuilderView() {
                 ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; Cancel discards them.`
                 : "Settings here affect saved and exported output; they do not change the editable Stage plot."}
             </div>
-            <label className="qzk-field-lbl">Format</label>
-            <Select
-              aria-label="Figure format"
-              options={FIGURE_FORMATS.map((v) => ({ value: v, label: v.toUpperCase() }))}
-              value={f.fmt}
-              onChange={(e) => f.setFmt(e.target.value)}
-            />
-            <label className="qzk-field-lbl">Style</label>
-            <Select
-              aria-label="Figure style"
-              options={FIGURE_STYLES.map((v) => ({ value: v, label: v }))}
-              value={f.style}
-              onChange={(e) => f.setStyle(e.target.value)}
-            />
-            <label className="qzk-field-lbl">DPI (raster)</label>
-            <NumberField
-              aria-label="Figure DPI (raster)"
-              value={dpiText}
-              onChange={(v) => {
-                setDpiText(v);
-                const n = Number(v);
-                // Only commit a finite, sane DPI; an invalid/out-of-range
-                // keystroke leaves the field text as typed and self-corrects
-                // once the entry becomes valid (no silent snap to 300, no
-                // negative/absurd DPI reaching the export request).
-                if (Number.isFinite(n) && n >= 10 && n <= 1200) f.setDpi(n);
-              }}
-              width={90}
-            />
+            <FigureOutputControls fmt={f.fmt} setFmt={f.setFmt} style={f.style} setStyle={f.setStyle} dpi={f.dpi} setDpi={f.setDpi} sizeCm={f.busy ? null : sizeCm} />
             {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
                 via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>
@@ -263,100 +273,38 @@ export default function FigureBuilderView() {
               />
             )}
 
-            {/* Sticky action row. Export/Apply/Cancel used to scroll away with
-                the rest of the column: with the property groups expanded the
-                settings column is ~2,400 px tall inside a ~900 px viewport, so
-                the buttons that COMMIT the work sat ~200 px below the fold and
-                had to be hunted for. Sticking them to the bottom of the
-                scroller keeps the commit affordance permanently in reach
-                without changing the DOM structure ToolWindow lays out. */}
-            <div
-              style={{
-                position: "sticky",
-                // The scroller (.qzk-win-body) has `--pad-lg` bottom padding;
-                // sticking at plain `bottom: 0` parks the row one padding-width
-                // ABOVE the scrollport edge, so scrolling content shows through
-                // the gap under it. Stick past the padding and add it back
-                // inside, so the row sits flush and stays opaque.
-                bottom: "calc(var(--pad-lg) * -1)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                paddingTop: 8,
-                paddingBottom: "var(--pad-lg)",
-                marginTop: "auto",
-                background: "var(--surface-2)",
-                borderTop: "1px solid var(--border-soft)",
-              }}
-            >
-              <span title={exportDisabled ? (f.error ?? "figure is not ready to export") : undefined}>
-                <Button variant="primary" onClick={() => void f.exportNow()} disabled={exportDisabled}>
-                  Export {f.fmt.toUpperCase()}
-                </Button>
-              </span>
-              {f.canonical && f.applyBlockedReason && (
-                <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
-                  {f.applyBlockedReason}
-                </div>
-              )}
-              {f.canonical && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Button
-                    variant="primary"
-                    onClick={f.apply}
-                    disabled={!f.canApply}
-                    title={f.applyBlockedReason ?? undefined}
-                  >
-                    {detachedCanonical ? "Create Editable Figure" : "Apply"}
-                  </Button>
-                  <Button onClick={() => void cancelPublicationPreview()}>Cancel</Button>
-                </div>
-              )}
-            </div>
           </div>
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: "grid",
-              placeItems: "center",
-              background: "var(--surface-1)",
-              borderRadius: 6,
-              minHeight: 280,
-              padding: 8,
-              // Fix round 5 (V1), belt-and-braces: the backend clips every
-              // hitmap box to its own axes rect now (the real fix), but an
-              // absolutely-positioned hitbox that somehow still overshot
-              // its `<img>` (a future regression, a browser quirk) would
-              // otherwise paint over this cell's siblings -- the sticky
-              // Export/Apply row above, or the settings column beside it --
-              // and swallow their clicks. `overflow: hidden` bounds any
-              // stray box to THIS cell at worst, never the rest of the UI.
-              overflow: "hidden",
-            }}
-          >
-            {f.error ? (
-              <div role="alert" aria-live="polite" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
-                {f.error}
-              </div>
-            ) : f.preview && f.hitmap ? (
-              /* #13/#14: hit-testable preview — click to focus a panel,
-                 double-click text to edit, drag legend/annotations */
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "100%" }}><PreviewOverlay
-                src={f.preview}
-                map={f.hitmap}
-                textOf={f.textOf}
-                onSelect={f.selectElement}
-                onEditText={f.editElementText}
-                onDragEnd={f.dragElement}
-                canonicalSeries={f.canonical && f.seriesChannels.length > 0}
-              />
-              <PreviewWarnings warnings={f.hitmap.warnings} /></div>
-            ) : (
-              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-                {f.busy ? "rendering…" : "preview"}
-              </div>
-            )}
+          {/* Sticky: the settings column can run ~2,400 px with every group
+              open; the preview stays in view while it scrolls. */}
+          <div style={{ flex: 1, minWidth: 0, position: "sticky", top: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <PreviewStage
+              preview={f.preview}
+              hitmap={f.hitmap}
+              previewDpi={f.previewDpi ?? null}
+              error={f.error}
+              busy={f.busy}
+              overlay={{
+                /* #13/#14: hit-testable preview — click to focus a panel,
+                   double-click text to edit, drag legend/annotations */
+                textOf: f.textOf,
+                onSelect: f.selectElement,
+                onEditText: f.editElementText,
+                onDragEnd: f.dragElement,
+                canonicalSeries: f.canonical && f.seriesChannels.length > 0,
+              }}
+            />
+            <ExportFooter
+              fmt={f.fmt}
+              onExport={() => void f.exportNow()}
+              exportDisabledReason={exportDisabledReason}
+              canonical={f.canonical}
+              detached={detachedCanonical}
+              dirty={f.dirty}
+              canApply={f.canApply}
+              applyBlockedReason={f.applyBlockedReason ?? null}
+              onApply={f.apply}
+              onClose={onClose}
+            />
           </div>
         </div>
       )}

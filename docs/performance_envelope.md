@@ -512,6 +512,10 @@ helpers that `plotdata.ts` imports); the lazy `plotColumns` chunk
 1.72 → 1.78 kB. `plotdata.ts` holds its 650-line pin (an import added,
 a three-line `if` folded).
 
+## Bounded fits pin BLAS to one thread — 2026-11-16
+
+`calc/_bounded_lsq.solve_bounded` (peak model fit, refl fit, the batch runner) holds BLAS at one thread while it solves (`calc/_blas_pin.py`, refcounted across overlapping fits): the Peak Analyzer's 20-peak `csv_xrd.csv` fit went 10.0 s unconverged → 3.8 s converged at load average ~6. Trade-off: while any fit runs, every other request's BLAS work in the server process runs single-threaded too.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Network/offline source transitions — unmeasurable today: no offline-vs-

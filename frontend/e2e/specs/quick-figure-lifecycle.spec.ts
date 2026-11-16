@@ -243,7 +243,7 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   await chooseFiles(
     page,
-    () => page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
+    () => page.getByRole("menuitem", { name: "Open workspace (.dwk)…", exact: true }).click(),
     savedPath!,
   );
   // Replacing a non-empty workspace confirms first (hasWorkspaceContent).

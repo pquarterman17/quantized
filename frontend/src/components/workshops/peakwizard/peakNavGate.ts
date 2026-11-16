@@ -7,7 +7,10 @@ import type { PeakWizardState } from "./usePeakWizard";
 const FIT_STEP = 3;
 
 /** The reason navigation away from the current step is blocked right now, or
- *  null. `target` is the step the control would go to (omit for "any"). */
-export function fitRunningBlock(w: Pick<PeakWizardState, "step" | "model">, target?: number): string | null {
-  return w.step === FIT_STEP && w.model.busy && target !== FIT_STEP ? "peak fit running…" : null;
+ *  null. `target` is the step the control would go to (omit for "any").
+ *  Only the model engine's fit can be cancelled, hence the two wordings. */
+export function fitRunningBlock(w: Pick<PeakWizardState, "step" | "model" | "fitBusy">, target?: number): string | null {
+  if (w.step !== FIT_STEP || target === FIT_STEP) return null;
+  if (w.model.busy) return "fitting — wait for it to finish, or cancel it";
+  return w.fitBusy ? "fitting — wait for it to finish" : null;
 }

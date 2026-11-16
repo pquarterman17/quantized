@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FigureSpec } from "../../../lib/api/figures";
 import type { DataStruct } from "../../../lib/types";
+import { previewDpiFor } from "./previewSizing";
 import { usePreviewRender } from "./usePreviewRender";
 
 const dataset: DataStruct = {
@@ -103,5 +104,27 @@ describe("usePreviewRender transport", () => {
     await waitFor(() => expect(sent).toHaveLength(1));
     unmount();
     expect(sent[0].signal?.aborted).toBe(true);
+  });
+});
+
+// UX-H review item 12: the preview renders at previewDpiFor(spec) — never the
+// export's own `spec.dpi` — and reports the resolution of the picture it shows.
+describe("usePreviewRender resolution (UX-H)", () => {
+  it("sends previewDpiFor(spec), not spec.dpi, and reports that dpi with the picture", async () => {
+    const sent: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_path: string, init: RequestInit) => {
+        sent.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        return hitmapResponse(`img${sent.length}`);
+      }),
+    );
+    const spec: FigureSpec = { dataset, style: "aps", dpi: 600 };
+    const { result } = renderHook(() => usePreviewRender(spec, false));
+    expect(result.current.previewDpi).toBeNull();
+    await waitFor(() => expect(result.current.preview).toBe("data:image/png;base64,img1"));
+    expect(sent[0].dpi).toBe(previewDpiFor(spec, window.devicePixelRatio));
+    expect(sent[0].dpi).not.toBe(600);
+    expect(result.current.previewDpi).toBe(sent[0].dpi);
   });
 });

@@ -92,7 +92,7 @@ test("a grouped box plot's summary table stays open across a reload", async ({ p
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   await chooseFiles(
     page,
-    () => page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
+    () => page.getByRole("menuitem", { name: "Open workspace (.dwk)…", exact: true }).click(),
     savedPath!,
   );
   await page.getByRole("button", { name: "Replace", exact: true }).click();

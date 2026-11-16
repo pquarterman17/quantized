@@ -28,7 +28,7 @@ import { nextPageDocumentId } from "../../../store/pageDocuments";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
-import { FIGURE_STYLES } from "../figurebuilder/figureOutputConstants";
+import { presetOptions } from "../../../lib/figurePresets";
 import BatchCompatibilityReview from "./BatchCompatibilityReview";
 import {
   batchRecipeChoices,
@@ -374,7 +374,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 190px repeat(2, 110px)", gap: 8 }}>
               <label className="qzk-field"><span className="qzk-field-lbl">File name</span><input className="qz-input" value={archiveName} placeholder={`${recipeChoice?.recipe.name ?? "Batch"} figures`} disabled={busy} onChange={(event) => setArchiveName(event.target.value)} /></label>
               <label className="qzk-field"><span className="qzk-field-lbl">Format</span><Select value={exportFormat} disabled={busy} onChange={(event) => setExportFormat(event.target.value as (typeof EXPORT_FORMATS)[number])} options={EXPORT_FORMATS.map((value) => ({ value, label: exportFormatLabel(value) }))} /></label>
-              <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={FIGURE_STYLES.map((value) => ({ value, label: value }))} /></label>
+              <label className="qzk-field"><span className="qzk-field-lbl">Style</span><Select value={exportStyle} disabled={busy} onChange={(event) => setExportStyle(event.target.value)} options={presetOptions(exportStyle)} /></label>
               <label className="qzk-field"><span className="qzk-field-lbl">DPI</span><input className="qz-input" type="number" min={50} max={1200} value={exportDpi} disabled={busy || exportFormat !== "png" && exportFormat !== "tiff"} onChange={(event) => setExportDpi(Number(event.target.value) || 300)} /></label>
             </div>
           )}
