@@ -2,7 +2,7 @@
 // detection half) and `mapdataFetch.ts` (lazy fetch/grid half).
 import { describe, expect, it, vi } from "vitest";
 
-import { canRenderMap, is2DMap } from "./mapdata";
+import { canRenderMap, is2DMap, mapGateWork } from "./mapdata";
 import {
   buildMapColumns,
   defaultMapKeys,
@@ -238,6 +238,98 @@ describe("map columns + tab gating (figures-audit #13)", () => {
       metadata: {},
     };
     expect(canRenderMap(d)).toBe(false);
+  });
+
+  // ---- UX-D: grid gate edge cases (coverage, line regularity, 2-level, cost) ----
+  const longForm = (pts: [number, number, number][]): DataStruct => ({
+    time: pts.map((p) => p[0]),
+    values: pts.map((p) => [p[1], p[2]]),
+    labels: ["Y", "Z"],
+    units: ["", ""],
+    metadata: { x_column_name: "X" },
+  });
+  const raster = (nx: number, ny: number, f: (i: number, j: number) => [number, number]): [number, number, number][] => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) { const [x, y] = f(i, j); pts.push([x, y, i * j]); }
+    return pts;
+  };
+
+  it("a regular grid with one cell missing, or an aborted last line, is still a map", () => {
+    const full = raster(6, 6, (i, j) => [i, j]);
+    expect(canRenderMap(longForm(full.filter((_, k) => k !== 7)))).toBe(true);
+    expect(canRenderMap(longForm(full.slice(0, 6 * 5 + 2)))).toBe(true); // scan stopped mid-line
+  });
+
+  it("scattered points on a coarse lattice (about half the cells) are NOT a map", () => {
+    const hash = (k: number): number => { const v = Math.sin(k * 12.9898) * 43758.5453; return v - Math.floor(v); };
+    const pts = raster(10, 10, (i, j) => [i, j]).filter((_, k) => hash(k) < 0.5);
+    expect(canRenderMap(longForm(pts))).toBe(false);
+  });
+
+  it("a 2 x N table is not a map (an axis needs 3 levels and lines need 3 points)", () => {
+    expect(canRenderMap(longForm(raster(2, 8, (i, j) => [i, j])))).toBe(false);
+    expect(canRenderMap(longForm(raster(8, 2, (i, j) => [i, j])))).toBe(false);
+    expect(canRenderMap(longForm(raster(3, 3, (i, j) => [i, j])))).toBe(true);
+  });
+
+  it("a sheared grid (coupled omega-2theta RSM as long-form CSV) is a map", () => {
+    // omega = offset + 2theta/2 (integers, so equal values are equal floats): ~17 % of the omega x 2theta cross product is occupied
+    const pts = raster(21, 41, (i, j) => [i + j, j]);
+    expect(canRenderMap(longForm(pts))).toBe(true);
+  });
+
+  it("a staggered (hex) raster is a map", () => {
+    expect(canRenderMap(longForm(raster(12, 12, (i, j) => [i + (j % 2) * 0.5, j])))).toBe(true);
+  });
+
+  it("an encoder-noisy fast axis (2 readback values per nominal step) is still a map", () => {
+    expect(canRenderMap(longForm(raster(12, 12, (i, j) => [i + (j % 2) * 1e-3, j])))).toBe(true);
+  });
+
+  it("a stepped profile whose 'fast' column is barely revisited (each value in < 3 rows) is NOT a map", () => {
+    // nbau_pnr-0-steps.dat shape: a staircase column beside a monotone profile
+    // axis whose values are used by ~2.5 rows each -- uniform monotone lines, but
+    // the "fast" axis does not recur across lines like a raster's does.
+    const pts: [number, number, number][] = [];
+    for (let line = 0; line < 30; line++) for (let j = 0; j < 5; j++) pts.push([2 * line + j, line * 0.01, 0]);
+    expect(canRenderMap(longForm(pts))).toBe(false);
+    // the same lines with the profile axis shared by more lines (step 1) ARE a sheared raster
+    const sheared: [number, number, number][] = [];
+    for (let line = 0; line < 30; line++) for (let j = 0; j < 5; j++) sheared.push([line + j, line * 0.01, 0]);
+    expect(canRenderMap(longForm(sheared))).toBe(true);
+  });
+
+  it("does the pair work only for pairs that can qualify, on a bounded sample (perf invariant)", () => {
+    // 10 monotone step-valued status columns over 300k rows: nothing here is a grid.
+    const n = 300_000;
+    const values = Array.from({ length: n }, (_, r) => Array.from({ length: 10 }, (_, c) => Math.floor(r / (4000 + c * 900))));
+    const d: DataStruct = {
+      time: Array.from({ length: n }, (_, r) => r * 0.01),
+      values,
+      labels: Array.from({ length: 10 }, (_, c) => `S${c}`),
+      units: Array(10).fill(""),
+      metadata: {},
+    };
+    const before = { ...mapGateWork };
+    expect(canRenderMap(d)).toBe(false);
+    const scans = mapGateWork.pairScans - before.pairScans;
+    const rows = mapGateWork.pairRows - before.pairRows;
+    expect(scans).toBeLessThanOrEqual(28); // C(8,2): the candidate cap
+    expect(rows).toBeLessThanOrEqual(28 * 20_000); // each scan sees <= the 20k-row sample, never 300k
+  });
+
+  it("scans no pairs at all when fewer than two columns repeat like axes", () => {
+    const n = 50;
+    const d: DataStruct = {
+      time: Array.from({ length: n }, (_, i) => i),
+      values: Array.from({ length: n }, (_, i) => [Math.sin(i), i * i]),
+      labels: ["A", "B"],
+      units: ["", ""],
+      metadata: {},
+    };
+    const before = mapGateWork.pairScans;
+    expect(canRenderMap(d)).toBe(false);
+    expect(mapGateWork.pairScans).toBe(before);
   });
 
   it("never guesses scattered XYZ: ordinary 3-column magnetometry data gets no Map tab", () => {

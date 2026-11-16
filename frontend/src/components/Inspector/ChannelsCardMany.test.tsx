@@ -56,4 +56,22 @@ describe("ChannelsCard with many columns", () => {
     fireEvent.click(screen.getByRole("button", { name: "None" }));
     expect(useApp.getState().yKeys).toEqual([0]);
   });
+
+  it("does not carry the filter or opened rows over to another dataset", () => {
+    const { rerender } = render(<ChannelsCard active={dataset} />);
+    fireEvent.change(screen.getByLabelText("Filter channels"), { target: { value: "field" } });
+    fireEvent.click(screen.getByLabelText("Field A more options"));
+    rerender(<ChannelsCard active={{ ...dataset, id: "d2" }} />);
+    expect(screen.getByLabelText("Filter channels")).toHaveValue("");
+    expect(screen.queryByLabelText("Field A modeling type")).toBeNull();
+  });
+
+  it("keeps a series' Y2 / Y3 axis visible in its collapsed row", () => {
+    useApp.setState({ y2Keys: [1] });
+    const { container } = render(<ChannelsCard active={dataset} />);
+    const row = Array.from(container.querySelectorAll(".qzk-channel-row")).find((r) => r.textContent?.includes("Field A"))!;
+    expect(row).toHaveTextContent("Y2");
+    const plain = Array.from(container.querySelectorAll(".qzk-channel-row")).find((r) => r.textContent?.includes("Field B"))!;
+    expect(plain.textContent).not.toMatch(/Y\d/);
+  });
 });

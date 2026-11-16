@@ -17,6 +17,7 @@ import { useLibraryResize } from "./useLibraryResize";
 import { useRevealImported } from "./useRevealImported";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { makeDemoDataset } from "../../lib/demo";
+import { useFileDropTarget } from "../../lib/fileDrop";
 import { folderPath } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import { chooseAndImport } from "../../lib/importEntry";
@@ -89,7 +90,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const { hierarchy, rows: allRows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [contentFilter, setContentFilter] = useState<LibraryContentFilter>("all");
-  const [dragging, setDragging] = useState(false);
+  const { dragging, props: dropProps } = useFileDropTarget((f) => importFiles(f));
   const { viewMode, changeViewMode, rememberLibraryFocus } = useLibraryViewTransition({
     controlledMode: controlledViewMode, onModeChange: onViewModeChange,
     hierarchy, rows: allRows, expandedFolders, expandedWorkbookIds,
@@ -155,17 +156,10 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const onDemo = () => {
     const ds: Dataset = {
       id: nextDatasetId(),
-      name: `demo-vsm-${++demoSeq}.dat`,
+      name: `demo-${++demoSeq}.dat`,
       data: makeDemoDataset(),
     };
     addDataset(ds);
-  };
-
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length) void importFiles(files);
   };
 
   // Filter through the shared smart-folder grammar (lib/smartfolders): a bare
@@ -263,17 +257,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     <aside
       ref={panelRef}
       className={`qzk-library${dragging ? " dragover" : ""}`}
-      onDragOver={(e) => {
-        // Only react to OS file drags; an internal dataset drag (row → folder) is
-        // handled by FolderRow and must not trip the file-import dropzone.
-        if (!e.dataTransfer.types.includes("Files")) return;
-        e.preventDefault();
-        if (!dragging) setDragging(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragging(false);
-      }}
-      onDrop={onDrop}
+      {...dropProps}
       onFocusCapture={rememberLibraryFocus}
     >
       <div className="qzk-lib-head">

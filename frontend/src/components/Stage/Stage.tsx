@@ -40,6 +40,7 @@ import WindowCanvas from "../windows/WindowCanvas";
 import { useRightDockClearance } from "./useRightDockClearance";
 import { PendingWorkspace } from "../Shell/workspaceSeams";
 
+const ScatterMapButton = lazyRegion(() => import("./ScatterMapButton"), "Scattered map");
 const EmptyProjectStage = lazyRegion(() => import("./EmptyProjectStage"), "Empty workspace");
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
 const Worksheet = lazyRegion(() => import("./Worksheet"), "Worksheet");
@@ -131,6 +132,7 @@ export default function Stage() {
             </button>
           ))}
         </div>
+        {!mappable && active && active.data.labels.length === 2 && active.data.values.length >= 4 && <ScatterMapButton />}
         <WindowWorkspaceControls />
       </div>
       <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${selectedTab}`}>

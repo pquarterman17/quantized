@@ -29,7 +29,12 @@ const COMPACT_ABOVE = 12;
 /** Compact modeling-type tags for the per-channel select. */
 const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
 
+/** Keyed by dataset so the filter text and opened rows never leak across files. */
 export default function ChannelsCard({ active }: { active: Dataset | null }) {
+  return <ChannelsCardBody key={active?.id ?? ""} active={active} />;
+}
+
+function ChannelsCardBody({ active }: { active: Dataset | null }) {
   const xKey = useApp((s) => s.xKey);
   const setXKey = useApp((s) => s.setXKey);
   const yKeys = useApp((s) => s.yKeys);
@@ -261,6 +266,11 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                   {units[i] ? ` (${units[i]})` : ""}
                 </span>
               </label>
+              {compact && visible && axisOf(i) !== 1 && (
+                <span className="qz-k" title="Drawn on this Y axis (change it under ⋯)" style={{ flex: "0 0 auto", color: "var(--accent)" }}>
+                  Y{axisOf(i)}
+                </span>
+              )}
               {compact ? roleSelect : axisSelect}
               {compact && (
                 <button
