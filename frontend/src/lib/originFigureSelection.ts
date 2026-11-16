@@ -116,22 +116,27 @@ export function figureSelectionState(
     : { xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {} };
 }
 /** The Stat Stage view for a figure whose every curve is an Origin
- *  histogram (`OriginCurve.plotType`): a histogram of the curve's column. `{}`
- *  for any other figure. (Column and bar curves stay on the XY stage, drawn
- *  as bars by their series style — `originCurveSeriesStyle`.) */
+ *  histogram, box, violin or strip plot of one kind (`OriginCurve.plotType`):
+ *  a histogram of the first curve's column, or one box / violin / strip per
+ *  plotted column (no group column: the stage's per-plotted-channel fallback,
+ *  the channels `figureChannelSelection` picks). `{}` for any other figure.
+ *  (Column and bar curves stay on the XY stage, drawn as bars by their series
+ *  style — `originCurveSeriesStyle`.) */
 export function figureStatState(
   figure: OriginFigure,
   ds: Dataset | undefined,
 ): { statMode?: true; statPicks?: StatPicks } {
   const curves = figure.curves ?? [];
-  if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== "histogram")) return {};
+  const mode = curves[0]?.plotType;
+  if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== mode)) return {};
+  if (mode !== "histogram" && mode !== "box" && mode !== "violin" && mode !== "strip") return {};
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
   const y = curves[0].y;
   const value = y === String(meta.x_column_name ?? "") ? -1 : letters.indexOf(y);
   if (value === -1 && y !== String(meta.x_column_name ?? "")) return {};
   const cols: StatCols = { group: null, group2: null, value, facet: null, color: null };
-  return { statMode: true, statPicks: { mode: "histogram", cols: statColRefs(ds, cols) } };
+  return { statMode: true, statPicks: { mode, cols: statColRefs(ds, cols) } };
 }
 
 /** Channel selection for a figure's decoded curves on its resolved dataset:

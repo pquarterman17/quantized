@@ -80,7 +80,7 @@ export interface PeakWizardState {
   findError: string | null;
   /** `find`: run with these settings instead of the recipe's (see
    *  usePeakCandidates's `runFind`). */
-  runFind: (find?: PeakRecipe["find"]) => Promise<void>;
+  runFind: (find?: PeakRecipe["find"], opts?: { auto?: boolean }) => Promise<void>;
   togglePeak: (i: number) => void;
   removePeak: (i: number) => void;
   /** Delete the model's peak `k` (the k-th INCLUDED candidate). */
@@ -270,6 +270,27 @@ export function usePeakWizard(): PeakWizardState {
       setPendingFind(null);
     }
   }, [pendingFind, active, recipe.range.lo, recipe.range.hi, recipe.baseline.method, segment, baseline, baselineError, runFind]);
+
+  // Origin's Peak Analyzer finds peaks on reaching the find step: arm one find
+  // when the step is entered with no candidates, and fire it once the working
+  // trace is ready (same terminal outcomes as the armed find above). A range
+  // request already carries its own armed find, so it is not doubled here.
+  const [autoFind, setAutoFind] = useState(false);
+  useEffect(() => {
+    setAutoFind(step === 1 && !pendingFind && !cands.findBusy && candidates.length === 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- armed on entering the step only
+  }, [step]);
+  useEffect(() => {
+    if (!autoFind) return;
+    if (!segment) {
+      setAutoFind(false);
+    } else if (segment.x.length === 0 || recipe.baseline.method === "none" || baseline !== null) {
+      setAutoFind(false);
+      void runFind(undefined, { auto: true });
+    } else if (baselineError) {
+      setAutoFind(false);
+    }
+  }, [autoFind, segment, recipe.baseline.method, baseline, baselineError, runFind]);
 
   // ④ Simultaneous fit of the included candidates.
   const runFit = useCallback(async () => {

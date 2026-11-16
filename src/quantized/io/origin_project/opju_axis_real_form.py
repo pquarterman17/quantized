@@ -91,6 +91,7 @@ from quantized.io.origin_project.opju_axis_scale_flags import (
     _real_x_log_flag,
     _real_y_log_flag,
 )
+from quantized.io.origin_project.opju_axis_sep_last import SEP_END_02, SEP_LAST_FLAG8
 from quantized.io.origin_project.opju_axis_zero_slot import UnprovenSlot, resolve_elided
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
@@ -283,29 +284,6 @@ def _real_fills(b: bytes, pos: int, end: int, n: int, bare: bool) -> list[tuple[
     return out
 
 
-def real_form_bare_pair(b: bytes, start: int, end: int) -> tuple[float, float] | None:
-    """``(from, to)`` from two REAL-FORM value tokens exactly filling
-    ``[start, end)`` — the "hybrid" axis record (§13.2 #13): a specimen-form
-    skeleton (``_Y_TRANSITION`` marker + ``7b 40`` X-scale filler) whose X/Y
-    span nevertheless stores real-corpus RLE/tagged value tokens, produced when
-    a plotted graph is later customized (``layer.plotN.*`` edits) instead of
-    ranged. An optional 1-2 byte leading flag (``0x81..0x8f``) precedes the
-    first value; try each skip and accept only a UNIQUE two-token exact fill
-    (fail-closed on ambiguity — never guessed). The tokens themselves are the
-    same oracle-validated ``_real_rle``/``_real_tagged`` used by the real form,
-    so a hit reproduces Origin's own range (verified: symbol_kinds.opju X span
-    ``89 c3 33 03 eb 3f 9a c2 99 02 18 40`` -> (0.85, 6.15), matching COM)."""
-    accepted: set[tuple[float, float]] = set()
-    for skip in (0, 1, 2):
-        if start + skip > end:
-            continue
-        fills = _real_fills(b, start + skip, end, 2, bare=False)
-        pairs = {(f[0], f[1]) for f in fills}
-        if len(pairs) == 1:
-            accepted |= pairs
-    return accepted.pop() if len(accepted) == 1 else None
-
-
 def _real_span_pair(
     b: bytes, start: int, end: int, bare: bool, lead: float | None = None
 ) -> tuple[float, float, float | None] | None:
@@ -376,10 +354,18 @@ def _parse_real_record(
     validated through 2026-07-04 parses byte-identically), then retried
     with the wide ``[80|81]`` lead that Hc2's Graph8/Graph12-family records
     need -- a record only ever reaches the wide pass after failing the
-    strict one, so the retry can add parses but never change one."""
-    for sep_re, every in ((_SEP_STRICT, False), (_SEP_WIDE, True)):
+    strict one, so the retry can add parses but never change one (same for
+    the third, last-byte ``09`` pass: ``opju_axis_sep_last``, and the fourth,
+    end-separator ``02`` pass: ``opju_axis_sep_last.SEP_END_02``)."""
+    passes = (
+        (_SEP_STRICT, None, False),
+        (_SEP_WIDE, None, True),
+        (SEP_LAST_FLAG8, None, True),
+        (_SEP_WIDE, SEP_END_02, True),
+    )
+    for sep_re, end_re, every in passes:
         try:
-            got = _parse_real_record_sep(b, p, window_end, sep_re, every=every)
+            got = _parse_real_record_sep(b, p, window_end, sep_re, every=every, end_re=end_re)
         except UnprovenSlot:
             return None  # a span filled, its zero's slot did not prove out
         if got is not None:
@@ -404,9 +390,16 @@ def _sep_hits(
 
 
 def _parse_real_record_sep(
-    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes], *, every: bool = False
+    b: bytes,
+    p: int,
+    window_end: int,
+    sep_re: re.Pattern[bytes],
+    *,
+    every: bool = False,
+    end_re: re.Pattern[bytes] | None = None,
 ) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
-    """One separator-form attempt of `_parse_real_record` (see above).
+    """One separator-form attempt of `_parse_real_record` (see above); the end
+    separator matches ``end_re`` when given (``SEP_END_02``), else ``sep_re``.
 
     With ``every`` (the wide retry only) each separator candidate is tried in
     order and the first whose record parses FULLY wins: the X span must
@@ -432,12 +425,12 @@ def _parse_real_record_sep(
         # over in the strict pass.
         seen_m2 = False
         # lazy: the wide pass stops at the first second separator that parses
-        for m2 in _sep_hits(sep_re, b, y_lo + plen, hi2, every=every):
+        for m2 in _sep_hits(end_re or sep_re, b, y_lo + plen, hi2, every=every):
             seen_m2 = True
             got = _real_y_record(b, window_end, y_lo, plen, xpair, m2)
             if got is not None:
                 return got
-        if not seen_m2:
+        if not seen_m2 and end_re is None:  # the 02 pass needs its end separator
             got = _real_y_record(b, window_end, y_lo, plen, xpair, None)
             if got is not None:
                 return got
