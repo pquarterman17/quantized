@@ -13,6 +13,9 @@ import { describe, expect, it } from "vitest";
 
 import { fitParamsForEdit, pipelineToPython, pipelineToScript, py } from "./pipeline";
 import { makeStep, type PipelineStep } from "./pipelineStep";
+import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
+import { resampleParamsOf } from "./transformResample";
+import { sigopParamsOf } from "./transformSigop";
 
 const FIXTURE = join(__dirname, "__fixtures__", "pipelineScript.py");
 
@@ -244,6 +247,44 @@ describe("pipelineToPython", () => {
     expect(s).toContain("    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import");
     expect(s).toContain("    roles = None  # with no error-column roles, as in the app");
     expect(s.indexOf("roles = None")).toBeLessThan(s.lastIndexOf("error_bindings=roles"));
+  });
+
+  it("the script's sigop validation is the app's sigopParamsOf, case by case", () => {
+    const cases: Record<string, unknown>[] = [
+      { method: "median", channels: [0, 1], args: { window: 5 } },
+      { method: "warp", channels: [0] },
+      { method: "median", channels: [0.5] },
+      { method: "median", channels: "0" },
+      { method: "despike", channels: [0], args: { window: { n: 3 } } },
+      { method: "ifft", channels: [], args: { magnitudeChannel: 1, phaseChannel: 1 } },
+      { method: "ifft", channels: [], args: { magnitudeChannel: 0, phaseChannel: 1 } },
+      { method: "reduce-nth", args: { n: 2 } },
+    ];
+    for (const raw of cases) {
+      const run = (f: () => unknown) => { try { return f(); } catch (e) { return (e as Error).message; } };
+      const app = run(() => { const { op: _op, ...rest } = sigopParamsOf({ op: "sigop", ...raw }); return rest; });
+      expect(run(() => sigopScriptParams(raw)), JSON.stringify(raw)).toEqual(app);
+    }
+  });
+
+  it("the script's resample validation is the app's resampleParamsOf, case by case", () => {
+    const cases: Record<string, unknown>[] = [
+      { mode: "n_points", nPoints: 50, method: "pchip", outOfRange: "clip", sortUnsorted: true },
+      { mode: "n_points", nPoints: 1.5 },
+      { mode: "step", step: 0.5, nPoints: 99 },
+      { mode: "step" },
+      { mode: "range", start: 0, stop: 10, step: 1, acceptedXUnits: ["K", "Oe"] },
+      { mode: "range", start: 0, stop: Infinity, step: 1 },
+      { mode: "step", step: 1, method: "cubic" },
+      { mode: "step", step: 1, outOfRange: "drop" },
+      { mode: "step", step: 1, acceptedXUnits: ["K"] },
+      { mode: "warp" },
+    ];
+    for (const raw of cases) {
+      const run = (f: () => unknown) => { try { return f(); } catch (e) { return (e as Error).message; } };
+      const app = run(() => { const { op: _op, acceptedXUnits: _a, ...rest } = resampleParamsOf({ op: "resample", ...raw }); return rest; });
+      expect(run(() => resampleScriptParams(raw)), JSON.stringify(raw)).toEqual(app);
+    }
   });
 
   it("validates a transform's recorded settings as the app's replay does", () => {

@@ -7,8 +7,7 @@
 
 import { compileFormula } from "./formula";
 import { headlessFormulaProblem } from "./formulaHeadless";
-import { resampleParamsOf } from "./transformResample";
-import { sigopParamsOf } from "./transformSigop";
+import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
 import { channelIndexOf } from "./formulaRename";
 import { makeStep, type PipelineStep, type StepKind } from "./pipelineStep";
 
@@ -279,11 +278,11 @@ function expressionLines(step: PipelineStep, g: Gen): Emit {
 function transformCall(p: Record<string, unknown>): string | { unmapped: string } {
   try {
     if (p.op === "sigop") {
-      const s = sigopParamsOf(p);
+      const s = sigopScriptParams(p);
       return `qz.run_signal_op(data, ${py(s.method)}, ${py(s.channels)}, ${py(s.args)}).data`;
     }
     if (p.op === "resample" && p.mode !== "match") {
-      const r = resampleParamsOf(p);
+      const r = resampleScriptParams(p);
       const grid = r.mode === "n_points" ? `, n_points=${py(r.nPoints)}` : r.mode === "step" ? `, step=${py(r.step)}` : `, start=${py(r.start)}, stop=${py(r.stop)}, step=${py(r.step)}`;
       return `qz.resample(data, mode=${py(r.mode)}${grid}, method=${py(r.method)}, out_of_range=${py(r.outOfRange)}, unsorted=${py(r.sortUnsorted ? "sort" : "refuse")}).data`;
     }
