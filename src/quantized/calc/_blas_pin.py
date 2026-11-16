@@ -19,6 +19,9 @@ threadpoolctl's controlling-thread claim around each change
 (``clear_controlling_thread(force=True)``). A pool behind the OpenMP threading
 layer is per-thread instead: each entrant pins and restores its own.
 
+Where no controllable BLAS pool is loaded (macOS wheels link Apple Accelerate,
+which threadpoolctl cannot see or limit) the pin is a no-op.
+
 While any fit holds the pin, other BLAS work in the process runs on one
 thread too (docs/performance_envelope.md).
 """

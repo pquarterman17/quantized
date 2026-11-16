@@ -8,6 +8,8 @@ from __future__ import annotations
 import threading
 
 import numpy as np
+import pytest
+import scipy.linalg  # noqa: F401  -- load scipy's BLAS (where it has its own) before threadpool_info
 from numpy.typing import NDArray
 from threadpoolctl import threadpool_info
 
@@ -19,9 +21,16 @@ def _blas_threads() -> list[int]:
     return [int(p["num_threads"]) for p in threadpool_info() if p["user_api"] == "blas"]
 
 
+# macOS wheels link Apple Accelerate, which threadpoolctl cannot see or limit:
+# there the pin is a documented no-op, so these checks have nothing to measure.
+_CONTROLLABLE = bool(_blas_threads())
+needs_blas_pool = pytest.mark.skipif(
+    not _CONTROLLABLE, reason="no threadpoolctl-controllable BLAS pool (e.g. macOS Accelerate)"
+)
+
+
 def test_solve_runs_single_threaded_blas_and_restores_it() -> None:
     before = _blas_threads()
-    assert before, "numpy/scipy load a BLAS pool"
     seen: list[list[int]] = []
     x = np.linspace(0.0, 1.0, 50)
     y = 2.0 * x + 1.0
@@ -36,8 +45,11 @@ def test_solve_runs_single_threaded_blas_and_restores_it() -> None:
     np.testing.assert_allclose(fit.x, [2.0, 1.0], atol=1e-8)
     assert seen and all(all(n == 1 for n in threads) for threads in seen)
     assert _blas_threads() == before
+    if not _CONTROLLABLE:  # the solve above still has to work where the pin is a no-op
+        assert before == [] and all(t == [] for t in seen)
 
 
+@needs_blas_pool
 def test_overlapping_fits_keep_the_pin_and_the_last_one_out_restores() -> None:
     """A enters, B enters, A leaves while B still runs, B leaves (another
     thread): threadpoolctl's own `limit()` left B unpinned and the process
