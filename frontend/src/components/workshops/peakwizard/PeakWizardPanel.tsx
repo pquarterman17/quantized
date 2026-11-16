@@ -50,6 +50,17 @@ export default function PeakWizardPanel() {
     setOpen(false);
   };
 
+  // Nothing to fit: Next from step ② and the Model / Fit & review chips (③, ④)
+  // are off, with the reason.
+  const noPeaks = !w.candidates.some((c) => c.included);
+  const noPeaksWhy = w.findBusy
+    ? "finding peaks…"
+    : w.findError
+      ? `peak find failed (${w.findError}) — retry it or add a peak, then continue`
+      : "no peaks to fit — find or add at least one peak first";
+  // Step ② -> ③ and ③ -> ④ (a model-table "×" can delete the last peak in ③).
+  const nextBlock = (w.step === 1 || w.step === 2) && noPeaks ? noPeaksWhy : null;
+
   const stepBody = [
     <StepRangeBaseline key={`s0-${w.recipeRev}`} w={w} />,
     <StepFindPeaks key={`s1-${w.recipeRev}`} w={w} />,
@@ -86,6 +97,8 @@ export default function PeakWizardPanel() {
               <button
                 key={label}
                 className={`qzk-wizard-step${i === w.step ? " qzk-active" : ""}`}
+                disabled={(i === 2 || i === 3) && noPeaks}
+                title={(i === 2 || i === 3) && noPeaks ? noPeaksWhy : undefined}
                 onClick={() => w.setStep(i)}
               >
                 <span className="qzk-wizard-num">{i + 1}</span> {label}
@@ -118,10 +131,16 @@ export default function PeakWizardPanel() {
               ← Back
             </Button>
             <span style={{ flex: 1 }} />
+            {nextBlock && (
+              <span className="qzk-ds-meta" role="status" style={{ color: "var(--text-faint)", alignSelf: "center" }}>
+                {nextBlock}
+              </span>
+            )}
             <Button
               size="sm"
               variant="primary"
-              disabled={w.step === WIZARD_STEPS.length - 1}
+              disabled={w.step === WIZARD_STEPS.length - 1 || nextBlock !== null}
+              title={nextBlock ?? undefined}
               onClick={w.next}
             >
               Next →
