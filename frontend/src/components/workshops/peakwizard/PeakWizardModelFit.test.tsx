@@ -208,7 +208,11 @@ describe("Peak analyzer — model engine setup (step 3)", () => {
     // shell.css's rule targets (the classic engine's "N peak(s) will be fit…").
     expect(screen.getByText(/Seeded from the detected peaks/).closest(".qzk-peakwizard")).not.toBeNull();
     const css = readFileSync(join(__dirname, "../../../styles/shell.css"), "utf8");
-    expect(css).toMatch(/\.qzk-peakwizard div\.qzk-ds-meta \{ white-space: normal; \}/);
+    // Wrapping is now global: the base hint class carries no nowrap / ellipsis.
+    const rule = css.match(/^\.qzk-ds-meta, \.qzk-helptext \{([^}]*)\}/m);
+    expect(rule, "global .qzk-ds-meta rule").not.toBeNull();
+    expect(rule![1]).not.toMatch(/nowrap|ellipsis/);
+    expect(css).not.toMatch(/^\.qzk-ds-meta[^{]*\{[^}]*nowrap/m);
   });
 
   it("a peak's × in the model table deletes it; the other peak keeps its edit under its new number (slice 3)", async () => {

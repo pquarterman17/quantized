@@ -24,6 +24,14 @@
   --type-title: 14px;   /* dialog / window titles */
   --type-display: 15px; /* command palette input, shortcuts heading */
 
+  /* Aliases for names components already used but nothing defined (UX audit
+     7, lane G1) — one definition here instead of per-site fallbacks. */
+  --font-sans: var(--font-ui);
+  --type-small: var(--font-size-sm);
+  --type-body: var(--type-title);
+  --font-size-xs: var(--font-size-sm);
+  --font-size-lg: var(--type-title);
+
   /* uppercase-label tracking */
   --tracking-label: 0.06em;
   --tracking-wide: 0.1em;

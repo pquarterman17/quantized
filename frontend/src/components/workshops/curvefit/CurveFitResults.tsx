@@ -95,7 +95,7 @@ export default function CurveFitResults(p: Props) {
         </div>
       )}
       {done && p.stale && (
-        <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, color: "var(--warning)" }}>
+        <div className="qzk-helptext" role="status" style={{ marginTop: 10, color: "var(--warning)" }}>
           The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.
         </div>
       )}

@@ -36,6 +36,7 @@ const stored = (): Record<string, unknown> => JSON.parse(localStorage.getItem(PR
 // different one each writer spec sets — so neither can be a no-op write.
 const POISON: Prefs = {
   theme: "light",
+  themeMode: "light",
   accent: "teal",
   density: "compact",
   palette: "viridis",
@@ -58,6 +59,7 @@ const POISON: Prefs = {
 };
 const NEXT: Prefs = {
   theme: "dark",
+  themeMode: "dark",
   accent: "rose",
   density: "comfy",
   palette: "default",
@@ -121,6 +123,12 @@ describe("pref fields: initial state", () => {
   });
 });
 
+// A theme PICK (setTheme, or setPref("theme"/"themeMode")) writes the effective
+// `theme` AND the user's `themeMode` choice together: that pairing is the
+// "follow system, but keep an explicit choice" contract (themeMode.test.ts).
+const THEME_PAIR = ["theme", "themeMode"];
+const wrote = (field: string): string[] => (THEME_PAIR.includes(field) ? THEME_PAIR : [field]);
+
 const NAMED: [keyof AppState, "theme" | "accent" | "density" | "palette"][] = [
   ["setTheme", "theme"],
   ["setAccent", "accent"],
@@ -132,9 +140,9 @@ describe("named appearance setters", () => {
   it.each(NAMED)("%s writes ONLY %s, and persists the whole prefs blob", (action, field) => {
     const before = snapshot();
     (act()[action] as (v: string) => void)(NEXT[field]);
-    expect(changedSince(before)).toEqual([field]);
+    expect(changedSince(before)).toEqual(wrote(field));
     expect(act()[field]).toBe(NEXT[field]);
-    expect(stored()).toMatchObject({ ...POISON, [field]: NEXT[field] });
+    expect(stored()).toMatchObject({ ...POISON, [field]: NEXT[field], ...(field === "theme" ? { themeMode: NEXT.themeMode } : {}) });
   });
 
   it.each(NAMED)("%s with the current value: no observable diff", (action, field) => {
@@ -156,7 +164,7 @@ describe("setPref (the Preferences dialog's generic writer)", () => {
   it.each(KEYS)("setPref(%s) writes ONLY that key and persists it", (key) => {
     const before = snapshot();
     act().setPref(key, NEXT[key]);
-    expect(changedSince(before)).toEqual([key]);
+    expect(changedSince(before)).toEqual(wrote(key));
     expect((act() as unknown as Snap)[key]).toEqual(NEXT[key]);
     expect(stored()[key]).toEqual(NEXT[key]);
   });

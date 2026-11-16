@@ -176,9 +176,9 @@ export default function PreferencesDialog() {
               <>
                 <PrefRow label="Theme">
                   <SegmentedControl
-                    options={["Dark", "Light"]}
-                    value={p.theme === "light" ? "Light" : "Dark"}
-                    onChange={(v) => setPref("theme", v === "Light" ? "light" : "dark")}
+                    options={["System", "Dark", "Light"]}
+                    value={p.themeMode === "light" ? "Light" : p.themeMode === "dark" ? "Dark" : "System"}
+                    onChange={(v) => setPref("themeMode", v.toLowerCase())}
                   />
                 </PrefRow>
                 <PrefRow label="Accent color" hint="a tint, not a reskin">
