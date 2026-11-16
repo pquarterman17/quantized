@@ -7,7 +7,7 @@
 //
 // Layout (UX-F, audit 7 finding 4): a sticky header — model, the PRIMARY Fit
 // button and the fit's status — over three tabs: Setup (inputs, weighting,
-// start values, By), Results (the fit, residual plots first, then the deeper
+// start values, By), Results (the fit, residual plots open, then the deeper
 // result tools) and Advanced (batch, templates, compare, ODR, scan, bumps).
 // Fit switches to Results, so the outcome and the Fit button are both in view
 // without scrolling. Every tab stays mounted (hidden), so a running batch or an
@@ -361,6 +361,7 @@ export default function CurveFitPanel() {
             cornerBusy={cornerBusy}
             onCornerPlot={() => void runCornerPlot()}
             onRemoveFit={() => void removeFit()}
+            residualsOpen={tab === "results"}
           />
         )}
       </TabPanel>

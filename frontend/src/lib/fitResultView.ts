@@ -68,6 +68,16 @@ export function fitResultView(i: FitResultInput): FitResultView {
   return { paramColumns: COLUMNS, paramRows, statRows, notes };
 }
 
+/** The parameter table as the narrow Curve Fit panel shows it: the Units
+ *  column is dropped when no parameter has a unit (every cell "—"), so the
+ *  value and CI cells keep one line each (UX-F). Copies keep all columns. */
+export function shownParamTable(v: FitResultView): { columns: string[]; rows: string[][] } {
+  const at = v.paramColumns.indexOf("Units");
+  if (at < 0 || v.paramRows.some((r) => r[at] !== "—")) return { columns: v.paramColumns, rows: v.paramRows };
+  const drop = <T>(xs: T[]) => xs.filter((_, i) => i !== at);
+  return { columns: drop(v.paramColumns), rows: v.paramRows.map(drop) };
+}
+
 /** Value and error as plain spreadsheet numbers ("5.4e-13": Excel parses it). */
 function numberCells(v: unknown, e: unknown): [string, string] {
   const r = fin(v) && fin(e) ? roundToError(v, e) : null;

@@ -56,6 +56,16 @@ describe("tool dock registry", () => {
     again();
   });
 
+  it("Reset window positions re-docks floated windows and forgets the choice", () => {
+    const off = registerDockable("a", 340);
+    undockToolWindow("a");
+    expect(toolDockSnapshot().owner).toBeNull();
+    useApp.getState().resetToolWindowPositions();
+    expect(toolDockSnapshot().owner).toBe("a");
+    expect(JSON.parse(localStorage.getItem(TOOL_DOCK_KEY)!)).toEqual({ floating: [] });
+    off();
+  });
+
   it("an unreadable stored choice is ignored, not fatal", () => {
     localStorage.setItem(TOOL_DOCK_KEY, "{not json");
     resetToolDockForTests();
@@ -65,7 +75,7 @@ describe("tool dock registry", () => {
   });
 
   it("the column never squeezes the stage below 640 px beside the Library", () => {
-    expect(dockColumnWidth(340)).toBe("min(340px, max(280px, calc(100vw - var(--lw, 210px) - 640px)))");
+    expect(dockColumnWidth(340)).toBe("min(340px, max(200px, calc(100vw - var(--lw, 210px) - 640px)))");
   });
 });
 

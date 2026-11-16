@@ -21,9 +21,12 @@ import { useSyncExternalStore } from "react";
 
 export const TOOL_DOCK_KEY = "qz.toolDock";
 
-/** Narrowest docked column (px); the window's own width is the widest. */
-export const DOCK_MIN_WIDTH = 280;
-/** Plot room the dock always leaves the stage at the default Library width. */
+/** Narrowest docked column (px): a tool window's own minimum (lib/toolwindow
+ *  MIN_WIDTH). The stage minimum below yields to it only on a viewport too
+ *  narrow for both (under ~1050 px beside a default Library). */
+export const DOCK_MIN_WIDTH = 200;
+/** Plot room the dock leaves the stage, beside the Library at its live width
+ *  (--lw), for EVERY docked window (Curve Fit 340, Peak analyzer 420, …). */
 export const DOCK_STAGE_MIN = 640;
 
 export interface DockState {
@@ -110,6 +113,15 @@ export function dockToolWindow(id: string): void {
   publish();
 }
 
+/** View ▸ "Reset window positions": forget every float choice, so every
+ *  dock-capable window docks again (open ones claim the column now). */
+export function resetToolDockFloats(): void {
+  floating.clear();
+  saveFloating();
+  for (const id of widths.keys()) if (!claimants.includes(id)) claimants.push(id);
+  publish();
+}
+
 function subscribe(fn: () => void): () => void {
   listeners.add(fn);
   return () => void listeners.delete(fn);
@@ -142,7 +154,7 @@ export function resetToolDockForTests(): void {
 }
 
 /** The CSS width of the docked column: the owner's width, but never so wide
- *  that the stage drops below DOCK_STAGE_MIN beside a default-width Library,
+ *  that the stage drops below DOCK_STAGE_MIN beside the Library (its live --lw),
  *  and never narrower than DOCK_MIN_WIDTH. */
 export function dockColumnWidth(width: number): string {
   return `min(${width}px, max(${DOCK_MIN_WIDTH}px, calc(100vw - var(--lw, 210px) - ${DOCK_STAGE_MIN}px)))`;

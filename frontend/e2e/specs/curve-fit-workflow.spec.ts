@@ -113,9 +113,8 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     expect(Math.max(...rowHeights) - Math.min(...rowHeights)).toBeLessThanOrEqual(1);
     await panel.getByText("Fit report", { exact: true }).click(); // collapse again
 
-    // Residual plots: first under the results (UX-F); each of the four has a
-    // real data area.
-    await panel.getByText("Residual plots", { exact: true }).click();
+    // Residual plots: open by themselves in the Results tab (UX-F); each of
+    // the four has a real data area.
     const plots = panel.getByRole("img", { name: /residual/ });
     await expect(plots).toHaveCount(4, { timeout: 15_000 });
     const areas = await plots.evaluateAll((hosts) =>

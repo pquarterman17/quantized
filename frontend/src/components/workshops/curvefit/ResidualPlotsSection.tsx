@@ -1,5 +1,5 @@
 // Curve Fit — "Residual plots" section (lazy chunk; mounted after a completed
-// registry-model fit, collapsed until opened). Residual vs X, residual vs
+// registry-model fit; opens with Curve Fit's Results tab). Residual vs X, residual vs
 // fitted value, a histogram and a normal Q-Q plot of THIS fit's residuals,
 // drawn by the shared SmallUPlot. The Q-Q pairs are calc.fit_stats'
 // residual_diagnostics (POST /api/fitting/diagnostics), fetched only when the
@@ -18,8 +18,30 @@ import type { FittedData } from "./useCurveFit";
 const ResidualPlotGrid = lazy(() => import("./ResidualPlotGrid"));
 type Num = number | null;
 
-export default function ResidualPlotsSection({ result, fitData, xLabel }: { result: CalcResult; fitData: FittedData; xLabel: string }) {
-  const [open, setOpen] = useState(false);
+/** uPlot reads `window.matchMedia` as its module loads; where it is missing
+ *  (jsdom, a very old webview) the plots chunk would throw, so the section
+ *  never opens BY ITSELF there -- an explicit click still tries. */
+const canAutoDraw = (): boolean => typeof window !== "undefined" && typeof window.matchMedia === "function";
+
+export default function ResidualPlotsSection({
+  result,
+  fitData,
+  xLabel,
+  autoOpen = false,
+}: {
+  result: CalcResult;
+  fitData: FittedData;
+  xLabel: string;
+  /** Open whenever this turns true (UX-F: Curve Fit's Results tab is
+   *  showing, so the residuals are one click -- the tab -- from anywhere).
+   *  The user can still collapse it. */
+  autoOpen?: boolean;
+}) {
+  const auto = autoOpen && canAutoDraw();
+  const [open, setOpen] = useState(auto);
+  useEffect(() => {
+    if (auto) setOpen(true);
+  }, [auto]);
   const [qq, setQq] = useState<{ qqX: Num[]; qqY: Num[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const residuals = result.residuals as Num[] | undefined;

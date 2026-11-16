@@ -15,6 +15,7 @@
 // (read store/windows.ts's header first for the general slice pattern).
 
 import type { ToolWindowLayout } from "../lib/toolwindow";
+import { resetToolDockFloats } from "./toolDock";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -36,7 +37,8 @@ export interface ToolWindowsSlice {
   toggleToolWindowCollapsed: (id: string, fallback: ToolWindowLayout) => void;
   /** View-menu "Reset window positions" (commands/uiCommands.ts): drops
    *  every persisted entry, so every open (and future) ToolWindow falls back
-   *  to its own default x/y/width props, uncollapsed, auto-height. */
+   *  to its own default x/y/width props, uncollapsed, auto-height, and every
+   *  floated dock-capable window docks again. */
   resetToolWindowPositions: () => void;
 }
 
@@ -52,6 +54,10 @@ export function createToolWindowsSlice(set: SliceSet): ToolWindowsSlice {
           toolWindowLayout: { ...s.toolWindowLayout, [id]: { ...current, collapsed: !current.collapsed } },
         };
       }),
-    resetToolWindowPositions: () => set({ toolWindowLayout: {} }),
+    // Also re-docks every floated analysis window (UX-F, store/toolDock.ts).
+    resetToolWindowPositions: () => {
+      resetToolDockFloats();
+      set({ toolWindowLayout: {} });
+    },
   };
 }
