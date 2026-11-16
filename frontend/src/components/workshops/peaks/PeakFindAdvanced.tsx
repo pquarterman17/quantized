@@ -53,10 +53,13 @@ const label: React.CSSProperties = { fontSize: "var(--font-size-sm)", color: "va
 interface Props {
   value: PeakFindParams;
   onApply: (p: PeakFindParams) => void;
+  /** What "Defaults" restores (the route's own by default; the Peak
+   *  analyzer passes its adaptive recipe defaults). */
+  defaults?: Readonly<PeakFindParams>;
   busy: boolean;
 }
 
-export default function PeakFindAdvanced({ value, onApply, busy }: Props) {
+export default function PeakFindAdvanced({ value, onApply, busy, defaults = DEFAULT_PEAK_FIND }: Props) {
   const [draft, setDraft] = useState<PeakFindParams>(value);
   // A new `value` (the caller applied or reset the settings) replaces the
   // draft DURING the render that carries it, never from a post-commit
@@ -125,7 +128,7 @@ export default function PeakFindAdvanced({ value, onApply, busy }: Props) {
           <Button size="sm" disabled={busy} onClick={() => onApply(draft)}>
             Find again
           </Button>
-          <Button size="sm" disabled={busy} onClick={() => onApply({ ...DEFAULT_PEAK_FIND })}>
+          <Button size="sm" disabled={busy} onClick={() => onApply({ ...defaults })}>
             Defaults
           </Button>
         </div>

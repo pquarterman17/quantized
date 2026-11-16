@@ -18,6 +18,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { singleFitTable } from "../../../lib/fitTableLayer";
 import FindXYSection from "./FindXYSection";
+import FitParamTable from "./FitParamTable";
 import FitTableControls from "./FitTableControls";
 import type { FittedData } from "../../../store/curveFitSession";
 
@@ -120,13 +121,9 @@ export default function CurveFitResults(p: Props) {
           The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.
         </div>
       )}
-      {shown && shown.rows.length > 0 && (
-        // One line per value and per CI (UX-F): no wrapping, tight cells, and
-        // a sideways scroll in its own box if a unit column still overflows.
-        <div className="qzk-nowrap-table qzk-dense-table" style={{ marginTop: 12, overflowX: "auto" }}>
-          <DataTable columns={shown.columns} rows={shown.rows} />
-        </div>
-      )}
+      {/* One line per value and per CI (UX-F); the CI folds under the value
+          when the dock is narrower than that (UX8-D, ./FitParamTable). */}
+      {shown && shown.rows.length > 0 && <FitParamTable columns={shown.columns} rows={shown.rows} />}
       {view?.notes.map((n) => (
         <div key={n} className="qzk-ds-meta" role="status" style={{ marginTop: 6, color: "var(--warn)" }}>{n}</div>
       ))}

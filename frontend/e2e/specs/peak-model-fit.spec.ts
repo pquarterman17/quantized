@@ -62,7 +62,9 @@ test.describe("Peak analyzer mixed-shape model fit", () => {
     // ③ model: the new engine is the default; peak 2 becomes a Lorentzian
     await panel.locator(".qzk-wizard-step", { hasText: "Model" }).click();
     await expect(panel.getByRole("combobox", { name: "fit engine" })).toHaveValue("model");
-    await expect(panel.getByRole("combobox", { name: "peak 1 shape" })).toHaveValue("gaussian");
+    // A 2θ scan starts from pseudo-Voigt (UX8-D); this fixture's peak 1 is a Gaussian.
+    await expect(panel.getByRole("combobox", { name: "peak 1 shape" })).toHaveValue("pseudo_voigt");
+    await panel.getByRole("combobox", { name: "peak 1 shape" }).selectOption("gaussian");
     await panel.getByRole("combobox", { name: "peak 2 shape" }).selectOption("lorentzian");
     await expect(panel.getByRole("combobox", { name: "background" })).toHaveValue("linear");
     await expect(panel.getByRole("textbox", { name: "#1 center start" })).toHaveValue(/^36/);

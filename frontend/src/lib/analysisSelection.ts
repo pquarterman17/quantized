@@ -21,7 +21,7 @@ export type AnalysisSelectionSource =
 export interface AnalysisRangeSelection {
   lo: number;
   hi: number;
-  source: "gadget region" | "integration region" | "selected rows" | "manual";
+  source: "gadget region" | "integration region" | "selected rows" | "manual" | "dragged" | "visible x range";
 }
 
 export type AnalysisRoiSelection =
