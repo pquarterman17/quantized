@@ -18,7 +18,9 @@ export function originKey(key: string): void {
     // Library rows answer the event; the one whose dataset id matches claims it (once),
     // so a dataset listed twice (tree + smart folder) opens a single rename box.
     const s = useApp.getState();
-    const ask = { id: s.selectedIds.length === 1 ? s.selectedIds[0] : s.activeId, hit: false };
+    // A Library row with keyboard focus wins, then the single selected row, then the active one.
+    const focused = document.activeElement?.closest("[data-ds-id]")?.getAttribute("data-ds-id");
+    const ask = { id: focused ?? (s.selectedIds.length === 1 ? s.selectedIds[0] : s.activeId), hit: false };
     window.dispatchEvent(new CustomEvent(RENAME_ACTIVE_EVENT, { detail: ask }));
     if (!ask.hit) s.setStatus("F2: show the dataset in the Library to rename it");
   }

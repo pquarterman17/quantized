@@ -52,6 +52,18 @@ describe("Ctrl+R — rescale, and never a reload", () => {
     expect(fireEvent.keyDown(window, { key: "r", code: "KeyR", metaKey: true, cancelable: true })).toBe(false);
   });
 
+  it("does not rescale the plot from inside a worksheet grid (it may be hidden), yet still blocks the reload", () => {
+    renderHook(() => useGlobalShortcuts());
+    const grid = document.createElement("div");
+    grid.setAttribute("role", "grid");
+    grid.tabIndex = 0;
+    document.body.appendChild(grid);
+    const survived = fireEvent.keyDown(grid, { key: "r", code: "KeyR", ctrlKey: true, cancelable: true });
+    grid.remove();
+    expect(survived).toBe(false);
+    expect(useApp.getState().xLim).toEqual([1, 2]);
+  });
+
   it("is blocked under an open modal, which drops every other app shortcut", () => {
     renderHook(() => useGlobalShortcuts());
     const hold = {};
@@ -134,6 +146,24 @@ describe("F2 — rename the selected (else active) dataset", () => {
     await vi.waitFor(() => expect(l.asks).toEqual([{ id: "focused", hit: false }]));
     expect(useApp.getState().status).toBe("");
     l.off();
+  });
+
+  it("a Library row with keyboard focus wins over the selection and the active dataset", async () => {
+    useApp.setState({ activeId: "plotted", selectedIds: ["selected"] });
+    const row = document.createElement("div");
+    row.setAttribute("data-ds-id", "roving");
+    row.tabIndex = 0;
+    const inner = document.createElement("button");
+    row.appendChild(inner);
+    document.body.appendChild(row);
+    inner.focus();
+    const l = listen(true);
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(inner, { key: "F2" });
+    await vi.waitFor(() => expect(l.asks).toHaveLength(1));
+    row.remove();
+    l.off();
+    expect(l.asks[0].id).toBe("roving");
   });
 
   it("falls back to the active dataset when several or none are selected", async () => {

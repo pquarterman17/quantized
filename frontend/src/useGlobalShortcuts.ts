@@ -211,7 +211,7 @@ export function useGlobalShortcuts(): void {
         // reserved by some browsers (listed in the shortcut sheet). Ctrl+Q lives in
         // the worksheet.
         case "r":
-          if (!e.shiftKey && !isEditingTarget(e.target)) rescale(s);
+          if (!e.shiftKey && !isEditingTarget(e.target) && !(e.target as Element).closest?.("[role=grid]")) rescale(s); // not from a worksheet grid (the plot may be hidden)
           break;
         case "n":
         case "j":

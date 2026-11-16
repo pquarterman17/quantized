@@ -92,10 +92,16 @@ export interface WorkspaceHydrationSlice {
   // state) — the File ▸ Remove all command. Moved here from useApp.ts
   // (2026-09-25, P2.5) because it IS loadWorkspace with an empty workspace.
   clearAll: () => void;
+  /** Identity of the current document: a fresh value on every loadWorkspace (Open, restore, Remove
+   *  all), restored by undo/redo. The browser save handle is bound to it (lib/browserFileHandle.ts). */
+  docEpoch: number;
 }
+
+let epochSeq = 0; // unique across undo, so a restored old epoch can never collide with a new one
 
 export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): WorkspaceHydrationSlice {
   return {
+    docEpoch: 0,
     // Replace the whole library with a restored workspace (from a .dwk file).
     // Resets every per-dataset view (channels, styles, axis limits) and drops the
     // overlays/markers tied to the old datasets — same hygiene as setActive.
@@ -160,6 +166,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           ? hydrateView(plotWindows.find((w) => w.id === focusedWindowId)!.view)
           : null;
         return {
+          docEpoch: ++epochSeq,
           datasets,
           folders: migrated.folders,
           // MUST be explicit — `set()` merges a PARTIAL state, so omitting this

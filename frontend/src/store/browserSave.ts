@@ -71,7 +71,6 @@ let busy = false;
 export async function quickSave(
   serialize: () => Promise<string | null>,
   saveAs: () => Promise<void>,
-  projectName: () => string | null,
   io: Report,
 ): Promise<void> {
   if (busy) return;
@@ -87,11 +86,9 @@ export async function quickSave(
     if (content === null) return;
     const r = await saveInPlace(content);
     if (r.kind !== "stale") return void report(r, io);
-    toast(`${r.reason} — choose where to save`, "danger");
-    if (!(await browserSaveAs(content, projectName(), io))) {
-      browserDownload(content, projectName());
-      say(io, `saved a copy as ${defaultSaveName(projectName())} in your downloads`, "ok");
-    }
+    // The file or the workspace changed while it was serializing: write nothing (the
+    // content is from the old state) and let the next press start clean.
+    say(io, `${r.reason} while saving; nothing was written. Press Ctrl+S again`, "danger");
   } finally {
     busy = false;
   }

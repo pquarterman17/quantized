@@ -339,7 +339,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // otherwise the download, named after the opened/saved file.
   const browser = await import("./browserSave");
   const name = get().currentProject?.name ?? null;
-  if (await browser.browserSaveAs(content, name, browserReport(get))) return;
+  if (!hasDesktopShell() && (await browser.browserSaveAs(content, name, browserReport(get)))) return; // desktop (a failed native write): plain download, never the browser picker
   browser.browserDownload(content, name);
   const msg = savedMsg(all.length);
   get().setStatus(msg);
@@ -372,7 +372,7 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     // Browser tab: single-flight, overwrite the Save As file in place when it is still
     // ours (store/browserSave.ts fails closed and re-prompts); no handle yet = Save As.
     const browser = await import("./browserSave");
-    return browser.quickSave(() => serializeCurrentWorkspace(get), () => runSaveWorkspaceToFile(get), () => get().currentProject?.name ?? null, browserReport(get));
+    return browser.quickSave(() => serializeCurrentWorkspace(get), () => runSaveWorkspaceToFile(get), browserReport(get));
   }
   if (project === null) return runSaveWorkspaceToFile(get);
   // PR I2 (L0.47): quick-save is the ONE write that lands on a KNOWN path

@@ -22,6 +22,10 @@ class FakeFile {
   getFileThrows = false;
   /** getFile starts throwing once a write has closed (the stamp read-back fails). */
   getFileThrowsAfterWrite = false;
+  /** Park close() until releaseClose() (an in-flight write). */
+  holdClose = false;
+  closeWaiters: (() => void)[] = [];
+  releaseClose = () => this.closeWaiters.splice(0).forEach((f) => f());
   /** Edit the file behind the app's back. */
   externalEdit(text: string): void {
     this.content = text;
@@ -41,10 +45,16 @@ class FakeFile {
           return Promise.resolve();
         },
         close: () => {
-          this.content = this.pending;
-          this.mtime += 1;
-          this.writes += 1;
-          return Promise.resolve();
+          const finish = () => {
+            this.content = this.pending;
+            this.mtime += 1;
+            this.writes += 1;
+          };
+          if (!this.holdClose) {
+            finish();
+            return Promise.resolve();
+          }
+          return new Promise<void>((r) => this.closeWaiters.push(() => (finish(), r())));
         },
       });
     },
@@ -64,6 +74,26 @@ function installPicker(...files: [FakeFile, string][]): Picker {
 }
 
 const gestureError = () => Object.assign(new Error("User activation is required to show a file picker"), { name: "SecurityError" });
+const names = () => useApp.getState().datasets.map((d) => d.name);
+const dataset = (name: string) => ({ id: name, name, data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } });
+/** A minimal replacement workspace, the shape clearAll hands loadWorkspace. */
+const wsWith = (name: string) => ({
+  datasets: [dataset(name)],
+  folders: [],
+  activeId: name,
+  selectedIds: [],
+  expandedFolders: [],
+  originFigures: [],
+  originFidelity: [],
+  reports: [],
+  figureDocs: [],
+  editableFigures: [],
+});
+/** File > Open: an undoable replace of the whole workspace. */
+const openWorkspace = (name: string) => {
+  useApp.getState().recordHistory("open workspace");
+  useApp.getState().loadWorkspace(wsWith(name));
+};
 const rename = (name: string) => useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], name }] });
 const toastText = () => useToasts.getState().toasts.map((t) => t.msg).join(" | ");
 
@@ -288,12 +318,117 @@ describe("the kept file belongs to one document", () => {
     await useApp.getState().saveWorkspace();
     const projectA = one.content;
     useApp.getState().clearAll();
-    expect(hasSaveHandle()).toBe(false);
-    useApp.getState().addDataset({ id: "b", name: "unrelated.dat", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } });
+    useApp.getState().addDataset(dataset("unrelated.dat"));
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledTimes(2);
     expect(one.content).toBe(projectA);
     expect(two.content).toContain("unrelated.dat");
+  });
+
+  it("Remove all in a session with no datasets still starts a new document", async () => {
+    const one = new FakeFile();
+    const two = new FakeFile();
+    const picker = installPicker([one, "P.dwk"], [two, "Q.dwk"]);
+    await useApp.getState().saveWorkspace();
+    const projectP = one.content;
+    useApp.setState({ datasets: [], activeId: null }); // the datasets were deleted one by one
+    useApp.getState().clearAll(); // [] -> []: no emptiness transition to notice
+    useApp.getState().addDataset(dataset("csv.dat"));
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledTimes(2);
+    expect(one.content).toBe(projectP);
+  });
+
+  it("Remove all then Undo gives the document back: Ctrl+S saves in place, no re-prompt, name kept", async () => {
+    const one = new FakeFile();
+    const picker = installPicker([one, "A.dwk"]);
+    await useApp.getState().saveWorkspace();
+    useApp.getState().clearAll();
+    useApp.getState().undo();
+    expect(names()).toEqual(["first.dat"]);
+    rename("edited.dat");
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledOnce();
+    expect(one.content).toContain("edited.dat");
+  });
+
+  it("undoing an Open must not let Ctrl+S write the old workspace over the opened file", async () => {
+    const opened = new FakeFile();
+    const picker = installPicker([opened, "B.dwk"], [new FakeFile(), "other.dwk"]);
+    openWorkspace("b.dat");
+    await useApp.getState().saveWorkspace(); // Save As B.dwk: contains b.dat
+    expect(opened.content).toContain("b.dat");
+    useApp.getState().undo(); // back to first.dat
+    expect(names()).toEqual(["first.dat"]);
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledTimes(2);
+    expect(opened.content).toContain("b.dat");
+    expect(opened.content).not.toContain("first.dat");
+  });
+
+  it("redoing an Open must not let Ctrl+S write the opened workspace into the other document's file", async () => {
+    const t1 = new FakeFile();
+    const t2 = new FakeFile();
+    const picker = installPicker([t1, "T1.dwk"], [t2, "T2.dwk"], [new FakeFile(), "T3.dwk"]);
+    await useApp.getState().saveWorkspace(); // X -> T1
+    openWorkspace("b.dat");
+    useApp.getState().undo(); // X again
+    await useApp.getState().saveWorkspace(); // epoch differs from T1's? no: same document X -> in place T1
+    expect(picker).toHaveBeenCalledOnce();
+    await useApp.getState().saveWorkspaceToFile(); // Save As T2 under document X
+    useApp.getState().redo(); // B.dat is back
+    expect(names()).toEqual(["b.dat"]);
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledTimes(3);
+    expect(t2.content).not.toContain("b.dat");
+  });
+
+  it("a workspace loaded directly (startup autosave restore, recovery) is a new document", async () => {
+    const one = new FakeFile();
+    const picker = installPicker([one, "late.dwk"], [new FakeFile(), "next.dwk"]);
+    await useApp.getState().saveWorkspace();
+    const saved = one.content;
+    useApp.getState().loadWorkspace(wsWith("restored.dat")); // no history, no commitOpened
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledTimes(2);
+    expect(one.content).toBe(saved);
+  });
+
+  it("a save that finishes after the handle was replaced does not resurrect the old handle", async () => {
+    const slow = new FakeFile();
+    const next = new FakeFile();
+    const picker = installPicker([slow, "slow.dwk"], [next, "next.dwk"]);
+    await useApp.getState().saveWorkspace();
+    slow.holdClose = true;
+    const inFlight = useApp.getState().saveWorkspace(); // in-place write parked at close()
+    await vi.waitFor(() => expect(slow.closeWaiters.length).toBe(1));
+    resetBrowserFile(); // an Open/undo dropped the handle meanwhile
+    slow.releaseClose();
+    await inFlight;
+    expect(hasSaveHandle()).toBe(false);
+    await useApp.getState().saveWorkspace();
+    expect(picker).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a failed native write on desktop", () => {
+  it("never reaches the browser picker or marks the project clean", async () => {
+    const picker = installPicker([new FakeFile(), "no.dwk"]);
+    (globalThis as { pywebview?: unknown }).pywebview = {
+      api: {
+        save_file_dialog: () => Promise.resolve({ path: "/p/x.dwk" }),
+        write_project_file: () => Promise.resolve({ ok: false, error: "disk full" }),
+      },
+    };
+    useApp.setState({ projectDirty: true });
+    try {
+      await useApp.getState().saveWorkspaceToFile();
+    } finally {
+      delete (globalThis as { pywebview?: unknown }).pywebview;
+    }
+    expect(picker).not.toHaveBeenCalled(); // the pre-lane-O behaviour: a plain download
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().projectDirty).toBe(true);
   });
 });
 

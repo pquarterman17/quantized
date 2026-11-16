@@ -19,8 +19,8 @@
 // `createWritable` stages into a swap file and only replaces on `close()`, so
 // a failed write leaves the previous good file untouched.
 //
-// The handle belongs to ONE document: an Open / restore (`commitOpened`) and
-// "Remove all" (the store subscription below) drop it.
+// The handle belongs to ONE document: `checkHandle` refuses it whenever the store's
+// `docEpoch` differs from the one it was saved under (Open, restore, Remove all, undo).
 
 import { useApp } from "../store/useApp";
 
@@ -51,7 +51,14 @@ export type BrowserSave =
   | { kind: "stale"; reason: string }
   | { kind: "failed"; reason: string };
 
-let held: { handle: FsHandle; stamp: string } | null = null;
+/** `epoch` = the document (`useApp.docEpoch`) the handle was saved under. It changes on every
+ *  Open / restore / Remove all and is restored by undo/redo, so the handle follows the DOCUMENT. */
+interface Held {
+  handle: FsHandle;
+  stamp: string;
+  epoch: number;
+}
+let held: Held | null = null;
 let openedName: string | null = null;
 
 const picker = (): PickerWindow["showSaveFilePicker"] => (window as unknown as PickerWindow).showSaveFilePicker;
@@ -86,13 +93,6 @@ export function resetBrowserFile(): void {
   openedName = null;
 }
 
-// "Remove all" (or removing the last dataset) starts a new document: Ctrl+S must
-// never overwrite the previous project's file with it. This module only loads
-// once a handle can exist, so the subscription is live whenever it matters.
-useApp.subscribe((s, p) => {
-  if (!s.datasets.length && p.datasets.length) resetBrowserFile();
-});
-
 /** Write and close (the swap-file replace happens at close, so a throw here left
  *  the old file intact), then read back the stamp; null = could not verify. */
 async function writeThrough(handle: FsHandle, content: string): Promise<string | null> {
@@ -107,11 +107,15 @@ async function writeThrough(handle: FsHandle, content: string): Promise<string |
   return handle.getFile().then(stampOf, () => null);
 }
 
-function keep(handle: FsHandle, stamp: string | null): BrowserSave {
-  held = stamp === null ? null : { handle, stamp };
-  if (stamp !== null) return { kind: "saved", name: handle.name };
-  openedName = handle.name;
-  return { kind: "saved", name: handle.name, unverified: true };
+/** Arm (or, unverifiable, drop) the handle after a write. `was` is the `held` this save
+ *  started from: if it changed meanwhile (an Open, a Save As, an undo dropped or replaced
+ *  it), the late write must not resurrect the old handle under the new document. */
+function keep(handle: FsHandle, stamp: string | null, epoch: number, was: Held | null): BrowserSave {
+  if (held === was) {
+    held = stamp === null ? null : { handle, stamp, epoch };
+    if (stamp === null) openedName = handle.name;
+  }
+  return stamp === null ? { kind: "saved", name: handle.name, unverified: true } : { kind: "saved", name: handle.name };
 }
 
 /** Save As: ask the user for a file, write it, keep the handle. */
@@ -119,6 +123,8 @@ export async function saveAsPicked(content: string, projectName?: string | null)
   const pick = picker();
   if (!pick) return { kind: "failed", reason: "this browser cannot pick a save location" };
   let handle: FsHandle;
+  const was = held;
+  const epoch = useApp.getState().docEpoch;
   try {
     handle = await pick({
       suggestedName: defaultSaveName(projectName),
@@ -128,9 +134,9 @@ export async function saveAsPicked(content: string, projectName?: string | null)
     return errName(e) === "AbortError" ? { kind: "cancelled" } : { kind: "failed", reason: errMsg(e) };
   }
   try {
-    return keep(handle, await writeThrough(handle, content));
+    return keep(handle, await writeThrough(handle, content), epoch, was);
   } catch (e) {
-    held = null;
+    if (held === was) held = null;
     return { kind: "failed", reason: errMsg(e) };
   }
 }
@@ -142,11 +148,14 @@ export async function checkHandle(): Promise<Extract<BrowserSave, { kind: "stale
   const cur = held;
   if (!cur) return { kind: "stale", reason: "no file chosen yet" };
   const { handle } = cur;
-  const drop = (reason: string): { kind: "stale"; reason: string } => {
+  const drop = (reason: string, keepName = true): { kind: "stale"; reason: string } => {
     held = null;
-    openedName = handle.name; // the next download / suggestion keeps the user's name
+    if (keepName) openedName = handle.name; // the next download / suggestion keeps the user's name
     return { kind: "stale", reason };
   };
+  // A different document (Open, restore, Remove all, or an undo across one): never write it
+  // into this file. Undoing back to the saved document makes the epochs match again.
+  if (cur.epoch !== useApp.getState().docEpoch) return drop(`the workspace changed since ${handle.name} was chosen`, false);
   try {
     let perm = (await handle.queryPermission?.({ mode: "readwrite" })) ?? "granted";
     if (perm !== "granted") perm = (await handle.requestPermission?.({ mode: "readwrite" })) ?? "denied";
@@ -168,9 +177,10 @@ export async function checkHandle(): Promise<Extract<BrowserSave, { kind: "stale
 export async function saveInPlace(content: string): Promise<BrowserSave> {
   const bad = await checkHandle();
   if (bad) return bad;
-  const handle = (held as NonNullable<typeof held>).handle;
+  const was = held as Held;
+  const { handle, epoch } = was;
   try {
-    return keep(handle, await writeThrough(handle, content));
+    return keep(handle, await writeThrough(handle, content), epoch, was);
   } catch (e) {
     return { kind: "failed", reason: errMsg(e) };
   }

@@ -242,7 +242,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const k = e.key;
     // Keys that move or edit act from the pre-select-all active cell and
     // collapse the selection to it; clear / copy / cut / fill keep the range.
-    const fromAll = all && all.range === range && !(accel && ["a", "c", "x", "v", "d"].includes(k.toLowerCase())) && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
+    const fromAll = all && all.range === range && !(accel && ["a", "c", "x", "v", "d", "q"].includes(k.toLowerCase())) && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
     const cur = fromAll ? { anchor: clampCell(all.active.focus, b), focus: clampCell(all.active.focus, b) } : start;
     if (fromAll) setRange(cur);
     // A jump to the bottom lands on the last DATA row, as Ctrl+End does in a
