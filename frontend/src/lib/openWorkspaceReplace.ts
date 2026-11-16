@@ -11,7 +11,7 @@ import { plural } from "./plural";
 import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock } from "../store/projectLock";
 import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
-import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
+import { closeProjectLock, noteProjectLockRelease, pendingProjectLockRelease, reserveProjectLock } from "../store/projectLockLifecycle";
 import { followProjectHistory } from "../store/projectFollowsHistory";
 import { readOnlyOpenReason } from "../store/projectLockPaths";
 import type { ProjectIdentity } from "../store/project";
@@ -92,11 +92,17 @@ function rollbackLockReservation(prior: PriorLock | null): void {
  *  `reserveLockForSwitch` has already overwritten by the time this runs). */
 function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior: PriorLock | null): void {
   if (!native || !prior) return;
+  const prev = prior.state;
+  // Registered SYNCHRONOUSLY, so an undo / quick re-open of the project just left
+  // waits for this release before re-acquiring it (store/projectLockLifecycle).
+  const earlier = pendingProjectLockRelease();
+  const released =
+    prev.path && prev.path !== native.path && canRelease(prev.record, prev.instanceId)
+      ? prev.provider.release(prev.path, prev.record?.token ?? "").catch(() => false)
+      : Promise.resolve();
+  noteProjectLockRelease(Promise.all([earlier, released]));
   void (async () => {
-    const prev = prior.state;
-    if (prev.path && prev.path !== native.path && canRelease(prev.record, prev.instanceId)) {
-      await prev.provider.release(prev.path, prev.record?.token ?? "").catch(() => false);
-    }
+    await Promise.all([earlier, released]); // incl. a still-pending release of the path being (re)opened
     if (prior.op && !isCurrentProjectLockOperation(prior.op)) return;
     const result = await useProjectLock.getState().openProject(native.path);
     if (!result.readOnly) return;

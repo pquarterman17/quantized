@@ -722,6 +722,17 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
     expect(write).not.toHaveBeenCalled();
   });
 
+  it("says the lock was lost (not that another instance holds it) when the bound lock is merely unlocked", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    useProjectLock.setState({ status: "unlocked", path: "/proj/workspace.dwk", openedAsCopy: false });
+    await useApp.getState().saveWorkspace();
+    expect(write).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/lock was lost/);
+    expect(useApp.getState().status).not.toMatch(/another instance/);
+  });
+
   it("an explicit Open as Copy session (writable, lock-less by design) is not refused", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });

@@ -9,6 +9,7 @@ import { runRemoveAll } from "../commands/fileCommandsLazy";
 import type { Dataset } from "../lib/types";
 import { followProjectHistory } from "./projectFollowsHistory";
 import { useProjectLock } from "./projectLock";
+import { noteProjectLockRelease } from "./projectLockLifecycle";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -129,6 +130,32 @@ describe("Undo of an open follows the project too (pre-existing hole)", () => {
     expect(ids()).toEqual(["a"]);
     expect(proj()).toBeNull();
     expect(useProjectLock.getState().path).toBeNull();
+  });
+});
+
+describe("a fast undo of an open waits for the open flow's background release of the project it left", () => {
+  it("re-acquires only after the (delayed) release lands, so the late release cannot delete the new lock", async () => {
+    const provider = useProjectLock.getState().provider;
+    const heldToken = useProjectLock.getState().record?.token ?? "";
+    const realRelease = provider.release.bind(provider);
+    let open!: () => void;
+    const gate = new Promise<void>((r) => { open = r; });
+    vi.spyOn(provider, "release").mockImplementation(async (path, token) => { await gate; return realRelease(path, token); });
+    openProject(B, "b");
+    // what the open flow does in the background: release A's lock (slowly) while B's is reserved
+    noteProjectLockRelease(provider.release(A.path, heldToken));
+    useProjectLock.setState({ path: B.path, status: "held-by-me", record: null });
+
+    const acquire = vi.spyOn(provider, "tryAcquire");
+    useApp.getState().undo(); // Ctrl+Z straight after the open
+    expect(proj()).toEqual(A);
+    await new Promise((r) => setTimeout(r, 30)); // let any (wrongly) un-gated acquisition run
+    expect(acquire).not.toHaveBeenCalled(); // nothing acquired while A's old record is still on disk
+
+    open();
+    await waitFor(() => expect(useProjectLock.getState().status).toBe("held-by-me"));
+    const rec = await provider.read(A.path);
+    expect(rec?.token).toBe(useProjectLock.getState().record?.token); // the NEW record survived the late release
   });
 });
 

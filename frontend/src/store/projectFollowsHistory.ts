@@ -31,7 +31,7 @@
 import type { ProjectIdentity } from "./project";
 import { useProjectLock } from "./projectLock";
 import { isCurrentProjectLockOperation } from "./projectLockEpoch";
-import { closeProjectLockAwaitable, reserveProjectLock } from "./projectLockLifecycle";
+import { closeProjectLockAwaitable, pendingProjectLockRelease, reserveProjectLock } from "./projectLockLifecycle";
 import { BROWSER_AUTOSAVE_LOCK_PATH, readOnlyOpenReason } from "./projectLockPaths";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -46,9 +46,6 @@ interface Swap {
 
 const swaps = new Map<number, Swap>();
 let watching = false;
-/** The most recent release of a project lock, awaited before any re-acquire. */
-let pendingRelease: Promise<unknown> = Promise.resolve();
-
 /** Install the subscription (idempotent). Call before the first swap can happen. */
 export function followProjectHistory(): void {
   if (watching) return;
@@ -84,11 +81,6 @@ export function followProjectHistory(): void {
   });
 }
 
-/** Remember a release a caller started itself (Remove all closes the lock). */
-export function noteProjectLockRelease(released: Promise<unknown>): void {
-  pendingRelease = released;
-}
-
 /** Why an Undo of Remove all must be refused right now (BEFORE it restores
  *  anything), or null: another project is open (or opening) — a state no
  *  ordered undo chain reaches, so it means a project was opened without an
@@ -103,8 +95,7 @@ export function removeAllUndoBlock(): string | null {
 function switchProject(target: ProjectIdentity | null): void {
   const s = useApp.getState();
   if ((s.currentProject?.path ?? null) === (target?.path ?? null)) return;
-  const released = Promise.all([pendingRelease, closeProjectLockAwaitable()]);
-  pendingRelease = released;
+  const released = Promise.all([pendingProjectLockRelease(), closeProjectLockAwaitable()]);
   s.setCurrentProject(target);
   if (!target) return;
   const reservation = reserveProjectLock(target.path);

@@ -2,6 +2,17 @@ import { useProjectLock } from "./projectLock";
 import { beginProjectLockOperation, DETACHED_LOCK } from "./projectLockEpoch";
 import { BROWSER_AUTOSAVE_LOCK_PATH } from "./projectLockPaths";
 
+/** The latest release of a project lock still in flight. Every re-acquire of
+ *  a path (Undo of an open / Remove all, a quick File ▸ Open of the project just
+ *  left) awaits it: acquiring while a release of the SAME path is pending is
+ *  refused by the stale lock file, then the late release deletes the record we
+ *  just took — the heartbeat then finds the project unlocked. */
+let lastRelease: Promise<unknown> = Promise.resolve();
+export const pendingProjectLockRelease = (): Promise<unknown> => lastRelease;
+export function noteProjectLockRelease(released: Promise<unknown>): void {
+  lastRelease = released;
+}
+
 /** Reserve a path as read-only while its asynchronous acquisition begins. */
 export function reserveProjectLock(path: string): number {
   const reservation = beginProjectLockOperation();
@@ -31,5 +42,6 @@ export function closeProjectLockAwaitable(): Promise<unknown> {
   const released =
     record !== null && record.instanceId === instanceId ? provider.release(path, record.token ?? "").catch(() => false) : Promise.resolve();
   useProjectLock.setState({ ...DETACHED_LOCK, status: "unlocked" });
+  lastRelease = Promise.all([lastRelease, released]);
   return released;
 }

@@ -32,7 +32,7 @@ import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
 import { canRelink, reimportOffer } from "./pendingEdit";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
-import { unboundLockRefusal } from "./saveLockGate";
+import { readOnlySaveReason, unboundLockRefusal } from "./saveLockGate";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
@@ -398,10 +398,7 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     return;
   }
   if (cachedLock.path === project.path && !cachedLock.canWriteNow()) {
-    const msg =
-      cachedLock.status === "held-by-other-stale"
-        ? `read-only — another (unresponsive) instance has this project open; use Take Over Editing`
-        : `read-only — another instance has this project open for editing`;
+    const msg = readOnlySaveReason(cachedLock.status);
     get().setStatus(msg);
     toast(msg, "danger");
     return;

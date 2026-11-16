@@ -15,3 +15,12 @@ export function unboundLockRefusal(
     ? null
     : `save refused — ${project.name} is not locked for editing here (it may have just been switched); use Save As to keep your work`;
 }
+
+/** Why a quick save is read-only. `unlocked` with the path still bound means OUR
+ *  lock was released or lost (not that someone else holds the project). */
+export function readOnlySaveReason(status: string): string {
+  if (status === "held-by-other-stale") return "read-only — another (unresponsive) instance has this project open; use Take Over Editing";
+  return status === "unlocked"
+    ? "read-only — this project's lock was lost; reopen the project, or use Save As to keep your work"
+    : "read-only — another instance has this project open for editing";
+}
