@@ -5,8 +5,10 @@
 // Neither the data (each column keeps its unit) nor the general
 // "label (unit)" rule changes: this only fills `PlotSeriesSpec.legend`, which
 // the on-screen legends (PlotLegend, BackgroundLegend) read first. A legend
-// rename (`view.seriesLabels`) still wins over it. The publication export
-// does NOT read it -- an exported figure keeps "MH_010K (emu)".
+// rename (`view.seriesLabels`) still wins over it. The flat publication
+// export honours the same flag server-side (the wire dataset carries the
+// metadata): `routes/export_figures_labels.legend_unit_on_axis`, with the
+// cases shared in tests/fixtures/wire/legend_unit_on_axis.json.
 import type { PlotPayload } from "./plotdata";
 import type { DataStruct } from "./types";
 

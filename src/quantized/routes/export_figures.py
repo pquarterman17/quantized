@@ -72,6 +72,7 @@ from quantized.routes.export_figures_facets import (
 from quantized.routes.export_figures_labels import (
     apply_offset_disclosure_to_renames,
     derived_axis_label,
+    legend_unit_on_axis,
     series_legends,
     series_names,
     solo_axis_label,
@@ -361,13 +362,20 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     # BUG-014 rename is verbatim (see series_legends/series_names' docs); the
     # offset disclosure (finding 6) is applied separately for that reason.
     legends = series_legends(req.series_styles, len(plot_series))
+    offsets = req.log_offsets
+    titled = apply_offset_disclosure_to_renames(
+        series_names(plot_series, legends), legends, offsets
+    )
+    # UX8-C: a shared-unit graph's LEGEND omits the unit, as on screen; the
+    # auto axis titles keep reading the "label (unit)" names, as on screen.
+    on_axis = legend_unit_on_axis(ds.metadata)
     names = apply_offset_disclosure_to_renames(
-        series_names(plot_series, legends), legends, req.log_offsets
+        series_names(plot_series, legends, unit_on_axis=on_axis), legends, offsets
     )
     x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
     overlays = req.analysis_overlays  # never in an auto title (lane K)
-    y_label = solo_axis_label(req.y_label, names, plot_series, 0, overlays)
-    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1, overlays)
+    y_label = solo_axis_label(req.y_label, titled, plot_series, 0, overlays)
+    y2_label = solo_axis_label(req.y2_label, titled, plot_series, 1, overlays)
     series: list[tuple[str, Any]] = apply_waterfall_offsets(
         [(name, s.values) for name, s in zip(names, plot_series, strict=True)],
         req.waterfall_offsets,
