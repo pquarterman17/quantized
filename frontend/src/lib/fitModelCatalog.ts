@@ -52,11 +52,12 @@ const GROUP_ORDER = [
 
 /** What the picker shows for a registry name, when it is not the name itself. */
 const DISPLAY: Record<string, string> = {
-  // The Origin name leads; the older Quantized name it replaces in the list
-  // is said once, after it (see ALIAS_OF).
-  ExpDec1: "ExpDec1 (= Exponential Decay)",
-  ExpGro1: "ExpGro1 (= Exponential Growth)",
-  ExpDec2: "ExpDec2 (= Bi-exponential Decay)",
+  // Same curve as the Origin built-in, but NOT interchangeable: other
+  // parameters in another order (Quick Fit fits "Exponential Decay"), so both
+  // stay listed and the hint names the twin -- searching either name finds both.
+  "Exponential Decay": "Exponential Decay (ExpDec1's curve; A, τ, C)",
+  "Exponential Growth": "Exponential Growth (ExpGro1's curve; A, τ, C)",
+  "Bi-exponential Decay": "Bi-exponential Decay (ExpDec2's curve; A₁, τ₁, A₂, τ₂, C)",
   ExpDecay1: "ExpDecay1 (ExpDec1 with an x0 offset)",
   ExpDecay2: "ExpDecay2 (ExpDec2 with an x0 offset)",
   ExpDecay3: "ExpDecay3 (ExpDec3 with an x0 offset)",
@@ -72,16 +73,6 @@ const DISPLAY: Record<string, string> = {
   Allometric: "Allometric (= Allometric1 for x > 0)",
   Poly5: "Poly 5",
   Poly: "Poly 9",
-};
-
-/** Registry models that draw EXACTLY the curve of an Origin built-in, with the
- *  same parameters in the same roles: the picker lists the Origin name once
- *  ("ExpDec1 (= Exponential Decay)") and hides this one, unless it is the
- *  model currently chosen (a saved fit may name it). Search still finds it. */
-export const ALIAS_OF: Readonly<Record<string, string>> = {
-  "Exponential Decay": "ExpDec1",
-  "Exponential Growth": "ExpGro1",
-  "Bi-exponential Decay": "ExpDec2",
 };
 
 export interface ModelOption {
@@ -102,13 +93,9 @@ export function fitModelLabel(name: string): string {
 /** `models` under their headings, in Origin's order; registry order within a
  *  group. A category this file does not know keeps its own name, after the
  *  known ones — a new backend model is never dropped from the picker. */
-export function groupFitModels(models: readonly FitModel[], keep?: string): ModelGroup[] {
+export function groupFitModels(models: readonly FitModel[]): ModelGroup[] {
   const groups = new Map<string, ModelOption[]>();
-  const present = new Set(models.map((m) => m.name));
   for (const m of models) {
-    // An alias is hidden when its Origin twin is listed, unless it is the current choice.
-    const twin = ALIAS_OF[m.name];
-    if (twin !== undefined && present.has(twin) && m.name !== keep) continue;
     const group = GROUP_OF[m.category] ?? m.category ?? "Other";
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group)!.push({ value: m.name, label: fitModelLabel(m.name) });

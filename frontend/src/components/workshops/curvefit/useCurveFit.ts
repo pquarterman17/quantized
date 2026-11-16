@@ -34,6 +34,7 @@ import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { analysisSelectionData } from "../../../lib/analysisSelection";
 
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
+import { recordRecentModel } from "../../../lib/fitModelPicker";
 import { exportCornerPlot } from "./curveFitCornerPlot";
 import { parseFitStarts } from "./fitStarts";
 import { weightingNow, weightingOf } from "./fitWeighting";
@@ -406,6 +407,7 @@ export function useCurveFit(): CurveFitState {
           params: fitStepParams(modelName, bound.spec),
         });
         useApp.getState().setFitSpec(ds.id, bound.spec, bound.rowIdentities);
+        recordRecentModel(modelName); // the picker's Recent group: models a fit RAN with (lib/fitModelPicker)
         publishFitAnalysisResult(ds.id);
         // Say so: the status line otherwise kept its previous message (after
         // a template, "press Fit to run it" — with the fit already done).

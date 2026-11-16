@@ -21,16 +21,19 @@ describe("fit model catalog", () => {
       m("Brand New", "Novel"),
     ]);
     expect(groups.map((g) => g.group)).toEqual(["Polynomial", "Exponential", "Peak Functions", "Magnetism", "Novel"]);
-    // The alias is listed once, under the Origin name.
-    expect(groups[1].options).toEqual([{ value: "ExpDec1", label: "ExpDec1 (= Exponential Decay)" }]);
+    // Both twins stay listed (different parameters; Quick Fit and e2e pick "Exponential Decay").
+    expect(groups[1].options).toEqual([
+      { value: "ExpDec1", label: "ExpDec1" },
+      { value: "Exponential Decay", label: "Exponential Decay (ExpDec1's curve; A, τ, C)" },
+    ]);
     // Values stay the registry names; only the labels explain.
     expect(groups[0].options).toEqual([{ value: "Poly5", label: "Poly 5" }, { value: "Linear", label: "Linear" }]);
   });
 
-  it("keeps an alias that is the current choice, and one whose twin is not listed", () => {
-    const list = [m("ExpDec1", "Exponential"), m("Exponential Decay", "Decay")];
-    expect(groupFitModels(list, "Exponential Decay")[0]!.options.map((o) => o.value)).toEqual(["ExpDec1", "Exponential Decay"]);
-    expect(groupFitModels([m("Exponential Decay", "Decay")])[0]!.options.map((o) => o.value)).toEqual(["Exponential Decay"]);
+  it("never hides a model behind its same-curve twin", () => {
+    const list = [m("ExpDec1", "Exponential"), m("Exponential Decay", "Decay"), m("ExpGro1", "Growth"), m("Exponential Growth", "Growth")];
+    const values = groupFitModels(list).flatMap((g) => g.options.map((o) => o.value));
+    expect(values.sort()).toEqual(["ExpDec1", "ExpGro1", "Exponential Decay", "Exponential Growth"]);
   });
 
   it("names how each near-duplicate differs", () => {

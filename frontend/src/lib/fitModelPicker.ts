@@ -1,12 +1,15 @@
 // The Curve Fit model picker's search and recents, pure apart from the
-// (try/catch-guarded) localStorage list of recently used models.
+// (try/catch-guarded) localStorage list of recently fitted models.
 //
 //   * search: every whitespace-separated word must appear in an option's label,
 //     registry name or group heading (case-insensitive), so "exp" narrows to
-//     the exponential family and "exponential decay" finds "ExpDec1 (= Exponential
-//     Decay)" although that alias is not listed under its own name;
-//   * recents: the last few models the user picked, repeated in a "Recent"
-//     group at the top (never custom equations, which have their own heading).
+//     the exponential family, and "expdec1" finds ExpDec1 AND its same-curve
+//     twin "Exponential Decay", whose label hint names it;
+//   * recents: the last few models a fit was RUN with (recordRecentModel, from
+//     the fit itself -- never a change event, so arrowing through the closed
+//     select cannot reorder the list under the keyboard), shown in a "Recent"
+//     group at the top INSTEAD of under their own heading, so every option
+//     value is unique. Never custom equations, which have their own heading.
 
 import type { ModelGroup, ModelOption } from "./fitModelCatalog";
 
@@ -38,31 +41,56 @@ export function filterModels(
   };
 }
 
-/** The recently picked registry models, newest first (empty without storage). */
+/** This session's list when storage is unavailable (private window, blocked). */
+let memory: string[] | null = null;
+const listeners = new Set<() => void>();
+
+/** The recently fitted registry models, newest first. */
 export function readRecents(): string[] {
   try {
+    if (memory) return memory; // storage refused a write this session
     const v: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, RECENT_MAX) : [];
   } catch {
-    return [];
+    return memory ?? [];
   }
 }
 
-/** Record a pick (custom equations are not recorded); returns the new list. */
-export function pushRecent(value: string, current: readonly string[] = readRecents()): string[] {
+/** The new recents list with `value` first (custom equations are not recorded). Pure. */
+export function pushRecent(value: string, current: readonly string[]): string[] {
   if (value === "" || value.startsWith("custom:")) return [...current];
-  const next = [value, ...current.filter((v) => v !== value)].slice(0, RECENT_MAX);
+  return [value, ...current.filter((v) => v !== value)].slice(0, RECENT_MAX);
+}
+
+/** Record that a fit was run with `value` and tell any mounted picker. */
+export function recordRecentModel(value: string): void {
+  const current = readRecents();
+  const next = pushRecent(value, current);
+  if (next.join("\u0000") === current.join("\u0000")) return;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
-    /* private window / blocked storage: the list lives for this session only */
+    memory = next; // blocked storage: the list lives for this session only
   }
-  return next;
+  listeners.forEach((l) => l());
 }
 
-/** `groups` with a leading "Recent" group of the recents that are still listed. */
+/** Subscribe to recordRecentModel (for useSyncExternalStore). */
+export function subscribeRecents(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** `groups` with a leading "Recent" group of the recents that are still listed,
+ *  each MOVED there from its own heading (a heading left empty is dropped), so
+ *  no value appears twice in the select. */
 export function withRecents(groups: readonly ModelGroup[], recents: readonly string[]): ModelGroup[] {
   const byValue = new Map(groups.flatMap((g) => g.options).map((o) => [o.value, o] as const));
   const options = recents.flatMap((v) => (byValue.has(v) ? [byValue.get(v)!] : []));
-  return options.length > 0 ? [{ group: RECENT_GROUP, options }, ...groups] : [...groups];
+  if (options.length === 0) return [...groups];
+  const moved = new Set(options.map((o) => o.value));
+  const rest = groups
+    .map((g) => ({ group: g.group, options: g.options.filter((o) => !moved.has(o.value)) }))
+    .filter((g) => g.options.length > 0);
+  return [{ group: RECENT_GROUP, options }, ...rest];
 }

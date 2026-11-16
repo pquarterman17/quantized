@@ -40,8 +40,9 @@ describe("CurveFitPanel — the model list is grouped by Origin category (re-aud
     });
     render(<CurveFitPanel />);
     const picker = await screen.findByRole("combobox", { name: "Model" });
-    await screen.findByRole("option", { name: "ExpDec1 (= Exponential Decay)" });
-    expect(screen.queryByRole("option", { name: /^Exponential Decay/ })).toBeNull(); // listed once
+    await screen.findByRole("option", { name: "ExpDec1" });
+    // Both twins listed: same curve, different parameters (e2e and Quick Fit pick this one by value).
+    expect(screen.getByRole("option", { name: "Exponential Decay (ExpDec1's curve; A, τ, C)" })).toHaveValue("Exponential Decay");
     const groups = [...picker.querySelectorAll("optgroup")].map((g) => g.label);
     expect(groups).toEqual(["Polynomial", "Exponential", "Custom equations"]);
     expect((picker as HTMLSelectElement).value).toBe("Linear");

@@ -3,16 +3,21 @@
 // with a search box and a "Recent" group on top (lib/fitModelPicker.ts).
 // The list itself stays a native <select> with <optgroup>s, so the keyboard
 // and screen readers get the grouping for free and the option VALUES are the
-// registry names, unchanged. While a search is typed the select opens as a
-// listbox of the matches: ArrowDown moves from the search box into it, Enter
-// in the box picks the first match, Escape clears the search.
+// registry names, unchanged -- each exactly once (a recent model moves to
+// Recent), and Recent changes only when a fit RUNS, so ArrowDown on the closed
+// select walks straight through it. While a search is typed the select opens as
+// a listbox of the matches: ArrowDown moves from the search box into it and
+// arrowing there selects without leaving the search; Enter, a click or leaving
+// the list commits (clears the search). Enter in the box picks the first match,
+// Escape clears the search.
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { ModelGroup, ModelOption } from "../../../lib/fitModelCatalog";
-import { filterModels, pushRecent, readRecents, withRecents } from "../../../lib/fitModelPicker";
+import { filterModels, readRecents, subscribeRecents, withRecents } from "../../../lib/fitModelPicker";
 
 const MAX_ROWS = 10;
+const recentsKey = () => readRecents().join("\n"); // a primitive: a stable snapshot
 
 export default function ModelSelect({
   groups,
@@ -27,10 +32,12 @@ export default function ModelSelect({
   onChange: (value: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [recents, setRecents] = useState<string[]>(readRecents);
+  const recentsSnap = useSyncExternalStore(subscribeRecents, recentsKey);
+  const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLSelectElement>(null);
   const searching = query.trim() !== "";
   const shown = useMemo(() => {
+    const recents = recentsSnap === "" ? [] : recentsSnap.split("\n");
     const f = filterModels(groups, custom, query, value);
     // The matches proper (the current model is always kept in the list above).
     const hits = filterModels(groups, custom, query, "\u0000");
@@ -39,18 +46,13 @@ export default function ModelSelect({
       custom: f.custom,
       first: hits.groups[0]?.options[0]?.value ?? hits.custom[0]?.value,
     };
-  }, [groups, custom, query, value, recents, searching]);
+  }, [groups, custom, query, value, recentsSnap, searching]);
   const rows = shown.groups.reduce((n, g) => n + g.options.length + 1, 0) + shown.custom.length + 1;
-
-  const pick = (v: string) => {
-    setRecents(pushRecent(v, recents));
-    setQuery("");
-    onChange(v);
-  };
 
   return (
     <>
       <input
+        ref={searchRef}
         type="search"
         className="qz-input"
         aria-label="Search models"
@@ -64,7 +66,10 @@ export default function ModelSelect({
             listRef.current?.focus();
           } else if (e.key === "Enter" && searching) {
             e.preventDefault();
-            if (shown.first !== undefined) pick(shown.first);
+            if (shown.first !== undefined) {
+              setQuery("");
+              onChange(shown.first);
+            }
           } else if (e.key === "Escape" && query !== "") {
             e.preventDefault();
             e.stopPropagation();
@@ -78,9 +83,17 @@ export default function ModelSelect({
         aria-label="Model"
         value={value}
         {...(searching ? { size: Math.min(MAX_ROWS, rows) } : {})}
-        onChange={(e) => pick(e.target.value)}
+        // Selecting never clears the search: arrowing through the matches fires change too.
+        onChange={(e) => onChange(e.target.value)}
+        // An option clicked in the open list, or Enter, commits the choice.
+        onClick={(e) => {
+          if (searching && (e.target as HTMLElement).tagName === "OPTION") setQuery("");
+        }}
+        onBlur={(e) => {
+          if (searching && e.relatedTarget !== searchRef.current) setQuery("");
+        }}
         onKeyDown={(e) => {
-          if (e.key === "Escape" && searching) {
+          if ((e.key === "Escape" || e.key === "Enter") && searching) {
             e.preventDefault();
             e.stopPropagation();
             setQuery("");
