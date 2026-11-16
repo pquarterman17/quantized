@@ -205,6 +205,46 @@
       "kind": "default",
       "via": "selection",
       "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
+    },
+    {
+      "name": "bubble curve sizes its markers by its sheet's column",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "style": "scatter", "sizeBy": "C"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "bubble",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "colour-mapped curve colours its markers by its sheet's column",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "style": "scatter", "colorBy": "D"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "color_mapped",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "size column the book does not hold draws a plain scatter",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "B", "style": "scatter", "sizeBy": "Q"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "scatter",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
+    },
+    {
+      "name": "polar layer opens the polar view",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "coordinates": "polar", "curves": [{"book": "Clean", "x": "A", "y": "B", "style": "line"}]},
+      "selection": {"xKey": null, "yKeys": [0]},
+      "stat": false,
+      "kind": "polar",
+      "via": "selection",
+      "drawn": [{"x": "A", "y": "B"}]
     }
   ]
 }

@@ -129,9 +129,11 @@ from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
 from quantized.io.origin_project.opju_plot_kinds import (
+    apply_marker_modifiers,
     apply_plot_kind,
     rowless_kind,
     stat_x_reason,
+    token_modifiers,
 )
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
@@ -433,6 +435,11 @@ def extract_curves_by_id(
             curve["style"] = style
         # area / step / column, or a row-less box / histogram; step style withheld
         apply_plot_kind(curve, record, stat)
+        if token_starts is None:  # the token's record runs to the next token
+            token_starts = [t.start() for t in tokens] + [end]
+        nxt = token_starts[bisect_right(token_starts, m.start())]
+        # a bubble / colour-mapped scatter's size / colour column (modifier block)
+        apply_marker_modifiers(curve, token_modifiers(b, m.end(), nxt), record)
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)

@@ -411,27 +411,71 @@ None open.
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
    multi-panel. Measured by the item 2 scorer (2026-11-15).
-   - [ ] **Bubble / colour-mapped: the size / colour encoding is not
-         decoded.** Since 2026-11-15 the X/Y bind (7 + 7 specimens) and the
-         figure carries `marker_encoding_not_decoded` (`opju_layer_kind`,
-         from the page's template name `bubble` / `colormapp`); the scorer
-         still counts these 14 plot types "drawn as scatter" (Origin's own
-         `GetPlotType()` reads 201 for them). Book: decode the size / colour
-         modifier column. Anchor `bubble/clean`.
+   - [x] ~~**Bubble / colour-mapped: the size / colour encoding is not
+         decoded.**~~ FIXED 2026-11-15 (`fix/plot-specialised-import`). A
+         curve token carries a plot-modifier block
+         (`SYSTEM 03 00 ce 02 01 d0 02 06 <n>` + `"<desig>|<dataset>"`
+         strings); `<desig>` is Origin C `COLDESIG_*` (9 SIZE, 18
+         EDGE_COLOR). Oracle: Origin C `DataPlot::GetModifiers` over COM on
+         every specimen and the whole real corpus (348 / 359 `.opju`
+         loaded): bubble 9 -> C 7 / 7, colour-mapped 18 -> C 7 / 7; real
+         18-entries 20 / 21 equal Origin's (the 21st names a book the plot no
+         longer uses). Mode from the record + Plot Details trees: symbol size
+         u16 @25 = 101 = size from the column; edge colour u32 @306 =
+         `0x00400065` = colour MAP (without the `0x40` flag it is Origin's
+         colour INDEX mode, `Analysed and Plotted Graph`). `opju_plot_kinds.
+         apply_marker_modifiers` sets `sizeBy` / `colorBy` (a column of the
+         curve's own sheet; the bogus 0.2 pt `symbolSize` of a bubble is
+         dropped); the frontend maps them to `SeriesStyle.sizeBy` /
+         `colorBy` (`originFigureSelection.withMarkerColumns`, lazy chunk),
+         and the figure says `marker_scale_not_decoded` instead of
+         `marker_encoding_not_decoded`. Scorer vs main `c40ed030`: plot type
+         123 match / 14 wrong -> 138 / 0 (14 bubble + colour-mapped, +1
+         polar below), 0 new wrong / phantom. Real corpus: 0 files change
+         (every real modifier fails closed).
+   - [ ] **Marker residue.** Origin's bubble size scale (`Scale` 24.0,
+         `SizeUnit`) and colormap (a 10-level rainbow, `ColorMap` levels)
+         are not decoded: quantized draws its own size range / viridis
+         (`marker_scale_not_decoded`; also #18 bubble axis padding). Real
+         corpus colour modifiers stay plain scatter: `SOP_meas` SHAP plots
+         (edge colour flag `0x48`, 18 curves), `YbMnBi2` (`0x40` with another
+         low byte; 18 + 19 fill colour), `Analysed and Plotted Graph` (index
+         colours: needs a categorical-colour mapping, not `colorBy`). Prove
+         each mode with Plot Details trees (`l7s/qz_fmt.c` pattern) before
+         reading it. Other modifiers seen (COM): 32 plot-label form, 37 / 38
+         line style / width, 39 / 40 / 44 / 62 / 83 bar-width / pattern /
+         grouping, 53 matrix heatmap, 13 / 14 vector XYXY ends (plot 218,
+         `30流场` / `50流场`, not reported by `GetModifiers`).
    - [ ] **XYZ contour, ternary, matrix contour: figure and axes decode
          (axes match on all 4 specimens incl. polar), but no curve binding
          decodes (`no_curve_bindings_decoded`; matrix: graph page unattributed,
          id table empty) so quantized draws Y and Z as lines against X.**
          Heatmap (matrix): no layer recovered. Matrix cells import exactly
          (800 / 800).
-   - [ ] **Polar and offset-stacked (waterfall) layers are not rebuilt.**
-         Since 2026-11-15 their curves are LEFT OUT
-         (`layer_kind_not_decoded`, `opju_layer_kind`, from the page's
-         template name `Polar` / `OffsetSta` -- a sufficient, not necessary,
-         signal) rather than drawn as Cartesian / un-offset lines. Real
-         corpus: 4 pages in 2 files carry `OffsetSta`, none with a decoded
-         curve, so 0 real-file curves are hidden vs main (8 + 1 specimens). Book: decode the
-         layer's coordinate system and offset (axes 6 / 6 match already).
+   - [x] ~~**Polar layers are not rebuilt.**~~ FIXED 2026-11-15
+         (`fix/plot-specialised-import`). A one-layer `Polar`-template page
+         whose curves share one (book, X) and whose theta axis runs 0..360 is
+         kept and tagged `coordinates: "polar"`; the apply opens
+         `polarMode` (`figurePolarState`). Oracle: `GraphLayer::
+         GetCoordinateType()` = 1 (polar) on the specimen, plot `(A "theta",
+         B "r")`. The template signal misses nothing real: COM over 348 / 359
+         real `.opju`, all 7,536 graph layers are Cartesian (0 polar, 0
+         ternary). Scorer: polar curves / plot type / colour / width omitted
+         -> match. Any other polar page stays omitted
+         (`layer_kind_not_decoded`).
+   - [ ] **Offset-stacked (waterfall) layers stay omitted**
+         (`layer_kind_not_decoded`): quantized cannot draw them yet (#13 /
+         cloud), so the curves are left out rather than drawn un-offset
+         (8 specimens; 4 real pages in 2 files, none with a decoded curve).
+   - [ ] **Ternary, contour, heatmap residue (2026-11-15 survey).** Real
+         corpus (COM `GetPlotType()`): 53 heatmap (105) plots, 2 XYZ
+         contour (243), 2 matrix contour (226), 0 ternary layers -- heatmap
+         is the one with real value. All need the layer / binding decode
+         first (`no_curve_bindings_decoded`; heatmap: no layer recovered),
+         then a map-tab apply. Ternary: Origin's plot is the Z dataset over
+         range `(A,B,C)` (`Tern_C`), axes A, B, C in column order -- map
+         explicitly (#17 default picks reorder them). Vector XYXY (218): 14
+         real plots; the 13 / 14 modifiers above name the end columns.
 8. **Commit passing specimens** to `test-data/origin/generated/<type>/` with
    their `oracle.json`, PNG and `.truth.json`, plus the generator command that
    rebuilds them; add realdata tests that score them

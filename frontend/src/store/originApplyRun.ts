@@ -353,6 +353,7 @@ export function runOriginFigureApply(
     ...libs.figureSelectionState(selection),
     // An all-histogram figure opens on the Stat Stage's histogram.
     ...libs.figureStatState(fig, ds),
+    ...libs.figurePolarState(fig),
     hiddenChannels: ds
       ? originHiddenChannels(ds.data).filter((key) => selection ? !selection.yKeys.includes(key) : true)
       : [],

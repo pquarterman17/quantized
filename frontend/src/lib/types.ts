@@ -193,12 +193,12 @@ export interface OriginCurve {
    *  fields (92/92 exact across both containers). */
   lineWidth?: number;
   symbolSize?: number;
-  /** Plot type beyond the line family: Origin's vertical "column", horizontal
-   *  "bar", "histogram" (`.opj`, opj_curves.py `_PLOT_TYPES`); "area", "step"
-   *  and "column" (`.opju`, opju_plot_kinds.py); "histogram", "box", "violin"
-   *  or "strip" (`.opju`, a curve with no X column, `x` = "":
-   *  opju_stat_plots.py). Absent for line/scatter and undecoded types. */
+  /** Plot type beyond the line family: Origin's vertical "column", horizontal "bar",
+   *  "histogram" (`.opj`, opj_curves.py `_PLOT_TYPES`); "area", "step" and "column" (`.opju`,
+   *  opju_plot_kinds.py); "histogram", "box", "violin" or "strip" (`.opju`, a curve with
+   *  no X column, `x` = "": opju_stat_plots.py). Absent for line/scatter and undecoded types. */
   plotType?: "column" | "bar" | "histogram" | "area" | "step" | "box" | "violin" | "strip";
+  sizeBy?: string; colorBy?: string; // bubble size / colour-mapped column, same sheet (opju_plot_kinds.py)
 }
 
 export interface OriginFigure {
@@ -211,6 +211,7 @@ export interface OriginFigure {
   y_log: boolean;
   source_hint?: string;
   n_curves: number;
+  coordinates?: "polar"; // Origin Polar layer: theta = X in degrees, r = Y (opju_layer_kind.py)
   annotations: string[];
   /** Positioned floating text (Origin Text objects) at DATA coordinates —
    *  the text box's top-left corner, multi-line text "\n"-joined. Only

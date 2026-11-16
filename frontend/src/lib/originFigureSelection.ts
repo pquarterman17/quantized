@@ -139,6 +139,33 @@ export function figureStatState(
   return { statMode: true, statPicks: { mode, cols: statColRefs(ds, cols) } };
 }
 
+/** An Origin Polar layer (`OriginFigure.coordinates`, theta = X in degrees,
+ *  r = Y) opens the XY stage's polar view; `{}` for any other figure. */
+export function figurePolarState(figure: OriginFigure): { polarMode?: true } {
+  return figure.coordinates === "polar" && (figure.curves ?? []).length > 0 ? { polarMode: true } : {};
+}
+
+/** `style` plus a bubble's size column / a colour-mapped scatter's colour
+ *  column (`OriginCurve.sizeBy` / `colorBy`, column names of the curve's own
+ *  sheet) as dataset channels. A column the dataset does not hold is left
+ *  out: the curve then draws as the plain scatter it was before. */
+function withMarkerColumns(
+  style: SeriesStyle | null,
+  curve: OriginCurve,
+  letters: string[],
+): SeriesStyle | null {
+  const size = curve.sizeBy ? letters.indexOf(curve.sizeBy) : -1;
+  const color = curve.colorBy ? letters.indexOf(curve.colorBy) : -1;
+  if (size < 0 && color < 0) return style;
+  const out: SeriesStyle = { ...(style ?? {}), marker: true };
+  if (size >= 0) {
+    out.sizeBy = size;
+    delete out.markerSize;
+  }
+  if (color >= 0) out.colorBy = color;
+  return out;
+}
+
 /** Channel selection for a figure's decoded curves on its resolved dataset:
  *  maps each curve's Origin column letter through the dataset's
  *  `origin_column_names` metadata (value-channel letters, in channel order)
@@ -226,7 +253,7 @@ export function figureChannelSelection(
       : ds.data.time.some(Number.isFinite);
     if (requireMaterializedData && xCellsExist && !xHasData) continue;
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
-    const st = originCurveSeriesStyle(curve);
+    const st = withMarkerColumns(originCurveSeriesStyle(curve), curve, letters);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (curve.x && curve.x !== xLetter) {
       if (requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
