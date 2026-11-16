@@ -85,7 +85,7 @@ export default function CurveFitResults(p: Props) {
   return (
     <>
       {done && p.stale && (
-        <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, color: "var(--warning)" }}>
+        <div className="qzk-ds-meta" role="status" style={{ marginTop: 10, color: "var(--warn)" }}>
           The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.
         </div>
       )}
@@ -95,7 +95,7 @@ export default function CurveFitResults(p: Props) {
         </div>
       )}
       {view?.notes.map((n) => (
-        <div key={n} className="qzk-ds-meta" role="status" style={{ marginTop: 6, color: "var(--warning)" }}>{n}</div>
+        <div key={n} className="qzk-ds-meta" role="status" style={{ marginTop: 6, color: "var(--warn)" }}>{n}</div>
       ))}
       {view && (
         <div style={{ marginTop: 8 }}>
