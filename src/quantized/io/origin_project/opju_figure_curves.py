@@ -127,7 +127,8 @@ from quantized.io.origin_project.opju_curve_token import (
 )
 from quantized.io.origin_project.opju_curve_token_x import token_x
 from quantized.io.origin_project.opju_embedded_pages import span_pages
-from quantized.io.origin_project.opju_plot_gates import error_bar_reason, withhold_step_style
+from quantized.io.origin_project.opju_plot_gates import error_bar_reason
+from quantized.io.origin_project.opju_plot_kinds import apply_plot_kind
 from quantized.io.origin_project.opju_sheet_signals import SheetGates, newly_proven_reason
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
@@ -423,7 +424,7 @@ def extract_curves_by_id(
         style = curve_plot_style(b, m.start())
         if style:
             curve["style"] = style
-        withhold_step_style(curve, record)  # drawn as straight segments otherwise
+        apply_plot_kind(curve, record)  # area / step; step style withheld
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)
