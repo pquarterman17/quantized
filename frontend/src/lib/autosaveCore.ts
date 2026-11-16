@@ -170,6 +170,8 @@ function queued<T>(job: (live: () => boolean) => Promise<T>, timedOut: () => T):
 }
 
 const TIMED_OUT = "the browser's storage did not answer (timed out) — the next autosave tries again";
+/** Clear's own wording: nothing retries it by itself (review F7). */
+const CLEAR_TIMED_OUT = "the browser's storage did not answer (timed out) — nothing was cleared; try again";
 
 /** Persist the workspace as a new generation (empty library → clear the slot).
  *
@@ -194,6 +196,9 @@ async function writeGeneration(ws: WorkspaceState, now: number, live: () => bool
       const keep = pin === null ? [] : (await be.read()).filter((g) => g.at < pin);
       if (!live()) return false;
       await (keep.length ? be.write(keep) : be.clear());
+      // A job the watchdog gave up on touches nothing more — not the stash,
+      // not the health line (review F7): a later job owns both now.
+      if (!live()) return false;
       if (pin === null) dropStash(now);
       else if ((readStash()[0]?.at ?? -Infinity) >= pin) dropStash(now);
       ctx.state.health = { savedAt: ctx.state.health.savedAt, error: null, count: keep.length };
@@ -235,6 +240,7 @@ async function writeGeneration(ws: WorkspaceState, now: number, live: () => bool
     // than it: a stash written while the write was in flight is newer, and
     // waits for the next save. (No drop on a failed save, quota included —
     // review N3: the stash may be the only copy newer than IndexedDB.)
+    if (!live()) return false; // given up on while writing: see above
     dropStash(Math.max(now, stash[0]?.at ?? now));
     ctx.state.health = { savedAt: now, error: null, count: kept.length };
     return true;
@@ -250,7 +256,16 @@ async function writeGeneration(ws: WorkspaceState, now: number, live: () => bool
  *  timestamp — P1.2 box "explain crash recovery source/time/choices" needs
  *  the candidate's age to decide whether it is newer than the last-opened
  *  project, which the workspace content alone can't say. */
-export async function loadAutosaveGeneration(): Promise<{ workspace: LoadedWorkspace; at: number } | null> {
+export interface RestoredGeneration {
+  workspace: LoadedWorkspace;
+  at: number;
+  /** A recovery the previous page left unanswered (the pending-recovery
+   *  marker, review F2): its newest generation, to be OFFERED again — never
+   *  applied silently. Equal to the pick itself when that is all there is. */
+  carried?: { workspace: LoadedWorkspace; at: number };
+}
+
+export async function loadAutosaveGeneration(): Promise<RestoredGeneration | null> {
   const be = backend();
   // The codec chunk is fetched alongside the storage read, and awaited OUTSIDE
   // the try below: a chunk that will not load must REJECT, never read as
@@ -273,8 +288,14 @@ export async function loadAutosaveGeneration(): Promise<{ workspace: LoadedWorks
     // deletions and pin stale versions — and puts every record it holds back
     // in the carry (lib/fitModelsProject.ts).
     if (!pick) return null;
-    const ws = parseWorkspace(pick.text);
-    return { workspace: { ...ws, ...autosaveRestoreFitModels(ws) }, at: pick.at };
+    const load = (g: { text: string; at: number }) => {
+      const ws = parseWorkspace(g.text);
+      return { workspace: { ...ws, ...autosaveRestoreFitModels(ws) }, at: g.at };
+    };
+    const picked = load(pick);
+    const before = ctx.state.restoreError ? null : ctx.state.carried;
+    const old = before === null ? null : pickRestorable(generations.filter((g) => g.at < before), (text) => isRestorable(parseWorkspace, text));
+    return old ? { ...picked, carried: old.at === pick.at ? picked : load(old) } : picked;
   } catch {
     return null; // never block startup on a bad autosave
   }
@@ -326,12 +347,12 @@ async function withLegacyGeneration(
  *  reason — the snapshot is then still there, so the caller must say so
  *  (silent-failure audit 2026-10-01). */
 export function clearAutosave(): Promise<string | null> {
-  return queued(wipe, () => TIMED_OUT);
+  return queued(wipe, () => CLEAR_TIMED_OUT);
 }
 
 async function wipe(live: () => boolean): Promise<string | null> {
   try {
-    if (!live()) return TIMED_OUT;
+    if (!live()) return CLEAR_TIMED_OUT;
     await backend().clear();
     dropStash();
     ctx.state.health = { savedAt: null, error: null, count: 0 };

@@ -18,4 +18,16 @@ describe("indexedDbBackend open", () => {
     (req.onblocked as () => void)();
     await expect(read).rejects.toThrow(/blocked by another quantized tab/);
   });
+
+  it("closes a connection that opens after the block already failed it (review F8)", async () => {
+    const req: Record<string, unknown> = {};
+    vi.stubGlobal("indexedDB", { open: () => req });
+    const read = indexedDbBackend().read();
+    (req.onblocked as () => void)();
+    await expect(read).rejects.toThrow(/blocked/);
+    const close = vi.fn();
+    req.result = { close };
+    (req.onsuccess as () => void)(); // the other tab let go — nobody is waiting now
+    expect(close).toHaveBeenCalledTimes(1);
+  });
 });

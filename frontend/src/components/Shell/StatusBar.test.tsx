@@ -11,6 +11,8 @@ import { trackJob } from "../../store/pendingOpActions";
 import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 
+const { retryAutosaveRestoreNow } = vi.hoisted(() => ({ retryAutosaveRestoreNow: vi.fn(() => true) }));
+vi.mock("../../autosaveStartupRestore", () => ({ retryAutosaveRestoreNow }));
 vi.mock("../../lib/api/figures", () => ({ exportFigure: vi.fn() }));
 vi.mock("../overlays/ParamDialog", () => ({
   askParams: vi.fn().mockResolvedValue({
@@ -108,6 +110,14 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     render(<StatusBar />);
     expect(screen.getByRole("button", { name: "⚠ previous session not restored" })).toHaveAttribute("title", "Couldn't restore (x) — retrying");
     expect(screen.queryByText("⚠ autosave failing")).toBeNull();
+  });
+
+  it("clicking the label while the restore is still failing retries it now (review F10)", () => {
+    retryAutosaveRestoreNow.mockClear();
+    useAutosaveStatus.setState({ health: { savedAt: null, error: null, count: 0, restoreError: "Couldn't restore (x) — retrying" } });
+    render(<StatusBar />);
+    fireEvent.click(screen.getByRole("button", { name: "⚠ previous session not restored" }));
+    expect(retryAutosaveRestoreNow).toHaveBeenCalledTimes(1);
   });
 
   it("after an Append, the label says the previous session is KEPT — never 'not restored'", () => {

@@ -423,4 +423,69 @@ describe("the save queue watchdog (review R4)", () => {
     vi.useRealTimers();
     expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([200]);
   });
+
+  it("the job it gave up on never writes when its storage read finally answers (the R4 guard, review F7)", async () => {
+    await loadCodec();
+    const base = memoryBackend();
+    let hang = true;
+    let answer!: () => void;
+    setAutosaveBackend({
+      ...base,
+      read: () =>
+        hang
+          ? new Promise<Generation[]>((r) => {
+              answer = () => void base.read().then(r);
+            })
+          : base.read(),
+    });
+    vi.useFakeTimers();
+    const first = saveAutosave(ws("late.dat"), 100);
+    await vi.advanceTimersByTimeAsync(QUEUE_TIMEOUT_MS + 10);
+    expect(await first).toBe(false);
+    hang = false;
+    expect(await saveAutosave(ws("after.dat"), 200)).toBe(true);
+    answer(); // the hung read answers at last
+    await vi.advanceTimersByTimeAsync(10);
+    vi.useRealTimers();
+    expect((await listAutosaveGenerations()).map((g) => g.at)).toEqual([200]);
+  });
+
+  it("a job whose write was already in flight when it timed out touches neither health nor the stash afterwards (review F7)", async () => {
+    await loadCodec();
+    const base = memoryBackend();
+    let hang = true;
+    let finish!: () => void;
+    setAutosaveBackend({
+      ...base,
+      write: (g) =>
+        hang
+          ? new Promise<void>((r) => {
+              finish = () => void base.write(g).then(r);
+            })
+          : base.write(g),
+    });
+    vi.useFakeTimers();
+    const first = saveAutosave(ws("late.dat"), 100);
+    await vi.advanceTimersByTimeAsync(QUEUE_TIMEOUT_MS + 10);
+    expect(await first).toBe(false);
+    hang = false;
+    expect(await saveAutosave(ws("after.dat"), 200)).toBe(true);
+    stashAutosave(ws("newer-stash.dat"), 90); // one the late job (at 100) would otherwise drop
+    const healthBefore = autosaveHealth();
+    finish(); // the in-flight write lands at last
+    await vi.advanceTimersByTimeAsync(10);
+    vi.useRealTimers();
+    expect(autosaveHealth()).toEqual(healthBefore); // still "saved at 200", not the late job's 100
+    expect(stashText()).toContain("newer-stash.dat");
+  });
+
+  it("a Clear that times out says nothing was cleared, in its own words (review F7)", async () => {
+    await loadCodec();
+    setAutosaveBackend({ ...memoryBackend(), clear: () => new Promise<void>(() => undefined) });
+    vi.useFakeTimers();
+    const clearing = clearAutosave();
+    await vi.advanceTimersByTimeAsync(QUEUE_TIMEOUT_MS + 10);
+    vi.useRealTimers();
+    expect(await clearing).toMatch(/timed out\) — nothing was cleared; try again$/);
+  });
 });

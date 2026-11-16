@@ -70,6 +70,7 @@ function resetAllLoaders(): void {
 }
 
 beforeEach(() => {
+  localStorage.removeItem("qz.autosave.pendingRecovery"); // a failed restore writes the marker
   vi.mocked(offerLateRestore).mockClear();
   resetAllLoaders();
   setAutosaveBackend(memoryBackend());
@@ -145,7 +146,7 @@ describe("autosave through the codec seam", () => {
       for (let i = 0; i < 10; i++) await Promise.resolve();
     });
 
-    expect(dangerToasts()).toEqual([expect.stringMatching(/^Couldn't restore the autosaved library \(.*\) — retrying; earlier autosaves are kept$/)]);
+    expect(dangerToasts()).toEqual([expect.stringMatching(/^Couldn't restore the autosaved library \(.*\) — retrying; earlier autosaves are kept \(click to retry now\)$/)]);
     expect(useApp.getState().datasets).toEqual([]);
   });
 });

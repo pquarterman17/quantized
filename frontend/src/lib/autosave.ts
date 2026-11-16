@@ -35,16 +35,48 @@ export interface AutosaveState {
   /** The previous session was APPENDED; its full copy is still pinned for a
    *  Replace or Discard — "kept", not "not restored". */
   restoreKept: boolean;
+  /** An unanswered recovery carried over from the previous page (review F2):
+   *  generations before this time are that session, still to be offered. */
+  carried: number | null;
 }
+
+/** The pending-recovery marker: while a previous session waits for an answer
+ *  (or for a restore that would not load), the time below which generations
+ *  are that session. Survives a reload, so the next startup offers the same
+ *  generation again instead of quietly restoring this session's newest save
+ *  and letting it rotate the old one out. Cleared when the pin settles. */
+export const PENDING_RECOVERY_KEY = "qz.autosave.pendingRecovery";
+
+function readMarker(): number | null {
+  try {
+    const at = Number(localStorage.getItem(PENDING_RECOVERY_KEY));
+    return Number.isFinite(at) && at > 0 ? at : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMarker(at: number | null): void {
+  try {
+    if (at === null) localStorage.removeItem(PENDING_RECOVERY_KEY);
+    else localStorage.setItem(PENDING_RECOVERY_KEY, String(at));
+  } catch {
+    /* storage blocked: the pin still holds for this page */
+  }
+}
+
+const carried = readMarker();
 const autosaveState: AutosaveState = {
   backend: null,
   health: { savedAt: null, error: null, count: 0 },
-  pinBefore: Date.now(),
+  pinBefore: Math.min(Date.now(), carried ?? Infinity),
   restoreError: null,
   restoreKept: false,
+  carried,
 };
 
 type Core = typeof import("./autosaveCore");
+type RestoredGeneration = import("./autosaveCore").RestoredGeneration;
 let core: Core | null = null;
 let coreLoad: Promise<Core> | null = null;
 
@@ -79,12 +111,14 @@ export function autosaveRestorePending(error: string, pinBefore = Date.now(), ke
   autosaveState.pinBefore ??= pinBefore;
   autosaveState.restoreError = error;
   autosaveState.restoreKept = kept;
+  writeMarker(autosaveState.pinBefore);
 }
 
 /** The startup restore succeeded, or the user declined it: normal rotation. */
 export function autosaveRestoreSettled(): void {
-  autosaveState.pinBefore = autosaveState.restoreError = null;
+  autosaveState.pinBefore = autosaveState.restoreError = autosaveState.carried = null;
   autosaveState.restoreKept = false;
+  writeMarker(null);
 }
 
 /** The health readout. A pending restore rides on its OWN field (review R8):
@@ -110,7 +144,7 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
 /** The newest restorable generation and its `at`, or null. REJECTS when the
  *  code to read it will not load — never "nothing to restore" over a good
  *  autosave (the caller reports the rejection). */
-export async function loadAutosaveGeneration(): Promise<{ workspace: LoadedWorkspace; at: number } | null> {
+export async function loadAutosaveGeneration(): Promise<RestoredGeneration | null> {
   workspaceCodec().catch(() => undefined); // fetch the codec alongside the core chunk; the core reports failure
   return (await autosaveCore()).loadAutosaveGeneration();
 }

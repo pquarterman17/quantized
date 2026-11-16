@@ -40,25 +40,39 @@ export default function Toaster() {
     if (stranded() && back instanceof HTMLElement && back.isConnected) back.focus();
     if (stranded()) rootRef.current?.focus();
   };
-  const pill = (t: Toast) => (
-    <div
-      key={t.id}
-      className={`qzk-toast${t.kind !== "info" ? ` ${t.kind}` : ""}`}
-      role={t.kind === "danger" ? "alert" : undefined}
-      onClick={() => dismiss(t.id)}
-      onMouseEnter={() => hold(t.id, true)}
-      onMouseLeave={() => hold(t.id, false)}
-      onFocus={focusHold(t, true)}
-      onBlur={focusHold(t, false)}
-    >
-      {t.msg}
-      {[...(t.action ? [t.action] : []), ...(t.actions ?? [])].map((a) => (
-        <button key={a.label} type="button" className="qzk-toast-action" onClick={onAction(t, a)}>
-          {a.label}
-        </button>
-      ))}
-    </div>
-  );
+  // A toast asking a QUESTION (several choices — the late-restore prompt)
+  // does not vanish on a stray click on its body: only a choice or Escape
+  // closes it. Each choice names the question it answers (aria-describedby),
+  // so "Discard" is not read out with no context (review F9).
+  const pill = (t: Toast) => {
+    const asks = (t.actions?.length ?? 0) > 0;
+    const msgId = `qzk-toast-msg-${t.id}`;
+    return (
+      <div
+        key={t.id}
+        className={`qzk-toast${t.kind !== "info" ? ` ${t.kind}` : ""}`}
+        role={t.kind === "danger" ? "alert" : undefined}
+        onClick={asks ? undefined : () => dismiss(t.id)}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") return;
+          e.stopPropagation();
+          dismiss(t.id);
+          rootRef.current?.focus();
+        }}
+        onMouseEnter={() => hold(t.id, true)}
+        onMouseLeave={() => hold(t.id, false)}
+        onFocus={focusHold(t, true)}
+        onBlur={focusHold(t, false)}
+      >
+        {asks ? <span id={msgId}>{t.msg}</span> : t.msg}
+        {[...(t.action ? [t.action] : []), ...(t.actions ?? [])].map((a) => (
+          <button key={a.label} type="button" className="qzk-toast-action" aria-describedby={asks ? msgId : undefined} onClick={onAction(t, a)}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    );
+  };
   // Rendered even while empty: screen readers commonly skip a live region
   // that enters the DOM together with its first text, which lost the first
   // toast's announcement (often the only one). The same holds for the nested

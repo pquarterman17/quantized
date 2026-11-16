@@ -11,6 +11,7 @@ import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { usePendingOps, type PendingOp } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 import { useShownDataset } from "../../store/useShownDataset";
+import { retryAutosaveRestoreNow } from "../../autosaveStartupRestore";
 
 /** Clock time of the last successful autosave, or "" when there isn't one. */
 function savedAtLabel(savedAt: number | null): string {
@@ -162,14 +163,15 @@ export default function StatusBar() {
         </span>
       ) : health.restoreError ? (
         // Review R8: a restore still pending is not an autosave failure —
-        // saves may be succeeding. Its own label; a click re-offers the
-        // Append / Replace / Discard prompt once there is one to answer.
+        // saves may be succeeding. Its own label; a click retries a restore
+        // that is still failing at once, or re-offers the Append / Replace /
+        // Discard prompt once there is one to answer (review F10).
         <button
           type="button"
           className="qzk-conn-stale"
           style={{ background: "none", border: "none", padding: 0, font: "inherit", cursor: "default" }}
           title={health.restoreError}
-          onClick={() => void import("../../lib/lateRestore").then((m) => m.reofferLateRestore())}
+          onClick={() => retryAutosaveRestoreNow() || void import("../../lib/lateRestore").then((m) => m.reofferLateRestore())}
         >
           {health.restoreKept ? "⚠ previous session kept — Replace or Discard" : "⚠ previous session not restored"}
         </button>
