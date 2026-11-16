@@ -237,11 +237,17 @@ test("Upright vertical bars with error bars export over their values, as the scr
     const store = (window as unknown as { __qz: { useApp: { setState: (p: unknown) => void } } }).__qz.useApp;
     store.setState({ xKey: null, yKeys: [0], errKeys: { 0: 1 }, seriesStyles: { 0: { bars: "vertical" } } });
   });
-  await expect.poll(async () => (await screenVerticalTicks(page)).length).toBeGreaterThan(2);
-  const screenTicks = await screenVerticalTicks(page);
+  // Wait on the bars' own frame, not just any frame: the import's first draw
+  // (before the setState above lands) also has >2 ticks, and under load it was
+  // read instead, ranging from 0. The screen does not range to zero.
+  await expect
+    .poll(async () => {
+      const ticks = await screenVerticalTicks(page);
+      return ticks.length > 2 ? Math.min(...ticks) : Number.NEGATIVE_INFINITY;
+    })
+    .toBeGreaterThan(900);
   const { svg } = await exportSvg(page);
   const exportTicks = svgVerticalTicks(svg);
-  expect(Math.min(...screenTicks)).toBeGreaterThan(900); // the screen does not range to zero
   expect(Math.min(...exportTicks)).toBeGreaterThan(900); // nor does the export (it used to run 0..1200)
   expect(Math.max(...exportTicks)).toBeLessThan(1100);
 });
