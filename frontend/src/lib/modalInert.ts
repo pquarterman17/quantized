@@ -24,8 +24,8 @@
 // ONE ORDER FOR EVERYTHING (R16). "Active" is the dialog OPENED LAST — the
 // order `lib/escapeStack.ts` already ranks Escape by — and this module makes
 // it the dialog PAINTED on top, too: every walk stamps each open dialog's
-// `.qz-overlay-backdrop` with a z-index in open order (101, 102, …; the
-// stylesheet's 100 is the floor, the toast stack at 200 stays above). Before
+// `.qz-overlay-backdrop` with a z-index in open order (1000, 1001, …, above
+// every floating tool window; lib/layers.ts names the whole stack). Before
 // that, equal z-index painted in TREE order, so `?` pressed in Help opened
 // Shortcuts (earlier in `AppOverlays`) underneath Help: invisible, yet the
 // first Escape closed it (measured in Chromium, main and this branch). Now
@@ -68,6 +68,7 @@
 import type { RefObject } from "react";
 
 import { holdModal } from "./appShortcuts";
+import { Z } from "./layers";
 
 /** Marks an app-level live region: never inert while a modal is open. The
  *  eager components spell it as a literal (importing this module would pull
@@ -126,7 +127,7 @@ function sync(): void {
   marked.clear();
   for (const b of stamped) b.style.zIndex = "";
   stamped.clear();
-  let z = 101;
+  let z: number = Z.modalBase; // above every tool window (lib/layers.ts)
   for (const entry of openModals) {
     const b = entry.ref.current?.closest<HTMLElement>(".qz-overlay-backdrop");
     if (b) {

@@ -50,6 +50,7 @@ export function actionPaletteEntry<T>(
     id: `${idPrefix}.${a.id}`,
     group,
     label: resolveLabel(a, t),
+    danger: a.destructive || a.danger || undefined,
     run: () => runContextAction(a, t),
   };
 }

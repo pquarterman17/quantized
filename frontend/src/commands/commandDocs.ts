@@ -70,7 +70,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Temporarily compose multiple plots into an aligned publication page, then export it.",
     keywords: "figure page multi panel composite",
   },
-  "export-figure": { description: "Export the current plot or composed page to a publication-ready image or vector file." },
+  "export-figure": {
+    description: "Export the current plot or composed page to a publication-ready image or vector file.",
+    keywords: "pdf svg eps png tiff vector raster image save publication",
+  },
   "export-origin": { description: "Export data and current plot settings as an Origin script plus accompanying data." },
   "export-origin-project": {
     description: "Save the selected datasets, or all of them, as workbooks in one Origin project.",
