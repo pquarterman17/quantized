@@ -28,7 +28,7 @@ import { lazyRegion } from "../../lib/lazyRegion";
  *  put the window, `components/overlays/ToolWindow.tsx` and `lib/workshopHelp.ts`
  *  in the eager bundle for a control most sessions never press. `lazyRegion`
  *  (UX-003's error boundary + retry) is the same shape `Library.tsx` already
- *  uses for `EditableFiguresSection` and `AppOverlays.tsx`'s `lazyPanel()`
+ *  uses for `EditableFiguresSection` and `AppOverlayPanels.tsx`'s `lazyPanel()`
  *  uses for every on-demand panel: the row itself, its glyph button and the
  *  toggle are untouched and still eager, so the ONLY difference is that the
  *  window paints one chunk-fetch later the first time it is opened in a

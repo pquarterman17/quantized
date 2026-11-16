@@ -3162,6 +3162,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Shell/AppearanceMenu.tsx",
       call: 'import("./AppearancePanel")',
     },
+    // SLICE 31 (2026-11-16): the flag-gated panel and dialog family (~60
+    // lazyPanel seams and their open-flag selectors), loaded as one chunk
+    // once the overlay shell has mounted.
+    { module: "/AppOverlayPanels.tsx", loader: "/AppOverlays.tsx", call: 'import("./AppOverlayPanels")' },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the

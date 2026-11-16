@@ -297,7 +297,7 @@ describe("HelpDialog search includes registry-published commands (P3.1 gap)", ()
 
 describe("HelpDialog startup boundary", () => {
   const overlaysSrc = Object.values(
-    import.meta.glob("../../AppOverlays.tsx", {
+    import.meta.glob("../../AppOverlayPanels.tsx", {
       query: "?raw",
       import: "default",
       eager: true,

@@ -19,10 +19,10 @@ const modules = import.meta.glob("/src/**/*.{ts,tsx}", {
 const WORKSHOP_DIRS = ["/workshops/ternary/", "/workshops/fieldplot/"];
 const sources = () =>
   Object.entries(modules).filter(([p]) => !/\.test\.(ts|tsx)$/.test(p));
-const overlays = () => sources().find(([p]) => p.endsWith("/AppOverlays.tsx"))?.[1] ?? "";
+const overlays = () => sources().find(([p]) => p.endsWith("/AppOverlayPanels.tsx"))?.[1] ?? "";
 
 describe("ternary + vector-field workshops stay lazily mounted", () => {
-  it("AppOverlays mounts the pair through one lazyPanel, gated on either flag", () => {
+  it("AppOverlayPanels mounts the pair through one lazyPanel, gated on either flag", () => {
     const src = overlays();
     expect(src).toContain('lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels")');
     expect(src).toContain("useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen)");
