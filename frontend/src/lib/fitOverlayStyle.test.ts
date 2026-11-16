@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { FIT_DASH, fitLineWidth, isFitSeries, traceWithFit } from "./fitOverlayStyle";
 import type { PlotPayload } from "./plotdata";
+import { FIT_SERIES_LABEL } from "./overlaySpecShape";
 import { buildSeriesDefs } from "./uplotSeries";
 
 const COLORS = { accentColor: "#00f", inkColor: "#fff", inkDimColor: "#888", isDarkBg: true };
@@ -34,6 +35,9 @@ describe("fit overlay style", () => {
     const own = [{ explicit: true, width: 3 }] as PlotPayloadStyles;
     expect(defs(payload(true), own)[1]!.points?.show).toBe(false);
     expect(defs(payload(true), [undefined, { width: 4, line: "solid" }] as PlotPayloadStyles)[2]!.dash).toBeUndefined();
+  });
+  it("recognises the label the export appends", () => {
+    expect(isFitSeries({ label: FIT_SERIES_LABEL, overlay: true })).toBe(true);
   });
   it("helpers: only the fit series, only the default Line trace changes", () => {
     expect(isFitSeries({ label: "fit", overlay: true })).toBe(true);

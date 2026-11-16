@@ -9,20 +9,21 @@
 //     the points stay visible between the dashes. Scatter / Step defaults and
 //     explicitly styled series are left alone.
 
-import { FIT_SERIES_LABEL } from "./overlaySpecShape";
 import type { DefaultTrace } from "./types";
+
+/** The fit series' label: lib/overlaySpecShape.FIT_SERIES_LABEL, repeated here because importing
+ *  that module would pull its message text into the eager bundle (a test pins them equal). */
+const FIT_LABEL = "fit";
 
 /** The canvas dash pattern (px on, px off) of a fit curve. */
 export const FIT_DASH: number[] = [6, 4];
-/** The thinness of a fit curve against the data line (never below 1 px). */
-const FIT_WIDTH_FACTOR = 0.8;
 
 /** A fit curve's line width given the width a plain data line would get. */
-export const fitLineWidth = (base: number): number => Math.max(1, Math.round(base * FIT_WIDTH_FACTOR * 100) / 100);
+export const fitLineWidth = (base: number): number => Math.max(1, base * 0.8);
 
 /** True for the series `withFitOverlay` appends (not a band edge). */
 export const isFitSeries = (s: { label?: string; overlay?: boolean; band?: number }): boolean =>
-  s.overlay === true && s.label === FIT_SERIES_LABEL && !s.band;
+  !!s.overlay && s.label === FIT_LABEL && !s.band;
 
 /** The default trace data series use while a fit is shown. */
 export const traceWithFit = (trace: DefaultTrace | undefined, fitShown: boolean): DefaultTrace | undefined =>

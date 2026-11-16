@@ -8,7 +8,7 @@
 import type uPlot from "uplot";
 
 import { resolveDrawColor } from "./contrastColor";
-import { FIT_DASH, fitLineWidth, isFitSeries, traceWithFit } from "./fitOverlayStyle";
+import { FIT_DASH, fitLineWidth, isFitSeries } from "./fitOverlayStyle";
 import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
@@ -174,7 +174,7 @@ export function buildSeriesDefs(
       // A fit curve nobody styled is a thinner dashed LINE, and data nobody styled gets markers
       // while a fit is shown, so the fit cannot hide it (lib/fitOverlayStyle.ts; the export agrees).
       const fitCurve = isFitSeries(s) && !seriesStyles?.[i];
-      const trace = seriesTrace(style, fitCurve ? "Line" : (s.overlay ? args.defaultTrace : traceWithFit(args.defaultTrace, fitShown)) ?? "Line"); // an explicit style opts out
+      const trace = seriesTrace(style, fitCurve ? "Line" : fitShown && !s.overlay && (args.defaultTrace ?? "Line") === "Line" ? "Line + markers" : args.defaultTrace ?? "Line"); // an explicit style opts out
       const lineW = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
       const width = fitCurve ? fitLineWidth(lineW) : lineW;
       const dash = fitCurve ? FIT_DASH : style?.line ? DASH[style.line] : undefined;

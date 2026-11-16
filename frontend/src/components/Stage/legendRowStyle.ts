@@ -4,7 +4,7 @@
 // look different depending on which window has focus.
 
 import { resolveDrawColor } from "../../lib/contrastColor";
-import { fitLineWidth, isFitSeries } from "../../lib/fitOverlayStyle";
+import { isFitSeries } from "../../lib/fitOverlayStyle";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { SeriesStyle } from "../../lib/types";
@@ -14,7 +14,7 @@ const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "cir
 /** A fit band's legend sample: the dashed edge `uplotSeries` draws. */
 const BAND_SAMPLE: SeriesStyle = { width: 1, line: "dashed" };
 /** A fit curve's legend sample: the thinner dashed line `uplotSeries` draws. */
-const FIT_SAMPLE: SeriesStyle = { width: fitLineWidth(1.5), line: "dashed" };
+const FIT_SAMPLE: SeriesStyle = { width: 1.2, line: "dashed" };
 /** The canvas' selected-row companion: line-free 7px accent-filled circles. */
 const SELECTED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 7 };
 
