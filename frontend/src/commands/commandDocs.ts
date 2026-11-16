@@ -173,7 +173,6 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "contour-scattered": { description: "Interpolate scattered X, Y, Z points onto a grid and show them as a map." },
   "function-plot": { description: "Plot y = f(x; parameters) over an x range as a live, editable curve." },
   "plot-recipe-manager": { description: "Browse every saved recipe and template.", keywords: "plot recipes manager" },
-  "copy-figure": { description: "Copy the current figure to the clipboard as an image (Ctrl+J).", keywords: "clipboard image" },
   autoscale: { description: "Reset zoom and restore automatic limits around the plotted data.", keywords: "rescale" },
   "view-back": { description: "Return to the preceding zoom or pan state." },
   "view-forward": { description: "Move forward to the next zoom or pan state." },

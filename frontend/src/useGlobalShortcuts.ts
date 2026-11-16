@@ -12,10 +12,8 @@ import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
-import { RENAME_ACTIVE_EVENT } from "./lib/renameActive";
+import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { toolForKey } from "./lib/plotToolKeys";
-import { buildCoreActions } from "./appCommandsCore";
-import { runAction } from "./store/commands";
 import { loadInteractionPrefs } from "./store/prefs";
 import { useApp } from "./store/useApp";
 
@@ -36,11 +34,8 @@ function rescale(s: AppState): boolean {
   return true;
 }
 
-/** Run a core palette command by id (Ctrl+N / Ctrl+J share the palette's path and its busy/failure handling). */
-const runCore = (id: string) => {
-  const a = buildCoreActions(useApp.getState).find((x) => x.id === id);
-  if (a) runAction(a);
-};
+/** Origin habits that open a lazy feature (Ctrl+N / Ctrl+J / F2): bodies in lib/originKeys.ts. */
+const originKey = (k: string) => void runLazy("Loading…", () => import("./lib/originKeys")).then((m) => m.originKey(k), onLoadFailure);
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
@@ -115,16 +110,11 @@ export function useGlobalShortcuts(): void {
           case "A": // autoscale / reset the plot view
             if (rescale(s)) e.preventDefault();
             return;
-          case "F2": {
-            // Rename the selected (else active) dataset, Origin's habit. Library rows answer
-            // the event (exactly one claims it); no row on screen = say so.
-            if (e.shiftKey) return; // Shift+F2 is the worksheet header editor
+          case "F2": // rename the selected (else active) dataset; Shift+F2 is the worksheet header editor
+            if (e.shiftKey) return;
             e.preventDefault();
-            const ask = { id: s.selectedIds.length === 1 ? s.selectedIds[0] : s.activeId, hit: false };
-            window.dispatchEvent(new CustomEvent(RENAME_ACTIVE_EVENT, { detail: ask }));
-            if (!ask.hit) s.setStatus("F2: show the dataset in the Library to rename it");
+            originKey("f2");
             return;
-          }
           case "f":
           case "F": // curve-fit workshop
             e.preventDefault();
@@ -227,24 +217,24 @@ export function useGlobalShortcuts(): void {
         case "j":
           if (e.shiftKey || isEditingTarget(e.target)) break;
           e.preventDefault();
-          runCore(e.key.toLowerCase() === "n" ? "new-workbook" : "copy-figure");
+          originKey(e.key.toLowerCase());
           break;
       }
     };
     // R15: through the modal gate. While a dialog is open only `?` and
     // Ctrl/Cmd+, (which open a dialog ON TOP) reach `onKey` at all.
-    return listenForAppShortcuts(onKey);
-  }, []);
-
-  // Ctrl/Cmd+R must never reload the tab and lose the session: under a modal, in a field
-  // that stops key propagation, with Caps Lock or a non-Latin layout (`code`, not `key`).
-  // Capture phase and outside the modal gate on purpose; the rescale itself stays gated.
-  useEffect(() => {
+    // Ctrl/Cmd+R must never reload the tab and lose the session: under a modal, in a field
+    // that stops key propagation, with Caps Lock or a non-Latin layout (`code`, not `key`).
+    // Capture phase and outside the modal gate on purpose; the rescale itself stays gated.
     const noReload = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyR") e.preventDefault();
     };
     window.addEventListener("keydown", noReload, true);
-    return () => window.removeEventListener("keydown", noReload, true);
+    const off = listenForAppShortcuts(onKey);
+    return () => {
+      off();
+      window.removeEventListener("keydown", noReload, true);
+    };
   }, []);
 
   // ── The three plot-tool tiers of the Escape ladder (GUI_INTERACTION #9) ──

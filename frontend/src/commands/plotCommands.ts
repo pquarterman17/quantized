@@ -342,13 +342,6 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Send figure to report…",
       run: () => void sendFigureToReport(s),
     },
-    {
-      id: "copy-figure", // Ctrl+J (Origin habit); body is the Plot menu's "Copy figure"
-      group: "Plot",
-      section: "Build & export",
-      label: "Copy figure",
-      run: () => void runLazy("Loading figure copy…", () => import("../lib/copyFigureCommand")).then((m) => m.runCopyFigureCommand(s), onLoadFailure),
-    },
     // ── Figures audit #6 / #8: the Axis dialog and the plot-type gallery
     // (one lazy chunk, store/figureDialogs.ts). ──
     {

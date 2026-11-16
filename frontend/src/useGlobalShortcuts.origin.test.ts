@@ -126,39 +126,41 @@ describe("F2 — rename the selected (else active) dataset", () => {
     return { asks, off: () => window.removeEventListener(RENAME_ACTIVE_EVENT, on) };
   };
 
-  it("names the single selected row, which can differ from the active (plotted) one", () => {
+  it("names the single selected row, which can differ from the active (plotted) one", async () => {
     useApp.setState({ activeId: "plotted", selectedIds: ["focused"] });
     const l = listen(true);
     renderHook(() => useGlobalShortcuts());
     expect(fireEvent.keyDown(window, { key: "F2", cancelable: true })).toBe(false);
-    expect(l.asks).toEqual([{ id: "focused", hit: false }]);
+    await vi.waitFor(() => expect(l.asks).toEqual([{ id: "focused", hit: false }]));
     expect(useApp.getState().status).toBe("");
     l.off();
   });
 
-  it("falls back to the active dataset when several or none are selected", () => {
+  it("falls back to the active dataset when several or none are selected", async () => {
     useApp.setState({ activeId: "plotted", selectedIds: ["a", "b"] });
     const l = listen(true);
     renderHook(() => useGlobalShortcuts());
     fireEvent.keyDown(window, { key: "F2" });
+    await vi.waitFor(() => expect(l.asks).toHaveLength(1));
     expect(l.asks[0].id).toBe("plotted");
     l.off();
   });
 
-  it("says so when no Library row claims it (Details view, search, collapsed panel)", () => {
+  it("says so when no Library row claims it (Details view, search, collapsed panel)", async () => {
     useApp.setState({ activeId: "plotted" });
     const l = listen(false);
     renderHook(() => useGlobalShortcuts());
     fireEvent.keyDown(window, { key: "F2" });
-    expect(useApp.getState().status).toMatch(/F2.*Library/);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/F2.*Library/));
     l.off();
   });
 
-  it("is inert while typing and with Shift (the worksheet header editor)", () => {
+  it("is inert while typing and with Shift (the worksheet header editor)", async () => {
     const l = listen(true);
     renderHook(() => useGlobalShortcuts());
     expect(typing({ key: "F2" })).toBe(true);
     fireEvent.keyDown(window, { key: "F2", shiftKey: true });
+    await vi.dynamicImportSettled();
     expect(l.asks).toEqual([]);
     l.off();
   });
