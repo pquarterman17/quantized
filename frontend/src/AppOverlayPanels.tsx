@@ -72,6 +72,7 @@ import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useStatsTestsStore } from "./store/statsTests";
 import { useVariabilityStore } from "./store/variability";
+import { useAnalysisExtras } from "./store/analysisExtras";
 import { useRelinkPanel } from "./store/relinkPanel";
 import { useRecodePanel } from "./store/recodePanel";
 import { useFigureDialog } from "./store/figureDialogs";
@@ -121,6 +122,7 @@ const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYBy
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
 const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
+const AnalysisExtrasHost = lazyPanel(() => import("./components/workshops/analysisextras/AnalysisExtrasHost"), "Analysis tools");
 const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"), "VariabilityChartPanel");
 const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"), "ReportPanel");
 const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"), "StatsChooserPanel");
@@ -282,6 +284,7 @@ function MainPanels() {
   const multivarOpen = useMultivarStore((s) => s.open);
   const statsTestsOpen = useStatsTestsStore((s) => s.open);
   const variabilityOpen = useVariabilityStore((s) => s.open);
+  const extrasOpen = useAnalysisExtras((s) => s.open.length > 0);
   const signalProcessingOpen = useApp((s) => s.signalProcessingOpen);
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
@@ -342,6 +345,7 @@ function MainPanels() {
       {multivarOpen && <MultivarPanel />}
       {statsTestsOpen && <StatsTestsPanel />}
       {variabilityOpen && <VariabilityChartPanel />}
+      {extrasOpen && <AnalysisExtrasHost />}
       {(signalProcessingOpen || openAnalysisResultId) && <SignalAnalysisPanels />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
