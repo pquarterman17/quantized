@@ -15,7 +15,7 @@ import {
   replaceConfirmMessage,
   replaceWorkspace,
 } from "../lib/openWorkspaceReplace";
-import { currentViewport } from "../lib/parseWorkspaceFile";
+import { currentViewport } from "../lib/currentViewport";
 import { workspaceCodec } from "../lib/workspaceCodecLazy";
 import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";

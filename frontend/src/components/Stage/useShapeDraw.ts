@@ -17,7 +17,7 @@ import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { createAnnotationFromDialog } from "./annotationShapeActions";
+import { preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
 
 export type DrawShapeKind = Shape["kind"] | "textbox";
 
@@ -76,6 +76,12 @@ export function useShapeDraw(): ShapeDrawResult {
     Boolean(drawShapeKind),
   );
 
+  // A placed text box opens its text dialog through ./objectMenus: warm it
+  // while the tool is armed, so the placement finds it loaded.
+  useEffect(() => {
+    if (drawShapeKind === "textbox") preloadObjectMenus();
+  }, [drawShapeKind]);
+
   const shapeDraw = useMemo<NonNullable<BuildOptsArgs["shapeDraw"]> | null>(() => {
     if (!drawShapeKind) return null;
     return {
@@ -103,7 +109,9 @@ export function useShapeDraw(): ShapeDrawResult {
           // ruling: unlike a right-click's cancellable menu pick, committing
           // a drag-drawn text box IS the commit — the tool flip isn't
           // conditioned on the dialog outcome).
-          void createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME });
+          // The dialog helper loads with the object menus (bundle diet slice
+          // 30), warmed below once the text-box tool is armed.
+          withObjectMenus((m) => void m.createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME }));
           return;
         }
         const id = addShape({ kind, x1, y1, x2, y2 });

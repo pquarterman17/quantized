@@ -32,17 +32,9 @@ import type { ViewportSize, WorkspaceParseResult } from "./workspaceParseCore";
 import type { LoadedWorkspace } from "./workspace";
 
 export type { ViewportSize } from "./workspaceParseCore";
-
-/** The real browser viewport, captured on the calling (main) thread.
- *  `parseWorkspace`'s `toolWindowLayout` clamp defaults to
- *  `window.innerWidth/innerHeight` when no `viewport` is passed — but
- *  `window` doesn't exist inside a worker, so that default would silently
- *  clamp to its own 1280x800 fallback instead. Reading it here and
- *  threading it through explicitly keeps the worker path byte-for-byte
- *  identical to the synchronous path's prior (implicit) default. */
-export function currentViewport(): ViewportSize {
-  return { width: window.innerWidth, height: window.innerHeight };
-}
+// Moved to its own module (bundle diet slice 30) so the eager Open command
+// can capture the viewport at pick time while this module loads on demand.
+export { currentViewport } from "./currentViewport";
 
 function unwrap(result: WorkspaceParseResult): LoadedWorkspace {
   if (result.ok) return result.workspace;

@@ -3,12 +3,13 @@
 
 import { renderHook } from "@testing-library/react";
 import { act } from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 import { pressEscape } from "../../test/pressEscape";
 import { useShapeEdit } from "./useShapeEdit";
+import { loadObjectMenus } from "./objectMenusLoader";
 
 // A stand-in conv (mirrors useAnnotationEdit.test.ts's CONV) — the plugin's
 // own shapeAnchorConversions round-trip lives in uplotShapes.test.ts; this
@@ -17,6 +18,13 @@ const CONV = {
   toPage: { x1: 0.1, y1: 0.2, x2: 0.3, y2: 0.4 },
   toData: { x1: 5, y1: 6, x2: 7, y2: 8 },
 };
+
+// The object menus load on demand (bundle diet slice 30); the app warms them
+// once a plot has an object to act on, so a gesture finds them loaded. Load
+// them up front the same way, so the menus here open on the gesture's frame.
+beforeAll(async () => {
+  await loadObjectMenus();
+});
 
 beforeEach(() => {
   useApp.setState({

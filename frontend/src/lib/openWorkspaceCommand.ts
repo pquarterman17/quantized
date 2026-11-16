@@ -9,7 +9,7 @@ import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
 import { baseName, parentDirectory } from "./importEntry";
 import { onLoadFailure, runLazy } from "./runLazy";
 import type { StoreGet } from "./exportActive";
-import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
+import { currentViewport } from "./currentViewport";
 import type { LoadedWorkspace } from "./workspace";
 import { workspaceCodec } from "./workspaceCodecLazy";
 import { withOp } from "../store/pendingOps";
@@ -80,7 +80,11 @@ export function openWorkspaceCommand(
     openFilePicker((files) => {
       const file = files[0];
       if (!file) return;
-      void withOp(label, () => parseWorkspaceFile(file, currentViewport()))
+      // The parse entry point (and its Worker) loads once a file is picked
+      // (bundle diet slice 30); a chunk that will not load lands in the same
+      // "<verb> failed: …" status a parse failure does, and nothing is opened.
+      const viewport = currentViewport();
+      void withOp(label, () => import("./parseWorkspaceFile").then((m) => m.parseWorkspaceFile(file, viewport)))
         .then(dispatch)
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),

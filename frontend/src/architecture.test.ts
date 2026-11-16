@@ -2812,6 +2812,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/datasetListEdits.ts",
       call: 'import("./duplicateDatasetRun")',
     },
+    // SLICE 30 (2026-11-15): three more async store-action bodies, the
+    // `.dwk` parse entry point once a file is picked, and the plot-object
+    // menus (warmed once a plot has an annotation or a shape; the registry
+    // actions they gather are in DRAGGED_OUT).
+    {
+      module: "/store/derivedWorksheetCreate.ts",
+      loader: "/store/derivedWorksheets.ts",
+      call: 'import("./derivedWorksheetCreate")',
+    },
+    { module: "/store/pasteDataRun.ts", loader: "/store/dataIntake.ts", call: 'import("./pasteDataRun")' },
+    { module: "/store/appendWorkspaceRun.ts", loader: "/store/workspaceHydration.ts", call: 'import("./appendWorkspaceRun")' },
+    { module: "/lib/parseWorkspaceFile.ts", loader: "/lib/openWorkspaceCommand.ts", call: 'import("./parseWorkspaceFile")' },
+    { module: "/components/Stage/objectMenus.tsx", loader: "/components/Stage/objectMenusLoader.ts", call: 'import("./objectMenus")' },
     {
       // SLICE 17: the Take Over Editing / Open as Copy bodies.
       module: "/commands/projectLockRun.ts",
@@ -3678,6 +3691,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // loads it when a default is set (commands/plotCommands.ts warmDefaultGraphTemplate).
     "/lib/defaultGraphTemplate.ts",
     "/lib/graphFormat.ts",
+    // SLICE 30 (2026-11-15): the annotation/shape registry actions, which the
+    // object menus, the right-click plot menu and the ⌘K palette (all lazy)
+    // import statically.
+    "/components/Stage/annotationShapeActions.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
