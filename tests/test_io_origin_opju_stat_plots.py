@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from quantized.io.origin_project import drop_empty_library_books, read_origin_project_all
+from quantized.io.origin_project.fidelity import assess_origin_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.import_manifest import origin_figures_and_fidelity
 from quantized.io.origin_project.opju_plot_gates import PLOT_TYPE_OFF
@@ -28,6 +29,8 @@ from quantized.io.origin_project.opju_plot_kinds import (
 )
 from quantized.io.origin_project.opju_stat_plots import (
     BOX_KIND_NOT_DECODED,
+    BOX_MARKS_NOT_DECODED,
+    HISTOGRAM_BINS_NOT_DECODED,
     HISTOGRAM_OF_SEVERAL_COLUMNS,
     STAT_LAYER_IN_PANELS,
     STAT_LAYER_OF_SEVERAL_BOOKS,
@@ -184,6 +187,33 @@ def test_multi_layer_and_unnamed_pages_omit() -> None:
     assert out[0]["curves"] == [] and out[2]["curves"] == []
     assert out[1] is figs[1]
     assert out[0]["curve_sheet_omitted"][0]["reason"] == STAT_LAYER_IN_PANELS
+
+
+def test_drawn_stat_figures_carry_their_fidelity_note() -> None:
+    """A drawn histogram says its bins are quantized's, a drawn box family
+    figure that its marks are; the note reaches the figure's fidelity."""
+    b = _MAGIC + _graph_page("G1", "Violin")
+    figs = [
+        {"name": "G1", "curves": [_box("B")]},
+        {"name": "G2", "curves": [_box("C", "histogram")]},
+        {"name": "G3", "curves": [{"book": "Bk", "x": "A", "y": "D", "style": "line"}]},
+    ]
+    out = apply_stat_kinds(figs, b)
+    assert out[0][BOX_MARKS_NOT_DECODED] == "violin" and HISTOGRAM_BINS_NOT_DECODED not in out[0]
+    assert out[1][HISTOGRAM_BINS_NOT_DECODED] == "histogram" and BOX_MARKS_NOT_DECODED not in out[1]
+    assert out[2] is figs[2]
+    base = {"x_from": 0.0, "x_to": 1.0, "y_from": 0.0, "y_to": 1.0, "x_log": False, "y_log": False}
+    assessed, _ = assess_origin_figures([{**f, **base} for f in out], container="opju")
+    omissions = [a["fidelity"]["omissions"] for a in assessed]
+    assert BOX_MARKS_NOT_DECODED in omissions[0] and HISTOGRAM_BINS_NOT_DECODED not in omissions[0]
+    assert HISTOGRAM_BINS_NOT_DECODED in omissions[1]
+    assert not {BOX_MARKS_NOT_DECODED, HISTOGRAM_BINS_NOT_DECODED} & set(omissions[2])
+
+
+def test_omitted_stat_layer_carries_no_drawn_note() -> None:
+    (out,) = apply_stat_kinds([{"name": "G", "curves": [_box("B")]}], _MAGIC)  # no template
+    assert out["curves"] == []
+    assert BOX_MARKS_NOT_DECODED not in out and HISTOGRAM_BINS_NOT_DECODED not in out
 
 
 def test_rowless_curves_of_several_books_omit() -> None:

@@ -369,12 +369,16 @@ None open.
          rowless curve on sheet N with no sheet X (`x_sheet_unproven`,
          Degree-of-impact Graph10 / 4A) is omitted although it needs no X.
          Origin's box statistics (whisker rule, mean marker, data overlay)
-         are not decoded: quantized draws its own default box marks.
+         are not decoded: quantized draws its own default box marks, and
+         every drawn box-family figure says so (`box_marks_not_decoded`
+         fidelity omission). Overlays are not told from the template:
+         SOP_meas Graph78 (template `BOX`) has distribution curves.
    - [ ] **Histogram residue.** 1-column histograms now open the Stat
          Stage histogram of that column (3 specimens; real corpus SOP_meas
          Graph37/38/42/45); BIN WIDTH / START are NOT decoded -- quantized
          uses its default bin rule, Origin its own (no COM readback found;
-         decode the record's bin fields against a by-construction oracle).
+         decode the record's bin fields against a by-construction oracle);
+         each drawn histogram says so (`histogram_bins_not_decoded`).
          Several-column histogram layers stay omitted
          (`histogram_of_several_columns`, 8 specimens; the Stat Stage bins
          one column: creation gap #15). `huge_tiny` not recovered. A

@@ -35,6 +35,17 @@ in quantized, so a layer with more than one keeps none (they draw as before,
 by their line style). Stacked (213), horizontal (215 / 216) and floating (207)
 columns are not decoded here.
 
+**What a drawn figure still lacks** is noted on it, the way
+``marker_encoding_not_decoded`` is (``fidelity``): a histogram carries
+``histogram_bins_not_decoded`` (Origin's bin width / start are not decoded;
+quantized bins with its own default rule, so bar heights can differ), and a
+box / violin / strip carries ``box_marks_not_decoded`` (quantized draws its own
+whisker rule and marks; Origin's box statistics, data-point / half-violin /
+distribution overlays are not decoded). The overlays are NOT told from the
+template: ``SOP_meas`` Graph78's template is plain ``BOX`` yet Origin draws a
+distribution curve beside each box, so every box-family figure carries the
+note.
+
 A histogram layer of several columns is omitted too
 (``histogram_of_several_columns``): the Stat Stage bins one column, Origin
 bins each, so drawing the first alone would show a different figure.
@@ -52,6 +63,8 @@ from quantized.io.origin_project.opju_plot_kinds import X_NOT_A_COLUMN as _X_NOT
 
 __all__ = [
     "BOX_KIND_NOT_DECODED",
+    "BOX_MARKS_NOT_DECODED",
+    "HISTOGRAM_BINS_NOT_DECODED",
     "HISTOGRAM_OF_SEVERAL_COLUMNS",
     "STAT_LAYER_IN_PANELS",
     "STAT_LAYER_OF_SEVERAL_BOOKS",
@@ -59,6 +72,10 @@ __all__ = [
 ]
 
 BOX_KIND_NOT_DECODED = "box_kind_not_decoded"
+# Figure-level fidelity notes (the ``marker_encoding_not_decoded`` mechanism):
+# the figure IS drawn, but not with Origin's own bins / box marks.
+HISTOGRAM_BINS_NOT_DECODED = "histogram_bins_not_decoded"
+BOX_MARKS_NOT_DECODED = "box_marks_not_decoded"
 STAT_LAYER_IN_PANELS = "stat_layer_in_multi_layer_page"
 HISTOGRAM_OF_SEVERAL_COLUMNS = "histogram_of_several_columns"
 STAT_LAYER_OF_SEVERAL_BOOKS = "stat_layer_of_several_books"
@@ -115,7 +132,8 @@ def apply_stat_kinds(figs: list[dict[str, Any]], b: bytes) -> list[dict[str, Any
             # the Stat Stage bins one column; Origin bins each (plan item 15)
             kind, reason = None, HISTOGRAM_OF_SEVERAL_COLUMNS
         if kind is not None:
-            out.append({**fig, "curves": [{**c, "plotType": kind} for c in curves]})
+            note = HISTOGRAM_BINS_NOT_DECODED if kind == "histogram" else BOX_MARKS_NOT_DECODED
+            out.append({**fig, "curves": [{**c, "plotType": kind} for c in curves], note: kind})
             continue
         notes = list(fig.get("curve_sheet_omitted") or [])
         notes += [
