@@ -204,3 +204,33 @@ describe("AxisDropZones", () => {
     expect(onContextMenu).toHaveBeenCalled();
   });
 });
+
+describe("AxisDropZones on a turned plot (Exchange X-Y)", () => {
+  it("highlights the band by the axis that sits there: bottom is Y, left is X, no right band", async () => {
+    const { useApp } = await import("../../store/useApp");
+    useApp.setState({ exchangeXY: true });
+    try {
+      const drops: string[] = [];
+      const { container } = render(
+        <AxisDropZones className="qzk-stage" onContextMenu={() => {}} onAxisDrop={(zone) => drops.push(zone)}>
+          <span>content</span>
+        </AxisDropZones>,
+      );
+      const stage = container.querySelector(".qzk-stage")!;
+      setStageRect(stage, 600, 400);
+      const dataTransfer = channelDataTransfer("d1", 0);
+      fireEvent.dragEnter(stage, { dataTransfer });
+      expect(container.querySelector(".qzk-axis-zone.y2.top")).not.toBeNull(); // Y2's band moves to the top
+      fireDrag(stage, "dragover", { dataTransfer, clientX: 300, clientY: 350 }); // bottom: Y
+      expect(container.querySelector(".qzk-axis-zone.x.active")).not.toBeNull(); // the bottom BAND
+      fireDrag(stage, "drop", { dataTransfer, clientX: 300, clientY: 350 });
+      fireEvent.dragEnter(stage, { dataTransfer });
+      fireDrag(stage, "drop", { dataTransfer, clientX: 40, clientY: 150 }); // left: X
+      fireEvent.dragEnter(stage, { dataTransfer });
+      fireDrag(stage, "drop", { dataTransfer, clientX: 300, clientY: 30 }); // top: Y2
+      expect(drops).toEqual(["y", "x", "y2"]);
+    } finally {
+      useApp.setState({ exchangeXY: false });
+    }
+  });
+});

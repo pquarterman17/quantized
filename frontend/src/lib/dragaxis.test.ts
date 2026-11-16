@@ -267,3 +267,17 @@ describe("resolveAxisDrop — cross-cutting validation", () => {
     expect(negative.noop).toMatch(/invalid channel/);
   });
 });
+
+describe("resolveAxisZone on a TURNED plot", () => {
+  const rect = { width: 600, height: 400 };
+  it("the bottom strip is Y and the left strip is X, as the axes sit there", () => {
+    expect(resolveAxisZone(rect, { x: 300, y: 350 }, true)).toBe("y");
+    expect(resolveAxisZone(rect, { x: 40, y: 150 }, true)).toBe("x");
+  });
+  it("has no right strip: its Y2 is the strip across the top", () => {
+    expect(resolveAxisZone(rect, { x: 560, y: 150 }, true)).toBeNull();
+    expect(resolveAxisZone(rect, { x: 300, y: 40 }, true)).toBe("y2");
+    expect(resolveAxisZone(rect, { x: 40, y: 40 }, true)).toBe("x"); // the left strip keeps its corner
+    expect(resolveAxisZone(rect, { x: 300, y: 40 })).toBeNull(); // upright: the top is plot interior
+  });
+});

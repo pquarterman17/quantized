@@ -59,6 +59,12 @@ const dataset = (ws: LoadedWorkspace, id: string): Dataset => ws.datasets.find((
 /** One edit per gated field (and gated value), keyed `Type.field`. */
 const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "PlotView.layers": (ws) => editView(ws, (v) => { v.layers = [{ id: "t", kind: "table", rows: [["a", "1"]] } as never]; }),
+  // (the fixture's view carries a Y break, which the exchange is refused beside: take it out)
+  "PlotView.exchangeXY": (ws) => editView(ws, (v) => {
+    v.exchangeXY = true;
+    v.yFmt = { ...v.yFmt, breaks: undefined };
+    v.y2Fmt = v.y2Fmt && { ...v.y2Fmt, breaks: undefined };
+  }),
   "PlotView.yAxes": (ws) => editView(ws, (v) => { v.yAxes = [{ lim: null, scale: null, step: null, fmt: null, label: "R3", color: null }]; }),
   "PlotView.yAxisOf": (ws) => editView(ws, (v) => {
     v.yAxes = [{ lim: null, scale: null, step: null, fmt: null, label: "R3", color: null }];
@@ -367,7 +373,7 @@ function populate(ws: LoadedWorkspace): void {
   const legend: Required<NonNullable<FigureOverrides["legend"]>> = { show: true, loc: "best", frame: true, anchor: [0, 0], title: "t" };
   const ticks: Required<NonNullable<FigureOverrides["ticks"]>> = { dir: "in", len: 3, minor: true };
   const spines: Required<NonNullable<FigureOverrides["spines"]>> = { top: true, right: true };
-  const overrides: Required<Omit<FigureOverrides, "layers">> = {
+  const overrides: Required<Omit<FigureOverrides, "layers" | "exchange_xy">> = { // wire-only keys: never persisted
     font_size: 9, font_name: "Arial", title_size: 9, label_size: 9, tick_size: 9, legend_size: 9,
     legend, ticks, spines,
     x_lim: [0, 1], x_reversed: true, y_lim: [0, 1], y2_lim: [0, 1],

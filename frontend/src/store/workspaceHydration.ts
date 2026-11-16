@@ -282,7 +282,9 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
       relinkLoadedGraphs(ws.datasets);
       // Gap audits 5 C / 6 K: the focused figure's saved overlays back on its
       // canvas, else its dataset's saved fit redrawn from its parameters (lazy).
-      void loadWindowOverlays().then((m) => m.restoreOverlays(), () => undefined);
+      // Either chunk failing (the module, or the redraw it fetches) only
+      // means no fit is put back: never an unhandled rejection.
+      void loadWindowOverlays().then((m) => m.restoreOverlays()).catch(() => undefined);
       announceWorkspaceReplace();
     },
     appendWorkspace: (ws) => (relinkLoadedGraphs(ws.datasets), runAppendWorkspace(set, get, ws)),

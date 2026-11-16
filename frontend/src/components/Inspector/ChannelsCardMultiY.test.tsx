@@ -39,6 +39,16 @@ describe("ChannelsCard: Y axis per series", () => {
     expect(useApp.getState().history).toHaveLength(1);
   });
 
+  it("offers no new Y3 on an exchanged plot (it is not drawn there): Y1 and Y2 only, no half-applied move", () => {
+    useApp.setState({ exchangeXY: true });
+    try {
+      render(<ChannelsCard active={dataset} />);
+      expect([...pick("M").options].map((o) => o.text)).toEqual(["Y1", "Y2"]);
+    } finally {
+      useApp.setState({ exchangeXY: false });
+    }
+  });
+
   it("Y2 and back to Y1 go through the same pick", () => {
     render(<ChannelsCard active={dataset} />);
     fireEvent.change(pick("R"), { target: { value: "2" } });

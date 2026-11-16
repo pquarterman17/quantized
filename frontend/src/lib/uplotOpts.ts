@@ -608,7 +608,9 @@ export interface BuildOptsArgs {
   } | null;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
-  yLim?: [number, number] | null; xReversed?: boolean; // x high-to-low: uPlot dir -1 (cursor/posToVal/zoom honour it)
+  yLim?: [number, number] | null;
+  xReversed?: boolean; // x high-to-low: uPlot dir -1 (cursor/posToVal/zoom honour it)
+  exchangeXY?: boolean; // Plot > Exchange X-Y axes: the layer turns on its side (lib/uplotOrient.ts)
   /** Secondary (right) Y axis: explicit range + scale. An applied Origin
    *  double-Y figure carries layer 2's own axis state here; null/undefined =
    *  autoscale / inherit yScale (the pre-2026-07-06 behaviour). */
@@ -1238,7 +1240,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
         },
       ],
     },
-    plugins: orientPlugins(plugins.map(compactPluginHooks), args.seriesStyles),
+    plugins: orientPlugins(plugins.map(compactPluginHooks), args.seriesStyles, args.exchangeXY),
     legend: { show: false },
     // Setting `scales.x.time` engages uPlot's CALENDAR-aware tick placement,
     // which snaps splits to day/month/year boundaries through `tzDate`. Left
@@ -1251,7 +1253,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     // exact (it follows DST per timestamp) and far cheaper than uPlot.tzDate,
     // which builds an Intl formatter per call.
     ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
-    ...orientAxes(scales, axes, args.seriesStyles), // horizontal bars: uplotOrient
+    ...orientAxes(scales, axes, args.seriesStyles, args.exchangeXY), // horizontal bars: uplotOrient
     padding: [null, hasY2 || args.yAxes?.length ? null : xLabelRightPad(tickPx), null, null],
     series: seriesArr,
     ...(bands.length > 0 ? { bands } : {}),

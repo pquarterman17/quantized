@@ -65,6 +65,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   plotTemplate: canonical("style.templateId", "Keep the selected template identity without reapplying it over later edits."),
   showAxisBox: canonical("axes.box.visible"),
   xReversed: canonical("axes.x.reversed"),
+  exchangeXY: canonical("axes.exchangeXY", "Swap which axis runs vertically; each axis keeps its own title, scale, limits, direction and format."),
   stackMode: canonical("plot.stack.enabled"),
   insetMode: canonical("plot.inset.enabled"),
   inset: canonical("plot.inset.geometry"),

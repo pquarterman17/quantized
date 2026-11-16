@@ -154,6 +154,15 @@ describe("BackgroundPlotWindow", () => {
     expect(opts.plugins).toHaveLength(2);
   });
 
+  it("draws an exchanged view turned, as the focused window does (X vertical, Y along the bottom)", async () => {
+    render(<BackgroundPlotWindow dataset={DATASET} view={{ ...noBoxView(), exchangeXY: true }} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { scales: { x: { ori?: number }; y: { ori?: number } }; axes: { side?: number }[] };
+    expect(opts.scales.x.ori).toBe(1);
+    expect(opts.scales.y.ori).toBe(0);
+    expect(opts.axes[0].side).toBe(3); // X axis on the left
+  });
+
   it("ignores the singleton store's tool overlays entirely (decision #2 — focused-window-only)", async () => {
     // A background window must NEVER show a fit/peak/baseline/deriv overlay
     // even if the LIVE singleton happens to have one set (e.g. from whatever

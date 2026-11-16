@@ -30,7 +30,7 @@ import {
 } from "../../lib/axisExtrasHook";
 import { awaitsOriginEscapes, originEscapesSettled } from "../../lib/originEscapeLoader";
 import type { AxisFormat, SeriesStyle } from "../../lib/types";
-import { hasHorizontalBars, orientTurnReady, orientTurnSettled } from "../../lib/uplotOrient";
+import { isTurned, orientTurnReady, orientTurnSettled } from "../../lib/uplotOrient";
 import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
 import { loadMarks, marksPending, usesMarks } from "../../lib/marksLoader";
 import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
@@ -64,11 +64,12 @@ export function plotDecorNeeds(
   annotations: readonly { text?: string }[] | null | undefined,
   overlays: number,
   styles?: readonly (SeriesStyle | undefined)[],
+  exchange?: boolean,
 ): LazyDecorNeeds {
   return {
     texts: [...labels, payload?.xLabel, ...(payload?.series.map((s) => s.label) ?? []), ...(annotations ?? []).map((a) => a.text)],
     overlays: overlays > 0,
-    ...(hasHorizontalBars(styles) ? { turned: true } : {}),
+    ...(isTurned(styles, exchange) ? { turned: true } : {}),
     ...(styles?.some(usesMarks) ? { marks: true } : {}),
   };
 }

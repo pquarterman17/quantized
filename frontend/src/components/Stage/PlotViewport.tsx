@@ -326,7 +326,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.y2Fmt,
     yAxes,
     args.showGrid,
-    args.axisBox, args.xReversed,
+    args.axisBox, args.xReversed, args.exchangeXY,
     args.fontSize,
     args.defaultTrace,
     args.wheelZoom,
@@ -363,7 +363,7 @@ export default function PlotViewport(props: PlotViewportProps) {
   // On-demand plugins, and a rebuild once the startup chunks settle (figures leftover g).
   const decor = plotDecorNeeds(
     [args.title, args.xAxisLabel, args.yAxisLabel, args.y2AxisLabel, ...(seriesLabels ?? [])],
-    displayPayload, args.annotations, startupOverlayCount({ r: args.refLines, s: args.regionShades, errorBars, errorSpans, colorByColumns }), args.seriesStyles,
+    displayPayload, args.annotations, startupOverlayCount({ r: args.refLines, s: args.regionShades, errorBars, errorSpans, colorByColumns }), args.seriesStyles, args.exchangeXY,
   );
   useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 

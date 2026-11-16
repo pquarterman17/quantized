@@ -78,6 +78,7 @@ function bandSize(dim: number, fraction: number): number {
 export function resolveAxisZone(
   rect: { width: number; height: number },
   point: { x: number; y: number },
+  turned = false,
 ): AxisZone | null {
   const { width, height } = rect;
   if (width <= 0 || height <= 0) return null;
@@ -85,10 +86,12 @@ export function resolveAxisZone(
   if (x < 0 || y < 0 || x > width || y > height) return null;
   const bandH = bandSize(height, X_BAND_FRACTION);
   const bandW = bandSize(width, Y_BAND_FRACTION);
-  if (y >= height - bandH) return "x";
-  if (x <= bandW) return "y";
-  if (x >= width - bandW) return "y2";
-  return null;
+  // A turned plot (horizontal bars / Exchange X-Y) has Y along the bottom, X up the
+  // left and its Y2 across the TOP (a top band, the same depth as the bottom one).
+  if (y >= height - bandH) return turned ? "y" : "x";
+  if (x <= bandW) return turned ? "x" : "y";
+  if (turned) return y <= bandH ? "y2" : null;
+  return x >= width - bandW ? "y2" : null;
 }
 
 /** A single store mutation resolveAxisDrop asks the caller to run — mirrors

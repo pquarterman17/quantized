@@ -122,6 +122,33 @@ describe("Axis dialog: G17 rows", () => {
   });
 });
 
+describe("Axis dialog while X and Y are exchanged", () => {
+  it("refuses a Y break and a top axis (the turn cannot draw them), and takes them once un-exchanged", () => {
+    useApp.setState({ exchangeXY: true });
+    openFigureDialog({ kind: "axis", axis: "y" });
+    render(<FigureDialogs />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Y axis Break from" }), { target: { value: "10" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Y axis Break to" }), { target: { value: "20" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("can't be set while X and Y are exchanged");
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("tab", { name: "X" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "X axis Shows" }), { target: { value: "reciprocal" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("exchanged");
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  it("an ordinary edit (a limit) still applies", () => {
+    useApp.setState({ exchangeXY: true });
+    openFigureDialog({ kind: "axis", axis: "y" });
+    render(<FigureDialogs />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Y axis From" }), { target: { value: "1" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Y axis To" }), { target: { value: "5" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().yLim).toEqual([1, 5]);
+  });
+});
+
 describe("Axis dialog: tick labels with commas round-trip (review L2)", () => {
   it("escapes a literal comma or backslash, and reopens to the same labels", () => {
     const labels = ["1,000", "a\\b", "", "plain"];

@@ -56,3 +56,21 @@ describe("pickNearestSeries", () => {
     expect(pickNearestSeries(480, [500, 600], 44)).toBe(0);
   });
 });
+
+describe("axisZoneAt on a TURNED plot (horizontal bars / Exchange X-Y)", () => {
+  const rect = { left: 100, top: 50, right: 500, bottom: 350 };
+  it("names the axis each gutter now carries: Y below, X at the left, Y2 across the top", () => {
+    expect(axisZoneAt(300, 380, rect, true, true)).toBe("y");
+    expect(axisZoneAt(60, 200, rect, true, true)).toBe("x");
+    expect(axisZoneAt(300, 20, rect, true, true)).toBe("y2");
+  });
+  it("has no right gutter and no Y2 gutter without a Y2", () => {
+    expect(axisZoneAt(540, 200, rect, true, true)).toBe("outside");
+    expect(axisZoneAt(300, 20, rect, false, true)).toBe("outside");
+  });
+  it("leaves the upright answer alone", () => {
+    expect(axisZoneAt(300, 380, rect, true)).toBe("x");
+    expect(axisZoneAt(60, 200, rect, true)).toBe("y");
+    expect(axisZoneAt(540, 200, rect, true)).toBe("y2");
+  });
+});

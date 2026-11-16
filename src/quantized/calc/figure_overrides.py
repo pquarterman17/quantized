@@ -76,6 +76,11 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
             v = margins.get(side)
             if v is not None and not 0.0 <= float(v) <= 1.0:
                 raise ValueError("margins are figure fractions in [0, 1]")
+    if ov.get("exchange_xy") is not None:  # Plot > Exchange X-Y axes (calc.figure_orient)
+        if not isinstance(ov["exchange_xy"], bool):
+            raise ValueError("exchange_xy must be true or false")
+        if ov["exchange_xy"] and ov.get("x_breaks"):
+            raise ValueError("exchange_xy is not supported together with x_breaks")
     validate_page_pad(ov.get("page_pad"))  # Page setup margins (calc.figure_layout)
     validate_typography(ov)  # per-element font sizes (calc.figure_fonts)
     breaks = ov.get("x_breaks")

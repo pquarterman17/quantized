@@ -75,6 +75,7 @@ const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: t
 const ORIGIN_FIGURE_MODE_RESET = {
   stackMode: false,
   insetMode: false,
+  exchangeXY: false, // a recovered graph is drawn as saved, never beside a stale exchange
   polarMode: false,
   statMode: false,
   composition: null,

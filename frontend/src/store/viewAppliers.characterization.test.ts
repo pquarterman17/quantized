@@ -1071,6 +1071,7 @@ describe("applyOriginFigure — single-layer branch", () => {
       activeId: "d2",
       stackMode: true,
       insetMode: true,
+      exchangeXY: true, // a recovered Origin graph is drawn as saved, not turned by a stale exchange
       polarMode: true,
       statMode: true,
       groupKey: 0,
@@ -1095,6 +1096,7 @@ describe("applyOriginFigure — single-layer branch", () => {
     expect(useApp.getState()).toMatchObject({
       stackMode: false,
       insetMode: false,
+      exchangeXY: false,
       polarMode: false,
       statMode: false,
       composition: null,

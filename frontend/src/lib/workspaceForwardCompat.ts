@@ -90,7 +90,7 @@ export const PLOT_VIEW: Classify<PlotView> = {
   facetKey: V, y2Keys: V, y2Lim: V, y2Scale: V, y2Step: V, y2AxisLabel: V, refLines: V, annotations: V,
   regionShades: V, shapes: V, seriesStyles: V, seriesLabels: V, errKeys: V, seriesOrder: V, hiddenChannels: V,
   waterfall: V, waterfallDx: V, panelFit: V, pageSetup: V,
-  layers: G, yAxes: G, yAxisOf: G, seriesRamp: G,
+  layers: G, exchangeXY: G, yAxes: G, yAxisOf: G, seriesRamp: G,
 };
 
 export const PLOT_WINDOW: Classify<PlotWindow> = {
@@ -198,7 +198,9 @@ export const FIGURE_OVERRIDES: Classify<FigureOverrides> = {
   font_size: V, font_name: V, title_size: V, label_size: V, tick_size: V, legend_size: V, legend: V, ticks: V,
   spines: V, x_lim: V, x_reversed: V, y_lim: V, y2_lim: V, margins: V, page_pad: V, grid: V, annotations: V,
   x_breaks: V, shapes: V, ref_lines: V, region_shades: V, inset: V,
-  layers: K,
+  // Wire-only like `layers`: built from the gated `PlotView.exchangeXY` at
+  // export time, never persisted by sanitizeFigureOverrides.
+  layers: K, exchange_xy: K,
 };
 
 // The export-request element is a subset of Annotation: a new key must be one.

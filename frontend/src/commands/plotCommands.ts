@@ -11,12 +11,24 @@ import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
+import { TURNED_TOOL_NOTE, turnedOf } from "../lib/uplotOrient";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
+import { useApp } from "../store/useApp";
 import { onLoadFailure, runLazy } from "./fileCommands";
 import { colorGradientCommand, legendFormatCommand } from "./plotStyleCommands";
+
+/** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes, and the store guard
+ *  that keeps it honest) is a lazy chunk the session starts loading with this
+ *  module, as `lib/uplotOrient.ts` does for its overlay half. Until it lands the
+ *  command reads "Loading…" and is off; a menu render after a failed load asks
+ *  again. */
+let xy: typeof import("../lib/exchangeXY") | undefined;
+const xyNow = () => xy ?? void import("../lib/exchangeXY").then((m) => { xy = m; m.installExchangeGuard(useApp, toast); }, () => {});
+xyNow();
+const xyWhy = (s: StoreGet) => (xyNow() ? xy!.exchangeBlocker(s()) : "Loading…");
 
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
@@ -169,6 +181,16 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => s().setXFmt({ ...s().xFmt, mode: cycleTickMode(s().xFmt.mode) }),
     },
     {
+      id: "exchange-xy", // Exchange X-Y axes: lib/exchangeXY.ts says what cannot be turned
+      group: "Plot",
+      section: "Axes",
+      label: "Exchange X–Y axes",
+      checked: () => s().exchangeXY,
+      disabled: () => !!xyWhy(s),
+      disabledReason: () => xyWhy(s),
+      run: () => { const why = xyWhy(s); if (why) toast(why); else xy!.toggleExchangeXY(useApp); }, // a palette pick of a blocked one says why
+    },
+    {
       id: "grid",
       group: "Plot",
       section: "Display",
@@ -219,6 +241,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Display",
       label: "Magnifier inset",
       checked: () => s().insetMode,
+      disabled: () => turnedOf(s()) && !s().insetMode, // the inset does not turn: not beside a turned plot
+      disabledReason: TURNED_TOOL_NOTE,
       run: () => s().setInsetMode(!s().insetMode),
     },
     {

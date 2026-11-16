@@ -32,7 +32,7 @@ import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "re
 import { loadToolPlugins } from "../../lib/axisExtrasHook";
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
-import { hasHorizontalBars, TURNED_TOOL_NOTE, TURNED_TOOLS } from "../../lib/uplotOrient";
+import { TURNED_TOOL_NOTE, TURNED_TOOLS, turnedOf } from "../../lib/uplotOrient";
 import {
   ANALYZE_TOOLS,
   COPY_DATA,
@@ -58,6 +58,8 @@ import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { useToolGroupFit } from "./plotToolbarOverflow";
 import { usePublishDockClearance } from "./useDockClearance";
 import PlotToolbarGroup from "./PlotToolbarGroup";
+
+const TURNED_OFF = { disabled: true, disabledReason: TURNED_TOOL_NOTE }; // not available on a turned plot
 
 interface Props {
   onReset: () => void;
@@ -124,7 +126,7 @@ export default function PlotToolbar({
 }: Props) {
   const tool = useApp((s) => s.plotTool);
   // A horizontal bar graph turns the plot: pointer-driven tools are off (uplotOrient).
-  const turned = useApp((s) => hasHorizontalBars(Object.values(s.seriesStyles)));
+  const turned = useApp(turnedOf);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setStatus = useApp((s) => s.setStatus);
   // S1 (a): ON whenever a multi-panel layout is engaged, not just `stackMode`.
@@ -176,7 +178,7 @@ export default function PlotToolbar({
     shortcut: keyForTool(t.id),
     active: tool === t.id,
     onClick: () => setPlotTool(t.id),
-    ...(turned && !TURNED_TOOLS.includes(t.id) ? { disabled: true, disabledReason: TURNED_TOOL_NOTE } : {}),
+    ...(turned && !TURNED_TOOLS.includes(t.id) ? TURNED_OFF : {}),
     ...(stackOn && t.id === "lasso" ? { disabled: true, disabledReason: LASSO_STACK_NOTE } : {}),
   });
 
@@ -253,7 +255,7 @@ export default function PlotToolbar({
           desc: stackOn ? "Return to a single overlaid plot" : STACK_MODE.desc,
           onClick: toggleStackLayout,
         }),
-        actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode) }),
+        actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode), ...(turned && !insetMode ? TURNED_OFF : {}) }),
         actionBtn(POLAR_MODE, { active: polarMode, onClick: () => setPolarMode(true) }),
         actionBtn(STAT_MODE, { active: statMode, onClick: () => setStatMode(true) }),
       ],

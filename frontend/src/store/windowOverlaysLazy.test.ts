@@ -19,7 +19,10 @@ describe("windowOverlaysLazy", () => {
     await expect(lazy.loadWindowOverlays()).rejects.toThrow();
     expect(lazy.overlaysNow()).toBeNull(); // the miss starts a new fetch
     fail = false;
-    await vi.waitFor(() => expect(lazy.overlaysNow()).not.toBeNull());
+    // The real module graph (the whole store) is imported cold here: under a
+    // parallel run that alone outlasted waitFor's 1 s default. The property is
+    // that the retry lands, not how fast -- the timeout is a loose backstop.
+    await vi.waitFor(() => expect(lazy.overlaysNow()).not.toBeNull(), { timeout: 15_000 });
     expect(typeof lazy.overlaysNow()!.handoff).toBe("function");
   });
 });

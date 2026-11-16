@@ -56,7 +56,8 @@ export function pointNear(
       const xv = xs[r];
       const yv = cols[s + 1]?.[r];
       if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv)) return null;
-      return [u.valToPos(xv, "x", false), u.valToPos(yv, u.series[s + 1]?.scale ?? "y", false)];
+      const [px, py] = [u.valToPos(xv, "x", false), u.valToPos(yv, u.series[s + 1]?.scale ?? "y", false)];
+      return u.scales.x.ori === 1 ? [py, px] : [px, py]; // a turned plot: X is the vertical position
     },
     x - rect.left,
     y - rect.top,
@@ -81,16 +82,18 @@ export function hitTest(
 ): { series: number | null; idx: number | null; zone: AxisZone; dataX: number | null; dataY: number | null } {
   if (!u || !u.over) return { series: null, idx: null, zone: "outside", dataX: null, dataY: null };
   const rect = u.over.getBoundingClientRect();
+  const turned = u.scales?.x?.ori === 1; // horizontal bars / Exchange X-Y: X runs up the side
   const zone = axisZoneAt(
     x,
     y,
     { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
     hasY2,
+    turned,
   );
   const localX = x - rect.left;
   const localY = y - rect.top;
-  const dataX = u.posToVal(localX, "x");
-  const dataY = u.posToVal(localY, "y");
+  const dataX = u.posToVal(turned ? localY : localX, "x");
+  const dataY = u.posToVal(turned ? localX : localY, "y");
   const xData = (u.data[0] ?? []) as (number | null)[];
   const idx = nearestIndex(xData, dataX);
   if (idx == null) return { series: null, idx: null, zone, dataX, dataY };
@@ -104,5 +107,5 @@ export function hitTest(
     const scale = u.series[i + 1]?.scale ?? "y";
     return u.valToPos(yv, scale, false);
   });
-  return { series: pickNearestSeries(localY, seriesPy, hitPx), idx, zone, dataX, dataY };
+  return { series: pickNearestSeries(turned ? localX : localY, seriesPy, hitPx), idx, zone, dataX, dataY };
 }
