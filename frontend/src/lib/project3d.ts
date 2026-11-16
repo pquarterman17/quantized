@@ -44,8 +44,17 @@ export function wrapAzim(a: number): number {
   return round(w === -180 ? 180 : w);
 }
 
+/** Within range, UNROUNDED: a gesture accumulates in this form, so a trackpad's
+ *  1-px wheel steps add up instead of rounding away. */
+export function limitView(v: View3d): View3d {
+  const w = ((((v.azim + 180) % 360) + 360) % 360) - 180;
+  return { elev: clamp(v.elev, -90, 90), azim: w === -180 ? 180 : w, zoom: clamp(v.zoom, ZOOM_RANGE[0], ZOOM_RANGE[1]) };
+}
+
+/** Within range and rounded to 0.01: the form a settled view is stored in. */
 export function clampView(v: View3d): View3d {
-  return { elev: round(clamp(v.elev, -90, 90)), azim: wrapAzim(v.azim), zoom: round(clamp(v.zoom, ZOOM_RANGE[0], ZOOM_RANGE[1])) };
+  const l = limitView(v);
+  return { elev: round(l.elev), azim: wrapAzim(l.azim), zoom: round(l.zoom) };
 }
 
 /** Degrees per dragged pixel: a 360-px drag turns the plot half way round. */
@@ -54,12 +63,12 @@ export const DRAG_DEG_PER_PX = 0.5;
 /** A drag of (dx, dy) px: the plot follows the pointer (drag right turns it
  *  right = azimuth down; drag down tips the top toward you = elevation up). */
 export function orbit(v: View3d, dx: number, dy: number): View3d {
-  return clampView({ ...v, azim: v.azim - dx * DRAG_DEG_PER_PX, elev: v.elev + dy * DRAG_DEG_PER_PX });
+  return limitView({ ...v, azim: v.azim - dx * DRAG_DEG_PER_PX, elev: v.elev + dy * DRAG_DEG_PER_PX });
 }
 
 /** One wheel notch (deltaY): about 10% per 100 px of scroll. */
 export function zoomBy(v: View3d, deltaY: number): View3d {
-  return clampView({ ...v, zoom: v.zoom * Math.exp(-deltaY / 1000) });
+  return limitView({ ...v, zoom: v.zoom * Math.exp(-deltaY / 1000) });
 }
 
 /** Keyboard rotation (a11y): arrows turn 5° (Shift 15°), +/- zoom. Returns
@@ -67,12 +76,12 @@ export function zoomBy(v: View3d, deltaY: number): View3d {
 export function keyStep(v: View3d, key: string, shift: boolean): View3d | null {
   const s = shift ? 15 : 5;
   switch (key) {
-    case "ArrowLeft": return clampView({ ...v, azim: v.azim + s });
-    case "ArrowRight": return clampView({ ...v, azim: v.azim - s });
-    case "ArrowUp": return clampView({ ...v, elev: v.elev + s });
-    case "ArrowDown": return clampView({ ...v, elev: v.elev - s });
-    case "+": case "=": return clampView({ ...v, zoom: v.zoom * 1.1 });
-    case "-": case "_": return clampView({ ...v, zoom: v.zoom / 1.1 });
+    case "ArrowLeft": return limitView({ ...v, azim: v.azim + s });
+    case "ArrowRight": return limitView({ ...v, azim: v.azim - s });
+    case "ArrowUp": return limitView({ ...v, elev: v.elev + s });
+    case "ArrowDown": return limitView({ ...v, elev: v.elev - s });
+    case "+": case "=": return limitView({ ...v, zoom: v.zoom * 1.1 });
+    case "-": case "_": return limitView({ ...v, zoom: v.zoom / 1.1 });
     default: return null;
   }
 }

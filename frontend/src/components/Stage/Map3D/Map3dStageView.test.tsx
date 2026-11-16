@@ -102,12 +102,41 @@ describe("Map stage interactive 3-D", () => {
     const el = await plot();
     const before = useApp.getState().history.length;
     fireEvent.pointerDown(el, { pointerId: 3, button: 0, clientX: 100, clientY: 100 });
-    fireEvent.pointerMove(el, { pointerId: 3, clientX: 140, clientY: 110 });
-    fireEvent.pointerMove(el, { pointerId: 3, clientX: 160, clientY: 120 });
+    fireEvent.pointerMove(el, { pointerId: 3, buttons: 1, clientX: 140, clientY: 110 });
+    fireEvent.pointerMove(el, { pointerId: 3, buttons: 1, clientX: 160, clientY: 120 });
     expect(view3d()?.azim).toBe(-60);
     fireEvent.pointerUp(el, { pointerId: 3, clientX: 160, clientY: 120 });
     expect(view3d()).toMatchObject({ elev: 40, azim: -90 });
     expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("a drag whose release was lost ends on the next move with no button down (no hover-rotate)", async () => {
+    render(<MapStage />);
+    const el = await plot();
+    fireEvent.pointerDown(el, { pointerId: 4, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 4, buttons: 1, clientX: 120, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 4, buttons: 0, clientX: 200, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 4, buttons: 0, clientX: 300, clientY: 100 });
+    expect(view3d()).toMatchObject({ azim: -70 });
+  });
+
+  it("a key gesture is written as soon as focus leaves the plot, so ⤓ right after exports it", async () => {
+    render(<MapStage />);
+    const el = await plot();
+    fireEvent.keyDown(el, { key: "ArrowRight" });
+    expect(view3d()?.azim).toBe(-60);
+    fireEvent.blur(el);
+    expect(view3d()?.azim).toBe(-65);
+  });
+
+  it("an undo during a pending gesture wins (the pending write is dropped)", async () => {
+    useApp.getState().setMapView3d("scan", { ...DEFAULT_MAP3D, kind: "surface", elev: 20 });
+    render(<MapStage />);
+    const el = await plot();
+    fireEvent.keyDown(el, { key: "ArrowRight" });
+    act(() => useApp.getState().undo());
+    await act(() => new Promise((r) => setTimeout(r, COMMIT_IDLE_MS + 100)));
+    expect(view3d()).toMatchObject({ elev: 30, azim: -60 });
   });
 
   it("Reset view returns to the default camera; the panel's angle fields follow the stored view", async () => {

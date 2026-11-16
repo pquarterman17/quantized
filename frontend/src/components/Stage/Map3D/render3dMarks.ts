@@ -136,17 +136,20 @@ function drawSurface(ctx: CanvasRenderingContext2D, f: Frame, s: SurfaceScene, f
 /** Every `pointStride`-th point is drawn: all of them once the view is still. */
 export const pointStride = (n: number, fast: boolean): number => (fast ? Math.max(1, Math.ceil(n / FAST_POINTS)) : 1);
 
-let splat: { w: number; h: number; img: ImageData; depth: Float32Array; canvas: HTMLCanvasElement } | null = null;
+/** The splat buffers, per drawn canvas: freed with the canvas when the view unmounts. */
+const splats = new WeakMap<HTMLCanvasElement, { w: number; h: number; img: ImageData; depth: Float32Array; canvas: HTMLCanvasElement }>();
 
 function drawPoints(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene, fast: boolean, dpr: number, drop: string): DrawStats {
   const n = s.px.length;
   const step = pointStride(n, fast);
   const W = ctx.canvas.width, H = ctx.canvas.height;
+  let splat = splats.get(ctx.canvas);
   if (!splat || splat.w !== W || splat.h !== H) {
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;
     splat = { w: W, h: H, img: new ImageData(W, H), depth: new Float32Array(W * H), canvas };
+    splats.set(ctx.canvas, splat);
   }
   const buf = new Uint32Array(splat.img.data.buffer);
   buf.fill(0);

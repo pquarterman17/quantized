@@ -29,8 +29,8 @@ describe("project3d", () => {
     expect(keyStep(HOME, "ArrowRight", true)?.azim).toBe(-75);
     expect(keyStep(HOME, "ArrowUp", false)?.elev).toBe(35);
     expect(keyStep(HOME, "ArrowDown", true)?.elev).toBe(15);
-    expect(keyStep(HOME, "+", false)?.zoom).toBe(1.1);
-    expect(keyStep(HOME, "-", false)?.zoom).toBe(0.91);
+    expect(keyStep(HOME, "+", false)?.zoom).toBeCloseTo(1.1, 12);
+    expect(clampView(keyStep(HOME, "-", false)!).zoom).toBe(0.91);
     expect(keyStep(HOME, "a", false)).toBeNull();
   });
 
@@ -38,6 +38,12 @@ describe("project3d", () => {
     expect(zoomBy(HOME, -100).zoom).toBeGreaterThan(1);
     expect(zoomBy(HOME, 100).zoom).toBeLessThan(1);
     expect(zoomBy(HOME, 1e6).zoom).toBe(ZOOM_RANGE[0]);
+  });
+
+  it("small trackpad steps add up (the live view is not rounded until it is stored)", () => {
+    let v = HOME;
+    for (let i = 0; i < 100; i++) v = zoomBy(v, -1);
+    expect(clampView(v).zoom).toBe(1.11);
   });
 
   it("the camera is orthonormal at any angle, and its scale ignores the angle", () => {

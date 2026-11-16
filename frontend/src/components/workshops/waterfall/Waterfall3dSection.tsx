@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react";
 
 import { exportMapFigure } from "../../../lib/api/mapFigure";
+import { DEFAULT_MAP3D } from "../../../lib/mapView3d";
 import type { View3d } from "../../../lib/project3d";
 import type { WaterfallSeries } from "../../../lib/waterfall";
 import { useApp } from "../../../store/useApp";
@@ -19,7 +20,7 @@ import { useMap3dImage } from "../../Stage/useMap3dImage";
 import { curveWaterfallBody, type DepthBy } from "./waterfall3d";
 
 const ROW = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } as const;
-const HOME: View3d = { elev: 30, azim: -60, zoom: 1 };
+const HOME: View3d = { elev: DEFAULT_MAP3D.elev, azim: DEFAULT_MAP3D.azim, zoom: DEFAULT_MAP3D.zoom };
 
 export interface Waterfall3dSectionProps {
   series: readonly WaterfallSeries[];

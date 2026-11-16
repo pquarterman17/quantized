@@ -108,10 +108,25 @@ function points(b: MapFigureSpec, x: number[], y: number[], z: number[]): PointS
   return { kind: "points", ...base(b, [px], [py], [pz]), px, py, pz, drop: b.drop_lines === true };
 }
 
+/** `calc/figure_map3d.py`'s limits: a value the axes cannot span, and the
+ *  separate-curve waterfall's total point cap. */
+const MAX_ABS = 1e100;
+export const MAX_CURVE_POINTS = 200_000;
+
+function tooLarge(s: Scene3d): boolean {
+  return [s.x, s.y, s.z].some((a) => Math.abs(a.lo) > MAX_ABS || Math.abs(a.hi) > MAX_ABS);
+}
+
 /** The scene for a 3-D export request, or the reason it cannot be drawn (the
  *  same refusals the route gives, so the screen never shows a figure the
  *  export would refuse). */
 export function sceneFromBody(b: MapFigureSpec): Scene3d | { error: string } {
+  const s = buildScene(b);
+  if (!("error" in s) && tooLarge(s)) return { error: "3-D values beyond +/-1e100 cannot be drawn on an axis" };
+  return s;
+}
+
+function buildScene(b: MapFigureSpec): Scene3d | { error: string } {
   const kind = b.kind ?? "";
   if (b.contour_source === "curves") {
     const curves = (b.curves ?? []).map((c) => {
@@ -119,6 +134,10 @@ export function sceneFromBody(b: MapFigureSpec): Scene3d | { error: string } {
       return { x: keep.map((i) => c.x[i]), z: keep.map((i) => c.z[i]), depth: c.depth };
     }).filter((c) => c.x.length >= 2);
     if (curves.length < 2) return { error: `a 3-D waterfall needs at least 2 curves with 2 or more points; found ${curves.length}` };
+    const total = curves.reduce((n, c) => n + c.x.length, 0);
+    if (total > MAX_CURVE_POINTS) {
+      return { error: `a 3-D waterfall draws at most ${MAX_CURVE_POINTS.toLocaleString("en-US")} points; got ${total.toLocaleString("en-US")}` };
+    }
     const lines = curves.map((c, j) => ({
       x: Float64Array.from(c.x), y: new Float64Array(c.x.length).fill(c.depth), z: Float64Array.from(c.z), t: j / Math.max(1, curves.length - 1),
     }));
@@ -156,7 +175,8 @@ export function sceneFromBody(b: MapFigureSpec): Scene3d | { error: string } {
         z: Float64Array.from(keep, (i) => grid[j][i] as number), t: j / Math.max(1, ny - 1),
       };
     });
-    return { kind: "lines", ...base(b, [Float64Array.from(xa)], [Float64Array.from(ya)], lines.map((l) => l.z)), lines };
+    // The axes span the plotted points (matplotlib autoscales to them), not the grid.
+    return { kind: "lines", ...base(b, lines.map((l) => l.x), lines.map((l) => l.y), lines.map((l) => l.z)), lines };
   }
   const zs = new Float64Array(nx * ny);
   let n = 0;

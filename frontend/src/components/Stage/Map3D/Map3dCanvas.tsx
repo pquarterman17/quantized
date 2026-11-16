@@ -143,7 +143,12 @@ export default function Map3dCanvas({ scene, view: stored, onCommit, home, child
         }}
         onPointerUp={orbit.onPointerUp}
         onPointerCancel={orbit.onPointerUp}
-        onPointerLeave={() => setHover(null)}
+        onLostPointerCapture={orbit.onLostPointerCapture}
+        onPointerLeave={() => {
+          setHover(null);
+          orbit.flush();
+        }}
+        onBlur={orbit.flush}
         onKeyDown={orbit.onKeyDown}
       >
         <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />

@@ -1,10 +1,14 @@
 // The interactive 3-D view's gestures: drag to rotate, wheel to zoom, arrow
 // keys to rotate (Shift = 15°) and +/- to zoom, 0 / Home to reset. The view
-// moves LOCALLY while a gesture runs (no store write per pixel) and is
-// committed ONCE when it ends -- pointer up, or 400 ms after the last wheel
-// notch / key press -- so one gesture is one undo step and the export reads
-// the angles the screen settled on. `moving` is true during a gesture and
-// briefly after, which the renderer uses to draw the decimated scene.
+// moves LOCALLY while a gesture runs (no store write per pixel, unrounded so
+// small trackpad steps add up) and is committed ONCE, rounded, when it ends --
+// pointer up, or 400 ms after the last wheel notch / key press -- so one
+// gesture is one undo step and the export reads the angles the screen settled
+// on. A pending commit is FLUSHED as soon as the pointer or focus leaves the
+// plot (so ⤓ clicked right after a key press exports the new view) and on
+// unmount; a stored-view change from elsewhere (undo, the panel's fields)
+// while one is pending wins and cancels it. `moving` is true during a gesture
+// and briefly after, which the renderer uses to draw the decimated scene.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -25,21 +29,38 @@ export function useOrbit(stored: View3d, onCommit: (v: View3d) => void, reset: V
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitRef = useRef(onCommit);
   commitRef.current = onCommit;
+  const storedRef = useRef(stored);
+  storedRef.current = stored;
+
+  const commitNow = useCallback(() => {
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = null;
+    const v = clampView(live.current);
+    live.current = v;
+    setView(v);
+    if (!same(v, storedRef.current)) commitRef.current(v);
+  }, []);
 
   // The stored view moved (undo, the panel's angle fields, a loaded project):
-  // follow it, unless the user is mid-gesture.
+  // follow it -- dropping a pending commit, which it supersedes -- unless the
+  // user is mid-drag.
   useEffect(() => {
-    if (drag.current || commitTimer.current) return;
+    if (drag.current) return;
+    if (commitTimer.current) {
+      clearTimeout(commitTimer.current);
+      commitTimer.current = null;
+    }
     if (!same(live.current, stored)) {
       live.current = stored;
       setView(stored);
     }
   }, [stored]);
 
+  // Unmounting (e.g. switching to "Export preview") keeps the gesture.
   useEffect(() => () => {
-    if (commitTimer.current) clearTimeout(commitTimer.current);
     if (settleTimer.current) clearTimeout(settleTimer.current);
-  }, []);
+    if (commitTimer.current) commitNow();
+  }, [commitNow]);
 
   const move = useCallback((v: View3d) => {
     live.current = v;
@@ -52,54 +73,67 @@ export function useOrbit(stored: View3d, onCommit: (v: View3d) => void, reset: V
     }, SETTLE_MS);
   }, []);
 
-  const commitNow = useCallback(() => {
-    if (commitTimer.current) clearTimeout(commitTimer.current);
-    commitTimer.current = null;
-    commitRef.current(live.current);
-  }, []);
-
   const commitSoon = useCallback(() => {
     if (commitTimer.current) clearTimeout(commitTimer.current);
     commitTimer.current = setTimeout(commitNow, COMMIT_IDLE_MS);
   }, [commitNow]);
 
+  /** Commit a pending wheel / key gesture now (pointer or focus left). */
+  const flush = useCallback(() => {
+    if (commitTimer.current) commitNow();
+  }, [commitNow]);
+
+  const endDrag = useCallback(() => {
+    if (!drag.current) return;
+    drag.current = null;
+    setMoving(false);
+    commitNow();
+  }, [commitNow]);
+
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
+    flush();
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
     e.currentTarget.setPointerCapture?.(e.pointerId);
-  }, []);
+  }, [flush]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>): boolean => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return false;
+    // The button was released where no pointerup reached us: the drag is over.
+    if ((e.buttons & 1) === 0) {
+      endDrag();
+      return false;
+    }
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (dx === 0 && dy === 0) return true;
     drag.current = { ...d, x: e.clientX, y: e.clientY };
     move(orbit(live.current, dx, dy));
     return true;
-  }, [move]);
+  }, [move, endDrag]);
 
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
-    drag.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
-    setMoving(false);
-    if (!same(live.current, stored)) commitNow();
-  }, [commitNow, stored]);
+    endDrag();
+  }, [endDrag]);
 
   const onWheel = useCallback((deltaY: number) => {
     move(zoomBy(live.current, deltaY));
     commitSoon();
   }, [move, commitSoon]);
 
+  const resetView = useCallback(() => {
+    live.current = clampView(reset);
+    commitNow();
+  }, [commitNow, reset]);
+
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === "0" || e.key === "Home") {
       e.preventDefault();
-      live.current = clampView(reset);
-      setView(live.current);
-      commitNow();
+      resetView();
       return;
     }
     const next = keyStep(live.current, e.key, e.shiftKey);
@@ -107,13 +141,7 @@ export function useOrbit(stored: View3d, onCommit: (v: View3d) => void, reset: V
     e.preventDefault();
     move(next);
     commitSoon();
-  }, [move, commitSoon, commitNow, reset]);
+  }, [move, commitSoon, resetView]);
 
-  const resetView = useCallback(() => {
-    live.current = clampView(reset);
-    setView(live.current);
-    commitNow();
-  }, [commitNow, reset]);
-
-  return { view, moving, onPointerDown, onPointerMove, onPointerUp, onWheel, onKeyDown, resetView };
+  return { view, moving, onPointerDown, onPointerMove, onPointerUp, onLostPointerCapture: endDrag, onWheel, onKeyDown, resetView, flush };
 }

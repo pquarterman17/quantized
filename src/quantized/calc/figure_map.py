@@ -272,7 +272,7 @@ def render_map_figure(
         ax: Any = fig.add_subplot(projection="3d") if kind in _3D_KINDS else fig.subplots()
         mappable = _draw(
             ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
-            label_contours, view_elev, view_azim, contour_source=contour_source,
+            label_contours, contour_source=contour_source,
             max_lines=max_lines, curve_list=curve_list,
         )
         if kind == "scatter3d" and drop_lines:
@@ -374,8 +374,6 @@ def _draw(
     levels: int | list[float],
     level_scale: str,
     label_contours: bool,
-    view_elev: float,
-    view_azim: float,
     *,
     contour_source: str = "grid",
     max_lines: int = 0,
@@ -383,12 +381,10 @@ def _draw(
 ) -> Any:
     """Draw the requested mark; return the colorbar mappable (or None)."""
     if contour_source == "curves":
-        ax.view_init(elev=view_elev, azim=view_azim)
         draw_curves(ax, curve_list or [], cmap)
         return None
     if contour_source == "points" and kind == "scatter3d":
         # The measured points themselves, coloured by z -- no grid, no resampling.
-        ax.view_init(elev=view_elev, azim=view_azim)
         return ax.scatter(x, y, z, c=z, cmap=cmap, s=6, depthshade=True)
     if contour_source == "points":
         # x/y/z are flat, equal-length scattered arrays here (not a grid) --
@@ -426,8 +422,7 @@ def _draw(
             ax.clabel(cs, inline=True, fontsize=7, fmt="%.3g")
         return cs
 
-    # 3-D kinds
-    ax.view_init(elev=view_elev, azim=view_azim)
+    # 3-D kinds (the camera is set once, by set_view, after drawing)
     xg, yg = np.meshgrid(x, y)  # (ny, nx)
     if kind == "surface":
         return ax.plot_surface(xg, yg, z, cmap=cmap, linewidth=0, antialiased=True)

@@ -22,7 +22,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MapPayload } from "../../../lib/mapdataFetch";
 import { DEFAULT_MAP3D } from "../../../lib/mapView3d";
-import { BOX, camera, keyStep, orbit, zoomBy, type View3d } from "../../../lib/project3d";
+import { BOX, camera, clampView, keyStep, orbit, zoomBy, type View3d } from "../../../lib/project3d";
 import { mapFigureBody } from "../mapFigureExport";
 import { view3dOptions } from "../map3dRequest";
 import { withCamera } from "./Map3dStageView";
@@ -58,7 +58,7 @@ function run(steps: Step[]): View3d {
     else if ("wheel" in s) v = zoomBy(v, s.wheel);
     else v = keyStep(v, s.key, !!s.shift) ?? v;
   }
-  return v;
+  return clampView(v); // what the gesture commits
 }
 
 /** Screen direction (x right, y UP) of the x, y and z box edges, in units of
