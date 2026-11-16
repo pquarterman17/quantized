@@ -3060,6 +3060,20 @@ new evidence:
 * Graph19 / Graph34's axis records still fail both separator forms
   (flag-token + bare-literal X spans that defeat the exact-fill).
 
+#### 6.2.3 Map plots: matrix objects and Z columns (2026-11-15)
+
+A heatmap (105) / contour (226) / image (220) token names the matrix
+object's own column record in the matrix book's page span: designation
+code 0, an EMPTY short name, offset-38/37 flags `0x60`/`0x01`, associated
+id 0 -- one per one-matrix book. An XYZ contour (243) or a scatter on a
+`Ternary`-template page names a Z column (code 5, flags `0x60`/`0x00`)
+whose offset-35 associated id is its Y and whose Y's is its X: Origin's
+range is `(X, Y, Z)` / `(A, B, C)`. COM-proven on the plot corpus and on
+the 5 decodable real matrix maps (`opju_map_plots`; plan
+`ORIGIN_PLOT_TYPE_PARITY_PLAN` item 7). The colour map (Plot Details
+`ColorMap` Min / Max / levels) follows ~560 bytes after the token,
+outside the 519-byte curve record, and is not decoded yet.
+
 ### 6.3 Origin → quantized figure mapping + gap list
 
 Both readers emit a flat list of plot-state snapshot dicts (`name`, `layer`,

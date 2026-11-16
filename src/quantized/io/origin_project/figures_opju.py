@@ -161,6 +161,7 @@ from quantized.io.origin_project.opju_figure_curves import (
     opju_pages,
 )
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
+from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 
 __all__ = ["extract_figures_opju"]
@@ -187,15 +188,12 @@ _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hi
 _OptF = float | None
 _OptB = bool | None
 _RealRecord = tuple[float, float, float, float, _OptB, _OptB, _OptF, _OptF]
-# Cap on annotations from the imprecise flat-scrape fallback (the routed
-# grammar path is exact and uncapped). Raised from 12 -> 64 so a real XRD graph
-# with many peak labels keeps them all; still a runaway guard against a noisy
-# scrape flooding the list (2026-07-06 genericity audit).
+# Flat-scrape annotation cap (routed grammar is uncapped): 64 keeps a real XRD
+# graph's peak labels, still a runaway guard (2026-07-06 genericity audit).
 _MAX_FLAT_ANNOTATIONS = 64
 
-# A graph window embeds a PNG preview thumbnail; `_texts_in` decodes its image
-# bytes as spurious "text". These chunk names open (or lead) that binary blob, so
-# they mark where real annotation text ends — everything at/after is image junk.
+# A graph window's embedded PNG thumbnail decodes as junk "text": these chunk
+# names open that blob, so they mark where real annotation text ends.
 _PNG_MARKERS = (
     "IHDR", "IDAT", "IEND", "PLTE", "pHYs", "tEXt",
     "zTXt", "iTXt", "sRGB", "gAMA", "cHRM", "bKGD",
@@ -302,7 +300,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     figures: list[dict[str, Any]] = []
     pages = opju_pages(b)
     table = column_id_table(b, pages)
-    legacy = not table.ids  # no id table (synthetic/template stream): counting fallback
+    maps = map_ids(b, pages)  # matrix / Z column ids (opju_map_plots)
+    legacy = not table.ids and not maps.matrix  # no id table: counting fallback
     if legacy:
         book_columns = book_columns_from_bytes(b)
         books_meta = book_metadata_from_bytes(b, book_columns)
@@ -314,7 +313,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
 
     def _is_graph_page(pi: int) -> bool:
         # owns no column records; needs the id table to tell book pages apart
-        return not legacy and pi >= 0 and pages[pi][1] not in table.book_pages
+        return not legacy and pi >= 0 and pages[pi][1] not in table.book_pages | maps.pages
 
     # On a GRAPH page whose anchors carry the record-length varint, a bare
     # 4-byte match without it is a coincidence inside another block (an id
@@ -476,7 +475,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "x_step": x_step,
                 "y_step": y_step,
                 "_page_idx": page_idx,
-                "curves": curves,
+                "curves": curves,  # + a heatmap / contour / ternary plot (opju_map_plots):
+                **layer_map(b, anchor, window_end, maps, off_sheet,
+                            pages[page_idx] if is_graph_page else None),
                 **({"curve_sheet_omitted": [n for _, n in omitted]} if omitted else {}),
             }
         )

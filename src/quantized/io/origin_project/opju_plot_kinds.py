@@ -96,6 +96,7 @@ X_NOT_A_COLUMN = "x_not_a_column"  # opju_curve_token_x: the record X id is 0
 # kept from their Y alone, see ``opju_stat_plots``.
 _ROWLESS = {206: "box", 219: "histogram"}
 COLUMN_PLOT = 203  # Origin's vertical column plot (plotType "column")
+_MAP_TYPES = frozenset({105, 220, 226, 243})  # heatmap, image, contour, XYZ contour
 
 
 def apply_plot_kind(
@@ -218,4 +219,7 @@ def stat_x_reason(stat: str | None, record: bytes | None) -> str:
     if stat is None and record is not None and len(record) > PLOT_TYPE_OFF:
         if record[PLOT_TYPE_OFF] in _ROWLESS:
             return "stat_plot_x_not_decoded"
+    if record is not None and len(record) > PLOT_TYPE_OFF and record[PLOT_TYPE_OFF] in _MAP_TYPES:
+        # a heatmap / contour / image is never an XY line (opju_map_plots binds it)
+        return "map_plot_not_decoded"
     return ""
