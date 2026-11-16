@@ -5,11 +5,14 @@
 //
 // The history entry itself does not carry the project (the undo snapshot is an
 // allowlist of workspace data, and history.ts is at its size ceiling), so this
-// follows the entry from outside, the way store/curveFitRemove.ts follows a
-// removed fit: a store subscription sees the "remove all" entry move onto the
+// follows the entries from outside, the way store/curveFitRemove.ts follows a
+// removed fit: a store subscription sees a "remove all" entry move onto the
 // redo stack (undone -> re-attach) or back onto the undo stack (redone ->
-// detach). Entries are told apart by identity, not seq — undo/redo re-push the
-// entry under a fresh seq.
+// detach). Undo/redo re-push an entry under a fresh seq and object, so entries
+// are matched by ORDINAL among the "remove all" entries of the undo stack
+// (one record per Remove all, null when no project was open), not by identity.
+// Known limit: evicting an old "remove all" entry past HISTORY_DEPTH shifts the
+// ordinals; the guards below (nothing attached, no other project) bound the harm.
 //
 // Re-attaching is honest, not optimistic: the project is marked unsaved (the
 // tool-window layout, recalc mode and library selection are not part of the
@@ -17,7 +20,8 @@
 // and the lock is genuinely re-acquired — after the earlier release has landed
 // (else the heartbeat could see our own stale release and demote to
 // read-only). If another instance took the project meanwhile, the work comes
-// back read-only with the usual reason and next step.
+// back read-only with the usual reason and next step. If ANOTHER project is
+// open (it would receive this one's data), the undo is reverted at once.
 
 import { readOnlyOpenReason } from "../lib/openWorkspaceReplace";
 import type { ProjectIdentity } from "./project";
@@ -34,21 +38,44 @@ interface Removed {
   released: Promise<unknown>;
 }
 
-let removed: Removed | null = null;
+/** One record per "remove all" entry on the undo stack, oldest first. */
+const records: (Removed | null)[] = [];
 let watching = false;
+/** True from `beginRemoveAll` to `rememberRemovedProject`: the new entry's own push is not an undo/redo. */
+let suspended = false;
+
+const ordinalCount = (h: readonly { label: string }[]): number => h.filter((e) => e.label === LABEL).length;
+
+/** Call just BEFORE `clearAll` records its entry. */
+export function beginRemoveAll(): void {
+  suspended = true;
+  watch();
+}
 
 /** Call right AFTER the Remove all took effect: remember the project that was
- *  open (null: none was) and follow the entry's undo/redo from now on. */
+ *  open (null: none was). */
 export function rememberRemovedProject(project: ProjectIdentity | null, released: Promise<unknown>): void {
-  removed = project ? { project, released } : null;
-  if (!removed || watching) return;
+  const ordinal = ordinalCount(useApp.getState().history) - 1;
+  records.length = Math.max(0, ordinal); // a new entry invalidates any redo-side records
+  records[ordinal] = project ? { project, released } : null;
+  suspended = false;
+}
+
+function watch(): void {
+  if (watching) return;
   watching = true;
   useApp.subscribe((s, prev) => {
-    if (!removed) return;
+    if (suspended) return;
     const undone = s.future.at(-1);
-    if (undone !== prev.future.at(-1) && undone?.label === LABEL) attach(removed);
+    if (undone !== prev.future.at(-1) && undone?.label === LABEL) {
+      const r = records[ordinalCount(s.history)];
+      if (r) attach(r);
+    }
     const redone = s.history.at(-1);
-    if (redone !== prev.history.at(-1) && redone?.label === LABEL) detach(removed);
+    if (redone !== prev.history.at(-1) && redone?.label === LABEL) {
+      const r = records[ordinalCount(s.history) - 1];
+      if (r) detach(r);
+    }
   });
 }
 
@@ -56,7 +83,6 @@ export function rememberRemovedProject(project: ProjectIdentity | null, released
  *  anything), or null: another project is open (or opening) and would receive
  *  this one's data. */
 export function removeAllUndoBlock(): string | null {
-  if (!removed) return null;
   const s = useApp.getState();
   return s.currentProject !== null || useProjectLock.getState().path !== null
     ? "another project is open now — undo would put this one's data into it"
@@ -65,7 +91,15 @@ export function removeAllUndoBlock(): string | null {
 
 function attach(r: Removed): void {
   const s = useApp.getState();
-  if (s.currentProject !== null || useProjectLock.getState().path !== null) return; // moved on
+  if (s.currentProject !== null || useProjectLock.getState().path !== null) {
+    // Moved on (Edit > Undo / Ctrl+Z cannot be refused up front): the data was
+    // just restored into the OTHER project's workspace — put it straight back.
+    suspended = true;
+    s.redo();
+    suspended = false;
+    toast("Can't undo Remove all — another project is open and would receive this one's data.", "info");
+    return;
+  }
   reserveProjectLock(r.project.path);
   s.setCurrentProject(r.project);
   s.markProjectDirty(); // see the header: not byte-identical to the saved file

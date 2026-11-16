@@ -60,7 +60,7 @@ describe("toastImportFailure", () => {
 
   it("says when several files failed (the toast covers the last one)", () => {
     render(<Toaster />);
-    act(() => toastImportFailure("c.dat", NO_PARSER, undefined, { added: 2, total: 5 }));
+    act(() => toastImportFailure("c.dat", NO_PARSER, undefined, { added: 2, failed: 3, total: 5 }));
     expect(screen.getByRole("alert")).toHaveTextContent("Imported 2 of 5 files — 3 failed, showing the last.");
   });
 
@@ -73,6 +73,18 @@ describe("toastImportFailure", () => {
     act(() => toastImportFailure(msg.split(":")[0], msg));
     expect(screen.getByRole("alert").textContent).toMatch(headline);
     expect(screen.queryByRole("button", { name: "Open import wizard" })).toBeNull();
+  });
+
+  it("classifies the message, not the file name, and a parser's own 'not found' is still a parse failure", () => {
+    render(<Toaster />);
+    act(() => toastImportFailure("permission_slip.dat", "permission_slip.dat: no parser registered for 'permission_slip.dat'"));
+    expect(screen.getByRole("alert")).toHaveTextContent("the format wasn't recognised");
+    expect(screen.getByRole("button", { name: "Open import wizard" })).toBeInTheDocument();
+    cleanup();
+    useToasts.setState({ toasts: [] });
+    render(<Toaster />);
+    act(() => toastImportFailure("x.csv", "x.csv: header row not found"));
+    expect(screen.getByRole("button", { name: "Open import wizard" })).toBeInTheDocument();
   });
 
   it("keeps a binary container's own advice visible in the toast", () => {

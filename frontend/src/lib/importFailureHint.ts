@@ -41,7 +41,7 @@ export function connectionHint(message: string): string {
  *  text-like file whose failure reached a parser (not a down server / stale
  *  token, and not a binary container). */
 export function wizardCanRead(name: string, message = ""): boolean {
-  const kind = failureKind(message);
+  const kind = failureKind(message, name);
   return (kind === "unrecognised" || kind === "parse") && !isBinaryName(name);
 }
 
@@ -53,10 +53,13 @@ export const isBinaryName = (name: string): boolean => {
 /** What kind of failure an error message describes: only the last two reached
  *  a parser, so only those are the file's content and worth the wizard. */
 export type FailureKind = "server" | "missing" | "denied" | "servererror" | "unrecognised" | "parse";
-export function failureKind(message: string): FailureKind {
+export function failureKind(error: string, name = ""): FailureKind {
+  // The batch error is "<file name>: <message>": classify the message only, or a
+  // file called "permission_slip.dat" would read as a permission failure.
+  const message = name && error.startsWith(`${name}: `) ? error.slice(name.length + 2) : error;
   if (connectionHint(message)) return "server";
-  if (/not found|no such file|enoent|\b404\b/i.test(message)) return "missing";
-  if (/permission|eacces|forbidden|\b403\b/i.test(message)) return "denied";
+  if (/\b(file|path|directory)\b[^:]{0,40}\bnot found|no such file|enoent|\b404\b|does not exist/i.test(message)) return "missing";
+  if (/permission denied|eacces|forbidden|\b403\b|access is denied/i.test(message)) return "denied";
   if (/internal server error|\bhttp 5\d\d\b|\b5\d\d (error|server)/i.test(message)) return "servererror";
   return /no parser registered/i.test(message) ? "unrecognised" : "parse";
 }

@@ -407,6 +407,7 @@ async function runImport<T>(
   let added = 0;
   let lastError = "";
   let lastFailed = ""; // its file name/path: picks the follow-up hint below
+  let failedN = 0;
   let lastItem: T | undefined; // ...and the item itself, for the toast's wizard hand-off
   let cancelled = false;
   const createdIds: string[] = [];
@@ -440,6 +441,7 @@ async function runImport<T>(
         }
         lastFailed = describe(item);
         lastItem = item;
+        failedN += 1;
         lastError = `${lastFailed}: ${e instanceof Error ? e.message : "error"}`;
       }
     }
@@ -476,7 +478,7 @@ async function runImport<T>(
   if (structures.length > 0) presentStructures(structures);
   if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId, { suppressFolderOffer });
   // UX-C: plain-language failure toast (lazy chunk; a failed load must not swallow the failure).
-  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, total: items.length })).catch(() => toast(summary, "danger"));
+  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, failed: failedN, total: items.length })).catch(() => toast(summary, "danger"));
   notifyParserNotes(noted);
   return createdIds;
 }

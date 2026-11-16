@@ -80,6 +80,27 @@ describe("Remove all follows the history entry, however undo/redo is driven", ()
     expect(useToasts.getState().toasts.some((t) => t.msg === "Already undone.")).toBe(true);
   });
 
+  it("Edit > Undo (cannot be refused up front) is reverted at once when another project is open", async () => {
+    await runRemoveAll(() => useApp.getState());
+    useApp.getState().setCurrentProject({ name: "other", path: "/proj/other.dwk" });
+    useApp.getState().undo();
+    // P's data was never left in the other project's workspace
+    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().currentProject?.name).toBe("other");
+    expect(useToasts.getState().toasts.some((t) => /Can't undo Remove all/.test(t.msg))).toBe(true);
+  });
+
+  it("a later Remove all with no project does not forget the first one's project", async () => {
+    await runRemoveAll(() => useApp.getState());
+    useApp.getState().undo(); // project P back
+    await waitFor(() => expect(useProjectLock.getState().status).toBe("held-by-me"));
+    await runRemoveAll(() => useApp.getState()); // P open again: records P a second time
+    useApp.getState().undo();
+    expect(useApp.getState().currentProject).toEqual(PROJECT);
+    useApp.getState().undo(); // nothing older to undo: no-op, project unchanged
+    expect(useApp.getState().currentProject).toEqual(PROJECT);
+  });
+
   it("refuses the WHOLE Undo, restoring nothing, when another project is open", async () => {
     await runRemoveAll(() => useApp.getState());
     useApp.getState().setCurrentProject({ name: "other", path: "/proj/other.dwk" });

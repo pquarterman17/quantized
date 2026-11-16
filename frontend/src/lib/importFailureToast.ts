@@ -20,7 +20,7 @@ export const useWizardHandoff = create<{ file: File | null }>(() => ({ file: nul
 
 /** Plain-language headline: what happened to which file, no parser jargon. */
 export function importFailureHeadline(name: string, technical: string): string {
-  switch (failureKind(technical)) {
+  switch (failureKind(technical, name)) {
     case "server": return `Couldn't import ${name}${connectionHint(technical)}.`;
     case "missing": return `Couldn't open ${name} — it wasn't found (moved or deleted?).`;
     case "denied": return `Couldn't open ${name} — permission was denied.`;
@@ -38,7 +38,7 @@ export function toastImportFailure(
   name: string,
   technical: string,
   file?: File,
-  batch?: { added: number; total: number },
+  batch?: { added: number; failed: number; total: number },
 ): void {
   const actions = [
     ...(wizardCanRead(name, technical)
@@ -72,7 +72,7 @@ export function toastImportFailure(
     },
   ];
   // Whether data changed: a partly-failed batch says how much of it landed.
-  const failed = batch ? batch.total - batch.added : 1;
+  const failed = batch?.failed ?? 1;
   const landed = batch && batch.total > 1
     ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed, showing the last` : ""}.`
     : "";

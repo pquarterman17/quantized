@@ -19,7 +19,7 @@ export function toastRemoved(msg: string, kind: ToastKind = "info"): void {
   // Captured NOW (synchronously): the lazy chunk must not re-read it after the load.
   const h = useApp.getState().history;
   const t = h.at(-1);
-  const top = t ? { seq: t.seq, label: t.label, depth: h.length } : undefined;
+  const top = t?.label === "remove datasets" ? { seq: t.seq, label: t.label, depth: h.length } : undefined;
   void import("./undoToast").then((m) => m.toastWithUndo(msg, kind, top), () => toast(msg, kind));
 }
 
