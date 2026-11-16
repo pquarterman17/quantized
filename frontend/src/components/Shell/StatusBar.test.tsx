@@ -109,6 +109,15 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     expect(screen.getByRole("button", { name: "⚠ previous session not restored" })).toHaveAttribute("title", "Couldn't restore (x) — retrying");
     expect(screen.queryByText("⚠ autosave failing")).toBeNull();
   });
+
+  it("after an Append, the label says the previous session is KEPT — never 'not restored'", () => {
+    useAutosaveStatus.setState({
+      health: { savedAt: Date.now(), error: null, count: 2, restoreError: "appended; kept", restoreKept: true },
+    });
+    render(<StatusBar />);
+    expect(screen.getByRole("button", { name: "⚠ previous session kept — Replace or Discard" })).toBeInTheDocument();
+    expect(screen.queryByText(/not restored/)).toBeNull();
+  });
 });
 
 describe("StatusBar pending-op live region (accessibility gap)", () => {

@@ -85,7 +85,9 @@ describe("the late-restore prompt", () => {
     expect(s.datasets.find((d) => d.name === "old.dat")?.folderId).toBe("fold-1");
     expect(s.reports.map((r) => r.id)).toEqual(["rep-1"]);
     expect(s.currentProject?.path).toBe("/work/opened.dwk"); // identity untouched
-    expect(autosaveHealth().restoreError).toMatch(/Append, Replace or Discard/); // still pinned
+    // Still pinned — and reported as KEPT, not "not restored".
+    expect(autosaveHealth().restoreError).toMatch(/kept until you Replace or Discard/);
+    expect(autosaveHealth().restoreKept).toBe(true);
   });
 
   it("Discard applies nothing and settles", () => {

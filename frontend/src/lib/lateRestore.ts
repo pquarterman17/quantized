@@ -32,6 +32,7 @@ interface Held {
 let held: Held | null = null;
 
 const PENDING = "The previous session's autosave is waiting: choose Append, Replace or Discard (click to choose again)";
+const KEPT = "The previous session was appended; its full copy is kept until you Replace or Discard it (click to choose)";
 const report = () => reportAutosaveHealth(autosaveHealth());
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
@@ -122,6 +123,8 @@ export async function appendRecovered(): Promise<boolean> {
   }
   // One set, after appendWorkspace recorded history: one Ctrl+Z undoes all.
   useApp.setState(patch);
+  autosaveRestorePending(KEPT, undefined, true);
+  report();
   toast(
     `Appended the previous session: ${plural(ws.datasets.length, "dataset")}` +
       (added ? ` and ${plural(added, "other library item")}` : "") +

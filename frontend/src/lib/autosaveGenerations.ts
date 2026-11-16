@@ -132,6 +132,9 @@ export interface AutosaveHealth {
    *  could not load, or a recovered one awaiting Append/Replace/Discard) —
    *  its generations are pinned meanwhile. Absent = nothing pending. */
   restoreError?: string | null;
+  /** With `restoreError`: the previous session was appended and its full
+   *  copy is kept for a Replace or Discard (the label says "kept"). */
+  restoreKept?: boolean;
 }
 
 export const HEALTHY: AutosaveHealth = { savedAt: null, error: null, count: 0 };

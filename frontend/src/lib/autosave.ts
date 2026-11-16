@@ -32,12 +32,16 @@ export interface AutosaveState {
   health: AutosaveHealth;
   pinBefore: number | null;
   restoreError: string | null;
+  /** The previous session was APPENDED; its full copy is still pinned for a
+   *  Replace or Discard — "kept", not "not restored". */
+  restoreKept: boolean;
 }
 const autosaveState: AutosaveState = {
   backend: null,
   health: { savedAt: null, error: null, count: 0 },
   pinBefore: Date.now(),
   restoreError: null,
+  restoreKept: false,
 };
 
 type Core = typeof import("./autosaveCore");
@@ -65,27 +69,30 @@ export function setAutosaveBackend(next: AutosaveBackend): void {
   autosaveState.backend = next;
   autosaveState.health = { savedAt: null, error: null, count: 0 };
   autosaveState.pinBefore = autosaveState.restoreError = null; // a test starts settled
+  autosaveState.restoreKept = false;
 }
 
 /** The startup restore failed (`error`) and will be retried: generations from
  *  before `pinBefore` stay out of the rotation, and the failure stays on the
  *  health line. */
-export function autosaveRestorePending(error: string, pinBefore = Date.now()): void {
+export function autosaveRestorePending(error: string, pinBefore = Date.now(), kept = false): void {
   autosaveState.pinBefore ??= pinBefore;
   autosaveState.restoreError = error;
+  autosaveState.restoreKept = kept;
 }
 
 /** The startup restore succeeded, or the user declined it: normal rotation. */
 export function autosaveRestoreSettled(): void {
   autosaveState.pinBefore = autosaveState.restoreError = null;
+  autosaveState.restoreKept = false;
 }
 
 /** The health readout. A pending restore rides on its OWN field (review R8):
  *  the status bar says "previous session not restored", never "autosave
  *  failing" while saves are succeeding. */
 export function autosaveHealth(): AutosaveHealth {
-  const { health, restoreError } = autosaveState;
-  return restoreError ? { ...health, restoreError } : health;
+  const { health, restoreError, restoreKept } = autosaveState;
+  return restoreError ? { ...health, restoreError, ...(restoreKept ? { restoreKept } : {}) } : health;
 }
 
 /** Persist the workspace as a new generation (empty library → clear the slot).

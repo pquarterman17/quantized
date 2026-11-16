@@ -171,7 +171,7 @@ export default function StatusBar() {
           title={health.restoreError}
           onClick={() => void import("../../lib/lateRestore").then((m) => m.reofferLateRestore())}
         >
-          ⚠ previous session not restored
+          {health.restoreKept ? "⚠ previous session kept — Replace or Discard" : "⚠ previous session not restored"}
         </button>
       ) : (
         health.savedAt != null && (
