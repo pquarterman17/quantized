@@ -189,8 +189,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // pipeline view's (#6) OWN state — declared on MacroPipelineSlice
   // (store/macroPipeline.ts); see AppState's extends list.
   status: string;
-  /** The `status` text that was set as a failure (`setStatus(msg, "danger")`): the status-bar dot is
-   *  red only while `status` still equals it, so a later direct `set({ status })` can't leave it stale. */
+  /** `status` text set as a failure (setStatus(msg, "danger")); the dot is red only while status still equals it. */
   statusDanger: string | null;
 
   /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave

@@ -116,7 +116,7 @@ export function buildDiscoveryCommands(s: StoreGet): Action[] {
       paletteOnly: true,
       run: () => {
         if (s().rightCollapsed) s().toggleRight();
-        void import("../lib/revealInspectorCard").then(
+        void runLazy("Opening Error columns…", () => import("../lib/revealInspectorCard")).then(
           (m) =>
             m.revealInspectorCard("Error columns").then((found) => {
               if (found) return;

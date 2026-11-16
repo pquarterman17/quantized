@@ -26,7 +26,7 @@ describe("EmptyProjectStage", () => {
     render(<EmptyProjectStage />);
     const imp = screen.getByRole("button", { name: "Import data…" });
     expect(imp).toHaveAttribute("aria-keyshortcuts", expect.stringMatching(/^(Control|Meta)\+O$/));
-    expect(imp).toHaveTextContent(/(Ctrl|⌘)O/); // shown visibly
+    expect(imp).toHaveTextContent(/(Ctrl\+|⌘)O/); // shown visibly (UX-Q: "Ctrl+O" off macOS)
     expect(screen.getByRole("button", { name: "Paste from clipboard" })).toHaveAttribute("aria-keyshortcuts");
     expect(screen.getByRole("button", { name: "Open workspace (.dwk)…" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add demo dataset" })).toBeInTheDocument();
