@@ -46,7 +46,13 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["WORKSPACE_FORMAT", "OriginWorkspace", "origin_book_error_roles", "workspace_json"]
+__all__ = [
+    "WORKSPACE_FORMAT",
+    "OriginWorkspace",
+    "datasets_workspace_json",
+    "origin_book_error_roles",
+    "workspace_json",
+]
 
 WORKSPACE_FORMAT = "quantized-workspace"
 _VERSION = 3
@@ -178,6 +184,34 @@ def _figure_dataset(figure: Mapping[str, Any], entries: list[dict[str, Any]]) ->
         if hint in str(e["name"]).lower():
             return str(e["id"])
     return None
+
+
+def datasets_workspace_json(
+    entries: Sequence[tuple[str, DataStruct]],
+    *,
+    sources: Sequence[str | None] | None = None,
+) -> str:
+    """A plain ``.dwk`` holding ``entries`` (``(name, data)``) as Library
+    datasets at the root, the first active -- what ``qz run --format dwk``
+    writes. ``sources`` (index-aligned) records each one's input file so
+    Re-import works. Deterministic (ids ``ds-1``…)."""
+    if not entries:
+        raise ValueError("a workspace needs at least one dataset")
+    datasets: list[dict[str, Any]] = []
+    for i, (name, ds) in enumerate(entries, start=1):
+        entry: dict[str, Any] = {"id": f"ds-{i}", "name": name, "data": _data(ds)}
+        src = sources[i - 1] if sources is not None and i - 1 < len(sources) else None
+        if src:
+            entry["source"] = {"kind": "path", "path": src}
+        datasets.append(entry)
+    doc = {
+        "format": WORKSPACE_FORMAT,
+        "version": _VERSION,
+        "datasets": datasets,
+        "folders": [],
+        "activeId": "ds-1",
+    }
+    return json.dumps(doc, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
 
 def workspace_json(ws: OriginWorkspace) -> str:

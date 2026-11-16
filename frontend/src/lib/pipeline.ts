@@ -6,6 +6,7 @@
 // (no React / store / fetch).
 
 import { compileFormula } from "./formula";
+import { headlessFormulaProblem } from "./formulaHeadless";
 import { channelIndexOf } from "./formulaRename";
 import { makeStep, type PipelineStep, type StepKind } from "./pipelineStep";
 
@@ -106,8 +107,17 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 //   import      -> qz.load(path) — for an Origin project too: it returns the
 //                  primary book, the one the app activates after the import
 //   correction  -> qz.apply_corrections(raw, params) — the app always corrects
-//                  the dataset's UNcorrected base, so the script does too
+//                  the dataset's UNcorrected base, so the script does too; a
+//                  background subtraction loads the background from a file
+//                  the script asks for (--background, one per such step)
 //   reset       -> back to that base
+//   expression  -> a formula column, qz.add_formula_columns, when the formula
+//                  is in the headless subset (lib/formulaHeadless.ts); like
+//                  the app, every formula column is recomputed on top of the
+//                  base after each correction / reset
+//   transform   -> resample (n points / step / range) via qz.align_resample,
+//                  and the signal / Reduce XY operations via qz.run_signal_op;
+//                  the output is the new dataset later steps work on
 //   fit         -> qz.fit_model(model, x, y) on the recorded channels and range,
 //                  with the recorded starts, bounds and held parameters
 //   ui          -> a comment, but ONLY for the view-only actions in VIEW_ONLY
@@ -115,9 +125,12 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 //                  most "ui" recordings edit data (cell edits, sorts, row and
 //                  column moves, recodes, re-imports), and any code not on that
 //                  list is treated as one of them
-// Everything else (formula columns, transforms, paste, append, a background
-// subtraction, a ui step that is not view-only, a step with no known kind)
-// has no `quantized.api` equivalent and becomes "NOT REPRODUCED". Every
+// Everything else (a formula outside the subset or a derived column with
+// units, the other transforms — join, merge, stack, split, dataset math, a
+// resample onto another dataset —, paste, append, a ui step that is not
+// view-only, a step with no known kind) has no `quantized.api` equivalent and
+// becomes "NOT REPRODUCED". `qz run` (quantized/recipe_run.py) replays the
+// same subset from a saved template. Every
 // comment-only step also keeps the app's own recorded line (`# app: ...`),
 // values included, as the audit trail the old export was. Because the data then differs from the app's, every LATER data step is
 // listed as a comment too, never run on the wrong data; the script still saves
@@ -215,7 +228,79 @@ function fitLines(n: number, p: Record<string, unknown>, label: string): Emit {
   return { lines, changesData: false };
 }
 
-function stepLines(step: PipelineStep, n: number, inputIndex: number): Emit {
+/** What the generator knows while it walks the steps: the formula columns the
+ *  current dataset carries (names, in order) and how many background files
+ *  the script asks for so far. */
+interface Gen {
+  formulas: string[];
+  backgrounds: number;
+}
+
+/** `target = <value>`, then the formula columns back on top (the app's order:
+ *  corrections act on the base; computed columns are recomputed after). */
+function rebase(value: string, g: Gen): string[] {
+  return g.formulas.length
+    ? [`${I}base = ${value}`, `${I}data = qz.add_formula_columns(base, formulas)  # the formula columns, recomputed`]
+    : [`${I}data = ${value}`];
+}
+
+const ROWS_NOTE = comment("rows excluded or filtered in the app are not recorded; this uses every row");
+
+function expressionLines(step: PipelineStep, g: Gen): Emit {
+  const p = step.params;
+  if (typeof p.name !== "string" || typeof p.expr !== "string") {
+    return { lines: [], changesData: true, unmapped: "this worksheet operation has no quantized.api equivalent" };
+  }
+  if (p.derived === true) return { lines: [], changesData: true, unmapped: "derived columns (units and error propagation) are evaluated only in the app" };
+  const problem = headlessFormulaProblem(p.expr);
+  if (problem) return { lines: [], changesData: true, unmapped: `formula ${JSON.stringify(p.expr)} is evaluated only in the app: ${problem}` };
+  const lines = g.formulas.length ? [] : [`${I}base = data  # the worksheet before its formula columns`];
+  const at = step.label.startsWith("Edit column") ? g.formulas.indexOf(p.name) : -1;
+  if (at >= 0) lines.push(`${I}formulas[${at}] = (${py(p.name)}, ${py(p.expr)})  # the edited formula`);
+  else {
+    lines.push(`${I}formulas.append((${py(p.name)}, ${py(p.expr)}))`);
+    g.formulas.push(p.name);
+  }
+  if (typeof p.errorOf === "string") lines.push(comment(`bound as column ${p.errorOf}'s error bars in the app; the binding is not applied here`));
+  lines.push(`${I}data = qz.add_formula_columns(base, formulas)`);
+  return { lines, changesData: true };
+}
+
+const RESAMPLE_KEYS: Record<string, string> = { nPoints: "n_points", step: "step", start: "start", stop: "stop" };
+
+function transformLines(p: Record<string, unknown>, g: Gen): Emit {
+  let call: string;
+  if (p.op === "sigop") {
+    call = `qz.run_signal_op(data, ${py(String(p.method ?? ""))}, ${py(p.channels ?? [])}, ${py(p.args ?? {})}).data`;
+  } else if (p.op === "resample" && ["n_points", "step", "range"].includes(String(p.mode))) {
+    const grid = Object.entries(RESAMPLE_KEYS).filter(([k]) => typeof p[k] === "number").map(([k, kw]) => `, ${kw}=${py(p[k])}`).join("");
+    const opts = `, method=${py(String(p.method ?? "linear"))}, out_of_range=${py(String(p.outOfRange ?? "nan"))}, unsorted=${py(p.sortUnsorted ? "sort" : "refuse")}`;
+    call = `qz.align_resample(data, mode=${py(String(p.mode))}${grid}${opts}).data`;
+  } else {
+    const what = p.op === "resample" ? "a resample onto another dataset's x" : `the ${String(p.op ?? "transform")} transform`;
+    return { lines: [], changesData: true, unmapped: `${what} has no quantized.api equivalent` };
+  }
+  const reset = g.formulas.length ? [`${I}formulas = []  # the new dataset holds them as plain values`] : [];
+  g.formulas = [];
+  return { lines: [ROWS_NOTE, `${I}data = ${call}`, `${I}raw = data  # a new dataset: its own base`, ...reset], changesData: true };
+}
+
+function correctionLines(p: Record<string, unknown>, g: Gen): Emit {
+  const lines = [comment("Error-column bindings set in the app are not recorded; pass error_bindings=[...] to match them.")];
+  let bg = "";
+  const ref = p.bg as { interp?: unknown } | null | undefined;
+  if (ref) {
+    lines.push(
+      comment("The background is read from the file given with --background, as loaded: if it was corrected in the app, correct it here first."),
+      `${I}background = qz.load(args.background[${g.backgrounds}])`,
+    );
+    bg = `, bg_dataset=background, bg_interp=${py(String(ref.interp ?? "linear"))}`;
+    g.backgrounds++;
+  }
+  return { lines: [...lines, ...rebase(`qz.apply_corrections(raw, ${py(p.params ?? {})}${bg})`, g)], changesData: true };
+}
+
+function stepLines(step: PipelineStep, n: number, inputIndex: number, g: Gen): Emit {
   const p = step.params;
   switch (step.kind) {
     case "import": {
@@ -226,23 +311,17 @@ function stepLines(step: PipelineStep, n: number, inputIndex: number): Emit {
       if (step.label.startsWith("Paste ")) return { lines: [], changesData: true, unmapped: "pasted data has no file to load" };
       // An Origin project: qz.load returns its primary book, the one the app
       // makes active after the import (and the recorded steps then ran on).
+      const reset = g.formulas.length ? [`${I}formulas = []`] : [];
+      g.formulas = [];
       return {
-        lines: [`${I}data = qz.load(args.inputs[${inputIndex}])`, `${I}raw = data  # the uncorrected base that corrections start from`],
+        lines: [`${I}data = qz.load(args.inputs[${inputIndex}])`, `${I}raw = data  # the uncorrected base that corrections start from`, ...reset],
         changesData: true,
       };
     }
-    case "correction": {
-      if (p.bg) return { lines: [], changesData: true, unmapped: "it subtracts a background dataset, which the pipeline does not record by file" };
-      return {
-        lines: [
-          comment("Error-column bindings set in the app are not recorded; pass error_bindings=[...] to match them."),
-          `${I}data = qz.apply_corrections(raw, ${py(p.params ?? {})})`,
-        ],
-        changesData: true,
-      };
-    }
+    case "correction":
+      return correctionLines(p, g);
     case "reset":
-      return { lines: [`${I}data = raw`], changesData: true };
+      return { lines: rebase("raw", g), changesData: true };
     case "fit":
       return fitLines(n, p, step.label);
     case "ui":
@@ -250,9 +329,9 @@ function stepLines(step: PipelineStep, n: number, inputIndex: number): Emit {
         ? { lines: [comment("display setting only; there is no data to re-run"), ...appLine(step)], changesData: false }
         : { lines: [], changesData: true, unmapped: "this recorded action can change the data and has no quantized.api equivalent" };
     case "expression":
-      return { lines: [], changesData: true, unmapped: "formula columns are evaluated only in the app (no quantized.api equivalent)" };
+      return expressionLines(step, g);
     case "transform":
-      return { lines: [], changesData: true, unmapped: `the ${String(p.op ?? "transform")} transform has no quantized.api equivalent` };
+      return transformLines(p, g);
     default:
       return { lines: [], changesData: true, unmapped: "this step kind has no quantized.api equivalent" };
   }
@@ -264,6 +343,7 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
   const body: string[] = [];
   let stoppedAt = 0;
   let loaded = false;
+  const gen: Gen = { formulas: [], backgrounds: 0 };
   steps.forEach((step, i) => {
     const n = i + 1;
     body.push("", comment(`${n}. ${step.label}`));
@@ -282,7 +362,7 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
       body.push(comment("The pipeline ran on a dataset that was already open; load its file:"), `${I}data = qz.load(args.inputs[0])`, `${I}raw = data`);
       loaded = true;
     }
-    const out = stepLines(step, n, inputs.length);
+    const out = stepLines(step, n, inputs.length, gen);
     if (out.unmapped) {
       body.push(comment(`NOT REPRODUCED: ${out.unmapped}.`), ...appLine(step));
       if (out.changesData) stoppedAt = n;
@@ -295,6 +375,8 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     body.push(...out.lines);
   });
   const usesFits = body.some((l) => l.includes("fits.append"));
+  const usesFormulas = body.some((l) => l.includes("add_formula_columns"));
+  const bgs = gen.backgrounds;
   // Choosing a dataset in the Library is not recorded, so after a second
   // import (or an Origin project's many books) the app may have run later
   // steps on another dataset than the one this script holds.
@@ -317,9 +399,10 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     "and the project open in the app is not changed. Steps with no quantized.api",
     "equivalent are kept as comments that say so.",
     "",
-    "Usage: python <this file> [INPUT ...] [--out OUT]",
+    `Usage: python <this file> [INPUT ...] [--out OUT]${bgs ? " --background FILE".repeat(bgs) : ""}`,
     "  INPUT  the file(s) the pipeline imports, in order (default: the recorded names)",
     "  OUT    where the final data goes: .csv, .tsv or .xlsx (default pipeline_output.csv)",
+    ...(bgs ? [`  FILE   the background each background-subtraction step subtracts, in step order (${bgs})`] : []),
     '"""',
     "",
     "import argparse",
@@ -335,6 +418,9 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     `${I}parser = argparse.ArgumentParser(description="Re-run a recorded Quantized pipeline.")`,
     `${I}parser.add_argument("inputs", nargs="*", help="input file(s), in import order")`,
     `${I}parser.add_argument("--out", default="pipeline_output.csv", help="output table (.csv/.tsv/.xlsx)")`,
+    ...(bgs
+      ? [`${I}parser.add_argument("--background", action="append", default=[], help="background file, one per background-subtraction step")`]
+      : []),
     `${I}args = parser.parse_args(argv)`,
     `${I}if hasattr(sys.stdout, "reconfigure"):  # labels may hold \u03bc etc.; a cp1252 console must not crash`,
     `${I}${I}sys.stdout.reconfigure(errors="backslashreplace")`,
@@ -342,9 +428,13 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     `${I}${I}args.inputs = list(RECORDED_INPUTS)`,
     `${I}if len(args.inputs) != len(RECORDED_INPUTS):`,
     `${I}${I}parser.error(f"give {len(RECORDED_INPUTS)} input file(s)")`,
+    ...(bgs
+      ? [`${I}if len(args.background) != ${bgs}:`, `${I}${I}parser.error("give ${bgs} --background file(s), one per background-subtraction step")`]
+      : []),
     `${I}data = None`,
     ...caveat,
     ...(usesFits ? [`${I}fits = []`] : []),
+    ...(usesFormulas ? [`${I}formulas = []  # the formula columns (name, expression), recomputed after each correction`] : []),
     ...body,
     "",
     ...(usesFits
@@ -359,7 +449,7 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
     `${I}${I}return 1`,
     // The script's own output: replaced on a re-run (overwrite), but never
     // one of the inputs it read (protect) — quantized.api.save_table refuses.
-    `${I}qz.save_table(data, args.out, overwrite=True, protect=args.inputs)  # replaces --out, never an input`,
+    `${I}qz.save_table(data, args.out, overwrite=True, protect=args.inputs${bgs ? " + args.background" : ""})  # replaces --out, never an input`,
     stoppedAt
       ? `${I}print(f"saved {args.out}: the data after step ${stoppedAt - 1}; steps from ${stoppedAt} on were NOT reproduced")`
       : `${I}print(f"saved {args.out}")`,

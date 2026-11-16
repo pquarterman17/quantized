@@ -7,37 +7,114 @@ fails here on purpose) and proves an end-to-end analysis runs with no server.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
 import numpy as np
+import pytest
 
 import quantized.api as qz
 
 # The frozen public surface. Changing it is a deliberate act: update this set
 # in the same commit as the api.py change (that is the point of the guard).
 _EXPECTED = {
-    "DataStruct", "load", "read_origin_books", "convert_origin_project", "save_table",
-    "curve_fit", "fit_model", "fit_single_peak", "fit_multi_peak", "find_peaks_robust",
-    "integrate_peaks", "batch_integrate_peaks",
-    "estimate_background", "fit_region_background", "baseline_als",
-    "baseline_modpoly", "baseline_rolling_ball",
-    "anchor_baseline", "shirley_background", "xrd_low_angle_background",
+    "DataStruct",
+    "load",
+    "read_origin_books",
+    "convert_origin_project",
+    "save_table",
+    "read_workspace",
+    "evaluate_formula",
+    "add_formula_columns",
+    "smooth_data",
+    "derivative",
+    "log_derivative",
+    "cumulative_integral",
+    "normalize",
+    "resample_data",
+    "align_resample",
+    "run_signal_op",
+    "median_filter",
+    "despike",
+    "lowess",
+    "hilbert_envelope",
+    "bin_average",
+    "average_duplicates",
+    "keep_every_nth",
+    "dataset_algebra",
+    "average_curves",
+    "curve_fit",
+    "fit_model",
+    "fit_single_peak",
+    "fit_multi_peak",
+    "find_peaks_robust",
+    "integrate_peaks",
+    "batch_integrate_peaks",
+    "estimate_background",
+    "fit_region_background",
+    "baseline_als",
+    "baseline_modpoly",
+    "baseline_rolling_ball",
+    "anchor_baseline",
+    "shirley_background",
+    "xrd_low_angle_background",
     "footprint_correction",
     "apply_corrections",
-    "descriptive_stats", "lin_regress", "t_test", "anova1", "pca_analysis",
-    "multiple_regression", "correlation_matrix", "partial_correlation",
+    "descriptive_stats",
+    "lin_regress",
+    "t_test",
+    "anova1",
+    "pca_analysis",
+    "multiple_regression",
+    "correlation_matrix",
+    "partial_correlation",
     "stepwise_regression",
-    "anova2", "anova2_unbalanced", "repeated_measures_anova", "tukey_hsd",
+    "anova2",
+    "anova2_unbalanced",
+    "repeated_measures_anova",
+    "tukey_hsd",
     "dunnett_test",
-    "mann_whitney", "wilcoxon_signed_rank", "kruskal_wallis", "friedman",
-    "sign_test", "shapiro_wilk", "anderson_darling", "levene", "ks_normal",
-    "ks_two_sample", "recommend_test",
-    "fit_distribution", "t_test_power", "required_n",
-    "box_stats", "grouped_box_stats", "violin_kde", "qq_plot", "histogram",
-    "ReportSheet", "section", "text_block", "table_block", "params_block",
-    "figure_block", "source_ref", "validate_report",
-    "from_curve_fit", "from_multipeak_fit", "from_anova", "from_stats_table",
-    "from_integrate", "from_batch_integrate",
-    "render_figure", "render_map_figure", "render_statplot_figure",
-    "render_report", "to_latex", "to_html", "format_value_error",
+    "mann_whitney",
+    "wilcoxon_signed_rank",
+    "kruskal_wallis",
+    "friedman",
+    "sign_test",
+    "shapiro_wilk",
+    "anderson_darling",
+    "levene",
+    "ks_normal",
+    "ks_two_sample",
+    "recommend_test",
+    "fit_distribution",
+    "t_test_power",
+    "required_n",
+    "box_stats",
+    "grouped_box_stats",
+    "violin_kde",
+    "qq_plot",
+    "histogram",
+    "ReportSheet",
+    "section",
+    "text_block",
+    "table_block",
+    "params_block",
+    "figure_block",
+    "source_ref",
+    "validate_report",
+    "from_curve_fit",
+    "from_multipeak_fit",
+    "from_anova",
+    "from_stats_table",
+    "from_integrate",
+    "from_batch_integrate",
+    "render_figure",
+    "render_map_figure",
+    "render_statplot_figure",
+    "render_report",
+    "to_latex",
+    "to_html",
+    "format_value_error",
 }
 
 
@@ -52,6 +129,59 @@ def test_every_public_name_resolves_and_is_callable() -> None:
         obj = getattr(qz, name, None)
         assert obj is not None, f"{name} missing from quantized.api"
         assert callable(obj), f"{name} is not callable"
+
+
+def test_data_operation_calls_are_the_golden_calc_functions() -> None:
+    """Gap audit 5 #6: the new calls are thin re-exports -- the SAME function
+    objects the golden-parity suites test, never a second implementation."""
+    from quantized.calc import processing, reduce_xy, resample, signal_filters, signal_ops
+
+    for name, mod in [
+        ("smooth_data", processing), ("derivative", processing), ("log_derivative", processing),
+        ("cumulative_integral", processing), ("normalize", processing),
+        ("resample_data", resample), ("run_signal_op", signal_ops),
+        ("median_filter", signal_filters), ("despike", signal_filters), ("lowess", signal_filters),
+        ("hilbert_envelope", signal_filters), ("bin_average", reduce_xy),
+        ("average_duplicates", reduce_xy), ("keep_every_nth", reduce_xy),
+    ]:  # fmt: skip
+        assert getattr(qz, name) is getattr(mod, name), name
+
+
+@pytest.mark.golden
+def test_public_smoothing_derivative_normalize_resample_match_matlab(
+    load_golden: Callable[[str], dict[str, Any]],
+    compare_calc: Callable[..., None],
+) -> None:
+    g = load_golden("calc_smooth_savgol.json")
+    compare_calc(
+        qz.smooth_data(
+            np.asarray(g["input"], dtype=float), method="savitzky-golay", window=5, poly_order=2
+        ),
+        g["output"],
+    )
+    g = load_golden("calc_derivative.json")
+    x, y = np.asarray(g["input"]["x"], dtype=float), np.asarray(g["input"]["y"], dtype=float)
+    compare_calc(qz.derivative(x, y, order=g["params"]["order"]), g["output"])
+    g = load_golden("calc_normalize_range.json")
+    compare_calc(
+        qz.normalize(np.asarray(g["input"], dtype=float), method=g["params"]["method"]), g["output"]
+    )
+
+
+def test_formula_columns_and_workspace_read_headless(tmp_path: Path) -> None:
+    from quantized.io.workspace_dwk import datasets_workspace_json
+
+    ds = qz.DataStruct.create(
+        [1.0, 2.0, 4.0], [[2.0, 1.0], [6.0, 3.0], [8.0, 0.0]], labels=["a", "b"]
+    )
+    out = qz.add_formula_columns(ds, [("ratio", "A / B"), ("twice", "2 * C + x")])
+    assert out.labels == ("a", "b", "ratio", "twice")
+    np.testing.assert_array_equal(out.column(2), [2.0, 2.0, np.inf])
+    np.testing.assert_array_equal(qz.evaluate_formula(out, "D"), [5.0, 6.0, np.inf])
+    path = tmp_path / "p.dwk"
+    path.write_text(datasets_workspace_json([("run.csv", out)]), encoding="utf-8")
+    ws = qz.read_workspace(path)
+    np.testing.assert_array_equal(ws.dataset("run.csv").data.values, out.values)
 
 
 def test_no_duplicate_names() -> None:

@@ -185,20 +185,69 @@ describe("pipelineToPython", () => {
     expect(s).toContain("load its file");
   });
 
-  it("comments out what it cannot reproduce: formula, paste, background, row selection", () => {
-    const formula = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2" }), later()]);
-    expect(formula).toContain("NOT REPRODUCED: formula columns are evaluated only in the app");
-    expect(formula).not.toContain("qz.apply_corrections");
+  it("comments out what it cannot reproduce: app-only formulas, derived columns, paste, row selection", () => {
+    for (const expr of ["if(A > 0, A, 0)", "mean(A)", 'col("Moment")', "Moment * 2", "A[2]", "row()"]) {
+      const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
+      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app`);
+      expect(s, expr).not.toContain("qz.apply_corrections");
+    }
+    const derived = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true })]);
+    expect(derived).toContain("NOT REPRODUCED: derived columns (units and error propagation)");
+    const frozen = pipelineToPython([imported(), makeStep("expression", "Freeze Copy of a", "", { id: "ds-9" })]);
+    expect(frozen).toContain("NOT REPRODUCED: this worksheet operation has no quantized.api equivalent");
     const paste = pipelineToPython([makeStep("import", "Paste pasted data 1", 'qz.pasteData("pasted data 1")', { name: "pasted data 1" })]);
     expect(paste).toContain("NOT REPRODUCED: pasted data has no file to load");
-    const bg = pipelineToPython([
-      imported(),
-      makeStep("correction", "Corrections", "", { params: {}, bg: { datasetId: "ds-2", interp: "linear" } }),
-    ]);
-    expect(bg).toContain("NOT REPRODUCED: it subtracts a background dataset");
     const rows = pipelineToPython([imported(), makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, rowIds: [1, 2, 3] })]);
     expect(rows).toContain("NOT REPRODUCED: it fitted an explicit row selection");
     expect(rows).not.toContain("fit_model");
+    for (const op of ["join", "merge", "stack", "split", "algebra", "signal"]) {
+      expect(pipelineToPython([imported(), makeStep("transform", op, "", { op })])).toContain(`NOT REPRODUCED: the ${op} transform has no quantized.api equivalent`);
+    }
+    const match = pipelineToPython([imported(), makeStep("transform", "Resample", "", { op: "resample", mode: "match", method: "linear" })]);
+    expect(match).toContain("NOT REPRODUCED: a resample onto another dataset's x");
+  });
+
+  it("reproduces element-wise formula columns, recomputed after every later correction (gap audit 5 #6)", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column t", "", { name: "t", expr: "A*2 + x" }),
+      makeStep("correction", "Corrections", "", { params: { yOff: 1 }, bg: null }),
+      makeStep("expression", "Edit column t", "", { name: "t", expr: "A*3" }),
+      makeStep("reset", "Reset corrections", ""),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain("    formulas = []  # the formula columns");
+    expect(s).toContain('    base = data  # the worksheet before its formula columns\n    formulas.append(("t", "A*2 + x"))\n    data = qz.add_formula_columns(base, formulas)');
+    expect(s).toContain('    base = qz.apply_corrections(raw, {"yOff": 1})\n    data = qz.add_formula_columns(base, formulas)');
+    expect(s).toContain('    formulas[0] = ("t", "A*3")  # the edited formula');
+    expect(s).toContain("    base = raw\n    data = qz.add_formula_columns(base, formulas)");
+  });
+
+  it("reproduces a background subtraction from a file the script asks for", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("correction", "Corrections", "", { params: {}, bg: { datasetId: "ds-2", interp: "pchip" } }),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain('parser.add_argument("--background", action="append"');
+    expect(s).toContain("if len(args.background) != 1:");
+    expect(s).toContain("    background = qz.load(args.background[0])");
+    expect(s).toContain('data = qz.apply_corrections(raw, {}, bg_dataset=background, bg_interp="pchip")');
+    expect(s).toContain("protect=args.inputs + args.background");
+  });
+
+  it("reproduces resample and signal / Reduce XY transforms on the current data", () => {
+    const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column t", "", { name: "t", expr: "A*2" }),
+      makeStep("transform", "Median", "", { op: "sigop", method: "median", channels: [0, 1], args: { window: 5 } }),
+      makeStep("transform", "Resample", "", { op: "resample", mode: "n_points", nPoints: 50, method: "pchip", outOfRange: "nan", sortUnsorted: false }),
+      later(),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain('    data = qz.run_signal_op(data, "median", [0, 1], {"window": 5}).data\n    raw = data  # a new dataset: its own base\n    formulas = []');
+    expect(s).toContain('    data = qz.align_resample(data, mode="n_points", n_points=50, method="pchip", out_of_range="nan", unsorted="refuse").data');
+    expect(s).toContain('    data = qz.apply_corrections(raw, {"xOff": 1})'); // no formulas left to recompute
   });
 });
 

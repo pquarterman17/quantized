@@ -316,6 +316,17 @@ def test_job_status_and_cancel_job(qz_client: QuantizedClient) -> None:
 # ── Frozen public surface (mirrors tests/test_public_api.py) ───────────
 
 
+def test_read_project_reads_the_file_without_a_request(tmp_path: Path) -> None:
+    """Gap audit 5 #6: a saved project is the file itself; no server needed."""
+    from quantized.io.workspace_dwk import datasets_workspace_json
+
+    ds = DataStruct.create([0.0, 1.0], [[1.0], [2.0]], labels=["m"])
+    (tmp_path / "p.dwk").write_text(datasets_workspace_json([("run", ds)]), encoding="utf-8")
+    client = QuantizedClient(base_url="http://127.0.0.1:9")  # nothing listens there
+    ws = client.read_project(tmp_path / "p.dwk")
+    assert ws.dataset("run").data.values.tolist() == [[1.0], [2.0]]
+
+
 def test_client_surface_is_frozen() -> None:
     public = {
         name
@@ -326,6 +337,7 @@ def test_client_surface_is_frozen() -> None:
         "health",
         "import_bytes",
         "import_path",
+        "read_project",
         "apply_corrections",
         "fit",
         "fit_dream",

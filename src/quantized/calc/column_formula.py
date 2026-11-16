@@ -1,0 +1,439 @@
+"""Worksheet column formulas, headless: the ELEMENT-WISE subset of the app's
+formula language (``frontend/src/lib/formula.ts``), evaluated over a whole
+DataStruct at once (gap audit 5, item 6).
+
+What this reads -- the same grammar, precedence and IEEE results as the app:
+
+* ``x`` (the X column) and the column letters ``A``, ``B``, … ``Z``, ``AA``, …
+  (positional, like the app: ``A`` is channel 0);
+* numbers, ``+ - * / // %``, ``^`` (looser than a unary sign: ``-2^2`` is 4)
+  and Python's ``**`` (tighter: ``-2**2`` is -4), parentheses;
+* the constants ``pi``, ``e``, ``nan`` and the plain function table
+  (``lib/formulaFuncs.ts``), with ``np.`` / ``numpy.`` / ``math.`` prefixes
+  dropped as the app drops them.
+
+Arithmetic follows JavaScript, which the app runs on, not Python: ``a / 0`` is
+±inf (0/0 NaN), ``%`` keeps the dividend's sign (``fmod``), ``a // b`` is
+``floor(a / b)``, ``1 ** nan`` is NaN, and ``min``/``max`` propagate NaN.
+
+What it refuses, at compile time with a ``ValueError`` naming the construct:
+comparisons and conditionals, ``and``/``or``/``not``, ``A[i]`` row indexing,
+quoted text (``col("Name")``, ``sheet(...)``, ``fit(...)``), the row-aware and
+aggregate functions (``row()``, ``lag``, ``diff``, ``cumsum``, ``mean(A)`` …)
+and any other name. A formula using one of those is evaluated only in the app;
+``lib/pipeline.ts`` checks the same subset before it exports a formula step,
+so an exported script never computes a different column than the app did.
+
+Pure ``calc`` layer: a recursive-descent parser over closures (no ``eval``),
+the sibling of ``calc/axis_expr.py`` for one variable.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable, Mapping, Sequence
+
+import numpy as np
+from numpy.typing import NDArray
+
+from ..datastruct import DataStruct
+
+__all__ = [
+    "add_formula_columns",
+    "channel_index",
+    "channel_letter",
+    "evaluate_formula",
+    "formula_problem",
+]
+
+Vec = NDArray[np.float64]
+Env = Mapping[str, Vec]
+Fn = Callable[[Env], Vec]
+Tok = tuple[str, str | float]
+
+MAX_LEN = 2000
+_TOKEN = re.compile(
+    r"\s*(?:(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)"
+    r"|(?:(?:np|numpy|math)\.)?([A-Za-z_]\w*)|(\*\*|//|[-+*/%^(),]))"
+)
+_REFUSED_CHARS = {
+    "<": "comparisons",
+    ">": "comparisons",
+    "=": "comparisons",
+    "!": "comparisons",
+    "?": "the conditional c ? a : b",
+    ":": "the conditional c ? a : b",
+    "[": "row indexing A[i]",
+    "]": "row indexing A[i]",
+    '"': "quoted text (col(), sheet(), fit())",
+    "'": "quoted text (col(), sheet(), fit())",
+}
+_CONSTS = {"pi": np.pi, "e": np.e, "nan": np.nan}
+
+
+def channel_letter(i: int) -> str:
+    """0 -> ``A``, 25 -> ``Z``, 26 -> ``AA`` (``lib/formula.ts``)."""
+    n = i
+    s = ""
+    while True:
+        s = chr(65 + n % 26) + s
+        n = n // 26 - 1
+        if n < 0:
+            return s
+
+
+def channel_index(letter: str) -> int | None:
+    """``A`` -> 0, ``AA`` -> 26; ``None`` for anything that is not a letter
+    reference (``lib/formulaRename.ts`` ``channelIndexOf``)."""
+    if not re.fullmatch(r"[A-Z]+", letter):
+        return None
+    n = 0
+    for ch in letter:
+        n = n * 26 + (ord(ch) - 64)
+    return n - 1
+
+
+def _div(a: Vec, b: Vec) -> Vec:
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.asarray(np.divide(a, b), dtype=float)
+
+
+def _js_pow(a: Vec, b: Vec) -> Vec:
+    """JavaScript ``a ** b``: as C ``pow`` except ``(±1) ** nan`` and
+    ``(±1) ** ±inf`` are NaN (C gives 1)."""
+    with np.errstate(all="ignore"):
+        r = np.asarray(np.power(a, b), dtype=float)
+    odd = (np.abs(a) == 1) & ~np.isfinite(b)
+    return np.asarray(np.where(odd, np.nan, r), dtype=float)
+
+
+def _at_digits(op: Callable[[Vec], Vec], name: str) -> Callable[..., Vec]:
+    """``floor(v)`` / ``floor(v, n)`` (numpy.round's scaling), as
+    ``lib/formulaFuncs.ts`` ``atDigits``."""
+
+    def call(*args: Vec) -> Vec:
+        if len(args) == 1:
+            return np.asarray(op(args[0]), dtype=float)
+        if len(args) != 2:
+            raise ValueError(f"{name}() takes 1 or 2 arguments")
+        v, n = args
+        finite = np.isfinite(n)
+        if np.any(finite & (n != np.round(n))):
+            raise ValueError(f"{name}(): digits must be a whole number")
+        with np.errstate(all="ignore"):
+            nn = np.where(finite, n, 0.0)
+            scale = np.power(10.0, np.abs(nn))
+            pos = op(v * scale) / scale
+            neg = op(v / scale) * scale
+            out = np.where(nn >= 0, pos, neg)
+        return np.asarray(np.where(np.isnan(n), np.nan, out), dtype=float)
+
+    return call
+
+
+def _reduce(op: Callable[[Vec, Vec], Vec], empty: float) -> Callable[..., Vec]:
+    def call(*args: Vec) -> Vec:
+        if not args:
+            return np.asarray(empty, dtype=float)
+        out = args[0]
+        for a in args[1:]:
+            out = op(out, a)
+        return np.asarray(out, dtype=float)
+
+    return call
+
+
+def _hypot(*args: Vec) -> Vec:
+    if not args:
+        return np.asarray(0.0)
+    out = np.abs(args[0])
+    for a in args[1:]:
+        out = np.hypot(out, a)
+    # Math.hypot: any infinite argument wins over NaN.
+    inf = np.zeros(np.broadcast(*args).shape, dtype=bool)
+    for a in args:
+        inf = inf | np.isinf(a)
+    return np.asarray(np.where(inf, np.inf, out), dtype=float)
+
+
+def _unary(f: Callable[[Vec], Vec]) -> Callable[..., Vec]:
+    def call(*args: Vec) -> Vec:
+        if len(args) != 1:
+            raise ValueError("this function takes one argument")
+        with np.errstate(all="ignore"):
+            return np.asarray(f(args[0]), dtype=float)
+
+    return call
+
+
+def _binary(f: Callable[[Vec, Vec], Vec]) -> Callable[..., Vec]:
+    def call(*args: Vec) -> Vec:
+        if len(args) != 2:
+            raise ValueError("this function takes two arguments")
+        with np.errstate(all="ignore"):
+            return np.asarray(f(args[0], args[1]), dtype=float)
+
+    return call
+
+
+_FUNCS: dict[str, Callable[..., Vec]] = {
+    "sin": _unary(np.sin),
+    "cos": _unary(np.cos),
+    "tan": _unary(np.tan),
+    "asin": _unary(np.arcsin),
+    "acos": _unary(np.arccos),
+    "atan": _unary(np.arctan),
+    "arcsin": _unary(np.arcsin),
+    "arccos": _unary(np.arccos),
+    "arctan": _unary(np.arctan),
+    "atan2": _binary(np.arctan2),
+    "sinh": _unary(np.sinh),
+    "cosh": _unary(np.cosh),
+    "tanh": _unary(np.tanh),
+    "exp": _unary(np.exp),
+    "log": _unary(np.log),
+    "ln": _unary(np.log),
+    "log10": _unary(np.log10),
+    "log2": _unary(np.log2),
+    "sqrt": _unary(np.sqrt),
+    "abs": _unary(np.abs),
+    "sign": _unary(np.sign),
+    "floor": _at_digits(np.floor, "floor"),
+    "ceil": _at_digits(np.ceil, "ceil"),
+    "hypot": _hypot,
+    "min": _reduce(np.minimum, np.inf),
+    "max": _reduce(np.maximum, -np.inf),
+    "pow": _binary(_js_pow),
+}
+_KEYWORDS = {
+    "and",
+    "or",
+    "not",
+    "if",
+    "where",
+    "row",
+    "rows",
+    "lag",
+    "diff",
+    "cumsum",
+    "col",
+    "sheet",
+}
+
+
+def _tokens(src: str) -> list[Tok]:
+    if len(src) > MAX_LEN:
+        raise ValueError("expression too long")
+    out: list[Tok] = []
+    pos = 0
+    text = src.rstrip()
+    while pos < len(text):
+        m = _TOKEN.match(text, pos)
+        if not m:
+            ch = text[pos:].lstrip()[:1]
+            what = _REFUSED_CHARS.get(ch)
+            if what:
+                raise ValueError(f"{what} is evaluated only in the app")
+            raise ValueError(f'unexpected character "{ch}"')
+        pos = m.end()
+        if m.group(1) is not None:
+            out.append(("num", float(m.group(1))))
+        elif m.group(2) is not None:
+            out.append(("name", m.group(2)))
+        else:
+            out.append(("op", m.group(3)))
+    return out
+
+
+def _arith_op(op: str, a: Fn, b: Fn) -> Fn:
+    def run(env: Env) -> Vec:
+        left, right = a(env), b(env)
+        with np.errstate(all="ignore"):
+            if op == "+":
+                return np.asarray(left + right, dtype=float)
+            if op == "-":
+                return np.asarray(left - right, dtype=float)
+            if op == "*":
+                return np.asarray(left * right, dtype=float)
+            if op == "/":
+                return _div(left, right)
+            if op == "//":
+                return np.asarray(np.floor(_div(left, right)), dtype=float)
+            return np.asarray(np.fmod(left, right), dtype=float)
+
+    return run
+
+
+def _compile(src: str) -> tuple[Fn, list[str]]:
+    """``src`` as a function of the column environment, plus every column name
+    (``x`` or a letter) it reads, in first-seen order."""
+    toks = _tokens(src)
+    if not toks:
+        raise ValueError("empty expression")
+    refs: list[str] = []
+    pos = 0
+
+    def peek() -> Tok | None:
+        return toks[pos] if pos < len(toks) else None
+
+    def eat() -> Tok:
+        nonlocal pos
+        if pos >= len(toks):
+            raise ValueError("unexpected end of expression")
+        pos += 1
+        return toks[pos - 1]
+
+    def is_op(*ops: str) -> bool:
+        t = peek()
+        return t is not None and t[0] == "op" and t[1] in ops
+
+    def expect(op: str) -> None:
+        if eat() != ("op", op):
+            raise ValueError(f'expected "{op}"')
+
+    def arith() -> Fn:
+        left = term()
+        while is_op("+", "-"):
+            left = _arith_op(str(eat()[1]), left, term())
+        return left
+
+    def term() -> Fn:
+        left = power()
+        while is_op("*", "/", "%", "//"):
+            left = _arith_op(str(eat()[1]), left, power())
+        return left
+
+    def power() -> Fn:  # `^`: right-assoc, looser than a unary sign
+        base = unary()
+        if is_op("^"):
+            eat()
+            exp = power()
+            return lambda env: _js_pow(base(env), exp(env))
+        return base
+
+    def unary() -> Fn:
+        if is_op("-", "+"):
+            neg = eat()[1] == "-"
+            inner = unary()
+            return (lambda env: np.asarray(-inner(env), dtype=float)) if neg else inner
+        return pypow()
+
+    def pypow() -> Fn:  # Python `**`: tighter than a sign on its left
+        base = atom()
+        if is_op("**"):
+            eat()
+            exp = unary()
+            return lambda env: _js_pow(base(env), exp(env))
+        return base
+
+    def call(name: str) -> Fn:
+        if name in _KEYWORDS or name not in _FUNCS:
+            raise ValueError(f'the function "{name}" is evaluated only in the app')
+        nxt = toks[pos + 1] if pos + 1 < len(toks) else None
+        bare = peek()
+        if (
+            name in ("min", "max")
+            and bare is not None
+            and bare[0] == "name"
+            and bare[1] not in _CONSTS
+            and nxt == ("op", ")")
+        ):
+            # `min(A)` is the app's column AGGREGATE (lib/formulaRowFns.ts),
+            # not the element-wise min of one value.
+            raise ValueError(f"the aggregate {name}({bare[1]}) is evaluated only in the app")
+        args: list[Fn] = []
+        if not is_op(")"):
+            args.append(arith())
+            while is_op(","):
+                eat()
+                args.append(arith())
+        expect(")")
+        f = _FUNCS[name]
+        return lambda env: f(*[a(env) for a in args])
+
+    def atom() -> Fn:
+        kind, v = eat()
+        if kind == "num":
+            val = float(v)
+            return lambda _env: np.asarray(val)
+        if kind == "op" and v == "(":
+            inner = arith()
+            expect(")")
+            return inner
+        if kind == "name":
+            name = str(v)
+            if is_op("("):
+                eat()
+                return call(name)
+            if name in _CONSTS:
+                c = float(_CONSTS[name])
+                return lambda _env: np.asarray(c)
+            if name != "x" and channel_index(name) is None:
+                raise ValueError(
+                    f'"{name}" is not x or a column letter; a column named in a formula '
+                    "(and every keyword) is evaluated only in the app"
+                )
+            if name not in refs:
+                refs.append(name)
+            return lambda env: env[name]
+        raise ValueError(f'unexpected "{v}"')
+
+    fn = arith()
+    if pos < len(toks):
+        raise ValueError(f'unexpected "{toks[pos][1]}"')
+    return fn, refs
+
+
+def formula_problem(expr: str) -> str | None:
+    """Why ``expr`` is outside the headless subset, or ``None``."""
+    try:
+        _compile(expr)
+    except ValueError as err:
+        return str(err)
+    return None
+
+
+def _env(data: DataStruct) -> dict[str, Vec]:
+    env: dict[str, Vec] = {"x": np.asarray(data.time, dtype=float)}
+    for c in range(data.n_channels):
+        env[channel_letter(c)] = np.asarray(data.values[:, c], dtype=float)
+    return env
+
+
+def evaluate_formula(data: DataStruct, expr: str) -> Vec:
+    """One formula over every row of ``data``: a float vector the length of
+    ``data.time``. Raises ``ValueError`` for a formula outside the subset (the
+    module doc) or a letter past the last column."""
+    fn, refs = _compile(expr)
+    env = _env(data)
+    for name in refs:
+        if name not in env:
+            raise ValueError(f'unknown variable "{name}": the data has {data.n_channels} columns')
+    out = np.asarray(fn(env), dtype=float)
+    return np.asarray(np.broadcast_to(out, (data.n_points,)), dtype=float).copy()
+
+
+def add_formula_columns(
+    data: DataStruct,
+    formulas: Sequence[tuple[str, str]] | Sequence[Mapping[str, str]],
+) -> DataStruct:
+    """Append one column per ``(name, expr)`` (or ``{"name", "expr"[, "unit"]}``)
+    in order, each formula seeing ``x``, the data's columns and every column
+    appended before it -- the app's computed columns (``applyFormulas``)."""
+    out = data
+    for f in formulas:
+        if isinstance(f, Mapping):
+            name, expr, unit = str(f["name"]), str(f["expr"]), str(f.get("unit", ""))
+        else:
+            name, expr, unit = str(f[0]), str(f[1]), ""
+        col = evaluate_formula(out, expr)
+        out = DataStruct.create(
+            out.time,
+            np.column_stack([out.values, col]) if out.n_channels else col.reshape(-1, 1),
+            labels=[*out.labels, name],
+            units=[*out.units, unit],
+            metadata=out.metadata,
+            cat_levels=out.cat_levels,
+            level_order=out.level_order,
+        )
+    return out
