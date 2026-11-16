@@ -154,3 +154,72 @@ test("Exchange X-Y axes: the screen and the exported SVG put the same title on t
   await page.evaluate(() => (window as unknown as QzWindow).__qz.useApp.getState().undo());
   await expect.poll(() => exchanged(page)).toBe(false);
 });
+
+type Fmt = { breaks?: [number, number][]; top?: { kind: string; factor?: number } };
+type Live = {
+  exchangeXY: boolean;
+  insetMode: boolean;
+  yFmt: Fmt;
+  xFmt: Fmt;
+  history: unknown[];
+  setInsetMode: (v: boolean) => void;
+  setYFmt: (f: Fmt) => void;
+  setXFmt: (f: Fmt) => void;
+  plotWindows: { id: string; kind: string; document?: { plot: { axisBreaks: { x: [number, number][] } } } }[];
+  focusedWindowId: string | null;
+};
+const live = (page: Page) => (fn: (s: Live) => unknown) =>
+  page.evaluate((src) => {
+    const s = (window as unknown as { __qz: { useApp: { getState: () => Live } } }).__qz.useApp.getState();
+    return new Function("s", `return (${src})(s)`)(s);
+  }, fn.toString());
+
+test("Exchange X-Y axes refuses an inset, a Y break and a top X axis once exchanged, and keeps the exchange", async ({ page }) => {
+  test.setTimeout(90_000);
+  await installCanvasRecorder(page);
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("sims-time-profile.csv"));
+  await waitForDatasetCount(page, 1);
+  await runPaletteCommand(page, "Exchange X–Y axes");
+  await expect.poll(() => exchanged(page)).toBe(true);
+  const history = (await live(page)((s) => s.history.length)) as number;
+
+  // The magnifier inset button is disabled while exchanged, and its palette command does nothing.
+  await expect(page.getByRole("button", { name: /Magnifier inset/i }).first()).toBeDisabled();
+  await runPaletteCommand(page, "Magnifier inset").catch(() => undefined);
+  await page.keyboard.press("Escape");
+  // The setters (what the Axis dialog, the Inspector and macros call) refuse before committing.
+  await live(page)((s) => { s.setInsetMode(true); s.setYFmt({ ...s.yFmt, breaks: [[2000, 8000]] }); s.setXFmt({ ...s.xFmt, top: { kind: "reciprocal", factor: 1 } }); });
+  expect(await live(page)((s) => ({ ex: s.exchangeXY, inset: s.insetMode, yb: s.yFmt.breaks ?? null, top: s.xFmt.top ?? null }))).toEqual({ ex: true, inset: false, yb: null, top: null });
+  expect(await live(page)((s) => s.history.length)).toBe(history); // refused: not even an undo entry
+  await expect(page.getByText(/can't be set while X and Y are exchanged/).first()).toBeVisible();
+  await expect.poll(async () => (await screenTitles(page, [X_TITLE]))[X_TITLE]).toEqual({ side: "left", rotated: true }); // still turned
+});
+
+test("Exchange X-Y axes is blocked by a saved x-break in the window's document, and drops when one arrives", async ({ page }) => {
+  test.setTimeout(90_000);
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("sims-time-profile.csv"));
+  await waitForDatasetCount(page, 1);
+  const setBreak = (x: [number, number][]) =>
+    page.evaluate((brk) => {
+      const store = (window as unknown as { __qz: { useApp: { getState: () => Live; setState: (p: unknown) => void } } }).__qz.useApp;
+      const s = store.getState();
+      const wins = s.plotWindows.map((w) => (w.id === s.focusedWindowId && w.document ? { ...w, document: { ...w.document, plot: { ...w.document.plot, axisBreaks: { ...w.document.plot.axisBreaks, x: brk } } } } : w));
+      store.setState({ plotWindows: wins });
+      return wins.some((w) => w.id === s.focusedWindowId && w.document);
+    }, x);
+  const hasDocument = await setBreak([[20, 30]]);
+  test.skip(!hasDocument, "the focused window has no document yet in this build");
+  // Not exchanged: the command is refused (disabled) beside the saved break.
+  await page.getByRole("menuitem", { name: "Plot" }).click().catch(() => undefined);
+  await runPaletteCommand(page, "Exchange X–Y axes");
+  expect(await exchanged(page)).toBe(false);
+  // Exchanged, then the break arrives (Break at gaps / the Figure Builder): the exchange is turned off, said so.
+  await setBreak([]);
+  await runPaletteCommand(page, "Exchange X–Y axes");
+  await expect.poll(() => exchanged(page)).toBe(true);
+  await setBreak([[20, 30]]);
+  await expect.poll(() => exchanged(page)).toBe(false);
+  await expect(page.getByText(/Exchange X–Y axes turned off/).first()).toBeVisible();
+});

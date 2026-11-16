@@ -130,6 +130,12 @@ describe("exchangeBlocker", () => {
     };
     for (const n of names) expect(exchangeBlocker({ ...ok, ...patches[n] }), n).toMatch(/^Not available for /);
   });
+  it("a saved x-break in the focused window's document blocks it (no live composition needed)", () => {
+    const w = (x: [number, number][], id = "w1") => [{ id, kind: "plot", document: { plot: { axisBreaks: { x } } } }];
+    expect(exchangeBlocker({ ...ok, plotWindows: w([[20, 30]]), focusedWindowId: "w1" })).toBe("Not available for multi-panel layouts");
+    expect(exchangeBlocker({ ...ok, plotWindows: w([]), focusedWindowId: "w1" })).toBeUndefined();
+    expect(exchangeBlocker({ ...ok, plotWindows: w([[20, 30]]), focusedWindowId: "other" })).toBeUndefined();
+  });
   it("lets an exchanged view be turned back whatever else is set", () => {
     expect(exchangeBlocker({ ...ok, exchangeXY: true, polarMode: true })).toBeUndefined();
   });
@@ -174,6 +180,15 @@ describe("the command and the store", () => {
     expect((a.disabledReason as () => string)()).toBe("Not available for polar plots");
     a.run();
     expect(useApp.getState().exchangeXY).toBe(false);
+  });
+
+  it("the magnifier inset command is off while exchanged (it does not turn), with the reason", () => {
+    const inset = buildPlotCommands(useApp.getState).find((x) => x.id === "inset-mode")!;
+    const off = () => (typeof inset.disabled === "function" ? inset.disabled() : inset.disabled);
+    expect(off()).toBe(false);
+    useApp.setState({ exchangeXY: true });
+    expect(off()).toBe(true);
+    expect(inset.disabledReason).toBe("Not available on a turned plot");
   });
 
   it("is off on a horizontal bar graph, saying it is already turned (a checked state must not lie)", () => {
@@ -226,9 +241,20 @@ describe("a saved view holding both", () => {
     expect(withValidLayers(win({ insetMode: true })).view.insetMode).toBe(true); // the rest of the view is kept
   });
 
+  it("a saved x-break in the window's document counts (Break at gaps, the Figure Builder)", () => {
+    const withBreak = (x: [number, number][]) =>
+      ({ ...win({}), document: { plot: { view: { ...defaultPlotView(), exchangeXY: true }, axisBreaks: { x, y: [] } }, bindings: { facetKey: null } } }) as unknown as PlotWindow;
+    expect(withValidLayers(withBreak([[20, 30]])).view.exchangeXY).toBe(false);
+    expect(withValidLayers(withBreak([])).view.exchangeXY).toBe(true);
+    const doc = (x: [number, number][]) =>
+      ({ plot: { view: { ...defaultPlotView(), exchangeXY: true }, axisBreaks: { x, y: [] } }, bindings: { facetKey: null } }) as unknown as FigureDocument;
+    expect(withValidFigureLayers(doc([[20, 30]])).plot.view.exchangeXY).toBe(false);
+    expect(withValidFigureLayers(doc([])).plot.view.exchangeXY).toBe(true);
+  });
+
   it("and so does a saved figure document's own view (its facet binding counts)", () => {
     const doc = (view: object, facetKey: number | null) =>
-      ({ plot: { view: { ...defaultPlotView(), exchangeXY: true, ...view } }, bindings: { facetKey } }) as unknown as FigureDocument;
+      ({ plot: { view: { ...defaultPlotView(), exchangeXY: true, ...view }, axisBreaks: { x: [], y: [] } }, bindings: { facetKey } }) as unknown as FigureDocument;
     expect(withValidFigureLayers(doc({}, null)).plot.view.exchangeXY).toBe(true);
     expect(withValidFigureLayers(doc({ insetMode: true }, null)).plot.view.exchangeXY).toBe(false);
     expect(withValidFigureLayers(doc({}, 2)).plot.view.exchangeXY).toBe(false);

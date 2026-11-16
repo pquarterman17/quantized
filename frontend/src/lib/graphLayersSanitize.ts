@@ -169,13 +169,13 @@ export function sanitizeLayers(v: unknown): GraphLayer[] {
 export function withValidLayers(w: PlotWindow): PlotWindow {
   if (w.kind !== "plot") return w;
   const document = w.document && withValidFigureLayers(w.document);
-  const view = dropStaleExchange({ ...w.view, layers: sanitizeLayers(w.view.layers), seriesStyles: cleanSymbolStyles(w.view.seriesStyles) });
+  const view = dropStaleExchange({ ...w.view, layers: sanitizeLayers(w.view.layers), seriesStyles: cleanSymbolStyles(w.view.seriesStyles) }, null, w.document?.plot.axisBreaks.x.length);
   return { ...w, view, ...(document ? { document } : {}) };
 }
 
 /** A loaded figure document with its layers (and symbol values) validated in full. */
 export function withValidFigureLayers(d: FigureDocument): FigureDocument {
   const v = d.plot.view;
-  const view = dropStaleExchange({ ...v, layers: sanitizeLayers(v.layers), seriesStyles: cleanSymbolStyles(v.seriesStyles) }, d.bindings.facetKey);
+  const view = dropStaleExchange({ ...v, layers: sanitizeLayers(v.layers), seriesStyles: cleanSymbolStyles(v.seriesStyles) }, d.bindings.facetKey, d.plot.axisBreaks.x.length);
   return { ...d, plot: { ...d.plot, view } };
 }

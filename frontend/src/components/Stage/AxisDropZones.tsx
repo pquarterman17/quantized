@@ -123,7 +123,7 @@ export default function AxisDropZones({ className, style, onContextMenu, onAxisD
         <div className="qzk-axis-drop-zones" aria-hidden="true">
           <div className={`qzk-axis-zone x${zone === (turned ? "y" : "x") ? " active" : ""}`} />
           <div className={`qzk-axis-zone y${zone === (turned ? "x" : "y") ? " active" : ""}`} />
-          {!turned && <div className={`qzk-axis-zone y2${zone === "y2" ? " active" : ""}`} />}
+          <div className={`qzk-axis-zone y2${turned ? " top" : ""}${zone === "y2" ? " active" : ""}`} />
         </div>
       )}
     </div>

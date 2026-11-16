@@ -220,13 +220,15 @@ describe("AxisDropZones on a turned plot (Exchange X-Y)", () => {
       setStageRect(stage, 600, 400);
       const dataTransfer = channelDataTransfer("d1", 0);
       fireEvent.dragEnter(stage, { dataTransfer });
-      expect(container.querySelector(".qzk-axis-zone.y2")).toBeNull();
+      expect(container.querySelector(".qzk-axis-zone.y2.top")).not.toBeNull(); // Y2's band moves to the top
       fireDrag(stage, "dragover", { dataTransfer, clientX: 300, clientY: 350 }); // bottom: Y
       expect(container.querySelector(".qzk-axis-zone.x.active")).not.toBeNull(); // the bottom BAND
       fireDrag(stage, "drop", { dataTransfer, clientX: 300, clientY: 350 });
       fireEvent.dragEnter(stage, { dataTransfer });
       fireDrag(stage, "drop", { dataTransfer, clientX: 40, clientY: 150 }); // left: X
-      expect(drops).toEqual(["y", "x"]);
+      fireEvent.dragEnter(stage, { dataTransfer });
+      fireDrag(stage, "drop", { dataTransfer, clientX: 300, clientY: 30 }); // top: Y2
+      expect(drops).toEqual(["y", "x", "y2"]);
     } finally {
       useApp.setState({ exchangeXY: false });
     }

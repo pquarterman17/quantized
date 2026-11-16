@@ -85,7 +85,7 @@ export function orientAxes(
  *  positions along the upright axes. */
 export const TURNED_TOOLS: readonly PlotTool[] = ["pointer", "zoom", "cursor"];
 export const TURNED_TOOL_NOTE =
-  "Not available on a horizontal bar graph or exchanged X–Y";
+  "Not available on a turned plot";
 
 /** `args` for a turned plot: a pointer-driven tool falls back to zoom, and
  *  wheel zoom and every drag-to-edit hook are off. Unchanged otherwise. */

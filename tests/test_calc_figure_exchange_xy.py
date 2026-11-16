@@ -186,6 +186,12 @@ def test_lines_beside_horizontal_bars_autoscale_on_the_turned_axes_too() -> None
     assert ax.lines, "the line series is drawn"
     assert max(ax.get_xlim()) >= 2000  # horizontal axis = the line's Y values
     assert 100 <= max(ax.get_ylim()) <= 150  # vertical axis = X (0..100)
+    # every bar is visible: each lies inside the axes (the category axis and the values)
+    (hlo, hhi), (vlo, vhi) = sorted(ax.get_xlim()), sorted(ax.get_ylim())
+    assert ax.patches
+    for bar in ax.patches:
+        assert hlo <= bar.get_x() and bar.get_x() + bar.get_width() <= hhi
+        assert vlo <= bar.get_y() and bar.get_y() + bar.get_height() <= vhi
 
 
 def test_exchange_with_axis_breaks_fails_closed() -> None:

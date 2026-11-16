@@ -314,7 +314,17 @@ describe("PlotToolbar on a horizontal bar graph (the plot turned on its side)", 
       expect(btn).toBeDisabled();
       expect(btn.closest("[title]")?.getAttribute("title") ?? btn.getAttribute("aria-describedby") ?? "").not.toBe("");
     }
-    expect(document.body.textContent ?? "").toContain("Not available on a horizontal bar graph");
+    expect(document.body.textContent ?? "").toContain("Not available on a turned plot");
+  });
+
+  it("disables the magnifier inset beside an exchange (the inset does not turn), and when on lets it be closed", () => {
+    useApp.setState({ exchangeXY: true, insetMode: false });
+    const { unmount } = render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: /^Magnifier inset/i })).toBeDisabled();
+    unmount();
+    useApp.setState({ exchangeXY: false });
+    render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: /^Magnifier inset/i })).toBeEnabled();
   });
 
   it("leaves every tool enabled on an upright bar graph", () => {

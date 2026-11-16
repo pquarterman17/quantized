@@ -59,6 +59,8 @@ import { useToolGroupFit } from "./plotToolbarOverflow";
 import { usePublishDockClearance } from "./useDockClearance";
 import PlotToolbarGroup from "./PlotToolbarGroup";
 
+const TURNED_OFF = { disabled: true, disabledReason: TURNED_TOOL_NOTE }; // not available on a turned plot
+
 interface Props {
   onReset: () => void;
   onSmartScale: () => void;
@@ -176,7 +178,7 @@ export default function PlotToolbar({
     shortcut: keyForTool(t.id),
     active: tool === t.id,
     onClick: () => setPlotTool(t.id),
-    ...(turned && !TURNED_TOOLS.includes(t.id) ? { disabled: true, disabledReason: TURNED_TOOL_NOTE } : {}),
+    ...(turned && !TURNED_TOOLS.includes(t.id) ? TURNED_OFF : {}),
     ...(stackOn && t.id === "lasso" ? { disabled: true, disabledReason: LASSO_STACK_NOTE } : {}),
   });
 
@@ -253,7 +255,7 @@ export default function PlotToolbar({
           desc: stackOn ? "Return to a single overlaid plot" : STACK_MODE.desc,
           onClick: toggleStackLayout,
         }),
-        actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode) }),
+        actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode), ...(turned && !insetMode ? TURNED_OFF : {}) }),
         actionBtn(POLAR_MODE, { active: polarMode, onClick: () => setPolarMode(true) }),
         actionBtn(STAT_MODE, { active: statMode, onClick: () => setStatMode(true) }),
       ],

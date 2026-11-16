@@ -107,8 +107,11 @@ describe("PlotView.exchangeXY (Plot > Exchange X-Y axes) survives a save/reopen"
       id: "w1", kind: "plot", title: "W", datasetId: "d1", geometry: { x: 1, y: 2, w: 300, h: 200 },
       z: 1, winState: "normal", view, document, bg: "theme", linkGroup: null, pinned: false,
     };
-    return roundTrip({ datasets: [ds], plotWindows: [win], focusedWindowId: "w1" }).plotWindows[0];
+    const loaded = roundTrip({ datasets: [ds], plotWindows: [win], focusedWindowId: "w1" });
+    lastWarnings = loaded.migrationWarnings;
+    return loaded.plotWindows[0];
   };
+  let lastWarnings: string[] = [];
 
   it("an exchanged view reopens exchanged, in the window and in its figure document", () => {
     const back = save({ ...defaultPlotView(), exchangeXY: true, xScale: "log", xReversed: true });
@@ -119,6 +122,7 @@ describe("PlotView.exchangeXY (Plot > Exchange X-Y axes) survives a save/reopen"
 
   it("a file holding it beside an inset reopens un-exchanged, the inset kept (the pair is refused)", () => {
     const back = save({ ...defaultPlotView(), exchangeXY: true, insetMode: true });
+    expect(lastWarnings.join()).toMatch(/Exchange X–Y axes was turned off/); // never silent
     expect(back.view.exchangeXY).toBe(false);
     expect(back.document?.plot.view.exchangeXY).toBe(false);
     expect(back.view.insetMode).toBe(true);

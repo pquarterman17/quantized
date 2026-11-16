@@ -993,6 +993,7 @@ body {
 .qzk-axis-zone.x { left: 0; right: 0; bottom: 0; height: clamp(32px, 22%, 88px); }
 .qzk-axis-zone.y { top: 0; left: 0; bottom: 0; width: clamp(32px, 16%, 88px); }
 .qzk-axis-zone.y2 { top: 0; right: 0; bottom: 0; width: clamp(32px, 16%, 88px); }
+.qzk-axis-zone.y2.top { left: 0; bottom: auto; width: auto; height: clamp(32px, 22%, 88px); }
 
 /* ── Graph Builder wells + preview (gap #51) ── */
 .qzk-zone-wells { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

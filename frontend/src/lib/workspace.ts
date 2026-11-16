@@ -385,7 +385,11 @@ export function parseWorkspace(
   // Graph layers are validated in full here (origin gap audit 3 #15).
   const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings).map(withValidFigureLayers);
   const pages = sanitizePageDocuments(o.pages);
-  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport).map(withValidLayers);
+  const parsedWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport);
+  const plotWindows = parsedWindows.map(withValidLayers);
+  for (const [i, w] of plotWindows.entries()) {
+    if (parsedWindows[i].view.exchangeXY && !w.view.exchangeXY) migrationWarnings.push(`"${w.title}": Exchange X–Y axes was turned off (it cannot be combined with this graph's inset, breaks, top axis, extra Y axes or layout)`);
+  }
   const focusedWindowId =
     typeof o.focusedWindowId === "string" &&
     plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")

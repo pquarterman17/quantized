@@ -11,6 +11,7 @@ import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
+import { TURNED_TOOL_NOTE, turnedOf } from "../lib/uplotOrient";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
 import { useRecipeManager } from "../store/recipeManager";
@@ -187,7 +188,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       checked: () => s().exchangeXY,
       disabled: () => !!xyWhy(s),
       disabledReason: () => xyWhy(s),
-      run: () => void (xyWhy(s) || s().toggleExchangeXY()),
+      run: () => void (xyWhy(s) || xy!.toggleExchangeXY(useApp)),
     },
     {
       id: "grid",
@@ -240,6 +241,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Display",
       label: "Magnifier inset",
       checked: () => s().insetMode,
+      disabled: () => turnedOf(s()) && !s().insetMode, // the inset does not turn: not beside a turned plot
+      disabledReason: TURNED_TOOL_NOTE,
       run: () => s().setInsetMode(!s().insetMode),
     },
     {

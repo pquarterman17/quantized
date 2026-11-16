@@ -54,6 +54,7 @@ from typing import Any
 import numpy as np
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.container import ErrorbarContainer
+from matplotlib.patches import Rectangle
 from numpy.typing import NDArray
 
 from quantized.calc.figure_orient import TransposedAxes
@@ -251,6 +252,10 @@ def _values(axes: list[Any], i: int) -> tuple[NDArray[np.float64], NDArray[np.fl
             if line.get_transform() == a.transData:
                 xy = np.asarray(line.get_xydata(), dtype=float)
                 (ends if id(line) in caps else pts).append(xy[:, i])
+        for bar in a.patches:  # bars drawn beside the lines: their extent is data too
+            if isinstance(bar, Rectangle) and a.lines:
+                x0, y0, w, h = bar.get_x(), bar.get_y(), bar.get_width(), bar.get_height()
+                pts.append(np.array([x0, x0 + w] if i == 0 else [y0, y0 + h], dtype=float))
         for c in a.collections:
             if isinstance(c, PathCollection):
                 pts.append(np.asarray(c.get_offsets(), dtype=float).reshape(-1, 2)[:, i])
