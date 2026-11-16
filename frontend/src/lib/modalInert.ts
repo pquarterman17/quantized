@@ -130,6 +130,11 @@ function sync(): void {
   for (const entry of openModals) {
     const b = entry.ref.current?.closest<HTMLElement>(".qz-overlay-backdrop");
     if (b) {
+      // A backdrop whose OWN stylesheet z-index is higher (the palette's, so it
+      // opens above floating tool windows at 200 + their focus order) keeps it:
+      // the inline stamp was cleared above, so this reads the stylesheet's.
+      const floor = Number.parseInt(getComputedStyle(b).zIndex, 10);
+      if (floor > z) z = floor;
       b.style.zIndex = String(z++);
       stamped.add(b);
     }

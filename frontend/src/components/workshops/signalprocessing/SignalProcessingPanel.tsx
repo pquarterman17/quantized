@@ -17,7 +17,7 @@ import { NumberField } from "../../primitives/NumberField";
 import SignalPreview from "./SignalPreview";
 import CorrelationInputs, { type CorrelationSourceMode } from "./CorrelationInputs";
 import SignalChannelInputs from "./SignalChannelInputs";
-import SignalOperationPicker from "./SignalOperationPicker";
+import SignalOperationPicker, { useAppliedOperationSeed } from "./SignalOperationPicker";
 import SigopBody from "./SigopBody";
 import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
 import SpectralControls from "./SpectralControls";
@@ -81,11 +81,11 @@ export default function SignalProcessingPanel() {
     setSigop(isSigopFilter(op) ? op : null);
     if (!isSigopFilter(op)) setSettings((c) => ({ ...c, operation: op as SignalSettings["operation"] }));
   };
+  useAppliedOperationSeed(pick);
   const spectralOperation = isSpectralOperation(settings.operation) ? settings.operation : null;
   const spectral = spectralOperation !== null;
   const crossWorksheet = settings.operation === "correlation" && correlationMode === "two";
   const secondary = crossWorksheet ? datasets.find((dataset) => dataset.id === secondaryId) ?? null : null;
-
   useEffect(() => {
     const plotted = (plotChannels ?? []).filter((channel) => available.includes(channel));
     setChannels(plotted.length ? plotted : available.slice(0, 1));

@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+
+import { useSignalOperationSeed } from "../../../store/signalOperationSeed";
 import { Select } from "../../primitives";
 import type { SignalOperation } from "./signalProcessingModel";
 import { SIGOP_FILTER_OPTIONS, type SigopFilterMethod } from "./sigopModel";
@@ -19,6 +22,20 @@ const OPTIONS: { value: SignalOperation | SigopFilterMethod; label: string }[] =
   { value: "correlation", label: "Cross-correlation" },
   ...SIGOP_FILTER_OPTIONS,
 ];
+
+/** Apply a pending ⌘K deep-link request (`store/signalOperationSeed.ts`)
+ *  through the panel's own `pick`, once, whether the panel was just mounted by
+ *  the command or was already open. An unknown id is dropped, never applied. */
+export function useAppliedOperationSeed(pick: (operation: string) => void): void {
+  const op = useSignalOperationSeed((s) => s.op);
+  const nonce = useSignalOperationSeed((s) => s.nonce);
+  useEffect(() => {
+    if (op === null) return;
+    if (OPTIONS.some((o) => o.value === op)) pick(op);
+    useSignalOperationSeed.getState().clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pick` is a fresh closure per render; the request is keyed by nonce
+  }, [op, nonce]);
+}
 
 export default function SignalOperationPicker({ value, onChange }: {
   value: SignalOperation | SigopFilterMethod;

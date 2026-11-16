@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +17,7 @@ const action = {
 };
 
 beforeEach(() => {
+  localStorage.clear(); // running a command records it (lib/paletteUsage.ts); keep tests independent
   useApp.setState({ cmdkOpen: true });
 });
 
@@ -174,5 +179,92 @@ describe("CommandPalette as a modal listbox", () => {
     // A grouped option still runs on click.
     fireEvent.mouseDown(within(file).getByRole("option", { name: "Export page" }));
     expect(actions[2].run).toHaveBeenCalledTimes(1);
+  });
+});
+
+// UX-B: ranked search (lib/paletteRank.ts), a category + shortcut + description
+// on each result, and "Recent" for an empty query (lib/paletteUsage.ts).
+describe("CommandPalette ranked search and recents", () => {
+  const fft = { id: "reductions-fft", group: "Analyze", label: "Film thickness (FFT)…", description: "Estimate film thickness from fringe frequency.", run: vi.fn() };
+  const fit = { id: "curvefit", group: "Analyze", label: "Curve fit…", description: "Fit a model to active data.", shortcut: "mod+shift+f", run: vi.fn() };
+  const other = { id: "grid", group: "Plot", label: "Toggle grid lines", description: "Show or hide the plot grid.", run: vi.fn() };
+  const type = (value: string) => fireEvent.change(screen.getByPlaceholderText("Type a command…"), { target: { value } });
+  const labels = () => screen.getAllByRole("option").map((o) => o.querySelector(".qz-cmdk-copy > span")?.textContent);
+
+  beforeEach(() => localStorage.clear());
+
+  it("puts the whole-word match first, not the scattered subsequence (the 'fit' bug)", () => {
+    render(<CommandPalette actions={[fft, fit, other]} />);
+    type("fit");
+    expect(labels()[0]).toBe("Curve fit…");
+  });
+
+  it("shows each result's category, shortcut and one-line description", () => {
+    render(<CommandPalette actions={[fft, fit, other]} />);
+    type("curve");
+    const option = screen.getByRole("option", { name: /Curve fit/ });
+    expect(within(option).getByText("Analyze")).toHaveClass("qz-cmdk-cat");
+    expect(within(option).getByText("Fit a model to active data.")).toBeInTheDocument();
+    expect(option.querySelector(".qz-shortcut")).not.toBeNull();
+  });
+
+  it("an empty query lists recently run commands first, once each", () => {
+    localStorage.setItem("qz.paletteUsage", JSON.stringify({ grid: { n: 1, t: 5 }, curvefit: { n: 4, t: 9 }, gone: { n: 1, t: 99 } }));
+    render(<CommandPalette actions={[fft, fit, other]} />);
+    const recent = screen.getByRole("group", { name: "Recent" });
+    expect(within(recent).getAllByRole("option").map((o) => o.querySelector(".qz-cmdk-copy > span")?.textContent)).toEqual(["Curve fit…", "Toggle grid lines"]);
+    expect(screen.getAllByRole("option")).toHaveLength(3); // fft follows; none repeated
+    expect(labels()[2]).toBe("Film thickness (FFT)…");
+  });
+
+  it("with nothing run yet, an empty query is the plain grouped list (no empty Recent)", () => {
+    render(<CommandPalette actions={[fft, fit, other]} />);
+    expect(screen.queryByRole("group", { name: "Recent" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Analyze" })).toBeInTheDocument();
+  });
+
+  it("running a command records it, so it leads the next empty palette", () => {
+    render(<CommandPalette actions={[fft, fit, other]} />);
+    type("grid");
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    expect(JSON.parse(localStorage.getItem("qz.paletteUsage") ?? "{}")).toMatchObject({ grid: { n: 1 } });
+    act(() => useApp.setState({ cmdkOpen: true }));
+    expect(within(screen.getByRole("group", { name: "Recent" })).getByRole("option", { name: /Toggle grid lines/ })).toBeInTheDocument();
+  });
+
+  it("a command that names the user's data (perEntity) is never recorded", () => {
+    const entity = { id: "reopen-1", group: "File", label: "Reopen project Alpha", perEntity: true, run: vi.fn() };
+    render(<CommandPalette actions={[entity]} />);
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    expect(entity.run).toHaveBeenCalledOnce();
+    expect(localStorage.getItem("qz.paletteUsage")).toBeNull();
+  });
+
+  it("stacks above floating tool windows (live check: it opened under Signal Processing)", async () => {
+    // lib/modalInert.ts stamps every open backdrop 101, 102, ... inline, which
+    // beat the stylesheet and left the palette under ToolWindow (200 + z). The
+    // stamp now keeps a backdrop's own higher stylesheet z-index. jsdom loads no
+    // stylesheet, so this applies the real rule from platform.css.
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../styles/platform.css"), "utf8");
+    const rule = /\.qz-cmdk-backdrop\s*\{[^}]*\}/.exec(css)?.[0] ?? "";
+    const z = Number(/z-index:\s*(\d+)/.exec(rule)?.[1]);
+    expect(z).toBeGreaterThan(200 + 100); // ToolWindow's base, with room for its focus order
+    expect(z).toBeLessThan(2000); // but under the toasts / menus layer
+    const style = document.head.appendChild(document.createElement("style"));
+    style.textContent = rule;
+    try {
+      render(<CommandPalette actions={[fit]} />);
+      const backdrop = document.querySelector<HTMLElement>(".qz-overlay-backdrop");
+      expect(backdrop).toHaveClass("qz-cmdk-backdrop");
+      await waitFor(() => expect(Number(backdrop?.style.zIndex)).toBeGreaterThanOrEqual(z));
+    } finally {
+      style.remove();
+    }
+  });
+
+  it("every typed word must match", () => {
+    render(<CommandPalette actions={[fft, fit, other]} />);
+    type("fit zzz");
+    expect(screen.getByText("No matching commands")).toBeInTheDocument();
   });
 });

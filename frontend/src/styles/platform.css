@@ -11,6 +11,13 @@
   z-index: 100;
 }
 
+/* The palette sits above floating tool windows (ToolWindow is 200 + its focus
+   order): at the shared scrim's 100 it opened UNDER an open Signal Processing
+   window, where a deep-link command could not even be seen. */
+.qz-cmdk-backdrop {
+  z-index: 1500;
+}
+
 /* ── centered glass dialog panel ── */
 .qz-dialog {
   position: absolute;
@@ -107,6 +114,32 @@
 .qz-cmdk-item.active {
   background: var(--accent-soft);
   color: var(--accent-text);
+}
+/* Right edge of a row: the category of a ranked / recent result, then its shortcut. */
+.qz-cmdk-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.qz-cmdk-cat {
+  font-size: var(--font-size-sm);
+  color: var(--text-faint);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+}
+.qz-cmdk-item.active .qz-cmdk-cat {
+  color: var(--text-muted);
+}
+/* The ranked list has no visible group header; the group stays named for assistive tech. */
+.qz-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .qz-cmdk-hit {
   background: none;
