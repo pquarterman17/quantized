@@ -280,12 +280,14 @@ describe("the read itself", () => {
     await tick();
     await tick();
     expect(live().data.time).toHaveLength(4);
-    expect(vi.mocked(importLive).mock.lastCall).toEqual([PATH, true]);
+    expect(vi.mocked(importLive).mock.lastCall?.slice(0, 2)).toEqual([PATH, true]);
+    expect(live().source?.checksum).toBe("sha256:4"); // a held read is not the whole file: baseline kept
     file = { n: 5 }; // nothing changes on disk; the server would now return all of it unheld
     for (let i = 3; i < STABLE_PARTIAL_POLLS; i++) await tick();
     expect(live().data.time).toHaveLength(4); // a pause mid-line is held for a good while...
     await tick(); // ...but not forever
-    expect(vi.mocked(importLive).mock.lastCall).toEqual([PATH, false]);
+    expect(vi.mocked(importLive).mock.lastCall?.slice(0, 2)).toEqual([PATH, false]);
+    expect(live().source?.checksum).toBe("sha256:5");
     expect(live().data.time).toHaveLength(5);
     expect(app().history).toHaveLength(0);
   });

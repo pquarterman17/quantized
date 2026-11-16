@@ -105,7 +105,7 @@ def test_partial_lines_are_held_in_every_line_ending_and_encoding(
 def test_a_file_with_no_complete_line_is_not_read_yet(tmp_path: Path) -> None:
     f = tmp_path / "new.csv"
     f.write_bytes(b"T,M")
-    assert _live(f)[0] == 409
+    assert _live(f)[0] == 425  # too early: not a race (409), not a failure
 
 
 def test_a_binary_format_is_never_cut(tmp_path: Path) -> None:
@@ -174,3 +174,16 @@ def test_a_file_no_parser_claims_is_a_422_not_a_500(tmp_path: Path) -> None:
     f.write_bytes(b"\x00\x00not an spc file\n")
     status, body, _ = _live(f)
     assert status == 422, body
+
+
+def test_an_os_error_while_parsing_is_unreachable_not_unparseable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = tmp_path / "img.png"
+    f.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    def locked(*_a: object, **_k: object) -> object:
+        raise PermissionError("locked by the instrument")
+
+    monkeypatch.setattr("quantized.routes.parsers._import_with_books", locked)
+    assert _live(f)[0] == 403

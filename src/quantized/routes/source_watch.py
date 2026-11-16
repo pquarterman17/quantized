@@ -33,7 +33,10 @@ can block for minutes, so:
   ``pending`` -- no answer YET, which is not the same as unreachable. The
   watcher reports a file unreachable only after it stays pending for several
   polls. The key is the requested path's own spelling (``abspath``), because
-  resolving symlinks is itself a filesystem call that can hang.
+  resolving symlinks is itself a filesystem call that can hang -- so a symlink
+  into a hung share counts against the volume holding the LINK. In-flight stats
+  are shared per path, so it takes ``PER_VOLUME_INFLIGHT`` distinct such links
+  to fill that volume's slots.
 """
 
 from __future__ import annotations
@@ -52,7 +55,7 @@ from pydantic import BaseModel, Field
 
 from quantized.data_roots import allowed_data_prefixes
 from quantized.desktop_consent import consented_path
-from quantized.routes._liveimport import source_stamp
+from quantized.io.live_text import source_stamp
 
 router = APIRouter(prefix="/api/source-watch", tags=["import"])
 
@@ -62,7 +65,7 @@ MAX_PATH_CHARS = 4096
 #: Concurrent stats on ONE volume; a hung share can hold at most this many threads.
 PER_VOLUME_INFLIGHT = 8
 ANSWER_TIMEOUT_S = 3.0
-_RETRY_S = 0.05
+_RETRY_S = 0.02
 _MOUNTS_TTL_S = 30.0
 
 
@@ -203,29 +206,20 @@ async def stat_sources(req: SourceStatRequest) -> SourceStatResponse:
 
     A path whose volume is at its cap is submitted again as soon as a slot
     frees (a healthy volume's stats finish in microseconds), until the answer
-    deadline; only then is it reported ``pending``."""
+    deadline; only then is it reported ``pending``. The request POLLS its
+    stats' futures (every ``_RETRY_S``) instead of awaiting wrapped ones: a
+    wrapper adds a done-callback to the thread's future, and a hung stat shared
+    by every poll would collect one per request for as long as it hangs."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + ANSWER_TIMEOUT_S
     futures: list[Future[SourceStat] | None] = [None] * len(req.paths)
-    # One asyncio wrapper per stat for this request: re-wrapping on every pass would pile
-    # done-callbacks onto a hung stat's future, one more per pass and per poll.
-    wrapped: dict[int, asyncio.Future[SourceStat]] = {}
     while True:
         futures = [
             f if f is not None else _submit(p) for p, f in zip(req.paths, futures, strict=True)
         ]
-        running = {id(f): f for f in futures if f is not None and not f.done()}
-        remaining = deadline - loop.time()
-        if remaining <= 0 or (not running and all(f is not None for f in futures)):
+        if all(f is not None and f.done() for f in futures) or loop.time() >= deadline:
             break
-        if running:
-            for key, fut in running.items():
-                if key not in wrapped:
-                    wrapped[key] = asyncio.wrap_future(fut)
-            waits = {wrapped[key] for key in running}
-            await asyncio.wait(waits, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
-        else:  # every slot of a volume is held by another request's stats
-            await asyncio.sleep(min(_RETRY_S, remaining))
+        await asyncio.sleep(_RETRY_S)
     return SourceStatResponse(
         entries=[_answer(p, f) for p, f in zip(req.paths, futures, strict=True)]
     )

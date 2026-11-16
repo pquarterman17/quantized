@@ -34,7 +34,7 @@ export interface LiveRead {
 }
 
 /** Re-read `path` as one consistent snapshot; `hold` leaves an unterminated last line out.
- *  Throws `HttpError` 409 when the file changed during the read (or has no complete line). */
+ *  Throws `HttpError` 409 when the file changed during the read, 425 when it has no complete line. */
 export async function importLive(path: string, hold: boolean, signal?: AbortSignal): Promise<LiveRead> {
   const res = await ensureOk(
     await fetch("/api/parsers/import", {

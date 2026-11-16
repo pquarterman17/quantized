@@ -219,7 +219,8 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
   async function read(e: Entry, shared: ImportCache, hold: boolean, stamp: string): Promise<void> {
     const failing = e.phase === "error";
     e.phase = "updating";
-    const wanted = (): boolean => entries.get(e.id) === e; // turned off (or re-enabled) meanwhile?
+    // Turned off (or re-enabled), or a project opened, while the file was being read?
+    const wanted = (): boolean => entries.get(e.id) === e && deps.epoch() === e.epoch;
     const r = await deps.reimport(e.id, shared, { hold, installed: e.installed, base: e.base, wanted });
     if (!wanted()) return;
     if (r.ok) {
@@ -237,6 +238,13 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       if (after) remembered.set(`${e.id}\0${e.path}`, { applied: e.applied, installed: e.installed, base: e.base, held: e.held });
       const tail = r.held ? ` (its last line has no line ending yet: read when it does, or after ${Math.round((STABLE_PARTIAL_POLLS * pollMs) / 1000)} s without change)` : r.reshaped ? " (the file's shape changed)" : "";
       deps.status(`auto-updated "${nameOf(e)}" — ${r.rows} rows at ${clock()}${tail}`);
+    } else if (r.early) {
+      // No complete line yet: treated like a held read of nothing -- read in full once it holds still.
+      e.applied = stamp;
+      e.held = true;
+      settle(e);
+      e.phase = "watching";
+      deps.status(`auto-update: "${nameOf(e)}" has no complete line yet — waiting for the file`);
     } else if (r.stale) {
       e.phase = "waiting"; // the file or the worksheet moved during the read: next poll
       if (++e.stale === MAX_STALE_READS) deps.notify(`Auto-update of "${nameOf(e)}": the file changed during each of the last ${MAX_STALE_READS} reads (it is written faster than it can be read) — still trying.`, "info");
@@ -326,7 +334,7 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       const shared: ImportCache = new Map(); // worksheets of one file read it once per round
       for (const e of [...entries.values()]) {
         const st = byPath.get(e.path);
-        if (st && entries.has(e.id)) await handle(e, st, shared);
+        if (st && entries.get(e.id) === e && e.epoch === deps.epoch()) await handle(e, st, shared);
       }
     } finally {
       busy = false;

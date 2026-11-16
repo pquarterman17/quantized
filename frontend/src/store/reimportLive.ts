@@ -72,8 +72,12 @@ export interface LiveOpts {
 export type LiveReimport =
   | { ok: true; rows: number; reshaped: boolean; labelled: boolean; stamp: string; held: boolean; data: DataStruct }
   /** `stale`: the worksheet changed while the file was read, or the file did
-   *  (409): nothing was written; the next poll retries. */
-  | { ok: false; stale: boolean; error: string };
+   *  (409): nothing was written; the next poll retries. `early`: a held read of a
+   *  file with no complete line yet (425): nothing to read until it holds still. */
+  | { ok: false; stale: boolean; early?: boolean; error: string };
+
+/** A read that has not answered by now is abandoned (a share that dropped after its stat). */
+export const READ_TIMEOUT_MS = 120_000;
 
 /** Push a labelled undo step for the CURRENT state without clearing redo (rule 1). */
 function pushStep(set: SliceSet, get: SliceGet, label: string): number | undefined {
@@ -90,7 +94,7 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
   if (!ds?.source) return { ok: false, stale: false, error: "the worksheet no longer has a source file" };
   try {
     const key = `${opts.hold ? 1 : 0}\0${ds.source.path}`;
-    const pending = shared.get(key) ?? importLive(ds.source.path, opts.hold);
+    const pending = shared.get(key) ?? importLive(ds.source.path, opts.hold, AbortSignal.timeout(READ_TIMEOUT_MS));
     shared.set(key, pending);
     const read = await pending;
     const freshRaw = await resolveFreshData(ds, read.data);
@@ -107,7 +111,9 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
     if (get().datasets.find((d) => d.id === id) !== ds) return { ok: false, stale: true, error: "the worksheet changed while its file was being read" };
     if (!opts.wanted()) return { ok: false, stale: false, error: "auto-update was turned off" };
     if (!merge) {
-      stampSource(set, id, ds, read); // nothing rewritten but the source baseline
+      // Nothing rewritten but the source baseline -- and that only when the worksheet holds
+      // everything read (a held line it lacks would make Relink/Pack and a reopen call it complete).
+      if (!read.held || own.time.length > freshRaw.time.length) stampSource(set, id, ds, read);
       return { ok: true, rows: own.time.length, reshaped: false, labelled: false, stamp: read.stamp, held: read.held, data: ds.data };
     }
     const label = diverged
@@ -119,14 +125,16 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
           : null;
     const stepSeq = label ? pushStep(set, get, label) : undefined;
     applyReimportMerge(set, get, ds, merge, undefined, true);
-    stampSource(set, id, ds, read);
+    if (!read.held) stampSource(set, id, ds, read); // a held read is not the whole file
     const next = get().datasets.find((d) => d.id === id);
     const old = opts.installed ?? (label ? null : ds.data);
     if (next && old && !merge.shapeChanged) rebaseHistory(set, id, old, next, stepSeq);
-    if (label) toast(diverged ? `Auto-update replaced your edits to "${ds.name}" with the file's newer data. Undo (Ctrl+Z) brings them back.` : `"${ds.name}" was updated from its file (undoable).`, "info");
+    // A reshape already toasts from applyReimportMerge ("changed shape on re-import").
+    if (label && (diverged || !merge.shapeChanged)) toast(diverged ? `Auto-update replaced your edits to "${ds.name}" with the file's newer data. Undo (Ctrl+Z) brings them back.` : `"${ds.name}" was updated from its file (undoable).`, "info");
     return { ok: true, rows: merge.newData.time.length, reshaped: merge.shapeChanged, labelled: label !== null, stamp: read.stamp, held: read.held, data: next?.data ?? merge.newData };
   } catch (e) {
     if (e instanceof HttpError && e.status === 409) return { ok: false, stale: true, error: e.message };
+    if (e instanceof HttpError && e.status === 425) return { ok: false, stale: false, early: true, error: e.message };
     return { ok: false, stale: false, error: e instanceof Error ? e.message : "error" };
   }
 }

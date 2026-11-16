@@ -4038,7 +4038,10 @@ export interface paths {
          *
          *     A path whose volume is at its cap is submitted again as soon as a slot
          *     frees (a healthy volume's stats finish in microseconds), until the answer
-         *     deadline; only then is it reported ``pending``.
+         *     deadline; only then is it reported ``pending``. The request POLLS its
+         *     stats' futures (every ``_RETRY_S``) instead of awaiting wrapped ones: a
+         *     wrapper adds a done-callback to the thread's future, and a hung stat shared
+         *     by every poll would collect one per request for as long as it hangs.
          */
         post: operations["stat_sources_api_source_watch_stat_post"];
         delete?: never;

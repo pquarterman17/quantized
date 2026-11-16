@@ -229,6 +229,33 @@ describe("the toggle", () => {
     expect(status).toHaveBeenLastCalledWith(expect.stringMatching(/relinked/), true);
   });
 
+  it("a project opened while a stat call is in flight: nothing is read", async () => {
+    const w = watcher();
+    await w.tick();
+    state.next = ok(IMPORTED + 60_000, 150);
+    await w.tick();
+    const statOnce = deps.stat;
+    deps.stat = async (p) => {
+      state.epoch = 2; // Revert lands while the stat call is pending
+      return statOnce(p);
+    };
+    await w.tick();
+    expect(reimport).not.toHaveBeenCalled();
+  });
+
+  it("a file with no complete line yet (425) is not re-read every poll", async () => {
+    reimport.mockResolvedValue({ ok: false, stale: false, early: true, error: "the file has no complete line yet" });
+    const w = watcher();
+    await w.tick();
+    state.next = ok(IMPORTED + 60_000, 150);
+    for (let i = 0; i < STABLE_PARTIAL_POLLS - 1; i++) await w.tick();
+    expect(reimport).toHaveBeenCalledTimes(1);
+    expect(notify).not.toHaveBeenCalled();
+    await w.tick(); // held still long enough: read in full
+    await w.tick();
+    expect(reimport).toHaveBeenLastCalledWith("d1", expect.any(Map), expect.objectContaining({ hold: false }));
+  });
+
   it("opening (or reverting) a project ends the watch", async () => {
     const w = watcher();
     await w.tick();
