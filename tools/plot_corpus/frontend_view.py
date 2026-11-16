@@ -214,6 +214,22 @@ def default_view(ds: Mapping[str, Any]) -> dict[str, Any]:
     return {"hidden": hidden, "ownX": own}
 
 
+def _marker_kind(
+    figure: Mapping[str, Any], mapped: Sequence[Mapping[str, Any]], letters: Sequence[str]
+) -> str:
+    """What a selection-path figure draws: ``polar`` (``figurePolarState``),
+    ``bubble`` / ``color_mapped`` when every mapped curve's ``sizeBy`` /
+    ``colorBy`` column is a channel (``originFigureSelection.withMarkerColumns``),
+    else ``import_compare.drawn_kind``."""
+    if figure.get("coordinates") == "polar" and figure.get("curves"):
+        return "polar"
+    if mapped and all(c.get("sizeBy") in letters for c in mapped):
+        return "bubble"
+    if mapped and all(c.get("colorBy") in letters for c in mapped):
+        return "color_mapped"
+    return drawn_kind(mapped)
+
+
 def drawn_curves(
     figure: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]]
 ) -> dict[str, Any]:
@@ -254,7 +270,8 @@ def drawn_curves(
         curves = [{"book": book, "x": x, "y": letters[k]} for k in sel["yKeys"]]
         mapped = [c for c in figure.get("curves") or []
                   if c.get("book") == book and c.get("y") in [letters[k] for k in sel["yKeys"]]]
-        return {"dataset": book, "via": "selection", "kind": drawn_kind(mapped), "curves": curves}
+        return {"dataset": book, "via": "selection", "kind": _marker_kind(figure, mapped, letters),
+                "curves": curves}
     view = default_view(ds)
     curves = [
         {"book": book, "x": letters[view["ownX"][c]] if c in view["ownX"] else x_letter, "y": y}

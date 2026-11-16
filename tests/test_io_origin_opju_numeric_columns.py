@@ -20,8 +20,10 @@ from quantized.io.origin_project.opju_column_fixed import (
 )
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
 from quantized.io.origin_project.opju_layer_kind import (
+    COORDINATES,
     LAYER_KIND_NOT_DECODED,
     MARKER_ENCODING_NOT_DECODED,
+    MARKER_SCALE_NOT_DECODED,
     apply_layer_kinds,
     page_layer_kind,
 )
@@ -194,6 +196,31 @@ def test_layer_kinds_omit_or_note() -> None:
     assert [o["reason"] for o in out[0]["curve_sheet_omitted"]] == [LAYER_KIND_NOT_DECODED] * 2
     assert out[0]["curve_sheet_omitted"][1]["book"] == "B"
     assert out[1]["curves"] == curves[:1] and out[1][MARKER_ENCODING_NOT_DECODED] == "bubble"
+
+
+def test_polar_degree_layer_is_kept_and_decoded_markers_note_the_scale() -> None:
+    one = [{"book": "P", "x": "A", "y": "B"}]
+    polar = {"name": "Graph1", "curves": one, "x_from": 0.0, "x_to": 360.0}
+    figs = [
+        polar,
+        {**polar, "name": "Graph2", "x_to": 6.28},  # theta not a degree circle: omitted
+        {"name": "Graph3", "curves": [{**one[0], "sizeBy": "C"}]},
+        {"name": "Graph4", "curves": [{**one[0], "colorBy": "C"}]},
+        {"name": "Graph5", "curves": [{**one[0], "colorBy": "C"}]},  # no template named
+    ]
+    b = _MAGIC + b"".join(
+        _graph_page(n, t)
+        for n, t in (("Graph1", "Polar"), ("Graph2", "Polar"), ("Graph3", "bubble"),
+                     ("Graph4", "bubble"), ("Graph5", "Line"))
+    )
+    out = apply_layer_kinds(figs, b)
+    assert out[0]["curves"] == one and out[0][COORDINATES] == "polar"
+    assert out[1]["curves"] == [] and COORDINATES not in out[1]
+    assert out[2][MARKER_SCALE_NOT_DECODED] == "bubble"
+    assert MARKER_ENCODING_NOT_DECODED not in out[2]
+    # a bubble page whose curve decoded a colour, not a size: still undecoded
+    assert out[3][MARKER_ENCODING_NOT_DECODED] == "bubble"
+    assert out[4][MARKER_SCALE_NOT_DECODED] == "column"
 
 
 # ── realdata anchors (Origin 2026b COM, 2026-11-15) ───────────────────────────
