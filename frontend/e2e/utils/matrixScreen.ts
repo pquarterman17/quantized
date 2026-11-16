@@ -157,7 +157,7 @@ export function axesOf(p: Panel): Axes {
   for (const t of p.ops.filter((o) => o.op === "text")) {
     const x = t.x!;
     const y = t.y!;
-    const n = Number(t.text);
+    const n = Number(t.text?.replace(/^−/, "-")); // auto ticks draw a true minus (UX audit 8 #8)
     const numeric = t.text!.trim() !== "" && Number.isFinite(n);
     if (t.rotated) (x < left ? out.yTitle : out.y2Title).push(t.text!);
     else if (y > top + height + 1) numeric ? out.x.push({ value: n, at: x }) : out.xTitle.push(t.text!);

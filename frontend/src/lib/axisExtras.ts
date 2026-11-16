@@ -20,6 +20,7 @@ import { activeBreaks, applyAxisBreaks, drawBreakMarks, insideBreak, type AxisEx
 import type { AxisBreak } from "./axisBreaks";
 import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
 import { applyScaleExtras, applyTickExtras, drawCross, keepEveryLabel, type CrossLook } from "./axisScaleExtras";
+import { sup, timesTen } from "./autoTickValues";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 // Gap audit 4 G11: the Y3+ axis builder rides this chunk (lib/axisExtrasHook.ts).
@@ -28,13 +29,11 @@ export { pushExtraYAxes } from "./uplotMultiY";
 type TickValues = NonNullable<uPlot.Axis["values"]>;
 type ValuesFn = Extract<TickValues, (...args: never[]) => unknown>;
 
-const SUP: Record<string, string> = { "-": "⁻", "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹" };
-const sup = (n: number): string => String(n).replace(/[-0-9]/g, (c) => SUP[c]);
 
 /** "×10⁻³" for a power of ten, else "×2.5" -- `divide_offset_text`'s twin. */
 export function divideLabel(divide: number): string {
   const exp = Math.log10(Math.abs(divide));
-  return divide > 0 && Math.abs(exp - Math.round(exp)) < 1e-9 ? `×10${sup(Math.round(exp))}` : `×${divide}`;
+  return divide > 0 && Math.abs(exp - Math.round(exp)) < 1e-9 ? timesTen(Math.round(exp)) : `×${divide}`;
 }
 
 /** Majors at whole powers of e inside [min, max] (an "Ln" axis). */
