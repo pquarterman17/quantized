@@ -31,7 +31,7 @@ import { useMapRuler } from "./useMapRuler";
 import { useMapSectorWedge } from "./useMapSectorWedge";
 import MapInterpolatedBadge from "./MapInterpolatedBadge";
 import MapStageNotice from "./MapStageNotice";
-const Map3dPreview = lazyRegion(() => import("./Map3dPreview"), "3-D view");
+const Map3dStageView = lazyRegion(() => import("./Map3D/Map3dStageView"), "3-D view");
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -384,7 +384,7 @@ export default function MapStage({ dataset }: MapStageProps) {
       )}
 
       {mapView.view3d && payload && (
-        <Map3dPreview payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} data={mapActive?.data} keys={keys} />
+        <Map3dStageView datasetId={dsId} payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} data={mapActive?.data} keys={keys} />
       )}
       {payload?.interpolated && <MapInterpolatedBadge nPoints={payload.interpolated.nPoints} />}
 

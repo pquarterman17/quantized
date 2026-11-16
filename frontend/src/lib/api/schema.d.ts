@@ -9156,6 +9156,11 @@ export interface components {
             /** Dpi */
             dpi?: number | null;
             /**
+             * Drop Lines
+             * @default false
+             */
+            drop_lines?: boolean;
+            /**
              * Equal Aspect
              * @default false
              */
@@ -9226,6 +9231,11 @@ export interface components {
              * @default 30
              */
             view_elev?: number;
+            /**
+             * View Zoom
+             * @default 1
+             */
+            view_zoom?: number;
             /** Width In */
             width_in?: number | null;
             /**
