@@ -26,7 +26,6 @@
 
 import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { failedWith, truncateReason } from "../lib/bookData";
-import { saveBlob } from "../lib/download";
 import { baseName, parentDirectory } from "../lib/importEntry";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
@@ -336,11 +335,22 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // path, so `currentProject` is deliberately left untouched
   // (lib/recentProjects.ts's module doc has the identical rule for Recent
   // Projects entries — the same "no path, no identity" reasoning applies).
-  saveBlob(new Blob([content], { type: "application/json" }), "workspace.dwk");
+  // Lane O: a Chromium save picker keeps its handle (Ctrl+S then saves in place);
+  // otherwise the download, named after the opened/saved file.
+  const browser = await import("./browserSave");
+  const name = get().currentProject?.name ?? null;
+  if (!hasDesktopShell() && (await browser.browserSaveAs(content, name, browserReport(get), state.docEpoch))) return; // desktop (a failed native write): plain download, never the browser picker
+  browser.browserDownload(content, name);
   const msg = savedMsg(all.length);
   get().setStatus(msg);
   toast(msg, "ok");
 }
+
+const browserReport = (get: SliceGet) => ({
+  setStatus: (m: string) => get().setStatus(m),
+  saved: (file: string) => savedMsg(get().datasets.length, file),
+  clean: () => get().markProjectClean(),
+});
 
 /** "Save" (Ctrl+S) — P1.2 box 1: write straight to the CURRENT project's
  *  known path with no dialog, when one is known and a bridge can reach it.
@@ -358,9 +368,13 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
  *  left here is to say so plainly and leave the dirty marker set. */
 export async function runSaveWorkspace(get: SliceGet): Promise<void> {
   const project = get().currentProject;
-  if (project === null || !hasDesktopShell()) {
-    return runSaveWorkspaceToFile(get);
+  if (!hasDesktopShell()) {
+    // Browser tab: single-flight, overwrite the Save As file in place when it is still
+    // ours (store/browserSave.ts fails closed and re-prompts); no handle yet = Save As.
+    const browser = await import("./browserSave");
+    return browser.quickSave(() => serializeCurrentWorkspace(get), () => runSaveWorkspaceToFile(get), browserReport(get));
   }
+  if (project === null) return runSaveWorkspaceToFile(get);
   // PR I2 (L0.47): quick-save is the ONE write that lands on a KNOWN path
   // with no fresh dialog — the exact write "never permit silent concurrent
   // writes to one project" guards. This first check is a CHEAP, CACHED

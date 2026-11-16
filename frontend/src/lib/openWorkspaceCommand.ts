@@ -85,7 +85,7 @@ export function openWorkspaceCommand(
       // "<verb> failed: …" status a parse failure does, and nothing is opened.
       const viewport = currentViewport();
       void withOp(label, () => import("./parseWorkspaceFile").then((m) => m.parseWorkspaceFile(file, viewport)))
-        .then(dispatch)
+        .then((ws) => dispatch({ ...ws, fileName: file.name }))
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
         );

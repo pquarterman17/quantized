@@ -12,6 +12,7 @@ import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
+import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
 import { useApp } from "./store/useApp";
@@ -23,6 +24,18 @@ import { useApp } from "./store/useApp";
 function inToolWindow(t: EventTarget | null): boolean {
   return t instanceof Element && t.closest("[data-tool-window]") !== null;
 }
+
+type AppState = ReturnType<typeof useApp.getState>;
+
+/** Reset the plot view to automatic limits; false when there was nothing to reset. */
+function rescale(s: AppState): boolean {
+  if (!s.xLim && !s.yLim && !s.y2Lim) return false;
+  s.recordView({ xLim: s.xLim, yLim: s.yLim, y2Lim: s.y2Lim }, { xLim: null, yLim: null, y2Lim: null });
+  return true;
+}
+
+/** Origin habits that open a lazy feature (Ctrl+N / Ctrl+J / F2): bodies in lib/originKeys.ts. */
+const originKey = (k: string) => void runLazy("Loading…", () => import("./lib/originKeys")).then((m) => m.originKey(k), onLoadFailure);
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
@@ -95,9 +108,12 @@ export function useGlobalShortcuts(): void {
         switch (e.key) {
           case "a":
           case "A": // autoscale / reset the plot view
-            if (!s.xLim && !s.yLim && !s.y2Lim) return; // nothing to reset
+            if (rescale(s)) e.preventDefault();
+            return;
+          case "F2": // rename the selected (else active) dataset; Shift+F2 is the worksheet header editor
+            if (e.shiftKey) return;
             e.preventDefault();
-            s.recordView({ xLim: s.xLim, yLim: s.yLim, y2Lim: s.y2Lim }, { xLim: null, yLim: null, y2Lim: null });
+            originKey("f2");
             return;
           case "f":
           case "F": // curve-fit workshop
@@ -183,20 +199,42 @@ export function useGlobalShortcuts(): void {
           s.setPrefsOpen(true);
           break;
         case "s":
-          // P1.2 box 1: Ctrl/Cmd+S — write to the known project path with no
-          // dialog; falls back to Save As (prompts / downloads) when there is
-          // no known project yet. ⇧ is reserved (a future explicit Save As
-          // shortcut), so this branch only claims the plain combo.
-          if (!e.shiftKey) {
-            e.preventDefault();
-            void s.saveWorkspace();
-          }
+          // P1.2 box 1: Ctrl/Cmd+S — write to the known project path (desktop) or
+          // the Save As file handle (Chromium) with no dialog; Save As / a download
+          // otherwise. ⇧ = Save As, always prompting (Origin's Ctrl+Shift+S).
+          e.preventDefault();
+          if (!e.repeat) void (e.shiftKey ? s.saveWorkspaceToFile() : s.saveWorkspace());
+          break;
+        // Origin habits (audit-6 lane O). Typing in a field keeps the native keys.
+        // Ctrl+R's reload block is the capture listener below (it must work under
+        // modals too); Ctrl+Shift+R (hard reload) is left alone. Ctrl+N / Ctrl+Q are
+        // reserved by some browsers (listed in the shortcut sheet). Ctrl+Q lives in
+        // the worksheet.
+        case "r":
+          if (!e.shiftKey && !isEditingTarget(e.target) && !(e.target as Element).closest?.("[role=grid]")) rescale(s); // not from a worksheet grid (the plot may be hidden)
+          break;
+        case "n":
+        case "j":
+          if (e.shiftKey || isEditingTarget(e.target)) break;
+          e.preventDefault();
+          originKey(e.key.toLowerCase());
           break;
       }
     };
     // R15: through the modal gate. While a dialog is open only `?` and
     // Ctrl/Cmd+, (which open a dialog ON TOP) reach `onKey` at all.
-    return listenForAppShortcuts(onKey);
+    // Ctrl/Cmd+R must never reload the tab and lose the session: under a modal, in a field
+    // that stops key propagation, with Caps Lock or a non-Latin layout (`code`, not `key`).
+    // Capture phase and outside the modal gate on purpose; the rescale itself stays gated.
+    const noReload = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyR") e.preventDefault();
+    };
+    window.addEventListener("keydown", noReload, true);
+    const off = listenForAppShortcuts(onKey);
+    return () => {
+      off();
+      window.removeEventListener("keydown", noReload, true);
+    };
   }, []);
 
   // ── The three plot-tool tiers of the Escape ladder (GUI_INTERACTION #9) ──

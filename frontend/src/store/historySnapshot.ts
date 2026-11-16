@@ -67,6 +67,9 @@ export interface HistorySnapshot {
   // here now so the FIRST mutating action in a later PR inherits undo for
   // free instead of repeating the `savedRois` omission this file's header warns about).
   workbooks: AppState["workbooks"];
+  /** Which document this is (store/workspaceHydration.ts): undo/redo carry it, so the browser save
+   *  handle (lib/browserFileHandle.ts) follows the document, not the transient list contents. */
+  docEpoch: AppState["docEpoch"];
   smartFolders: AppState["smartFolders"];
   savedPlotSpecs: AppState["savedPlotSpecs"];
   activePlotSpecId: AppState["activePlotSpecId"];
@@ -133,6 +136,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     folders: s.folders,
     expandedFolders: s.expandedFolders,
     workbooks: s.workbooks,
+    docEpoch: s.docEpoch,
     smartFolders: s.smartFolders,
     savedPlotSpecs: s.savedPlotSpecs,
     activePlotSpecId: s.activePlotSpecId,

@@ -48,6 +48,8 @@ export interface GridCursorHooks {
   onColumnMenu: (col: number, x: number, y: number) => void;
   /** Shift+F2: edit `col`'s Long Name / Units / Comments. */
   onEditHeader: (col: number) => void;
+  /** Ctrl+Q (Origin's Set Column Values): open it for the focused column (-1 = the row-number column, i.e. a new column). */
+  onSetColumnValues?: (col: number) => void;
 }
 
 export interface GridCursor {
@@ -240,7 +242,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     const k = e.key;
     // Keys that move or edit act from the pre-select-all active cell and
     // collapse the selection to it; clear / copy / cut / fill keep the range.
-    const fromAll = all && all.range === range && !(accel && ["a", "c", "x", "v", "d"].includes(k.toLowerCase())) && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
+    const fromAll = all && all.range === range && !(accel && ["a", "c", "x", "v", "d", "q"].includes(k.toLowerCase())) && k !== "Delete" && k !== "Backspace" && k !== "Escape" && !["Shift", "Control", "Alt", "Meta"].includes(k);
     const cur = fromAll ? { anchor: clampCell(all.active.focus, b), focus: clampCell(all.active.focus, b) } : start;
     if (fromAll) setRange(cur);
     // A jump to the bottom lands on the last DATA row, as Ctrl+End does in a
@@ -266,6 +268,11 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       hooks.onEditHeader(cur.focus.col);
     } else if (k === "F2") {
       startEdit(undefined, cur);
+    } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && k.toLowerCase() === "q" && hooks.onSetColumnValues) {
+      // Ctrl only, never ⌘Q (quits the app on macOS). Same gate as the column menu:
+      // a re-derived sheet has no Set Column Values, so say why instead.
+      if (readOnly) setStatus(editRefusalNotice(ds));
+      else hooks.onSetColumnValues(cur.focus.col);
     } else if (k === "ContextMenu" || (k === "F10" && e.shiftKey)) {
       const box = document.getElementById(cellId(cur.focus.pos, cur.focus.col))?.getBoundingClientRect();
       hooks.onColumnMenu(cur.focus.col, box ? box.left : 0, box ? box.bottom : 0);
