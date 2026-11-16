@@ -4,7 +4,7 @@
 // Colors are stored either as a palette-token name ("--series-3", re-themeable)
 // or a literal hex from the custom picker. Renders for any dataset (≥1 channel).
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { defaultErrKeys } from "../../lib/errorbars";
@@ -55,8 +55,12 @@ function StyleRow({
   naturalErr,
   cycle,
   drawnColor,
+  selected = false,
 }: {
   channel: number;
+  /** UX-A: the curve selected on the plot — its row opens and is outlined
+   *  (the Inspector scrolls it into view). */
+  selected?: boolean;
   cycle: CycleSlot;
   /** The colour the graph's gradient gives this curve (gap audit 4 G1), if any. */
   drawnColor?: string;
@@ -97,8 +101,32 @@ function StyleRow({
   // existing pick or the dataset's default pairing (Origin Y-error / refl dR).
   const canError = errCol != null || naturalErr != null;
 
+  // Open = opened by the user OR by the current selection (UX-A). They are
+  // tracked apart so a deselect closes only what the selection opened, never
+  // a row the user opened by hand; collapsing a selected row closes it.
+  const [userOpen, setUserOpen] = useState(false);
+  const [selOpen, setSelOpen] = useState(selected);
+  const [prevSelected, setPrevSelected] = useState(selected);
+  if (prevSelected !== selected) {
+    setPrevSelected(selected);
+    setSelOpen(selected);
+  }
+  const open = userOpen || selOpen;
+
   return (
-    <details id={`series-style-${channel}`} className="qz-card" style={{ marginBottom: 4 }}>
+    <details
+      id={`series-style-${channel}`}
+      className="qz-card"
+      open={open}
+      onToggle={(e) => {
+        const now = e.currentTarget.open;
+        if (now === open) return;
+        setUserOpen(now);
+        if (!now) setSelOpen(false);
+      }}
+      aria-current={selected || undefined}
+      style={{ marginBottom: 4, ...(selected ? { outline: "2px solid var(--accent)", outlineOffset: -1 } : {}) }}
+    >
       <summary>
         <span
           style={{
@@ -143,7 +171,7 @@ function StyleRow({
           </Checkbox>
         </div>
 
-        <span className="qzk-field-lbl">Color</span>
+        <span className="qzk-field-lbl">Colour</span>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {PALETTE.map((n) => {
             const token = `--series-${n}`;
@@ -269,7 +297,14 @@ function StyleRow({
   );
 }
 
-export default function SeriesStyleCard({ active }: { active: Dataset | null }) {
+export default function SeriesStyleCard({
+  active,
+  selectedChannel,
+}: {
+  active: Dataset | null;
+  /** UX-A: the dataset channel of the curve selected on the plot, if any. */
+  selectedChannel?: number;
+}) {
   const styled = useApp((s) => Object.keys(s.seriesStyles).length);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
@@ -304,6 +339,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
           naturalErr={natErr[i]}
           cycle={cycle}
           drawnColor={ramped[i]?.color}
+          selected={i === selectedChannel}
         />
       ))}
     </Card>

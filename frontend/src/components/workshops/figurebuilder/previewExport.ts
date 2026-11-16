@@ -43,7 +43,7 @@ export interface PreviewExportDeps {
   autoSeriesStyles: boolean;
   /** The focused canvas' increments, for a session on that window (canonicalSession.sessionTickHints). */
   tickHints?: LiveTickSteps | null;
-  setStatus: (status: string) => void;
+  setStatus: (status: string, tone?: "ok" | "danger") => void;
 }
 
 /** P3.4 safe cancel: each path is one StatusBar op whose Cancel aborts the
@@ -131,6 +131,6 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
     });
     setStatus(done?.value ? `exported ${stem}.${fmt}` : CANCELLED);
   } catch (e) {
-    setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+    setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`, "danger");
   }
 }

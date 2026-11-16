@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { canRenderMap } from "./mapdata";
+import { canRenderMap, ensureMapGate } from "./mapdata";
 import { plotTypeUnavailable } from "./plotTypes";
 import { contourFromScattered } from "./scatteredContour";
 import { useApp } from "../store/useApp";
@@ -29,7 +29,8 @@ describe("Contour from scattered XYZ", () => {
     expect(canRenderMap(useApp.getState().datasets[0].data)).toBe(false);
   });
 
-  it("points the contour plot type's refusal at the explicit command", () => {
+  it("points the contour plot type's refusal at the explicit command", async () => {
+    await ensureMapGate(useApp.getState().datasets[0].data);
     expect(plotTypeUnavailable("contour", useApp.getState().datasets[0])).toMatch(/Contour from scattered XYZ/);
   });
 

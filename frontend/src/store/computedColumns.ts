@@ -117,7 +117,7 @@ export function refreshFitRefsLater(id: string, get: SliceGet): void {
   if (!formulas?.some((f) => f.derived?.fits?.length || FIT_CALL_RE.test(f.expr))) return;
   void import("./fitRefsRun")
     .then((m) => m.refreshFitRefsFor(id))
-    .catch((e) => get().setStatus(`could not refresh fitted-value columns: ${e instanceof Error ? e.message : "error"}`));
+    .catch((e) => get().setStatus(`could not refresh fitted-value columns: ${e instanceof Error ? e.message : "error"}`, "danger"));
 }
 
 /** `expr` with col("Long Name") stored as the column's letter
@@ -180,7 +180,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       if (expr === null) return false;
       const linked = linkSheets(get, id, expr);
       if ("error" in linked) {
-        get().setStatus(`Can't add column "${name}": ${linked.error}`);
+        get().setStatus(`Can't add column "${name}": ${linked.error}`, "danger");
         return false;
       }
       const sheets = linked.sheets;
@@ -192,7 +192,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           to: recalcNodes.column(id, target),
         });
         if (reason) {
-          get().setStatus(`Can't add column "${name}": ${reason}`);
+          get().setStatus(`Can't add column "${name}": ${reason}`, "danger");
           return false;
         }
       }
@@ -230,7 +230,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       // each name it already used staying on the worksheet it was bound to.
       const linked = expr === current.expr ? { sheets: current.sheets } : linkSheets(get, id, expr, current.sheets);
       if ("error" in linked) {
-        get().setStatus(`Can't update column "${current.name}": ${linked.error}`);
+        get().setStatus(`Can't update column "${current.name}": ${linked.error}`, "danger");
         return false;
       }
       const sheets = linked.sheets;
@@ -250,7 +250,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           to: recalcNodes.column(id, target),
         });
         if (reason) {
-          get().setStatus(`Can't update column "${current.name}": ${reason}`);
+          get().setStatus(`Can't update column "${current.name}": ${reason}`, "danger");
           return false;
         }
       }

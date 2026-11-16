@@ -1,4 +1,4 @@
-// Peak Analyzer wizard (#31) — the stepper frame. Origin's Peak Analyzer,
+// Peak analyzer wizard (#31) — the stepper frame. Origin's Peak analyzer,
 // re-imagined as a quantized workshop: five steps over the existing peak /
 // baseline / fit calc, ending in a #36 report (or the #32 integrate-only
 // path). All state lives in usePeakWizard so navigation never loses edits;
@@ -70,10 +70,10 @@ export default function PeakWizardPanel() {
   ][w.step];
 
   return (
-    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak Analyzer" width={420} x={dockedX(420)} dock="right" onClose={close}>
+    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak analyzer" width={420} x={dockedX(420)} dock="right" onClose={close}>
       {/* Roving tablist, AUTOMATIC activation (lib/tabListKeys): switching is
           cheap, and the batch view stays mounted, so arrows select too. */}
-      <div role="tablist" aria-label="Peak Analyzer mode" style={{ display: "flex", gap: 6, marginBottom: 8 }} onKeyDown={(e) => onTabListKeyDown(e, true)}>
+      <div role="tablist" aria-label="Peak analyzer mode" style={{ display: "flex", gap: 6, marginBottom: 8 }} onKeyDown={(e) => onTabListKeyDown(e, true)}>
         {(["wizard", "batch"] as const).map((m) => (
           <Button key={m} size="sm" type="button" role="tab" aria-selected={mode === m} tabIndex={mode === m ? 0 : -1} variant={mode === m ? "primary" : "default"} onClick={() => show(m)}>
             {m === "wizard" ? "Wizard" : "Batch"}

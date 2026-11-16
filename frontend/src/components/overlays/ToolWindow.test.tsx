@@ -466,7 +466,7 @@ describe("ToolWindow Escape precedence (P3.3 round 2)", () => {
       return () => window.removeEventListener("keydown", h);
     }, [onEscape]);
     return (
-      <ToolWindow id="t17" title="Peak Analyzer" onClose={onClose}>
+      <ToolWindow id="t17" title="Peak analyzer" onClose={onClose}>
         <button type="button">Run</button>
       </ToolWindow>
     );

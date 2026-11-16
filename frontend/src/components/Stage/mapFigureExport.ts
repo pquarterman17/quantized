@@ -188,7 +188,7 @@ export interface RunMapExportArgs {
   view: MapExportView;
   /** Filename stem (the dataset name without its extension). */
   stem: string;
-  setStatus: (msg: string) => void;
+  setStatus: (msg: string, tone?: "ok" | "danger") => void;
   /** Commit the 3-D choice made in the dialog to the figure state (undoable),
    *  so the on-screen preview becomes exactly the figure that is exported. */
   setView3d?: (v: Map3dView | undefined) => void;
@@ -230,7 +230,7 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
     view: String(params.view), elev: Number(params.elev), azim: Number(params.azim), style, title,
   });
   if (!choice.ok) {
-    setStatus(`map export refused — ${choice.error}`);
+    setStatus(`map export refused — ${choice.error}`, "danger");
     return;
   }
   const next3d = choice.view3d;
@@ -245,7 +245,7 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
     return;
   }
   if (!payload) {
-    setStatus("map export failed — nothing is mapped yet");
+    setStatus("map export failed — nothing is mapped yet", "danger");
     return;
   }
   const body = mapFigureBody(
@@ -258,6 +258,6 @@ export async function runMapExport({ canvas, payload, loading, view, stem, setSt
     if (done) keep();
     setStatus(done ? `exported ${filename}.${fmt}` : "export cancelled");
   } catch (e) {
-    setStatus(`map export failed — ${e instanceof Error ? e.message : "unknown error"}`);
+    setStatus(`map export failed — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
   }
 }

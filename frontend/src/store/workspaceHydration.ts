@@ -266,6 +266,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // SAME transient-tool clear a dataset/focus switch applies elsewhere
           // (windows.ts's `focusTransientReset`); one field list to maintain.
           ...focusTransientReset(),
+          statusDanger: null, // a loaded project drops a stale failure marker (UX-Q)
           // PLOT_WORKFLOW_PLAN item 5: additive — absent on a pre-item-5 .dwk
           // sanitizes to {} (lib/workspace.ts's own undefined-input path).
           techniqueViewMemory: sanitizeTechniqueViewMemory(ws.techniqueViewMemory),

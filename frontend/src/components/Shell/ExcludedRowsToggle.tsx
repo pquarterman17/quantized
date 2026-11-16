@@ -15,6 +15,10 @@ import { useApp } from "../../store/useApp";
 export default function ExcludedRowsToggle() {
   const grey = useApp((s) => s.excludedDisplay) === "grey";
   const setPref = useApp((s) => s.setPref);
+  // UX-Q: with no datasets there are no rows to exclude; keep the empty
+  // project's status bar free of a control that does nothing yet.
+  const hasData = useApp((s) => s.datasets.length > 0);
+  if (!hasData) return null;
   return (
     <button
       type="button"

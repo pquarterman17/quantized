@@ -179,7 +179,7 @@ export default function ReferencePatternSection() {
       <Button size="sm" style={{ marginTop: 8 }} disabled={busy} onClick={() => fileRef.current?.click()}>
         {busy ? "Reading…" : "Choose reference file…"}
       </Button>
-      {axisProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warning, #d97706)" }}>{axisProblem}</div>}
+      {axisProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warn)" }}>{axisProblem}</div>}
       {error && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{error}</div>}
 
       {pattern && (
@@ -193,7 +193,7 @@ export default function ReferencePatternSection() {
             <NumberField value={baseline} onChange={setBaseline} width={90} step={0.01} />
             <label className="qzk-field-lbl">Maximum height</label>
             <NumberField value={height} onChange={setHeight} width={90} step={0.01} />
-            <label className="qzk-field-lbl">Color</label>
+            <label className="qzk-field-lbl">Colour</label>
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Reference pattern color" />
           </div>
           <label className="qzk-field-lbl" style={{ display: "flex", gap: 6, marginTop: 8 }}>
@@ -204,8 +204,8 @@ export default function ReferencePatternSection() {
             Target wavelength: {targetWavelength == null ? "unknown" : `${targetWavelength.toFixed(5)} Å`}
             {converted.converted ? ` · ${converted.reflections.length} positions will be converted` : ""}
           </div>
-          {wavelengthWarning && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warning, #d97706)" }}>{wavelengthWarning}</div>}
-          {converted.dropped > 0 && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warning, #d97706)" }}>
+          {wavelengthWarning && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warn)" }}>{wavelengthWarning}</div>}
+          {converted.dropped > 0 && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--warn)" }}>
             {converted.dropped} reflection{converted.dropped === 1 ? " is" : "s are"} impossible at the target wavelength and will be omitted.
           </div>}
           {sourceProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{sourceProblem}</div>}

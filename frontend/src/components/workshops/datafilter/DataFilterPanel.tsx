@@ -77,7 +77,7 @@ export default function DataFilterPanel() {
       ) : (
         <>
           {f.mismatched > 0 && (
-            <div role="status" className="qzk-ds-meta" style={{ marginBottom: 10, color: "var(--warning, #d6a84b)" }}>
+            <div role="status" className="qzk-ds-meta" style={{ marginBottom: 10, color: "var(--warn)" }}>
               {f.mismatched} saved filter {f.mismatched === 1 ? "rule is" : "rules are"} paused because the column type changed.
               Change the type back to restore {f.mismatched === 1 ? "it" : "them"}, edit that column to replace it, or Clear all filters.
             </div>

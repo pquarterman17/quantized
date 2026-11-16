@@ -63,7 +63,7 @@ beforeEach(() => {
 async function fitOnce(): Promise<() => void> {
   const { unmount } = render(<CurveFitPanel />);
   fireEvent.click(await screen.findByRole("button", { name: "Fit" }));
-  await screen.findByText("0.98");
+  await screen.findByText("0.98000");
   return unmount;
 }
 
@@ -80,7 +80,7 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
     // A remount (the panel reopened) shows the same result again.
     unmount();
     render(<CurveFitPanel />);
-    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    expect(await screen.findByText("0.98000")).toBeInTheDocument();
   });
 
   it("Remove fit asks first; a declined confirm removes nothing", async () => {
@@ -101,7 +101,7 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove fit" }));
     await waitFor(() => expect(useApp.getState().datasets[0]!.fitSpec).toBeUndefined());
     expect(useApp.getState().fitOverlay).toBeNull();
-    expect(screen.queryByText("0.98")).toBeNull();
+    expect(screen.queryByText("0.98000")).toBeNull();
     useApp.getState().undo();
     expect(useApp.getState().datasets[0]!.fitSpec?.model).toBe("Linear");
   });
@@ -116,14 +116,14 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
     // Before the fix the FitSpec came back but the curve stayed gone and the
     // panel stayed empty until the Library result was reopened.
     expect(useApp.getState().fitOverlay).toEqual(curve);
-    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    expect(await screen.findByText("0.98000")).toBeInTheDocument();
     act(() => useApp.getState().redo());
     expect(useApp.getState().datasets[0]!.fitSpec).toBeUndefined();
     expect(useApp.getState().fitOverlay).toBeNull();
-    await waitFor(() => expect(screen.queryByText("0.98")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("0.98000")).toBeNull());
     act(() => useApp.getState().undo());
     expect(useApp.getState().fitOverlay).toEqual(curve);
-    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    expect(await screen.findByText("0.98000")).toBeInTheDocument();
   });
 
   it("Undo of Remove fit restores the curve while the window is closed; reopening shows the result", async () => {
@@ -136,7 +136,7 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
     act(() => useApp.getState().undo());
     expect(useApp.getState().fitOverlay).toEqual(curve);
     render(<CurveFitPanel />);
-    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    expect(await screen.findByText("0.98000")).toBeInTheDocument();
   });
 
   it("Remove fit deletes the fit's Library result, as its confirmation says, and Undo restores it", async () => {
@@ -166,17 +166,17 @@ describe("CurveFitPanel — one retained fit per worksheet", () => {
       yFit: [2, 4, 6, 8, 10], residuals: [0, 0, 0, 0, 0],
     });
     fireEvent.click(screen.getByRole("button", { name: "Fit" }));
-    expect(await screen.findByText("0.55")).toBeInTheDocument();
+    expect(await screen.findByText("0.55000")).toBeInTheDocument();
     // Back to the first (a dataset switch clears the drawn curve).
     act(() => useApp.setState({ activeId: "d1", fitOverlay: null }));
     // Before the fix: an empty panel and no curve — the second fit had
     // replaced the only retained result.
-    expect(await screen.findByText("0.98")).toBeInTheDocument();
-    expect(screen.queryByText("0.55")).toBeNull();
+    expect(await screen.findByText("0.98000")).toBeInTheDocument();
+    expect(screen.queryByText("0.55000")).toBeNull();
     await waitFor(() => expect(useApp.getState().fitOverlay).toEqual(first));
     // And the second worksheet's is still there.
     act(() => useApp.setState({ activeId: "d2", fitOverlay: null }));
-    expect(await screen.findByText("0.55")).toBeInTheDocument();
+    expect(await screen.findByText("0.55000")).toBeInTheDocument();
     await waitFor(() => expect(useApp.getState().fitOverlay?.datasetId).toBe("d2"));
   });
 
@@ -217,7 +217,7 @@ describe("CurveFitPanel — a result whose data changed", () => {
     act(() => useApp.setState({ datasets: [{ ...before, data: widened }] }));
     render(<CurveFitPanel />);
     // Before the fix: an empty panel beside the curve (the data object changed).
-    expect(await screen.findByText("0.98")).toBeInTheDocument();
+    expect(await screen.findByText("0.98000")).toBeInTheDocument();
   });
 });
 
@@ -241,8 +241,8 @@ describe("CurveFitPanel — a background re-fit", () => {
     await fitOnce();
     await refitAfterEdit();
     // Before the fix the panel kept showing R² 0.98 (the fit of the old data).
-    expect(await screen.findByText("0.75")).toBeInTheDocument();
-    expect(screen.queryByText("0.98")).toBeNull();
+    expect(await screen.findByText("0.75000")).toBeInTheDocument();
+    expect(screen.queryByText("0.98000")).toBeNull();
     expect(useApp.getState().fitOverlay?.y).toEqual(REFIT.yFit);
   });
 
@@ -251,7 +251,7 @@ describe("CurveFitPanel — a background re-fit", () => {
     unmount();
     await refitAfterEdit();
     render(<CurveFitPanel />);
-    expect(await screen.findByText("0.75")).toBeInTheDocument();
+    expect(await screen.findByText("0.75000")).toBeInTheDocument();
   });
 
   it("of another tool's fit on the worksheet is not adopted", async () => {
@@ -262,8 +262,8 @@ describe("CurveFitPanel — a background re-fit", () => {
     act(() => useApp.setState({ datasets: [other] }));
     const pairs = dropGapRows(other.data.time, other.data.values.map((r) => r[0]!));
     act(() => commitRecomputedFit(useApp.setState, useApp.getState, other, other.fitSpec, pairs, { yKey: 0, xKey: null }, REFIT));
-    expect(screen.queryByText("0.75")).toBeNull();
-    expect(screen.getByText("0.98")).toBeInTheDocument();
+    expect(screen.queryByText("0.75000")).toBeNull();
+    expect(screen.getByText("0.98000")).toBeInTheDocument();
   });
 });
 

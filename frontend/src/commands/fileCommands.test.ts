@@ -78,6 +78,14 @@ describe("File menu — Save-As label matches the e2e download-trigger locator",
 
 vi.mock("./packProjectCommands", () => ({ runPackProject: vi.fn() }));
 
+describe("File menu — demo dataset (UX-Q: the Library header button is gone)", () => {
+  it("the demo + bundled-sample commands stay registered under File", () => {
+    const cmds = buildFileCommands(useApp.getState);
+    expect(cmds.find((c) => c.id === "demo")).toMatchObject({ group: "File", label: "Add demo dataset" });
+    expect(cmds.find((c) => c.id === "load-sample")).toBeTruthy();
+  });
+});
+
 describe("File menu — Pack Project command", () => {
   it("has a description and an ellipsis-terminated label (every registered command needs a description)", () => {
     const cmd = withCommandDocs(buildFileCommands(useApp.getState)).find((c) => c.id === "pack-project");

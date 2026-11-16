@@ -1,4 +1,4 @@
-// Peak Analyzer — client-side mirror of the model fitter's parameter rules
+// Peak analyzer — client-side mirror of the model fitter's parameter rules
 // (src/quantized/calc/peak_model.py, `PeakParams`), so step 3/4 can block Fit
 // with a plain reason instead of sending a table the backend will reject with
 // a 422. Pure. The backend stays the final arbiter; this only has to agree

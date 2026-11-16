@@ -1,4 +1,4 @@
-// Peak Analyzer batch — the route's total-points cap is enforced on the
+// Peak analyzer batch — the route's total-points cap is enforced on the
 // CLIENT before submit (slice-4 review item 2): datasets past it become
 // "not run" rows that say why, the rest are queued, and the request never
 // exceeds the cap (so it can never be an all-or-nothing 422). The cap is

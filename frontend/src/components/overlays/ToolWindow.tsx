@@ -26,13 +26,15 @@ import {
   MIN_WIDTH,
   TITLE_BAR_HEIGHT,
 } from "../../lib/toolwindow";
+import { Z } from "../../lib/layers";
+import { nextToolZ, raiseToolWindow, registerToolWindow, type ToolZHandle } from "../../lib/toolWindowZ";
 import { workshopHelpTopic } from "../../lib/workshopHelp";
 import { openHelpTopic } from "../../store/help";
 import { useApp } from "../../store/useApp";
 import { useOpenerRestore } from "./useDialogFocus";
 import { useRightDockRegistration } from "./useRightDockRegistration";
 
-let zTop = 0;
+// Focus order lives in lib/toolWindowZ.ts, bounded to the tool-window band.
 
 /** A window with no saved position opens clear of the Library panel, not over
  *  it: the Library is where the user picks what the window acts on (and was
@@ -89,7 +91,9 @@ export default function ToolWindow({
   // The title-bar buttons' accessible names say WHICH panel they act on.
   const panelName = typeof title === "string" ? title : "this panel";
 
-  const [z, setZ] = useState(() => ++zTop);
+  const [z, setZ] = useState(nextToolZ);
+  const zHandle = useRef<ToolZHandle>({ z, set: setZ });
+  useEffect(() => registerToolWindow(zHandle.current), []);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const resizeRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const winRef = useRef<HTMLDivElement | null>(null);
@@ -284,13 +288,13 @@ export default function ToolWindow({
         {
           left: layout.x,
           top: layout.y,
-          zIndex: 200 + z,
+          zIndex: Z.toolBase + z,
           width: layout.width,
           height: layout.collapsed ? undefined : (layout.height ?? undefined),
           "--qzk-win-top": `${layout.y}px`,
         } as CSSProperties
       }
-      onMouseDown={() => setZ(++zTop)}
+      onMouseDown={() => raiseToolWindow(zHandle.current)}
     >
       <div
         ref={titleRef}

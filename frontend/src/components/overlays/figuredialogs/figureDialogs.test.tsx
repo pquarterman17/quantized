@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import FigureDialogs from "./FigureDialogs";
 import { buildPlotCommands } from "../../../commands/plotCommands";
 import { axisDraft, axisDraftErrors, axisPatch } from "../../../lib/axisDialogModel";
+import { ensureMapGate } from "../../../lib/mapdata";
 import { plotTypePatch, plotTypeUnavailable } from "../../../lib/plotTypes";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
@@ -18,7 +19,8 @@ function csv(labels: string[], time: number[], rows: number[][]): Dataset {
 }
 
 const sweep = csv(["A", "B"], [0, 1, 2, 3], [[1, 5], [2, 6], [3, 7], [4, 8]]);
-const xyz = csv(["Y", "Z"], [0, 0, 1, 1], [[0, 1], [1, 2], [0, 3], [1, 4]]);
+// 3 x 3 long-form grid (the map gate needs >=3 levels per axis)
+const xyz = csv(["Y", "Z"], [0, 0, 0, 1, 1, 1, 2, 2, 2], [[0, 1], [1, 2], [2, 3], [0, 4], [1, 5], [2, 6], [0, 7], [1, 8], [2, 9]]);
 
 beforeEach(() => {
   useFigureDialog.setState({ open: null });
@@ -42,7 +44,9 @@ describe("plot-type gallery model (#8)", () => {
     expect(plotTypePatch("histogram", { seriesStyles: {}, statPicks: {} }, [0]).statPicks).toEqual({ mode: "histogram" });
   });
 
-  it("offers contour only for map-shaped (XYZ) data, and says why not", () => {
+  it("offers contour only for map-shaped (XYZ) data, and says why not", async () => {
+    await ensureMapGate(xyz.data);
+    await ensureMapGate(sweep.data);
     expect(plotTypeUnavailable("contour", sweep)).toMatch(/X, Y, Z on a grid/);
     expect(plotTypeUnavailable("contour", xyz)).toBeNull();
     expect(plotTypeUnavailable("line", null)).toMatch(/Select a dataset/);
@@ -67,11 +71,18 @@ describe("Axis dialog model (#6)", () => {
     const d = axisDraft(view, "y");
     expect(d.scale).toBe("ln");
     expect(d.minor).toBe("4");
-    const patch = axisPatch(view, "y", { ...d, divide: "0.001", ticks: "in", from: "1", to: "100", increment: "", titleSize: "14" });
+    const patch = axisPatch(view, "y", { ...d, divide: "0.001", ticks: "in", from: "1", to: "100", increment: "", titleSize: "10.5" });
     expect(patch.yScale).toBe("log");
     expect(patch.yFmt).toEqual({ mode: "auto", digits: 2, divide: 0.001, minor: 4, ticks: "in", base: "e" });
     expect(patch.yLim).toEqual([1, 100]);
     expect(patch.axisLabelStyles?.y?.size).toBe(14);
+  });
+
+  it("edits the axis title size in pt (like Label size) while storing px, losslessly", () => {
+    const view = { ...defaultPlotView(), axisLabelStyles: { y: { size: 14.5 } } };
+    const d = axisDraft(view, "y");
+    expect(d.titleSize).toBe("10.88");
+    expect(axisPatch(view, "y", d).axisLabelStyles?.y?.size).toBe(14.5);
   });
 
   it("validates before Apply", () => {

@@ -294,13 +294,13 @@ export function useFitYByX(): FitYByXState {
       } else {
         setQueuedReport(null);
         setReportBusy(false);
-        setStatus("Could not create the report because the full dataset is unavailable; re-import the source to continue");
+        setStatus("Could not create the report because the full dataset is unavailable; re-import the source to continue", "danger");
       }
     }).catch((e: unknown) => {
       if (request !== pendingSeq.current) return;
       setQueuedReport(null);
       setReportBusy(false);
-      setStatus(`Could not create the report because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`);
+      setStatus(`Could not create the report because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`, "danger");
     });
     return true;
   }

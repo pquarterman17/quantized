@@ -125,7 +125,7 @@ describe("useGlobalFit — channels of the active dataset", () => {
     });
     // The first member of the active dataset is shown, aligned to its rows.
     expect(result.current.shownIndex).toBe(0);
-    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 1, xKey: 0 }, y: [1, 3, 5, 7] });
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 1, xKey: 0 }, y: [1, 3, 5, 7], curveFit: true });
     // Showing channel B puts ITS curve on the plot, the gap row left empty.
     act(() => result.current.show(1));
     await waitFor(() => expect(useApp.getState().fitOverlay?.y[2]).toBe(7));
@@ -240,11 +240,11 @@ describe("useGlobalFit — datasets matched by column label", () => {
     ]);
     expect(useApp.getState().fitOverlay?.datasetId).toBe("d1");
     act(() => useApp.setState({ activeId: "d2" }));
-    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d2", binding: { yKey: 2, xKey: 1 }, y: [4, 6, 8] }));
+    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d2", binding: { yKey: 2, xKey: 1 }, y: [4, 6, 8], curveFit: true }));
     // A shown member stops owning the overlay once its dataset leaves the plot.
     act(() => result.current.show(1));
     act(() => useApp.setState({ activeId: "d1" }));
-    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 1, xKey: 0 }, y: [1, 3, 5, 7] }));
+    await waitFor(() => expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 1, xKey: 0 }, y: [1, 3, 5, 7], curveFit: true }));
   });
 
   it("Show on another dataset's member makes that dataset active", async () => {

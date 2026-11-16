@@ -61,7 +61,7 @@ export interface StatStageSeed {
 
 /** Peak-workshop click-on-plot marker editing (interaction plan item 5) — the
  *  bridge PlotStage reads to wire `peakMarkerEditPlugin` (lib/peakMarkerHit.ts).
- *  Peak Analyzer or the simpler Peaks panel owns the candidate list and
+ *  Peak analyzer or the simpler Peaks panel owns the candidate list and
  *  callbacks; this is only a THIN projection while one edit mode is live.
  *  The field/type retain their original wizard name for compatibility. Mirrors
  *  ReflectivitySeed/StatStageSeed's cross-panel-hook shape, generalized to a
@@ -108,7 +108,7 @@ export interface WorkshopFlagsSlice {
   signalProcessingOpen: boolean;
   dataFilterOpen: boolean;
   statsChooserOpen: boolean; // the "which test?" front door (#26)
-  peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
+  peakWizardOpen: boolean; // the Peak analyzer stepper (#31)
   importWizardOpen: boolean; // guess/preview/parse over a saved-filter (#40)
   pipelineOpen: boolean; // the editable pipeline view (#6)
   figureBuilderOpen: boolean;

@@ -9,6 +9,7 @@ import { runExportFigureCommand } from "../../lib/exportFigureCommand";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { trackJob } from "../../store/pendingOpActions";
 import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
+import { makeDemoDataset } from "../../lib/demo";
 import { useApp } from "../../store/useApp";
 
 const { retryAutosaveRestoreNow } = vi.hoisted(() => ({ retryAutosaveRestoreNow: vi.fn(() => true) }));
@@ -400,5 +401,41 @@ describe("StatusBar × export cancel (P3.4 safe-cancel-for-export)", () => {
 
     expect(useApp.getState().status).toBe("export cancelled");
     await vi.waitFor(() => expect(screen.queryByText("Exporting scan.dat…")).not.toBeInTheDocument());
+  });
+});
+
+describe("StatusBar dot tone on failure (UX-Q)", () => {
+  const dot = () => document.querySelector(".qzk-conn .qz-dot");
+
+  it("is green normally, red for a danger status, and green again once the message changes", () => {
+    render(<StatusBar />);
+    expect(dot()).toHaveClass("qz-ok");
+    act(() => useApp.getState().setStatus("imported 0/1 — failed a.csv: bad", "danger"));
+    expect(dot()).toHaveClass("qz-danger");
+    act(() => useApp.getState().setStatus("imported 1 file"));
+    expect(dot()).toHaveClass("qz-ok");
+    // A direct write (no setStatus) must not inherit the stale red.
+    act(() => useApp.getState().setStatus("boom", "danger"));
+    act(() => useApp.setState({ status: "later" }));
+    expect(dot()).toHaveClass("qz-ok");
+  });
+
+  it("clears when a dataset is added or a workspace is loaded, even if no new status is written", () => {
+    render(<StatusBar />);
+    act(() => useApp.getState().setStatus("import failed", "danger"));
+    expect(dot()).toHaveClass("qz-danger");
+    act(() => useApp.getState().addDataset({ id: "ok1", name: "ok1.dat", data: makeDemoDataset() }));
+    expect(dot()).toHaveClass("qz-ok");
+    act(() => useApp.getState().setStatus("export failed", "danger"));
+    expect(dot()).toHaveClass("qz-danger");
+    act(() => useApp.getState().loadWorkspace({ datasets: [] } as unknown as Parameters<ReturnType<typeof useApp.getState>["loadWorkspace"]>[0]));
+    expect(dot()).toHaveClass("qz-ok");
+  });
+
+  it("keeps the warn dot while the backend is disconnected", () => {
+    useConnection.setState({ connected: false });
+    render(<StatusBar />);
+    act(() => useApp.getState().setStatus("x", "danger"));
+    expect(dot()).toHaveClass("qz-warn");
   });
 });

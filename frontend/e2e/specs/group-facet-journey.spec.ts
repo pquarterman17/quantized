@@ -238,7 +238,7 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
   const focusedTitlebar = page.locator(".qzk-plotwin.focused .qzk-plotwin-titlebar");
   await expect(focusedTitlebar).toBeVisible();
   await focusedTitlebar.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Close window", exact: true }).click();
   await expect
     .poll(() => page.evaluate(
       (id) => (window as unknown as { __qz: { useApp: { getState: () => { plotWindows: { id: string }[] } } } })
@@ -320,9 +320,10 @@ async function legendSeriesLabels(page: Page): Promise<string[]> {
   const rows = page.locator(".qzk-stage .qzk-legend .it").filter({ hasText: /\(Run=/ });
   return rows.evaluateAll((elements) =>
     elements.map((el) => {
-      // The series label sits in the row's keyboard toggle when the legend is
-      // interactive (Space/Enter hide-show checkbox), else directly in the row.
-      const host = el.querySelector(".qzk-legend-toggle") ?? el;
+      // The series label sits in its own label span on the interactive legend
+      // (UX-A: the swatch alone is the hide/show toggle), in the toggle on the
+      // background window's read-only legend, else directly in the row.
+      const host = el.querySelector(".qzk-legend-label") ?? el.querySelector(".qzk-legend-toggle") ?? el;
       let text = "";
       for (const node of host.childNodes) {
         if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? "";
@@ -414,7 +415,7 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   const focusedTitlebar = page.locator(".qzk-plotwin.focused .qzk-plotwin-titlebar");
   await expect(focusedTitlebar).toBeVisible();
   await focusedTitlebar.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Close window", exact: true }).click();
   // A grouped, never-saved window carries user edits, so closing it asks
   // first (figures audit #15); confirm.
   await page.getByRole("dialog").getByRole("button", { name: "Close window", exact: true }).click();

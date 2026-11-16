@@ -1,4 +1,4 @@
-// Gap audit 6, lane N / P10: the Peak Analyzer finds peaks on reaching step ②
+// Gap audit 6, lane N / P10: the Peak analyzer finds peaks on reaching step ②
 // (as Origin does), refuses Next with zero peaks and says why, and a model fit
 // leaves "fitted …" on the status line.
 
@@ -47,7 +47,7 @@ afterEach(() => vi.unstubAllGlobals());
 const step = (name: string) => fireEvent.click(screen.getByText(name, { selector: ".qzk-wizard-step" }));
 const next = () => screen.getByRole("button", { name: /Next/ });
 
-describe("Peak Analyzer step 2 auto-find", () => {
+describe("Peak analyzer step 2 auto-find", () => {
   it("finds peaks on entering the step without a click", async () => {
     findMock.mockResolvedValue(FOUND);
     const { result } = renderHook(() => usePeakWizard());
@@ -81,7 +81,7 @@ describe("Peak Analyzer step 2 auto-find", () => {
   });
 });
 
-describe("Peak Analyzer step chips with no peaks", () => {
+describe("Peak analyzer step chips with no peaks", () => {
   it("the Model and Fit & review chips are disabled with the same reason until a peak exists", async () => {
     findMock.mockResolvedValue({ peaks: [], background: [] });
     render(<PeakWizardPanel />);
@@ -106,7 +106,7 @@ function deferredFind() {
   return { resolve: (v: typeof FOUND = FOUND) => resolve(v) };
 }
 
-describe("Peak Analyzer auto-find races", () => {
+describe("Peak analyzer auto-find races", () => {
   it("a late auto-find never replaces peaks the user added while it ran", async () => {
     const d = deferredFind();
     const { result } = renderHook(() => usePeakWizard());
@@ -145,7 +145,7 @@ describe("Peak Analyzer auto-find races", () => {
   });
 });
 
-describe("Peak Analyzer Next gate", () => {
+describe("Peak analyzer Next gate", () => {
   it("says the find failed when it did, instead of only 'no peaks'", async () => {
     findMock.mockRejectedValue(new Error("backend unreachable"));
     render(<PeakWizardPanel />);
@@ -175,7 +175,7 @@ describe("Peak Analyzer Next gate", () => {
   });
 });
 
-describe("Peak Analyzer fit status", () => {
+describe("Peak analyzer fit status", () => {
   it("says 'fitted' on the status line after a model fit", async () => {
     findMock.mockResolvedValue(FOUND);
     vi.stubGlobal("fetch", () =>

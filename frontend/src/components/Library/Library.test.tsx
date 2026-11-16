@@ -268,6 +268,14 @@ describe("Library — focused project exploration", () => {
 // loadWorkspace migration, e.g. set directly on the store as a stale/edited
 // doc would) must NOT resurrect any of that UI; the flat-list fallback keeps
 // rendering it normally instead.
+describe("Library header (UX-Q)", () => {
+  it("carries no Add demo button: the demo dataset lives in File > Import and the palette", () => {
+    render(<Library />);
+    expect(screen.queryByRole("button", { name: "Add demo" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import data" })).toBeInTheDocument();
+  });
+});
+
 describe("Library — group-chip UI retired (item 6)", () => {
   const grouped = (id: string, group: string): Dataset => ({ ...dsWith(id), group });
 

@@ -1,4 +1,4 @@
-// Peak Analyzer model fit — per-point 1σ errors (`y_err`) for the working
+// Peak analyzer model fit — per-point 1σ errors (`y_err`) for the working
 // segment. The column is the one the curve-fit workshop's "Y error column"
 // weighting uses: the view's `errKeys` entry for the primary fit channel,
 // resolved through the shared `lib/fitweights.dyForFit`, so the two fits read

@@ -95,7 +95,7 @@ export function withStagePresentation(encoded: FigureSpec, stage: FigureSpec): F
  *  ordinary export failure instead of silently exporting a different figure. */
 export function buildEncodedFigureSpec(spec: PlotSpec, ds: Dataset, stem: string, o: FigureRenderOpts): FigureSpec {
   const e = encodeSpec(spec, [ds]);
-  if (!e) throw new Error("this graph no longer has a Color, Symbol or Label encoding to export");
+  if (!e) throw new Error("this graph no longer has a Colour, Symbol or Label encoding to export");
   return encodedFigureSpec(e, spec, stem, o);
 }
 

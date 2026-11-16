@@ -236,7 +236,7 @@ export default function SubstratesTab() {
                 </button>
               </span>
               {filmPhase && filmPhase.system !== "cubic" && (
-                <div className="qzk-ds-meta" role="note" style={{ marginTop: 6, color: "var(--warning)" }}>
+                <div className="qzk-ds-meta" role="note" style={{ marginTop: 6, color: "var(--warn)" }}>
                   ⚠ {filmPhase.name} is {filmPhase.system}: a = {filmPhase.a} Å is its conventional cell&apos;s a,
                   which may not be the in-plane repeat the film matches on (orthorhombic and rhombohedral
                   perovskites, for example, match on a pseudocubic ≈ a/√2). This scalar mismatch assumes a

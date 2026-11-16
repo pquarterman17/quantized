@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useContext, useEffect, useRef, type ReactNode } from "react";
 
 import { openHelpTopic } from "../../store/help";
+import { CardStateContext } from "./cardState";
 
 export interface CardProps {
   title: ReactNode;
@@ -8,6 +9,9 @@ export interface CardProps {
   defaultOpen?: boolean;
   /** When set, show a small contextual-help action in the card header. */
   helpTopic?: string;
+  /** Identity for a CardStateContext provider (UX-A); defaults to a string
+   *  `title`. Without a provider the card is uncontrolled, as before. */
+  cardId?: string;
   children: ReactNode;
 }
 
@@ -17,10 +21,38 @@ export default function Card({
   count,
   defaultOpen = true,
   helpTopic,
+  cardId,
   children,
 }: CardProps) {
+  const ctl = useContext(CardStateContext);
+  const id = cardId ?? (typeof title === "string" ? title : undefined);
+  const api = id !== undefined ? ctl : null;
+  const open = api && id !== undefined ? api.isOpen(id, defaultOpen) : defaultOpen;
+  const ref = useRef<HTMLDetailsElement>(null);
+  const reveal = api?.reveal;
+  const revealN = reveal && reveal.id === id ? reveal.n : 0;
+  useEffect(() => {
+    // The header, not the whole card: a card taller than its scroller would
+    // align its top and push what sits above it (a Selection section) away.
+    if (revealN) ref.current?.querySelector("summary")?.scrollIntoView?.({ block: "nearest" });
+  }, [revealN]);
   return (
-    <details className="qz-card" open={defaultOpen}>
+    <details
+      ref={ref}
+      className="qz-card"
+      open={open}
+      data-card-id={api ? id : undefined}
+      // Controlled under a provider: the user's toggle is reported, and the
+      // provider's answer is what renders next.
+      onToggle={
+        api && id !== undefined
+          ? (e) => {
+              const now = e.currentTarget.open;
+              if (now !== api.isOpen(id, defaultOpen)) api.setOpen(id, now);
+            }
+          : undefined
+      }
+    >
       <summary>
         {/* The title is its OWN node, never a bare text child of <summary>.
             Every affordance in this header (the count badge, the `?` action,

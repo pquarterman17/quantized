@@ -148,7 +148,7 @@ export function useWaterfall(): WaterfallState {
     try {
       resolved = await useApp.getState().resolveDatasets(included.map((d) => d.id));
     } catch (e) {
-      setStatus(`waterfall export failed: ${e instanceof Error ? e.message : "error"}`);
+      setStatus(`waterfall export failed: ${e instanceof Error ? e.message : "error"}`, "danger");
       return;
     }
     const resolvedSeries = activeChannel

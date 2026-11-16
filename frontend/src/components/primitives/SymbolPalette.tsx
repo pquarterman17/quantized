@@ -10,6 +10,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { Z } from "../../lib/layers";
+
 /** One palette entry. `math` is the mathtext form; `text` the plain-Unicode
  *  form preferred OUTSIDE math regions. Snippets are text-only full labels. */
 export interface PaletteEntry {
@@ -282,7 +284,7 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
       className="qzk-menu-pop qzk-ctx"
       // ContextMenu sits above this at zIndex 2100 (see its module header),
       // but the two never coexist: both close on any outside mousedown.
-      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 1000, width: 248 }}
+      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: Z.modalPopover, width: 248 }}
     >
       <Section label="Insert" entries={SCRIPTS} onInsert={onInsert} cols={4} />
       <Section label="Origin escapes" entries={ORIGIN_ESCAPES} onInsert={onInsert} cols={3} />

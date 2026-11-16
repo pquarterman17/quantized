@@ -92,7 +92,7 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
 /** Plain (no confirm/danger) — matches the existing ✕ button's directness. */
 export const windowCloseAction: ContextAction<WindowActionTarget> = {
   id: "window.close",
-  label: "Close Window",
+  label: "Close window",
   run: (t) => {
     void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
       (module) => module.closeFigureWindow(t.win.id),

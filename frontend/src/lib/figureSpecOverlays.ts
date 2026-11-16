@@ -4,7 +4,7 @@
 // WHY. `lib/plotdata.composeDisplayPayload` splices the fit / baseline / peak
 // overlays onto the drawn payload after the plotted channels, each with a
 // legend entry ("fit", "baseline", "peaks"). The export request never carried
-// them, so a Peak Analyzer model fit, a peak-find result or a reflectivity fit
+// them, so a Peak analyzer model fit, a peak-find result or a reflectivity fit
 // exported as bare data (round-3 plot audit: an XRD pattern with 14 peak
 // markers and a legend entry on screen, none of either in the SVG). The ROI
 // differentiate preview (`derivOverlay`, a secondary-axis gadget preview) is
@@ -53,6 +53,7 @@ import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "./overlaySpecShape";
+import { fitLineWidth, traceWithFit } from "./fitOverlayStyle";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
 import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
@@ -209,9 +210,9 @@ function appendOverlays(
     if (!o || o.y.length < n) return []; // placement already dropped another dataset's
     const edges = (o.band ?? []).every((e) => e.y.length >= n) ? (o.band ?? []) : [];
     return [
-      { label, legend: label, y: o.y, points, band: 0, factor: factorFor(o) },
+      { label, legend: label, y: o.y, points, band: 0, fit: label === FIT_SERIES_LABEL && !!o.curveFit, factor: factorFor(o) },
       ...edges.map((e, k) => ({
-        label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1, factor: factorFor(o),
+        label: e.label, legend: e.legend ?? e.label, y: e.y, points: false, band: k + 1, fit: false, factor: factorFor(o),
       })),
     ];
   });
@@ -250,7 +251,16 @@ function appendOverlays(
   const traced = traceSeriesStyles(base, lineKeys, sources.defaultTrace, {}) ?? base;
   const widened =
     lineWidthSeriesStyles(traced, lineKeys, canvasLineWidth(view.plotTemplate, sources.defaultLineWidth)) ?? traced;
-  const styles = widened.map((st, i) => (present[i].points || present[i].band ? base[i] : st));
+  // The fit is a thinner DASHED line whatever the default trace (lib/fitOverlayStyle: the canvas' rule).
+  const fitWidth = fitLineWidth(canvasLineWidth(view.plotTemplate, sources.defaultLineWidth));
+  const styles = widened.map((st, i) =>
+    present[i].fit ? { ...base[i], line: "dashed" as const, width: fitWidth }
+      : present[i].points || present[i].band ? base[i] : st);
+  // ... and while it is shown, data without a style of its own gets markers, as on the canvas.
+  const own = spec.series_styles ?? keys.map(() => null);
+  const dataStyles = traceWithFit(sources.defaultTrace, present.some((o) => o.fit), spec.dataset.values.length) !== sources.defaultTrace
+    ? traceSeriesStyles(own, keys, "Line + markers", view.seriesStyles) ?? own
+    : own;
   const pad = <T>(list: T[] | undefined, v: T): T[] | undefined => (list ? [...list, ...present.map(() => v)] : undefined);
   return {
     ...spec,
@@ -261,7 +271,7 @@ function appendOverlays(
       units: [...spec.dataset.units, ...present.map(() => "")],
     },
     y_keys: [...keys, ...lineKeys],
-    series_styles: [...(spec.series_styles ?? keys.map(() => null)), ...styles],
+    series_styles: [...dataStyles, ...styles],
     // Lane K: the overlays never feed the automatic Y title (the canvas titles
     // its axis from the plotted channels alone).
     analysis_overlays: [...(spec.analysis_overlays ?? keys.map(() => false)), ...present.map(() => true)],

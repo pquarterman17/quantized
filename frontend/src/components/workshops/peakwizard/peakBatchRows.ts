@@ -1,4 +1,4 @@
-// Peak Analyzer batch — the uncertainty / diagnostic result table (audit
+// Peak analyzer batch — the uncertainty / diagnostic result table (audit
 // P2.4 slice 4). Pure: no React, no store, no fetch.
 //
 // ONE ROW PER (dataset, peak): centre / FWHM / height / area each with its

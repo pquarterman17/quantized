@@ -201,7 +201,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
           // — a chunk that 404s after a deploy, an offline desktop shell —
           // became an unhandled rejection and the user saw nothing at all.
           const why = reason instanceof Error ? reason.message : String(reason);
-          s().setStatus(`could not produce diagnostics: ${why}`);
+          s().setStatus(`could not produce diagnostics: ${why}`, "danger");
           toast("could not produce diagnostics", "danger");
         });
       },

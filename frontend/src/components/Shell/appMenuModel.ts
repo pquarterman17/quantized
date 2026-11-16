@@ -164,6 +164,7 @@ export function buildAppMenuItems(
   const destructive: ContextMenuItem[] = [];
 
   for (const action of actions) {
+    if (action.paletteOnly) continue;
     const guest = action.group !== group ? crossListed[action.id] : undefined;
     if (action.group !== group && guest === undefined) continue;
     const item = leaf(

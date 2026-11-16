@@ -1,4 +1,4 @@
-// Peak Analyzer — the mixed-shape model's editable parameter table (audit
+// Peak analyzer — the mixed-shape model's editable parameter table (audit
 // P2.4 slice 2). One row per model parameter: start value, vary (unchecked =
 // fixed at the start value), optional min / max (blank = the backend's
 // default: open, except widths > 0 and eta in [0, 1]), and a tie to another
@@ -21,7 +21,7 @@ import type { ModelFitState } from "./useModelFit";
 const cell = { padding: "2px 3px" } as const;
 
 /** Control widths (px). Together with the name and vary columns they fit the
- *  Peak Analyzer's 420 px window: the table used to run past its right edge,
+ *  Peak analyzer's 420 px window: the table used to run past its right edge,
  *  cutting the "tie to" column off (re-audit #16). */
 export const COL = { start: 64, bound: 50, tie: 80 } as const;
 

@@ -1,4 +1,4 @@
-// Peak Analyzer, audit P2.4 slice 3, through usePeakWizard with a stubbed
+// Peak analyzer, audit P2.4 slice 3, through usePeakWizard with a stubbed
 // fetch (real request builders, real hooks): recipe v2 carrying the model
 // configuration end to end, direct add into the model table, deleting a peak
 // from the model table, the "Fit this range" hand-off, and the step-① baseline

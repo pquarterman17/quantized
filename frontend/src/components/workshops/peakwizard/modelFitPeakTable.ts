@@ -1,4 +1,4 @@
-// Peak Analyzer -> the durable peak table (audit P2.1 "Per-peak fit
+// Peak analyzer -> the durable peak table (audit P2.1 "Per-peak fit
 // uncertainties", filled by the P2.4 model-fit engine). Pure: no React, no
 // store, no fetch.
 //

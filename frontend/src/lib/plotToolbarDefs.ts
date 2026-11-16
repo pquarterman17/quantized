@@ -53,11 +53,11 @@ export const NAVIGATE_TOOLS: ToolDef[] = [
 
 // ── Inspect: read values off the plot without transforming it. ──
 export const INSPECT_TOOLS: ToolDef[] = [
-  { id: "cursor", glyph: "✛", name: "Data Cursor", desc: "Click a point to read its coordinates" },
+  { id: "cursor", glyph: "✛", name: "Data cursor", desc: "Click a point to read its coordinates" },
   { id: "measure", glyph: "∡", name: "Measure", desc: "Drag between two points for Δx, Δy, slope" },
-  { id: "stats", glyph: "Σ", name: "Region Stats", desc: "Drag a range to compute summary statistics" },
-  { id: "select", glyph: "⬚", name: "Select Rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
-  { id: "lasso", glyph: "◌", name: "Lasso Mask", desc: "Drag an outline around points to mask them; Shift unmasks" },
+  { id: "stats", glyph: "Σ", name: "Region stats", desc: "Drag a range to compute summary statistics" },
+  { id: "select", glyph: "⬚", name: "Select rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
+  { id: "lasso", glyph: "◌", name: "Lasso mask", desc: "Drag an outline around points to mask them; Shift unmasks" },
 ];
 
 // ── Analyze: region tools whose result persists as a chip (∫ / ∩) or a live
@@ -65,7 +65,7 @@ export const INSPECT_TOOLS: ToolDef[] = [
 export const ANALYZE_TOOLS: ToolDef[] = [
   { id: "integ", glyph: "∫", name: "Integrate", desc: "Drag a range for the area under the curve" },
   { id: "fwhm", glyph: "∩", name: "Peak / FWHM", desc: "Drag a range to measure a peak's width" },
-  { id: "qfit", glyph: "≈", name: "Gadget", desc: "Drag a region or place cursors for a live fit or analysis" },
+  { id: "qfit", glyph: "≈", name: "Live fit / quick analysis", desc: "Drag a region or place cursors for a live fit or analysis" },
 ];
 
 // The Baseline workshop's "Fit from region" (useBaseline.pickRegion) arms
@@ -75,7 +75,7 @@ export const ANALYZE_TOOLS: ToolDef[] = [
 const REGION_TOOL: ToolDef = {
   id: "region",
   glyph: "▭",
-  name: "Background Region",
+  name: "Background region",
   desc: "Drag a background range on x for baseline fitting; drag a taller box to limit y too",
 };
 
@@ -109,37 +109,37 @@ export const SHAPE_TOOLS: ShapeDef[] = [
 export const RESET_VIEW: ActionDef = {
   id: "reset",
   glyph: "⊡",
-  name: "Reset View",
+  name: "Reset view",
   desc: "Restore the default zoom and pan",
 };
 export const SMART_SCALE: ActionDef = {
   id: "smartScale",
   glyph: "⊿",
-  name: "Smart Auto-scale",
+  name: "Smart auto-scale",
   desc: "Pick linear or log scale from the data's range",
 };
 export const STACK_MODE: ActionDef = {
   id: "stack",
   glyph: "▤",
-  name: "Stack Channels",
+  name: "Stack channels",
   desc: "Show each channel in its own panel",
 };
 export const INSET_MODE: ActionDef = {
   id: "inset",
   glyph: "⊕",
-  name: "Magnifier Inset",
+  name: "Magnifier inset",
   desc: "Show a zoomed inset over the plot",
 };
 export const POLAR_MODE: ActionDef = {
   id: "polar",
   glyph: "✺",
-  name: "Polar Plot",
+  name: "Polar plot",
   desc: "Render angle vs. radius",
 };
 export const STAT_MODE: ActionDef = {
   id: "statMode",
   glyph: "▦",
-  name: "Statistics View",
+  name: "Statistics view",
   desc: "Show box, violin, Q-Q, or histogram views",
 };
 
@@ -153,18 +153,18 @@ export const SAVE_PNG: ActionDef = {
 export const COPY_DATA: ActionDef = {
   id: "copyData",
   glyph: "⧉",
-  name: "Copy Data",
+  name: "Copy data",
   desc: "Copy the plotted data as tab-separated values",
 };
 export const COPY_FIGURE: ActionDef = {
   id: "copyFigure",
   glyph: "⎘",
-  name: "Copy Figure",
+  name: "Copy figure",
   desc: "Copy the publication figure (300 DPI) for Office; adds vector SVG where the browser allows",
 };
 export const SNAPSHOT_WINDOW: ActionDef = {
   id: "snapshotWindow",
   glyph: "⊞",
-  name: "Snapshot Window",
+  name: "Snapshot window",
   desc: "Freeze the plot into a new compare window",
 };

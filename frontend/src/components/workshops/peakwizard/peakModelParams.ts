@@ -1,4 +1,4 @@
-// Peak Analyzer — the mixed-shape model's parameter set (audit P2.4 slice 2).
+// Peak analyzer — the mixed-shape model's parameter set (audit P2.4 slice 2).
 // Pure: seeds, edits and serialises the parameters `/api/peaks/model-fit`
 // takes (backend contract: src/quantized/calc/peak_model.py's header). Peak i
 // owns `p{i}.{center,height,fwhm,eta,fwhm_g,fwhm_l}` by shape; the background

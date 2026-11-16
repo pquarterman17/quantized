@@ -107,7 +107,7 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         run = await import("./derivedWorksheetCreate");
       } catch (e) {
         const msg = `Create derived worksheet failed to load: ${e instanceof Error ? e.message : "error"}`;
-        get().setStatus(msg);
+        get().setStatus(msg, "danger");
         toast(msg, "danger");
         return null;
       }

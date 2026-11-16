@@ -1,4 +1,4 @@
-// Peak Analyzer model fit: the primary channel's designated error column
+// Peak analyzer model fit: the primary channel's designated error column
 // (the view's `errKeys`, the same pick the curve-fit workshop's "Y error
 // column" weighting makes) rides along as `y_err`, cut to the fitted segment.
 // No designation, or an unusable column, keeps the fit unweighted. Waits are on

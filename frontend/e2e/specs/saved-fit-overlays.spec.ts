@@ -147,8 +147,8 @@ test("a Peak Analyzer fit (with its fitted background) survives a reload with no
   // Let the import's own autosave land first, so the next one is the fit's.
   await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: false });
 
-  await runPaletteCommand(page, "Peak Analyzer");
-  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
+  await runPaletteCommand(page, "Peak analyzer");
+  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Peak analyzer", { exact: true }) });
   await panel.locator(".qzk-wizard-step", { hasText: "Find peaks" }).click();
   await panel.getByRole("button", { name: "Find peaks", exact: true }).click();
   await expect(panel.getByRole("checkbox")).toHaveCount(2, { timeout: 15_000 });
@@ -168,10 +168,10 @@ test("a Peak Analyzer fit (with its fitted background) survives a reload with no
 
   // Review 3 R3: REOPENING the panel (its baseline step runs again) keeps the
   // fitted background, and a save still writes it.
-  await runPaletteCommand(page, "Peak Analyzer");
+  await runPaletteCommand(page, "Peak analyzer");
   await expect(panel.locator(".qzk-wizard-step", { hasText: "Find peaks" })).toBeVisible();
   await panel.locator(".qzk-wizard-step", { hasText: "Find peaks" }).click();
-  await panel.getByRole("button", { name: "Close Peak Analyzer" }).click();
+  await panel.getByRole("button", { name: "Close Peak analyzer" }).click();
   await expect(panel).toHaveCount(0);
   const reopened = await page.evaluate(() => {
     const s = (window as unknown as Qz).__qz.useApp.getState() as {

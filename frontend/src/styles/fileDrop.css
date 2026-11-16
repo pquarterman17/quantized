@@ -1,0 +1,4 @@
+.qzk-filedrop { position: fixed; inset: 0; z-index: var(--z-file-drop); display: grid; place-items: center; background: color-mix(in srgb, var(--surface-0) 72%, transparent); outline: 3px dashed var(--accent); outline-offset: -12px; pointer-events: none; }
+.qzk-filedrop > div { display: flex; flex-direction: column; gap: 6px; padding: 22px 34px; border: 1px solid var(--glass-border); border-radius: var(--radius); background: var(--glass); box-shadow: var(--shadow); text-align: center; }
+.qzk-filedrop strong { color: var(--text); font-size: var(--font-size-lg); }
+.qzk-filedrop span { color: var(--text-dim); font-size: var(--font-size-sm); }

@@ -67,7 +67,7 @@ export async function createSpectralWorksheet(
     to: recalcNodes.dataset(newId),
   });
   if (reason) {
-    get().setStatus(`Can't create a spectral worksheet: ${reason}`);
+    get().setStatus(`Can't create a spectral worksheet: ${reason}`, "danger");
     return null;
   }
   try {
@@ -93,7 +93,7 @@ export async function createSpectralWorksheet(
       : undefined;
     if (!currentSource || currentSource.pending || currentSource.data !== source.data ||
         (secondary && (!currentSecondary || currentSecondary.pending || currentSecondary.data !== secondary.data))) {
-      get().setStatus("Can't create a spectral worksheet: source data changed while analysis was running.");
+      get().setStatus("Can't create a spectral worksheet: source data changed while analysis was running.", "danger");
       return null;
     }
     const sourceName = secondary
@@ -117,7 +117,7 @@ export async function createSpectralWorksheet(
     );
     return created.id;
   } catch (error) {
-    get().setStatus(`create spectral worksheet failed: ${error instanceof Error ? error.message : "error"}`);
+    get().setStatus(`create spectral worksheet failed: ${error instanceof Error ? error.message : "error"}`, "danger");
     return null;
   }
 }

@@ -1,4 +1,4 @@
-// Tool windows docked at the RIGHT edge (Curve Fit, Peak Analyzer), and the
+// Tool windows docked at the RIGHT edge (Curve Fit, Peak analyzer), and the
 // clearance the stage needs so its plot reflows to their left — the way
 // Origin docks a dialog BESIDE the graph instead of over it (fitting live
 // check: the docked Curve Fit covered ~60 px of the plot and the legend).

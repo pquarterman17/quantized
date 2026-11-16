@@ -27,7 +27,7 @@ export interface PlotViewportProps
    *  literal `buildOpts` argument. */
   theme: Theme;
   accent: Accent;
-  /** Peak Analyzer wizard click-on-plot marker editing (RAW bridge, not yet
+  /** Peak analyzer wizard click-on-plot marker editing (RAW bridge, not yet
    *  wrapped into `buildOpts`'s `{markers,onAdd,onRemove}` shape). Kept as its
    *  own prop rather than folded into the spread below so the effect's
    *  dependency array can key off this STABLE store-selected reference,

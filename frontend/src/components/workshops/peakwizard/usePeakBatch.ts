@@ -1,4 +1,4 @@
-// Peak Analyzer batch — state hook (audit P2.4 slice 4): run a SAVED v2
+// Peak analyzer batch — state hook (audit P2.4 slice 4): run a SAVED v2
 // recipe over many datasets and collect the uncertainty / diagnostic table.
 //
 // LIFECYCLE. `run` prepares every picked dataset on the client

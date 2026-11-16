@@ -1,4 +1,4 @@
-// "Publish to peak table" in the Peak Analyzer's fit step (audit P2.1
+// "Publish to peak table" in the Peak analyzer's fit step (audit P2.1
 // uncertainties, via the P2.4 model engine), driven through the panel: the
 // published durable table carries values, standard errors, null-error
 // reasons, shapes and provenance; a stale, non-converged or data-changed fit
@@ -80,7 +80,7 @@ async function fit(res: PeakModelFitResponse) {
   await screen.findByLabelText("fit metrics");
 }
 
-describe("Peak Analyzer — Publish to peak table", () => {
+describe("Peak analyzer — Publish to peak table", () => {
   it("writes one durable row per peak with values, errors, reasons and provenance", async () => {
     await fit(modelFitResponse());
     fireEvent.click(publishBtn());
@@ -130,7 +130,7 @@ describe("Peak Analyzer — Publish to peak table", () => {
     fireEvent.click(publishBtn());
     await waitFor(() => expect(publishBtn()).toBeEnabled());
     expect(confirmMock).toHaveBeenCalledTimes(1);
-    expect(String(confirmMock.mock.calls[0][1])).toMatch(/already has a 2-peak table \(a Peak Analyzer model fit/);
+    expect(String(confirmMock.mock.calls[0][1])).toMatch(/already has a 2-peak table \(a Peak analyzer model fit/);
     expect(useApp.getState().datasets[0].peakTable).toBe(first);
 
     confirmMock.mockResolvedValueOnce(true);

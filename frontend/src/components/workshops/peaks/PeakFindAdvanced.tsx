@@ -62,7 +62,7 @@ export default function PeakFindAdvanced({ value, onApply, busy }: Props) {
   // draft DURING the render that carries it, never from a post-commit
   // effect: the effect form also ran once on mount, after the chunk's first
   // commit, and an edit typed into that gap was silently reset (measured
-  // 1/20 under load in the Peak Analyzer's step ② test, 2026-09-30).
+  // 1/20 under load in the Peak analyzer's step ② test, 2026-09-30).
   const [seen, setSeen] = useState(value);
   if (value !== seen) {
     setSeen(value);

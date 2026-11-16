@@ -73,8 +73,8 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   expect(svg).toContain("median"); // the custom label, drawn at the crossing
   expect(svg).toContain("95%");
 
-  // ── Lasso Mask: drag an outline around the upper part of the loop ──
-  await page.getByRole("button", { name: "Lasso Mask" }).click();
+  // ── Lasso mask: drag an outline around the upper part of the loop ──
+  await page.getByRole("button", { name: "Lasso mask" }).click();
   const over = page.locator(".qzk-stage .u-over").first();
   const box = (await over.boundingBox())!;
   const before = (await state(page)).history;
@@ -89,7 +89,7 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   await expect.poll(async () => (await state(page)).excluded).toBe(0);
 
   // ── Link Y axis with… a second graph window ──
-  await runPaletteCommand(page, "New Graph Window");
+  await runPaletteCommand(page, "New graph window");
   await expect.poll(async () => (await state(page)).linkY.length).toBe(2);
   await runPaletteCommand(page, "Link Y axis with…");
   const ask = page.getByRole("dialog", { name: /Link Y axis of/ });

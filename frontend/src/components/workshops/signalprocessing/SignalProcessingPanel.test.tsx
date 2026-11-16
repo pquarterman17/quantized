@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
+import { SEED_TTL_MS, useSignalOperationSeed } from "../../../store/signalOperationSeed";
 import { useApp } from "../../../store/useApp";
 import SignalProcessingPanel from "./SignalProcessingPanel";
 
@@ -41,6 +42,7 @@ const dataset: Dataset = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  useSignalOperationSeed.setState({ op: null, nonce: 0 });
   correctionMock.mockImplementation(async ({ dataset: data }: { dataset: Dataset["data"] }) => structuredClone(data));
   spectralMock.mockResolvedValue({
     time: [0, 1],
@@ -302,6 +304,57 @@ describe("SignalProcessingPanel", () => {
     const launch = screen.getByRole("button", { name: "Apply to selected sheets…" });
     expect(launch).toBeDisabled();
     expect(launch).toHaveAttribute("title", "Reference X range must be finite and increasing.");
+  });
+
+  // ⌘K deep links (commands/discoveryCommands.ts): "Normalize · peak = 1" opens
+  // the panel ON that operation, with its live preview already running.
+  it("opens on the operation a palette deep link seeded, and previews it", async () => {
+    useSignalOperationSeed.getState().request("normalize-peak");
+    render(<SignalProcessingPanel />);
+    expect(screen.getByLabelText("Operation")).toHaveValue("normalize-peak");
+    await waitFor(() => expect(correctionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ params: expect.objectContaining({ normMethod: "Peak (max=1)" }) }),
+      expect.any(AbortSignal),
+    ));
+    expect(useSignalOperationSeed.getState().op).toBeNull(); // consumed: a later plain open keeps the user's choice
+  });
+
+  it("re-points an already-open panel when a second deep link arrives", () => {
+    render(<SignalProcessingPanel />);
+    expect(screen.getByLabelText("Operation")).toHaveValue("smooth");
+    act(() => useSignalOperationSeed.getState().request("derivative-first"));
+    expect(screen.getByLabelText("Operation")).toHaveValue("derivative-first");
+    act(() => useSignalOperationSeed.getState().request("integral"));
+    expect(screen.getByLabelText("Operation")).toHaveValue("integral");
+  });
+
+  it("drops a seed nobody consumed for a minute (the panel chunk failed to load)", () => {
+    useSignalOperationSeed.getState().request("normalize-peak");
+    useSignalOperationSeed.setState({ at: Date.now() - SEED_TTL_MS - 1 });
+    render(<SignalProcessingPanel />);
+    expect(screen.getByLabelText("Operation")).toHaveValue("smooth");
+    expect(useSignalOperationSeed.getState().op).toBeNull();
+  });
+
+  it("queues a deep link that arrives while Create linked worksheet is running, instead of losing it", async () => {
+    let finish: (v: null) => void = () => undefined;
+    createSignalMock.mockImplementation(() => new Promise((r) => { finish = r; }));
+    render(<SignalProcessingPanel />);
+    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    act(() => useSignalOperationSeed.getState().request("integral"));
+    expect(screen.getByLabelText("Operation")).toHaveValue("smooth"); // held, not applied mid-commit
+    expect(useSignalOperationSeed.getState().op).toBe("integral"); // and not discarded
+    await act(async () => finish(null));
+    await waitFor(() => expect(screen.getByLabelText("Operation")).toHaveValue("integral"));
+  });
+
+  it("drops a seeded operation the panel does not offer instead of applying it", () => {
+    useSignalOperationSeed.getState().request("no-such-operation");
+    render(<SignalProcessingPanel />);
+    expect(screen.getByLabelText("Operation")).toHaveValue("smooth");
+    expect(useSignalOperationSeed.getState().op).toBeNull();
   });
 
   it("does not silently interpret a blank reference bound as zero", () => {

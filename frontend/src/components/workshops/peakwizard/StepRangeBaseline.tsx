@@ -1,4 +1,4 @@
-// Peak Analyzer wizard — step ① (range & baseline), moved out of steps.tsx
+// Peak analyzer wizard — step ① (range & baseline), moved out of steps.tsx
 // (which sat at the 400-line component ceiling) when the baseline picker grew
 // the Baseline workshop's SNIP, anchor-point, Shirley and polynomial methods.
 
