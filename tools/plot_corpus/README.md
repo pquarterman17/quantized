@@ -35,8 +35,16 @@ uv run python tools/plot_corpus/score_import.py --corpus <corpus> --generated <g
 uv run python tools/plot_corpus/scratch_run.py --corpus <corpus> --gen <gen> --out <review>
 ```
 
-Output stays out of the repo. Specimens join the private `test-data` corpus
-only through plan item 8.
+Output stays out of the repo. The built corpus is committed to the private
+`test-data` repo at `origin/generated/` (specimens as `<type>/<family>/`, the
+generator output as `_families/<family>/`; see its README). Check 1 against it:
+
+```bash
+uv run python tools/plot_corpus/score_import.py --corpus ../test-data/origin/generated   --generated ../test-data/origin/generated/_families --out <dir>
+```
+
+`tests/test_plot_corpus_import_floor.py` (realdata) ratchets that score against
+`tests/fixtures/plot_corpus/import_floor.json`.
 
 ## Findings the code relies on (Origin 2026b Student, 2026-11-15)
 
