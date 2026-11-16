@@ -8,6 +8,12 @@ module makes the read itself safe to take while an instrument appends:
   :func:`~quantized.io.registry.is_line_text`) is read ONCE into memory and
   parsed from a private temp copy of exactly those bytes, so nothing the
   writer does after the read can reach the parse.
+COST PER UPDATE. Every update re-reads the WHOLE file: a text file is held in
+memory once (its size), hashed, and written to a temp copy of the same size on
+the system temp disk for the parse, then the copy is removed; a binary file is
+read twice (hashed, then parsed in place). A 100 MB log refreshed every few
+seconds is therefore ~100 MB of memory and temp disk per refresh while it runs.
+
 The byte snapshot, the cut and the stamp check live in ``io/live_text.py``;
 this module adapts them to HTTP (409 changed during the read, 425 no complete
 line yet, 422 unparseable, 404/403/503 unreachable).

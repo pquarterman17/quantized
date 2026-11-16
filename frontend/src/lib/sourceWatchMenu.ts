@@ -24,3 +24,10 @@ export async function toggleAutoUpdate(id: string): Promise<CanAutoUpdate> {
   const { toggleAutoUpdate: toggle } = await import("./sourceWatch");
   return toggle(id);
 }
+
+/** Re-read a watched worksheet's file now -- e.g. one left on older data after an undo, whose
+ *  measurement has finished (the watch otherwise waits for the file's next change). */
+export async function readSourceNow(id: string): Promise<void> {
+  const { readAutoUpdateNow } = await import("./sourceWatch");
+  readAutoUpdateNow(id);
+}

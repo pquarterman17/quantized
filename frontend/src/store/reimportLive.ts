@@ -46,9 +46,10 @@
 import { importLive, type LiveRead } from "../lib/api/sourceWatch";
 import { HttpError } from "../lib/api/http";
 import type { DataStruct, Dataset } from "../lib/types";
-import type { HistoryEntry } from "./history";
+import { HISTORY_DEPTH, type HistoryEntry } from "./history";
+import { snapshotOf } from "./historySnapshot";
 import { toast } from "./toasts";
-import { reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
+import { holdsFileRows, reimportBaseCols, reimportColumnsChanged, resolveFreshData, rowsArePrefix } from "../lib/reimport";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
 import type { AppState } from "./useApp";
 
@@ -61,9 +62,9 @@ export type ImportCache = Map<string, Promise<LiveRead>>;
 export interface LiveOpts {
   /** Leave an unfinished last line out of the read. */
   hold: boolean;
-  /** The `data` this watcher last installed in the worksheet (null: none yet this session). */
-  installed: DataStruct | null;
-  /** The file rows of that generation (the append test's base); null: the worksheet's own. */
+  /** The file rows this watcher last installed (`raw` with corrections); null: none yet this
+   *  session. Divergence and the history rebase are decided on these, never on `data`'s
+   *  identity: fit()/sheet() column refreshes and background recalcs rewrite `data` too. */
   base: DataStruct | null;
   /** Still wanted when the read lands? (false: the toggle went off meanwhile -- write nothing) */
   wanted: () => boolean;
@@ -79,12 +80,18 @@ export type LiveReimport =
 /** A read that has not answered by now is abandoned (a share that dropped after its stat). */
 export const READ_TIMEOUT_MS = 120_000;
 
-/** Push a labelled undo step for the CURRENT state without clearing redo (rule 1). */
-function pushStep(set: SliceSet, get: SliceGet, label: string): number | undefined {
-  const future = get().future;
-  get().recordHistory(label);
-  set({ future });
-  return get().history[get().history.length - 1]?.seq;
+/** Steps pushed here take NEGATIVE seqs: unique against history.ts's positive counter (which
+ *  this module cannot reach), and seqs are only ever compared for equality. */
+let liveSeq = 0;
+
+/** Push a labelled undo step for the CURRENT state without clearing redo (rule 1) -- in ONE
+ *  store write: `recordHistory` + restoring `future` would show subscribers a moment with redo
+ *  empty, and store/projectFollowsHistory.ts prunes the records of entries that leave both
+ *  stacks (a project swap waiting in redo would lose its record). */
+function pushStep(set: SliceSet, label: string): number {
+  const seq = -++liveSeq;
+  set((s) => ({ history: [...s.history, { label, snapshot: snapshotOf(s), seq }].slice(-HISTORY_DEPTH) }));
+  return seq;
 }
 
 /** Re-read `id`'s source file and install it in place. Never throws; on any
@@ -98,7 +105,7 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
     shared.set(key, pending);
     const read = await pending;
     const freshRaw = await resolveFreshData(ds, read.data);
-    const diverged = opts.installed !== null && ds.data !== opts.installed;
+    const diverged = opts.base !== null && !holdsFileRows(ds, opts.base);
     const own = ds.corrections && ds.raw ? ds.raw : ds.data;
     // Nothing new: the worksheet already holds exactly the file's rows (a first read adopts them
     // as the installed generation), or a held read is a prefix of them (the file's unterminated
@@ -120,15 +127,14 @@ export async function liveReimport(set: SliceSet, get: SliceGet, id: string, sha
       ? "Auto-update replaced your edits"
       : merge.shapeChanged
         ? "Auto-update (the file's shape changed)"
-        : opts.installed === null
+        : opts.base === null
           ? "Auto-update (first read of the file)"
           : null;
-    const stepSeq = label ? pushStep(set, get, label) : undefined;
+    const stepSeq = label ? pushStep(set, label) : undefined;
     applyReimportMerge(set, get, ds, merge, undefined, true);
     if (!read.held) stampSource(set, id, ds, read); // a held read is not the whole file
     const next = get().datasets.find((d) => d.id === id);
-    const old = opts.installed ?? (label ? null : ds.data);
-    if (next && old && !merge.shapeChanged) rebaseHistory(set, id, old, next, stepSeq);
+    if (next && opts.base && !merge.shapeChanged) rebaseHistory(set, ds, opts.base, next, stepSeq);
     // A reshape already toasts from applyReimportMerge ("changed shape on re-import").
     if (label && (diverged || !merge.shapeChanged)) toast(diverged ? `Auto-update replaced your edits to "${ds.name}" with the file's newer data. Undo (Ctrl+Z) brings them back.` : `"${ds.name}" was updated from its file (undoable).`, "info");
     return { ok: true, rows: merge.newData.time.length, reshaped: merge.shapeChanged, labelled: label !== null, stamp: read.stamp, held: read.held, data: next?.data ?? merge.newData };
@@ -147,13 +153,16 @@ function stampSource(set: SliceSet, id: string, ds: Dataset, read: LiveRead): vo
   set((s) => ({ datasets: stamped(s.datasets) }));
 }
 
-/** Point every undo/redo snapshot's copy of worksheet `id` that still holds `old` at `next`'s
- *  rows and source baseline -- except the step this very update pushed (`skipSeq`). */
-function rebaseHistory(set: SliceSet, id: string, old: DataStruct, next: Dataset, skipSeq: number | undefined): void {
+/** Point every undo/redo snapshot's copy of worksheet `id` that still holds the file rows `base`
+ *  at `next`'s rows and source baseline -- except the step this very update pushed (`skipSeq`). */
+function rebaseHistory(set: SliceSet, ds: Dataset, base: DataStruct, next: Dataset, skipSeq: number | undefined): void {
+  const id = ds.id;
   const fix = (list: HistoryEntry[]): HistoryEntry[] =>
     list.map((e) => {
       const held = e.seq === skipSeq ? undefined : e.snapshot.datasets.find((d) => d.id === id);
-      if (!held || held.data !== old) return e;
+      // Same file rows AND the same formula columns / corrections as the worksheet just updated,
+      // so `next`'s columns mean the same thing in that snapshot.
+      if (!held || held.formulas !== ds.formulas || held.corrections !== ds.corrections || !holdsFileRows(held, base)) return e;
       const datasets = e.snapshot.datasets.map((d) => (d.id === id ? { ...d, data: next.data, source: next.source, ...(d.raw ? { raw: next.raw } : {}) } : d));
       return { ...e, snapshot: { ...e.snapshot, datasets } };
     });

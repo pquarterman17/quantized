@@ -89,6 +89,24 @@ export function rowsArePrefix(a: DataStruct, b: DataStruct, cols: number, upTo =
 /** The base (file) columns of `ds`: its labels minus formula columns. */
 export const reimportBaseCols = (ds: Dataset): number => Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
 
+const matchCache = new WeakMap<DataStruct, { base: DataStruct; same: boolean }>();
+
+/** Does worksheet `ds` still hold exactly the file rows `base` (the source watch's last
+ *  install)? Decided on the FILE-derived part only, because other features rewrite `data`
+ *  without being an edit: a fit()/fitval() refresh, sheet() and other formula columns
+ *  (excluded: base columns only), a background-subtraction recalc (with corrections the
+ *  file's rows are `ds.raw`, which a recalc never writes -- and a corrected sheet refuses
+ *  cell edits). Identity first; values once per new data object (cached), not per poll. */
+export function holdsFileRows(ds: Dataset, base: DataStruct): boolean {
+  const own = ds.corrections && ds.raw ? ds.raw : ds.data;
+  if (own === base) return true;
+  const hit = matchCache.get(own);
+  if (hit && hit.base === base) return hit.same;
+  const same = own.time.length === base.time.length && rowsArePrefix(own, base, reimportBaseCols(ds));
+  matchCache.set(own, { base, same });
+  return same;
+}
+
 /** Does `fresh` only ADD rows to what `ds` holds, row for row (so row-indexed state -- excluded
  *  rows, the view -- still points at the same rows)? True when the worksheet's own file rows
  *  (`ds.raw` when corrections are applied) are a prefix of `fresh`, or -- for a worksheet edited

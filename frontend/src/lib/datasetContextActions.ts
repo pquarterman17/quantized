@@ -13,7 +13,7 @@ import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { multiSelected } from "./multiSelected";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
-import { canAutoUpdate, toggleAutoUpdate, watchedIds } from "./sourceWatchMenu";
+import { canAutoUpdate, readSourceNow, toggleAutoUpdate, watchedIds } from "./sourceWatchMenu";
 import { useApp } from "../store/useApp";
 
 // Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
@@ -85,6 +85,12 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
       return can.ok ? "" : can.reason;
     },
     run: (t) => void toggleAutoUpdate(t.dataset.id),
+  },
+  {
+    id: "dataset.autoUpdateNow",
+    label: "Read the source file now",
+    hidden: (t) => !watchedIds.has(t.dataset.id),
+    run: (t) => void readSourceNow(t.dataset.id),
   },
   {
     id: "dataset.split",

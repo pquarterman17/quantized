@@ -175,6 +175,19 @@ describe("a worksheet that differs from its file (F1 b, c)", () => {
     expect(live().data.values[0][1]).toBe(0);
   });
 
+  it("'Read the source file now' brings a worksheet left on older data back, as one undoable step", async () => {
+    await installed();
+    app().setCellValue("d1", 0, 1, 999);
+    file = { n: 5 };
+    await settle();
+    app().undo(); // back to the edit; the measurement has finished, the file will not change
+    w.readNow("d1");
+    await tick();
+    expect(live().data.values[0][1]).toBe(0);
+    expect(app().history.at(-1)?.label).toBe("Auto-update replaced your edits");
+    expect(app().future).toHaveLength(1);
+  });
+
   it("after an undo, the next REAL change is one labelled step, and redo survives it", async () => {
     await installed();
     app().setCellValue("d1", 0, 1, 999);
@@ -212,6 +225,20 @@ describe("a worksheet that differs from its file (F1 b, c)", () => {
     await settle();
     expect(app().history).toHaveLength(0);
     expect(app().future).toHaveLength(1); // the edit is still redoable
+  });
+
+  it("a labelled step never shows subscribers an empty redo stack (projectFollowsHistory prunes on it)", async () => {
+    await installed();
+    app().setCellValue("d1", 0, 1, 999);
+    app().renameDataset("d1", "r2");
+    app().undo();
+    let smallest = app().future.length;
+    const off = useApp.subscribe((s) => (smallest = Math.min(smallest, s.future.length)));
+    file = { n: 5 };
+    await settle();
+    off();
+    expect(app().history.at(-1)?.label).toBe("Auto-update replaced your edits");
+    expect(smallest).toBe(1);
   });
 
   it("a reshape is a labelled step and keeps redo", async () => {

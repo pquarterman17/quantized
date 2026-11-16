@@ -458,7 +458,8 @@ def resolve_parser(path: Path) -> Parser:
 def is_line_text(path: Path) -> bool:
     """Does ``path`` resolve to a line-oriented TEXT parser? Only those may have
     an unfinished last line held back by the live source watch
-    (``io/live_text.py``); a binary format is never cut at a newline byte."""
+    (``io/live_text.py``); a binary format is never cut at a newline byte. A plugin
+    parser is never held: its format is unknown here (it gets the stamp check only)."""
     parser = resolve_parser(path)
     if parser is import_sims:  # the SIMS parser also reads .xlsx workbooks
         return path.suffix.lower() in (".csv", ".tsv", ".txt")

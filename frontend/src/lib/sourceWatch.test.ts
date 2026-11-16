@@ -71,7 +71,7 @@ describe("debounce", () => {
     expect(w.phase("d1")).toBe("waiting");
     await w.tick();
     expect(reimport).toHaveBeenCalledTimes(1);
-    expect(reimport).toHaveBeenCalledWith("d1", expect.any(Map), expect.objectContaining({ hold: true, installed: null, base: null }));
+    expect(reimport).toHaveBeenCalledWith("d1", expect.any(Map), expect.objectContaining({ hold: true, base: null }));
     await w.tick();
     expect(reimport).toHaveBeenCalledTimes(1);
   });
@@ -266,6 +266,18 @@ describe("the toggle", () => {
     expect(w.has("d1")).toBe(false);
     expect(reimport).not.toHaveBeenCalled();
     expect(status).toHaveBeenLastCalledWith(expect.stringMatching(/project was opened/));
+  });
+
+  it("'read now' reads at the next poll even though the file has not changed", async () => {
+    const w = watcher();
+    await w.tick();
+    await w.tick();
+    expect(reimport).not.toHaveBeenCalled();
+    w.readNow("d1");
+    await w.tick();
+    expect(reimport).toHaveBeenCalledTimes(1);
+    await w.tick();
+    expect(reimport).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the eager menu's watched set in step", () => {

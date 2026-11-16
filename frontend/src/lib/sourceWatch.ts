@@ -45,6 +45,7 @@
 // (lib/datasetContextActions.ts) through lib/sourceWatchMenu.ts's dynamic import.
 
 import { statSources, type SourceStat } from "./api/sourceWatch";
+import { holdsFileRows } from "./reimport";
 import type { DataStruct, Dataset } from "./types";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
@@ -97,11 +98,12 @@ interface Entry {
   waited: number;
   /** Consecutive `pending` stat answers. */
   silent: number;
-  /** The `data` this watcher last installed, and its file rows. */
-  installed: DataStruct | null;
+  /** The file rows this watcher last installed (`raw` with corrections), null: none yet. */
   base: DataStruct | null;
-  /** The worksheet no longer holds `installed` (edit, undo or redo). */
+  /** The worksheet no longer holds `base` (edit, undo or redo; lib/reimport.holdsFileRows). */
   diverged: boolean;
+  /** "Read the file now" was asked for: the next poll reads, whatever the stamp says. */
+  force: boolean;
   /** The document (`docEpoch`) the watch was turned on in: opening a project ends it. */
   epoch: number;
   /** The last read held back an unfinished last line. */
@@ -143,6 +145,8 @@ function matchesBaseline(ds: Dataset | undefined, stamp: string): boolean {
 
 export interface Watcher {
   enable(id: string): CanAutoUpdate;
+  /** Read the file at the next poll (polled at once), even if it has not changed. */
+  readNow(id: string): void;
   disable(id: string): void;
   has(id: string): boolean;
   phase(id: string): WatchPhase | null;
@@ -159,7 +163,7 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
   const entries = new Map<string, Entry>();
   /** What was installed per worksheet+path, kept across a toggle off/on while the worksheet
    *  still holds the very `data` installed (a reopened project's copy does not). */
-  const remembered = new Map<string, Pick<Entry, "applied" | "installed" | "base" | "held">>();
+  const remembered = new Map<string, Pick<Entry, "applied" | "base" | "held">>();
   let busy = false;
   let failures = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -180,7 +184,7 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
   const prune = (): void => {
     for (const [key, known] of remembered) {
       const ds = deps.dataset(key.split("\0")[0]);
-      if (!ds || ds.data !== known.installed) remembered.delete(key);
+      if (!ds || !known.base || !holdsFileRows(ds, known.base)) remembered.delete(key);
     }
   };
 
@@ -206,10 +210,10 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
 
   /** Track whether the worksheet still holds what this watcher installed. */
   function checkDivergence(e: Entry, ds: Dataset | undefined): void {
-    if (!e.installed || !ds) return;
-    const now = ds.data !== e.installed;
+    if (!e.base || !ds) return;
+    const now = !holdsFileRows(ds, e.base);
     if (now && !e.diverged) {
-      deps.status(`auto-update: "${nameOf(e)}" now differs from its file (an edit, undo or redo) — kept as it is; the file's next change replaces it as one undoable step`);
+      deps.status(`auto-update: "${nameOf(e)}" now differs from its file (an edit, undo or redo) — kept as it is; the file's next change replaces it as one undoable step (or Library menu ▸ "Read the source file now")`);
     } else if (!now && e.diverged) {
       deps.status(`auto-update: "${nameOf(e)}" matches its file again — updates resume`);
     }
@@ -221,13 +225,12 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
     e.phase = "updating";
     // Turned off (or re-enabled), or a project opened, while the file was being read?
     const wanted = (): boolean => entries.get(e.id) === e && deps.epoch() === e.epoch;
-    const r = await deps.reimport(e.id, shared, { hold, installed: e.installed, base: e.base, wanted });
+    const r = await deps.reimport(e.id, shared, { hold, base: e.base, wanted });
     if (!wanted()) return;
     if (r.ok) {
       const after = deps.dataset(e.id);
       e.applied = r.stamp;
-      e.installed = after?.data ?? r.data;
-      e.base = after?.corrections && after.raw ? after.raw : e.installed;
+      e.base = after?.corrections && after.raw ? after.raw : (after?.data ?? r.data);
       e.diverged = false;
       e.held = r.held;
       e.failedStamp = null;
@@ -235,7 +238,7 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       e.stale = 0;
       settle(e);
       e.phase = "watching";
-      if (after) remembered.set(`${e.id}\0${e.path}`, { applied: e.applied, installed: e.installed, base: e.base, held: e.held });
+      if (after) remembered.set(`${e.id}\0${e.path}`, { applied: e.applied, base: e.base, held: e.held });
       const tail = r.held ? ` (its last line has no line ending yet: read when it does, or after ${Math.round((STABLE_PARTIAL_POLLS * pollMs) / 1000)} s without change)` : r.reshaped ? " (the file's shape changed)" : "";
       deps.status(`auto-updated "${nameOf(e)}" — ${r.rows} rows at ${clock()}${tail}`);
     } else if (r.early) {
@@ -274,6 +277,12 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
     // with the import time is not proof: a file appended to just after its import passed it.
     if (e.applied === null) e.applied = matchesBaseline(ds, stamp) ? stamp : "";
     checkDivergence(e, ds);
+    if (e.force) {
+      // Asked for by the user (e.g. a finished measurement left on older data after an undo).
+      e.force = false;
+      e.failedStamp = null;
+      return read(e, shared, e.same < STABLE_PARTIAL_POLLS, stamp);
+    }
     const back = e.phase === "missing" || e.phase === "unavailable";
     if (stamp === e.applied) {
       if (back) deps.notify(`The source file of "${nameOf(e)}" is back and unchanged.`, "info");
@@ -352,11 +361,11 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       if (!entries.has(id)) {
         const path = ds.source!.path;
         const known = remembered.get(`${id}\0${path}`);
-        const mine = known && known.installed === ds.data ? known : null; // the very data installed here
+        const mine = known?.base && holdsFileRows(ds, known.base) ? known : null; // still the rows installed here
         entries.set(id, {
           id, path, importedAt: ds.importedAt, applied: mine?.applied ?? null, pending: null, failedStamp: null, attempts: 0, stale: 0,
-          last: null, same: 0, waited: 0, silent: 0, installed: mine?.installed ?? null, base: mine?.base ?? null,
-          diverged: false, held: mine?.held ?? false, epoch: deps.epoch(), phase: "watching",
+          last: null, same: 0, waited: 0, silent: 0, base: mine?.base ?? null,
+          diverged: false, force: false, held: mine?.held ?? false, epoch: deps.epoch(), phase: "watching",
         });
         deps.status(`auto-update on for "${ds.name}" — checking its file every ${Math.round(pollMs / 1000)} s`);
         sync();
@@ -368,6 +377,13 @@ export function createWatcher(deps: WatchDeps, opts: { pollMs?: number; timers?:
       if (entries.delete(id)) deps.status(`auto-update off for "${deps.dataset(id)?.name ?? id}"`);
       sync();
       prune();
+    },
+    readNow(id) {
+      const e = entries.get(id);
+      if (!e) return;
+      e.force = true;
+      deps.status(`auto-update: reading the source of "${nameOf(e)}" now…`);
+      if (timers) void tick();
     },
     has: (id) => entries.has(id),
     phase: (id) => entries.get(id)?.phase ?? null,
@@ -421,6 +437,9 @@ function realWatcher(): Watcher {
   return w;
 }
 
+
+/** Read worksheet `id`'s file now (it must be watched). */
+export const readAutoUpdateNow = (id: string): void => realWatcher().readNow(id);
 
 /** Flip the toggle for worksheet `id`; the result says why it could not turn on. */
 export function toggleAutoUpdate(id: string): CanAutoUpdate {
