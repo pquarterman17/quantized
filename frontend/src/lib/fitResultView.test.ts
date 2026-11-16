@@ -64,4 +64,8 @@ describe("copy serializers", () => {
     expect(md).toContain("| y0 | 9.000 ± 0.012 | [8.972, 9.028] | emu |");
     expect(md).toContain("| R² | 0.99987 |");
   });
+  it("Markdown: escapes backslashes before pipes in cells", () => {
+    const md = fitResultMarkdown({ ...input, names: ["a\\|b", "A1", "t1"] });
+    expect(md).toContain("| a\\\\\\|b |");
+  });
 });
