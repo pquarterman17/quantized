@@ -516,6 +516,43 @@ a three-line `if` folded).
 
 `calc/_bounded_lsq.solve_bounded` (peak model fit, refl fit, the batch runner) holds BLAS at one thread while it solves (`calc/_blas_pin.py`, refcounted across overlapping fits): the Peak Analyzer's 20-peak `csv_xrd.csv` fit went 10.0 s unconverged → 3.8 s converged at load average ~6. Trade-off: while any fit runs, every other request's BLAS work in the server process runs single-threaded too.
 
+## Large file with x in no order — 2026-11-16
+
+A 100k-row `x,y,z` CSV with x in no order took about 3 minutes from drop to
+first paint. Built app, headless Chromium (software raster), Library drop,
+1360x900. Profiling showed the parse, transfer, store and worksheet were
+fast. All the time was canvas raster ("(program)" in the CPU profile, the
+`CanvasRenderingContext2D::FinalizeFrame` / `Commit` trace events), twice
+per import. Non-ascending x turns off decimation, so the loop path
+(`fullLine`) stroked one 1.5-px path with a vertex per row. Every segment
+crossed the plot, and raster cost grows with the stroked area. The fix is in
+`lib/uplotLoopLine.ts`, which rides the region-decor startup chunk: a vertex
+at the same device pixel as the one before it is not emitted (the same
+pixels), and a line that covers its plot at least 16 times with vertices in
+at least half of its 8-px cells is stroked one device pixel wide (Skia's
+hairline path). Until that chunk lands, the builder draws every row in one call, which is the previous behaviour for small loops. Eager bundle 776.8 → 776.6 kB.
+
+| File (drop → first paint) | Before | After |
+|---|---|---|
+| 100k ascending x (`x,y,z`) | 1.0 s | 1.1 s |
+| 1M ascending x | 5.5 s | 5.7 s |
+| 100k x in no order | 179 s | 5.6 s |
+| 1M x in no order | > 900 s (no paint) | 55 s |
+| 100k noisy hysteresis loop (20 laps) | 1.8 s | 1.9–2.2 s |
+| 1M noisy hysteresis loop | 34 s | 35 s |
+
+Per phase at 1M ascending: backend parse 0.9 s + JSON encode 1.7 s (32.8 MB),
+upload response at 3.4 s; the dataset row at 5.4 s; worksheet open 0.4 s;
+autosave under 0.3 s. Nothing in the import was O(n²).
+
+Still open: both slow rows that remain are canvas raster. (1) The 1M noisy
+loop has about 850k distinct-pixel vertices, at about 7 s per series per
+frame. Thinning and culling were tried and both visibly narrowed the band.
+(2) The first plot after an import is rastered twice. The dock's
+`--qz-dock-clear` settles in two steps (host heights 710 → 653 → 699 px),
+and each `setSize` redraws. That costs nothing on ordinary data, but it
+doubles the time for every pathological row above.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Network/offline source transitions — unmeasurable today: no offline-vs-

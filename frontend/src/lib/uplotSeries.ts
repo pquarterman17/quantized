@@ -16,6 +16,7 @@ import { offAutoscale } from "./overlayAutoscale";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { BAR_PATHS } from "./uplotBars";
 import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
+import { regionDecor } from "./regionDecorLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
 import type { ErrorBarPaint } from "./uplotErrorRange";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -59,40 +60,16 @@ export function buildSeriesDefs(
   const { seriesStyles } = args;
   ensureMarks(seriesStyles);
   const { accentColor, inkColor, inkDimColor, isDarkBg } = colors;
-  // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
-  // index window and draws the full acquisition order. See `linearPaths` docs.
-  // uPlot min/max-decimates a run of >= 4 points per pixel assuming ascending
-  // x, collapsing a dense descending spectrum to one vertical line: draw in
-  // runs short enough to stay exact, joined end to end. `bbox.width` is device
-  // px rounded to a HALF pixel (x.5 at a 125 %/150 % display), so the run is
-  // floored to a whole row count: a fractional run start reads undefined rows,
-  // uPlot's non-null scan answers -1 and the run sweeps from row 0, decimated.
-  // Gaps: uPlot breaks a line by CLIPPING the x interval a null run spans,
-  // which assumes ascending x — on a loop it cut holes into whatever curve
-  // crossed that interval (an overlay's block rows are all nulls). A loop
-  // breaks the line by not drawing across a null (or a value a log axis cannot
-  // place) and keeps no clip.
-  const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
-    (u, sidx) => {
-      const ys = u.data[sidx] as readonly (number | null | undefined)[];
-      const last = u.data[0].length - 1;
-      const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
-      const log = (u.scales?.[u.series?.[sidx]?.scale ?? "y"]?.distr as number | undefined) === 3;
-      const drawable = (i: number) => { const y = ys[i]; return y != null && Number.isFinite(y) && !(log && y <= 0); };
-      let out: uPlot.Series.Paths | null = null;
-      for (let s = 0; s <= last; s++) {
-        if (!drawable(s)) continue;
-        let e = s;
-        while (e < last && drawable(e + 1)) e++;
-        for (let i = s; ; i += run) {
-          const p = b(u, sidx, i, Math.min(e, i + run));
-          if (p && out) (out.stroke as Path2D).addPath(p.stroke as Path2D);
-          else if (p) out = { ...p, clip: null };
-          if (i + run >= e) break;
-        }
-        s = e;
-      }
-      return out ?? b(u, sidx, 0, last);
+  // Non-monotonic x: `fullLine` (lib/uplotLoopLine.ts, in the region-decor
+  // startup chunk) draws a line over the full acquisition order. Until that
+  // chunk lands (or if it never does) the builder draws every row in one call:
+  // exact below 4 rows per pixel, uPlot's ascending-x decimation above. The
+  // viewports rebuild once it lands (Stage/useLazyPlotParts). `fullPoints`
+  // does the same for markers.
+  const fullLine = (b: uPlot.Series.PathBuilder, own?: boolean): uPlot.Series.PathBuilder =>
+    (u, sidx, i0, i1) => {
+      const loop = regionDecor()?.fullLine;
+      return loop ? loop(b, own)(u, sidx, i0, i1) : b(u, sidx, 0, u.data[0].length - 1);
     };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
@@ -228,8 +205,9 @@ export function buildSeriesDefs(
         // must not read as an explicit choice, or the pref would un-step this.
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
       } else if (!xAscending && width > 0 && args.linearPaths) {
-        // Loop rendering: draw the line over every point in acquisition order.
-        def.paths = fullLine(args.linearPaths);
+        // Loop rendering: draw the line over every point in acquisition order,
+        // with the stroke built by lib/uplotLoopLine.ts (bounded raster cost).
+        def.paths = fullLine(args.linearPaths, true);
       }
       return def;
     }),

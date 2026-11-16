@@ -6,11 +6,18 @@
 // started at a fractional row index (`u.data[0][12.5]` is undefined), uPlot's
 // non-null scan answered -1 and the run swept from row 0 past the decimation
 // threshold: a 7-file VSM overlay drew all but the last loop as vertical bars.
+// The run tiling is exercised through the STEP builder, which still strokes
+// each run itself; a plain line builds its own stroke over the same runs
+// (lib/uplotLoopLine.ts, tested in uplotLoopLine.test.ts).
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { PlotPayload } from "./plotdata";
+import { regionDecorSettled } from "./regionDecorLoader";
 import { buildOpts } from "./uplotOpts";
+
+// The loop drawing rides the region-decor startup chunk.
+beforeAll(() => regionDecorSettled);
 
 const n = 2000;
 // A field sweep up then back down: x is NOT ascending.
@@ -24,13 +31,13 @@ const loop: PlotPayload = {
 
 function runsAt(width: number): [number, number][] {
   const runs: [number, number][] = [];
-  const linearPaths = vi.fn((_u: unknown, _s: number, i0: number, i1: number) => {
+  const steppedPaths = vi.fn((_u: unknown, _s: number, i0: number, i1: number) => {
     runs.push([i0, i1]);
     return { stroke: { addPath: vi.fn() } };
   });
   const opts = buildOpts(loop, {
     width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(),
-    linearPaths: linearPaths as never,
+    defaultTrace: "Step", steppedPaths: steppedPaths as never,
   });
   const paths = (opts.series?.[1] as { paths: (u: unknown, si: number, i0: number, i1: number) => unknown }).paths;
   paths({ data: loop.data, bbox: { width } }, 1, 0, 0);
@@ -63,13 +70,13 @@ describe("a non-monotonic line's gaps", () => {
 
   it("draws only across non-null rows, every one of them, and clips nothing", () => {
     const runs: [number, number][] = [];
-    const linearPaths = vi.fn((_u: unknown, _s: number, i0: number, i1: number) => {
+    const steppedPaths = vi.fn((_u: unknown, _s: number, i0: number, i1: number) => {
       runs.push([i0, i1]);
       return { stroke: { addPath: vi.fn() }, clip: "x-interval clip" };
     });
     const opts = buildOpts(block, {
       width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(),
-      linearPaths: linearPaths as never,
+      defaultTrace: "Step", steppedPaths: steppedPaths as never,
     });
     const paths = (opts.series?.[1] as { paths: (u: unknown, si: number, i0: number, i1: number) => { clip?: unknown } }).paths;
     const out = paths({ data: [xs, ys], bbox: { width: 100.5 }, series: [{}, { scale: "y" }], scales: { y: { distr: 1 } } }, 1, 0, 0);
