@@ -388,6 +388,30 @@
     "NaN",
     "NaN"
    ]
+  },
+  {
+   "expr": "A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A+A",
+   "app": [
+    4000,
+    0,
+    -7000,
+    1000,
+    "NaN",
+    2500,
+    -1000
+   ]
+  },
+  {
+   "expr": "B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B - x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x",
+   "app": [
+    1.8739277038847965e+286,
+    4.149515568880993e+180,
+    0,
+    -149,
+    "Infinity",
+    "Infinity",
+    -6000
+   ]
   }
  ],
  "refused": [
@@ -411,6 +435,11 @@
   "rnd()",
   "interp(x, A, B)",
   "A and B",
-  "not A"
+  "not A",
+  "A\n+ 1",
+  "A +\r1",
+  "1e400 + A",
+  "Ａ + 1",
+  "٣ + A"
  ]
 }

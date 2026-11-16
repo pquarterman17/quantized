@@ -40,7 +40,10 @@ that fails fails the whole input (the app's batch keeps going and flags the
 row; headless, nothing half-done is written).
 
 Not recorded by the app and so not replayed: rows excluded or filtered in the
-app (every row is used) and error-column bindings set by hand.
+app (every row is used) and error-column roles changed by hand. The roles the
+app SEEDS on import (Origin designations, a parser's declaration, the label
+guess: ``io/error_seed.py``) are applied to every correction, as the app sends
+them, so a bound error column is scaled but never offset.
 """
 
 from __future__ import annotations
@@ -57,6 +60,8 @@ import numpy as np
 import quantized.api as qz
 from quantized.calc.column_formula import formula_problem
 from quantized.datastruct import DataStruct
+from quantized.io.error_seed import seed_error_roles
+from quantized.recipe_params import expectation_warnings, resample_params, sigop_params
 
 __all__ = [
     "Recipe",
@@ -73,7 +78,6 @@ STEP_KINDS = ("ui", "import", "expression", "correction", "reset", "fit", "trans
 _VIEW_ONLY = re.compile(
     r"^qz\.(setXScale|setYScale|setPlotTitle|setWaterfall|setShowGrid|setXKey|setYKeys|setGroupKey)\("
 )
-_RESAMPLE_MODES = ("n_points", "step", "range")
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,8 @@ class Recipe:
     outputs: tuple[str, ...] = ()
     description: str = ""
     revision: int | None = None
+    #: The recording input's layout (``lib/recipeExpect.ts``), when saved.
+    expects: Mapping[str, Any] | None = None
 
 
 @dataclass
@@ -124,6 +130,7 @@ def parse_recipe(text: str) -> Recipe:
         else (),
         description=str(doc.get("description") or "").strip(),
         revision=rev if isinstance(rev, int) and not isinstance(rev, bool) and rev > 0 else None,
+        expects=dict(doc["expects"]) if isinstance(doc.get("expects"), Mapping) else None,
     )
 
 
@@ -153,7 +160,7 @@ def _background_steps(recipe: Recipe) -> int:
     return sum(
         1
         for s in recipe.steps
-        if _enabled(s) and s["kind"] == "correction" and s["params"].get("bg")
+        if _enabled(s) and s["kind"] == "correction" and isinstance(s["params"].get("bg"), Mapping)
     )
 
 
@@ -170,6 +177,13 @@ def _step_problem(step: Mapping[str, Any]) -> str | None:
             return "a derived column (units / error propagation) is evaluated only in the app"
         problem = formula_problem(str(p["expr"]))
         return f"formula {p['expr']!r}: {problem}" if problem else None
+    if kind == "correction":
+        if not isinstance(p.get("params", {}), Mapping):
+            return "its correction parameters are malformed"
+        bg = p.get("bg")
+        if bg and not (isinstance(bg, Mapping) and isinstance(bg.get("interp", ""), str)):
+            return "its background reference is malformed"
+        return None
     if kind == "fit":
         if p.get("fitTemplate") is not None:
             return "a Curve Fit template step has no headless equivalent yet"
@@ -184,12 +198,15 @@ def _step_problem(step: Mapping[str, Any]) -> str | None:
         return None
     if kind == "transform":
         op = p.get("op")
-        if op == "resample":
-            return (
-                None if p.get("mode") in _RESAMPLE_MODES else "a resample onto another dataset's X"
-            )
-        if op == "sigop":
-            return None
+        try:
+            if op == "resample":
+                resample_params(p)
+                return None
+            if op == "sigop":
+                sigop_params(p)
+                return None
+        except ValueError as exc:
+            return str(exc)
         return f"the {op or 'unknown'} transform has no headless equivalent"
     return None
 
@@ -248,21 +265,10 @@ def _fit(data: DataStruct, p: Mapping[str, Any]) -> tuple[dict[str, Any], int]:
 
 def _transform(data: DataStruct, p: Mapping[str, Any]) -> tuple[DataStruct, list[str]]:
     if p["op"] == "resample":
-        res = qz.align_resample(
-            data,
-            mode=str(p["mode"]),
-            n_points=p.get("nPoints"),
-            step=p.get("step"),
-            start=p.get("start"),
-            stop=p.get("stop"),
-            method=str(p.get("method", "linear")),
-            out_of_range=str(p.get("outOfRange", "nan")),
-            unsorted="sort" if p.get("sortUnsorted") else "refuse",
-        )
+        res = qz.resample(data, **resample_params(p))
         return res.data, [str(w.get("text", "")) for w in res.warnings]
-    channels = p.get("channels") or []
-    args = p.get("args") or {}
-    sig = qz.run_signal_op(data, str(p.get("method", "")), list(channels), dict(args))
+    method, channels, args = sigop_params(p)
+    sig = qz.run_signal_op(data, method, channels, args)
     return sig.data, list(sig.warnings)
 
 
@@ -278,7 +284,11 @@ def run_recipe(
     if problems:
         raise ValueError("cannot run headless: " + "; ".join(problems))
     run = RecipeRun(data=data)
+    run.warnings.extend(f"input: {w}" for w in expectation_warnings(recipe.expects, data))
     raw = base = data
+    # The roles the app seeds on import and sends with every correction
+    # (io/error_seed.py); a transform's output gets none, as in the app.
+    roles = seed_error_roles(data)
     formulas: list[tuple[str, str]] = []
     bg_next = 0
     blocked = ""
@@ -310,17 +320,26 @@ def run_recipe(
                     run.warnings.append(f"{label}: computed; its error-bar binding is not applied")
             elif kind == "correction":
                 bg = None
-                if p.get("bg"):
+                if isinstance(p.get("bg"), Mapping):
                     bg, bg_next = backgrounds[bg_next], bg_next + 1
                 interp = str(p["bg"].get("interp", "linear")) if bg is not None else "linear"
                 base = qz.apply_corrections(
-                    raw, dict(p.get("params") or {}), bg_dataset=bg, bg_interp=interp
+                    raw,
+                    dict(p.get("params") or {}),
+                    bg_dataset=bg,
+                    bg_interp=interp,
+                    error_bindings=roles,
                 )
             elif kind == "reset":
                 base = raw
             elif kind == "fit":
                 fit, n_fit = _fit(run.data, p)
                 run.fits.append((label, fit))
+                if p.get("statsVersion") != 2:
+                    run.warnings.append(
+                        f"{label}: recorded with the legacy (v1) fit statistics; "
+                        "this uses the current ones"
+                    )
                 run.log.append(f"{label}: fit {n_fit} points, R2={fit.get('R2', math.nan):.6g}")
                 continue
             else:  # transform: a new dataset; its formula columns become plain values
@@ -328,6 +347,7 @@ def run_recipe(
                 run.warnings.extend(f"{label}: {w}" for w in warns if w)
                 raw = base = out
                 formulas = []
+                roles = None
             run.data = qz.add_formula_columns(base, formulas) if formulas else base
             run.log.append(f"{label}: ok")
         except (ValueError, KeyError, IndexError, TypeError) as exc:

@@ -168,7 +168,11 @@ def _struct(raw: Any, where: str, nulls: list[int], warnings: list[str]) -> Data
         if raw.get(key) is not None:
             payload[key] = raw[key]
     try:
-        return DataStruct.from_dict(payload)
+        ds = DataStruct.from_dict(payload)
+        for key, kept in (("cat_levels", ds.cat_levels), ("level_order", ds.level_order)):
+            if key in payload and kept is None:
+                warnings.append(f"{where}: its {key} was not readable and was dropped")
+        return ds
     except ValueError as exc:
         # A damaged level table: the app repairs it (sanitizeDataStruct); keep
         # the numbers, drop the table, and say so.
@@ -266,7 +270,7 @@ def parse_workspace(text: str, *, base_dir: str | Path | None = None) -> Workspa
     ``ValueError``) for an unknown version."""
     try:
         doc = json.loads(text)
-    except (json.JSONDecodeError, ValueError) as exc:
+    except (json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise ValueError("not a valid workspace file (bad JSON)") from exc
     if not isinstance(doc, Mapping) or doc.get("format") != WORKSPACE_FORMAT:
         raise ValueError("not a quantized workspace (.dwk) file")

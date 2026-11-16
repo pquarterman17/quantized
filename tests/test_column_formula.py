@@ -100,6 +100,11 @@ def test_javascript_arity_and_failed_rows_are_nan() -> None:
     assert np.isnan(evaluate_formula(d, "floor(x, 0.5)")).all()
 
 
+def test_long_chains_evaluate_iteratively() -> None:
+    d = _ds()
+    np.testing.assert_array_equal(evaluate_formula(d, "+".join(["A"] * 3000)), d.column(0) * 3000)
+
+
 def test_length_and_nesting_limits_refuse_not_crash() -> None:
     assert formula_problem("1+" * 4999 + "1") is None
     assert "longer than 10000" in str(formula_problem("1+" * 5000 + "1"))

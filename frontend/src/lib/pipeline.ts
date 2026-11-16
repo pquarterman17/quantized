@@ -7,6 +7,8 @@
 
 import { compileFormula } from "./formula";
 import { headlessFormulaProblem } from "./formulaHeadless";
+import { resampleParamsOf } from "./transformResample";
+import { sigopParamsOf } from "./transformSigop";
 import { channelIndexOf } from "./formulaRename";
 import { makeStep, type PipelineStep, type StepKind } from "./pipelineStep";
 
@@ -106,8 +108,10 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 // Step mapping (`params` as the recorders store them):
 //   import      -> qz.load(path) — for an Origin project too: it returns the
 //                  primary book, the one the app activates after the import
-//   correction  -> qz.apply_corrections(raw, params) — the app always corrects
-//                  the dataset's UNcorrected base, so the script does too; a
+//   correction  -> qz.apply_corrections(raw, params, error_bindings=roles) —
+//                  the app always corrects the dataset's UNcorrected base,
+//                  with the error-column roles it seeded on import
+//                  (qz.seed_error_roles), so the script does too; a
 //                  background subtraction loads the background from a file
 //                  the script asks for (--background, one per such step)
 //   reset       -> back to that base
@@ -115,7 +119,7 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
 //                  is in the headless subset (lib/formulaHeadless.ts); like
 //                  the app, every formula column is recomputed on top of the
 //                  base after each correction / reset
-//   transform   -> resample (n points / step / range) via qz.align_resample,
+//   transform   -> resample (n points / step / range) via qz.resample,
 //                  and the signal / Reduce XY operations via qz.run_signal_op;
 //                  the output is the new dataset later steps work on
 //   fit         -> qz.fit_model(model, x, y) on the recorded channels and range,
@@ -270,27 +274,39 @@ function expressionLines(step: PipelineStep, g: Gen): Emit {
   return { lines, changesData: true };
 }
 
-const RESAMPLE_KEYS: Record<string, string> = { nPoints: "n_points", step: "step", start: "start", stop: "stop" };
+/** The transform's call, from params validated by the app's OWN replay
+ *  validators (what a replay would send), or why it is not reproduced. */
+function transformCall(p: Record<string, unknown>): string | { unmapped: string } {
+  try {
+    if (p.op === "sigop") {
+      const s = sigopParamsOf(p);
+      return `qz.run_signal_op(data, ${py(s.method)}, ${py(s.channels)}, ${py(s.args)}).data`;
+    }
+    if (p.op === "resample" && p.mode !== "match") {
+      const r = resampleParamsOf(p);
+      const grid = r.mode === "n_points" ? `, n_points=${py(r.nPoints)}` : r.mode === "step" ? `, step=${py(r.step)}` : `, start=${py(r.start)}, stop=${py(r.stop)}, step=${py(r.step)}`;
+      return `qz.resample(data, mode=${py(r.mode)}${grid}, method=${py(r.method)}, out_of_range=${py(r.outOfRange)}, unsorted=${py(r.sortUnsorted ? "sort" : "refuse")}).data`;
+    }
+  } catch (e) {
+    return { unmapped: `its recorded settings are invalid (${e instanceof Error ? e.message : "error"})` };
+  }
+  const what = p.op === "resample" ? "a resample onto another dataset's x" : `the ${String(p.op ?? "transform")} transform`;
+  return { unmapped: `${what} has no quantized.api equivalent` };
+}
 
 function transformLines(p: Record<string, unknown>, g: Gen): Emit {
-  let call: string;
-  if (p.op === "sigop") {
-    call = `qz.run_signal_op(data, ${py(String(p.method ?? ""))}, ${py(p.channels ?? [])}, ${py(p.args ?? {})}).data`;
-  } else if (p.op === "resample" && ["n_points", "step", "range"].includes(String(p.mode))) {
-    const grid = Object.entries(RESAMPLE_KEYS).filter(([k]) => typeof p[k] === "number").map(([k, kw]) => `, ${kw}=${py(p[k])}`).join("");
-    const opts = `, method=${py(String(p.method ?? "linear"))}, out_of_range=${py(String(p.outOfRange ?? "nan"))}, unsorted=${py(p.sortUnsorted ? "sort" : "refuse")}`;
-    call = `qz.align_resample(data, mode=${py(String(p.mode))}${grid}${opts}).data`;
-  } else {
-    const what = p.op === "resample" ? "a resample onto another dataset's x" : `the ${String(p.op ?? "transform")} transform`;
-    return { lines: [], changesData: true, unmapped: `${what} has no quantized.api equivalent` };
-  }
+  const call = transformCall(p);
+  if (typeof call !== "string") return { lines: [], changesData: true, unmapped: call.unmapped };
   const reset = g.formulas.length ? [`${I}formulas = []  # the new dataset holds them as plain values`] : [];
   g.formulas = [];
-  return { lines: [ROWS_NOTE, `${I}data = ${call}`, `${I}raw = data  # a new dataset: its own base`, ...reset], changesData: true };
+  return {
+    lines: [ROWS_NOTE, `${I}data = ${call}`, `${I}raw = data  # a new dataset: its own base`, `${I}roles = None  # with no error-column roles, as in the app`, ...reset],
+    changesData: true,
+  };
 }
 
 function correctionLines(p: Record<string, unknown>, g: Gen): Emit {
-  const lines = [comment("Error-column bindings set in the app are not recorded; pass error_bindings=[...] to match them.")];
+  const lines = [comment("Error-column roles changed by hand in the app are not recorded; this uses the roles seeded on import.")];
   let bg = "";
   const ref = p.bg as { interp?: unknown } | null | undefined;
   if (ref) {
@@ -301,7 +317,7 @@ function correctionLines(p: Record<string, unknown>, g: Gen): Emit {
     bg = `, bg_dataset=background, bg_interp=${py(String(ref.interp ?? "linear"))}`;
     g.backgrounds++;
   }
-  return { lines: [...lines, ...rebase(`qz.apply_corrections(raw, ${py(p.params ?? {})}${bg})`, g)], changesData: true };
+  return { lines: [...lines, ...rebase(`qz.apply_corrections(raw, ${py(p.params ?? {})}${bg}, error_bindings=roles)`, g)], changesData: true };
 }
 
 function stepLines(step: PipelineStep, n: number, inputIndex: number, g: Gen): Emit {
@@ -318,7 +334,7 @@ function stepLines(step: PipelineStep, n: number, inputIndex: number, g: Gen): E
       const reset = g.formulas.length ? [`${I}formulas = []`] : [];
       g.formulas = [];
       return {
-        lines: [`${I}data = qz.load(args.inputs[${inputIndex}])`, `${I}raw = data  # the uncorrected base that corrections start from`, ...reset],
+        lines: [`${I}data = qz.load(args.inputs[${inputIndex}])`, `${I}raw = data  # the uncorrected base that corrections start from`, `${I}roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import`, ...reset],
         changesData: true,
       };
     }
@@ -346,6 +362,7 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
   const inputs: string[] = [];
   const body: string[] = [];
   let stoppedAt = 0;
+  let stopWhy = "which this script cannot reproduce";
   let loaded = false;
   const gen: Gen = { formulas: [], backgrounds: 0 };
   steps.forEach((step, i) => {
@@ -355,18 +372,21 @@ export function pipelineToPython(steps: readonly PipelineStep[]): string {
       body.push(comment("(turned off in the pipeline; not run)"), ...appLine(step));
       // As the app's Run pipeline: every later step was recorded on this
       // transform's output, which does not exist (executeSteps' blockedBy).
-      if (step.kind === "transform" && !stoppedAt) stoppedAt = n;
+      if (step.kind === "transform" && !stoppedAt) {
+        stoppedAt = n;
+        stopWhy = "a turned-off transform: the steps after it were recorded on its output";
+      }
       return;
     }
     if (stoppedAt) {
-      body.push(comment(`not run: it follows step ${stoppedAt}, which this script cannot reproduce`), ...appLine(step));
+      body.push(comment(`not run: it follows step ${stoppedAt}, ${stopWhy}`), ...appLine(step));
       return;
     }
     if (step.kind !== "import" && step.kind !== "ui" && !loaded) {
       // The pipeline started on a dataset that was already open: load it from
       // the first input given on the command line.
       inputs.push("");
-      body.push(comment("The pipeline ran on a dataset that was already open; load its file:"), `${I}data = qz.load(args.inputs[0])`, `${I}raw = data`);
+      body.push(comment("The pipeline ran on a dataset that was already open; load its file:"), `${I}data = qz.load(args.inputs[0])`, `${I}raw = data`, `${I}roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import`);
       loaded = true;
     }
     const out = stepLines(step, n, inputs.length, gen);

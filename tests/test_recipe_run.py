@@ -39,7 +39,11 @@ def _recipe(*steps: dict[str, Any], outputs: list[str] | None = None) -> str:
     )
 
 
-FIT = _step("fit", "Fit Gaussian", {"model": "Gaussian", "yKey": 0, "xKey": None, "p0": None})
+FIT = _step(
+    "fit",
+    "Fit Gaussian",
+    {"model": "Gaussian", "yKey": 0, "xKey": None, "p0": None, "statsVersion": 2},
+)
 
 
 def _peak(path: Path, centre: float) -> None:
@@ -171,9 +175,66 @@ def test_qz_run_writes_data_summary_figures_and_report(tmp_path: Path) -> None:
     summary = qz.load(out / "Peak summary.csv")
     np.testing.assert_allclose(summary.column(1)[:2], [4.0, 6.0], atol=1e-6)
     assert math.isnan(summary.column(1)[2])
-    # Nothing is overwritten without --overwrite.
-    assert run_command(args) == 1
+    assert report["inputs"][2]["outputs"] == []  # nothing listed for a failed input
+    assert not list(out.glob("broken*"))
+    # Nothing is overwritten without --overwrite: refused up front, nothing touched.
+    before = (out / "run-report.json").read_text("utf-8")
+    assert run_command(args) == 2
+    assert (out / "run-report.json").read_text("utf-8") == before
     assert run_command([*args, "--overwrite"]) == 1  # still only broken.csv
+
+
+def test_qz_run_never_reads_its_own_earlier_outputs(tmp_path: Path) -> None:
+    _peak(tmp_path / "a.csv", 4.0)
+    (tmp_path / "r.json").write_text(_recipe(FIT, outputs=["A"]), "utf-8")
+    args = [str(tmp_path / "r.json"), str(tmp_path / "*.csv"), "--out", str(tmp_path)]
+    assert run_command(args) == 0
+    assert (tmp_path / "a - Peak.csv").exists() and (tmp_path / "Peak summary.csv").exists()
+    assert run_command([*args, "--overwrite"]) == 0
+    report = json.loads((tmp_path / "run-report.json").read_text("utf-8"))
+    assert [Path(e["input"]).name for e in report["inputs"]] == ["a.csv"]
+    assert {Path(p).name for p in report["skipped_previous_outputs"]} == {
+        "a - Peak.csv",
+        "Peak summary.csv",
+    }
+
+
+def test_qz_run_reports_an_unwritable_out_cleanly(tmp_path: Path) -> None:
+    _peak(tmp_path / "a.csv", 4.0)
+    (tmp_path / "r.json").write_text(_recipe(FIT), "utf-8")
+    (tmp_path / "file").write_text("x", "utf-8")
+    out = tmp_path / "file" / "sub"  # a file where a folder must go
+    assert run_command([str(tmp_path / "r.json"), str(tmp_path / "a.csv"), "--out", str(out)]) == 2
+
+
+def test_recorded_transform_settings_are_validated_as_the_app_does() -> None:
+    bad = [
+        _step("transform", "R", {"op": "resample", "mode": "n_points", "nPoints": 1}),
+        _step("transform", "R", {"op": "resample", "mode": "step", "method": "cubic", "step": 1}),
+        _step("transform", "S", {"op": "sigop", "method": "warp", "channels": [0]}),
+        _step("transform", "S", {"op": "sigop", "method": "median", "channels": ["a"]}),
+        _step("correction", "C", {"params": {}, "bg": "ds-2"}),
+    ]
+    probs = recipe_problems(parse_recipe(_recipe(*bad)))
+    assert [p.split(" (")[0] for p in probs] == [f"step {n}" for n in range(1, 6)]
+    ok = _step("transform", "R", {"op": "resample", "mode": "step", "step": 0.5, "nPoints": 3})
+    run = run_recipe(
+        parse_recipe(_recipe(ok)), qz.DataStruct.create([0.0, 1.0, 2.0], [1.0, 2.0, 3.0])
+    )
+    assert run.data.n_points == 5  # the step grid; the stray nPoints is ignored, as in the app
+
+
+def test_input_layout_and_legacy_statistics_are_reported() -> None:
+    expects = {"columns": [{"name": "Moment", "unit": "emu", "required": True}]}
+    legacy = _step("fit", "Fit", {"model": "Linear", "yKey": 0, "p0": None})
+    doc = json.loads(_recipe(legacy))
+    doc["expects"] = expects
+    run = run_recipe(
+        parse_recipe(json.dumps(doc)),
+        qz.DataStruct.create([0.0, 1.0, 2.0], [1.0, 2.0, 3.5], labels=["Field"]),
+    )
+    assert any('column 1 is "Field"' in w for w in run.warnings)
+    assert any("legacy (v1) fit statistics" in w for w in run.warnings)
 
 
 def test_qz_run_dwk_project_reads_back(tmp_path: Path) -> None:

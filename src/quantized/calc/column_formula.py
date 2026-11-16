@@ -30,6 +30,7 @@ the sibling of ``calc/axis_expr.py`` for one variable.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 
@@ -52,9 +53,11 @@ Fn = Callable[[Env], Vec]
 Tok = tuple[str, str | float]
 
 MAX_LEN = 10000  # lib/formulaHeadless.ts refuses the same
+# ASCII only, and only space / tab between tokens: lib/formulaTokenize.ts.
 _TOKEN = re.compile(
-    r"\s*(?:(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)"
-    r"|(?:(?:np|numpy|math)\.)?([A-Za-z_]\w*)|(\*\*|//|[-+*/%^(),]))"
+    r"[ \t]*(?:([0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?|\.[0-9]+(?:[eE][+-]?[0-9]+)?)"
+    r"|(?:(?:np|numpy|math)\.)?([A-Za-z_][A-Za-z0-9_]*)|(\*\*|//|[-+*/%^(),]))",
+    re.ASCII,
 )
 _REFUSED_CHARS = {
     "<": "comparisons",
@@ -85,7 +88,7 @@ def channel_letter(i: int) -> str:
 def channel_index(letter: str) -> int | None:
     """``A`` -> 0, ``AA`` -> 26; ``None`` for anything that is not a letter
     reference (``lib/formulaRename.ts`` ``channelIndexOf``)."""
-    if not re.fullmatch(r"[A-Z]+", letter):
+    if not re.fullmatch(r"[A-Z]+", letter, re.ASCII):
         return None
     n = 0
     for ch in letter:
@@ -215,18 +218,21 @@ def _tokens(src: str) -> list[Tok]:
         raise ValueError(f"longer than {MAX_LEN} characters")
     out: list[Tok] = []
     pos = 0
-    text = src.rstrip()
+    text = src.rstrip(" \t")
     while pos < len(text):
         m = _TOKEN.match(text, pos)
         if not m:
-            ch = text[pos:].lstrip()[:1]
+            ch = text[pos:].lstrip(" \t")[:1]
             what = _REFUSED_CHARS.get(ch)
             if what:
                 raise ValueError(f"{what} is evaluated only in the app")
             raise ValueError(f'unexpected character "{ch}"')
         pos = m.end()
         if m.group(1) is not None:
-            out.append(("num", float(m.group(1))))
+            num = float(m.group(1))
+            if not math.isfinite(num):  # the app's "bad number" (1e400)
+                raise ValueError(f'bad number "{m.group(1)}"')
+            out.append(("num", num))
         elif m.group(2) is not None:
             out.append(("name", m.group(2)))
         else:
@@ -234,21 +240,32 @@ def _tokens(src: str) -> list[Tok]:
     return out
 
 
-def _arith_op(op: str, a: Fn, b: Fn) -> Fn:
+def _binop(op: str, left: Vec, right: Vec) -> Vec:
+    with np.errstate(all="ignore"):
+        if op == "+":
+            return np.asarray(left + right, dtype=float)
+        if op == "-":
+            return np.asarray(left - right, dtype=float)
+        if op == "*":
+            return np.asarray(left * right, dtype=float)
+        if op == "/":
+            return _div(left, right)
+        if op == "//":
+            return np.asarray(np.floor(_div(left, right)), dtype=float)
+        return np.asarray(np.fmod(left, right), dtype=float)
+
+
+def _chain(first: Fn, rest: list[tuple[str, Fn]]) -> Fn:
+    """A left-associative ``a op b op c ...`` evaluated ITERATIVELY, so a
+    long chain (``A+A+...``, 1000 terms) never nests 1000 closures deep."""
+    if not rest:
+        return first
+
     def run(env: Env) -> Vec:
-        left, right = a(env), b(env)
-        with np.errstate(all="ignore"):
-            if op == "+":
-                return np.asarray(left + right, dtype=float)
-            if op == "-":
-                return np.asarray(left - right, dtype=float)
-            if op == "*":
-                return np.asarray(left * right, dtype=float)
-            if op == "/":
-                return _div(left, right)
-            if op == "//":
-                return np.asarray(np.floor(_div(left, right)), dtype=float)
-            return np.asarray(np.fmod(left, right), dtype=float)
+        acc = first(env)
+        for op, fn in rest:
+            acc = _binop(op, acc, fn(env))
+        return acc
 
     return run
 
@@ -281,16 +298,20 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
             raise ValueError(f'expected "{op}"')
 
     def arith() -> Fn:
-        left = term()
+        first = term()
+        rest: list[tuple[str, Fn]] = []
         while is_op("+", "-"):
-            left = _arith_op(str(eat()[1]), left, term())
-        return left
+            op = str(eat()[1])
+            rest.append((op, term()))
+        return _chain(first, rest)
 
     def term() -> Fn:
-        left = power()
+        first = power()
+        rest: list[tuple[str, Fn]] = []
         while is_op("*", "/", "%", "//"):
-            left = _arith_op(str(eat()[1]), left, power())
-        return left
+            op = str(eat()[1])
+            rest.append((op, power()))
+        return _chain(first, rest)
 
     def power() -> Fn:  # `^`: right-assoc, looser than a unary sign
         base = unary()
@@ -401,7 +422,10 @@ def _evaluate(env: Mapping[str, Vec], n_points: int, n_channels: int, expr: str)
     for name in refs:
         if name not in env:
             raise ValueError(f'unknown variable "{name}": the data has {n_channels} columns')
-    out = np.asarray(fn(env), dtype=float)
+    try:
+        out = np.asarray(fn(env), dtype=float)
+    except RecursionError as exc:  # pathological nesting: refused, never a crash
+        raise ValueError("nested too deeply") from exc
     return np.asarray(np.broadcast_to(out, (n_points,)), dtype=float).copy()
 
 

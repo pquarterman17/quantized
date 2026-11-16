@@ -20,8 +20,8 @@ qz run subtract.json sample.csv --background empty_cell.csv --out out/
 | `--out DIR` | Output folder (created). Required. |
 | `--format csv\|xlsx\|dwk` | The processed data: one `<input> - <recipe>.csv` / `.xlsx` per input, or ONE `<recipe>.dwk` project with every processed dataset (and the summary sheet) to open in the app. Default `csv`. |
 | `--figures pdf\|svg\|png` | Also write one figure per input (X against every channel), rendered by the server's own exporter. |
-| `--background FILE` | The background a background-subtraction step subtracts, read as loaded. |
-| `--overwrite` | Replace outputs that already exist. Inputs are never written. |
+| `--background FILE` | The background a background-subtraction step subtracts, read as loaded. Give it once per such step, in step order. |
+| `--overwrite` | Replace outputs that already exist. Inputs are never written. Every output is checked before any input is read; one that would be refused stops the run with nothing written. Files an earlier run of the recipe wrote into `--out` are never taken as inputs. |
 
 When the template declares outputs (the fit parameters a template batch puts in
 its summary sheet), `qz run` writes `<recipe> summary.csv`: one row per input,
@@ -57,7 +57,10 @@ none in the API yet (stack, unstack, transpose, split, signal recipes, SIMS).
 A step that fails on one input fails that input, never the batch.
 
 Not recorded by the app, so not replayed: rows excluded or filtered in the app
-(every row is used) and error-column bindings set by hand.
+(every row is used) and error-column roles changed by hand. The roles the app
+seeds on import -- Origin designations, a parser's declaration, then the label
+guess (`M` / `M_err`) -- ARE applied (`qz.seed_error_roles`), so a correction
+offsets the values but not their bound error column, as in the app.
 
 ### The formula subset
 
@@ -84,21 +87,25 @@ sweep = ws.dataset("sweep.dat").data          # a DataStruct, as the app shows i
 
 Each dataset carries `data` (corrected, computed columns included), `raw` (the
 uncorrected base), `formulas`, `corrections`, `folder_path`, `source_path`,
-`notes` and `tags`; the workspace carries the active dataset, the recorded
+`notes` and `tags`, and `sampled` (True when the rows were saved as a preview
+sample, before the file was read in full); the workspace carries the active dataset, the recorded
 `pipeline` and `warnings`. A project saved by a NEWER Quantized is refused with
 `WorkspaceVersionError`, naming both versions, rather than half-read.
-`QuantizedClient.read_project(path)` is the same call on the client.
+`QuantizedClient.read_workspace(path)` is the same call on the client (it
+reads the file; no request).
 
 ## The data operations, from code
 
-`quantized.api` exposes the app's own data operations: `smooth_data`,
-`derivative`, `log_derivative`, `cumulative_integral`, `normalize`,
-`resample_data`, `align_resample`, `run_signal_op` (and `median_filter`,
-`despike`, `lowess`, `hilbert_envelope`), Reduce XY (`bin_average`,
-`average_duplicates`, `keep_every_nth`), `dataset_algebra`, `average_curves`,
-and the formula columns `evaluate_formula` / `add_formula_columns`. They are the
-same functions the app's server calls (the smoothing, derivative, normalize and
-resample ports are golden-tested against MATLAB).
+`quantized.api` exposes the app's own data operations, each taking a
+DataStruct first and its options by keyword (`channels=` picks columns;
+categorical columns are never transformed): `smooth`, `derivative`,
+`log_derivative`, `cumulative_integral`, `normalize`, `resample` (the app's
+Resample transform; `.data` plus `.warnings`), `run_signal_op` and the filters
+`median_filter`, `despike`, `lowess`, `hilbert_envelope`, Reduce XY
+(`bin_average`, `average_duplicates`, `keep_every_nth`), `dataset_algebra`,
+`average_curves`, the formula columns `evaluate_formula` / `add_formula_columns`,
+and `seed_error_roles`. The maths is the app's own (smoothing, derivative,
+normalize and resample are golden-tested against MATLAB).
 
 ## Export a recorded pipeline as a script
 

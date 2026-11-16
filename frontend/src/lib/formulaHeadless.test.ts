@@ -64,6 +64,9 @@ const CASES = [
   // JavaScript arity: extra arguments ignored, a missing one gives NaN.
   "sin(A, B) + cos(x, 1, 2)",
   "atan2(A) + pow(B) + floor() + sqrt()",
+  // A long chain evaluates without deep recursion on either side.
+  Array.from({ length: 1000 }, () => "A").join("+"),
+  Array.from({ length: 600 }, () => "B").join("*") + " - " + Array.from({ length: 600 }, () => "x").join("-"),
 ];
 
 const REFUSED = [
@@ -88,6 +91,12 @@ const REFUSED = [
   "interp(x, A, B)",
   "A and B",
   "not A",
+  // The app's tokenizer: ASCII only, space/tab between tokens, finite numbers.
+  "A\n+ 1",
+  "A +\r1",
+  "1e400 + A",
+  "\uff21 + 1",
+  "\u0663 + A",
 ];
 
 const wire = (v: number): number | string =>
