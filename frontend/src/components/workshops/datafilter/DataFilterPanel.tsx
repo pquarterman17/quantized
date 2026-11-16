@@ -71,7 +71,7 @@ export default function DataFilterPanel() {
   return (
     <ToolWindow id="datafilter" title="Data Filter" width={340} onClose={() => setOpen(false)}>
       {!f.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to filter.
         </div>
       ) : (

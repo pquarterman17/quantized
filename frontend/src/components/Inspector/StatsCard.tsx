@@ -51,7 +51,7 @@ export default function StatsCard({ active }: { active: Dataset | null }) {
       {active && error && <MetaRow label="—" value="unavailable offline" />}
       {active && !error && (
         <>
-          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginBottom: 4 }}>
+          <div className="qzk-helptext" style={{ color: "var(--text-faint)", marginBottom: 4 }}>
             Summary of the first channel's values.
           </div>
           <MetaRow label="Channel" value={channel} title={channel} />

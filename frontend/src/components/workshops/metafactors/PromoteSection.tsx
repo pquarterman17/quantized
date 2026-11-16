@@ -11,9 +11,9 @@ const gap = { marginTop: 8 };
 const faint = { marginTop: 4, color: "var(--text-faint)" };
 
 export default function PromoteSection({ m }: { m: MetaFactorsState }) {
-  if (!m.picked.length) return <div className="qzk-ds-meta" style={{ ...gap, ...faint }}>Tick at least one dataset.</div>;
+  if (!m.picked.length) return <div className="qzk-helptext" style={{ ...gap, ...faint }}>Tick at least one dataset.</div>;
   if (!m.keys.length || !m.key) {
-    return <div className="qzk-ds-meta" style={{ ...gap, ...faint }}>The picked datasets carry no single-value metadata fields.</div>;
+    return <div className="qzk-helptext" style={{ ...gap, ...faint }}>The picked datasets carry no single-value metadata fields.</div>;
   }
   const plan = m.plan;
   return (
@@ -80,7 +80,7 @@ export default function PromoteSection({ m }: { m: MetaFactorsState }) {
       >
         {m.busy ? "Adding…" : "Add factor column"}
       </Button>
-      <div className="qzk-ds-meta" style={faint}>
+      <div className="qzk-helptext" style={faint}>
         A computed column after the existing ones; Ctrl+Z undoes it, and it is recorded as a pipeline step.
       </div>
     </>

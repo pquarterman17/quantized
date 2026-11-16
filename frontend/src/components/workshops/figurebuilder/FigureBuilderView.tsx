@@ -81,7 +81,7 @@ export default function FigureBuilderView() {
   return (
     <ToolWindow id={WINDOW_ID} title={title} width={defaultWidth()} onClose={onClose}>
       {!f.data && !canonicalFailure ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to preview a figure.
         </div>
       ) : (

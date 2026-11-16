@@ -42,7 +42,7 @@ export default function SavedRoisCard({ roi }: { roi: RoiCutsState }) {
       </div>
 
       {roi.savedRois.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ marginTop: 8 }}>
+        <div className="qzk-helptext" style={{ marginTop: 8 }}>
           No saved ROIs yet.
         </div>
       ) : (

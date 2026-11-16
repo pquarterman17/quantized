@@ -98,7 +98,7 @@ export default function ResamplePreviewPlot({
     [source, result, channel],
   );
   if (!src.length && !out.length) {
-    return <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Nothing to plot in this column.</div>;
+    return <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Nothing to plot in this column.</div>;
   }
   // x spans the resampled grid too (its full range, not just the decimated
   // points), so a blank (out-of-range) target still widens the axis and the

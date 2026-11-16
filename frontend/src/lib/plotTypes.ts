@@ -18,6 +18,7 @@
 //                                          draws; `figureDialogActions` routes)
 
 import { seriesModePatch, type SeriesMode } from "./seriesMode";
+import * as GLYPHS from "./glyphs";
 import { canRenderMap, MAP_GATE_CHECKING, mapGateResolved } from "./mapdata";
 import type { PlotView } from "./plotview";
 import type { Dataset, SeriesStyle } from "./types";
@@ -37,21 +38,21 @@ export interface PlotTypeDef {
 }
 
 export const PLOT_TYPES: readonly PlotTypeDef[] = [
-  { id: "line", label: "Line", glyph: "╱", description: "Connected lines through every point." },
-  { id: "scatter", label: "Scatter", glyph: "∴", description: "Markers only, no connecting line." },
-  { id: "lineSymbol", label: "Line + Symbol", glyph: "⟋", description: "Connected lines with a marker at each point." },
-  { id: "area", label: "Area", glyph: "◢", description: "Lines filled down to zero." },
-  { id: "column", label: "Column / Bar", glyph: "▥", description: "One bar per category (the X column's levels), side by side per series." },
-  { id: "stackedColumn", label: "Stacked Column", glyph: "▤", description: "Bars stacked per category, one segment per series." },
-  { id: "box", label: "Box", glyph: "◫", description: "Box-and-whisker per category." },
-  { id: "histogram", label: "Histogram", glyph: "▇", description: "Distribution of one column's values." },
-  { id: "contour", label: "Contour / Heatmap", glyph: "◎", description: "Colour map with contour lines from X/Y/Z columns." },
-  { id: "violin", label: "Violin", glyph: "◇", description: "Distribution shape per category, mirrored." },
-  { id: "doubleY", label: "Double-Y", glyph: "⇵", description: "The last plotted column on a second Y axis at the right." },
-  { id: "polar", label: "Polar", glyph: "◴", description: "Angle (X, degrees) against radius (Y)." },
-  { id: "waterfall", label: "Waterfall", glyph: "≋", description: "Curves offset vertically so overlapping traces separate." },
-  { id: "stacked", label: "Stacked panels", glyph: "☰", description: "Each curve in its own panel, sharing one X axis." },
-  { id: "ternary", label: "Ternary", glyph: "△", description: "Three composition columns on a triangle." },
+  { id: "line", label: "Line", glyph: GLYPHS.plotLine, description: "Connected lines through every point." },
+  { id: "scatter", label: "Scatter", glyph: GLYPHS.plotScatter, description: "Markers only, no connecting line." },
+  { id: "lineSymbol", label: "Line + Symbol", glyph: GLYPHS.plotLineSymbol, description: "Connected lines with a marker at each point." },
+  { id: "area", label: "Area", glyph: GLYPHS.plotArea, description: "Lines filled down to zero." },
+  { id: "column", label: "Column / Bar", glyph: GLYPHS.plotColumn, description: "One bar per category (the X column's levels), side by side per series." },
+  { id: "stackedColumn", label: "Stacked Column", glyph: GLYPHS.plotStackedColumn, description: "Bars stacked per category, one segment per series." },
+  { id: "box", label: "Box", glyph: GLYPHS.plotBox, description: "Box-and-whisker per category." },
+  { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
+  { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Colour map with contour lines from X/Y/Z columns." },
+  { id: "violin", label: "Violin", glyph: GLYPHS.plotViolin, description: "Distribution shape per category, mirrored." },
+  { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The last plotted column on a second Y axis at the right." },
+  { id: "polar", label: "Polar", glyph: GLYPHS.plotPolar, description: "Angle (X, degrees) against radius (Y)." },
+  { id: "waterfall", label: "Waterfall", glyph: GLYPHS.plotWaterfall, description: "Curves offset vertically so overlapping traces separate." },
+  { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
+  { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
 ];
 
 /** Types that open an existing tool rather than restyle the graph. */

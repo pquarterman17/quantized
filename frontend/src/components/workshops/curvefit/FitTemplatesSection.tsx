@@ -113,7 +113,7 @@ export default function FitTemplatesSection({ current, apply }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
           No fit templates yet.
         </div>
       )}

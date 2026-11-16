@@ -126,7 +126,7 @@ export default function BondAngleCard({
           =
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Enter fractional coordinates as x y z (decimals or simple fractions like 1/3). Nearest-image mode applies
         lattice translations; the result reports those image shifts and flags a genuinely ambiguous (equidistant)
         image.

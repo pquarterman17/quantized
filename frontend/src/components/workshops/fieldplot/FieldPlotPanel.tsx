@@ -31,7 +31,7 @@ export default function FieldPlotPanel() {
   return (
     <ToolWindow id="fieldplot" title="Vector field" width={600} onClose={() => setOpen(false)}>
       {!f.hasData ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset with X, Y, U and V columns.
         </div>
       ) : (

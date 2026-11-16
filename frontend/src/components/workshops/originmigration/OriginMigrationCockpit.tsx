@@ -226,7 +226,7 @@ export default function OriginMigrationCockpit({
       {projects.length > 1 && (
         <label className="qzk-origin-migration-project">
           <span>Imported project</span>
-          <select className="qz-input" value={selected.fidelity.id} onChange={(event) => setSelectedId(event.target.value)}>
+          <select className="qz-select" value={selected.fidelity.id} onChange={(event) => setSelectedId(event.target.value)}>
             {projects.map((project) => (
               <option key={project.fidelity.id} value={project.fidelity.id}>{project.fidelity.stem}</option>
             ))}

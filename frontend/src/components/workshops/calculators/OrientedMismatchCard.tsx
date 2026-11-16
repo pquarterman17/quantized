@@ -134,7 +134,7 @@ export default function OrientedMismatchCard() {
           Compare
         </Button>
       </div>
-      <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+      <div className="qzk-helptext" style={{ marginTop: 6 }}>
         Compare: the two reduced in-plane lattices, centering included, with their axes aligned. A
         rotated or supercell match (e.g. GaN on c-plane sapphire, √3×√3 R30°) needs the search below.
       </div>

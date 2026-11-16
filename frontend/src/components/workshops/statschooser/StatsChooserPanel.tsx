@@ -23,7 +23,7 @@ export default function StatsChooserPanel() {
   return (
     <ToolWindow id="statschooser" title="Test chooser" width={400} onClose={() => setOpen(false)}>
       {!c.active ? (
-        <div className="qzk-ds-meta" style={faint}>
+        <div className="qzk-helptext" style={faint}>
           Select a dataset to analyze.
         </div>
       ) : (

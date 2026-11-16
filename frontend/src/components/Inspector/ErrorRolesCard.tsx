@@ -104,7 +104,7 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
     >
       <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
       {roles.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           No error columns bound. Detect them from the column names, or pair one
           per series in Channels.
         </div>

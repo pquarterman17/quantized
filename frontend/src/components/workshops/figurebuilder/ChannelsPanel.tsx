@@ -72,7 +72,7 @@ export default function ChannelsPanel({
         />
       </span>
       {labels.length === 0 ? (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           No data columns to assign.
         </div>
       ) : (

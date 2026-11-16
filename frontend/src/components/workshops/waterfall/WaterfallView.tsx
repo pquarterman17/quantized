@@ -69,7 +69,7 @@ export default function WaterfallView() {
   return (
     <ToolWindow id="waterfall" title="Waterfall" x={140} y={80} width={460} onClose={() => close(false)}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="qzk-ds-meta">
+        <div className="qzk-helptext">
           Stack one channel across datasets. Defaults to your selection; tick rows to include.
         </div>
 
@@ -92,7 +92,7 @@ export default function WaterfallView() {
           <label className="qzk-field">
             <span>Channel</span>
             <select
-              className="qz-input"
+              className="qz-select"
               value={w.channel}
               onChange={(e) => w.setChannel(e.target.value)}
               disabled={w.channels.length === 0}
@@ -108,7 +108,7 @@ export default function WaterfallView() {
           <label className="qzk-field">
             <span>Offset</span>
             <select
-              className="qz-input"
+              className="qz-select"
               value={w.mode}
               onChange={(e) => w.setMode(e.target.value as "add" | "mul")}
             >

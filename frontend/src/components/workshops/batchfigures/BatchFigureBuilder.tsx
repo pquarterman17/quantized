@@ -265,7 +265,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
 
   return (
     <ToolWindow id="batch-figure-builder" title="Batch Figure Builder" width={780} x={180} y={80} onClose={onClose}>
-      <div className="qzk-ds-meta">
+      <div className="qzk-helptext">
         Repeat one Plot Recipe across several datasets. Quantized checks every mapping first; incompatible datasets are never silently dropped.
       </div>
 
@@ -326,7 +326,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
           </Checkbox>
           );
         })}
-        {datasets.length === 0 ? <span className="qzk-ds-meta">Load datasets before building figures.</span> : visibleDatasets.length === 0 && <span className="qzk-ds-meta">No datasets match this workbook and search.</span>}
+        {datasets.length === 0 ? <span className="qzk-helptext">Load datasets before building figures.</span> : visibleDatasets.length === 0 && <span className="qzk-helptext">No datasets match this workbook and search.</span>}
       </div>
 
       {phase === "idle" && (

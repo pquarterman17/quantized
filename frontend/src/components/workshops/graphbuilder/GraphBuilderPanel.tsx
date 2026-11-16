@@ -34,10 +34,10 @@ import ZoneWell from "./ZoneWell";
 const MARK_GLYPH: Record<string, string> = {
   scatter: "⣿ scatter",
   line: "╱ line",
-  step: "▤ step",
+  step: "⊓ step",
   box: "▯ box",
   violin: "◈ violin",
-  bar: "▭ bar",
+  bar: "▮ bar",
 };
 
 const STEP_MODE_OPTS: { value: StepMode; label: string }[] = [
@@ -67,7 +67,7 @@ export default function GraphBuilderPanel() {
           onDelete={g.deleteSpec}
         />
         {!g.hasData ? (
-          <div className="qzk-ds-meta" style={faint}>
+          <div className="qzk-helptext" style={faint}>
             Select a dataset to build a graph.
           </div>
         ) : (

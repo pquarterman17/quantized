@@ -61,7 +61,7 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
     >
       <label style={ROW}>
         View
-        <select
+        <select className="qz-select"
           aria-label="3-D view kind"
           value={view3d ? MAP3D_LABELS[view3d.kind] : FLAT_CHOICE}
           onChange={(e) => {
@@ -83,7 +83,7 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
           <TextField label="Z unit" value={view3d.zUnit} width={110} onCommit={(zUnit) => edit({ zUnit })} />
           <label style={ROW}>
             Style
-            <select aria-label="3-D figure style" value={view3d.style} onChange={(e) => edit({ style: e.target.value })}>
+            <select className="qz-select" aria-label="3-D figure style" value={view3d.style} onChange={(e) => edit({ style: e.target.value })}>
               {presetOptions(view3d.style, FIGURE_STYLES).map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}

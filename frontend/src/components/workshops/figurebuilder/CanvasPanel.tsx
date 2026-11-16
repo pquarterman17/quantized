@@ -50,7 +50,7 @@ export default function CanvasPanel({
               onChange={(event) => setPageSetup(convertPageUnit(ps ?? defaultPageSetup(), event.target.value as PageUnit))}
             />
           </span>
-          {!ps && <div className="qzk-ds-meta" style={{ width: "100%" }}>No page set: the style preset's size.</div>}
+          {!ps && <div className="qzk-helptext" style={{ width: "100%" }}>No page set: the style preset's size.</div>}
         </>
       )}
       <span className="qzk-field-lbl" style={{ width: "100%" }}>axes box margins (figure fraction)</span>
