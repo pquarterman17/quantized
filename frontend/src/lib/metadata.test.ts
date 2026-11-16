@@ -67,4 +67,10 @@ describe("metadataToTSV", () => {
     const tsv = metadataToTSV({ b: 2, a: 1 });
     expect(tsv).toBe("a\t1\nb\t2");
   });
+
+  it("hides the first_plot wiring from rows and the copied TSV", () => {
+    const md = { a: 1, first_plot: { of: ["M"], log: 4 } };
+    expect(metadataRows(md)).toEqual([["a", "1"]]);
+    expect(metadataToTSV(md)).toBe("a\t1");
+  });
 });

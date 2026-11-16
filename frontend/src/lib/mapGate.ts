@@ -139,3 +139,17 @@ function uniformLines(l: Lines): boolean {
   }
   return ok >= 0.8 * live.length;
 }
+
+/** Do (x, column `yCol`) THEMSELVES tile a grid? `hasGridAxes` accepts any two
+ *  repeating columns of the table; the import's auto-open as a map must hold
+ *  for the specific pair it plots (x = `data.time`, y1 = `yCol`), so a third
+ *  column's grid (Temperature at 3 setpoints) never opens a line plot as a map. */
+export function hasGridPair(data: DataStruct, yCol: number): boolean {
+  const n = data.values.length;
+  let stride = Math.ceil(n / SAMPLE_ROWS);
+  if (stride > 1 && stride % 2 === 0) stride++;
+  const m = Math.floor((n - 1) / stride) + 1;
+  const x = axisOf(m, (r) => data.time[r * stride]);
+  const y = axisOf(m, (r) => data.values[r * stride][yCol]);
+  return x !== null && y !== null && tiles(x, y, m);
+}

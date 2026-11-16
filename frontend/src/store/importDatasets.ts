@@ -51,6 +51,7 @@ import { loadPath, loadUpload, pathBasename, presentStructures, type ImportLoad,
 import { notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
+import { withFirstPlot } from "./firstPlotNotice";
 import { toast } from "./toasts";
 import { nextDatasetId, nextFolderId } from "./idSeq";
 import type { AppState } from "./useApp";
@@ -282,7 +283,7 @@ function addFromPayload(
     // the MORE common file) took this branch and used ONLY the label guess —
     // the same harm E1 fixed for the multi-book branch above. Prefer Origin's
     // designations here too; a genuinely non-Origin file (`null`) is unchanged.
-    const inputs: Dataset[] = sheets.map((sheetData) => ({
+    const inputs: Dataset[] = sheets.map((sheetData) => withFirstPlot({ // UX8-A: the first plot, picked once
       ...seedErrorRoles(sheetData), ...src,
       id: nextDatasetId(), name: sheetDatasetName(origin.name, sheetData, sheets.length), ["data"]: sheetData,
       importedAt,
