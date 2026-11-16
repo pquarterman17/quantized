@@ -390,6 +390,33 @@ body {
    when the dataset has no tags and none is being added. */
 .qzk-ds-tags-compact { flex-basis: 100%; }
 .qzk-ds-compact .qzk-ds-spark { height: 22px; }
+/* UX8-I: the add-tag "+" of an UNTAGGED compact row is an overlay at the row's
+   right edge, painted only on hover/focus (opacity, so it keeps its box and
+   tab stop) -- it used to take a full extra line under every dataset. */
+.qzk-ds.qzk-ds-compact { position: relative; container-type: inline-size; }
+/* ...and in a narrow Library (the default 210-260 px panel) the "N pts - M ch"
+   count text (ONLY it: the Origin sheet chip and the pending marker stay) no longer wraps to a SECOND line under every name (that was ~54 px per
+   dataset; Origin's Project Explorer shows ~30 rows). They go visually hidden --
+   still read by a screen reader, and shown by the status bar for the active row
+   and by the Inspector -- so a dataset is one ~32 px line. A wider panel keeps
+   them inline. */
+@container (max-width: 300px) {
+  .qzk-ds-compact-meta > .qzk-ds-counts { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* With the counts gone, an otherwise empty meta must not cost a flex gap, and
+     the name may give up some of its reserved width so the preview toggle stays
+     on the name's line instead of wrapping to a second one. */
+  .qzk-ds-compact-meta:not(:has(> :not(.qzk-ds-counts))) { display: none; }
+  .qzk-ds-compact-row > .qzk-ds-name { min-width: min(6ch, 100%); }
+}
+.qzk-ds-tags-resting { position: absolute; top: 50%; right: 4px; flex-basis: auto; transform: translateY(-50%); opacity: 0; }
+.qzk-ds:hover .qzk-ds-tags-resting,
+.qzk-ds:focus-within .qzk-ds-tags-resting,
+.qzk-ds-tags-resting:focus-within { opacity: 1; }
+/* The preview toggle is the last item on the name's line, at the row's right
+   edge -- the same spot the "+" would take. Park the "+" just LEFT of the toggle
+   (26px wide + the row gap + its own 4px margin) so the two never overlap; it
+   covers only the tail of a long name, and only while hovered/focused. */
+.qzk-ds-tags-resting { right: 36px; }
 /* Footer row: metadata on the left, row actions (badge + ▲▼⧉✕) on the right.
    The name owns its own full-width row above, so long filenames stay readable. */
 /* Non-first sheet of a multi-sheet Origin pseudo-book (lib/grouping's
@@ -982,6 +1009,11 @@ body {
    (was 11px @ regular) to --font-size (13px @ regular / 12 compact / 14
    comfy) — still density-aware, no new preference. */
 .qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size); color: var(--text-dim); }
+/* UX8-I: the reorder arrows are chrome inside the figure -- invisible at rest,
+   shown while the row is hovered or holds focus (opacity keeps box + tab stop). */
+.qzk-legend-reorder { opacity: 0; transition: opacity 100ms ease; }
+.qzk-legend .it:hover .qzk-legend-reorder,
+.qzk-legend .it:focus-within .qzk-legend-reorder { opacity: 1; }
 .qzk-legend-toggle { display: inline-flex; align-items: center; gap: 7px; min-width: 0; border-radius: var(--radius-sm); }
 .qzk-legend-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* R2: the floating legend's title heading (the per-panel spatial legend keeps its own). */
@@ -1177,7 +1209,8 @@ body {
 /* Curve Fit's header (CurveFitHeader.tsx): the Fit button is the one primary
    action, so it is full height and weight beside a quiet Auto-guess. */
 .qz-cf-fitbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
-.qz-btn.qz-cf-fit { min-width: 76px; font-weight: var(--weight-semibold); color: var(--text); background: color-mix(in oklab, var(--accent-soft), var(--accent) 24%); }
+.qz-btn.qz-cf-fit { min-width: 76px; font-weight: var(--weight-semibold); color: var(--primary-fg); background: var(--primary-bg); }
+.qz-btn.qz-cf-fit:hover { color: var(--primary-fg); }
 .qz-cf-status { flex: 1 0 100%; min-width: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qz-cf-panel select { max-width: 100%; }
 .qz-cf-tabs { display: flex; gap: 2px; margin: 0 calc(-1 * var(--pad-lg)); padding: 0 var(--pad); }

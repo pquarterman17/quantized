@@ -40,9 +40,15 @@ interface RichLabelInputProps {
   name?: string;
   /** Commit on every keystroke (FigureBuilder) instead of blur/Enter. */
   live?: boolean;
+  /** Teach the `$...$` syntax (UX8-I): while the draft has no markup yet, a
+   *  one-line hint says how to type a sub/superscript. Off by default -- the
+   *  Title/axis fields would carry it on every row. */
+  hint?: boolean;
 }
 
-export default function RichLabelInput({ value, onCommit, placeholder, labelledBy, name, live = false }: RichLabelInputProps) {
+const RICH_LABEL_HINT = "Use $…$ for sub/superscripts, e.g. $T_{B}$";
+
+export default function RichLabelInput({ value, onCommit, placeholder, labelledBy, name, live = false, hint = false }: RichLabelInputProps) {
   const previewId = useId();
   const [draft, setDraft] = useState(value);
   const [palette, setPalette] = useState<{ x: number; y: number } | null>(null);
@@ -167,6 +173,7 @@ export default function RichLabelInput({ value, onCommit, placeholder, labelledB
           Ω
         </button>
       </div>
+      {hint && !hasMarkup(draft) && <div className="qzk-helptext" style={{ marginTop: 2 }}>{RICH_LABEL_HINT}</div>}
       {hasMarkup(draft) && (
         <div
           id={previewId}

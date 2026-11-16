@@ -115,3 +115,34 @@ export function canRenderMap(data: DataStruct | null | undefined): boolean {
   if (tooSmall(data)) return false;
   return data.metadata["scatteredXYZ"] === true || gate.get(data) === true;
 }
+
+/** True when X (the dataset's first column) runs strictly one way: a 1-D sweep
+ *  such as M(T) or an XRD scan. Such a table is NOT scattered X-Y-Z points, so
+ *  the stage never offers "View as scattered map" for it (UX8-I) -- scattered
+ *  data revisits or jumps around in X. Non-finite X entries are skipped. */
+function computeMonotonicX(data: DataStruct): boolean {
+  let sign = 0;
+  let prev: number | null = null;
+  for (const x of data.time) {
+    if (!Number.isFinite(x)) continue;
+    if (prev !== null) {
+      const d = Math.sign(x - prev);
+      if (d === 0 || (sign !== 0 && d !== sign)) return false;
+      sign = d;
+    }
+    prev = x;
+  }
+  return true;
+}
+
+const monotonicCache = new WeakMap<DataStruct, boolean>();
+
+/** Memoised per DataStruct (the stage calls it every render; the scan is O(n)). */
+export function isMonotonicX(data: DataStruct): boolean {
+  let v = monotonicCache.get(data);
+  if (v === undefined) {
+    v = computeMonotonicX(data);
+    monotonicCache.set(data, v);
+  }
+  return v;
+}

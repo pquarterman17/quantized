@@ -12,7 +12,7 @@
 // against the fixed component; see the PR/commit note.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -90,7 +90,7 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
     expect(first.container.querySelector(".qzk-ds-name")).not.toHaveTextContent("Moke:");
     expect(first.container.querySelector(".qzk-ds-name")).toHaveAttribute(
       "title",
-      "Moke:Book4 — 30 nm MnN — double-click the row to open it, or this name to rename it",
+      "Moke:Book4 — 30 nm MnN — double-click to open it; double-click the name of the open dataset (or press F2) to rename it",
     );
     first.unmount();
 
@@ -132,6 +132,15 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
     expect(unshortened.container.querySelector(".qzk-ds-name")).not.toHaveAttribute("aria-label");
   });
 
+  it("double-clicking the name of a dataset that is not open opens it instead of renaming (one-line row: the centre IS the name)", () => {
+    const openFromLibrary = vi.fn();
+    useApp.setState({ openFromLibrary });
+    render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
+    fireEvent.doubleClick(screen.getByText(ds.name));
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(openFromLibrary).toHaveBeenCalledWith(ds.id);
+  });
+
   it("double-clicking a shortened row's name still opens the rename input pre-filled with the FULL name", () => {
     const origin: Dataset = {
       ...ds,
@@ -139,7 +148,8 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
       data: { ...ds.data, metadata: { origin_book: "Book4", origin_book_long: "30 nm MnN" } },
       source: { kind: "path", path: "C:\\data\\Moke.opju" },
     };
-    render(<DatasetRow dataset={origin} {...baseProps} treeMode />);
+    // The name renames the OPEN dataset; on any other row it opens it instead.
+    render(<DatasetRow dataset={origin} {...baseProps} treeMode active />);
     const name = screen.getByText("Book4 — 30 nm MnN");
     fireEvent.doubleClick(name);
     expect(screen.getByDisplayValue("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
@@ -223,7 +233,7 @@ describe("Library Tree rows say how to open them", () => {
   it("the row and its name tooltip name the double-click", () => {
     const { container } = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
     expect(container.querySelector(".qzk-ds")).toHaveAttribute("title", "Double-click to open");
-    expect(container.querySelector(".qzk-ds-name")?.getAttribute("title")).toMatch(/double-click the row to open it/);
+    expect(container.querySelector(".qzk-ds-name")?.getAttribute("title")).toMatch(/double-click to open it/);
   });
 
   it("the flat list (where a click opens) carries no such hint", () => {

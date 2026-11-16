@@ -25,7 +25,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 
-import { canRenderMap, ensureMapGate, mapGateVersion, subscribeMapGate } from "../../lib/mapdata";
+import { canRenderMap, ensureMapGate, isMonotonicX, mapGateVersion, subscribeMapGate } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { plotIntentStageTab } from "../../lib/stagetab";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
@@ -132,7 +132,7 @@ export default function Stage() {
             </button>
           ))}
         </div>
-        {!mappable && active && active.data.labels.length === 2 && active.data.values.length >= 4 && <ScatterMapButton />}
+        {!mappable && active && active.data.labels.length === 2 && active.data.values.length >= 4 && !isMonotonicX(active.data) && <ScatterMapButton />}
         <WindowWorkspaceControls />
       </div>
       <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${selectedTab}`}>

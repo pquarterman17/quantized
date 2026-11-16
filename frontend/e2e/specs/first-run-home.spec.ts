@@ -11,9 +11,10 @@ import { gotoApp, waitForDatasetCount } from "../utils/harness";
 test("Home can open a local 2-D example directly in the map view @core", async ({ page }) => {
   await gotoApp(page);
 
-  await expect(page.getByText("Start here", { exact: true })).toBeVisible();
-  // one name everywhere: the Home panel AND the empty stage both offer it
-  await expect(page.getByRole("button", { name: "Import wizard…" }).first()).toBeVisible();
+  // UX8-I: one empty state -- the stage card owns the import entry points, the
+  // Library keeps only the example chips.
+  await expect(page.getByRole("button", { name: "Import wizard…" })).toHaveCount(1);
+  await expect(page.getByText("Try an example", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "2-D", exact: true }).click();
 
   await waitForDatasetCount(page, 1);

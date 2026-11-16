@@ -165,7 +165,7 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, openHint
       {!compactOriginName && <OriginSheetChip dataset={d} />}
       <span
         className="qzk-ds-name"
-        title={openHint ? `${d.name} — double-click the row to open it, or this name to rename it` : `${d.name} — double-click to rename`}
+        title={openHint ? `${d.name} — double-click to open it; double-click the name of the open dataset (or press F2) to rename it` : `${d.name} — double-click to rename`}
         aria-label={nameAriaLabel}
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -210,8 +210,11 @@ export function DatasetRowTags({ dataset: d, compact, draft, onDraft, onFilterTa
     if (draft && draft.trim()) addDatasetTag(d.id, draft);
     onDraft(null);
   };
+  // UX8-I: an untagged compact row paints its "+" only on hover/focus, as an
+  // overlay -- it no longer costs a whole line per dataset.
+  const restingAdd = compact && (d.tags ?? []).length === 0 && draft == null;
   return (
-    <div className={`qzk-ds-tags${compact ? " qzk-ds-tags-compact" : ""}`}>
+    <div className={`qzk-ds-tags${compact ? " qzk-ds-tags-compact" : ""}${restingAdd ? " qzk-ds-tags-resting" : ""}`}>
       {(d.tags ?? []).map((t) => (
         <span
           key={t}

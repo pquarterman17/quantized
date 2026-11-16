@@ -288,6 +288,8 @@ export default function PlotLegend({
               role={interactive ? "checkbox" : undefined}
               aria-checked={interactive ? !isHidden : undefined}
               aria-labelledby={interactive ? labelId : undefined}
+              // Fallback name when the label span renders empty (UX8-I).
+              aria-label={interactive ? defaultLabel(s) : undefined}
               tabIndex={interactive ? 0 : undefined}
               onClick={
                 interactive
@@ -310,7 +312,7 @@ export default function PlotLegend({
               <RichText text={text} />
             </span>
             {interactive && plotted.length > 1 && (
-              <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
+              <span className="qzk-legend-reorder" style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
                 {/* ▲ always moves the row UP the list: earlier in draw order,
                     or under a waterfall (rows listed top trace first) later. */}
                 {[up, -up].map((dir) => (

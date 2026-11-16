@@ -8,7 +8,7 @@
 // The scale half (the roving stop surviving a scroll of a 400-item tree)
 // lives in LibraryTree.scale.test.tsx beside the other virtualization tests.
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryTree from "./LibraryTree";
@@ -237,6 +237,8 @@ describe("LibraryTree — Escape returns focus to the row", () => {
 
   it("Enter commits an inline rename and also hands focus back to the row", async () => {
     render(<Harness />);
+    // The name renames the OPEN dataset (a double-click elsewhere opens it).
+    act(() => useApp.setState({ activeId: "d2" }));
     fireEvent.doubleClick(row("worksheet:d2").querySelector(".qzk-ds-name")!);
     const input = row("worksheet:d2").querySelector("input")!;
     input.focus();
@@ -363,6 +365,8 @@ describe("LibraryTree — type-ahead", () => {
 
   it("never steals keys from an inline rename input or a nested control", () => {
     render(<Harness />);
+    // The name renames the OPEN dataset (a double-click elsewhere opens it).
+    act(() => useApp.setState({ activeId: "d2" }));
     fireEvent.doubleClick(row("worksheet:d2").querySelector(".qzk-ds-name")!);
     const input = row("worksheet:d2").querySelector("input")!;
     input.focus();
