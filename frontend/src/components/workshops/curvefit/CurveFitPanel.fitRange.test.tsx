@@ -121,15 +121,33 @@ describe("Curve Fit range (UX8-D)", () => {
     expect(fittedX()).toEqual(X);
   });
 
-  it("keeps following the zoom in custom-equation mode (that fit reads the same range)", async () => {
+  it("claims no range in custom-equation mode, whose fit does not read one, and restores it on return", async () => {
+    useApp.setState({ xLim: [150, 250] });
     render(<CurveFitPanel />);
     await screen.findAllByRole("option", { name: "Linear" });
-    fireEvent.change(screen.getByRole("combobox", { name: /model/i }), { target: { value: "custom:" } });
-    act(() => useApp.setState({ xLim: [150, 250] }));
+    const range = () => useAnalysisSelection.getState().selection?.items[0]?.range ?? null;
     expect(await screen.findByTestId("cf-fit-range")).toHaveTextContent("Fit range 150 – 250 (visible x range)");
-    act(() => useApp.setState({ xLim: null }));
+    // The equation fit (useEquationFit) runs over the whole X: no bar, and the
+    // automatic range leaves the selection so Review inputs does not claim it.
+    fireEvent.change(screen.getByRole("combobox", { name: /model/i }), { target: { value: "custom:" } });
     expect(screen.queryByTestId("cf-fit-range")).toBeNull();
-    expect(useAnalysisSelection.getState().selection?.items[0]?.range).toBeNull();
+    expect(range()).toBeNull();
+    act(() => useApp.setState({ xLim: [160, 240] }));
+    expect(range()).toBeNull();
+    // Back on a registry model: the zoom applies again.
+    fireEvent.change(screen.getByRole("combobox", { name: /model/i }), { target: { value: "Linear" } });
+    expect(await screen.findByTestId("cf-fit-range")).toHaveTextContent("Fit range 160 – 240 (visible x range)");
+    expect(range()).toMatchObject({ lo: 160, hi: 240, source: "visible x range" });
+  });
+
+  it("claims no range in Global fit mode either", async () => {
+    useApp.setState({ xLim: [150, 250] });
+    render(<CurveFitPanel />);
+    await screen.findAllByRole("option", { name: "Linear" });
+    expect(await screen.findByTestId("cf-fit-range")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Global fit" }));
+    expect(screen.queryByTestId("cf-fit-range")).toBeNull();
+    expect(useAnalysisSelection.getState().selection?.items[0]?.range ?? null).toBeNull();
   });
 
   it("never takes a drag the Baseline workshop armed", async () => {

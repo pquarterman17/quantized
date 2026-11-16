@@ -20,7 +20,15 @@ export function regionPickOwner(): RegionPickOwner | null {
   return owner;
 }
 
-/** The pick was consumed (or the arm cancelled) by `who`: clear its tag. */
-export function releaseRegionPick(who: RegionPickOwner): void {
+/** The pick was consumed (`taken`) or the arm cancelled by `who`: clear its
+ *  tag. A taken pick stays marked, so another panel's effect running in the
+ *  same commit (it still sees the pick) does not take it too. */
+export function releaseRegionPick(who: RegionPickOwner, taken?: object): void {
   if (owner === who) owner = null;
+  if (taken) consumed.add(taken);
 }
+
+/** Was this pick already taken by the panel that armed it? */
+export const regionPickTaken = (pick: object): boolean => consumed.has(pick);
+
+const consumed = new WeakSet<object>();

@@ -15,7 +15,7 @@ import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselin
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { magXAxis } from "../../../lib/magDataKind";
-import { armRegionPick, regionPickOwner, releaseRegionPick } from "../../../lib/regionPickOwner";
+import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -238,8 +238,9 @@ export function useBaseline(): BaselineState {
   // when present — otherwise an x-only re-drag after an earlier box pick
   // would silently keep masking against the stale y-box.
   useEffect(() => {
-    if (!regionPicked || regionPickOwner() === "curvefit") return; // Curve Fit's drag, not ours
-    releaseRegionPick("baseline");
+    // Curve Fit's drag (armed, or just taken there), not ours.
+    if (!regionPicked || regionPickOwner() === "curvefit" || regionPickTaken(regionPicked)) return;
+    releaseRegionPick("baseline", regionPicked);
     const [xLo, xHi] = regionPicked.x;
     const [yLo, yHi] = regionPicked.yRange ?? [Number.NaN, Number.NaN];
     setParamsState((p) => ({ ...p, regionXMin: xLo, regionXMax: xHi, regionYMin: yLo, regionYMax: yHi }));

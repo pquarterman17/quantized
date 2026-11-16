@@ -239,10 +239,10 @@ export default function CurveFitPanel() {
     <CurveFitModelPicker groups={modelGroups} custom={customOptions} value={modelName} onChange={setModelName}
       globalMode={globalMode} onGlobalMode={() => setGlobalMode((v) => !v)} />
   );
-  // The fit range (UX8-D) in every mode -- the global and equation fits read the same selection.
+  // The fit range (UX8-D): only the registry fit reads it; the bar stays mounted to take its ranges out.
   const fitCtx = { linear: isLinearFamily(registryModel?.category), weights: fitData?.weights };
   const fitted = !globalMode && !isCustom && !!result && !guessOnly && !resultStale;
-  const rangeBar = <FitRangeBar active={active} fitted={fitted} offer={!globalMode && !isCustom && (isSinglePeakModel(registryModel?.category) || (fitted && !!poorFit(result!, fitCtx)))} />;
+  const rangeBar = <FitRangeBar active={active} enabled={!globalMode && !isCustom} fitted={fitted} offer={!globalMode && !isCustom && (isSinglePeakModel(registryModel?.category) || (fitted && !!poorFit(result!, fitCtx)))} />;
 
   if (globalMode) {
     const reg = models.find((m) => m.name === modelName);

@@ -42,8 +42,11 @@ const SOURCE_LABEL: Record<AnalysisRangeSelection["source"], string> = {
 const line = { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 4 } as const;
 const note = { color: "var(--text-faint)", fontSize: "var(--font-size-sm)" } as const;
 
-export default function FitRangeBar({ active, offer, fitted }: {
+export default function FitRangeBar({ active, enabled, offer, fitted }: {
   active: Dataset | null;
+  /** The fit showing reads the range (the registry-model fit). Mounted in
+   *  every mode all the same, so leaving it takes its ranges out. */
+  enabled: boolean;
   /** Offer the drag even with no range: a single-peak model, or a poor fit. */
   offer: boolean;
   /** A current (not stale) fit is showing: the zoom no longer moves the range. */
@@ -77,6 +80,7 @@ export default function FitRangeBar({ active, offer, fitted }: {
     if (regionPicked && id && regionPickOwner() === "curvefit") {
       const [a, b] = regionPicked.x;
       setDragged({ id, lo: Math.min(a, b), hi: Math.max(a, b) });
+      releaseRegionPick("curvefit", regionPicked);
       setRegionPicked(null);
       setArmed(null);
       setPlotTool(armed.back);
@@ -88,15 +92,18 @@ export default function FitRangeBar({ active, offer, fitted }: {
   // Closing the panel mid-drag leaves no tag behind.
   useEffect(() => () => releaseRegionPick("curvefit"), []);
 
-  const mine = dragged && dragged.id === id ? dragged : null;
+  const mine = enabled && dragged && dragged.id === id ? dragged : null;
   const cur = item?.range ?? null;
   const pickedBefore = !!cur && cur.source !== "dragged" && cur.source !== "visible x range";
+  // Disabled (the global / custom-equation fits, which do not read the
+  // range): none of this bar's own ranges -- they would show in Review inputs
+  // as a range the fit then ignores. The drag is kept for coming back.
   const want: AnalysisRangeSelection | null = mine
     ? { lo: mine.lo, hi: mine.hi, source: "dragged" }
-    : view && selection?.source === "tool-default" ? { ...view, source: "visible x range" } : null;
+    : enabled && view && selection?.source === "tool-default" ? { ...view, source: "visible x range" } : null;
   const differs = !sameRange(cur, want) || cur?.source !== want?.source;
   // A drag (made or undone) always applies; the zoom only while no fit shows.
-  const hold = !mine && (pickedBefore || (fitted && cur?.source !== "dragged"));
+  const hold = !mine && (pickedBefore || (enabled && fitted && cur?.source !== "dragged"));
   const apply = () => {
     if (id) updateItem(id, { range: want });
   };
@@ -105,7 +112,7 @@ export default function FitRangeBar({ active, offer, fitted }: {
     if (item && id && !hold && differs) updateItem(id, { range: want });
   });
 
-  if (!active || !item) return null;
+  if (!active || !item || !enabled) return null;
   const drag = () => {
     armRegionPick("curvefit");
     setArmed({ back: plotTool === "region" ? "zoom" : plotTool });
