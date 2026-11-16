@@ -22,13 +22,9 @@
 //     every caller shape (fire-and-forget UI trigger, await-one, await-many,
 //     await-all-pending-before-save).
 
-import { guessImportSettings, parseImportText } from "../lib/api";
-import { plural } from "../lib/plural";
 import { installBookData } from "../lib/bookData";
-import { lit } from "../lib/macro";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
-import { nextDatasetId } from "./idSeq";
 import { announceBookFailure } from "./pendingEdit";
 import type { AppState } from "./useApp";
 
@@ -71,9 +67,6 @@ export interface DataIntakeSlice {
   // lands as a correctly-parsed dataset — never a second parser.
   pasteDataFromClipboard: () => Promise<void>;
 }
-
-// Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
-let _pasteSeq = 0;
 
 /** The load failure last announced for each pending dataset OBJECT, so a view's
  *  re-kick that fails the same way stays quiet (see `ensureBookData`). Weak:
@@ -171,34 +164,19 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         return;
       }
       get().setStatus("parsing pasted data…");
+      // The parse-and-commit half loads here, after the clipboard read
+      // (bundle diet slice 30, plans/BUNDLE_HEADROOM.md): the read stays in
+      // the gesture's own task. A chunk that will not load adds nothing.
+      let run: typeof import("./pasteDataRun");
       try {
-        const settings = await guessImportSettings(text);
-        const data = await parseImportText(text, settings);
-        _pasteSeq += 1;
-        const id = nextDatasetId();
-        const name = `pasted data ${_pasteSeq}`;
-        get().addDataset({ id, name, data });
-        set({ worksheetId: null }); // the Worksheet tab shows the paste, not a book opened earlier
-        get().recordMacro(`Paste ${name}`, `qz.pasteData(${lit(name)})`, {
-          kind: "import",
-          params: { name },
-        });
-        const msg = `${name} — ${data.time.length} rows, ${data.labels.length} column${plural(data.labels.length)}`;
-        // Worksheet audit #21: the parser's notes (a decimal-comma cell left
-        // blank, a column read as text) are part of the outcome — say them,
-        // never leave a NaN unexplained.
-        const notes = Array.isArray(data.metadata.notes) ? data.metadata.notes.filter((n): n is string => typeof n === "string") : [];
-        const full = notes.length ? `${msg}. ${notes.join(" ")}` : msg;
-        get().setStatus(full);
-        toast(full, notes.length ? "info" : "ok");
+        run = await import("./pasteDataRun");
       } catch (e) {
-        // P3.4 error-quality audit (2026-09-14): a bare `e.message` here is
-        // whatever the parser threw ("no delimiter found", or an HTTP status
-        // line) — true, but it names neither the operation nor the outcome.
-        const msg = `could not create a dataset from the pasted text: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`;
+        const msg = `Paste failed to load: ${e instanceof Error ? e.message : "error"} — nothing was added`;
         get().setStatus(msg);
         toast(msg, "danger");
+        return;
       }
+      await run.pasteDataRun(text, set, get);
     },
   };
 }

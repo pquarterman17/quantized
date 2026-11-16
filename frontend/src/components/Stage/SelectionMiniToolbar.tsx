@@ -17,38 +17,22 @@
 // and would otherwise paint over (and swallow clicks on) this strip's
 // rightmost buttons.
 
-import { runContextAction, type ContextAction } from "../../lib/contextActions";
+import { useEffect, useSyncExternalStore } from "react";
+
 import { useApp } from "../../store/useApp";
-import {
-  annotationActions,
-  shapeActions,
-  type AnnotationActionTarget,
-  type ShapeActionTarget,
-} from "./annotationShapeActions";
+import { loadObjectMenus, objectMenus, subscribeObjectMenus } from "./objectMenusLoader";
 
-function resolveLabel<T>(a: ContextAction<T>, t: T): string {
-  return typeof a.label === "function" ? a.label(t) : a.label;
-}
-
-function Strip<T>({ kind, actions, target }: { kind: string; actions: ContextAction<T>[]; target: T }) {
-  return (
-    <div className="qzk-glass qzk-tool-hud qzk-mini-toolbar" role="toolbar" aria-label="Selected object actions">
-      <span className="hint">{kind}</span>
-      {actions
-        .filter((a) => !a.hidden?.(target))
-        .map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            className={a.danger || a.destructive ? "danger" : undefined}
-            disabled={a.enabled ? !a.enabled(target) : false}
-            onClick={() => runContextAction(a, target)}
-          >
-            {resolveLabel(a, target)}
-          </button>
-        ))}
-    </div>
-  );
+/** The object-menu module, re-rendering once it lands, whoever started the
+ *  load (this strip, a right-click, a warm-up). While it is missing, each new
+ *  `selectedKey` (a live selection in pointer mode) starts a load; a failed
+ *  load shows no strip until a later load succeeds (the right-click menu
+ *  reports its own failure). */
+function useObjectMenus(selectedKey: string | null) {
+  const mod = useSyncExternalStore(subscribeObjectMenus, objectMenus);
+  useEffect(() => {
+    if (selectedKey !== null && !mod) loadObjectMenus().catch(() => {});
+  }, [selectedKey, mod]);
+  return mod;
 }
 
 export default function SelectionMiniToolbar() {
@@ -58,17 +42,17 @@ export default function SelectionMiniToolbar() {
   const annotations = useApp((s) => s.annotations);
   const shapes = useApp((s) => s.shapes);
 
-  if (plotTool !== "pointer") return null;
+  const annotation =
+    plotTool === "pointer" && selectedAnnotationId ? annotations.find((a) => a.id === selectedAnnotationId) : undefined;
+  const shape =
+    plotTool === "pointer" && !annotation && selectedShapeId ? shapes.find((x) => x.id === selectedShapeId) : undefined;
+  // The strip and its registry actions load with the object menus (bundle
+  // diet slice 30); nothing shows until they have.
+  const m = useObjectMenus(annotation ? `a:${annotation.id}` : shape ? `s:${shape.id}` : null);
+  if (!m) return null;
 
-  const annotation = selectedAnnotationId ? annotations.find((a) => a.id === selectedAnnotationId) : undefined;
-  if (annotation) {
-    const target: AnnotationActionTarget = { id: annotation.id, conv: null };
-    return <Strip kind="Annotation" actions={annotationActions} target={target} />;
-  }
-
-  const shape = selectedShapeId ? shapes.find((x) => x.id === selectedShapeId) : undefined;
+  if (annotation) return <m.AnnotationStrip id={annotation.id} />;
   if (!shape) return null;
-  const target: ShapeActionTarget = { id: shape.id, conv: null };
   const kind = `${shape.kind[0].toUpperCase()}${shape.kind.slice(1)}`;
-  return <Strip kind={kind} actions={shapeActions} target={target} />;
+  return <m.ShapeStrip id={shape.id} kind={kind} />;
 }

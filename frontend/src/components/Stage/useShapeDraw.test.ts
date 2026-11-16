@@ -3,12 +3,13 @@
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useApp } from "../../store/useApp";
 import { pressEscape } from "../../test/pressEscape";
 import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
+import { loadObjectMenus } from "./objectMenusLoader";
 import { textBoxSizeFor, useShapeDraw } from "./useShapeDraw";
 
 vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
@@ -17,6 +18,14 @@ vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
 }));
 
 const mockAskAnnotationText = vi.mocked(askAnnotationText);
+
+// A placed text box opens its dialog through the object menus, which load
+// on demand (bundle diet slice 30); the app warms them once the text-box tool
+// is armed. Load them up front the same way, so the dialog opens on the
+// commit's own frame.
+beforeAll(async () => {
+  await loadObjectMenus();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

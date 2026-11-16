@@ -1,6 +1,17 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-15, after slice 29):** the core command list's
+**Current state (2026-11-15, after slice 30):** five more on-demand pieces
+left the startup chunk: three async store-action bodies (Create derived
+worksheet, the parse half of Paste data, the commit half of Append project),
+the `.dwk` parse entry point (loaded once a file is picked), and the plot
+object menus (annotation/shape right-click menus, their registry actions and
+the selection mini-toolbar strip, warmed once a plot has an object).
+Measured on main `c40ed030` (809,593 B, the same as `6c454b3c`):
+**809,593 -> 803,410 B (-6,183 B)** with the review round's fixes, about
+12.3 kB under the UNMOVED 816,042 B pin. That headroom is for
+the pending feature branches (~+5-6 kB eager together). See "Slice 30".
+
+**Previous state (2026-11-15, after slice 29):** the core command list's
 help copy (descriptions and ⌘K keywords) left the startup chunk for the
 full command list App loads right after mount. Measured on its parent
 `964352e5`: **815,231 -> 802,210 B (-13,021 B)**; merged over slice 28
@@ -3563,6 +3574,152 @@ Slice 27's list less this one: the other lazy-only declarations (~3.3 kB),
 the async store actions' bodies (~3.5 kB), `uplotShapes`+`shapeHit`, the
 plot-window gesture, and the published-command copy of
 `useWindowCommands.ts` (same shape as this slice, smaller).
+
+### Slice 30 — four async seams and the plot-object menus, pin UNMOVED — **DONE (2026-11-15)**
+
+**Measured net eager delta −6,183 B — pin unchanged at 816,042 B**
+
+Several pending branches together add roughly +5 to +6 kB eager, which would
+have left main within a few hundred bytes of the pin. Exact bytes, `npm ci`,
+`node_modules/.vite` wiped, `npx tsc -b --force`, `npm run build` (entry
+chunk + Rolldown runtime); per-step rows are plain `vite build`s on the way,
+cumulative:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `6c454b3c` (parent, main after #707) | 809,593 | — |
+| + Create derived worksheet body -> `store/derivedWorksheetCreate.ts` | 808,557 | −1,036 |
+| + Paste data parse half -> `store/pasteDataRun.ts`, Append project commit -> `store/appendWorkspaceRun.ts` | 807,449 | −1,108 |
+| + `.dwk` parse entry point behind `import()` (`lib/parseWorkspaceFile.ts`) | 806,889 | −560 |
+| + plot-object menus -> `components/Stage/objectMenus.tsx` | 802,784 | −4,105 |
+| (tidy-up: lint fixes, `recentProjectReopen` import) | 802,703 | −81 |
+| merged with main `c40ed030` (#712; main itself also measures 809,593) | 802,703 | 0 |
+| + review round: queued-gesture cancel, mini-toolbar subscription (L-1, L-2) | 803,410 | +707 |
+| this slice, as landed | 803,410 | **−6,183** |
+
+#### How it was found
+
+The slice-26/27 method: a throwaway vite plugin dumping each module's
+`getModuleInfo().importedIds`, the sourcemap profile
+(`scripts/profile-eager-bundle.mjs`), and for every eager module the bytes
+that become unreachable from `main.tsx` without it. Two more scans (not
+committed): every `async` function body in an eager module, and every
+eager-module export no eager module imports. The halves scan found only
+scattered few-hundred-byte declarations, most of them also used inside
+their own module. The async scan gave the three store actions. The
+dominator ranking gave the object-menu family: `annotationShapeActions.ts`
+2,033 B, `SelectionMiniToolbar.tsx` 966 B and the menu bodies of
+`useShapeEdit.ts` / `useAnnotationEdit.ts`, none of which can run before a
+plot has an annotation or a shape.
+
+#### The moves
+
+- **Create derived worksheet** (`store/derivedWorksheets.ts`): the action
+  awaits `import("./derivedWorksheetCreate")` and runs the body there,
+  moved verbatim (`summarizePipeline` with it). Every caller already awaits
+  the promise. A chunk that will not load reports a status line and a danger
+  toast ("Create derived worksheet failed to load: …"), returns null and
+  creates nothing: the slice-17/28 contract.
+- **Paste data** (`store/dataIntake.ts`): the clipboard read, its refusal
+  and the empty check stay in the action, in the gesture's own task (a
+  clipboard read can need user activation). The guess/parse/commit half,
+  with its `pasted data N` counter, loads after the read
+  (`store/pasteDataRun.ts`). A load failure says "Paste failed to load: … —
+  nothing was added".
+- **Append project** (`store/workspaceHydration.ts`): `runAppendWorkspace`
+  already loaded the merge engine through `runLazy` before recording
+  history; it now loads `store/appendWorkspaceRun.ts` instead, which imports
+  the merge engine and holds the commit verbatim. The empty-project refusal
+  stays eager. A load failure is `runLazy`'s toast and a rejected promise,
+  and the project and undo stack are untouched, as before.
+  (`adoptFitModels` is exported for it.)
+- **The `.dwk` parse entry point** (`lib/parseWorkspaceFile.ts`, with its
+  Worker URL): the Open/Append command loads it inside the same `withOp`
+  once a file is picked; the picker still opens in the click's own task.
+  `currentViewport` moved to `lib/currentViewport.ts` so the viewport is
+  still read at pick time; `parseWorkspaceFile.ts` re-exports it. A load
+  failure lands in the existing "open failed: …" status.
+- **Plot-object menus.** `components/Stage/objectMenus.tsx` holds the
+  annotation and shape right-click menu builders (the hooks' former
+  `openMenu` bodies, verbatim), the selection mini-toolbar's strip, and
+  re-exports the two dialog helpers; it is the only eager-side importer of
+  `annotationShapeActions.ts`, now lazy. `objectMenusLoader.ts` is the
+  `lib/axisExtrasHook.ts` getter shape: once loaded, a right-click, a label
+  double-click or a text-box placement runs on the gesture's own frame, as
+  the eager import did. **Warm-up:** `useAnnotationEdit` / `useShapeEdit`
+  start the load as soon as their canvas bridge exists (pointer tool and at
+  least one annotation / shape), and `useShapeDraw` as soon as the text-box
+  tool is armed; nothing in this family can run before then, so a plot
+  without objects never fetches it. A gesture that finds the module unloaded
+  is queued, and only the newest queued gesture runs. Review round (same
+  day, finding L-1): it is dropped if the user moves on before the chunk
+  lands (a pointerdown anywhere, Escape, the menu's close, or leaving the
+  pointer tool), where it used to pop up late at the old position. A placed
+  text box is the exception to the tool check, since its own commit flips
+  the tool to pointer. A failed load shows "Could not load the object menu:
+  …" for a gesture still current and opens nothing, and nothing is cached,
+  so the next gesture retries. The mini-toolbar shows nothing until the
+  module is in (a failed warm-up is silent); it subscribes to the loader,
+  so a later load by any caller, or a load it starts for a newly selected
+  object, shows the strip without a deselect (finding L-2).
+
+In a real browser (headless Chromium against `qz --no-browser`, built tree,
+real backend): none of the five chunks was fetched at startup. Paste data
+read a real clipboard and parsed through the backend; Create derived
+worksheet ran the real corrections API; the object-menu chunk was NOT fetched
+with a plotted dataset and no objects, and WAS fetched as soon as an
+annotation existed; the annotation's right-click menu (with Frame), the
+selection mini-toolbar and the double-click text editor all opened and
+committed; Append workspace through the File picker loaded the parse and
+append chunks and appended. No console error; the one warning is Chromium's
+existing canvas `getImageData` readback note. The e2e `@core` set (87 tests)
+and the annotation/shape, quick-figure, multi-panel and mouse-editing
+journeys passed against the same build.
+
+#### Guards and tests
+
+- `architecture.test.ts`: SEAMS entries for `store/derivedWorksheetCreate.ts`,
+  `store/pasteDataRun.ts`, `store/appendWorkspaceRun.ts`,
+  `lib/parseWorkspaceFile.ts` and `components/Stage/objectMenus.tsx`; a
+  `DRAGGED_OUT` entry for `components/Stage/annotationShapeActions.ts`.
+  `commands/recentProjectReopen.ts` now imports `currentViewport` from its
+  own module.
+- `store/slice30Seams.lazyFail.test.ts`: each of the three store bodies
+  failing to load is reported and changes nothing (paste still reads the
+  clipboard first). `lib/parseWorkspaceFile.lazyFail.test.ts`: the parse
+  chunk failing lands in "open failed: …" and clears the busy op, and the
+  next open loads the parser and opens.
+- `components/Stage/objectMenus.lazy.test.tsx`: a right-click whose chunk
+  fails toasts and opens nothing, then a retry opens the menu; an annotation
+  menu and the mini-toolbar strip appear once loaded.
+- `components/Stage/objectMenus.cold.test.tsx` (review round, finding L-3):
+  a fresh module graph per test with the chunk held behind a gate, so each
+  race is forced. No objects means no fetch, and the first annotation
+  starts one. A queued right-click opens once the chunk lands, and only the
+  newest queued gesture runs. A pointerdown, Escape, `closeMenu` or leaving
+  the pointer tool drops a queued menu. A double-click edit and a placed
+  text box run once it lands, and a text box whose chunk fails toasts and
+  creates nothing. After a failed load the strip appears on a new selection
+  or on any other caller's load. Removing the gesture check or the loader's
+  notification turns five of these red.
+- The suites that open an object menu and read it synchronously
+  (`useAnnotationEdit`, `useShapeEdit`, `useShapeDraw`,
+  `SelectionMiniToolbar`) load the module in `beforeAll`, as the warm-up
+  does in the app.
+
+#### Candidates still not taken
+
+Slice 29's list less the paste/derived-worksheet bodies: the scattered
+lazy-only declarations (~3 kB, mostly also used inside their own module),
+`uplotShapes`+`shapeHit`, the plot-window gesture, the published commands'
+copy (`useWindowCommands.ts` and four `commands/*Commands.ts`, ~1 kB), and
+`useAxisLabelEdit.ts`'s menu (923 B, the same shape as this slice's object
+menus). Sync store actions whose bodies only lazy panels call
+(`createQuickFigureFromMapping`, `commitSeparateWorksheets`, the figure
+lifecycle) would need their signatures made async first.
+
+**Pin:** unmoved, as in slices 28-29: the reclaimed bytes are headroom for
+the queued branches, not a lock-in.
 
 ## What this does NOT change
 

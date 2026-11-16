@@ -3,13 +3,14 @@
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 import { pressEscape } from "../../test/pressEscape";
 import { useAnnotationEdit } from "./useAnnotationEdit";
+import { loadObjectMenus } from "./objectMenusLoader";
 
 vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../store/annotationTextDialog")>()),
@@ -22,6 +23,13 @@ const mockAskAnnotationText = vi.mocked(askAnnotationText);
 // computes; the plugin's own round-trip is covered in uplotOverlays.test.ts,
 // this file only needs a concrete value to feed the toggle action.
 const CONV = { toPage: { x: 0.4, y: 0.6 }, toData: { x: 5, y: 9 } };
+
+// The object menus load on demand (bundle diet slice 30); the app warms them
+// once a plot has an object to act on, so a gesture finds them loaded. Load
+// them up front the same way, so the menus here open on the gesture's frame.
+beforeAll(async () => {
+  await loadObjectMenus();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

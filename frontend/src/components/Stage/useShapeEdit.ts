@@ -8,20 +8,17 @@
 // toggle, Delete) now come from the shared registry
 // (`annotationShapeActions`) via `buildMenuItems` — defined once, reused by
 // the ⌘K palette and the selection mini-toolbar. The swatch/opacity/width
-// pickers (parameterized, not discrete actions) stay hand-built here.
+// pickers (parameterized, not discrete actions) are hand-built. Both are
+// built in ./objectMenus, loaded on demand (bundle diet slice 30).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { buildMenuItems } from "../../lib/contextActions";
 import { useEscapeSurface } from "../../lib/escapeStack";
-import { SERIES_VARS, cssVar, type BuildOptsArgs } from "../../lib/uplotOpts";
-import { DEFAULT_SHAPE_WIDTH, resolveShapeOpacity } from "../../lib/uplotShapes";
+import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
-import type { ContextMenuItem, Swatch } from "../overlays/ContextMenu";
-import { shapeDeleteAction, shapeToggleActions, type ShapeConv } from "./annotationShapeActions";
-
-const OPACITY_STEPS = [0.25, 0.5, 0.75, 1] as const;
-const WIDTH_STEPS = [1, 2, 3] as const;
+import type { ContextMenuItem } from "../overlays/ContextMenu";
+import type { ShapeConv } from "./annotationShapeActions";
+import { cancelPendingObjectMenu, preloadObjectMenus, withObjectMenus } from "./objectMenusLoader";
 
 export interface ShapeMenuState {
   x: number;
@@ -62,79 +59,22 @@ export function useShapeEdit(tool: string): ShapeEditResult {
     Boolean(selectedShapeId),
   );
 
-  const openMenu = (id: string, clientX: number, clientY: number, conv: ShapeConv) => {
-    const s = useApp.getState().shapes.find((x) => x.id === id);
-    if (!s) return;
-    const opacity = resolveShapeOpacity(s);
-    const width = s.width ?? DEFAULT_SHAPE_WIDTH;
-    const canFill = s.kind === "rect" || s.kind === "ellipse";
-    const target = { id, conv };
-    // The "ink" swatch shows the app's general foreground token as a stand-in
-    // (the REAL resolved plot ink color depends on this window's background
-    // override, resolved only at draw/export time) — clicking it clears the
-    // override so the shape reverts to that resolved ink color.
-    const strokeSwatches: Swatch[] = [
-      ...SERIES_VARS.map((tok, i) => ({
-        key: tok,
-        title: `Series ${i + 1}`,
-        css: `var(${tok})`,
-        active: s.stroke === tok,
-        run: () => updateShape(id, { stroke: tok }),
-      })),
-      {
-        key: "ink",
-        title: "Annotation ink (default)",
-        css: cssVar("--text") || "#eee",
-        active: s.stroke == null,
-        run: () => updateShape(id, { stroke: undefined }),
+  // The menu's items (the swatch/opacity/width pickers plus the registry
+  // actions) are built in ./objectMenus, which loads on demand (bundle diet
+  // slice 30). A shape that no longer exists opens no menu, and a gesture
+  // that waited for that load is dropped if the tool has left pointer mode.
+  const toolRef = useRef(tool);
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
+  const openMenu = (id: string, clientX: number, clientY: number, conv: ShapeConv) =>
+    withObjectMenus(
+      (m) => {
+        const items = m.shapeMenuItems(id, conv);
+        if (items) setMenu({ x: clientX, y: clientY, items });
       },
-    ];
-    const fillSwatches: Swatch[] = [
-      ...SERIES_VARS.map((tok, i) => ({
-        key: tok,
-        title: `Series ${i + 1}`,
-        css: `var(${tok})`,
-        active: s.fill === tok,
-        run: () => updateShape(id, { fill: tok }),
-      })),
-      {
-        key: "match-stroke",
-        title: "Match stroke (default)",
-        css: cssVar("--text") || "#eee",
-        active: s.fill == null,
-        run: () => updateShape(id, { fill: undefined }),
-      },
-    ];
-    setMenu({
-      x: clientX,
-      y: clientY,
-      items: [
-        { header: `${s.kind[0].toUpperCase()}${s.kind.slice(1)}` },
-        { header: "Stroke" },
-        { swatches: strokeSwatches },
-        ...(canFill ? ([{ header: "Fill" }, { swatches: fillSwatches }] as ContextMenuItem[]) : []),
-        {
-          label: "Opacity",
-          submenu: OPACITY_STEPS.map((pct) => ({
-            label: `${Math.round(pct * 100)}%`,
-            checked: Math.abs(opacity - pct) < 1e-6,
-            run: () => updateShape(id, { opacity: pct }),
-          })),
-        },
-        {
-          label: "Width",
-          submenu: WIDTH_STEPS.map((w) => ({
-            label: `${w} px`,
-            checked: width === w,
-            run: () => updateShape(id, { width: w }),
-          })),
-        },
-        ...buildMenuItems(shapeToggleActions, target),
-        { separator: true },
-        ...buildMenuItems([shapeDeleteAction], target),
-      ],
-    });
-  };
+      () => toolRef.current === "pointer",
+    );
 
   const bridge = useMemo<NonNullable<BuildOptsArgs["shapeEdit"]> | null>(() => {
     if (tool !== "pointer" || !hasShapes) return null;
@@ -145,8 +85,19 @@ export function useShapeEdit(tool: string): ShapeEditResult {
       onReshape: (id, patch) => updateShape(id, patch),
       onContextMenu: openMenu,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, hasShapes, selectedShapeId, setSelectedShapeId, updateShape]);
 
-  return { bridge, menu, closeMenu: () => setMenu(null) };
+  // Warm the object menus once there is a shape to act on.
+  useEffect(() => {
+    if (bridge) preloadObjectMenus();
+  }, [bridge]);
+
+  return {
+    bridge,
+    menu,
+    closeMenu: () => {
+      cancelPendingObjectMenu();
+      setMenu(null);
+    },
+  };
 }
