@@ -8,8 +8,10 @@ import { decimalsForIncrement, pow10 } from "./ticks";
 
 const SUPERSCRIPT = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 
+/** An integer in superscript digits ("-3" -> "⁻³"). */
+export const sup = (k: number): string => String(k).replace("-", "⁻").replace(/\d/g, (d) => SUPERSCRIPT[+d]);
 /** "10" with `k` in superscript digits (10², 10⁻³). */
-const tenTo = (k: number) => `10${String(k).replace("-", "⁻").replace(/\d/g, (d) => SUPERSCRIPT[+d])}`;
+const tenTo = (k: number) => `10${sup(k)}`;
 
 /** Exact decade exponent of `v`, or null when `v` is not a power of ten. */
 function decadeOf(v: number): number | null {

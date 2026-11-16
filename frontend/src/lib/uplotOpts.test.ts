@@ -597,8 +597,9 @@ describe("buildOpts defaultTrace", () => {
       const fmt = tickFormatter({ mode: "auto", digits: 2 });
       const labels = fmt(null as never, denseSplits, 0, 0, 0.0001);
       expect(new Set(labels).size).toBe(denseSplits.length);
-      // Audit 6 P3 (deliberate): one decimal count per linear axis, zero included, as Origin pads.
-      expect(labels).toContain("0.0000");
+      // UX audit 8 #8 (deliberate): ticks all below 1e-2 read as mantissas of a
+      // ×10⁻⁴ factor drawn at the axis end, with a true minus.
+      expect(labels).toEqual(["−2", "−1", "0", "1", "2"]);
     });
 
     it("auto mode reproduces the SAME duplicate-run shape without a fixed/sci path involved (repro proof)", () => {
@@ -620,17 +621,20 @@ describe("buildOpts defaultTrace", () => {
 
     it("never renders a bare negative zero after rounding (auto mode)", () => {
       const fmt = tickFormatter({ mode: "auto", digits: 2 });
-      expect(fmt(null as never, [-0.0000001], 0, 0, 1000)).toEqual(["0"]);
+      // (Beside a 1000 tick: alone, -1e-7 would take a ×10⁻⁷ factor and read "−1".)
+      expect(fmt(null as never, [-0.0000001, 1000], 0, 0, 1000)).toEqual(["0", "1000"]);
     });
 
-    it("auto mode leaves a healthy large-integer range's labels byte-identical to uPlot's own Intl-grouped output", () => {
+    it("auto mode draws a large-integer range as ×10⁴ mantissas, never grouped (UX audit 8 #8)", () => {
       // Field axis from the owner's screenshot: -15,000..15,000, no fraction
       // digits needed. decimalsForIncrement(5000) floors to 0, matching the
       // Intl.NumberFormat default's own effective output at this magnitude
       // (no regression on the healthy axis the owner's report showed).
       const fmt = tickFormatter(undefined);
       const labels = fmt(null as never, [-15000, -10000, -5000, 0, 5000, 10000, 15000], 0, 0, 5000);
-      expect(labels).toEqual(["-15,000", "-10,000", "-5,000", "0", "5,000", "10,000", "15,000"]);
+      // Deliberately changed (UX audit 8 #8): was "-15,000" … "15,000", Intl-grouped.
+      expect(labels).toEqual(["−1.5", "−1.0", "−0.5", "0.0", "0.5", "1.0", "1.5"]);
+      expect(fmt(null as never, [-6000, 0, 6000], 0, 0, 6000)).toEqual(["−6000", "0", "6000"]);
     });
 
     it("auto mode uses publication-style decade labels on a logarithmic axis", () => {

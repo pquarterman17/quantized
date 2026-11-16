@@ -34,6 +34,7 @@ from quantized.calc.figure_ticks import (  # noqa: E402
     apply_tick_steps,
     axis_tick_formatter,
 )
+from quantized.calc.tick_multiplier import AutoTickFormatter  # noqa: E402
 
 
 def test_apply_tick_steps_uses_decoded_intervals_on_linear_axes() -> None:
@@ -98,12 +99,17 @@ def test_axis_tick_formatter_builds_for_fixed_sci_eng() -> None:
         assert f is not None
 
 
-def test_apply_tick_formats_auto_leaves_default_formatter() -> None:
+def test_apply_tick_formats_auto_is_matplotlib_default_in_range() -> None:
+    # Deliberately changed (UX audit 8 #8): auto installs AutoTickFormatter, a
+    # ScalarFormatter that only adds the x10^n factor outside 1e-2..1e4.
     fig, ax = plt.subplots()
     try:
-        default_formatter = ax.xaxis.get_major_formatter()
         apply_tick_formats(ax, {"mode": "auto", "digits": 2}, None)
-        assert ax.xaxis.get_major_formatter() is default_formatter
+        assert type(ax.xaxis.get_major_formatter()) is AutoTickFormatter
+        ax.set_xticks([0.0, 100.0, 200.0])
+        fig.canvas.draw()
+        assert [t.get_text() for t in ax.get_xticklabels()] == ["0", "100", "200"]
+        assert ax.xaxis.get_offset_text().get_text() == ""
     finally:
         plt.close(fig)
 

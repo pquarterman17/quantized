@@ -1,5 +1,5 @@
-// Import wizard preview — pure renderer. A numbered raw-lines strip (header /
-// units / first-data-row rows highlighted) above the resolved-columns grid:
+// Import wizard preview — pure renderer. A numbered raw-lines strip (RawLines:
+// header / units / first-data-row rows highlighted) above the resolved-columns grid:
 // per-column name + unit text fields and a role select (x/y/error/label/
 // ignore, matching `ImportSettings.roles` exactly), then the first N parsed
 // data rows. All editing calls back into useImportWizard — this component
@@ -8,7 +8,9 @@
 import { fmtNum } from "../../../lib/format";
 import { ROLE_OPTIONS, xRoleColumns } from "../../../lib/importwizard";
 import type { ImportColumnRole, ImportPreviewResponse } from "../../../lib/types";
+import { highlightDelimiter } from "../../../lib/importRawLines";
 import { Select } from "../../primitives";
+import RawLines from "./RawLines";
 
 export default function PreviewTable({
   preview,
@@ -21,20 +23,6 @@ export default function PreviewTable({
   onNameChange: (index: number, name: string) => void;
   onUnitChange: (index: number, unit: string) => void;
 }) {
-  const rowBg = (i: number): string | undefined => {
-    if (i === preview.header_line) return "var(--accent-soft)";
-    if (i === preview.units_line) return "var(--capture-soft)";
-    if (i === preview.label_line) return "var(--border-soft)";
-    return undefined;
-  };
-  const rowTitle = (i: number): string | undefined => {
-    if (i === preview.header_line) return "header line";
-    if (i === preview.units_line) return "units line";
-    if (i === preview.label_line) return "label line (legend labels)";
-    if (i === preview.data_start_line) return "first data line";
-    return undefined;
-  };
-
   // P1-5 DEFECT 1: every column currently marked x, when there's more than
   // one -- parse_import only ever keeps the first as the axis and silently
   // drops the rest, so each offending select gets a visible invalid state.
@@ -43,36 +31,12 @@ export default function PreviewTable({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div
-        style={{
-          maxHeight: 130,
-          overflowY: "auto",
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--font-size-sm)",
-          border: "1px solid var(--border-soft)",
-          borderRadius: "var(--radius-sm)",
-        }}
-      >
-        {preview.raw_lines.map((line, i) => (
-          <div
-            key={i}
-            title={rowTitle(i)}
-            style={{
-              display: "flex",
-              gap: 8,
-              padding: "1px 6px",
-              background: rowBg(i),
-              borderTop: i === preview.data_start_line ? "1px solid var(--ok)" : undefined,
-              whiteSpace: "pre",
-            }}
-          >
-            <span style={{ color: "var(--text-faint)", minWidth: 24, textAlign: "right" }}>
-              {i}
-            </span>
-            <span style={{ color: "var(--text-dim)" }}>{line || " "}</span>
-          </div>
-        ))}
-      </div>
+      <RawLines
+        lines={preview.raw_lines}
+        roles={preview}
+        delimiter={highlightDelimiter(preview.delimiter, undefined, preview.raw_lines)}
+        more={Math.max(0, preview.n_lines - preview.raw_lines.length)}
+      />
 
       <div style={{ overflowX: "auto" }}>
         <table className="qz-table">

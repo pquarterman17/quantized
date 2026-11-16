@@ -31,6 +31,7 @@ from quantized.calc.axis_style import apply_axis_style
 from quantized.calc.figure_marks import DropLine, apply_drop_lines, collect_drop
 from quantized.calc.figure_scale import drawable_lim
 from quantized.calc.figure_styles import FigureStyle
+from quantized.calc.tick_multiplier import disable_auto_multiplier
 
 __all__ = ["SLOT_PT", "draw_extra_axes"]
 
@@ -96,6 +97,7 @@ def draw_extra_axes(
             error_spans=spans,
         )
         offset += len(series)
+        disable_auto_multiplier(axk.yaxis)  # its x10^n would sit on Y2's, as on screen
         axk.spines["right"].set_visible(True)
         axk.spines["right"].set_position(("outward", SLOT_PT * (first_slot + i)))
         lim = spec.get("lim")

@@ -463,3 +463,12 @@ describe("isCommittableRow (the one predicate the panel count and commit share)"
     expect(isCommittableRow({ ...base, collision: { resolution: "keep" } })).toBe(true);
   });
 });
+
+describe("mtime comparison tolerance", () => {
+  it("an mtime one ulp from the probe's float is the same instant; a real change is not", () => {
+    const probe = 1_731_000_000.123456;
+    const derived = Number(1_731_000_000_123_456_200n) / 1e9; // ns-derived, last bit differs
+    expect(sourceChangeVerdict({ mtime: derived, size: 5 }, { mtime: probe, size: 5 })).toBe("unchanged");
+    expect(sourceChangeVerdict({ mtime: probe - 1, size: 5 }, { mtime: probe, size: 5 })).toBe("changed");
+  });
+});

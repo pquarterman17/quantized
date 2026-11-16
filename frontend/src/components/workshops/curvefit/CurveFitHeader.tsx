@@ -72,6 +72,8 @@ export function CurveFitModelPicker({
 export interface CurveFitHeaderProps {
   /** Model label row + picker (shared with the global and equation modes). */
   modelPicker: ReactNode;
+  /** The fit range line under the Fit bar (./FitRangeBar). */
+  range?: ReactNode;
   /** The registry-model fit bar; absent in modes that carry their own. */
   fit?: {
     disabled: boolean;
@@ -85,7 +87,7 @@ export interface CurveFitHeaderProps {
   };
 }
 
-export default function CurveFitHeader({ modelPicker, fit }: CurveFitHeaderProps) {
+export default function CurveFitHeader({ modelPicker, range, fit }: CurveFitHeaderProps) {
   return (
     <>
       {modelPicker}
@@ -108,6 +110,7 @@ export default function CurveFitHeader({ modelPicker, fit }: CurveFitHeaderProps
           </span>
         </div>
       )}
+      {range}
       {fit && (
         // Roving tablist, AUTOMATIC activation: every panel stays mounted (a
         // running batch or an open report survives a tab switch), so it is cheap.

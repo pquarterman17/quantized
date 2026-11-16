@@ -30,7 +30,7 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
 const N = 60;
 const ds: Dataset = {
   id: "d1",
-  name: "xrd scan",
+  name: "scan", // no XRD / Raman evidence: the shape default stays Gaussian (peakDefaults)
   data: {
     time: Array.from({ length: N }, (_, i) => i / 10),
     values: Array.from({ length: N }, (_, i) => [

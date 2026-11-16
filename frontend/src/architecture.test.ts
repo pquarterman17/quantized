@@ -864,7 +864,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // major-tick filter) moved to lib/logTicks.ts.
   // 1269 -> 1262 (2026-11-14, bundle diet slice 27): the tool-dock plugins
   // are read through `toolPlugins()` (lib/axisExtrasHook.ts), one import line.
-  "/lib/uplotOpts.ts": 1262,
+  // 1262 -> 1177 (2026-11-16, UX audit 8 #8): the auto tick labels moved to
+  // lib/autoTickValues.ts when they gained the ×10ⁿ factor.
+  "/lib/uplotOpts.ts": 1177,
   // 1175 -> 1164 (2026-11-13, figures integration): the region-shade chunk
   // loader moved to lib/regionDecorLoader.ts.
   // 1164 -> 1076 (2026-11-15, origin gap audit 4 lane A): the error-bar drawing

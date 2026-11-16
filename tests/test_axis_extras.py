@@ -14,6 +14,7 @@ from matplotlib.ticker import AutoMinorLocator, LogLocator  # noqa: E402
 
 from quantized.calc.axis_extras import divide_offset_text  # noqa: E402
 from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
+from quantized.calc.tick_multiplier import AutoTickFormatter  # noqa: E402
 from quantized.routes.export_figures_schema import TickFormatSpec, _tick_fmt  # noqa: E402
 
 
@@ -60,9 +61,10 @@ def test_ln_scale_puts_majors_at_powers_of_e() -> None:
 def test_no_extras_changes_nothing() -> None:
     fig, ax = plt.subplots()
     ax.plot([0, 1], [0, 1])
-    before = type(ax.yaxis.get_major_formatter())
     apply_tick_formats(ax, None, {"mode": "auto", "digits": 2})
-    assert type(ax.yaxis.get_major_formatter()) is before
+    # UX audit 8 #8: auto is the AutoTickFormatter (matplotlib's own between
+    # 1e-2 and 1e4), never an extras wrapper.
+    assert type(ax.yaxis.get_major_formatter()) is AutoTickFormatter
     plt.close(fig)
 
 

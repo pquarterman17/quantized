@@ -162,17 +162,24 @@ describe("the main axes' tick density: matplotlib's AutoLocator", () => {
 describe("auto labels: one decimal count per linear axis", () => {
   const auto = () => tickFormatter({ mode: "auto", digits: 3 }, "linear");
 
-  it("pads 0, 0.0005, ..., 0.0095 to four decimals", () => {
+  // Deliberately changed (UX audit 8 #8): these ticks are all below 1e-2, so
+  // they read as mantissas of a ×10⁻³ factor -- "0.0" … "9.5", one decimal --
+  // where they were padded to "0.0000" … "0.0095".
+  it("pads 0, 0.0005, ..., 0.0095 to one decimal of a ×10⁻³ factor", () => {
     const splits = Array.from({ length: 20 }, (_, i) => Number((i * 0.0005).toFixed(4)));
     const labels = auto()(undefined as never, splits, 1, 30, 0.0005) as string[];
-    expect(labels.slice(17)).toEqual(["0.0085", "0.0090", "0.0095"].map((s) => Number(s).toLocaleString(undefined, { minimumFractionDigits: 4 })));
-    expect(new Set(labels.map((l) => l.replace(/^.*?[.,](\d+)$/, "$1").length))).toEqual(new Set([4]));
+    expect(labels.slice(17)).toEqual(["8.5", "9.0", "9.5"]);
+    expect(new Set(labels.map((l) => l.split(".")[1]?.length))).toEqual(new Set([1]));
   });
 
-  it("stops padding past 5 decimals, where matplotlib turns to an offset (review M3)", () => {
-    const labels = auto()(undefined as never, [0, 1e-9, 2e-9], 1, 30, 1e-9) as string[];
-    expect(labels[0]).toBe("0");
-    expect(labels[2]).toBe((2e-9).toLocaleString(undefined, { maximumFractionDigits: 9 }));
+  it("pads a plain axis to the increment's decimals, without grouping", () => {
+    const labels = auto()(undefined as never, [0, 0.025, 0.05], 1, 30, 0.025) as string[];
+    expect(labels).toEqual(["0.000", "0.025", "0.050"]);
+    expect(auto()(undefined as never, [0, 2500, 5000, 7500], 1, 30, 2500)).toEqual(["0", "2500", "5000", "7500"]);
+  });
+
+  it("a nano-scale axis reads as mantissas too, never a 9-decimal string", () => {
+    expect(auto()(undefined as never, [0, 1e-9, 2e-9], 1, 30, 1e-9)).toEqual(["0", "1", "2"]);
   });
 
   it("hands out one formatter per mode, not a fresh closure per call (review L3)", () => {

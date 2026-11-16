@@ -104,7 +104,9 @@ export function applySeamSides(opts: uPlot.Options, seams: { left: boolean; righ
   // uPlot's auto top pad (a third of ITS default x axis size) applies only
   // beside a y axis; pin it on every panel so the plot areas line up and the
   // shared y grid reads straight across.
-  pad[0] ??= TOP_PAD;
+  // (A function is the auto ×10ⁿ band, lib/autoTickValues.ts: at least the same pin.)
+  const top = pad[0];
+  pad[0] = typeof top === "function" ? (...a) => Math.max(TOP_PAD, top(...a)) : top ?? TOP_PAD;
   // A y2 axis owns the right side; leave its pad to uPlot.
   if (seams.right && axes.length < 3) pad[1] = SEAM_PAD;
   const x = axes[0];

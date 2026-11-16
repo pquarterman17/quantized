@@ -51,6 +51,8 @@ import { Component, lazy, Suspense, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 
+import ToolLoadFailure from "./toolLoadFailure";
+
 /** Marks "the loader's own promise rejected" without touching the rejected
  *  value itself — mutating a caught error (a `Symbol` property write) would
  *  throw on a frozen/non-extensible one (e.g. `Object.freeze(new Error())`),
@@ -90,6 +92,8 @@ function isLoadFailure(error: unknown): error is LoadFailure {
 
 interface CatchProps {
   label: string;
+  /** A floating tool panel (`AppOverlayPanels`' lazyPanel): its own card. */
+  tool: boolean;
   onRetry: () => void;
   children: ReactNode;
 }
@@ -115,6 +119,9 @@ class Catch extends Component<CatchProps, CatchState> {
     console.error(`[lazyRegion] "${this.props.label}" chunk failed to load`, cause);
   }
   render(): ReactNode {
+    if (this.state.failed && this.props.tool) {
+      return <ToolLoadFailure label={this.props.label} onRetry={this.props.onRetry} />;
+    }
     if (this.state.failed) {
       return (
         <div className="qzk-lazy-fail" role="alert">
@@ -156,6 +163,7 @@ export function lazyRegion<P extends object>(
   load: () => Promise<{ default: ComponentType<P> }>,
   label: string,
   fallback: ReactNode | ((props: P) => ReactNode) = null,
+  tool = false,
 ): PreloadableRegion<P> {
   const taggedLoad = taggedLoader(load);
   // Written only by a SUCCESSFUL resolution, read only by a fresh mount's
@@ -189,7 +197,7 @@ export function lazyRegion<P extends object>(
       setAttempt((a) => a + 1);
     };
     return (
-      <Catch key={attempt} label={label} onRetry={retry}>
+      <Catch key={attempt} label={label} tool={tool} onRetry={retry}>
         <Suspense fallback={typeof fallback === "function" ? fallback(props) : fallback}>
           <Comp {...props} />
         </Suspense>

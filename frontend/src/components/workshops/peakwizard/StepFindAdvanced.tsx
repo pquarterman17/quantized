@@ -16,8 +16,13 @@
 import { useMemo } from "react";
 
 import { lazyRegion } from "../../../lib/lazyRegion";
+import { DEFAULT_RECIPE } from "../../../lib/peakwizard";
 import { DEFAULT_PEAK_FIND, type PeakFindParams } from "../peaks/peakFindParams";
 import type { PeakWizardState } from "./usePeakWizard";
+
+// "Defaults" restores the wizard's adaptive find (UX8-D), not the route's
+// SNR 5 / 50 peaks / non-strict prominence that let noise through.
+const WIZARD_DEFAULTS: PeakFindParams = { ...DEFAULT_PEAK_FIND, ...DEFAULT_RECIPE.find };
 
 const PeakFindAdvanced = lazyRegion(() => import("../peaks/PeakFindAdvanced"), "Advanced");
 
@@ -28,6 +33,7 @@ export default function StepFindAdvanced({ w }: { w: PeakWizardState }) {
     <PeakFindAdvanced
       value={value}
       busy={w.findBusy}
+      defaults={WIZARD_DEFAULTS}
       onApply={(params) => {
         w.patchRecipe({ find: params });
         void w.runFind(params);

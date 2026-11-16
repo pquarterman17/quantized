@@ -9,6 +9,7 @@
 // dash-with-a-reason the Peak analyzer's results table shows.
 
 import { fmtNum } from "../../../lib/format";
+import { valueErrCells } from "../../../lib/valueErrCells";
 import { ERR_COLUMNS, type PeakErrField, type PeakTableEntry } from "../../../lib/peakTable";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -23,11 +24,14 @@ interface Props {
 export default function PeakValueCell({ value, field, entry }: Props) {
   if (!entry) return <>{fmtNum(value)}</>;
   const err = entry[ERR_COLUMNS[field]] ?? null;
+  // Curve Fit's value ± error rounding, as every peak table (lib/valueErrCells).
+  const c = valueErrCells(value, err);
+  if (c.inline !== null) return <span style={{ whiteSpace: "nowrap" }}>{c.inline}</span>;
   return (
     <span style={{ whiteSpace: "nowrap" }}>
-      {fmtNum(value)}{" "}
-      {err !== null ? (
-        <span style={faint}>± {fmtNum(err)}</span>
+      {c.value}{" "}
+      {c.error !== null ? (
+        <span style={faint}>± {c.error}</span>
       ) : (
         <span style={faint} title={entry.errReasons?.[field] ?? "no error reported"} data-no-error="">
           ± —

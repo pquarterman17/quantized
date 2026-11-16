@@ -440,7 +440,9 @@ describe("resolveImportFilter — line-position sanity (P1.6 review P1-2)", () =
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toContain("label");
-    expect(r.reason).toContain("line 1");
+    // 1-based, like the wizard's line fields: index 1 is "line 2".
+    expect(r.reason).toContain("(line 2)");
+    expect(r.reason).toContain("data starts at line 2");
   });
 
   it("also catches it via the numeric-row heuristic even if a data-start guess somehow missed it", () => {

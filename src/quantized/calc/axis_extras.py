@@ -37,6 +37,7 @@ from matplotlib.ticker import AutoMinorLocator, Formatter, FuncFormatter, LogLoc
 
 from quantized.calc.axis_breaks import apply_y_breaks, normalize_breaks
 from quantized.calc.axis_scales import apply_custom_ticks, apply_scale_extras
+from quantized.calc.tick_multiplier import times_ten
 
 __all__ = ["apply_axis_extras", "divide_offset_text"]
 
@@ -50,7 +51,7 @@ def divide_offset_text(divide: float) -> str:
     (``axisExtras.ts``'s ``divideLabel``)."""
     exp = math.log10(abs(divide)) if divide else 0.0
     if divide > 0 and abs(exp - round(exp)) < 1e-9:
-        return "×10" + str(int(round(exp))).translate(_SUPERSCRIPT)
+        return times_ten(int(round(exp)))
     return f"×{divide:g}"
 
 

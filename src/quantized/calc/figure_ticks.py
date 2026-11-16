@@ -42,6 +42,7 @@ from matplotlib.ticker import Formatter, MultipleLocator
 from quantized.calc.axis_extras import apply_axis_extras
 from quantized.calc.figure_tick_hint import HintLocator
 from quantized.calc.tick_hint import TickHint
+from quantized.calc.tick_multiplier import install_auto_formatter
 from quantized.heavy_import import heavy_imports
 
 __all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
@@ -271,6 +272,7 @@ def apply_tick_formats(
     for axis, scale, fmt in pairs:
         formatter = axis_tick_formatter(fmt)
         if formatter is None:
+            install_auto_formatter(axis, scale, fmt)  # UX audit 8 #8: the auto x10^n
             continue
         if scale == "log":
             # The log rule still picks WHICH ticks carry text (lib/logTicks.ts).

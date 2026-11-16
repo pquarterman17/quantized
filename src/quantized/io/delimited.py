@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io import _column_kind as ck
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
@@ -78,48 +79,23 @@ def _label_row_role(i: int, header: int, units: int, origin: OriginAsciiRows | N
     return "comment" if origin is not None and i == origin.comments else "label"
 
 
-def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ...]]:
-    """P1.4: encode raw text cells as float codes ``0..n-1`` (NaN = a blank
-    cell -- missing, not a level of its own) plus the ordered level table
-    that inverts them (``levels[code] == original string``, LOSSLESS). Level
-    order is first-appearance order in the file -- deterministic, and the
-    natural default until a user-settable ordering (J1) lands."""
-    levels: list[str] = []
-    seen: dict[str, int] = {}
-    codes = np.full(len(cells), np.nan, dtype=np.float64)
-    for i, raw in enumerate(cells):
-        text = raw.strip()
-        if not text:
-            continue
-        idx = seen.get(text)
-        if idx is None:
-            idx = len(levels)
-            seen[text] = idx
-            levels.append(text)
-        codes[i] = idx
-    return codes, tuple(levels)
-
-
 _WIDTH_SAMPLE_ROWS = 64
 
 
 def _numeric_column(
     values: np.ndarray, tokens: Sequence[Sequence[str]], c: int, n_rows: int
 ) -> bool:
-    """A data column holds NUMBERS: more than a tenth of its rows parse, and
-    they are most of its non-empty cells (a missing-value spelling such as
-    "n/a" counts as empty). A text column with the odd
-    number-looking cell ("r1, r2, 7, r4") is text -- it used to become a
-    mostly-NaN numeric channel and lose its text."""
+    """A data column holds NUMBERS, by the rule the Import Wizard shares
+    (`_column_kind.numeric_column`): more than a tenth of its rows hold a
+    number, and number-like cells (a "NaN" too) are most of its filled ones.
+    A text column with the odd number-looking cell ("r1, r2, 7, r4") is text."""
     n_num = int(np.count_nonzero(~np.isnan(values)))
-    if n_num / max(n_rows, 1) <= 0.1:
-        return False
-    if n_num == n_rows:
+    if n_num == n_rows and n_rows:
         return True  # every row parsed: no need to look at the text
-    n_filled = sum(
-        1 for row in tokens if c < len(row) and row[c].strip().lower() not in layout._MISSING_TOKENS
-    )
-    return 2 * n_num > n_filled
+    if n_num <= 0.1 * max(n_rows, 1):
+        return False
+    n_nan, n_filled = ck.nan_words_and_filled(row[c].strip() for row in tokens if c < len(row))
+    return ck.numeric_column(n_num, n_num + n_nan, n_filled, n_rows)
 
 
 def _sample_width(tokens: Sequence[Sequence[str]], data_start: int) -> int:
@@ -350,7 +326,7 @@ def import_csv(
             if row_units and c < len(row_units) and row_units[c]:
                 unit = row_units[c]
             cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
-            codes, levels = _encode_categorical(cells)
+            codes, levels = ck.encode_categorical(cells)
             cat_levels[len(labels)] = levels
             labels.append(label)
             units.append(unit)
@@ -451,6 +427,8 @@ def import_csv(
         notes.append(decimal_note)
     shown_all = [_extract_units(h)[1] or h for h in col_headers]
     notes.extend([*(e.note(shown_all) for e in dc_found), *comma_notes])
+    if data_columns is None:  # text cells in a column judged numeric: never silent
+        notes.extend(ck.dropped_text_notes(shown_all, matrix, data_tokens, data_idx))
     if time_promoted:
         if time_idx in categorical_idx:
             notes.append(
