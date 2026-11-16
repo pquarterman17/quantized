@@ -48,7 +48,6 @@ const EXEMPT: Readonly<Record<string, string>> = {
 // dataset" and "Save the whole project", and "annotation"/"draw", whose top
 // hits were fuzzy-title noise ("Tables > Join", "Graph Builder").
 const QUERY_TOP: Readonly<Record<string, string>> = {
-  dataset: "Join datasets by key",
   "library items": "Library items",
   "library folders": "Library folders",
   "library workbooks": "Library workbooks",

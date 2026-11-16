@@ -23,6 +23,7 @@ import { REGION_SHADE_ALPHA } from "./uplotOverlays";
 // The error-bar drawing rides this startup chunk too (lib/uplotErrorDraw.ts).
 export { drawErrorBands, drawErrorBars, drawErrorSpans } from "./uplotErrorDraw";
 export { drawColorScatter } from "./uplotScatterDraw"; // and the colour-mapped scatter
+export { finishLoop, loopInk, strokeRows } from "./uplotLoopLine"; // and a non-monotonic-x line's stroke
 
 /** A shade's vertical extent in canvas px: the full plot height, or its y
  *  values on the shade's scale — a value with no position on a positive-only

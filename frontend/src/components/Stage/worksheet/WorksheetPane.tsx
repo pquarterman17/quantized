@@ -33,6 +33,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { BookSource, Dataset } from "../../../lib/types";
+import { consumeSetColumnValuesRequest, onSetColumnValuesRequest } from "../../../store/setColumnValuesRequest";
 import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
 import HeaderEditor, { type HeaderEditTarget } from "./HeaderEditor";
@@ -108,6 +109,14 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
   const [scv, setScv] = useState<ScvTarget | null>(null); // Set Column Values (G3)
   const rootRef = useRef<HTMLDivElement>(null);
+  // Data > Set Column Values… / the palette: a request made before this pane mounted is still pending.
+  useEffect(() => {
+    const open = () => {
+      if (consumeSetColumnValuesRequest() && !ds.linkedCurves) setScv({ kind: "new" });
+    };
+    open();
+    return onSetColumnValuesRequest(open);
+  }, [ds.linkedCurves]);
   /** Open the header editor ON column `col`'s header cell. */
   const editHeader = (col: number) => {
     const cells = rootRef.current?.querySelectorAll<HTMLElement>("[data-col]") ?? [];

@@ -64,7 +64,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "export-hdf5": { description: "Export the active dataset and available raw/corrected forms to HDF5." },
   "figure-builder": {
     description: "Preview or export the focused figure at publication size; Apply updates that figure without changing its data.",
-    keywords: "figure builder live preview publication",
+    keywords: "figure builder live preview publication font fonts size typography text",
   },
   "figure-page": {
     description: "Temporarily compose multiple plots into an aligned publication page, then export it.",
@@ -72,7 +72,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "export-figure": {
     description: "Open the export view: a large, true-size preview with named journal presets, then save as PDF, SVG, PNG, TIFF or EPS.",
-    keywords: "pdf svg eps png tiff vector raster image save publication preview journal preset",
+    keywords: "pdf svg eps png tiff vector raster image save publication preview journal preset aps nature thesis slide poster",
   },
   "export-figure-quick": {
     description: "Export the current plot or composed page straight from a settings dialog, without the preview.",
@@ -127,7 +127,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "sqlite-query": { description: "Run a read-only query against a SQLite database and import the result as a dataset." },
   "find-in-project": { description: "Search dataset names, columns, notes, and metadata across the entire project." },
   trash: { description: "Review, restore, or permanently purge datasets moved to project trash." },
-  "dataset-math": { description: "Create a derived dataset by mathematically combining two existing datasets." },
+  "dataset-math": {
+    description: "Create a derived dataset by mathematically combining two existing datasets.",
+    keywords: "subtract difference ratio algebra minus plus add divide multiply fc zfc background arithmetic",
+  },
   resample: {
     description: "Interpolate one or more datasets onto a new x-grid or another dataset's x, with a live preview.",
     keywords: "interpolate interp1 align regrid common grid match x resample reduce rows bin average duplicate x every nth decimate thin",
@@ -243,7 +246,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "axis-dialog": {
     description: "Edit an axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
-    keywords: "scale limits ticks minor divide font break",
+    keywords: "scale limits range from to min max ticks minor divide font break",
   },
   "y-axis-settings": {
     description: "Set a Y3+ axis' title, scale, range, tick step, number format and colour, or remove it (assign series to Y3+ in the Channels card).",
@@ -269,11 +272,11 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Apply the copied style to every graph in this folder, the Library selection, or all open graphs; one undo step.",
     keywords: "style folder all batch consistent theme",
   },
-  "insert-arrow": { description: "Draw an arrow annotation directly on the active plot." },
+  "insert-arrow": { description: "Draw an arrow annotation directly on the active plot.", keywords: "annotate annotation pointer" },
   "insert-line": { description: "Draw a straight reference or annotation line on the active plot." },
   "insert-rect": { description: "Draw a rectangular region or callout on the active plot." },
   "insert-ellipse": { description: "Draw an elliptical region or callout on the active plot." },
-  "insert-textbox": { description: "Place a movable rich-text annotation box on the active plot." },
+  "insert-textbox": { description: "Place a movable rich-text annotation box on the active plot.", keywords: "annotate label note caption" },
   "insert-inset": { description: "A small graph of any data, on its own axes, over the plot." },
   "insert-image": { description: "A PNG, JPEG or SVG image on the plot." },
   "insert-table": { description: "A small table, typed or from worksheet rows, on the plot." },
