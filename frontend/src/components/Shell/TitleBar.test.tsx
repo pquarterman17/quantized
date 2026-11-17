@@ -72,6 +72,18 @@ describe("TitleBar — browser file name and window title", () => {
     expect(document.title).toBe("• MyRun.dwk — Quantized");
   });
 
+  it("UX9-I: centres the project name, ahead of the shown dataset", () => {
+    useApp.setState({
+      currentProject: { name: "MyRun.dwk", path: "/p/MyRun.dwk" },
+      datasets: [{ id: "d", name: "scan.csv", data: { time: [], values: [], labels: [], units: [], metadata: {} } }],
+      activeId: "d",
+    });
+    const { container } = render(<TitleBar />);
+    const doc = container.querySelector(".qzk-doc")!;
+    expect(doc.querySelector(".qzk-project")?.textContent).toBe("MyRun.dwk");
+    expect(doc.textContent).toBe("MyRun.dwk — scan.csv");
+  });
+
   it("is plain 'Quantized' with no project", () => {
     render(<TitleBar />);
     expect(document.title).toBe("Quantized");

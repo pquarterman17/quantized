@@ -646,7 +646,9 @@ describe("buildOpts defaultTrace", () => {
 
     it("auto log mode leaves minor decades blank and preserves numeric labels for a sub-decade view", () => {
       const fmt = tickFormatter({ mode: "auto", digits: 2 }, "log");
-      expect(fmt(null as never, [1, 2, 5, 10], 0, 0, 1)).toEqual(["1", "", "", "10"]);
+      expect(fmt(null as never, [1, 2, 5, 10, 20, 100], 0, 0, 1)).toEqual(["1", "", "", "10", "", "10²"]);
+      // UX9-I: under three decade anchors, 2 and 5 carry text too (logMajorTickFilter keeps them).
+      expect(fmt(null as never, [1, 2, 5, 10], 0, 0, 1)).toEqual(["1", "2", "5", "10"]);
       expect(fmt(null as never, [0.8, 0.9, 1, 1.1, 1.2], 0, 0, 0.1)).toEqual([
         "0.8", "0.9", "1", "1.1", "1.2",
       ]);
