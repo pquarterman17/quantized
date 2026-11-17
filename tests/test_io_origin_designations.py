@@ -122,7 +122,7 @@ def test_default_graph_plots_every_y_against_nearest_preceding_x_with_errors() -
         "column_designations": {"A": "X", "B": "Y", "C": "Y-error", "D": "X", "E": "Y", "F": "Y"},
     }
     _, ogs = format_origin_script(_ds(list("bcdef"), meta))
-    assert "plotxy iy:=(1,2,3):(4,5):(4,6) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=((1,2,3),(4,5),(4,6)) plot:=201 ogl:=[<new>];" in ogs
     assert "yl.text$" not in ogs  # several curves: no single Y title
 
 
@@ -131,7 +131,7 @@ def test_default_graph_uses_declared_error_target() -> None:
         "error_roles": [{"channel": 2, "target": 0, "axis": "y", "side": "both"}],
     }
     _, ogs = format_origin_script(_ds(["M1", "M2", "sM1"], meta))
-    assert "plotxy iy:=(1,2,4):(1,3) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=((1,2,4),(1,3)) plot:=201 ogl:=[<new>];" in ogs
 
 
 def test_default_graph_without_y_columns_is_skipped() -> None:
@@ -143,7 +143,7 @@ def test_default_graph_without_y_columns_is_skipped() -> None:
 def test_plot_state_all_channels_excludes_error_columns_and_draws_bars() -> None:
     meta = {"error_roles": [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]}
     _, ogs = format_origin_script(_ds(["R", "dR", "T"], meta), graph=GraphSpec())
-    assert "plotxy iy:=(1,2,3):(1,4) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=((1,2,3),(1,4)) plot:=201 ogl:=[<new>];" in ogs
 
 
 def test_column_comments_and_x_long_name_are_exported() -> None:

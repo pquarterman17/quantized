@@ -175,3 +175,12 @@ def test_a_lone_sheet_pseudo_book_is_named_after_its_base_book(tmp_path) -> None
     sheets = [_ds(metadata={"origin_book": "Book1@2"}), _ds(metadata={"origin_book": "Book1@3"})]
     write_opj(sheets, p)
     assert [b.metadata["origin_book"] for b in read_origin_books(p)] == ["Book1", "Book2"]
+
+
+def test_window_title_is_nul_terminated_before_the_storage_marker() -> None:
+    """Plan item 9 (Origin 2026b COM readback, 2026-11-16): without a NUL
+    before ``@${[0|]}`` Origin titled the book ``"My Title@${[0|]}"``."""
+    from quantized.io.origin_project.writer_blocks import window_header
+
+    head = window_header("Bk", "My Title")
+    assert head[195:] == b"My Title\x00@${[0|]}\x00"

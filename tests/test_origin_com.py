@@ -143,9 +143,15 @@ def test_send_to_origin_labtalk_call_sequence(monkeypatch: pytest.MonkeyPatch) -
     assert dispatched == ["Origin.ApplicationSI"]
     assert result == {"books": ["Loop_A"], "rows": [3]}
 
-    # One newbook, then one range/label command per column (X + 2 Y).
+    # One newbook, one range/label command per column (X + 2 Y), then one
+    # designation command (plan item 9: without it every column was a Y).
     assert fake.executed[0] == "newbook name:=Loop_A option:=lsname;"
-    assert len(fake.executed) == 4
+    assert len(fake.executed) == 5
+    assert fake.executed[4] == (
+        "range __d1 = [Loop_A]1!col(1); __d1.type = 4; "
+        "range __d2 = [Loop_A]1!col(2); __d2.type = 1; "
+        "range __d3 = [Loop_A]1!col(3); __d3.type = 1;"
+    )
 
     x_cmd = fake.executed[1]
     assert "range __c1 = [Loop_A]1!col(1);" in x_cmd
@@ -172,6 +178,27 @@ def test_send_to_origin_labtalk_call_sequence(monkeypatch: pytest.MonkeyPatch) -
     assert ref == "[Loop_A]1"
     assert rows == [[1.0, 10.0, 100.0], [2.0, 20.0, 200.0], [3.0, 30.0, 300.0]]
     assert (x, y) == (0, 0)
+
+
+def test_send_to_origin_sets_declared_designations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plan item 9: a Y-error / X-error / second-X column arrives with its
+    role (the .ogs rule), not as a plain Y."""
+    fake = _FakeApp()
+    _make_available(monkeypatch, fake)
+    ds = _ds(
+        time=[1.0, 2.0],
+        values=[[10.0, 0.1, 0.2, 5.0], [20.0, 0.2, 0.3, 6.0]],
+        labels=("y", "dy", "dx", "x2"),
+        units=("", "", "", ""),
+        metadata={
+            "x_column_name": "x",
+            "error_roles": [],
+            "user_column_designations": {"1": "Y-error", "2": "X-error", "3": "X"},
+        },
+    )
+    origin_com.send_to_origin([ds], book_names=["E"])
+    types = [cmd.split(".type = ")[1].rstrip(";") for cmd in fake.executed[-1].split("; range")]
+    assert types == ["4", "1", "3", "7", "4"]
 
 
 def test_send_to_origin_multi_book_dedup_and_row_counts(monkeypatch: pytest.MonkeyPatch) -> None:

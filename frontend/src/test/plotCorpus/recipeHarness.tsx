@@ -39,6 +39,7 @@ import type { Dataset, DataStruct, SeriesStyle } from "../../lib/types";
 import { setColumnDesignation } from "../../store/columnDesignationActions";
 import { setStatPicks } from "../../store/statLevelOptions";
 import { useApp } from "../../store/useApp";
+import { originExports, type OriginExports } from "./originExports";
 
 export type RecipeStep =
   | { gallery: PlotTypeId }
@@ -61,6 +62,8 @@ export interface SpecimenIn {
     axis: Record<string, string>;
     styles: Partial<SeriesStyle>[];
   };
+  /** Also capture the Origin export bodies (tools/plot_corpus/roundtrip_run.py). */
+  origin?: boolean;
 }
 
 export type ExportRoute = "figure" | "statplot" | "categorical" | "map" | "ternary";
@@ -72,6 +75,9 @@ export interface SpecimenOut {
   /** What the store holds after the recipe: enough to tell which renderer
    *  drew it without re-deriving the routing. */
   state?: { plotted: number[]; statMode: boolean; polarMode: boolean; stageTab: string; statPicks: unknown };
+  /** The app's Origin export bodies for this screen (item 9 round trip);
+   *  only when the input asks for them. */
+  origin?: OriginExports;
   error?: string;
 }
 
@@ -183,6 +189,7 @@ export async function runSpecimen(input: SpecimenIn, index: number): Promise<Spe
     input.prelude.styles.forEach((st, i) => {
       if (i < curves.length) useApp.getState().setSeriesStyle(curves[i], st);
     });
+    const origin = input.origin ? await originExports() : undefined;
     const s = useApp.getState();
     const state = {
       plotted: plotted(ds), statMode: s.statMode, polarMode: s.polarMode, stageTab: s.stageTab, statPicks: s.statPicks,
@@ -194,7 +201,7 @@ export async function runSpecimen(input: SpecimenIn, index: number): Promise<Spe
       const data = analysisData(ds) as DataStruct;
       const [a, b, c] = defaultPicks(data, 3);
       const built = buildTernaryRequest(data, { a, b, c, colorBy: null }, { title: "", filename: "ternary" });
-      return { key: input.key, route: "ternary", spec: built.spec, state };
+      return { key: input.key, route: "ternary", spec: built.spec, state, origin };
     }
     if (s.stageTab === "map") {
       const data = mapColumns(ds.data);
@@ -205,14 +212,14 @@ export async function runSpecimen(input: SpecimenIn, index: number): Promise<Spe
         { cmap: "viridis", logZ: false, colorLimits: null, contour: { on: s.contourOn, levelCount: s.contourLevelCount, scale: s.contourScale } },
         { fmt: "png", style: "default", title: "", filename: "map" },
       );
-      return { key: input.key, route: "map", spec, state };
+      return { key: input.key, route: "map", spec, state, origin };
     }
     if (s.statMode && !s.polarMode) {
       const req = await statRequest();
-      return { key: input.key, route: req.route, spec: req.spec, state };
+      return { key: input.key, route: req.route, spec: req.spec, state, origin };
     }
     const spec = buildStageFigureSpec(useApp.getState, ds, "corpus", OPTS);
-    return { key: input.key, route: "figure", spec, state };
+    return { key: input.key, route: "figure", spec, state, origin };
   } catch (err) {
     return { key: input.key, error: err instanceof Error ? err.message : String(err) };
   }

@@ -109,7 +109,9 @@ export async function runSendToOrigin(
     const resolved = await s().resolveDatasets(targets.map((d) => d.id));
     const r = await sendToOriginFn({
       datasets: resolved.map((d) => ({
-        dataset: d.data,
+        // The live error bindings + Set As map, as the .ogs/.opj exports send
+        // them: the COM writer now sets designations from them (plan item 9).
+        dataset: withLiveErrorRoles(d),
         name: d.name.replace(/\.[^.]+$/, ""),
       })),
     });

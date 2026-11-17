@@ -12,7 +12,7 @@ private `test-data` corpus.
 **Parent:** MAIN_PLAN.md
 **Status:** Active
 **Created:** 2026-11-15
-**Updated:** 2026-11-15
+**Updated:** 2026-11-16
 
 ---
 
@@ -124,7 +124,10 @@ installed `Plot.ogs`, with ids from `PlotPopup/FilterPlotTypes.xml`.
   after any fix to see which gaps closed.
 - Items 5-8 are per plot-type family and parallelizable. Each one runs its
   import fixes (this session, COM) and books its creation gaps (cloud).
-- Item 9 (round trip quantized → Origin) is a later batch and reuses item 1.
+- Item 9 (round trip quantized → Origin) shipped 2026-11-16; its exporter
+  gaps are items 20-26 (re-run `tools/plot_corpus/roundtrip_*.py` +
+  `score_roundtrip.py` to verify each). #20/#21/#23 are bugs (the export
+  writes something wrong), #22/#24-#26 feature gaps.
 - Items 10-19 are creation gaps for the cloud sessions, independent of each
   other; #10 and #14 share the missing bar-creation UI. Re-run
   `tools/plot_corpus/scratch_run.py` to verify each.
@@ -564,13 +567,91 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     `POLAR_LINE_PX` (`lib/polarFigureSpec.ts`), so a Series card width
     (2 pt in the corpus) never reaches a polar figure.
 
+### Round-trip exporter gaps found by item 9 (2026-11-16)
+
+Evidence: `tools/plot_corpus/roundtrip_run.py` + `roundtrip_origin.py` +
+`score_roundtrip.py` over the 155 check-2 matches x 4 paths (620 exports
+opened in Origin 2026b over COM); scorecard in
+`$SCRATCH/plot_corpus/roundtrip/fixed/scorecard.md`.
+
+20. **`.ogs` as downloaded imports nothing** (bug, 155/155 exports): the
+    script names its CSV relatively (`impASC fname:="x_data.csv"`) and Origin
+    2026b resolves a relative `impASC` path against neither `cd` nor the
+    script's folder (measured: `cd <folder>` then `run.file` -> 0 rows, an
+    empty book, `plotxy` fails). Every other `.ogs` result in the scorecard
+    was measured with the CSV path made absolute. Needs a way to locate the
+    CSV (embed the data in the script, or prompt with `dlgFile` when the
+    relative name does not exist), then a re-run of the round trip.
+21. **`.ogs` graph is always a scatter** (bug, plot type 246 wrong / 49
+    match): `plotxy ... plot:=201` is hard-coded and `GraphSpec` has no
+    plot-type field, so line (200), line+symbol (202), area (204), column
+    (203), box (206), histogram (219) and stacked column (213) arrive as
+    scatter. The item-9 `plotxy` fix made 196 of these visible (they had no
+    graph at all before). Needs the series mode -> Origin plot code in the
+    `.ogs` request (frontend `runExportOrigin` + `GraphSpec`). The `.ogs`
+    also writes no X-error bars (6 `dx` columns not plotted), no curve
+    styles (295 missing) and no axis range unless the user typed one.
+22. **`.opj` / Send to Origin / `origin-project` carry no graph** (feature
+    gap, 295 curves each): the writers take DataStructs only. A graph needs
+    a graph-window writer for `.opj` (the import side's
+    `opj_graph_windows`/`opj_curves` model) and a `plotxy` step for COM.
+23. **`.opj` worksheet shows 161 of 20,000 rows** (bug, 18 `large_n`
+    exports): COM `wks.nrows` 20,000 and `col(1)[20000]` is right, but
+    `wks.maxrows` is 161 and `GetWorksheet` returns 161 rows -- the sheet's
+    row count is not the u16 the writer sets at `Pd`+82 (or a second field
+    caps it). Needs a COM probe of which header field Origin reads.
+24. **Dates exported as Unix seconds** (bug, 5 `dates` specimens x every
+    path): a date X arrives as 1.77e9 (seconds since 1970) where Origin's
+    own column holds day numbers (2461041); no path converts or marks the
+    column as a date.
+25. **Text category column** (bug, 2 `text_categories` specimens x every
+    path): the imported text X is exported as a Y column after a phantom
+    `Sample Index` X; `.opj` and COM write its level CODES (0, 1, ...) instead
+    of the text; the `.ogs` draws it as a curve.
+26. **Row masks** (feature gap, 11 `masked_rows` exports per path): no path
+    writes an excluded/masked row.
+
 ## Tier 3 — Nice-to-Have
 
-9. **Round trip quantized → Origin** — export each passing figure (`.opj`
-   writer / `.ogs`), open it in Origin over COM, and score Origin's readback
-   against the same truth
+None open.
 
 ## Completed
+
+- ~~**#9 Round trip quantized → Origin**~~ (2026-11-16) — every user path that
+  targets Origin, surveyed: File > Export Origin (.ogs) (`/api/export/origin`),
+  File > Export Origin project (.opj) (`/api/export/opj`), File > Send to
+  Origin (COM) (`/api/export/origin-com`), plus the API-only
+  `/api/export/origin-project`; not round-tripped: `/api/export/xrd-csv`
+  `fmt=origin` (the menu always sends `standard`, XRD only) and `qz convert`
+  (Origin -> CSV/XLSX only). `tools/plot_corpus/roundtrip_run.py` re-runs
+  check 2 and captures the bodies the app's own commands build on that
+  screen (`frontend/src/test/plotCorpus/originExports.ts`);
+  `roundtrip_origin.py` opens each export in an owned `Origin.Application`
+  (COM sends through the shipped `send_to_origin` with this session's app
+  handle) and reads books + graphs back with the harness's oracle reader;
+  `score_roundtrip.py` / `roundtrip_compare.py` classify match / wrong /
+  missing / phantom per (path x plot type x family), unit-tested without
+  Origin (`tests/test_plot_corpus_roundtrip.py`). 155 check-2 matches x 4
+  paths = 620 exports. Fixed here (each re-proven by the Origin readback;
+  no value the exporter writes differently became wrong, but the `plotxy`
+  fix made the hard-coded scatter visible on 196 more curves -- plot type
+  50 -> 246 wrong, 224 -> 0 missing; see #21):
+  - `.ogs` multi-curve graph: Origin 2026b REJECTS the `(x,y):(x,y)` join, so
+    every multi-curve script stopped with no graph; now `((x,y),(x,y,e))`
+    (curves 71 -> 295 match, 224 missing -> 0; two y2 channels proven too);
+  - `.ogs` log axes wrote `layer.x.type = 1`, which reads back LINEAR (log10
+    is 2): axis type 2 wrong -> 0, 140 -> 310 match;
+  - `.ogs` written without a BOM is read as ANSI: 44 non-ASCII long names
+    mojibake -> 0 (UTF-8 BOM);
+  - `.ogs` book titled after the CSV (`x_data.csv`): title restored after
+    `impASC` (155 wrong -> 0 on `.ogs` and `origin-project`);
+  - `.opj` window title read as `"name@${[0|]}"`: NUL before the marker
+    (155 wrong -> 0);
+  - Send to Origin set no designations (19 Y-error / X-error / second-X
+    columns arrived as Y): `wks.col.type` via `range`, and the command now
+    sends the live error roles + Set As map (19 wrong -> 2, both the text
+    category column of #25).
+  Remaining defects booked as #20-#26.
 
 - ~~**#8 Commit the specimens + ratchet**~~ (2026-11-15) — 233 specimens
   (231 `.opju` + PNG + `oracle.json`, 2 refused; 28 MB) committed to private
