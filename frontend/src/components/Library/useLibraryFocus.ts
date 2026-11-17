@@ -7,6 +7,7 @@ import {
   type LibraryContentFilter,
 } from "../../lib/libraryExplorer";
 import {
+  collapsedSheetOf,
   flattenLibraryHierarchy,
   type FlatLibraryNode,
   type LibraryHierarchy,
@@ -15,6 +16,11 @@ import {
 } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+
+/** A workbook with something to disclose: children, but not the lone sheet a
+ *  collapsed row already shows. */
+const isExpandableWorkbook = (node: LibraryNode | undefined): boolean =>
+  node != null && node.children.length > 0 && collapsedSheetOf(node) == null;
 
 /** Session-only browse scope. It never changes entity ownership, selection,
  * import targeting, or the saved workspace. */
@@ -95,7 +101,7 @@ export function useLibraryFocus(
     [hierarchy, scopeContainers.folders],
   );
   const expandableWorkbooks = useMemo(
-    () => new Set([...scopeContainers.workbooks].filter((id) => hierarchy.byKey.get(`workbook:${id}`)?.children.length)),
+    () => new Set([...scopeContainers.workbooks].filter((id) => isExpandableWorkbook(hierarchy.byKey.get(`workbook:${id}`)))),
     [hierarchy, scopeContainers.workbooks],
   );
   const setAllExpanded = (expanded: boolean): void => {

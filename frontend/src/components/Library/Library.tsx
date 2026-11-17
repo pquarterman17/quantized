@@ -136,7 +136,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     let attempts = 0;
     const tryScroll = (): void => {
       const target = document.querySelector(
-        `[data-lib-row="${CSS.escape(key)}"], [data-ds-id="${CSS.escape(node.entityId)}"]`,
+        `[data-lib-row="${CSS.escape(key)}"], [data-ds-id="${CSS.escape(node.entityId)}"], [data-lib-wb="${CSS.escape(key)}"]`,
       );
       if (target) target.scrollIntoView?.({ block: "nearest" }); // absent in jsdom
       else if (++attempts < 5) requestAnimationFrame(tryScroll);
@@ -327,7 +327,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       {allRows.length > 0 && (
         <LibraryExplorerControls
           filter={contentFilter}
-          count={libraryNodeCount(searchActive ? libraryFocus.projectHierarchy : browseHierarchy)}
+          count={libraryNodeCount(searchActive ? libraryFocus.projectHierarchy : browseHierarchy, !searchActive && viewMode !== "details")}
           canExpand={libraryFocus.canExpand}
           canCollapse={libraryFocus.canCollapse}
           searching={searchActive}

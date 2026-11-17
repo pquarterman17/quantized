@@ -22,7 +22,7 @@
 // Extracted out of DatasetRow.tsx so the compact layout doesn't duplicate
 // any of them (DatasetRow.tsx sits near the 400-line component ceiling).
 
-import { DATASET_DND } from "./dnd";
+import { DATASET_DND, WORKBOOK_DND } from "./dnd";
 import DerivedWorksheetMark from "./DerivedWorksheetMark";
 import RecomputedMark from "./RecomputedMark";
 import { isOriginBookDataset } from "../../lib/grouping";
@@ -44,9 +44,13 @@ interface ControlsProps {
   /** Set inside LibraryTree (U5): the grip leaves the Tab sequence, and the
    *  menu button stays in it only on the roving row. */
   treeItem?: TreeItemProps;
+  /** Set when this row IS its single-sheet workbook (collapsedSheetOf): the
+   *  grip also carries WORKBOOK_DND so a folder accepts the drop (a lone
+   *  sheet's own placement follows its workbook, so DATASET_DND alone no-ops). */
+  workbookId?: string;
 }
 
-export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, onOpenMenu, treeItem }: ControlsProps) {
+export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, onOpenMenu, treeItem, workbookId }: ControlsProps) {
   const setActiveDrag = useApp((s) => s.setActiveDrag);
   return (
     <>
@@ -63,8 +67,9 @@ export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, o
         onDragStart={(e) => {
           e.stopPropagation();
           e.dataTransfer.setData(DATASET_DND, d.id);
+          if (workbookId) e.dataTransfer.setData(WORKBOOK_DND, workbookId);
           e.dataTransfer.effectAllowed = "move";
-          setActiveDrag({ kind: "dataset", id: d.id });
+          setActiveDrag(workbookId ? { kind: "workbook", id: workbookId, datasetId: d.id } : { kind: "dataset", id: d.id });
         }}
         onDragEnd={() => setActiveDrag(null)}
         onClick={(e) => e.stopPropagation()}
