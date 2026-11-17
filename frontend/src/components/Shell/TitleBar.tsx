@@ -39,7 +39,7 @@ export default function TitleBar() {
         <span className="ic" style={{ color: "var(--accent)" }}>
           {GLYPHS.brand}
         </span>
-        <span className="nm">Quantized</span>
+        <h1 className="nm">Quantized</h1>
         {projectName && (
           <span className="qzk-project" title={currentProject?.path ?? projectName}>
             — {projectName}

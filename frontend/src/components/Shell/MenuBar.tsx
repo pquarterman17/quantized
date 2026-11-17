@@ -137,11 +137,10 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   return (
     <nav
       className="qzk-menubar"
-      role="menubar"
-      aria-label="Application menu"
       onPointerEnter={warmMenuModel}
       onFocus={warmMenuModel}
     >
+      <div role="menubar" aria-label="Application menu">
       {MENUS.map((label) => {
         const expanded = open?.label === label;
         return (
@@ -188,6 +187,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
           </button>
         );
       })}
+      </div>
 
       {open && openItems.length > 0 && (
         <ContextMenu

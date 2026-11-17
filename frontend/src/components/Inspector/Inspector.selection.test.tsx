@@ -41,11 +41,11 @@ beforeEach(() => {
 });
 
 const cardTitles = () =>
-  [...document.querySelectorAll<HTMLDetailsElement>(".qzk-inspector > details.qz-card")].map(
+  [...document.querySelectorAll<HTMLDetailsElement>(".qzk-inspector > details.qz-card, .qzk-inspector > .qz-card-wrap > details.qz-card")].map(
     (d) => d.querySelector(".qz-card-heading")?.textContent,
   );
 const card = (title: string) =>
-  document.querySelector<HTMLDetailsElement>(`.qzk-inspector > details.qz-card[data-card-id="${title}"]`);
+  document.querySelector<HTMLDetailsElement>(`.qzk-inspector details.qz-card[data-card-id="${title}"]`);
 const select = (sel: PlotSelection | null) => act(() => usePlotSelection.setState({ sel }));
 
 describe("selection-driven Inspector", () => {
