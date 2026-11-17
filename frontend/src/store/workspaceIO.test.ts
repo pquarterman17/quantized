@@ -151,7 +151,7 @@ describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
     await useApp.getState().saveWorkspaceToFile();
     expect(saveBlob).toHaveBeenCalledTimes(1);
     const [blob, name] = vi.mocked(saveBlob).mock.calls[0];
-    expect(name).toBe("workspace.dwk");
+    expect(name).toBe("a.dwk"); // UX9-I: after the dataset, not workspace.dwk
     expect(blob.type).toBe("application/json");
   });
 
@@ -228,14 +228,14 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/data/runs/workspace.dwk" }) });
     useWorkingPaths.getState().use("/data/runs");
     await useApp.getState().saveWorkspaceToFile();
-    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "/data/runs");
+    expect(dialog).toHaveBeenCalledWith("a.dwk", "/data/runs");
   });
 
-  it("suggests workspace.dwk and no directory when nothing is known yet", async () => {
+  it("suggests the dataset's name (UX9-I) and no directory when nothing is known yet", async () => {
     const dialog = vi.fn(async () => ({ path: "/proj/workspace.dwk" }));
     setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/proj/workspace.dwk" }) });
     await useApp.getState().saveWorkspaceToFile();
-    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "");
+    expect(dialog).toHaveBeenCalledWith("a.dwk", "");
   });
 
   it("remembers the folder actually saved into; a cancel remembers nothing", async () => {

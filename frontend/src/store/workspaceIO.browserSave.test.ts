@@ -121,7 +121,7 @@ describe("browser Save in place (File System Access API)", () => {
     const picker = installPicker([file, "run7.dwk"]);
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledOnce();
-    expect(picker.mock.calls[0][0].suggestedName).toBe("workspace.dwk");
+    expect(picker.mock.calls[0][0].suggestedName).toBe("first.dwk"); // UX9-I: after the dataset
     expect(file.content).toContain("first.dat");
 
     rename("second.dat");
@@ -293,7 +293,7 @@ describe("browser Save fails closed", () => {
   it("Save As with a picker refused for lack of a gesture still saves, as a download", async () => {
     win.showSaveFilePicker = vi.fn().mockRejectedValue(gestureError());
     await useApp.getState().saveWorkspaceToFile();
-    expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("workspace.dwk");
+    expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("first.dwk");
     expect(useApp.getState().status).toMatch(/saved workspace/);
   });
 });
@@ -321,7 +321,7 @@ describe("the kept file belongs to one document", () => {
     useApp.getState().addDataset(dataset("unrelated.dat"));
     await useApp.getState().saveWorkspace();
     expect(picker).toHaveBeenCalledTimes(2);
-    expect(picker.mock.calls[1][0].suggestedName).toBe("workspace.dwk"); // not A's file name
+    expect(picker.mock.calls[1][0].suggestedName).toBe("unrelated.dwk"); // not A's file name: the new dataset's
     expect(one.content).toBe(projectA);
     expect(two.content).toContain("unrelated.dat");
   });
@@ -455,9 +455,9 @@ describe("a failed native write on desktop", () => {
 });
 
 describe("browser Save with no File System Access API (download fallback)", () => {
-  it("is named workspace.dwk when nothing was opened", async () => {
+  it("is named after the dataset when nothing was opened (UX9-I: not workspace.dwk)", async () => {
     await useApp.getState().saveWorkspaceToFile();
-    expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("workspace.dwk");
+    expect(vi.mocked(saveBlob).mock.calls[0][1]).toBe("first.dwk");
   });
 
   it("is named after the opened file", async () => {

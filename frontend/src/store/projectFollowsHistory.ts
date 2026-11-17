@@ -38,6 +38,23 @@ import { useApp } from "./useApp";
 
 const SWAP_LABELS: ReadonlySet<string> = new Set(["remove all", "open workspace", "open workspace without layout"]);
 
+const OPEN_LABELS: ReadonlySet<string> = new Set(["open workspace", "open workspace without layout"]);
+
+/** UX9-I: undoing an open swaps the whole project back, never silently -- the
+ *  toast names it and offers Redo (refused once anything else moved the stack). */
+function undidOpenToast(seq: number): void {
+  toast("Undid open workspace — the previous workspace is back", "info", {
+    action: {
+      label: "Redo",
+      onClick: () => {
+        const s = useApp.getState();
+        if (s.future.at(-1)?.seq === seq) s.redo();
+        else toast("Can't redo the open here — other edits came after it. Use Edit ▸ Redo.", "info");
+      },
+    },
+  });
+}
+
 interface Swap {
   before: ProjectIdentity | null;
   /** Known once the entry has been undone (the project then current). */
@@ -66,6 +83,7 @@ export function followProjectHistory(): void {
         swaps.set(f.seq, rec);
         switchProject(rec.before);
       }
+      if (OPEN_LABELS.has(f.label)) undidOpenToast(f.seq);
     } else if (redid) {
       const rec = swaps.get(pf.seq);
       if (rec) {
