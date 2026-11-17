@@ -61,7 +61,7 @@ export function collapsedWorkbookItems(
   const target: WorkbookActionTarget = { node: workbook, onRename, onStageOpen };
   const core = workbookCoreActions
     .filter((a) => !DATASET_COVERED.has(a.id))
-    .map((a) => (a.id === "workbook.rename" ? { ...a, label: "Rename workbook…" } : a));
+    .map((a) => (a.id === "workbook.rename" ? { ...a, label: "Rename…" } : a));
   return [
     ...(onFocus ? [{ label: "Focus on this workbook", run: onFocus } as ContextMenuItem] : []),
     ...buildMenuItems(core, target),

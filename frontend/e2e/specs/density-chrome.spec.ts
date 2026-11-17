@@ -54,9 +54,9 @@ test("sheet rows are one line in the Library and the plot dock is one Tab stop",
   await expect.poll(async () => (await state()).wbFolder).toBe((await state()).folderId);
   expect((await state()).wbFolder).toBeTruthy();
 
-  // ... and its menu's "Rename workbook…" renames the workbook and the sheet together.
+  // ... and its menu's "Rename…" renames the workbook and the sheet together.
   await page.locator("[data-ds-id]", { hasText: "loop5" }).click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Rename workbook…" }).click();
+  await page.getByRole("menuitem", { name: "Rename…", exact: true }).click();
   const input = page.locator("input.qzk-ds-name");
   await input.fill("Renamed loop");
   await input.press("Enter");

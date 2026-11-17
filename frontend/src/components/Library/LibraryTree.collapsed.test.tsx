@@ -17,7 +17,10 @@ import { useLibraryHierarchyRows } from "./useLibraryHierarchyRows";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { WorkbookNode } from "../../lib/workbooks";
 import { askConfirm } from "../overlays/ConfirmDialog";
+import { useToasts } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
+import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
+import PlotWindowFrame from "../windows/PlotWindowFrame";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -57,6 +60,7 @@ function fire(el: Element, type: string, dataTransfer: unknown) {
 }
 
 beforeEach(() => {
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     folders: [folder],
     workbooks: [wb("w1", "data"), wb("w2", "other")],
@@ -68,6 +72,7 @@ beforeEach(() => {
     activeId: null,
     selectedIds: [],
     trash: [],
+    plotWindows: [],
     history: [],
     confirmRemove: false,
   });
@@ -129,6 +134,54 @@ describe("regression 1: drag and Move to folder move the WORKBOOK", () => {
   });
 });
 
+describe("the dual drag payload", () => {
+  const win: PlotWindow = {
+    id: "pw", kind: "plot", title: "", datasetId: "d1", geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 0,
+    winState: "normal", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+  };
+
+  it("dropped on a plot window it plots the SHEET (DATASET_DND), leaving the workbook where it is", () => {
+    act(() => useApp.setState({ plotWindows: [win], focusedWindowId: "pw" }));
+    render(<><Harness /><PlotWindowFrame win={win} focused datasetName="data.csv"><div className="plot" /></PlotWindowFrame></>);
+    const dt = makeTransfer();
+    fire(sheetRow("d2").querySelector(".qzk-drag-handle")!, "dragstart", dt);
+    fire(document.querySelector(".qzk-plotwin-titlebar")!, "drop", dt);
+    const s = useApp.getState();
+    expect(s.plotWindows[0].datasetId).toBe("d2");
+    expect(s.workbooks.find((w) => w.id === "w2")!.folderId).toBeUndefined();
+  });
+
+  it("dropped on a folder it moves the WORKBOOK, not a plot", () => {
+    render(<Harness />);
+    const dt = makeTransfer();
+    fire(sheetRow("d1").querySelector(".qzk-drag-handle")!, "dragstart", dt);
+    expect(Object.keys(dt.data).sort()).toEqual([DATASET_DND, WORKBOOK_DND].sort());
+    fire(folderRow("f1"), "drop", dt);
+    const s = useApp.getState();
+    expect(s.workbooks.find((w) => w.id === "w1")!.folderId).toBe("f1");
+    expect(s.plotWindows).toEqual([]);
+  });
+});
+
+describe("mixed selection Move", () => {
+  it("moves collapsed rows' workbooks, leaves a multi-sheet book's sheet (and its siblings) put, and says so", () => {
+    act(() => useApp.setState({
+      workbooks: [wb("w1", "data"), wb("w3", "pair")],
+      datasets: [ds("d1", "w1"), ds("b", "w3"), ds("c", "w3")],
+      expandedWorkbookIds: ["w3"],
+    }));
+    render(<Harness />);
+    act(() => useApp.getState().selectIds(["d1", "b"]));
+    fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByText('Move 2 selected to "Project"'));
+    const s = useApp.getState();
+    expect(s.workbooks.find((w) => w.id === "w1")!.folderId).toBe("f1");
+    expect(s.workbooks.find((w) => w.id === "w3")!.folderId).toBeUndefined();
+    expect(s.datasets.filter((d) => d.workbookId === "w3").map((d) => d.folderId)).toEqual([undefined, undefined]);
+    expect(useToasts.getState().toasts.some((t) => /1 sheet stays with its workbook/.test(t.msg))).toBe(true);
+  });
+});
+
 describe("regression 4: workbook actions and selection", () => {
   const menuLabels = (): string[] => screen.getAllByRole("menuitem").map((el) => el.textContent ?? "");
 
@@ -137,7 +190,7 @@ describe("regression 4: workbook actions and selection", () => {
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
     const labels = menuLabels();
     for (const want of [
-      "Rename workbook…", "Reimport All", "Reimport Available Sources", "Browse", "Combine…",
+      "Rename…", "Reimport All", "Reimport Available Sources", "Browse", "Combine…",
       "Copy", "Duplicate", "Reveal Source", "Properties…", "Delete", "Quick Plot",
       "Plot (make active)", "Add tag…",
     ]) expect(labels.some((l) => l.startsWith(want))).toBe(true);
@@ -146,10 +199,10 @@ describe("regression 4: workbook actions and selection", () => {
     expect(labels.filter((l) => l === "Duplicate")).toHaveLength(1);
   });
 
-  it("Rename workbook renames the workbook and the sheet together, in one Undo step", () => {
+  it("Rename… renames the workbook and the sheet together, in one Undo step", () => {
     render(<Harness />);
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText("Rename workbook…"));
+    fireEvent.click(screen.getByText("Rename…"));
     const input = document.querySelector(".qzk-ds-name") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "Renamed" } });
     fireEvent.keyDown(input, { key: "Enter" });

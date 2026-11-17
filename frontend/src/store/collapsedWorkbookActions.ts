@@ -3,6 +3,7 @@
 // components/Library/collapsedWorkbook.ts): the row acts as the WORKBOOK for
 // rename and move, so these touch both the workbook and its sheet.
 
+import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
 /** Rename the workbook AND its sheet together -- they share one name, and the
@@ -11,28 +12,38 @@ import { useApp } from "./useApp";
  *  entry and one Undo restores both. A refused sheet rename (a name sheet()
  *  links cannot show) leaves the workbook alone too. */
 export function renameCollapsedWorkbook(datasetId: string, workbookId: string, name: string): void {
+  const wanted = name.trim();
   const s = useApp.getState();
   const before = s.datasets.find((d) => d.id === datasetId)?.name;
-  s.renameDataset(datasetId, name);
+  if (!wanted || before === undefined) return;
+  s.renameDataset(datasetId, wanted);
   const after = useApp.getState().datasets.find((d) => d.id === datasetId)?.name;
-  if (!after) return;
+  if (after !== wanted) return; // refused (or vanished): nothing changed, nothing more to record
   const wb = useApp.getState().workbooks.find((w) => w.id === workbookId);
-  if (!wb || wb.name === after) return;
-  if (after === before) useApp.getState().renameWorkbook(workbookId, after); // sheet already had the name: only the workbook differed
-  else useApp.setState((st) => ({ workbooks: st.workbooks.map((w) => (w.id === workbookId ? { ...w, name: after } : w)) }));
+  if (!wb || wb.name === wanted) return;
+  if (before === wanted) useApp.getState().renameWorkbook(workbookId, wanted); // sheet already had the name: only the workbook differed
+  else useApp.setState((st) => ({ workbooks: st.workbooks.map((w) => (w.id === workbookId ? { ...w, name: wanted } : w)) }));
 }
 
-/** Move the rows' WORKBOOKS (not the sheets) into `folderId`; a dataset with no
- *  workbook falls back to the plain dataset move. */
-export function moveToFolderViaWorkbooks(ids: readonly string[], folderId: string | null): void {
+/** Move the WORKBOOK of every selected COLLAPSED row (a workbook holding only
+ *  that sheet) into `folderId`; a dataset with no workbook falls back to the
+ *  plain dataset move. A sheet of a MULTI-sheet workbook cannot move alone (its
+ *  placement follows its workbook) and moving the workbook would drag its
+ *  unselected siblings along, so it is left out. Returns how many were left. */
+export function moveToFolderViaWorkbooks(ids: readonly string[], folderId: string | null): number {
   const s = useApp.getState();
   const workbookIds = new Set<string>();
   const loose: string[] = [];
+  let stays = 0;
   for (const id of ids) {
     const wb = s.datasets.find((d) => d.id === id)?.workbookId;
-    if (wb && s.workbooks.some((w) => w.id === wb)) workbookIds.add(wb);
-    else loose.push(id);
+    if (wb && s.workbooks.some((w) => w.id === wb)) {
+      if (s.datasets.some((d) => d.workbookId === wb && !ids.includes(d.id))) stays++;
+      else workbookIds.add(wb);
+    } else loose.push(id);
   }
   workbookIds.forEach((id) => s.moveWorkbookToFolder(id, folderId));
   if (loose.length > 0) s.moveDatasetsToFolder(loose, folderId);
+  if (stays > 0) toast(`${stays} sheet${stays > 1 ? "s" : ""} stay${stays > 1 ? "" : "s"} with ${stays > 1 ? "their workbooks" : "its workbook"}`, "info");
+  return stays;
 }
