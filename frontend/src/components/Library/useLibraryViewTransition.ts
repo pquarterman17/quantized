@@ -77,7 +77,7 @@ export function useLibraryViewTransition(options: Options) {
     const tryFocus = (): void => {
       const selector = key.startsWith("worksheet:")
         ? `[data-ds-id="${CSS.escape(key.slice("worksheet:".length))}"]`
-        : `[data-lib-row="${CSS.escape(key)}"]`;
+        : `[data-lib-row="${CSS.escape(key)}"], [data-lib-wb="${CSS.escape(key)}"]`;
       const target = document.querySelector(selector) as HTMLElement | null;
       if (target) {
         target.focus();
