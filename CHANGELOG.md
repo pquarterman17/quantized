@@ -6,6 +6,51 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-17
+
+### Added
+
+- **XRD indexing against built-in phases** (#757):
+  - Pick a phase from the built-in database (Si, Ge, Au, Ag, Cu, Al, Pt, MgO, SrTiO₃, Al₂O₃, ZnO, GaAs, ...) and a wavelength. Your peaks are matched to their (hkl) with d and Δ2θ, and the labels can be placed on the plot.
+  - The Peaks window gains a d (Å) column on 2θ axes and one-click Export CSV / Copy.
+- **Batch fit → parameter vs X** (#751): after a batch fit, one click plots a fitted parameter against temperature, field or the number in each sheet's name.
+- **Baseline on several spectra at once** (#755):
+  - Apply to N selected runs the same baseline on every selected spectrum as one undo step. Each sheet's columns are matched by name.
+  - The outputs are grouped in a folder, with an Overlay these button.
+- **Undo history and Edit ▸ Cut / Copy / Delete** (#758):
+  - Edit ▸ Undo history lists the last 20 steps; click one to jump back, and Redo returns.
+  - Cut, Copy and Delete work on the surface you last worked in.
+  - The command palette now finds "peak table", "d-spacing", "Scherrer", "tau vs T" and "batch fit".
+
+### Changed
+
+- **Origin export** (#746): six exporter fixes, each proven by reading the export back into Origin.
+- **Window titles** (#747):
+  - The project name is shown in the window title.
+  - The export view is titled by the window it was opened from.
+  - Several dropped text files give one combined import note.
+- **Journal export** (#748): multi-panel pages use the preset's real height, and the superscript minus renders in every journal preset.
+- **Peak "Fit all together"** (#749) converges reliably and reports real ±1σ uncertainties, with a warning when the fit is poor.
+- **Library** (#750): a single-sheet workbook is one row.
+- **Multi-panel export** (#752):
+  - The grid fits itself to the panels you add, starting at 1×2.
+  - The save note is one line.
+  - Single-series panels drop their legend.
+- **One waterfall** (#753): the menu command draws the waterfall and the Channels slider tunes it, as one undo step.
+- **Project round-trip** (#754):
+  - A reopened project keeps markers-on-data with a dashed fit.
+  - Save suggests the project or dataset name instead of `workspace.dwk`.
+  - The title bar shows the project.
+  - Undo straight after opening no longer empties the project.
+  - Short log axes label 2 and 5 within a decade, on screen and in export.
+- **Signal Processing** (#755): the preview gives a normalised curve its own scale, and the X note shows the real column name.
+- **Accessibility** (#756):
+  - The page has proper landmarks and a valid menu bar.
+  - Help buttons sit outside card headers.
+  - The Library splitter resizes with the arrow keys, and double-click resets it.
+  - The Curve Fit model search shows a real list.
+  - The light-theme active tab has stronger contrast.
+
 ## [0.37.0] - 2026-11-17
 
 ### Changed
