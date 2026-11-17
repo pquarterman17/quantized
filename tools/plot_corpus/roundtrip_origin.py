@@ -8,7 +8,7 @@ fresh project in ONE owned ``Origin.Application`` (``origin_session``; never
   ``impASC`` names its CSV relative to it), then ``run.file`` the ``.ogs``;
 * ``opj`` -- ``Application.Load`` of the ``.opj``;
 * ``com`` -- the app's own ``io.origin_com.send_to_origin`` with the saved
-  request body, its ``EnsureDispatch("Origin.ApplicationSI")`` answered with
+  request body, its dispatch of the user's Origin (the SI ProgID) answered with
   THIS session's ``Origin.Application`` (so the owner's Origin is never
   touched, and the LabTalk / ``PutWorksheet`` calls are the shipped ones).
 
