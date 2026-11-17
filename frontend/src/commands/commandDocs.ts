@@ -179,7 +179,11 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   // ── commands/plotCommands.ts ──
   yLog: { description: "Switch the vertical axis between linear, logarithmic, and reciprocal scales." },
   yTickFormat: { description: "Change vertical-axis labels between automatic, fixed, scientific, and engineering notation." },
-  waterfall: { description: "Separate overlapping curves with an adjustable vertical offset." },
+  waterfall: {
+    description: "Draw the selected datasets as a waterfall: plot them together and stack the curves with a vertical offset.",
+    keywords: "waterfall offset stack stagger separate overlapping curves spectra",
+  },
+  "waterfall-export": { description: "Export the stacked waterfall data as CSV (with or without the offset), or draw a 3-D waterfall." },
   "contour-scattered": { description: "Interpolate scattered X, Y, Z points onto a grid and show them as a map." },
   "function-plot": { description: "Plot y = f(x; parameters) over an x range as a live, editable curve." },
   "plot-recipe-manager": { description: "Browse every saved recipe and template.", keywords: "plot recipes manager" },
