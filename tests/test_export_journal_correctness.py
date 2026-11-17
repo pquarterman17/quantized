@@ -1,7 +1,7 @@
 """UX9-A: journal export correctness.
 
-* A page honours the preset's stated width x height (the page is split among
-  panels, not scaled by rows/cols -- 1x2 APS double used to be 17.8 x 3.25 cm).
+* A grid page is the preset's stated width x (height x rows): the preset
+  height is one row of panels (1x2 APS double used to be 17.8 x 3.25 cm).
 * ``⁻`` / ``−`` render in every preset font (no LastResort tofu box).
 """
 
@@ -36,17 +36,22 @@ def _render(style: str, rows: int, cols: int, **kw: Any) -> bytes:
 
 
 @pytest.mark.parametrize("style", sorted(FIGURE_STYLES))
-@pytest.mark.parametrize("grid", [(1, 1), (1, 2), (2, 2)])
+@pytest.mark.parametrize("grid", [(1, 1), (1, 2), (2, 2), (3, 1)])
 def test_page_size_is_the_presets_stated_size(style: str, grid: tuple[int, int]) -> None:
     st = FIGURE_STYLES[style]
     w, h = _mediabox_cm(_render(style, *grid))
     assert w == pytest.approx(st.fig_width_cm, abs=0.05)
-    assert h == pytest.approx(st.fig_height_cm, abs=0.05)
+    assert h == pytest.approx(st.fig_height_cm * grid[0], abs=0.05)
 
 
 def test_aps_double_1x2_is_17_8_by_6_5_cm() -> None:
     w, h = _mediabox_cm(_render("aps_double", 1, 2))
     assert (round(w, 1), round(h, 1)) == (17.8, 6.5)
+
+
+def test_aps_double_2x2_is_17_8_by_13_cm() -> None:
+    w, h = _mediabox_cm(_render("aps_double", 2, 2))
+    assert (round(w, 1), round(h, 1)) == (17.8, 13.0)
 
 
 def test_explicit_height_wins() -> None:
