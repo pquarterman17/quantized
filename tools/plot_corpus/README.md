@@ -23,6 +23,9 @@ Origin's own answers as `oracle.json` for the import and from-scratch scorers
 | `import_compare.py` / `import_values.py` | Pure verdict logic: curves, axes, styles, plot type / values, column metadata, sheet pairing. Every item is match / wrong / phantom / omitted + reason. |
 | `frontend_view.py` | Mirror of what the frontend draws for a figure; pinned to the real frontend by `tests/fixtures/plot_corpus/frontend_view_cases.json` (pytest + vitest). |
 | `score_report.py` | Tallies, grouped wrong/phantom findings (listed first), markdown. |
+| `roundtrip_run.py` | Plan item 9, step 1: re-runs check 2 and, for every match, posts the bodies the app's own Origin export commands build (`frontend/src/test/plotCorpus/originExports.ts`) to `/api/export/origin`, `/opj`, `/origin-project`; saves the COM body. |
+| `roundtrip_origin.py` | Step 2 (COM lock): opens each export in an owned `Origin.Application` (`.ogs` run as shipped, then with its CSV path made absolute; `.opj` loaded; COM through the shipped `send_to_origin` with this session's app) and reads books + graphs back. |
+| `score_roundtrip.py` / `roundtrip_compare.py` | Step 3: match / wrong / missing / phantom per (path x plot type x family) against the planted sheet and `oracle.json`; `scorecard.md` lists the wrong values first. |
 | `scorecard.py` / `scorecard_page.py` | Plan item 4: merges both scorecards into one row per (type x family) with the owning plan item; writes `scorecard.md`, `scorecard.json` and the owner review page `index.html` (Origin PNG / import render / from-scratch PNG; the import column is empty, nothing rasterises the import). |
 
 ```bash
@@ -33,6 +36,10 @@ uv run --with pywin32 python tools/plot_corpus/origin_build.py --corpus <gen> --
 uv run python tools/plot_corpus/score_import.py --corpus <corpus> --generated <gen> --out <dir>
 # check 2, no Origin needed:
 uv run python tools/plot_corpus/scratch_run.py --corpus <corpus> --gen <gen> --out <review>
+# round trip quantized -> Origin (item 9); step 2 under the shared COM lock:
+uv run python tools/plot_corpus/roundtrip_run.py --corpus <corpus> --gen <gen> --out <rt>
+uv run --with pywin32 python tools/plot_corpus/roundtrip_origin.py --dir <rt>
+uv run python tools/plot_corpus/score_roundtrip.py --dir <rt> --corpus <corpus> --gen <gen>
 ```
 
 Output stays out of the repo. The built corpus is committed to the private
@@ -64,3 +71,11 @@ uv run python tools/plot_corpus/score_import.py --corpus ../test-data/origin/gen
   7 step horizontal, 8 step vertical, 9/10 centred steps. `set %C -l` uses a
   different numbering.
 - `layer.x.type`: 1 linear (default), 2 log10.
+- Export round trip (item 9, 2026-11-16): `plotxy iy:=(1,2):(1,3)` FAILS (no
+  graph); `iy:=((1,2),(1,3))` and `(1,2:3)` work, a triple `(1,2,3)` adds a
+  231 error-bar plot. A relative `impASC fname:="x.csv"` resolves against
+  neither `cd` nor the script's folder. `run.file` needs a backslash path. A
+  script file without a BOM is read as ANSI. `impASC` titles the book after
+  the CSV. `range r = [Book]1!col(n); r.type = 3;` sets a designation where
+  `win -a` cannot find a book `newbook ... option:=lsname` named by its long
+  name.

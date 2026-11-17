@@ -50,11 +50,17 @@ from quantized.io.origin_graph import (
 from quantized.io.origin_x_echo import kept_channels, remap_graph
 
 __all__ = [
+    "OGS_BOM",
     "GraphSpec",
     "format_origin_project_script",
     "format_origin_script",
     "origin_rich_unit",
 ]
+
+# Prefix of a written ``.ogs`` file: Origin reads a script file WITHOUT a byte
+# order mark as ANSI, so a UTF-8 long name "2θ" lands as "2Î¸"; with the
+# UTF-8 BOM it lands as written (COM readback, Origin 2026b, 2026-11-16).
+OGS_BOM = "﻿"
 
 # The comment each LabTalk designation line carries.
 _TYPE_COMMENT = {
@@ -120,6 +126,9 @@ def format_origin_script(
     base = str(source).replace("\\", "/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
     book = _sanitize(book_name or base or "data")
     sheet = _sanitize(sheet_name or book)
+    # The book's display title: the caller's long name, else the unsanitized
+    # name the dataset goes by.
+    title = book_long_name or book_name or base or book
 
     # The X column's display name: its long name when the dataset carries one
     # (an Origin import's `x_column_name` is the SHORT name, e.g. "A"), the
@@ -169,7 +178,9 @@ def format_origin_script(
         # 2-header CSV correctly and the explicit designations below re-assert
         # names/units. See docs/origin_project_format.md.)
         f'impASC fname:="{csv_name}";',
-        *([f'page.longname$ = "{escape_lt(book_long_name)}";'] if book_long_name else []),
+        # impASC also titles the book after the CSV ("x_data.csv", COM
+        # readback 2026-11-16): always restore the dataset's own title.
+        f'page.longname$ = "{escape_lt(title)}";',
         f'wks.name$ = "{sheet}";',
         # A successful impASC renamed the book; capture its (post-import) short
         # name so the item-26 secondary-axis plotxy can reference the worksheet
@@ -263,7 +274,7 @@ def format_origin_project_script(
             sheet_name=book,
             make_graph=make_graph,
             created=created,
-            book_long_name=long_name if long_name != book else "",
+            book_long_name=long_name or raw,
         )
         csvs.append((csv_name, csv_text))
         body = ogs_text.splitlines()
