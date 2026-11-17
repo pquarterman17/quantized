@@ -6,6 +6,42 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-17
+
+### Changed
+
+- **First plot after import** (#740):
+  - Monitor columns are left off the default plot: temperature against a non-temperature X, status or setpoint columns, readbacks in X's unit, and constant columns.
+  - Log Y turns on for positive data spanning more than 3 decades.
+  - x,y,z grids whose x and y share a unit open as a map.
+  - The import toast offers a one-click undo: Linear Y, Line plot or Plot all.
+- **Publication-style axis numbers** (#739):
+  - Tick labels drop digit grouping and use a true minus sign.
+  - Very small or very large axes show mantissas with a ×10ⁿ factor at the axis end, on screen and in export alike.
+  - Each worksheet column uses one number notation.
+- **Fit and peak defaults** (#737):
+  - Curve Fit uses the visible X range while the plot is zoomed.
+  - A poor fit shows a warning status instead of a green one.
+  - The CI column wraps instead of being clipped.
+  - Peak Analyzer finds at most 9 peaks and defaults to pseudo-Voigt for XRD/Raman, keeping the fit within its time limit.
+  - All peak tables share one value ± error format.
+- **Import recovery** (#738):
+  - The import wizard always shows the file's raw lines with 1-based line numbers, even when parsing fails.
+  - Failure toasts say why ("the file is empty", "header but no data rows") and fold together when several fail.
+  - A "Lost connection" banner offers Reload.
+- **Density and chrome** (#741):
+  - Library rows are more compact.
+  - Double-click opens a dataset; rename it from its name when it is open, or with F2.
+  - Legend arrows appear on hover.
+  - The plot toolbar is a single Tab stop.
+  - Light-theme inputs and buttons are clearer.
+  - Annotations show a $…$ hint with a live preview.
+  - First run has a single empty state.
+
+### Fixed
+
+- A column holding NaN in a decimal-comma (or point-decimal) file is no longer turned into categories. Direct import and the wizard now share one numeric-column rule (#738).
+
 ## [0.36.0] - 2026-11-16
 
 ### Added
