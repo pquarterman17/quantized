@@ -16,6 +16,12 @@ describe("projectSaveName", () => {
     expect(projectSaveName({ currentProject: null, datasets, activeId: null })).toBe("sample7.dwk");
   });
 
+  it("keeps a trailing number that is not an extension", () => {
+    expect(dwkNameFrom("Fe3O4 sample 1.5")).toBe("Fe3O4 sample 1.5.dwk");
+    expect(dwkNameFrom("sample7.csv")).toBe("sample7.dwk");
+    expect(dwkNameFrom("scan.0001.dat")).toBe("scan.0001.dwk");
+  });
+
   it("is null for an empty session (the caller keeps workspace.dwk)", () => {
     expect(projectSaveName({ currentProject: null, datasets: [], activeId: null })).toBeNull();
   });

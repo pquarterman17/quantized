@@ -11,7 +11,7 @@ const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 
 /** `name` as a `.dwk` file name, or null when nothing usable is left. */
 export function dwkNameFrom(name: string | null | undefined): string | null {
-  const stem = (name ?? "").replace(/\.[^./\\]{1,8}$/, "").replace(BAD, "_").replace(/^[\s.]+|[\s.]+$/g, "").slice(0, 120).replace(/[\s.]+$/, "");
+  const stem = (name ?? "").replace(/\.(?=[^./\\]*[A-Za-z])[^./\\]{1,8}$/, "").replace(BAD, "_").replace(/^[\s.]+|[\s.]+$/g, "").slice(0, 120).replace(/[\s.]+$/, "");
   if (!stem || !/[^_]/.test(stem)) return null;
   return `${RESERVED.test(stem) ? "_" : ""}${stem}.dwk`; // "CON.dwk" cannot be created on Windows
 }
