@@ -49,9 +49,11 @@ import { recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import Sparkline from "./Sparkline";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
+import type { WorkbookLibraryNode } from "../../lib/libraryHierarchy";
 import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { RENAME_ACTIVE_EVENT } from "../../lib/renameActive";
 import type { Dataset } from "../../lib/types";
+import { renameCollapsedWorkbook } from "../../store/collapsedWorkbookActions";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
@@ -88,6 +90,10 @@ interface Props {
   treeMode?: boolean;
   /** LibraryTree only: treeitem semantics + the roving tab stop (U5). */
   treeItem?: TreeItemProps;
+  /** Set when this row IS its single-sheet workbook (collapsedWorkbook.ts). */
+  workbook?: WorkbookLibraryNode;
+  /** "Focus on this workbook" for that workbook (LibraryTreeRow). */
+  onFocusWorkbook?: () => void;
 }
 
 export default function DatasetRow({
@@ -103,6 +109,8 @@ export default function DatasetRow({
   folderCaption,
   treeMode = false,
   treeItem,
+  workbook,
+  onFocusWorkbook,
 }: Props) {
   const innerTab = innerTabIndex(treeItem);
   // Staleness badge (#4): amber when this dataset's corrections or fit await
@@ -143,7 +151,8 @@ export default function DatasetRow({
   }, [d.id, d.name]);
 
   const commitRename = () => {
-    if (rename != null) renameDataset(d.id, rename);
+    if (rename != null && workbook) renameCollapsedWorkbook(d.id, workbook.entity.id, rename);
+    else if (rename != null) renameDataset(d.id, rename);
     setRename(null);
   };
 
@@ -224,6 +233,9 @@ export default function DatasetRow({
     canMoveDown,
     () => setRename(d.name),
     () => setTag(""),
+    undefined,
+    workbook,
+    onFocusWorkbook,
   );
 
   const nameProps = {
@@ -254,7 +266,7 @@ export default function DatasetRow({
   const ch = d.pending ? d.pending.cols : d.data.labels.length;
   const pendingTitle = d.pending ? "full data loads on first view" : undefined;
   const controls = (
-    <DatasetRowControls dataset={d} stale={stale} onRecalc={() => void recalcNow()} sheetNumber={sheetNumber} onOpenMenu={openMenuAt} treeItem={treeItem} />
+    <DatasetRowControls dataset={d} stale={stale} onRecalc={() => void recalcNow()} sheetNumber={sheetNumber} onOpenMenu={openMenuAt} treeItem={treeItem} workbookId={workbook?.entityId} />
   );
   const nameEl = <DatasetRowName {...nameProps} />;
   const folderCaptionEl = folderCaption && (
@@ -268,6 +280,7 @@ export default function DatasetRow({
       className={rowClassName}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
+      data-lib-wb={workbook?.key}
       tabIndex={0}
       {...treeItem}
       // UX-001: `active` = shown in the focused window (LibraryTree passes

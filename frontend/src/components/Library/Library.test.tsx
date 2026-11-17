@@ -114,8 +114,12 @@ describe("Library — focused project exploration", () => {
         { id: "w2", name: "Book B", folderId: "f2", order: 0 },
       ],
       datasets: [
+        // Two sheets each: a one-sheet workbook collapses into its sheet's row
+        // (collapsedSheetOf), and these tests drive the workbook header.
         { ...dsWith("Sheet A"), workbookId: "w1" },
+        { ...dsWith("Sheet A2"), workbookId: "w1" },
         { ...dsWith("Sheet B"), workbookId: "w2" },
+        { ...dsWith("Sheet B2"), workbookId: "w2" },
       ],
       expandedFolders: ["f1", "f2"],
       expandedWorkbookIds: ["w1", "w2"],
@@ -162,7 +166,7 @@ describe("Library — focused project exploration", () => {
     act(() => {
       useApp.setState({
         workbooks: [{ id: "w2", name: "Book B", folderId: "f2", order: 0 }],
-        datasets: [{ ...dsWith("Sheet B"), workbookId: "w2" }],
+        datasets: [{ ...dsWith("Sheet B"), workbookId: "w2" }, { ...dsWith("Sheet B2"), workbookId: "w2" }],
       });
     });
     expect(await screen.findByText("Book B")).toBeInTheDocument();
@@ -201,7 +205,7 @@ describe("Library — focused project exploration", () => {
 
   it("filters by item type without leaking the flat fallback and offers a one-click reset", async () => {
     render(<Library />);
-    expect(await screen.findByText("6 shown")).toBeInTheDocument();
+    expect(await screen.findByText("8 shown")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Show item type" }), { target: { value: "reports" } });
 
     expect(screen.getByText("No reports in this view.")).toBeInTheDocument();

@@ -4,10 +4,12 @@ import type { AnalysisResult } from "./analysisResult";
 import { createFigureDocument } from "./figureDocument";
 import {
   buildLibraryHierarchy,
+  collapsedWorkbookCount,
   flattenLibraryHierarchy,
   type LibraryNode,
   type LibraryNodeKey,
 } from "./libraryHierarchy";
+import { libraryNodeCount } from "./libraryExplorer";
 import type { OriginFigureEntry } from "./originFigures";
 import { createPageDocument } from "./pageDocumentActions";
 import { defaultPlotView } from "./plotview";
@@ -288,13 +290,59 @@ describe("buildLibraryHierarchy", () => {
 describe("flattenLibraryHierarchy", () => {
   it("emits only expanded subtrees in deterministic display order", () => {
     const hierarchy = buildLibraryHierarchy({
-      folders: [folder("f", null)], workbooks: [workbook("w", "f")], datasets: [dataset("d", "w")],
+      folders: [folder("f", null)], workbooks: [workbook("w", "f")], datasets: [dataset("d", "w"), dataset("e", "w")],
     });
     expect(flattenLibraryHierarchy(hierarchy, new Set()).map((row) => row.node.key)).toEqual(["folder:f"]);
     expect(flattenLibraryHierarchy(hierarchy, new Set<LibraryNodeKey>(["folder:f"]))
       .map((row) => row.node.key)).toEqual(["folder:f", "workbook:w"]);
     expect(flattenLibraryHierarchy(hierarchy, new Set<LibraryNodeKey>(["folder:f", "workbook:w"]))
-      .map((row) => row.node.key)).toEqual(["folder:f", "workbook:w", "worksheet:d"]);
+      .map((row) => row.node.key)).toEqual(["folder:f", "workbook:w", "worksheet:d", "worksheet:e"]);
+  });
+
+  describe("single-sheet workbook collapse (one row, UX8-I)", () => {
+    const one = buildLibraryHierarchy({
+      folders: [folder("f", null)], workbooks: [workbook("w", "f")], datasets: [dataset("d", "w")],
+    });
+
+    it("renders the workbook as its sheet's row, placed where the workbook is", () => {
+      const rows = flattenLibraryHierarchy(one, new Set<LibraryNodeKey>(["folder:f"]));
+      expect(rows.map((row) => row.node.key)).toEqual(["folder:f", "worksheet:d"]);
+      expect(rows[1].workbook?.key).toBe("workbook:w");
+      expect(rows[1].node.depth).toBe(1); // the workbook's depth, not the sheet's 2
+      expect(rows[1].node.parentKey).toBe("folder:f");
+      expect(rows[1].hasChildren).toBe(false);
+    });
+
+    it("is opt-out, and the plain flatten still shows the header", () => {
+      expect(flattenLibraryHierarchy(one, new Set<LibraryNodeKey>(["folder:f"]), { collapseSingleSheet: false })
+        .map((row) => row.node.key)).toEqual(["folder:f", "workbook:w"]);
+    });
+
+    it("re-expands when the workbook gains a second sheet or a graph", () => {
+      const twoSheets = buildLibraryHierarchy({
+        folders: [], workbooks: [workbook("w")], datasets: [dataset("d", "w"), dataset("e", "w")],
+      });
+      expect(flattenLibraryHierarchy(twoSheets, new Set()).map((r) => r.node.key)).toEqual(["workbook:w"]);
+      const withGraph = buildLibraryHierarchy({
+        folders: [], workbooks: [workbook("w")], datasets: [dataset("d", "w")],
+        editableFigures: [createFigureDocument({ id: "fig", name: "G", datasetId: "d", view: defaultPlotView() })],
+      });
+      expect(flattenLibraryHierarchy(withGraph, new Set()).map((r) => r.node.key)).toEqual(["workbook:w"]);
+    });
+
+    it("keeps recovered Origin books as workbook rows", () => {
+      const origin = buildLibraryHierarchy({
+        folders: [], workbooks: [{ ...workbook("w"), originBook: "Book1" }], datasets: [dataset("d", "w")],
+      });
+      expect(collapsedWorkbookCount(origin)).toBe(0);
+      expect(flattenLibraryHierarchy(origin, new Set()).map((r) => r.node.key)).toEqual(["workbook:w"]);
+    });
+
+    it("the shown count drops exactly the collapsed workbooks (Details lists every entity)", () => {
+      expect(libraryNodeCount(one)).toBe(3);
+      expect(libraryNodeCount(one, true)).toBe(2);
+      expect(collapsedWorkbookCount(one)).toBe(1);
+    });
   });
 
   // Re-audit #9 (owner decision): a new import lands BELOW the existing root

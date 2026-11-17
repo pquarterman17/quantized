@@ -160,7 +160,7 @@ export default function PlotWindowFrame({
   // the moment a dataset drag starts, not only the one the pointer happens
   // to be over (`dropping`, above).
   const isDropCandidate =
-    activeDrag?.kind === "dataset" && win.kind !== "snapshot" && win.kind !== "panel" && !dropping;
+    (activeDrag?.kind === "dataset" || activeDrag?.datasetId != null) && win.kind !== "snapshot" && win.kind !== "panel" && !dropping;
 
   return (
     <div
