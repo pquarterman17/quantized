@@ -2,6 +2,7 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { reopenRecent } from "../../lib/reopenRecent";
 import type { RecentFile } from "../../lib/recentFiles";
 import { recentParentLabel, relativeTime } from "../../lib/recentLabels";
+import { jumpBackInHistory, undoHistoryRows } from "../../lib/undoHistory";
 import { runAction, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 
@@ -49,6 +50,29 @@ export function recentMenuItems(): ContextMenuItem[] {
         { separator: true } as const,
         { label: "Clear recent", run: clearRecent },
       ],
+    },
+  ];
+}
+
+/** Edit's trailing "Undo history" flyout: the last 20 edits, newest first, the
+ *  current state marked; a click jumps back to the state after that edit (the
+ *  redo stack stays intact). Built per menu open, like Recent. */
+export function undoHistoryMenuItems(): ContextMenuItem[] {
+  const rows = undoHistoryRows(useApp.getState().history);
+  if (!rows.length) {
+    return [{ separator: true }, { label: "Undo history", submenu: [], disabled: true, title: "Nothing to undo yet" }];
+  }
+  return [
+    { separator: true },
+    {
+      label: "Undo history",
+      submenu: rows.map((r) => ({
+        label: r.label,
+        checked: r.current,
+        title: r.current ? "Current state" : `Jump back ${r.stepsBack} step${r.stepsBack === 1 ? "" : "s"} (Redo returns)`,
+        shortcutLabel: r.current ? "current" : undefined,
+        run: () => void jumpBackInHistory(useApp.getState, r.stepsBack),
+      })),
     },
   ];
 }
@@ -196,6 +220,7 @@ export function buildAppMenuItems(
   const result = [...roots];
   if (roots.length && sections.size) result.push({ separator: true });
   for (const [label, submenu] of sections) result.push({ label, submenu });
+  if (group === "Edit") result.push(...undoHistoryMenuItems());
   if (destructive.length) {
     if (result.length) result.push({ separator: true });
     result.push(...destructive);

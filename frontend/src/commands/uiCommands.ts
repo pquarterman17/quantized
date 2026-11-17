@@ -13,6 +13,7 @@ import { copyText } from "../lib/clipboard";
 // deferral that defers nothing.
 import { saveBlob } from "../lib/download";
 import type { StoreGet } from "../lib/exportActive";
+import { buildEditClipboardCommands } from "./editClipboardCommands";
 import { toast } from "../store/toasts";
 import { inspectorShown, toggleInspector } from "../store/inspectorToggle";
 import { openHelp, useHelp } from "../store/help";
@@ -132,6 +133,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       shortcut: PALETTE_SHORTCUT,
       run: () => s().setCmdk(true),
     },
+    ...buildEditClipboardCommands(s),
     {
       id: "paste-data",
       group: "Edit",
