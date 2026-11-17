@@ -122,6 +122,10 @@ class FitMultiPeakRequest(BaseModel):
     bg_degree: int = 1
     constrain: bool = False
     link_mode: str = "None"
+    # The app's fits polish the MATLAB-parity simplex with bounded least
+    # squares and return 1-sigma errors (calc.peak_multifit_polish); False is
+    # the bit-for-bit MATLAB onFitSimultaneous result, kept for parity checks.
+    polish: bool = True
 
 
 @router.post("/fit-multi")
@@ -138,7 +142,7 @@ def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
     result = call_calc(fit_multi_peak,
         req.x, req.y, seeds,
         model=req.model, bg_degree=req.bg_degree,
-        constrain=req.constrain, link_mode=req.link_mode,
+        constrain=req.constrain, link_mode=req.link_mode, polish=req.polish,
     )
     out: dict[str, Any] = to_jsonable(result)
     return out

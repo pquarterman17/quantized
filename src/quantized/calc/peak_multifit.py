@@ -20,6 +20,14 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
+from quantized.calc.peak_multifit_polish import (
+    Polish,
+    free_bounds,
+    linear_map,
+    peak_sigmas,
+    polish_fit,
+)
+from quantized.calc.peak_noise import estimate_noise
 from quantized.calc.peakshapes import pseudo_voigt_area
 
 __all__ = ["build_linked_packer", "compute_peak_area", "fit_multi_peak"]
@@ -165,6 +173,7 @@ def fit_multi_peak(
     constrain: bool = False,
     link_mode: str = "None",
     max_fev: int | None = None,
+    polish: bool = False,
 ) -> dict[str, Any]:
     """Fit ``peaks`` + a polynomial background simultaneously. Port of
     ``peakAnalysis.onFitSimultaneous``.
@@ -182,6 +191,16 @@ def fit_multi_peak(
     Python result matches the MATLAB GUI bit-for-bit (scipy and MATLAB share the
     Lagarias simplex). Pass an explicit ``max_fev`` to let the fit converge further
     (diverges from MATLAB parity — use only when you want the best fit, not parity).
+
+    ``polish=True`` (the ``/api/peaks/fit-multi`` default; UX audit 9 lane B)
+    follows the simplex with a bounded least-squares polish and returns 1σ
+    errors — ``centerErr``/``fwhmErr``/``heightErr``/``areaErr``/``etaErr`` per
+    peak (None where no honest σ exists) — plus ``noiseSigma`` (the peak
+    detector's white-noise estimate of ``y``), ``converged``, ``fitMessage``
+    and ``polishStart``. See :mod:`quantized.calc.peak_multifit_polish` for
+    why and how it diverges from MATLAB. ``polish=False`` (the default here) is
+    the golden-parity path, unchanged; it reports ``converged`` as the
+    simplex's own flag (False when the eval budget ran out) and no errors.
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
@@ -202,6 +221,7 @@ def fit_multi_peak(
     def model_eval(pf: NDArray[np.float64]) -> NDArray[np.float64]:
         return _composite_eval(expand(pf), xv, n_peaks, n_per_peak, n_bg, model)
 
+    center_bnd: NDArray[np.float64] | None = None
     if constrain and n_peaks > 1:
         center_bnd = np.array(
             [max(3.0 * abs(p0[k * n_per_peak + 2]), x_span * 0.02) for k in range(n_peaks)]
@@ -225,6 +245,15 @@ def fit_multi_peak(
         options={"maxiter": 30000, "maxfev": fev, "xatol": 1e-10, "fatol": 1e-14},
     )
     p_fit = expand(np.asarray(res.x, dtype=float))
+    extra: dict[str, Any] = {"solver": "nelder-mead", "converged": bool(res.success),
+                             "fitMessage": str(res.message)}
+    sigmas: list[dict[str, float | None]] | None = None
+    if polish:
+        p_fit, sigmas, extra = _polish(
+            model_eval, xv, yv, [("simplex", np.asarray(res.x, dtype=float)),
+                                 ("seed", np.asarray(p_free0, dtype=float))],
+            expand, n_peaks, n_per_peak, seed_centers, center_bnd, model,
+        )
 
     bg_coeffs = p_fit[len(p_fit) - n_bg :]
     fitted: list[dict[str, Any]] = []
@@ -243,6 +272,7 @@ def fit_multi_peak(
             "area": compute_peak_area(model, height, fw, eta),
             "status": "fitted(global)",
             "model": model,
+            **({} if sigmas is None else sigmas[k]),
         })
 
     y_fit = _composite_eval(p_fit, xv, n_peaks, n_per_peak, n_bg, model)
@@ -256,4 +286,35 @@ def fit_multi_peak(
         "params": [float(v) for v in p_fit],
         "nPeaks": n_peaks,
         "model": model,
+        **extra,
     }
+
+
+def _polish(
+    model_eval: ExpandFn, xv: NDArray[np.float64], yv: NDArray[np.float64],
+    starts: list[tuple[str, NDArray[np.float64]]], expand: ExpandFn, n_peaks: int,
+    n_per_peak: int, seed_centers: NDArray[np.float64],
+    center_bnd: NDArray[np.float64] | None, model: str,
+) -> tuple[NDArray[np.float64], list[dict[str, float | None]], dict[str, Any]]:
+    """Bounded LSQ polish of the simplex result (peak_multifit_polish)."""
+    n_free = starts[0][1].size
+    emap = linear_map(expand, n_free)
+    lo, hi = free_bounds(emap, n_peaks, n_per_peak, xv, seed_centers, center_bnd)
+    fwhm_full = np.zeros(emap.shape[0], dtype=bool)
+    fwhm_full[[k * n_per_peak + 2 for k in range(n_peaks)]] = True
+    fwhm_free = np.asarray((emap[fwhm_full] != 0).any(axis=0), dtype=bool)
+
+    def residuals(pf: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.asarray(model_eval(pf) - yv, dtype=float)
+
+    if not np.all(lo < hi):  # a zero-span x: no box to search, keep the simplex
+        pol = Polish(x=starts[0][1], converged=False, message="x has no span to bound a polish",
+                     usable=[False] * n_free)
+    else:
+        pol = polish_fit(residuals, starts, lo, hi, fwhm_free, int(xv.size))
+    p_fit = expand(pol.x)
+    extra: dict[str, Any] = {
+        "solver": "nelder-mead+trf", "converged": pol.converged, "fitMessage": pol.message,
+        "polishStart": pol.start, "noiseSigma": estimate_noise(yv),
+    }
+    return p_fit, peak_sigmas(pol, emap, p_fit, n_peaks, n_per_peak, model), extra

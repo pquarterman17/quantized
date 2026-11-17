@@ -6616,6 +6616,11 @@
             "title": "Peaks",
             "type": "array"
           },
+          "polish": {
+            "default": true,
+            "title": "Polish",
+            "type": "boolean"
+          },
           "x": {
             "items": {
               "type": "number"
