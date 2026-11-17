@@ -2297,6 +2297,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // file is open" isn't a content edit). Never serialized into a `.dwk`
   // either (see store/project.ts's header).
   currentProject: "current project name/path identity; session-local, not an undoable data edit",
+  browserFileName: "browser tab's opened/saved .dwk name, shown in the title bar; session-local display, not an undoable data edit",
   projectDirty: "unsaved-changes flag for the current project; derived status, not an undoable data edit",
 
   // shell/layout UI state (retrospective-audit sweep: fields declared directly on AppState, newly visible to this guard)
