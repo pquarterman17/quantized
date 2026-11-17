@@ -10,11 +10,12 @@ import {
   type ReferenceAxisMode,
   type ReferenceReflection,
 } from "../../../lib/xrdReferencePattern";
-import { nextPlotObjectId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
 import { pawleyAxisProblem, scanRange } from "./pawleyInputs";
+import BuiltInPhaseIndexer from "./BuiltInPhaseIndexer";
+import { addReferenceSticks } from "./referenceSticks";
 
 interface EditableReflection extends ReferenceReflection { included: boolean }
 
@@ -29,8 +30,8 @@ function optionalPositive(value: string): number | null {
 export default function ReferencePatternSection() {
   const active = useActiveDataset();
   const xKey = useApp((s) => s.xKey);
-  const recordHistory = useApp((s) => s.recordHistory);
   const setStatus = useApp((s) => s.setStatus);
+  const recordHistory = useApp((s) => s.recordHistory);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastFileRef = useRef<File | null>(null);
   const readToken = useRef(0);
@@ -103,38 +104,14 @@ export default function ReferencePatternSection() {
     commitLocked.current = true;
     const b = Number(baseline);
     const h = Number(height);
-    const groupId = nextPlotObjectId("reference-pattern");
     const sourceName = name.trim() || pattern.name;
     const wavelengthLabel = source != null
       ? targetWavelength != null && Math.abs(source - targetWavelength) >= 1e-9
         ? ` · λ ${source.toFixed(5)}→${targetWavelength.toFixed(5)} Å`
         : ` · λ ${source.toFixed(5)} Å`
       : " · λ unknown";
-    // Group label is durable, human-readable scientific provenance. Keeping
-    // it once per pattern avoids repeating identical source metadata on every
-    // one of as many as 2,000 stick objects.
-    const groupLabel = `${sourceName}${wavelengthLabel}`;
-    recordHistory("add XRD reference pattern");
-    useApp.setState((state) => ({
-      refLines: [...state.refLines, ...converted.reflections.map((row, index) => {
-        return {
-          id: nextPlotObjectId("ref"),
-          axis: "x" as const,
-          value: row.twoTheta,
-          label: row.label,
-          groupId,
-          ...(index === 0 ? { groupLabel } : {}),
-          stick: {
-            intensity: row.intensity,
-            baseline: b,
-            height: h,
-            color,
-            visible: true,
-            showLabel: showLabels,
-          },
-        };
-      })],
-    }));
+    // Group label is durable, human-readable scientific provenance.
+    addReferenceSticks(`${sourceName}${wavelengthLabel}`, converted.reflections, { baseline: b, height: h, color, showLabels }, recordHistory);
     const conversion = converted.converted ? `, converted to ${targetWavelength?.toFixed(5)} Å` : "";
     const dropped = converted.dropped ? `; ${converted.dropped} impossible reflection${converted.dropped === 1 ? "" : "s"} omitted` : "";
     setStatus(`added ${converted.reflections.length} reference stick${converted.reflections.length === 1 ? "" : "s"}${conversion}${dropped}`);
@@ -154,8 +131,9 @@ export default function ReferencePatternSection() {
 
   return (
     <div style={{ marginTop: 10 }}>
+      <BuiltInPhaseIndexer />
       <div className="qzk-helptext" style={hint}>
-        Import a trusted 2θ/intensity stick pattern (CSV, TSV, XY, or text). Raw data are not changed.
+        Or import a trusted 2θ/intensity stick pattern (CSV, TSV, XY, or text). Raw data are not changed.
       </div>
       <label className="qzk-field-lbl" style={{ display: "flex", gap: 6, marginTop: 10 }}>
         <input type="checkbox" checked={axisMode === "two-theta"} onChange={(e) => {

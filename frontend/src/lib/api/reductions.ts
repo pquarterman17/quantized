@@ -4,7 +4,8 @@
 // useWilliamsonHall.ts / useFftThickness.ts / useReflectivityFft.ts import
 // directly from this path.
 
-import { postJSON } from "./http";
+import { getJSON, postJSON } from "./http";
+import type { XrdIndexResult, XrdPhaseChoice } from "../xrdIndex";
 import type { FftThicknessResult, PawleyResult, ReflectivityFftResult, WilliamsonHallResult } from "../reductionTypes";
 
 /** Crystallite size + microstrain from XRD peak positions and widths. */
@@ -86,4 +87,21 @@ export function spinAsymmetry(body: {
   dr_mm?: number[];
 }): Promise<SpinAsymmetryResult> {
   return postJSON("/api/reductions/spin-asymmetry", body);
+}
+
+/** Phase-database phases the XRD indexer supports (cubic + hexagonal). */
+export function xrdPhases(): Promise<{ phases: XrdPhaseChoice[]; default_wavelength: number }> {
+  return getJSON("/api/reductions/xrd-phases");
+}
+
+/** A built-in phase's allowed reflections in a 2θ range + each peak's nearest (hkl). */
+export function xrdIndex(body: {
+  phase: string;
+  peaks?: number[];
+  wavelength?: number;
+  tolerance?: number;
+  two_theta_min?: number;
+  two_theta_max?: number;
+}, signal?: AbortSignal): Promise<XrdIndexResult> {
+  return postJSON("/api/reductions/xrd-index", body, signal);
 }

@@ -21,6 +21,12 @@ from quantized.calc.reductions import (
     spin_asymmetry,
     williamson_hall,
 )
+from quantized.calc.xrd_index import (
+    CU_KA1_A,
+    DEFAULT_TOLERANCE_DEG,
+    index_peaks,
+    xrd_phase_choices,
+)
 from quantized.routes._errors import call_calc
 
 router = APIRouter(prefix="/api/reductions", tags=["reductions"])
@@ -230,3 +236,32 @@ def pawley_route(req: PawleyRequest) -> dict[str, Any]:
 
 def _finite_or_none(v: float) -> float | None:
     return v if math.isfinite(float(v)) else None
+
+
+@router.get("/xrd-phases")
+def xrd_phases_route() -> dict[str, Any]:
+    """Phase-database phases the XRD indexer supports (cubic + hexagonal)."""
+    return {"phases": xrd_phase_choices(), "default_wavelength": CU_KA1_A}
+
+
+class XrdIndexRequest(BaseModel):
+    phase: str = Field(min_length=1, max_length=80)
+    peaks: list[FiniteFloat] = Field(default_factory=list, max_length=2_000)
+    wavelength: float = Field(default=CU_KA1_A, ge=0.2, le=10, allow_inf_nan=False)
+    tolerance: float = Field(default=DEFAULT_TOLERANCE_DEG, ge=0, le=5, allow_inf_nan=False)
+    two_theta_min: float = Field(default=10.0, ge=0, lt=180, allow_inf_nan=False)
+    two_theta_max: float = Field(default=90.0, gt=0, le=180, allow_inf_nan=False)
+
+
+@router.post("/xrd-index")
+def xrd_index_route(req: XrdIndexRequest) -> dict[str, Any]:
+    """Allowed reflections of a built-in phase + each peak's nearest (hkl) and Δ2θ."""
+    return call_calc(
+        index_peaks,
+        req.peaks,
+        req.phase,
+        wavelength=req.wavelength,
+        tolerance=req.tolerance,
+        two_theta_min=req.two_theta_min,
+        two_theta_max=req.two_theta_max,
+    )

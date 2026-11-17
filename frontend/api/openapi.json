@@ -16985,6 +16985,57 @@
         "title": "XrdCsvRequest",
         "type": "object"
       },
+      "XrdIndexRequest": {
+        "properties": {
+          "peaks": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2000,
+            "title": "Peaks",
+            "type": "array"
+          },
+          "phase": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Phase",
+            "type": "string"
+          },
+          "tolerance": {
+            "default": 0.2,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Tolerance",
+            "type": "number"
+          },
+          "two_theta_max": {
+            "default": 90.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 180.0,
+            "title": "Two Theta Max",
+            "type": "number"
+          },
+          "two_theta_min": {
+            "default": 10.0,
+            "exclusiveMaximum": 180.0,
+            "minimum": 0.0,
+            "title": "Two Theta Min",
+            "type": "number"
+          },
+          "wavelength": {
+            "default": 1.5406,
+            "maximum": 10.0,
+            "minimum": 0.2,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "phase"
+        ],
+        "title": "XrdIndexRequest",
+        "type": "object"
+      },
       "XrdLowAngleRequest": {
         "properties": {
           "include_x2": {
@@ -23680,6 +23731,74 @@
           }
         },
         "summary": "Williamson Hall Route",
+        "tags": [
+          "reductions"
+        ]
+      }
+    },
+    "/api/reductions/xrd-index": {
+      "post": {
+        "description": "Allowed reflections of a built-in phase + each peak's nearest (hkl) and \u03942\u03b8.",
+        "operationId": "xrd_index_route_api_reductions_xrd_index_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XrdIndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Xrd Index Route Api Reductions Xrd Index Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xrd Index Route",
+        "tags": [
+          "reductions"
+        ]
+      }
+    },
+    "/api/reductions/xrd-phases": {
+      "get": {
+        "description": "Phase-database phases the XRD indexer supports (cubic + hexagonal).",
+        "operationId": "xrd_phases_route_api_reductions_xrd_phases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Xrd Phases Route Api Reductions Xrd Phases Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Xrd Phases Route",
         "tags": [
           "reductions"
         ]

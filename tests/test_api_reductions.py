@@ -216,3 +216,24 @@ def test_pawley_route_hkl_bound_uses_the_tied_value() -> None:
     r = _pawley(b=40.0, c=40.0, tie="abc")
     assert r.status_code == 200, r.text
     assert r.json()["cell"][1] == r.json()["cell"][0]
+
+
+def test_xrd_phases_and_index_routes() -> None:
+    phases = client.get("/api/reductions/xrd-phases").json()
+    assert phases["default_wavelength"] == pytest.approx(1.5406)
+    assert any(p["name"] == "Silicon" for p in phases["phases"])
+    resp = client.post(
+        "/api/reductions/xrd-index",
+        json={
+            "phase": "Silicon",
+            "peaks": [28.40, 47.30],
+            "two_theta_min": 20,
+            "two_theta_max": 80,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [m["label"] for m in body["matches"]] == ["(111)", "(220)"]
+    assert len(body["reflections"]) == 5
+    bad = client.post("/api/reductions/xrd-index", json={"phase": "nope"})
+    assert bad.status_code == 422

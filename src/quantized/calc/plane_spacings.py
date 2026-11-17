@@ -25,6 +25,7 @@ module's own path also works.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 __all__ = ["plane_spacings"]
@@ -129,6 +130,7 @@ def plane_spacings(
     lambda_: float = 1.5406,
     centering: str = "P",
     min_d: float = 0.0,
+    allowed: Callable[[int, int, int], bool] | None = None,
 ) -> dict[str, Any]:
     r"""Enumerate allowed ``(hkl)`` reflections with d-spacings and ``2θ``.
 
@@ -139,6 +141,11 @@ def plane_spacings(
     is the multiplicity), pick a canonical representative per group, and sort by
     descending ``d`` (ascending ``2θ``). ``2θ = 2·asin(λ/2d)`` in degrees, with
     physically unreachable reflections (``λ/2d > 1``) marked ``NaN``.
+
+    ``allowed`` (Python-only extension, default ``None`` = MATLAB behaviour) is
+    an extra per-``(h,k,l)`` reflection condition applied after the centering
+    rule and BEFORE grouping, so multiplicities count only surviving planes —
+    e.g. the diamond-glide rule in :mod:`quantized.calc.xrd_index`.
 
     ``b``/``c`` default to ``a``. Returns a dict with ``hkl`` (list of ``[h,k,l]``),
     ``d``, ``two_theta``, ``multiplicity``, ``centering``, ``system``, ``lambda``,
@@ -167,6 +174,8 @@ def plane_spacings(
                 if hh == 0 and kk == 0 and ll == 0:
                     continue
                 if not _centering_allowed(hh, kk, ll, cen):
+                    continue
+                if allowed is not None and not allowed(hh, kk, ll):
                     continue
                 d = _triclinic_d(a, bb, cc, alpha, beta, gamma, hh, kk, ll)
                 if d < min_d:
