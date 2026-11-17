@@ -244,7 +244,7 @@ export default function App() {
       <TitleBar />
       <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
       <WorkspaceErrorBoundary resetKey={workspaceResetKey}>
-        <div className={mainCls} style={mainStyle}>
+        <main className={mainCls} style={mainStyle}>
           <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
           {quickFigureBuilderDatasetId ? (
             <QuickFigureBuilderWorkspace />
@@ -256,7 +256,7 @@ export default function App() {
           <Inspector />
           {/* The docked window sits over this slot (overlays/useToolWindowDock.ts). */}
           {dock.owner && <div className="qzk-tooldock-slot" aria-hidden="true" />}
-        </div>
+        </main>
       </WorkspaceErrorBoundary>
       <StatusBar />
       <CommandPalette actions={actions} />

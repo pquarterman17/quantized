@@ -204,6 +204,11 @@
   height: var(--row-h);
   padding: 0 6px;
 }
+/* A listbox (size>1) shows its rows; the fixed control height would clip it. */
+.qz-select[size]:not([size="1"]) {
+  height: auto;
+  padding: 2px 0;
+}
 .qz-select:focus-visible {
   outline: none;
   border-color: var(--accent);
@@ -381,6 +386,18 @@
 }
 .qz-card:not([open]) > summary {
   margin-bottom: 0;
+}
+.qz-card-wrap {
+  position: relative;
+}
+.qz-card-wrap > .qz-card > summary {
+  min-height: 18px;
+  padding-right: 24px;
+}
+.qz-card-wrap > .qz-card-help {
+  position: absolute;
+  top: var(--pad-lg);
+  right: var(--pad-lg);
 }
 .qz-card-help {
   width: 18px;
