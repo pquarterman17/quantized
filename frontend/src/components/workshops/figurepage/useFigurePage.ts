@@ -257,7 +257,10 @@ export function useFigurePage() {
       selected !== null && slots[selected]?.source === null
         ? selected
         : slots.findIndex((s) => s.source === null);
-    if (target < 0 && canAutoGrow()) {
+    // A source already on the page only MOVES (assignSlot): growing for it would
+    // add an empty slot instead of making room.
+    const onPage = slots.some((s) => s.source?.kind === source.kind && s.source.id === source.id);
+    if (target < 0 && !onPage && canAutoGrow()) {
       const [r, c] = fitGrid(filledCount(slots) + 1, rows, cols) as [number, number];
       const grown = resizeSlots(slots, cols, r, c);
       target = grown.findIndex((s) => s.source === null);

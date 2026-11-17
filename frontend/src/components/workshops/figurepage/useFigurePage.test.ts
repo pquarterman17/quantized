@@ -250,6 +250,15 @@ describe("useFigurePage", () => {
       expect(result.current.slots.slice(0, 4).map((s) => s.source?.id)).toEqual(["w1", "f1", "x3", "x4"]);
     });
 
+    it("re-clicking a source already on a full page does not grow the grid", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assignToNext(result.current.windowSources[0]));
+      act(() => result.current.assignToNext(result.current.docSources[0]));
+      act(() => result.current.assignToNext(result.current.windowSources[0]));
+      expect([result.current.rows, result.current.cols]).toEqual([1, 2]);
+      expect(result.current.slots).toHaveLength(2);
+    });
+
     it("stops auto-growing once the user sets the grid", () => {
       const { result } = renderHook(() => useFigurePage());
       act(() => result.current.setGrid(1, 2));
