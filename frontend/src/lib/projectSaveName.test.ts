@@ -27,3 +27,11 @@ describe("projectSaveName", () => {
     expect(dwkNameFrom("///")).toBeNull();
   });
 });
+
+describe("dwkNameFrom (Windows-safe)", () => {
+  it("prefixes reserved device names and caps the length", () => {
+    expect(dwkNameFrom("CON.csv")).toBe("_CON.dwk");
+    expect(dwkNameFrom("nul")).toBe("_nul.dwk");
+    expect(dwkNameFrom("a".repeat(300) + ".csv")?.length).toBeLessThanOrEqual(124);
+  });
+});

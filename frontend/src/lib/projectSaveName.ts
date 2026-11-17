@@ -6,10 +6,14 @@
 /** Characters no file system accepts in a name (Windows' set covers POSIX). */
 const BAD = /[\\/:*?"<>|\u0000-\u001f]+/g;
 
+/** Device names Windows refuses as a file name, with or without an extension. */
+const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+
 /** `name` as a `.dwk` file name, or null when nothing usable is left. */
 export function dwkNameFrom(name: string | null | undefined): string | null {
-  const stem = (name ?? "").replace(/\.[^./\\]{1,8}$/, "").replace(BAD, "_").replace(/^[\s.]+|[\s.]+$/g, "");
-  return stem && /[^_]/.test(stem) ? `${stem}.dwk` : null;
+  const stem = (name ?? "").replace(/\.[^./\\]{1,8}$/, "").replace(BAD, "_").replace(/^[\s.]+|[\s.]+$/g, "").slice(0, 120).replace(/[\s.]+$/, "");
+  if (!stem || !/[^_]/.test(stem)) return null;
+  return `${RESERVED.test(stem) ? "_" : ""}${stem}.dwk`; // "CON.dwk" cannot be created on Windows
 }
 
 interface SaveNameState {
