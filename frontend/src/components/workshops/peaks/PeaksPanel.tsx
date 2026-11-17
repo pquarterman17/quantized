@@ -15,6 +15,8 @@ import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
 import PeakFitSummary from "./PeakFitSummary";
+import PeakTableExport from "./PeakTableExport";
+import { dCells, dHeader, peakDContext } from "./peakWindowExport";
 import { DEFAULT_PEAK_FIND } from "./peakFindParams";
 import { peakReportResult, peakReportUnits } from "./peakReport";
 import { usePeakTableSelection } from "./peakSelection";
@@ -136,9 +138,13 @@ export default function PeaksPanel() {
     }
   };
 
+  const dCtx = peakDContext(active, plotView.xKey); // d (Å) column: 2θ axes only
+  const dCol = dCtx ? [dHeader(dCtx)] : [];
+  const dCell = (c: number) => dCells(dCtx, c);
   const rows = peaks.map((p, i) => [
     i + 1,
     fmtNum(p.center),
+    ...dCell(p.center),
     fmtNum(p.height),
     fmtNum(p.fwhm),
     fmtNum(p.localSNR),
@@ -184,6 +190,7 @@ export default function PeaksPanel() {
     return [
       i + 1,
       <PeakValueCell key="c" value={p.center} field="center" entry={errOf} />,
+      ...dCell(p.center),
       <PeakValueCell key="h" value={p.height} field="height" entry={errOf} />,
       <PeakValueCell key="w" value={p.fwhm} field="fwhm" entry={errOf} />,
       <PeakValueCell key="a" value={p.area} field="area" entry={errOf} />,
@@ -271,7 +278,7 @@ export default function PeaksPanel() {
       {rows.length > 0 && (
         <PeakTable
           ariaLabel="detected peaks"
-          columns={["#", "center", "height", "FWHM", "SNR"]}
+          columns={["#", "center", ...dCol, "height", "FWHM", "SNR"]}
           rows={rows}
           selected={detectedSelection.selected}
           // K1: this table renders WHENEVER peaks exist, independent of
@@ -296,6 +303,11 @@ export default function PeaksPanel() {
           addPeakAt={addDetectedPeakAt}
           removePeaks={removeDetectedPeaks}
         />
+      )}
+      {active && !hasFit && peaks.length > 0 && (
+        <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+          <PeakTableExport peaks={peaks} kind="detected" d={dCtx} datasetName={active.name} />
+        </div>
       )}
 
       {active && (
@@ -333,7 +345,7 @@ export default function PeaksPanel() {
             modelFit={modelFit} edited={manualEditCount(shown)} excluded={excludedCount} />
           <PeakTable
             ariaLabel="fitted peaks"
-            columns={["#", "center", "height", "FWHM", "area", "incl."]}
+            columns={["#", "center", ...dCol, "height", "FWHM", "area", "incl."]}
             rows={fitRows}
             selected={fittedSelection.selected}
             onSelect={fittedSelection.select}
@@ -357,6 +369,7 @@ export default function PeaksPanel() {
             <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
               {reporting ? "Reporting…" : "→ Report"}
             </Button>
+            <PeakTableExport peaks={shown} kind="fitted" d={dCtx} datasetName={active?.name ?? "peaks"} />
           </div>
         </div>
       )}
