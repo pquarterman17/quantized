@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
+import { magXAxis } from "../../../lib/magDataKind";
 import { xUnitOf } from "../../../lib/transformResample";
 import { buildSignalRecipeTemplate, saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
 import BatchApplyLauncher from "../pipeline/BatchApplyLauncher";
@@ -265,15 +266,14 @@ export default function SignalProcessingPanel() {
     }
   };
 
-  const xLabel = typeof active?.data.metadata.xLabel === "string" && active.data.metadata.xLabel.trim()
-    ? active.data.metadata.xLabel.trim()
-    : "X";
-  const xUnit = active ? xUnitOf(active.data) : "";
-
+  // The REAL X column name ("Raman shift"), not the generic metadata fallback.
+  const xAxis = active ? magXAxis(active.data, null) : null;
+  const xLabel = xAxis?.label.trim() || (typeof active?.data.metadata.xLabel === "string" ? active.data.metadata.xLabel.trim() : "") || "X";
+  const xUnit = active ? xUnitOf(active.data) || xAxis?.unit.trim() || "" : "";
   return (
     <ToolWindow id="signal-processing" title="Signal Processing" width={620} x={180} y={90} onClose={close}>
       <div className="qz-signal-workbench">
-        <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a linked worksheet; the source is never overwritten.</p>
+        <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
         {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : (
           <>
             <div className="qz-signal-note">
@@ -381,16 +381,16 @@ export default function SignalProcessingPanel() {
             <SignalScopeNote source={active} secondary={secondary} />
             {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
+            {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
+            <BatchApplyLauncher setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
             <div className="qz-dialog-actions">
               <Button onClick={close}>Cancel</Button>
               <Button disabled={Boolean(validation) || !recipe || crossWorksheet} title={crossWorksheet ? "Cross-worksheet recipes retain project-specific source links and cannot yet be saved as reusable templates." : validation || undefined} onClick={() => void saveRecipe()}>Save recipe…</Button>
               {/* A disabled control always says why (worksheet audit #9). */}
               <Button variant="primary" disabled={Boolean(validation || outputError) || !displayedPreview || busy} title={validation || outputError || previewError || (!displayedPreview ? "Waiting for the live preview…" : undefined)} onClick={() => void commit()}>
-                {busy ? "Creating…" : "Create linked worksheet"}
+                {busy ? "Creating…" : "Create new worksheet"}
               </Button>
             </div>
-            {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
-            <BatchApplyLauncher setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
           </>
         )}
       </div>

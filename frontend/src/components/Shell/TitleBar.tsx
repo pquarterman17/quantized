@@ -39,7 +39,7 @@ export default function TitleBar() {
         <span className="ic" style={{ color: "var(--accent)" }}>
           {GLYPHS.brand}
         </span>
-        <span className="nm">Quantized</span>
+        <h1 className="nm">Quantized</h1>
       </div>
       {/* UX9-I: the centred title names the PROJECT once it has one; the shown
           dataset follows it, dimmed (before, only the dataset was centred). */}

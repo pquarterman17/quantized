@@ -37,7 +37,7 @@ test.describe("Click a curve, edit it in the Inspector @core", () => {
     await expect(selection.getByRole("status")).toContainText("Curve:");
     const row = page.locator(".qzk-inspector details[aria-current=true]");
     await expect(row).toHaveAttribute("open", "");
-    await expect(page.locator(".qzk-inspector > details.qz-card").first()).toHaveAttribute("data-card-id", "Series style");
+    await expect(page.locator(".qzk-inspector details.qz-card").first()).toHaveAttribute("data-card-id", "Series style");
 
     // Click 2: a colour.
     await row.getByTitle("Series 4").click();

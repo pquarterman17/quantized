@@ -9,8 +9,14 @@
 
 import { useEffect, useRef } from "react";
 
-import { LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "../../store/prefs";
+import {
+  LIBRARY_PANEL_WIDTH_DEFAULT,
+  LIBRARY_PANEL_WIDTH_MAX,
+  LIBRARY_PANEL_WIDTH_MIN,
+} from "../../store/prefs";
 import { useApp } from "../../store/useApp";
+
+const setWidth = (w: number) => useApp.getState().setPref("libraryPanelWidth", w);
 
 function clamp(px: number): number {
   return Math.min(LIBRARY_PANEL_WIDTH_MAX, Math.max(LIBRARY_PANEL_WIDTH_MIN, px));
@@ -34,7 +40,7 @@ export function useLibraryResize(): (e: React.PointerEvent) => void {
     };
     const up = () => {
       cleanup.current?.();
-      useApp.getState().setPref("libraryPanelWidth", lastW);
+      setWidth(lastW);
     };
     cleanup.current = () => {
       window.removeEventListener("pointermove", move);
@@ -52,3 +58,17 @@ export function useLibraryResize(): (e: React.PointerEvent) => void {
     window.addEventListener("blur", up);
   };
 }
+
+/** Keyboard + double-click for the separator: Left/Right step 16 px,
+ *  double-click restores the first-run default width. */
+export const libraryResizeKeys = {
+  onKeyDown(e: React.KeyboardEvent): void {
+    const d = { ArrowRight: 16, ArrowLeft: -16 }[e.key as "ArrowLeft"];
+    if (!d) return;
+    e.preventDefault();
+    setWidth(clamp(useApp.getState().libraryPanelWidth + d));
+  },
+  onDoubleClick(): void {
+    setWidth(LIBRARY_PANEL_WIDTH_DEFAULT);
+  },
+};
