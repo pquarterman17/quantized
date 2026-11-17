@@ -132,4 +132,12 @@ describe("summaryX", () => {
     expect(summaryXMeta(summaryX(inputs, { source: { kind: "index" }, sort: false }))).toEqual({});
     expect(summaryXMeta(summaryX(inputs, { source: { kind: "name" }, sort: false })).x_column_name).toBe("Number in name");
   });
+
+  it("titles a unit-suffixed name number from the unit, only when every name agrees (UX9-C)", () => {
+    const names = (...n: string[]) => summaryX(n.map((name) => ({ name })), { source: { kind: "name" }, sort: false });
+    expect(names("decay_010K.csv", "decay_050K.csv")).toMatchObject({ xName: "Temperature", xUnit: "K", x: [10, 50] });
+    expect(names("a_5T", "a_9T")).toMatchObject({ xName: "Field", xUnit: "T" });
+    expect(names("a_10K", "a_20T")).toMatchObject({ xName: "Number in name", xUnit: "" });
+    expect(names("S1", "S2")).toMatchObject({ xName: "Number in name", xUnit: "" });
+  });
 });

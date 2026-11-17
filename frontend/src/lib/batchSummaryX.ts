@@ -103,6 +103,25 @@ function readParam(i: SummaryXInput, name: string): Read {
   return first;
 }
 
+// A unit glued to the number in every name ("010K", "5T", "100Oe") names the
+// quantity for the axis title only; the values and the unit-agreement rules
+// above are untouched.
+const NAME_UNITS: Record<string, string> = { K: "Temperature", mK: "Temperature", T: "Field", mT: "Field", kOe: "Field", Oe: "Field", G: "Field" };
+const NAME_UNIT_AFTER = /^\s?(mK|K|mT|T|kOe|Oe|G)(?![A-Za-z])/;
+
+/** `{xName, xUnit}` read off the names ("Temperature", "K"), or null unless every
+ *  input has a number followed by the same unit. */
+export function nameAxis(inputs: readonly SummaryXInput[]): { xName: string; xUnit: string } | null {
+  let unit: string | null = null;
+  for (const i of inputs) {
+    const m = NAME_NUMBER.exec(i.name);
+    const u = m ? NAME_UNIT_AFTER.exec(i.name.slice(m.index + m[0].length))?.[1] : undefined;
+    if (!u || (unit !== null && u !== unit)) return null;
+    unit = u;
+  }
+  return unit ? { xName: NAME_UNITS[unit]!, xUnit: unit } : null;
+}
+
 function labelOf(s: SummaryXSource): string {
   if (s.kind === "index") return "Input";
   if (s.kind === "name") return "Number in name";
@@ -156,8 +175,9 @@ export function summaryX(inputs: readonly SummaryXInput[], choice: SummaryXChoic
     order.sort((a, b) => (key(a) === key(b) ? a - b : key(a) < key(b) ? -1 : 1));
   }
   const how = s.kind === "index" ? "input order" : s.kind === "name" ? "first number in the name" : s.kind === "meta" ? `metadata ${pathLabel(s.path)}` : `parameter ${s.name}`;
+  const named = s.kind === "name" && !xUnit ? nameAxis(inputs) : null;
   return {
-    x: order.map((k) => xs[k]!), order, xName: labelOf(s), xUnit, missing,
+    x: order.map((k) => xs[k]!), order, xName: named?.xName ?? labelOf(s), xUnit: named?.xUnit ?? xUnit, missing,
     how: `${how}${choice.sort ? ", sorted by X" : ""}`,
   };
 }
