@@ -84,3 +84,21 @@ describe("sanitizeFigureOverlays (untrusted .dwk input)", () => {
     expect(sanitizeFigureOverlays("nope")).toBeUndefined();
   });
 });
+
+describe("UX9-I: the fit's own look is part of the section", () => {
+  const curveFit: FitOverlay = { ...FIT, curveFit: true };
+
+  it("a Curve Fit curve keeps `curveFit` through capture, JSON and restore", () => {
+    const saved = JSON.parse(JSON.stringify(captureFit(curveFit, DS))) as unknown;
+    expect(sanitizeFigureOverlays(saved)?.fit?.curveFit).toBe(true);
+    expect(fitFromDocument(saved, DS)).toEqual(curveFit);
+  });
+
+  it("a section saved before the flag (or by Quick Fit) restores plain; only `true` counts", () => {
+    const saved = JSON.parse(JSON.stringify(captureFit(FIT, DS))) as Record<string, { curveFit?: unknown }>;
+    expect(saved.fit.curveFit).toBeUndefined();
+    expect(fitFromDocument(saved, DS)?.curveFit).toBeUndefined();
+    saved.fit.curveFit = "yes";
+    expect(fitFromDocument(saved, DS)?.curveFit).toBeUndefined();
+  });
+});

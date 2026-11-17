@@ -147,3 +147,22 @@ def test_a_sub_decade_log_view_takes_the_origin_step(ax: plt.Axes) -> None:
     apply_tick_steps(ax, None, 0.05, "linear", "log")
     ax.figure.canvas.draw()
     assert [round(v, 6) for v in ax.yaxis.get_majorticklocs()] == [1.0, 1.05, 1.1, 1.15, 1.2, 1.25]
+
+
+def test_a_few_decade_view_also_labels_2_and_5_as_the_screen_does(ax: plt.Axes) -> None:
+    # UX9-I: 0.3..10 read only "1, 10"; under three decade anchors the screen
+    # (lib/logTicks.ts FEW_DECADES) labels 2 and 5 in each decade too, written
+    # "5x10^-1" beside the decade's own 10^k notation. Majors, then minors.
+    _view(ax, 0.3, 10.0)
+    assert _labels(ax, 0.3, 10.0) == [
+        r"$\mathdefault{1}$",
+        r"$\mathdefault{10}$",
+        r"$\mathdefault{5\times10^{-1}}$",
+        r"$\mathdefault{2}$",
+        r"$\mathdefault{5}$",
+    ]
+
+
+def test_three_decades_keep_decade_only_labels(ax: plt.Axes) -> None:
+    _view(ax, 1e-3, 0.1)
+    assert len(_labels(ax, 1e-3, 0.1)) == 3

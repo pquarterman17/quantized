@@ -40,14 +40,17 @@ export default function TitleBar() {
           {GLYPHS.brand}
         </span>
         <span className="nm">Quantized</span>
+      </div>
+      {/* UX9-I: the centred title names the PROJECT once it has one; the shown
+          dataset follows it, dimmed (before, only the dataset was centred). */}
+      <div className="qzk-doc">
         {projectName && (
           <span className="qzk-project" title={currentProject?.path ?? projectName}>
-            — {projectName}
+            {projectName}
             {projectDirty && <span className="qzk-project-dirty"> •</span>}
           </span>
         )}
-      </div>
-      <div className="qzk-doc">
+        {projectName && stem && <span className="ext"> — </span>}
         {stem}
         {ext && <span className="ext">{ext}</span>}
       </div>

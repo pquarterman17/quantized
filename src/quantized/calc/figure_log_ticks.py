@@ -10,7 +10,9 @@ thinned or the view spans more than six decades.
 
 Labels: on a decade view only every n-th decade carries text, n chosen so
 labels stay 50 px (x) / 30 px (y) apart at 96 px per inch -- uPlot's minimum
-label spacing. A sub-decade view labels its arithmetic ticks with ordinary
+label spacing. A view with fewer than ``_FEW_DECADES`` decade anchors also
+labels 2 and 5 in each decade (as minor-tick text) when 1..2 has that spacing
+(UX9-I: 0.3..10 read only "1, 10"). A sub-decade view labels its arithmetic ticks with ordinary
 numbers, skipping one closer than that spacing to the last label kept.
 
 Pure layer (matplotlib only); split from ``calc.figure_scale`` for size.
@@ -69,6 +71,19 @@ def _decade_of(v: float) -> int | None:
     exp = math.log10(v)
     k = round(exp)
     return k if abs(exp - k) < 1e-9 else None
+
+
+def _half_decade(v: float) -> int | None:
+    """``v``'s decade exponent when ``v`` is 2 or 5 x 10^k, else None."""
+    if not (v > 0) or not math.isfinite(v):
+        return None
+    k = math.floor(math.log10(v) + 1e-9)
+    m = v / _pow10(k)
+    return k if abs(m - 2) < 2e-9 or abs(m - 5) < 5e-9 else None
+
+
+#: The screen's ``FEW_DECADES`` (lib/logTicks.ts): fewer anchors label 2 and 5.
+_FEW_DECADES = 3
 
 
 def _spans_decade(vals: list[float]) -> bool:
@@ -145,7 +160,13 @@ def _labelled(axis: Any) -> tuple[list[float], bool]:
     s = _grid(axis, getattr(axis.get_major_locator(), "step", None))
     if _spans_decade(s):
         n = _stride(axis)
-        return [v for v in s if (k := _decade_of(v)) is not None and k % n == 0], True
+        few = sum(1 for v in s if _decade_of(v) is not None) < _FEW_DECADES
+        sub = n == 1 and few and _gap(axis, 2.0, 1.0) >= _space(axis)
+        return [
+            v for v in s
+            if ((k := _decade_of(v)) is not None and k % n == 0)
+            or (sub and k is None and _half_decade(v) is not None)
+        ], True
     kept: list[float] = []
     for v in s:
         if not kept or _gap(axis, v, kept[-1]) >= _space(axis):
@@ -191,11 +212,13 @@ class LogTickLabels(Formatter):
 
     def __call__(self, x: float, pos: int | None = None) -> str:
         axis = self.axis
-        if self.minor or axis is None or not hasattr(axis, "get_view_interval"):
+        if axis is None or not hasattr(axis, "get_view_interval"):
             return ""
         kept, decades = _labelled(axis)
         if not any(abs(x - v) <= _EPS * abs(v) for v in kept):
             return ""
+        if self.minor and not (decades and _half_decade(x) is not None):
+            return ""  # a minor tick carries text only as a few-decade 2 or 5
         gaps = [b - a for a, b in zip(kept, kept[1:], strict=False) if b > a]
         incr = min(gaps) if gaps else 0.0
         if isinstance(self.inner, _AxisTickFormatter):
@@ -206,6 +229,11 @@ class LogTickLabels(Formatter):
         if decades:
             k = _decade_of(x)
             if k is None:
-                return ""
+                h = _half_decade(x)
+                if h is None:
+                    return ""
+                m = round(x / _pow10(h))
+                body = str(m * 10**h) if h in (0, 1) else f"{m}\\times10^{{{h}}}"
+                return f"$\\mathdefault{{{body}}}$"
             return f"$\\mathdefault{{{10**k if k in (0, 1) else f'10^{{{k}}}'}}}$"
         return _plain(x, incr, kept[0], kept[-1])

@@ -103,3 +103,28 @@ describe("logMajorTickFilter on a sub-decade view keeps labels apart", () => {
     for (let i = 1; i < pos.length; i++) expect(Math.abs(pos[i] - pos[i - 1])).toBeGreaterThanOrEqual(30);
   });
 });
+
+describe("UX9-I: a few-decade view also labels 2 and 5", () => {
+  // 0.3..10 read only "1, 10": two labels on a whole axis.
+  const texts = (u: uPlot, splits: number[]) => {
+    const kept = logMajorTickFilter(u, splits, 1);
+    const text = logDecadeLabels(kept)!;
+    return kept.flatMap((v, i) => (v == null || !text[i] ? [] : [text[i]]));
+  };
+
+  it("labels 5×10⁻¹, 1, 2, 5, 10 over 0.3..10 when the decade has room", () => {
+    expect(texts(plotWith(200), fixedLogAxisSplits(0.3, 10))).toEqual(["5×10⁻¹", "1", "2", "5", "10"]); // 10⁻¹ notation, as its anchor
+  });
+
+  it("writes them in each decade's own notation beside 10^k anchors", () => {
+    expect(texts(plotWith(200), fixedLogAxisSplits(3, 200))).toEqual(["5", "10", "20", "50", "10²", "2×10²"]);
+  });
+
+  it("keeps decades only when 1..2 is narrower than the label spacing", () => {
+    expect(texts(plotWith(80), fixedLogAxisSplits(0.3, 10))).toEqual(["1", "10"]); // 1..2 is 24 px < 30 px
+  });
+
+  it("leaves a view of three or more decades on its decade anchors", () => {
+    expect(labelled(logMajorTickFilter(plotWith(200), fixedLogAxisSplits(1e-3, 0.1), 1))).toEqual([1e-3, 1e-2, 0.1]);
+  });
+});

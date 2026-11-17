@@ -27,6 +27,7 @@
 import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { failedWith, truncateReason } from "../lib/bookData";
 import { baseName, parentDirectory } from "../lib/importEntry";
+import { projectSaveName } from "../lib/projectSaveName";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
@@ -215,7 +216,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // Open Project dialogs use.
   const project = get().currentProject;
   const destination = await pickSaveDestination(
-    project?.name || "workspace.dwk",
+    projectSaveName(get()) ?? "workspace.dwk", // UX9-I: the project's name, else the dataset's
     (project ? parentDirectory(project.path) : "") || useWorkingPaths.getState().current || undefined,
   );
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
@@ -339,7 +340,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // Lane O: a Chromium save picker keeps its handle (Ctrl+S then saves in place);
   // otherwise the download, named after the opened/saved file.
   const browser = await import("./browserSave");
-  const name = get().currentProject?.name ?? null;
+  const name = projectSaveName(get());
   if (!hasDesktopShell() && (await browser.browserSaveAs(content, name, browserReport(get), state.docEpoch))) return; // desktop (a failed native write): plain download, never the browser picker
   browser.browserDownload(content, name);
   const msg = savedMsg(all.length);
