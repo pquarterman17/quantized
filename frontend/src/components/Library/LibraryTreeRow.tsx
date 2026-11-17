@@ -10,15 +10,17 @@ interface Props {
   row: FlatLibraryNode;
   /** WAI-ARIA treeitem attributes for the row's anchor (LibraryTree, U5). */
   treeItem: TreeItemProps;
+  /** The row's own highlight (isRowSelected): for a collapsed single-sheet
+   *  workbook row it also reads the WORKBOOK selection. */
+  selected: boolean;
   activeId: string | null;
-  selectedIds: ReadonlySet<string>;
   folderCounts: ReadonlyMap<string, number>;
   onFilterTag: (tag: string) => void;
   onFocusContainer?: (node: Extract<LibraryNode, { kind: "folder" | "workbook" }>) => void;
 }
 
 /** Kind dispatch kept out of LibraryTree's keyboard/virtualization controller. */
-export default function LibraryTreeRow({ row, treeItem, activeId, selectedIds, folderCounts, onFilterTag, onFocusContainer }: Props) {
+export default function LibraryTreeRow({ row, treeItem, selected, activeId, folderCounts, onFilterTag, onFocusContainer }: Props) {
   const { node, expanded, hasChildren } = row;
   switch (node.kind) {
     case "folder":
@@ -26,7 +28,7 @@ export default function LibraryTreeRow({ row, treeItem, activeId, selectedIds, f
     case "workbook":
       return <WorkbookRow node={node} depth={node.depth} expanded={expanded} hasChildren={hasChildren} treeItem={treeItem} onFocus={onFocusContainer ? () => onFocusContainer(node) : undefined} />;
     case "worksheet":
-      return <DatasetRow dataset={node.entity} active={node.entity.id === activeId} selected={selectedIds.has(node.entity.id)} showReorder={false} canMoveUp={false} canMoveDown={false} onFilterTag={onFilterTag} depth={node.depth} treeMode treeItem={treeItem} />;
+      return <DatasetRow dataset={node.entity} active={node.entity.id === activeId} selected={selected} showReorder={false} canMoveUp={false} canMoveDown={false} onFilterTag={onFilterTag} depth={node.depth} treeMode treeItem={treeItem} workbook={row.workbook} onFocusWorkbook={onFocusContainer && row.workbook ? () => onFocusContainer(row.workbook!) : undefined} />;
     case "origin-figure":
       return <FigureRow entry={node.entity} depth={node.depth} treeMode treeItem={treeItem} />;
     default:

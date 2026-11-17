@@ -7,6 +7,7 @@
 
 import { toast } from "../store/toasts";
 import { toastRemoved } from "./datasetRemoval";
+import { removeDatasetsPruningCollapsed } from "../store/collapsedWorkbookActions";
 import { useApp } from "../store/useApp";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { multiSelected } from "./multiSelected";
@@ -32,7 +33,11 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     run: (t) => {
       const n = t.selectedIds.length;
       const since = useApp.getState().history.at(-1)?.seq;
-      useApp.getState().removeSelected();
+      const st = useApp.getState();
+      const ids = st.selectedIds.length ? st.selectedIds : st.activeId ? [st.activeId] : [];
+      removeDatasetsPruningCollapsed(ids); // collapsed single-sheet rows take their workbook with them
+      const activeId = useApp.getState().activeId;
+      useApp.setState({ selectedIds: activeId ? [activeId] : [] });
       toastRemoved(`removed ${n} datasets`, since);
     },
   },

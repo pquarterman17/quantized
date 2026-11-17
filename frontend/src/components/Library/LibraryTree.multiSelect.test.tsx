@@ -76,22 +76,34 @@ describe("LibraryTree multi-selection (UX8-C)", () => {
     expect(useApp.getState().selectedIds).toEqual(["m8", "m7", "m6", "m5"]);
   });
 
-  it("Ctrl+A on a focused row selects every visible dataset; a collapsed workbook's sheets are not visible", () => {
-    useApp.setState({ expandedWorkbookIds: ids.slice(0, 8) });
+  it("Ctrl+A on a focused row selects every visible dataset, one-sheet workbooks included", () => {
+    // Each single-sheet workbook shows as its sheet's row, so all ten are visible.
     render(<Harness />);
     row("m0").focus();
     fireEvent.keyDown(row("m0"), { key: "a", ctrlKey: true });
-    expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
+    expect(useApp.getState().selectedIds).toEqual(ids);
     fireEvent.keyDown(row("m0"), { key: "A", metaKey: true });
-    expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
+    expect(useApp.getState().selectedIds).toEqual(ids);
     fireEvent.keyDown(row("m0"), { key: "A", ctrlKey: true, shiftKey: true }); // not select-all
-    expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
+    expect(useApp.getState().selectedIds).toEqual(ids);
     // From a row's own control (the "⋯" button) too, not the browser's select-all.
     act(() => useApp.getState().selectIds(["m1"]));
     const control = row("m0").querySelector("button")!;
     const ev = createEvent.keyDown(control, { key: "a", ctrlKey: true });
     fireEvent(control, ev);
     expect(ev.defaultPrevented).toBe(true);
-    expect(useApp.getState().selectedIds).toEqual(ids.slice(0, 8));
+    expect(useApp.getState().selectedIds).toEqual(ids);
+  });
+
+  it("Ctrl+A skips the sheets of a collapsed (multi-sheet) workbook", () => {
+    useApp.setState({
+      workbooks: [wb("multi"), ...ids.slice(2).map(wb)],
+      datasets: [ds("m0", "multi"), ds("m1", "multi"), ...ids.slice(2).map((id) => ds(id, id))],
+      expandedWorkbookIds: [],
+    });
+    render(<Harness />);
+    row("m2").focus();
+    fireEvent.keyDown(row("m2"), { key: "a", ctrlKey: true });
+    expect(useApp.getState().selectedIds).toEqual(ids.slice(2));
   });
 });

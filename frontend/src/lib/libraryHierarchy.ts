@@ -357,20 +357,58 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
   return { roots: finalRoots, byKey, warnings };
 }
 
+export type WorkbookLibraryNode = Extract<LibraryNode, { kind: "workbook" }>;
+export type WorksheetLibraryNode = Extract<LibraryNode, { kind: "worksheet" }>;
+
+/** The ONE collapse policy (UX8-I): a workbook holding exactly one sheet and
+ *  nothing else (no graph, result, page or report) renders as a single row --
+ *  the sheet -- instead of a header plus a sheet row. Returns that sheet, or
+ *  null when the workbook keeps its own row. Recovered ORIGIN books never
+ *  collapse: their book name is the identity (a sheet is "Sheet1" inside
+ *  "Book4"), and the Origin import IA discloses book by book. It is derived from the hierarchy
+ *  it is asked about, so a second sheet or a graph re-expands the workbook, and
+ *  a content-type filter that hides a graph collapses on what is SHOWN. */
+export function collapsedSheetOf(node: LibraryNode): WorksheetLibraryNode | null {
+  if (node.kind !== "workbook" || node.entity.originBook || node.children.length !== 1) return null;
+  const [only] = node.children;
+  return only.kind === "worksheet" ? only : null;
+}
+
+/** How many rows a hierarchy never renders because a workbook collapsed into
+ *  its sheet. Tree/Tiles-navigator counts subtract this; Details lists every
+ *  entity (a workbook and its sheet carry different columns) and does not. */
+export function collapsedWorkbookCount(hierarchy: LibraryHierarchy): number {
+  let n = 0;
+  for (const node of hierarchy.byKey.values()) if (collapsedSheetOf(node)) n++;
+  return n;
+}
+
 export interface FlatLibraryNode {
   node: LibraryNode;
   hasChildren: boolean;
   expanded: boolean;
+  /** Set when this worksheet row stands for its single-sheet workbook
+   *  (collapsedSheetOf). `node` is then the SHEET, re-parented/re-depthed to
+   *  the workbook's place so keyboard nav and ARIA levels read as one row. */
+  workbook?: WorkbookLibraryNode;
 }
 
 /** Flatten visible rows without rebuilding ownership. Expansion uses canonical
- * keys, so equal entity ids in different kinds cannot collide. */
+ * keys, so equal entity ids in different kinds cannot collide. A single-sheet
+ * workbook is collapsed into one row unless `collapseSingleSheet` is false. */
 export function flattenLibraryHierarchy(
   hierarchy: LibraryHierarchy,
   expandedKeys: ReadonlySet<LibraryNodeKey>,
+  options: { collapseSingleSheet?: boolean } = {},
 ): FlatLibraryNode[] {
+  const collapse = options.collapseSingleSheet !== false;
   const rows: FlatLibraryNode[] = [];
   const visit = (nodes: readonly LibraryNode[]) => nodes.forEach((node) => {
+    const sheet = collapse ? collapsedSheetOf(node) : null;
+    if (sheet && node.kind === "workbook") {
+      rows.push({ node: { ...sheet, depth: node.depth, parentKey: node.parentKey }, hasChildren: false, expanded: false, workbook: node });
+      return;
+    }
     const hasChildren = node.children.length > 0;
     const expanded = hasChildren && expandedKeys.has(node.key);
     rows.push({ node, hasChildren, expanded });

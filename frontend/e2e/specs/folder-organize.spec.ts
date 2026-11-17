@@ -160,7 +160,9 @@ test.describe("Library folder organization @core", () => {
     //    moveWorkbookToFolder cascades the member dataset's folderId, which
     //    the second poll pins so the workbook/dataset placement can't
     //    diverge — the exact drift the retired dataset→folder drag caused) ──
-    const wbHandle = page.locator(".qzk-workbook-row", { hasText: "dataset-a" }).locator(".qzk-drag-handle");
+    // (A one-sheet workbook is ONE row -- the sheet's -- whose grip carries the
+    // workbook payload: UX8-I.)
+    const wbHandle = page.locator("[data-ds-id]", { hasText: "dataset-a" }).locator(".qzk-drag-handle");
     await wbHandle.dragTo(page.locator(FOLDER_HEAD, { hasText: "Alpha" }));
 
     await expect

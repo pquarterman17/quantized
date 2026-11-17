@@ -1,4 +1,4 @@
-import type { LibraryHierarchy, LibraryNode, LibraryNodeKey } from "./libraryHierarchy";
+import { collapsedWorkbookCount, type LibraryHierarchy, type LibraryNode, type LibraryNodeKey } from "./libraryHierarchy";
 
 export type LibraryContentFilter = "all" | "data" | "figures" | "reports";
 
@@ -38,8 +38,11 @@ export function filterLibraryHierarchy(
   return { roots, byKey, warnings: hierarchy.warnings };
 }
 
-export function libraryNodeCount(hierarchy: LibraryHierarchy): number {
-  return hierarchy.byKey.size;
+/** The "N shown" count: every node the view lists. `collapsed` (Tree/Tiles
+ *  navigator) drops the workbooks that render as their sheet's row, so the
+ *  count equals the rows the tree can show; Details lists all entities. */
+export function libraryNodeCount(hierarchy: LibraryHierarchy, collapsed = false): number {
+  return hierarchy.byKey.size - (collapsed ? collapsedWorkbookCount(hierarchy) : 0);
 }
 
 export function libraryContainerIds(hierarchy: LibraryHierarchy): { folders: Set<string>; workbooks: Set<string> } {

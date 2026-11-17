@@ -103,6 +103,9 @@ export interface LibrarySelection {
 export interface ActiveDrag {
   kind: "dataset" | "folder" | "workbook";
   id: string;
+  /** A workbook drag from a collapsed single-sheet row (collapsedSheetOf) ALSO
+   *  carries its sheet's DATASET_DND payload, so plot windows still light up. */
+  datasetId?: string;
 }
 
 export interface LibraryPanelSlice {

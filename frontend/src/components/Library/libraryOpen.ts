@@ -12,7 +12,7 @@
 // plans/BUNDLE_HEADROOM.md): the eager Library panel needs only that one, and
 // every caller of this module is already lazy, so this module loads with them.
 
-import type { LibraryNode } from "../../lib/libraryHierarchy";
+import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { figureLayerFamily } from "../../lib/originFigures";
 import { useApp } from "../../store/useApp";
 import { focusedWindowGuardsAgainst } from "../../store/windowOpenGuard";
@@ -62,6 +62,18 @@ export function isSelected(
   return node.kind === "worksheet"
     ? selectedIds.has(node.entityId)
     : selection?.kind === node.kind && selection.id === node.entityId;
+}
+
+/** isSelected for a flattened ROW: a collapsed single-sheet workbook row
+ *  (FlatLibraryNode.workbook) is highlighted by its sheet's dataset selection
+ *  OR by a selection of the workbook it stands for. */
+export function isRowSelected(
+  row: FlatLibraryNode,
+  selectedIds: ReadonlySet<string>,
+  selection: { kind: string; id: string } | null,
+): boolean {
+  return isSelected(row.node, selectedIds, selection)
+    || (row.workbook != null && selection?.kind === "workbook" && selection.id === row.workbook.entityId);
 }
 
 /** The workbook id a node is nested under, or undefined when it isn't a

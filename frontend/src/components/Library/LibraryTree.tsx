@@ -27,8 +27,9 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
 import { isEditorTarget, isTextEditorTarget, keyOfRow, NAV_KEYS, rowSelector } from "./libraryTreeDom";
+import { deleteCollapsedWorkbook } from "./collapsedWorkbook";
 import LibraryTreeRow from "./LibraryTreeRow";
-import { isSelected, openLibraryNode } from "./libraryOpen";
+import { isRowSelected, openLibraryNode } from "./libraryOpen";
 import { selectLibraryNode } from "../../lib/librarySelect";
 import { focusRowWhenRendered, useListVirtualization } from "./useListVirtualization";
 import { subtreeCount, subtreeCountIndex } from "../../lib/foldertree";
@@ -152,7 +153,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   // exactly the data-loss path `lib/focusGuard.ts` exists to prevent, so the
   // recovery wins: it sets `recoveringRef` and this effect stands down for that
   // render.
-  const selectedRow = rows.find((r) => isSelected(r.node, selectedIdSet, librarySelection));
+  const selectedRow = rows.find((r) => isRowSelected(r, selectedIdSet, librarySelection));
   const selectedKey = selectedRow?.node.key ?? null;
   const modelStop = (indexOfKey(rows, focusKey) >= 0 ? focusKey : null) ?? selectedKey ?? rows[0]?.node.key ?? null;
   const tabStopKey = rendered.some((r) => r.node.key === modelStop) ? modelStop : rendered[0]?.node.key ?? null;
@@ -304,7 +305,10 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
       if (node.kind === "worksheet") {
         e.preventDefault();
         const ids = useApp.getState().selectedIds;
-        requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
+        const targets = ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId];
+        // A lone collapsed single-sheet row deletes the WORKBOOK, as its menu does.
+        if (rows[idx].workbook && targets.length === 1) deleteCollapsedWorkbook(rows[idx].workbook);
+        else requestDatasetRemoval(targets);
         return;
       }
       // Artifact rows (E-b2): Delete routes through the SAME registry action
@@ -372,9 +376,9 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
         <LibraryTreeRow
           key={row.node.key}
           row={row}
-          treeItem={treeItemProps(row, offset + i, positions, isSelected(row.node, selectedIdSet, librarySelection), row.node.key === tabStopKey)}
+          treeItem={treeItemProps(row, offset + i, positions, isRowSelected(row, selectedIdSet, librarySelection), row.node.key === tabStopKey)}
+          selected={isRowSelected(row, selectedIdSet, librarySelection)}
           activeId={activeId}
-          selectedIds={selectedIdSet}
           folderCounts={folderCounts}
           onFilterTag={onFilterTag}
           onFocusContainer={onFocusContainer}
