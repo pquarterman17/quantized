@@ -3222,6 +3222,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reductions/xrd-index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xrd Index Route
+         * @description Allowed reflections of a built-in phase + each peak's nearest (hkl) and Δ2θ.
+         */
+        post: operations["xrd_index_route_api_reductions_xrd_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reductions/xrd-phases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Xrd Phases Route
+         * @description Phase-database phases the XRD indexer supports (cubic + hexagonal).
+         */
+        get: operations["xrd_phases_route_api_reductions_xrd_phases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reference/constants": {
         parameters: {
             query?: never;
@@ -12477,6 +12517,33 @@ export interface components {
              */
             intensity?: string;
         };
+        /** XrdIndexRequest */
+        XrdIndexRequest: {
+            /** Peaks */
+            peaks?: number[];
+            /** Phase */
+            phase: string;
+            /**
+             * Tolerance
+             * @default 0.2
+             */
+            tolerance?: number;
+            /**
+             * Two Theta Max
+             * @default 90
+             */
+            two_theta_max?: number;
+            /**
+             * Two Theta Min
+             * @default 10
+             */
+            two_theta_min?: number;
+            /**
+             * Wavelength
+             * @default 1.5406
+             */
+            wavelength?: number;
+        };
         /** XrdLowAngleRequest */
         XrdLowAngleRequest: {
             /**
@@ -17721,6 +17788,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    xrd_index_route_api_reductions_xrd_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XrdIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    xrd_phases_route_api_reductions_xrd_phases_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
