@@ -83,7 +83,7 @@ export async function openFixture(page: Page, doc: FigureDocument): Promise<void
   }, { doc, ds: matrixDataset(), palette: [...TEST_SERIES_PALETTE] });
 }
 
-function readScreen(page: Page): Promise<Screen> {
+export function readScreen(page: Page): Promise<Screen> {
   return page.evaluate(() => {
     const rec = (window as unknown as { __qzDraw: { log: (c: HTMLCanvasElement) => DrawOp[] } }).__qzDraw;
     const scratch = document.createElement("canvas").getContext("2d")!;

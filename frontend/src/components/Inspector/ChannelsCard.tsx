@@ -22,6 +22,7 @@ import BufferedNumberField from "../primitives/BufferedNumberField";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
 import ChannelsFilterBar from "./ChannelsFilterBar";
+import { useWaterfallReveal } from "./useWaterfallReveal";
 
 /** Above this many columns the card switches to one compact line per channel. */
 const COMPACT_ABOVE = 12;
@@ -54,6 +55,7 @@ function ChannelsCardBody({ active }: { active: Dataset | null }) {
   const setWaterfallDx = useApp((s) => s.setWaterfallDx);
   const endHistoryRun = useApp((s) => s.endHistoryRun);
 
+  const waterfallRef = useWaterfallReveal("Channels");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
 
@@ -326,16 +328,23 @@ function ChannelsCardBody({ active }: { active: Dataset | null }) {
           </div>
         );
       })}
-      <SliderRow
-        label="Waterfall"
-        value={Math.round(waterfall * 100)}
-        min={0}
-        max={100}
-        step={5}
-        onChange={(v) => setWaterfall(v / 100)}
-        onGestureStart={endHistoryRun}
-        format={(v) => `${v}%`}
-      />
+      <div ref={waterfallRef}>
+        <SliderRow
+          label="Waterfall"
+          value={Math.round(waterfall * 100)}
+          min={0}
+          max={100}
+          step={5}
+          onChange={(v) => setWaterfall(v / 100)}
+          onGestureStart={endHistoryRun}
+          format={(v) => <span style={{ whiteSpace: "nowrap" }}>{`${v}% of range`}</span>}
+        />
+        {waterfall > 0 && (
+          <div className="qzk-helptext" data-testid="waterfall-axis-hint">
+            Curves are stacked: the Y axis scale reads the offset values, not each curve&apos;s own.
+          </div>
+        )}
+      </div>
       {/* Origin's waterfall X step: series i slides right by i x this % of the x-range.
           Typed per keystroke, so focus starts a fresh undo run (setWaterfallDx coalesces). */}
       <div className="qz-slider-row" title="Shift each next series right by this % of the x-range (negative shifts left).">

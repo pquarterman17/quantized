@@ -19,6 +19,7 @@ import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { onLoadFailure, runLazy } from "./fileCommands";
 import { colorGradientCommand, legendFormatCommand } from "./plotStyleCommands";
+import { applyWaterfall } from "./waterfallCommand";
 
 /** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes, and the store guard
  *  that keeps it honest) is a lazy chunk the session starts loading with this
@@ -123,7 +124,14 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "waterfall",
       group: "Plot",
       section: "Layout",
-      label: "Waterfall (stack datasets)…",
+      label: "Waterfall…",
+      run: () => void applyWaterfall(),
+    },
+    {
+      id: "waterfall-export",
+      group: "Plot",
+      section: "Layout",
+      label: "Waterfall data export (CSV / 3-D)…",
       run: () => s().setWaterfallOpen(true),
     },
     { id: "contour-scattered", group: "Plot", section: "Layout", label: "Contour from scattered XYZ…", run: () => graphFormatCommand(s, (m) => m.contourFromScattered) },
