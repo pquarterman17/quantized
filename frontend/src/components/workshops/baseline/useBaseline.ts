@@ -129,6 +129,16 @@ function baselineInput(
   };
 }
 
+/** Batch target: the SAME channels (by column label) as the active binding; the
+ *  plot's index-based selection means something else in another column layout. */
+function batchInput(ds: Dataset, ref: BaselineBinding | null): BaselineInput | string {
+  if (!ref) return "select a plotted Y channel first";
+  const yKey = ds.data.labels.indexOf(ref.yLabel);
+  const xKey = ref.xKey == null ? null : ds.data.labels.indexOf(ref.xLabel);
+  if (yKey < 0 || xKey === -1) return `${ds.name}: no "${yKey < 0 ? ref.yLabel : ref.xLabel}" column`;
+  return baselineInput(ds, xKey, [yKey], null) ?? `${ds.name}: no usable Y channel`;
+}
+
 /** The full-range polynomial methods reuse the region-fit calc (#8: the
  *  BG-from-region polyfit surfaced as first-class picker choices). */
 function regionOrder(method: BaselineMethod, p: BaselineParams): number {
@@ -368,10 +378,9 @@ export function useBaseline(): BaselineState {
     try {
       for (const id of ids) {
         const ds = await useApp.getState().resolveDataset(id);
-        if (!ds) continue;
-        const st = useApp.getState();
-        const input = baselineInput(ds, st.xKey, st.yKeys, st.seriesOrder) ?? baselineInput(ds, null, null, null);
-        if (!input) throw new Error(`${ds.name}: no usable Y channel`);
+        if (!ds) throw new Error("a selected dataset could not be loaded");
+        const input = batchInput(ds, binding);
+        if (typeof input === "string") throw new Error(input);
         const res = await callBaseline(method, input.x, input.y, params, anchors).catch((e: unknown) => {
           throw new Error(`${ds.name}: ${e instanceof Error ? e.message : "baseline failed"}`);
         });

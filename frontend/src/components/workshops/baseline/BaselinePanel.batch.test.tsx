@@ -75,4 +75,30 @@ describe("BaselinePanel batch apply (UX9-E)", () => {
     expect(useApp.getState().datasets).toHaveLength(3);
     expect(useApp.getState().folders).toHaveLength(0);
   });
+
+  it("binds each dataset's channel by label, not by the plot's column index; a missing column fails the whole batch", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [1, 1, 1, 1], coeffs: [0, 1], n_points: 4, mean: 1, std: 0, min: 1, max: 1, order: 1,
+    });
+    const swapped: DataStruct = { ...raw, values: raw.values.map((r) => [99, r[0]]), labels: ["Temp", "Intensity"], units: ["K", "cps"] };
+    useApp.setState({ datasets: [spectrum("A.txt", "a"), { id: "b", name: "B.txt", data: swapped }], selectedIds: ["a", "b"] });
+    render(<BaselinePanel />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply to 2 selected" }));
+    });
+    expect(vi.mocked(baselineRegion).mock.calls.map((c) => c[0].y)).toEqual([[10, 12, 11, 13], [10, 12, 11, 13]]);
+    const bOut = useApp.getState().datasets.find((d) => d.name === "B (bg-sub)");
+    expect(bOut?.data.values.map((r) => r[0])).toEqual([99, 99, 99, 99]); // Temp untouched
+
+    const other: DataStruct = { ...raw, labels: ["Counts"] };
+    act(() => useApp.setState({ datasets: [spectrum("A.txt", "a"), { id: "c", name: "C.txt", data: other }], selectedIds: ["a", "c"], activeId: "a", history: [], folders: [] }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply to 2 selected" }));
+    });
+    expect(screen.getByText(/C\.txt: no "Intensity" column/)).toBeInTheDocument();
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().folders).toHaveLength(0);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
 });
