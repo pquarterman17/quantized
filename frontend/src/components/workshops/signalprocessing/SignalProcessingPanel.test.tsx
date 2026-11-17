@@ -65,10 +65,18 @@ beforeEach(() => {
 });
 
 describe("SignalProcessingPanel", () => {
+  it("shows the real X column name (not the generic 'X') in the source note", () => {
+    useApp.setState({
+      datasets: [{ ...dataset, data: { ...dataset.data, metadata: { x_column_name: "Raman shift", x_column_unit: "cm-1" } } }],
+    });
+    render(<SignalProcessingPanel />);
+    expect(screen.getByText(/X: Raman shift \(cm-1\)/)).toBeInTheDocument();
+  });
+
   it("previews the plotted signal through the channel-targeted API", async () => {
     render(<SignalProcessingPanel />);
 
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     expect(correctionMock).toHaveBeenLastCalledWith(expect.objectContaining({
       dataset: dataset.data,
@@ -89,7 +97,7 @@ describe("SignalProcessingPanel", () => {
     });
     render(<SignalProcessingPanel />);
 
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     expect(screen.getByRole("group", { name: "Bound uncertainty" })).toHaveTextContent("propagated through this linear operation");
     // The caveat is on screen, not only in the code.
@@ -112,7 +120,7 @@ describe("SignalProcessingPanel", () => {
     render(<SignalProcessingPanel />);
     fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "integral" } });
     expect(screen.getByRole("alert")).toHaveTextContent(/uncertainty in secondary came out of an earlier smoothing, derivative or integral.*correlated/);
-    expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeDisabled();
     expect(correctionMock).not.toHaveBeenCalled();
     // The note under the drop box must not contradict the alert: an integral
     // CAN propagate; this input is the problem, not the operation (live check).
@@ -121,7 +129,7 @@ describe("SignalProcessingPanel", () => {
     expect(note).toHaveTextContent(/earlier linear step/);
     // A scalar step is still exact.
     fireEvent.change(screen.getByRole("combobox", { name: "Operation" }), { target: { value: "normalize-peak" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeEnabled());
   });
 
   it("a nonlinear operation with a bound Y error says why it is blocked, and dropping the uncertainty unblocks it", async () => {
@@ -134,7 +142,7 @@ describe("SignalProcessingPanel", () => {
 
     const reason = 'Logarithmic derivative can\'t propagate the bound Y uncertainty. Tick "Drop uncertainty for this output" or unassign the error column.';
     expect(screen.getByRole("alert")).toHaveTextContent(reason);
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     expect(create).toBeDisabled();
     expect(create).toHaveAttribute("title", reason); // a disabled control says why
     expect(screen.getByRole("button", { name: "Save recipe…" })).toHaveAttribute("title", reason);
@@ -152,7 +160,7 @@ describe("SignalProcessingPanel", () => {
     createSignalMock.mockReturnValue(pending);
     render(<SignalProcessingPanel />);
 
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     act(() => {
       create.click();
@@ -169,7 +177,7 @@ describe("SignalProcessingPanel", () => {
       return new Promise<null>((resolve) => signal.addEventListener("abort", () => resolve(null), { once: true }));
     });
     render(<SignalProcessingPanel />);
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
 
     fireEvent.click(create);
@@ -216,7 +224,7 @@ describe("SignalProcessingPanel", () => {
 
   it("disables commit instead of reusing a preview from the previous operation", async () => {
     render(<SignalProcessingPanel />);
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     spectralMock.mockImplementation(() => new Promise(() => {}));
 
@@ -231,7 +239,7 @@ describe("SignalProcessingPanel", () => {
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "correlation" } });
 
     expect(screen.getByRole("alert")).toHaveTextContent("requires exactly two");
-    expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeDisabled();
   });
 
   it("previews and commits a correlation linked to two worksheets", async () => {
@@ -254,7 +262,7 @@ describe("SignalProcessingPanel", () => {
     fireEvent.click(screen.getByLabelText("One column from each of two worksheets"));
     fireEvent.change(screen.getByLabelText("Second worksheet"), { target: { value: reference.id } });
 
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     expect(spectralMock).toHaveBeenLastCalledWith(
       dataset.data,
@@ -336,11 +344,11 @@ describe("SignalProcessingPanel", () => {
     expect(useSignalOperationSeed.getState().op).toBeNull();
   });
 
-  it("queues a deep link that arrives while Create linked worksheet is running, instead of losing it", async () => {
+  it("queues a deep link that arrives while Create new worksheet is running, instead of losing it", async () => {
     let finish: (v: null) => void = () => undefined;
     createSignalMock.mockImplementation(() => new Promise((r) => { finish = r; }));
     render(<SignalProcessingPanel />);
-    const create = screen.getByRole("button", { name: "Create linked worksheet" });
+    const create = screen.getByRole("button", { name: "Create new worksheet" });
     await waitFor(() => expect(create).toBeEnabled());
     fireEvent.click(create);
     act(() => useSignalOperationSeed.getState().request("integral"));
@@ -363,6 +371,6 @@ describe("SignalProcessingPanel", () => {
     fireEvent.change(screen.getByLabelText("Reference"), { target: { value: "range" } });
 
     expect(screen.getByRole("alert")).toHaveTextContent("Reference X range must be finite and increasing");
-    expect(screen.getByRole("button", { name: "Create linked worksheet" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeDisabled();
   });
 });

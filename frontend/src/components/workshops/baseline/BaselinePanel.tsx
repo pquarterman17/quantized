@@ -9,6 +9,7 @@
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
+import { plotSelectedTogether } from "../../../lib/plotSelectedTogether";
 import { useApp } from "../../../store/useApp";
 import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
 
@@ -76,6 +77,7 @@ export default function BaselinePanel() {
   const {
     active, method, params, baseline, busy, error, anchors, binding,
     setMethod, setParams, compute, subtract, clear, pickRegion, clearAnchors, applyAnchors,
+    applyToSelected, selectedCount, batchOutputIds,
   } = useBaseline();
 
   const close = () => {
@@ -93,7 +95,7 @@ export default function BaselinePanel() {
       />
 
       <div className="qzk-hint" style={{ marginTop: 6 }}>
-        {binding ? `Analyzing ${binding.yLabel} vs ${binding.xLabel}` : "Select a plotted Y channel"}
+        {binding ? `${active?.name}: ${binding.yLabel} vs ${binding.xLabel}` : "Select a plotted Y channel"}
       </div>
 
       <div
@@ -177,10 +179,28 @@ export default function BaselinePanel() {
           </Button>
         ) : (
           <Button size="sm" disabled={!baseline} onClick={() => void subtract()}>
-            Subtract →
+            Subtract → new worksheet
           </Button>
         )}
       </div>
+
+      {selectedCount >= 2 && (
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={busy || method === "anchor"}
+          title={method === "anchor" ? "Anchors are placed on one spectrum; pick another method to batch" : "Same method and parameters on each selected dataset; one undo step"}
+          onClick={() => void applyToSelected()}
+          style={{ marginTop: 8, width: "100%" }}
+        >
+          {`Apply to ${selectedCount} selected`}
+        </Button>
+      )}
+      {batchOutputIds.length >= 2 && (
+        <Button size="sm" onClick={() => void plotSelectedTogether(batchOutputIds)} style={{ marginTop: 8, width: "100%" }}>
+          {`◇ Overlay these ${batchOutputIds.length}`}
+        </Button>
+      )}
 
       {!active && (
         <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
@@ -196,7 +216,7 @@ export default function BaselinePanel() {
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
           {method === "anchor"
             ? "Baseline overlaid — Apply −BG subtracts it as a correction step."
-            : "Baseline overlaid — Subtract writes a new dataset."}
+            : "Baseline overlaid — Subtract creates a new worksheet."}
         </div>
       )}
     </ToolWindow>

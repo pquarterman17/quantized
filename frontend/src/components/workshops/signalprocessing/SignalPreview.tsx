@@ -32,20 +32,49 @@ export function samplePreviewRows(
   return sampled;
 }
 
-function points(
-  rows: (readonly [number, number])[],
-  bounds: readonly [number, number, number, number],
-  width: number,
-  height: number,
-): string {
-  const [xmin, xmax, ymin, ymax] = bounds;
-  const xspan = xmax - xmin || 1;
-  const yspan = ymax - ymin || 1;
+type Bounds = readonly [number, number, number, number];
+
+function boundsOf(rows: readonly (readonly [number, number])[]): Bounds {
+  if (!rows.length) return [0, 1, 0, 1];
+  let xmin = Infinity;
+  let xmax = -Infinity;
+  let ymin = Infinity;
+  let ymax = -Infinity;
+  for (const [x, y] of rows) {
+    if (x < xmin) xmin = x;
+    if (x > xmax) xmax = x;
+    if (y < ymin) ymin = y;
+    if (y > ymax) ymax = y;
+  }
+  return [xmin, xmax, ymin, ymax];
+}
+
+/** Pixel position inside a pane `height` tall whose top edge sits at `top`. */
+function project(x: number, y: number, b: Bounds, width: number, height: number, top: number): [number, number] {
+  const [xmin, xmax, ymin, ymax] = b;
+  return [
+    8 + ((x - xmin) / (xmax - xmin || 1)) * (width - 16),
+    top + 8 + (1 - (y - ymin) / (ymax - ymin || 1)) * (height - 16),
+  ];
+}
+
+function points(rows: (readonly [number, number])[], b: Bounds, width: number, height: number, top = 0): string {
   return rows.map(([x, y]) => {
-    const px = 8 + ((x - xmin) / xspan) * (width - 16);
-    const py = 8 + (1 - (y - ymin) / yspan) * (height - 16);
+    const [px, py] = project(x, y, b, width, height, top);
     return `${px.toFixed(1)},${py.toFixed(1)}`;
   }).join(" ");
+}
+
+/** Processed gets its OWN Y scale (stacked pane) when its span is under half
+ *  (or over double) the original's: a normalised or differentiated curve on the
+ *  original's scale is a flat line. Comparable spans keep the one-scale overlay
+ *  so smoothing/baseline stay directly comparable. */
+function needsOwnScale(a: Bounds, b: Bounds): boolean {
+  const sa = a[3] - a[2];
+  const sb = b[3] - b[2];
+  if (!(sa > 0) || !(sb > 0)) return false;
+  const ratio = sa < sb ? sa / sb : sb / sa;
+  return ratio < 0.5;
 }
 
 export default function SignalPreview({
@@ -65,34 +94,34 @@ export default function SignalPreview({
   flagged?: readonly (readonly [number, number])[];
 }) {
   const width = 460;
-  const height = 150;
   const originalRows = showOriginal ? samplePreviewRows(finiteRows(source, channel)) : [];
   const processedRows = result ? samplePreviewRows(finiteRows(result, resultChannel)) : [];
-  const combined = [...originalRows, ...processedRows, ...flagged];
-  const bounds = combined.length
-    ? [
-        Math.min(...combined.map(([x]) => x)),
-        Math.max(...combined.map(([x]) => x)),
-        Math.min(...combined.map(([, y]) => y)),
-        Math.max(...combined.map(([, y]) => y)),
-      ] as const
-    : [0, 1, 0, 1] as const;
+  const origBounds = boundsOf([...originalRows, ...flagged]);
+  const procBounds = boundsOf(processedRows);
+  const stacked = originalRows.length > 0 && processedRows.length > 0 && needsOwnScale(origBounds, procBounds);
+  const paneH = stacked ? 110 : 150;
+  const height = stacked ? 2 * paneH + 6 : 150;
+  const shared: Bounds = boundsOf([...originalRows, ...processedRows, ...flagged]);
+  const xs = shared;
+  const ob: Bounds = stacked ? [xs[0], xs[1], origBounds[2], origBounds[3]] : shared;
+  const pb: Bounds = stacked ? [xs[0], xs[1], procBounds[2], procBounds[3]] : shared;
+  const procTop = stacked ? paneH + 6 : 0;
   return (
     <div className="qz-signal-preview">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={showOriginal ? "Original and processed signal preview" : "Analysis output preview"}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={stacked ? { height: `${height}px` } : undefined} role="img" data-layout={stacked ? "stacked" : "overlay"} aria-label={showOriginal ? "Original and processed signal preview" : "Analysis output preview"}>
         <rect x="0" y="0" width={width} height={height} fill="var(--bg-1)" />
-        <polyline points={points(originalRows, bounds, width, height)} fill="none" stroke="var(--text-faint)" strokeWidth="1.2" />
+        <polyline points={points(originalRows, ob, width, paneH)} fill="none" stroke="var(--text-faint)" strokeWidth="1.2" />
         {flagged.slice(0, 200).map(([x, y]) => {
-          const [xmin, xmax, ymin, ymax] = bounds;
-          const cx = 8 + ((x - xmin) / (xmax - xmin || 1)) * (width - 16);
-          const cy = 8 + (1 - (y - ymin) / (ymax - ymin || 1)) * (height - 16);
+          const [cx, cy] = project(x, y, ob, width, paneH, 0);
           return <circle key={`${x}:${y}`} cx={cx.toFixed(1)} cy={cy.toFixed(1)} r="3" fill="none" stroke="var(--danger)" strokeWidth="1.4" data-flagged="" />;
         })}
-        {result && <polyline points={points(processedRows, bounds, width, height)} fill="none" stroke="var(--accent)" strokeWidth="1.8" />}
+        {stacked && <line x1="0" x2={width} y1={paneH + 3} y2={paneH + 3} stroke="var(--border)" strokeWidth="1" />}
+        {result && <polyline points={points(processedRows, pb, width, paneH, procTop)} fill="none" stroke="var(--accent)" strokeWidth="1.8" />}
       </svg>
       <div className="qz-signal-preview-key">
         <span className="qz-signal-preview-name">Preview: {result?.labels[resultChannel] ?? source.labels[channel] ?? `channel ${channel + 1}`}</span>
         {showOriginal && <span>Original</span>}<strong>{showOriginal ? "Processed" : "Output"}</strong>
+        {stacked && <span>own Y scale</span>}
       </div>
     </div>
   );
