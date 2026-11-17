@@ -32,6 +32,8 @@ import {
   assignSlot,
   clearSlot,
   emptySlots,
+  filledCount,
+  fitGrid,
   moveSlot as swapSlots,
   patchSlot,
   resizeSlots,
@@ -73,7 +75,7 @@ export function useFigurePage() {
   // is resolved separately (see usePageLifecycle's `pageDocument`) since a
   // session source can reference a still-unsaved window, which a persisted
   // document can't.
-  const [draft, setDraft] = useState(() => createPageDocument({ id: nextDraftId(), name: "Untitled page" }));
+  const [draft, setDraft] = useState(() => createPageDocument({ id: nextDraftId(), name: "Untitled page", rows: 1, cols: 2 }));
   const rows = draft.rows;
   const cols = draft.cols;
   const labelFormat = draft.output.labelFormat;
@@ -86,8 +88,11 @@ export function useFigurePage() {
   const greyscale = draft.output.greyscale ?? false;
   const layout = draft.layout; // F3.5: gap/link/align/resize-mode controls
 
-  const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(2, 2));
+  const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(1, 2));
   const [selected, setSelected] = useState<number | null>(null);
+  // UX9-G: the grid auto-fits the panel count (1x2 to start, growing as
+  // sources are assigned) until the user sets rows/cols themselves.
+  const [gridTouched, setGridTouched] = useState(false);
 
   const lifecycle = usePageLifecycle(draft, setDraft, slots, setSlots, setSelected);
   // F3.6: the ONE spec-derivation path (buildSpec) plus preview/export/copy —
@@ -142,7 +147,7 @@ export function useFigurePage() {
   );
   function assignDataset(datasetId: string): void {
     // No free (or selected) slot: open nothing (a stray window + undo step).
-    if (selected === null && !slots.some((slot) => slot.source === null)) {
+    if (!canAutoGrow() && selected === null && !slots.some((slot) => slot.source === null)) {
       setStatus("every slot is full: select one to replace, or add a row/column");
       return;
     }
@@ -173,6 +178,13 @@ export function useFigurePage() {
     setSlots((prev) => resizeSlots(prev, cols, r, c));
     setDraft((prev) => ({ ...prev, rows: r, cols: c }));
     setSelected(null);
+    setGridTouched(true);
+  }
+
+  /** Auto-fit only while the grid is the untouched default of a page that was
+   *  never saved: a reopened/saved layout is the user's, never reshaped. */
+  function canAutoGrow(): boolean {
+    return !gridTouched && !lifecycle.everSaved && fitGrid(filledCount(slots) + 1, rows, cols) !== null;
   }
 
   /** Style preset change re-syncs DPI to that preset's calibrated value
@@ -237,9 +249,24 @@ export function useFigurePage() {
     setSelected(j);
   }
 
-  /** Click a source: fill the selected slot, else the first empty one. */
+  /** Click a source: fill the selected slot if empty, else the first empty
+   *  one; with none free, grow the auto grid (UX9-G), else replace the
+   *  selected slot. */
   function assignToNext(source: PanelSource): void {
-    const target = selected !== null ? selected : slots.findIndex((s) => s.source === null);
+    let target =
+      selected !== null && slots[selected]?.source === null
+        ? selected
+        : slots.findIndex((s) => s.source === null);
+    if (target < 0 && canAutoGrow()) {
+      const [r, c] = fitGrid(filledCount(slots) + 1, rows, cols) as [number, number];
+      const grown = resizeSlots(slots, cols, r, c);
+      target = grown.findIndex((s) => s.source === null);
+      setSlots(assignSlot(grown, target, source));
+      setDraft((prev) => ({ ...prev, rows: r, cols: c }));
+      setSelected(target);
+      return;
+    }
+    if (target < 0) target = selected ?? -1;
     if (target < 0) return;
     assign(target, source);
   }

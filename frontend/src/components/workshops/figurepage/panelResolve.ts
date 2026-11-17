@@ -106,6 +106,21 @@ export function stripPageIncompatibleOverrides(
   return Object.keys(overrides).length > 0 ? overrides : undefined;
 }
 
+/** UX9-G: a panel drawing ONE plain series gets no legend by default (its
+ *  axis label already names it; the on-screen legend sat mid-data on the page).
+ *  Left alone when anything makes a legend informative: several series, a
+ *  secondary axis, a group/encoding/facet split, or a legend title. */
+function hideSoloLegend(spec: FigureSpec, ov: FigureOverrides | undefined): FigureOverrides | undefined {
+  const solo =
+    spec.y_keys?.length === 1 &&
+    !spec.y2_keys?.length &&
+    spec.group_col === undefined &&
+    !spec.encoding &&
+    !spec.facets?.length;
+  if (!solo || ov?.legend?.title || ov?.legend?.show === false) return ov;
+  return { ...ov, legend: { ...ov?.legend, show: false } };
+}
+
 /** A page panel's figure: the overrides a page cannot honour dropped, and the
  *  Y3+ axes (gap audit 4 G11) too -- the page renderer draws Y1 / Y2 only, so
  *  those series land on Y1 (the spec's `y2_keys` already leaves them out), as
@@ -114,7 +129,7 @@ export function stripPageIncompatibleOverrides(
 export function pagePanelSpec(spec: FigureSpec): FigureSpec {
   const { y_axes: extra, ...rest } = spec;
   if (extra?.length) useApp.getState().setStatus("Figure page: a panel's Y3+ axes are drawn on Y1 (a page panel draws Y1 and Y2 only)");
-  return { ...rest, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+  return { ...rest, overrides: hideSoloLegend(rest, stripPageIncompatibleOverrides(spec.overrides)) };
 }
 
 /** Resolve one panel source into the single-figure payload the page route

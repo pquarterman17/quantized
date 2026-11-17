@@ -13,7 +13,8 @@ import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { buildPageSpecFromDocument, panelFigure, panelRenderInputs } from "./panelResolve";
+import { buildPageSpecFromDocument, pagePanelSpec, panelFigure, panelRenderInputs } from "./panelResolve";
+import type { FigureSpec } from "../../../lib/api/figures";
 
 const DATA: DataStruct = {
   time: [0, 1, 2],
@@ -298,5 +299,19 @@ describe("the focused-window panel's preview cache key", () => {
     const before = panelRenderInputs(slots, useApp.getState());
     useApp.setState({ seriesLabels: { 0: "M 5 K" } });
     expect(panelRenderInputs(slots, useApp.getState())).not.toEqual(before);
+  });
+});
+
+describe("UX9-G solo-series legend", () => {
+  const base = { dataset: {}, x_key: 0, y_keys: [1] } as unknown as FigureSpec;
+  it("hides the legend of a one-series panel, keeping other legend fields", () => {
+    const out = pagePanelSpec({ ...base, overrides: { legend: { show: true, loc: "custom" } } });
+    expect(out.overrides?.legend).toEqual({ show: false, loc: "custom" });
+  });
+  it("leaves multi-series, secondary-axis and titled legends alone", () => {
+    expect(pagePanelSpec({ ...base, y_keys: [1, 2] }).overrides?.legend).toBeUndefined();
+    expect(pagePanelSpec({ ...base, y2_keys: [1] }).overrides?.legend).toBeUndefined();
+    const titled = pagePanelSpec({ ...base, overrides: { legend: { show: true, title: "T" } } });
+    expect(titled.overrides?.legend?.show).toBe(true);
   });
 });

@@ -20,7 +20,7 @@
 import type { FigureDocument } from "./figureDocument";
 import type { FigureDoc } from "./figuredoc";
 import { docRenderable } from "./figuredoc";
-import type { PageLabelFormat } from "./figurepage";
+import { PAGE_MAX_GRID, type PageLabelFormat } from "./figurepage";
 import type { PlotWindow } from "./plotview";
 
 export type PanelSourceKind = "window" | "figdoc" | "figure";
@@ -161,6 +161,23 @@ export function slotLabels(slots: PageSlot[], fmt: PageLabelFormat): string[] {
     k += 1;
     return s.label !== null ? s.label : auto;
   });
+}
+
+/** UX9-G auto-fit: the smallest grid that holds `n` panels and CONTAINS the
+ *  current one (so `resizeSlots` never drops a filled slot): 1x2 -> 1x3 ->
+ *  2x3 -> 3x3 -> 3x4 -> 4x4. Returns the current grid when it already fits,
+ *  or null at PAGE_MAX_GRID. */
+export function fitGrid(n: number, rows: number, cols: number): [number, number] | null {
+  let r = rows;
+  let c = cols;
+  while (r * c < n) {
+    if (r === 1 && c < 3) c += 1;
+    else if (r < c && r < PAGE_MAX_GRID) r += 1;
+    else if (c < PAGE_MAX_GRID) c += 1;
+    else if (r < PAGE_MAX_GRID) r += 1;
+    else return null;
+  }
+  return [r, c];
 }
 
 export function filledCount(slots: PageSlot[]): number {
