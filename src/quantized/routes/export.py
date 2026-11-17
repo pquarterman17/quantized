@@ -26,7 +26,12 @@ from quantized.csv_safe import with_excel_bom
 from quantized.datastruct import DataStruct
 from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
-from quantized.io.origin import GraphSpec, format_origin_project_script, format_origin_script
+from quantized.io.origin import (
+    OGS_BOM,
+    GraphSpec,
+    format_origin_project_script,
+    format_origin_script,
+)
 from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.origin_project.writer_matrix import matrix_fallbacks
@@ -189,7 +194,7 @@ def export_origin(req: OriginRequest) -> Response:
 
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"{stem}.ogs", ogs_text)
+        zf.writestr(f"{stem}.ogs", OGS_BOM + ogs_text)
         zf.writestr(csv_name, with_excel_bom(csv_text))
     return Response(
         content=buf.getvalue(),
@@ -266,7 +271,7 @@ def export_origin_project(req: OpjRequest) -> Response:
     stem = _safe_name(req.filename, "")
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"{stem}.ogs", ogs_text)
+        zf.writestr(f"{stem}.ogs", OGS_BOM + ogs_text)
         for csv_name, csv_text in csvs:
             zf.writestr(csv_name, with_excel_bom(csv_text))
     return Response(

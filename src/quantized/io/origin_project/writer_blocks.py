@@ -246,11 +246,17 @@ def window_header(book: str, long_name: str = "") -> bytes:
     (no marker) sends the reader to its v4.3227 printable-run fallback,
     which picked template bytes ("BA") as the title of every book written
     without a long name (audit 2026-11). The title is printable ASCII (the
-    reader's title rule), other characters as ``\\(xHHHH)`` escapes."""
+    reader's title rule), other characters as ``\\(xHHHH)`` escapes.
+
+    The title is NUL-terminated BEFORE the marker: Origin 2026b showed the
+    unterminated form's bare ``@${[0|]}`` as part of the title
+    (``page.longname$`` = ``"My Title@${[0|]}"``) and reads ``title\\0@${[0|]}``
+    as ``"My Title"`` (COM, 2026-11-16, ORIGIN_PLOT_TYPE_PARITY_PLAN item 9).
+    The reader stops at the NUL either way (the 0x6F label rule)."""
     p = bytearray(_WIN_197[:195])
     enc = book.encode("ascii", errors="strict")[:24]  # sanitized by the writer
     p[2 : 2 + len(enc) + 1] = enc + b"\x00"
-    p += encode_text(long_name or book, ascii_only=True) + b"@${[0|]}\x00"
+    p += encode_text(long_name or book, ascii_only=True) + b"\x00@${[0|]}\x00"
     return bytes(p)
 
 

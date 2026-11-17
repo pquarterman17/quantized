@@ -43,7 +43,11 @@ def test_origin_export_matches_matlab(
 
     assert csv_text.splitlines() == ref["csv"]
 
-    actual = ogs_text.splitlines()
+    # Deliberate deviation from the MATLAB golden (ORIGIN_PLOT_TYPE_PARITY_PLAN
+    # item 9, Origin COM readback 2026-11-16): impASC titles the book after the
+    # CSV, so the script always restores the dataset's title afterwards.
+    actual = [line for line in ogs_text.splitlines() if not line.startswith("page.longname$")]
+    assert f'page.longname$ = "{ref["book"]}";' in ogs_text
     expected = ref["ogs"]
     assert len(actual) == len(expected)
     for a, e in zip(actual, expected, strict=True):
@@ -89,7 +93,7 @@ def test_origin_graph_default_view() -> None:
     # graph=GraphSpec() with y_keys=None -> all channels, one grouped plotxy.
     ds = _three_channel_ds()
     _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec())
-    assert "plotxy iy:=(1,2):(1,3):(1,4) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=((1,2),(1,3),(1,4)) plot:=201 ogl:=[<new>];" in ogs
     assert 'xb.text$ = "Time (s)";' in ogs
     # 3 primary channels -> no single-series yl.text$ label is emitted.
     assert "yl.text$" not in ogs
@@ -107,8 +111,8 @@ def test_origin_graph_log_axes() -> None:
     _, ogs = format_origin_script(
         ds, make_graph=True, graph=GraphSpec(y_keys=(0,), x_log=True, y_log=True)
     )
-    assert "layer.x.type = 1;  // Log X" in ogs
-    assert "layer.y.type = 1;  // Log Y" in ogs
+    assert "layer.x.type = 2;  // Log X" in ogs
+    assert "layer.y.type = 2;  // Log Y" in ogs
 
 
 def test_origin_graph_custom_lims() -> None:
@@ -163,7 +167,7 @@ def test_origin_graph_y2_split() -> None:
         graph=GraphSpec(y_keys=(0, 1, 2), y2_keys=(2,)),
     )
     assert "string qzbk$ = page.name$;" in ogs  # captured after impASC
-    assert "plotxy iy:=(1,2):(1,3) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=((1,2),(1,3)) plot:=201 ogl:=[<new>];" in ogs
     assert "layer -nr;  // new right-Y layer, linked X" in ogs
     assert "plotxy iy:=[%(qzbk$)]data!(1,4) plot:=201 ogl:=2!;" in ogs
     assert "page.active = 2;  // operate on the new right-Y layer below" in ogs
@@ -181,7 +185,7 @@ def test_origin_graph_y2_all_channels_falls_back_to_single_axis() -> None:
         graph=GraphSpec(y_keys=(0, 1), y2_keys=(0, 1)),
     )
     assert "layer -nr" not in ogs
-    assert "plotxy iy:=(1,2):(1,3) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=((1,2),(1,3)) plot:=201 ogl:=[<new>];" in ogs
 
 
 def test_origin_graph_rejects_out_of_range_index() -> None:
@@ -405,3 +409,14 @@ def test_origin_graph_reversed_x_swaps_the_axis_range() -> None:
         ds, graph=GraphSpec(y_keys=(0,), x_lim=(None, 2.0), x_reversed=True)
     )
     assert "layer.x.from = 2;" in ogs and f"layer.x.to = {t.min():.10g};" in ogs
+
+
+def test_origin_graph_several_y2_channels_use_the_nested_range_form() -> None:
+    """Plan item 9: Origin 2026b rejects the ``(x,y):(x,y)`` join (the plotxy
+    line fails and no graph is made); several ranges go in ``((..),(..))``."""
+    ds = _three_channel_ds()
+    graph = GraphSpec(y_keys=(0, 1, 2), y2_keys=(1, 2))
+    _, ogs = format_origin_script(ds, make_graph=True, graph=graph)
+    assert "plotxy iy:=(1,2) plot:=201 ogl:=[<new>];" in ogs
+    assert "plotxy iy:=([%(qzbk$)]data!(1,3),[%(qzbk$)]data!(1,4)) plot:=201 ogl:=2!;" in ogs
+    assert "):(" not in ogs

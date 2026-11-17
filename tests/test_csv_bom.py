@@ -113,7 +113,7 @@ def test_origin_zip_csv_bom_and_round_trip(tmp_path: Path) -> None:
         client.post("/api/export/origin", json={"dataset": _refl("Å^-1"), "filename": "s"}).content
     )
     assert members["s_data.csv"].startswith(BOM)
-    assert not members["s.ogs"].startswith(BOM)  # the script is not a CSV
+    assert members["s.ogs"].startswith(BOM)  # Origin reads a BOM-less script as ANSI (plan item 9)
     path = tmp_path / "s_data.csv"
     path.write_bytes(members["s_data.csv"])
     back = import_auto(path)

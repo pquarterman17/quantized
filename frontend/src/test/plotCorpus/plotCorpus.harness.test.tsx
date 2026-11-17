@@ -11,6 +11,19 @@ import { describe, expect, it, vi } from "vitest";
 
 import { runSpecimen, type SpecimenIn, type SpecimenOut } from "./recipeHarness";
 
+// Item 9 round trip: the .opj command's transport records its body
+// (originExports.ts), and Send to Origin's confirm is answered yes.
+vi.mock("../../lib/api/originProject", () => ({
+  exportOriginProject: async (body: unknown) => {
+    (globalThis as { __qzOpjCapture?: unknown }).__qzOpjCapture = body;
+    return { matrixFallbacks: 0 };
+  },
+}));
+vi.mock("../../components/overlays/ConfirmDialog", async (orig) => ({
+  ...(await orig<object>()),
+  askConfirm: async () => true,
+}));
+
 const IN = process.env.QZ_PLOT_CORPUS_IN;
 const OUT = process.env.QZ_PLOT_CORPUS_OUT;
 const API = process.env.QZ_PLOT_CORPUS_API;

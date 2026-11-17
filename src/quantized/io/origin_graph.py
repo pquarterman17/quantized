@@ -206,6 +206,22 @@ def _xy_range(x_col: int, y: int, curves: CurveSet) -> str:
     return f"({x_col},{_col(y)})" if err is None else f"({x_col},{_col(y)},{err})"
 
 
+def _ranges(items: list[str]) -> str:
+    """The ``plotxy iy:=`` value for one or more XYRanges: a lone range as is,
+    several in Origin's nested form ``((x,y),(x,y,e))``. The ``(x,y):(x,y)``
+    join this module used to emit is REJECTED by Origin 2026b (``plotxy``
+    fails, the script stops and no graph is made); the nested form makes one
+    plot per range, a triple adding its error-bar plot (COM ``GetPlotType``:
+    201 + 231), measured 2026-11-16 (ORIGIN_PLOT_TYPE_PARITY_PLAN item 9)."""
+    return items[0] if len(items) == 1 else "(" + ",".join(items) + ")"
+
+
+# ``layer.<axis>.type`` codes, measured on Origin 2026b (2026-11-16): writing
+# 0 or 1 reads back 1 (linear); 2 is log10. The 1 this module used to write
+# for a log axis left it LINEAR.
+_LOG10 = 2
+
+
 def default_graph(
     curves: CurveSet,
     *,
@@ -220,12 +236,12 @@ def default_graph(
     its nearest-preceding X, with its Y-error bars, in one grouped ``plotxy``."""
     if not curves.y_channels:
         return ["", "// Create graph: no Y-designated column -- skipped"]
-    pairs = ":".join(_xy_range(curves.x_col[y], y, curves) for y in curves.y_channels)
+    pairs = _ranges([_xy_range(curves.x_col[y], y, curves) for y in curves.y_channels])
     o = ["", "// Create graph", f"plotxy iy:={pairs} plot:=201 ogl:=[<new>];"]
     if log_x:
-        o.append("layer.x.type = 1;  // Log X")
+        o.append(f"layer.x.type = {_LOG10};  // Log X")
     if log_y:
-        o.append("layer.y.type = 1;  // Log Y")
+        o.append(f"layer.y.type = {_LOG10};  // Log Y")
     o.append(f'xb.text$ = "{escape_lt(_axis_title(x_name, x_unit))}";')
     if len(curves.y_channels) == 1:
         yi = curves.y_channels[0]
@@ -249,8 +265,9 @@ def plot_state_graph(
     channels, x source, log flags, axis limits, and an optional secondary
     (right) Y axis for ``y2_keys``.
 
-    One ``plotxy`` call plots the whole primary y-set via grouped range
-    syntax (``(x,y1):(x,y2):…`` — pairs need not be contiguous columns). The
+    One ``plotxy`` call plots the whole primary y-set via the nested range
+    form (``((x,y1),(x,y2))`` -- pairs need not be contiguous columns; see
+    ``_ranges``). The
     secondary axis uses ``layer -nr`` (new right-Y layer linked to the active
     graph's X axis) followed by a ``plotxy`` into layer 2. Both were VERIFIED
     live against OriginPro via COM: the secondary ``plotxy`` must reference the
@@ -298,12 +315,12 @@ def plot_state_graph(
         x_lbl_unit = units[xi] if xi < len(units) else ""
 
     o: list[str] = ["", "// Create graph (current plot state)"]
-    pairs = ":".join(_xy_range(x_of(i), i, curves) for i in primary)
+    pairs = _ranges([_xy_range(x_of(i), i, curves) for i in primary])
     o.append(f"plotxy iy:={pairs} plot:=201 ogl:=[<new>];")
     if graph.x_log:
-        o.append("layer.x.type = 1;  // Log X")
+        o.append(f"layer.x.type = {_LOG10};  // Log X")
     if graph.y_log:
-        o.append("layer.y.type = 1;  // Log Y")
+        o.append(f"layer.y.type = {_LOG10};  // Log Y")
     if graph.x_reversed:
         o.extend(_reversed_x_lines(graph.x_lim, x_data))
     else:
@@ -319,7 +336,9 @@ def plot_state_graph(
         # Explicit worksheet ref: the graph is the active window here, so a bare
         # (x,y) range would not resolve. qzbk$ (import block) holds the book's
         # post-impASC short name; <sheet> was restored right after import.
-        pairs2 = ":".join(f"[%(qzbk$)]{sheet}!{_xy_range(x_of(i), i, curves)}" for i in secondary)
+        pairs2 = _ranges(
+            [f"[%(qzbk$)]{sheet}!{_xy_range(x_of(i), i, curves)}" for i in secondary]
+        )
         o += [
             "",
             "// Secondary (right) Y axis for y2-assigned channels (item 26).",
@@ -330,7 +349,7 @@ def plot_state_graph(
             "page.active = 2;  // operate on the new right-Y layer below",
         ]
         if graph.y_log:
-            o.append("layer.y.type = 1;  // Log Y (right)")
+            o.append(f"layer.y.type = {_LOG10};  // Log Y (right)")
         if len(secondary) == 1:
             yi = secondary[0]
             y_unit = units[yi] if yi < len(units) else ""

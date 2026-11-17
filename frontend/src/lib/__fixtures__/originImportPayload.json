@@ -248,8 +248,8 @@
   "container_integrity": {
    "checked": true,
    "complete": true,
-   "file_bytes": 10179,
-   "declared_bytes": 10179,
+   "file_bytes": 10181,
+   "declared_bytes": 10181,
    "detail": "file length matches its header"
   }
  }
