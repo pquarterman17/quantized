@@ -8,6 +8,7 @@
 import { useState, type ComponentProps, type ReactNode } from "react";
 
 import { Button } from "../../primitives";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { onTabListKeyDown } from "../../../lib/tabListKeys";
 import type { FitStatusTone } from "./curveFitStatus";
 import ModelSelect from "./ModelSelect";
@@ -84,10 +85,16 @@ export interface CurveFitHeaderProps {
     status: { text: string; tone: FitStatusTone };
     tab: CurveFitTab;
     onTab: (t: CurveFitTab) => void;
+    /** "Fit N worksheets": expand the batch section (it may be mounted, collapsed). */
+    onOpenBatch?: () => void;
   };
 }
 
 export default function CurveFitHeader({ modelPicker, range, fit }: CurveFitHeaderProps) {
+  // Several worksheets in scope: Fit means the batch, which lives in Advanced
+  // (opened with the model already chosen), not a silent fit of the active one.
+  const scope = useAnalysisSelection((s) => (s.toolId === "curvefit" ? s.selection?.items.length ?? 0 : 0));
+  const batch = scope >= 2;
   return (
     <>
       {modelPicker}
@@ -97,11 +104,18 @@ export default function CurveFitHeader({ modelPicker, range, fit }: CurveFitHead
             variant="primary"
             className="qz-cf-fit"
             disabled={fit.disabled}
-            title="Fit the model to the selected data (the result opens in the Results tab)"
-            onClick={fit.onFit}
+            title={batch
+              ? `Open the batch: fit ${scope} worksheets with this model (Run is one click away)`
+              : "Fit the model to the selected data (the result opens in the Results tab)"}
+            onClick={batch ? () => (fit.onOpenBatch?.(), fit.onTab("advanced")) : fit.onFit}
           >
-            {fit.fitting ? "Fitting…" : "Fit"}
+            {fit.fitting ? "Fitting…" : batch ? `Fit ${scope} worksheets` : "Fit"}
           </Button>
+          {batch && (
+            <Button size="sm" variant="ghost" disabled={fit.disabled} title="Fit only the active worksheet, not the batch (the result opens in the Results tab)" onClick={fit.onFit}>
+              {fit.fitting ? "Fitting…" : "Fit active only"}
+            </Button>
+          )}
           <Button size="sm" variant="ghost" disabled={fit.disabled} title="Fill the start values from the data without fitting" onClick={fit.onGuess}>
             Auto-guess
           </Button>

@@ -117,7 +117,8 @@ test.describe("Origin journey: fitting and peaks", () => {
     await panel.getByRole("tab", { name: "Advanced" }).click();
     const toggle = panel.getByRole("button", { name: /Batch · 3 worksheets/ });
     await toggle.scrollIntoViewIfNeeded();
-    await toggle.click();
+    // A multi-worksheet launch opens the batch already expanded (UX9-C).
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
     const batch = panel.locator(".qzk-analysis-batch");
     await batch.getByRole("button", { name: "Run Curve Fit (Linear) batch" }).click();
     // Every worksheet reaches a final status; none fails.

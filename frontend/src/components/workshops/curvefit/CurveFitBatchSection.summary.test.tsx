@@ -64,7 +64,6 @@ describe("CurveFitBatchSection — summary worksheet row order", () => {
     });
     vi.mocked(fitModel).mockImplementation(async (req) => ({ params: [req.y[0] === 1 ? 10 : 20, 0, 0], errors: [0, 0, 0], R2: 1, RMSE: 0, chiSqRed: 0, nPoints: 3 }));
     render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="none" manualKey={null} />);
-    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
     fireEvent.click(await screen.findByRole("button", { name: "Create summary worksheet" }));
     const added = useApp.getState().datasets.at(-1)!;
@@ -79,7 +78,6 @@ describe("CurveFitBatchSection — summary worksheet", () => {
   it("keeps the run's model and parameter columns after the panel's model changes", async () => {
     const props = { paramRows: [], weightMode: "none" as const, manualKey: null };
     const { rerender } = render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
     await screen.findByRole("button", { name: "Create summary worksheet" });
     await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
@@ -102,7 +100,6 @@ describe("CurveFitBatchSection — weighting", () => {
   it("honours the panel's 'Scale errors with √(reduced χ²)' switch for weighted inputs", async () => {
     // Poisson weighting needs positive counts: the sheets hold 1, 2, 3.
     render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="poisson" manualKey={null} scaleErrors={false} />);
-    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
     await screen.findByRole("button", { name: "Create summary worksheet" });
     const reqs = vi.mocked(fitModel).mock.calls.map((c) => c[0]);
@@ -120,7 +117,6 @@ describe("CurveFitBatchSection — weighting", () => {
     const datasets = useApp.getState().datasets;
     useApp.setState({ resolveDataset: async (id: string) => datasets.find((d) => d.id === id) });
     render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={rows} weightMode="none" manualKey={null} />);
-    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
     await screen.findByRole("button", { name: "Create summary worksheet" });
     const p0s = vi.mocked(fitModel).mock.calls.map((c) => c[0].p0);
@@ -129,7 +125,6 @@ describe("CurveFitBatchSection — weighting", () => {
 
   it("names direct weighting, not manual, when it cannot be used", async () => {
     render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="direct" manualKey={null} />);
-    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
     await screen.findByRole("button", { name: "Create summary worksheet" });
     expect(screen.getAllByText(/Direct weighting was not configured/).length).toBeGreaterThan(0);
