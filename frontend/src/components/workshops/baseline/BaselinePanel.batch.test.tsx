@@ -1,0 +1,78 @@
+// BaselinePanel batch apply (UX9-E): the header names the dataset, and
+// "Apply to N selected" writes N grouped outputs as ONE undo entry.
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { baselineRegion } from "../../../lib/api/baseline";
+import type { DataStruct } from "../../../lib/types";
+import { useApp } from "../../../store/useApp";
+import BaselinePanel from "./BaselinePanel";
+
+vi.mock("../../../lib/api/baseline", () => ({
+  baselineALS: vi.fn(),
+  baselineAnchor: vi.fn(),
+  baselineEstimate: vi.fn(),
+  baselineModPoly: vi.fn(),
+  baselineRegion: vi.fn(),
+  baselineRollingBall: vi.fn(),
+  baselineShirley: vi.fn(),
+  baselineXrdLowAngle: vi.fn(),
+}));
+
+const raw: DataStruct = {
+  time: [1, 2, 3, 4],
+  values: [[10], [12], [11], [13]],
+  labels: ["Intensity"],
+  units: ["cps"],
+  metadata: {},
+};
+const spectrum = (name: string, id: string) => ({ id, name, data: raw });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useApp.setState({
+    datasets: [spectrum("Raman_A.txt", "a"), spectrum("Raman_B.txt", "b"), spectrum("Raman_C.txt", "c")],
+    workbooks: [],
+    folders: [],
+    history: [],
+    future: [],
+    activeId: "a",
+    selectedIds: ["a", "b", "c"],
+    baselineOpen: true,
+    baselineOverlay: null,
+    baselineAnchorEdit: null,
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
+  });
+});
+
+describe("BaselinePanel batch apply (UX9-E)", () => {
+  it("names the dataset in the header", () => {
+    render(<BaselinePanel />);
+    expect(screen.getByText(/Raman_A\.txt: Intensity vs/)).toBeInTheDocument();
+  });
+
+  it("Apply to 3 selected writes 3 grouped outputs as ONE undo entry, then offers Overlay", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [1, 1, 1, 1], coeffs: [0, 1], n_points: 4, mean: 1, std: 0, min: 1, max: 1, order: 1,
+    });
+    render(<BaselinePanel />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply to 3 selected" }));
+    });
+    const s = useApp.getState();
+    expect(vi.mocked(baselineRegion)).toHaveBeenCalledTimes(3);
+    const out = s.datasets.filter((d) => d.name.endsWith("(bg-sub)"));
+    expect(out.map((d) => d.name)).toEqual(["Raman_A (bg-sub)", "Raman_B (bg-sub)", "Raman_C (bg-sub)"]);
+    expect(s.folders).toHaveLength(1);
+    expect(out.every((d) => d.folderId === s.folders[0].id)).toBe(true);
+    expect(s.history).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Overlay these 3/ })).toBeInTheDocument();
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(useApp.getState().folders).toHaveLength(0);
+  });
+});

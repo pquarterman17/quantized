@@ -18,6 +18,7 @@ import { magXAxis } from "../../../lib/magDataKind";
 import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
 export type BaselineMethod =
   | "als"
@@ -72,6 +73,13 @@ export interface BaselineState {
   setParams: (patch: Partial<BaselineParams>) => void;
   compute: () => Promise<void>;
   subtract: () => Promise<void>;
+  /** "Apply to N selected": the same method + params on every selected dataset,
+   *  outputs grouped in one folder, ONE undo entry. */
+  applyToSelected: () => Promise<void>;
+  /** Datasets selected in the Library (the batch targets). */
+  selectedCount: number;
+  /** The batch's output dataset ids still in the Library (for "Overlay these"). */
+  batchOutputIds: string[];
   clear: () => void;
   /** Arm the plot's rubber-band so the next drag fills the region box edges. */
   pickRegion: () => void;
@@ -203,6 +211,9 @@ export function useBaseline(): BaselineState {
   const [estimateBinding, setEstimateBinding] = useState<BaselineBinding | null>(null);
   const [anchors, setAnchors] = useState<[number, number][]>([]);
   const [busy, setBusy] = useState(false);
+  const selectedCount = useApp((s) => s.selectedIds.length);
+  const [batchIds, setBatchIds] = useState<string[]>([]);
+  const liveIds = useApp((s) => s.datasets.filter((d) => batchIds.includes(d.id)).map((d) => d.id).join("|"));
   const [error, setError] = useState<string | null>(null);
   const binding = active ? baselineInput(active, xKey, yKeys, seriesOrder)?.binding ?? null : null;
   // The debounced anchor-preview effect must re-estimate with the LATEST
@@ -336,36 +347,45 @@ export function useBaseline(): BaselineState {
       setError("the baseline no longer matches this dataset; recompute it before subtracting");
       return false;
     }
-    const src = ds.data;
-    const yKey = estimateBinding.yKey;
-    const values = src.values.map((row, i) => {
-      const b = baseline[i];
-      const next = [...row];
-      if (Number.isFinite(row[yKey]) && b != null) next[yKey] = row[yKey] - b;
-      return next;
-    });
-    const data: DataStruct = {
-      ...src,
-      values,
-      metadata: {
-        ...src.metadata,
-        baseline_subtracted: method,
-        baseline_source: {
-          x_key: estimateBinding.xKey,
-          x_label: estimateBinding.xLabel,
-          y_key: estimateBinding.yKey,
-          y_label: estimateBinding.yLabel,
-        },
-      },
-    };
-    const stem = ds.name.replace(/\.[^.]+$/, "");
-    addDataset({ id: nextDatasetId(), name: `${stem} (bg-sub)`, data });
+    const data = subtractBaselineData(ds.data, baseline, estimateBinding, method);
+    addDataset({ id: nextDatasetId(), name: bgSubName(ds.name), data });
     setStatus(`subtracted ${method} baseline`);
     return true;
   }
 
   async function subtract(): Promise<void> {
     await subtractInto();
+  }
+
+  async function applyToSelected(): Promise<void> {
+    const ids = useApp.getState().selectedIds;
+    if (ids.length < 2 || method === "anchor") return;
+    setBusy(true);
+    setError(null);
+    setBatchIds([]);
+    const outputs: { name: string; data: DataStruct }[] = [];
+    const sources: Dataset[] = [];
+    try {
+      for (const id of ids) {
+        const ds = await useApp.getState().resolveDataset(id);
+        if (!ds) continue;
+        const st = useApp.getState();
+        const input = baselineInput(ds, st.xKey, st.yKeys, st.seriesOrder) ?? baselineInput(ds, null, null, null);
+        if (!input) throw new Error(`${ds.name}: no usable Y channel`);
+        const res = await callBaseline(method, input.x, input.y, params, anchors).catch((e: unknown) => {
+          throw new Error(`${ds.name}: ${e instanceof Error ? e.message : "baseline failed"}`);
+        });
+        outputs.push({ name: bgSubName(ds.name), data: subtractBaselineData(ds.data, res.baseline, input.binding, method) });
+        sources.push(ds);
+      }
+      if (outputs.length === 0) return;
+      setBatchIds(commitBaselineBatch(outputs, sources, method, useApp.getState).ids);
+      setStatus(`subtracted ${method} baseline from ${outputs.length} datasets`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "baseline failed"); // nothing was written: the batch is all-or-nothing
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Anchor apply (#2): merge bgAnchors into the dataset's corrections and run
@@ -457,6 +477,9 @@ export function useBaseline(): BaselineState {
     setParams,
     compute,
     subtract,
+    applyToSelected,
+    selectedCount,
+    batchOutputIds: liveIds ? liveIds.split("|") : [],
     clear,
     pickRegion,
     clearAnchors,
