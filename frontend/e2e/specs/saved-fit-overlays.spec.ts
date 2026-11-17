@@ -14,19 +14,19 @@ import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
 import { exportFromView } from "../utils/exportView";
 
-interface Snap { focused: string | null; fitFor: string | null; band: number; docFit: boolean; windows: number; firstDs: string | null }
+interface Snap { focused: string | null; fitFor: string | null; band: number; curveFit: boolean; docFit: boolean; windows: number; firstDs: string | null }
 type Qz = { __qz: { useApp: { getState: () => Record<string, unknown>; setState: (p: Record<string, unknown>) => void } } };
 
 const snap = (page: Page): Promise<Snap> =>
   page.evaluate(() => {
     const s = (window as unknown as Qz).__qz.useApp.getState() as {
       focusedWindowId: string | null; datasets: { id: string }[];
-      fitOverlay: { datasetId: string; band?: unknown[] } | null;
+      fitOverlay: { datasetId: string; band?: unknown[]; curveFit?: true } | null;
       plotWindows: { id: string; document?: { overlays?: { fit?: unknown } } }[];
     };
     const w = s.plotWindows.find((x) => x.id === s.focusedWindowId);
     return {
-      focused: s.focusedWindowId, fitFor: s.fitOverlay?.datasetId ?? null, band: s.fitOverlay?.band?.length ?? 0,
+      focused: s.focusedWindowId, fitFor: s.fitOverlay?.datasetId ?? null, band: s.fitOverlay?.band?.length ?? 0, curveFit: s.fitOverlay?.curveFit === true,
       docFit: Boolean(w?.document?.overlays?.fit), windows: s.plotWindows.length, firstDs: s.datasets[0]?.id ?? null,
     };
   });
@@ -74,6 +74,7 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   await expect.poll(async () => (await snap(page)).band).toBeGreaterThan(0);
   const fitted = await snap(page);
   expect(fitted.fitFor).toBe(fitted.firstDs);
+  expect(fitted.curveFit).toBe(true); // the dashed-fit-over-marked-data look (lib/fitOverlayStyle.ts)
 
   // ── Export: the fit series are marked, and the Y title is the screen's ──
   // UX-H: through the DEFAULT path (Export figure… -> the export view).
@@ -114,6 +115,7 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   ]);
   const savedPath = await saved.path();
   expect(savedPath, "the .dwk download completed").toBeTruthy();
+  expect(saved.suggestedFilename(), "UX9-I: named after the dataset").not.toBe("workspace.dwk");
   const fresh = await (await browser.newContext()).newPage();
   await gotoApp(fresh);
   await fresh.locator(".qzk-menubar").getByText("File", { exact: true }).click();
@@ -123,6 +125,8 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   await waitForDatasetCount(fresh, 2);
   await expect.poll(async () => (await snap(fresh)).fitFor, { timeout: 15_000 }).not.toBeNull();
   expect((await snap(fresh)).band).toBeGreaterThan(0);
+  // UX9-I: reopened with NO fit panel open, the fit keeps its own look.
+  expect((await snap(fresh)).curveFit).toBe(true);
   await fresh.context().close();
 
   // ── An older project (no figure copy): redrawn from the saved parameters ──

@@ -18,6 +18,7 @@ import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 import { closeRelinkPanel } from "../store/relinkPanel";
 import { notifyMigrationWarnings, toast } from "../store/toasts";
+import { useApp } from "../store/useApp";
 import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
 import { parentDirectory } from "./importEntry";
@@ -158,7 +159,15 @@ export function recordNativeOpen(native: ProjectIdentity | undefined): void {
 function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectIdentity | undefined, skipLayout: boolean): boolean {
   if (rejectIfImportRunning()) return false;
   followProjectHistory(); // BEFORE the entry is pushed: it records the project this open replaces
-  s().recordHistory(skipLayout ? "open workspace without layout" : "open workspace");
+  // UX9-I: an open into an EMPTY session with nothing to undo records no step
+  // -- its Undo could only empty the project just opened (the audit's "Undid
+  // open workspace" blank screen). Opening a file is not an edit; the opened
+  // project is the start of its history. Redo is cleared too: those entries
+  // belong to a workspace that is gone. Over real content (or under older
+  // steps) the entry stays, the safety net for an accidental replace, and its
+  // Undo says so with a Redo toast (store/projectFollowsHistory).
+  if (hasWorkspaceContent(s) || s().history.length > 0) s().recordHistory(skipLayout ? "open workspace without layout" : "open workspace");
+  else if (s().future.length) useApp.setState({ future: [] });
   // C1 (review F4): an open relink panel refers to the OUTGOING project's
   // datasets, and the backend independently revokes its directory grants at
   // the native project-open moment (`_read_granted` -> `clear_dir_grants`)
