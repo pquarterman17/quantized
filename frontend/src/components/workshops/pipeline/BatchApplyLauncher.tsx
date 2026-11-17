@@ -54,7 +54,7 @@ export default function BatchApplyLauncher({
   // wrap inside the dialog instead of widening it.
   return (
     <div style={{ display: "grid", gap: 6, justifyItems: "start", minWidth: 0 }}>
-      <Button disabled={Boolean(disabledReason) || open} title={disabledReason || (open ? "The batch panel is open below" : "Run this same setup on each selected Library sheet, with a preflight first")} onClick={() => setOpen(true)}>
+      <Button variant="primary" disabled={Boolean(disabledReason) || open} title={disabledReason || (open ? "The batch panel is open below" : "Run this same setup on each selected Library sheet, with a preflight first")} onClick={() => setOpen(true)}>
         Apply to selected sheets…
       </Button>
       {open && built.error && <p className="qz-error" role="alert">{built.error}</p>}

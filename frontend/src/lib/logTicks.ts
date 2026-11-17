@@ -23,6 +23,20 @@ function decadeOf(v: number): number | null {
 const positiveOf = (splits: readonly (number | null)[]) =>
   splits.filter((v): v is number => Number.isFinite(v) && v! > 0);
 
+/** `v`'s decade exponent when `v` is 2x or 5x a power of ten, else null. */
+function halfDecadeOf(v: number): number | null {
+  const k = Math.floor(Math.log10(v) + 1e-9);
+  const m = v / pow10(k);
+  return Math.abs(m - 2) < 2e-9 || Math.abs(m - 5) < 5e-9 ? k : null;
+}
+
+/** UX9-I: a decade view with fewer anchors than this also labels 2 and 5 in
+ *  each decade (0.3..10 read only "1, 10"; now "0.5, 1, 2, 5, 10") --
+ *  calc/figure_log_ticks.py's `_FEW_DECADES`, so the export agrees. */
+const FEW_DECADES = 3;
+const fewDecades = (splits: readonly (number | null)[]) =>
+  positiveOf(splits).filter((v) => decadeOf(v) !== null).length < FEW_DECADES;
+
 /** True when the positive splits span at least one full decade. */
 export function spansDecade(splits: readonly (number | null)[]): boolean {
   const positive = positiveOf(splits);
@@ -46,16 +60,25 @@ function scaledLabels(splits: readonly (number | null)[]): (string | null)[] | n
 
 /** Publication-style labels for an automatic logarithmic axis: on a view that
  *  spans at least a decade, only the decade anchors carry text (1, 10, 10²,
- *  10⁻³, …) and the 2–9 subdivisions stay blank. A sub-decade view gets
+ *  10⁻³, …) and the 2–9 subdivisions stay blank -- except 2 and 5 (2, 50,
+ *  5×10⁻³) on a view with fewer than `FEW_DECADES` anchors, where
+ *  `logMajorTickFilter` kept them (a call without that filter labels them
+ *  too). A sub-decade view gets
  *  ordinary numeric labels (0.8/0.9/1.0), more useful than pretending every
  *  split is a power of ten: null hands those to the caller, except for huge or
  *  tiny magnitudes, labelled 1.5×10²² here (`scaledLabels`). */
 export function logDecadeLabels(splits: readonly (number | null)[]): (string | null)[] | null {
   if (!spansDecade(splits)) return scaledLabels(splits);
+  const sub = fewDecades(splits);
   return splits.map((v) => {
     if (!positiveOf([v]).length) return null;
     const k = decadeOf(v!);
-    if (k === null) return "";
+    if (k === null) {
+      const h = sub ? halfDecadeOf(v!) : null;
+      if (h === null) return "";
+      const m = Math.round(v! / pow10(h));
+      return h === 0 || h === 1 ? `${m * 10 ** h}` : `${m}×${tenTo(h)}`;
+    }
     if (k === 0 || k === 1) return `${10 ** k}`;
     return tenTo(k);
   });
@@ -74,7 +97,8 @@ const space = (axisIdx: number) => (axisIdx ? 30 : 50);
 /** Every n-th decade keeps its label so labels stay `space` apart. */
 const decadeStride = (u: uPlot, axisIdx: number) => Math.ceil(space(axisIdx) / gapPx(u, axisIdx, 10, 1)) || 1;
 
-/** Keep labels only on decade anchors while retaining 2-9 subdivisions as
+/** Keep labels only on decade anchors (plus 2 and 5 on a few-decade view,
+ * `FEW_DECADES`) while retaining 2-9 subdivisions as
  * splits for log grid lines and tick marks. When a decade is narrower than
  * uPlot's minimum label spacing, only every n-th decade (k % n == 0) keeps its
  * label, as uPlot's own log filter thins them. A sub-decade view's arithmetic
@@ -86,9 +110,12 @@ export function logMajorTickFilter(u: uPlot, splits: number[], axisIdx: number):
     return splits.map((v) => (last === last && gapPx(u, axisIdx, v, last) < space(axisIdx) ? null : (last = v)));
   }
   const n = decadeStride(u, axisIdx);
+  // 2 and 5 join a few-decade view's labels when 1..2 (a third of a decade,
+  // the narrowest gap they make) still has the label spacing.
+  const sub = n === 1 && fewDecades(splits) && gapPx(u, axisIdx, 2, 1) >= space(axisIdx);
   return splits.map((v) => {
     const k = decadeOf(v); // null for v <= 0 too
-    return k !== null && k % n === 0 ? v : null;
+    return (k !== null && k % n === 0) || (sub && k === null && v > 0 && halfDecadeOf(v) !== null) ? v : null;
   });
 }
 

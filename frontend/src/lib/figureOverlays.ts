@@ -40,6 +40,10 @@ export interface FigureOverlayCurve {
   binding: OverlayBinding;
   y: (number | null)[];
   band?: FitBandEdges;
+  /** The fit's own look (`FitOverlay.curveFit`, lib/fitOverlayStyle): a Curve
+   *  Fit curve stays a dashed line over marked data after a reopen, whatever
+   *  panel is open. Fit only; absent (a pre-UX9 file, Quick Fit) = plain. */
+  curveFit?: true;
 }
 
 export interface FigureOverlays {
@@ -80,7 +84,8 @@ export function captureFit(
 ): FigureOverlays | undefined {
   if (!fit || !ds || fit.datasetId !== ds.id || !fit.binding || !curveFits(fit, ds.data.time.length)) return undefined;
   const band = fit.band?.length ? { band: fit.band.map((e) => ({ ...e, y: e.y.map(cell) })) } : {};
-  const out: FigureOverlays = { rows: rows ?? overlayRowsKey(ds), fit: structuredClone({ binding: fit.binding, y: fit.y.map(cell), ...band }) };
+  const look = fit.curveFit ? { curveFit: true as const } : {};
+  const out: FigureOverlays = { rows: rows ?? overlayRowsKey(ds), fit: structuredClone({ binding: fit.binding, y: fit.y.map(cell), ...band, ...look }) };
   if (background?.fitOf === fit && background.binding && curveFits(background, ds.data.time.length)) {
     out.background = structuredClone({ binding: background.binding, y: background.y.map(cell) });
   }
@@ -143,6 +148,7 @@ export function sanitizeFigureOverlays(value: unknown): FigureOverlays | undefin
   if (!isObject(value) || typeof value.rows !== "string" || !value.rows) return undefined;
   const fit = sanitizeCurve(value.fit);
   if (!fit) return undefined;
+  if (isObject(value.fit) && value.fit.curveFit === true) fit.curveFit = true; // the fit's look; never a background's
   if (value.background === undefined) return { rows: value.rows, fit };
   const background = sanitizeCurve(value.background);
   return background && !background.band && background.y.length === fit.y.length
