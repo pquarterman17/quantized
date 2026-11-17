@@ -22,6 +22,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import RichLabelInput from "../../primitives/RichLabelInput";
 import { clampToolWindowPos, TITLE_BAR_HEIGHT } from "../../../lib/toolwindow";
+import { getFigureViewLabel, resetFigureViewLabel } from "../../../lib/exportFigureView";
 import { useApp } from "../../../store/useApp";
 import { useFigureBuilder } from "./useFigureBuilder";
 
@@ -52,9 +53,11 @@ export default function FigureBuilderView() {
   const [figName, setFigName] = useState("");
   const [figLive, setFigLive] = useState(true);
   const [tplName, setTplName] = useState("");
+  const [label] = useState(getFigureViewLabel); // titled by how it was opened
+  useEffect(() => resetFigureViewLabel, []);
   const title = f.canonical
-    ? `Publication preview — ${f.documentName}${f.dirty ? " (modified)" : ""}`
-    : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
+    ? `${label} — ${f.documentName}${f.dirty ? " (modified)" : ""}`
+    : (f.frozen ? `${label} (frozen data)` : label);
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
   const detachedCanonical = f.publicationTarget === "new-editable";
   const exportDisabledReason = !f.canonical || f.canExport ? null

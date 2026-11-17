@@ -62,6 +62,8 @@ let held: Held | null = null;
 /** A name worth suggesting, valid only for the document (`epoch`) it was learned under. */
 let openedName: { name: string; epoch: number } | null = null;
 const liveEpoch = (): number => useApp.getState().docEpoch;
+/** Mirror the learned name into the store so the title bar can show it. */
+const shown = (name: string | null): void => useApp.getState().setBrowserFileName(name);
 
 const picker = (): PickerWindow["showSaveFilePicker"] => (window as unknown as PickerWindow).showSaveFilePicker;
 const stampOf = (f: File): string => `${f.lastModified}:${f.size}`;
@@ -88,12 +90,14 @@ export function defaultSaveName(projectName?: string | null): string {
 export function commitOpened(name?: string): void {
   held = null;
   openedName = name ? { name, epoch: liveEpoch() } : null; // called right after loadWorkspace: the NEW epoch
+  shown(name ?? null);
 }
 
 /** Forget the kept file and the opened name (a new document has none). */
 export function resetBrowserFile(): void {
   held = null;
   openedName = null;
+  shown(null);
 }
 
 /** Write and close (the swap-file replace happens at close, so a throw here left
@@ -117,6 +121,7 @@ function keep(handle: FsHandle, stamp: string | null, epoch: number, was: Held |
   if (held === was) {
     held = stamp === null ? null : { handle, stamp, epoch };
     if (stamp === null) openedName = { name: handle.name, epoch };
+    shown(handle.name);
   }
   return stamp === null ? { kind: "saved", name: handle.name, unverified: true } : { kind: "saved", name: handle.name };
 }
