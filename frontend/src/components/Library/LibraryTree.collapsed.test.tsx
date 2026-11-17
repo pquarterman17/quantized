@@ -245,6 +245,37 @@ describe("regression 4: workbook actions and selection", () => {
   });
 });
 
+describe("multi-selection removal of collapsed rows leaves no ghost workbooks", () => {
+  const expectClean = () => {
+    const s = useApp.getState();
+    expect(s.datasets).toEqual([]);
+    expect(s.workbooks).toEqual([]);
+    expect(s.history.filter((h) => h.label === "remove datasets")).toHaveLength(1);
+    act(() => s.undo());
+    const u = useApp.getState();
+    expect(u.workbooks.map((w) => w.id)).toEqual(["w1", "w2"]);
+    expect(u.datasets.map((d) => d.id)).toEqual(["d1", "d2"]);
+  };
+
+  it("row menu Remove N selected", async () => {
+    render(<Harness />);
+    act(() => useApp.getState().selectIds(["d1", "d2"]));
+    fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByText("Remove 2 selected"));
+    await act(() => Promise.resolve());
+    expectClean();
+  });
+
+  it("Delete key over the selection", async () => {
+    render(<Harness />);
+    act(() => useApp.getState().selectIds(["d1", "d2"]));
+    sheetRow("d1").focus();
+    fireEvent.keyDown(sheetRow("d1"), { key: "Delete" });
+    await act(() => Promise.resolve());
+    expectClean();
+  });
+});
+
 describe("selection gestures behave as dataset rows (UX8-C)", () => {
   it("click selects, Shift-click ranges over the rows as shown, double-click opens", () => {
     render(<Harness />);

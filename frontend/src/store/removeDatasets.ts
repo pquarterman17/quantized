@@ -18,7 +18,6 @@ import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
 import type { AppState } from "./useApp";
 import { pruneWindowDatasetRefs } from "./windowDocuments";
 import { pruneReportRefs } from "../lib/reportRefs";
-import { pruneDanglingWorkbookScopeTemplates } from "../lib/quickPlotTemplates";
 
 /** The slice of state `removeDatasetsPatch` reads and rewrites — every
  *  id-bearing field a dataset removal must prune. A `HistorySnapshot`
@@ -133,7 +132,6 @@ export function removeDatasetsWithTrash(
   if (opts?.permanent) {
     set((s) => ({
       ...removeDatasetsPatch(s, ids),
-      ...pruneEmptiedWorkbooks(s, ids),
       ...scrubDatasetsFromHistory(s, ids),
       ...scrubDatasetsFromTrash(s, ids),
     }));
@@ -141,24 +139,5 @@ export function removeDatasetsWithTrash(
   }
   get().recordHistory("remove datasets");
   get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
-  // shared with deleteWorkbook (workbookActions.ts); emptied workbooks go in the SAME update/undo step
-  set((s) => ({ ...removeDatasetsPatch(s, ids), ...pruneEmptiedWorkbooks(s, ids) }));
-}
-
-/** Workbooks the removal leaves with no sheet (a workbook only ever holds
- *  sheets plus artifacts derived from them, so no sheet = nothing to show)
- *  go with it; otherwise bulk-removing single-sheet rows strands childless
- *  workbook rows. Only workbooks that LOST a member here are candidates. */
-function pruneEmptiedWorkbooks(s: Pick<AppState, "datasets" | "workbooks" | "quickPlotTemplates">, ids: readonly string[]):
-  Partial<Pick<AppState, "workbooks" | "quickPlotTemplates">> {
-  const drop = new Set(ids);
-  const touched = new Set(s.datasets.filter((d) => drop.has(d.id) && d.workbookId).map((d) => d.workbookId!));
-  if (touched.size === 0) return {};
-  const alive = new Set(s.datasets.filter((d) => !drop.has(d.id) && d.workbookId).map((d) => d.workbookId!));
-  const workbooks = s.workbooks.filter((w) => !touched.has(w.id) || alive.has(w.id));
-  if (workbooks.length === s.workbooks.length) return {};
-  return {
-    workbooks,
-    quickPlotTemplates: pruneDanglingWorkbookScopeTemplates(s.quickPlotTemplates, new Set(workbooks.map((w) => w.id))),
-  };
+  set((s) => removeDatasetsPatch(s, ids)); // shared with deleteWorkbook (workbookActions.ts)
 }

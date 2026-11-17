@@ -3,7 +3,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { renameCollapsedWorkbook, moveToFolderViaWorkbooks } from "./collapsedWorkbookActions";
+import { removeDatasetsPruningCollapsed, renameCollapsedWorkbook, moveToFolderViaWorkbooks } from "./collapsedWorkbookActions";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 import type { Dataset } from "../lib/types";
@@ -27,11 +27,19 @@ beforeEach(() => {
   });
 });
 
-describe("removeDatasets prunes workbooks it empties", () => {
-  it("drops childless workbooks, keeps one that still has a sheet, in one undo step", () => {
-    useApp.getState().removeDatasets(["a", "b", "c"]);
+describe("removeDatasets (store core) leaves workbooks alone", () => {
+  it("a workbook that loses its last sheet stays alive (memberless)", () => {
+    useApp.getState().removeDatasets(["a"]);
+    expect(useApp.getState().workbooks.map((w) => w.id)).toEqual(["w1", "w2", "w3"]);
+  });
+});
+
+describe("removeDatasetsPruningCollapsed", () => {
+  it("drops collapsed rows' workbooks, keeps one that still has a sheet, in one undo step", () => {
+    removeDatasetsPruningCollapsed(["a", "b", "c"]);
     let s = useApp.getState();
     expect(s.workbooks.map((w) => w.id)).toEqual(["w3"]); // d keeps w3 alive
+    expect(s.datasets.map((d) => d.id)).toEqual(["d"]);
     expect(s.history).toHaveLength(1);
     s.undo();
     s = useApp.getState();
@@ -39,10 +47,15 @@ describe("removeDatasets prunes workbooks it empties", () => {
     expect(s.datasets.map((d) => d.id)).toEqual(["a", "b", "c", "d"]);
   });
 
-  it("removeDatasets([a]) leaves no empty w1, and leaves unrelated pre-existing workbooks alone", () => {
+  it("leaves unrelated pre-existing workbooks alone", () => {
     useApp.setState({ workbooks: [wb("w1"), wb("w2"), wb("lonely")] });
-    useApp.getState().removeDatasets(["a"]);
+    removeDatasetsPruningCollapsed(["a"]);
     expect(useApp.getState().workbooks.map((w) => w.id)).toEqual(["w2", "lonely"]);
+  });
+
+  it("plain (non-collapsed) removal keeps store-core behaviour", () => {
+    removeDatasetsPruningCollapsed(["c", "d"]);
+    expect(useApp.getState().workbooks.map((w) => w.id)).toEqual(["w1", "w2", "w3"]);
   });
 });
 

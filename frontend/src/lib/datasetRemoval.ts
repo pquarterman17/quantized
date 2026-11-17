@@ -10,6 +10,7 @@
 import { askParams } from "../components/overlays/ParamDialog";
 import { plural } from "./plural";
 import { toast, type ToastKind } from "../store/toasts";
+import { removeDatasetsPruningCollapsed } from "../store/collapsedWorkbookActions";
 import { useApp } from "../store/useApp";
 
 /** Announce a removal with an Undo (lib/undoToast, loaded on demand to keep it
@@ -35,7 +36,7 @@ export function requestDatasetRemoval(ids: readonly string[]): void {
   const doRemove = () => {
     const st = useApp.getState();
     const since = st.history.at(-1)?.seq; // an entry this removal did not record is not ours to undo
-    st.removeDatasets(live);
+    removeDatasetsPruningCollapsed(live);
     const msg = `removed ${n} dataset${plural(n)}`;
     st.setStatus(msg);
     toastRemoved(msg, since);
