@@ -42,6 +42,21 @@ describe("applyWaterfall", () => {
     expect(useApp.getState().waterfall).toBe(0.5);
   });
 
+  it("is one undo step: a single undo removes the overlay graph and the offset", async () => {
+    useApp.setState({ datasets: [ds("a"), ds("b"), ds("c")], selectedIds: ["a", "b", "c"], activeId: "a" });
+    await applyWaterfall();
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["waterfall"]);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(useApp.getState().waterfall).toBe(0);
+  });
+
+  it("records nothing when it refuses", async () => {
+    useApp.setState({ datasets: [ds("a")], activeId: "a", selectedIds: ["a"] });
+    await applyWaterfall();
+    expect(useApp.getState().history).toEqual([]);
+  });
+
   it("stacks the focused graph's own curves when nothing is multi-selected, keeping an existing offset", async () => {
     useApp.setState({ datasets: [MULTI], activeId: "m", selectedIds: ["m"], waterfall: 0.2 });
     await applyWaterfall();

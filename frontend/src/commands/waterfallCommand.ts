@@ -6,6 +6,7 @@
 
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { effectiveChannels } from "../lib/plotdata";
+import { snapshotOf } from "../store/historySnapshot";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
@@ -18,6 +19,20 @@ export const REVEAL_WATERFALL_EVENT = "qz:reveal-waterfall";
 /** Plot the selection together (>=2 datasets), set the offset, and reveal the
  *  slider. With <2 selected it stacks the focused graph's own curves. */
 export async function applyWaterfall(): Promise<void> {
+  // One gesture, one undo step: the overlay graph and the offset fold into a
+  // single entry holding the state from before (store/undoStep.ts's pattern;
+  // nothing recorded -> nothing folded, so a refusal leaves the stack alone).
+  const history = useApp.getState().history;
+  const sinceSeq = history[history.length - 1]?.seq;
+  const snapshot = snapshotOf(useApp.getState());
+  try {
+    await runWaterfall();
+  } finally {
+    useApp.getState().foldHistorySince(sinceSeq, "waterfall", snapshot);
+  }
+}
+
+async function runWaterfall(): Promise<void> {
   const before = useApp.getState();
   if (before.selectedIds.length >= 2) {
     const prior = before.datasets.length;

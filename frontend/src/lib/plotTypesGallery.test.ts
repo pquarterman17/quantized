@@ -2,7 +2,7 @@
 // draws through separate commands -- double-Y, polar, violin, waterfall,
 // stacked panels, ternary -- and each tile reaches that machinery.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAuxFigureStore } from "../components/workshops/ternary/auxFigureStore";
 import { applyPlotType } from "./figureDialogActions";
@@ -44,13 +44,15 @@ describe("plot-type gallery: the types behind separate commands", () => {
     expect(plotTypeUnavailable("polar", one)).toBeNull();
   });
 
-  it("each tile reaches the existing machinery", () => {
+  it("each tile reaches the existing machinery", async () => {
     applyPlotType("doubleY");
     expect(s().y2Keys).toEqual([2]);
     applyPlotType("polar");
     expect(s().polarMode).toBe(true);
     applyPlotType("waterfall");
-    expect(s().waterfallOpen).toBe(true);
+    // UX9-D: the tile draws the waterfall itself (no tool window).
+    await vi.waitFor(() => expect(s().waterfall).toBe(0.3));
+    expect(s().stageTab).toBe("plot");
     applyPlotType("stacked");
     expect(s().stackMode).toBe(true);
     applyPlotType("ternary", () => useAuxFigureStore.getState().setTernaryOpen(true));
