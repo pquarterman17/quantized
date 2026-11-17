@@ -148,6 +148,7 @@ describe("useFigurePage", () => {
 
   it("assigns into slots and previews the auto label sequence", () => {
     const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGrid(2, 2));
     const [src] = result.current.windowSources;
     const [docSrc] = result.current.docSources;
     act(() => result.current.assign(3, src));
@@ -166,15 +167,15 @@ describe("useFigurePage", () => {
   // FigureDocument id ONLY when the session source resolves to one that has
   // actually been saved into `editableFigures` (F3.2: reference, never flatten).
   describe("F3.1 pageDocument draft", () => {
-    it("starts as an empty 2x2 document matching the default grid", () => {
+    it("starts as an empty 1x2 document matching the default grid", () => {
       const { result } = renderHook(() => useFigurePage());
       expect(result.current.pageDocument).toMatchObject({
         schema: "quantized.page",
         version: 2, // F3.5 bumped the schema for the new `layout` field
-        rows: 2,
+        rows: 1,
         cols: 2,
       });
-      expect(result.current.pageDocument.panels).toHaveLength(4);
+      expect(result.current.pageDocument.panels).toHaveLength(2);
       expect(result.current.pageDocument.panels.every((p) => p.figureId === null)).toBe(true);
     });
 
@@ -225,8 +226,52 @@ describe("useFigurePage", () => {
     });
   });
 
+  describe("UX9-G grid auto-fit", () => {
+    it("two clicked sources fill a 1x2 page and the second does not replace the first", () => {
+      const { result } = renderHook(() => useFigurePage());
+      expect([result.current.rows, result.current.cols]).toEqual([1, 2]);
+      act(() => result.current.assignToNext(result.current.windowSources[0]));
+      act(() => result.current.assignToNext(result.current.docSources[0]));
+      expect(result.current.slots.map((s) => s.source?.id)).toEqual(["w1", "f1"]);
+      expect(result.current.labels).toEqual(["(a)", "(b)"]);
+      expect([result.current.rows, result.current.cols]).toEqual([1, 2]);
+    });
+
+    it("grows 1x2 -> 1x3 -> 2x3 as a full page takes more sources, keeping positions", () => {
+      const { result } = renderHook(() => useFigurePage());
+      const w = result.current.windowSources[0];
+      const d = result.current.docSources[0];
+      act(() => result.current.assignToNext(w));
+      act(() => result.current.assignToNext(d));
+      act(() => result.current.assignToNext({ ...d, id: "x3" }));
+      expect([result.current.rows, result.current.cols]).toEqual([1, 3]);
+      act(() => result.current.assignToNext({ ...d, id: "x4" }));
+      expect([result.current.rows, result.current.cols]).toEqual([2, 3]);
+      expect(result.current.slots.slice(0, 4).map((s) => s.source?.id)).toEqual(["w1", "f1", "x3", "x4"]);
+    });
+
+    it("re-clicking a source already on a full page does not grow the grid", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assignToNext(result.current.windowSources[0]));
+      act(() => result.current.assignToNext(result.current.docSources[0]));
+      act(() => result.current.assignToNext(result.current.windowSources[0]));
+      expect([result.current.rows, result.current.cols]).toEqual([1, 2]);
+      expect(result.current.slots).toHaveLength(2);
+    });
+
+    it("stops auto-growing once the user sets the grid", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.setGrid(1, 2));
+      act(() => result.current.assignToNext(result.current.windowSources[0]));
+      act(() => result.current.assignToNext(result.current.docSources[0]));
+      act(() => result.current.assignToNext({ ...result.current.docSources[0], id: "x3" }));
+      expect([result.current.rows, result.current.cols]).toEqual([1, 2]);
+    });
+  });
+
   it("assignToNext fills the selected slot, else the first empty one", () => {
     const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGrid(2, 2));
     const [src] = result.current.windowSources;
     const [docSrc] = result.current.docSources;
     act(() => result.current.assignToNext(src)); // no selection -> slot 0
@@ -238,6 +283,7 @@ describe("useFigurePage", () => {
 
   it("builds panel payloads from the window view / doc config", async () => {
     const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGrid(2, 2));
     act(() => result.current.assign(0, result.current.windowSources[0]));
     act(() => result.current.assign(3, result.current.docSources[0]));
     const spec = await result.current.buildSpec();
@@ -268,7 +314,7 @@ describe("useFigurePage", () => {
     expect(p1.figure.y_scale).toBe("log");
     expect(p1.figure.title).toBe("doc title");
     expect(p1.figure.overrides).toEqual({
-      legend: { show: true, loc: "auto" },
+      legend: { show: false, loc: "auto" },
       grid: true,
       spines: { top: true, right: true },
       ticks: { minor: true },
@@ -308,6 +354,7 @@ describe("useFigurePage", () => {
 
   it("grid resize preserves assignments by position", () => {
     const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGrid(2, 2));
     act(() => result.current.assign(0, result.current.windowSources[0]));
     act(() => result.current.assign(3, result.current.docSources[0]));
     act(() => result.current.setGrid(2, 3));
@@ -340,6 +387,7 @@ describe("useFigurePage", () => {
 
   it("moveSlot swaps two panels (source + label/title as one unit) and follows selection", () => {
     const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGrid(2, 2));
     act(() => result.current.assign(0, result.current.windowSources[0]));
     act(() => result.current.setSlotLabel(0, "(iv)"));
     act(() => result.current.assign(3, result.current.docSources[0]));
@@ -534,6 +582,7 @@ describe("useFigurePage", () => {
   describe("F3.2 missing-source semantics", () => {
     it("exposes per-slot live status: empty/ok-live/ok-frozen alongside the slots", () => {
       const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.setGrid(2, 2));
       act(() => result.current.assign(0, result.current.windowSources[0])); // live window
       act(() => result.current.assign(1, result.current.docSources[0])); // frozen figdoc (FROZEN_DOC)
       expect(result.current.sourceStatuses[0]).toEqual({ status: "ok", lifecycle: "live" });
