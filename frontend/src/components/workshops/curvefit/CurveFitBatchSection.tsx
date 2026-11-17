@@ -18,6 +18,10 @@ import { batchColumns, batchSummaryData, batchTableInputs, fitSummaryValues, lib
 import { batchFitTable } from "../../../lib/fitTableLayer";
 import FitTableControls from "./FitTableControls";
 import { parseFitStarts } from "./fitStarts";
+import CurveFitBatchPlotChips from "./CurveFitBatchPlotChips";
+import { asOneEditStep } from "../../../store/undoStep";
+import { plotSummaryParameter } from "../../../store/plotSummaryParameter";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
 
 interface Props {
   modelName: string;
@@ -28,6 +32,8 @@ interface Props {
   /** The panel's "Scale errors with √(reduced χ²)" switch: a weighted batch
    *  input reports its errors the way the single fit would. */
   scaleErrors?: boolean;
+  /** Bumped by the header's "Fit N worksheets": opens the section. */
+  expandSignal?: number;
 }
 
 const median = (values: number[]): number | null => {
@@ -37,9 +43,10 @@ const median = (values: number[]): number | null => {
   return finite.length % 2 ? finite[middle] : (finite[middle - 1] + finite[middle]) / 2;
 };
 
-export default function CurveFitBatchSection({ modelName, model, paramRows, weightMode, manualKey, scaleErrors = true }: Props) {
+export default function CurveFitBatchSection({ modelName, model, paramRows, weightMode, manualKey, scaleErrors = true, expandSignal = 0 }: Props) {
   const setStatus = useApp((s) => s.setStatus);
   const datasets = useApp((s) => s.datasets);
+  const multi = useAnalysisSelection((st) => st.toolId === "curvefit" && (st.selection?.items.length ?? 0) >= 2);
   const names = model?.paramNames ?? paramRows.map((r) => r.name);
   const columns = batchColumns(names);
   // What the LAST RUN fitted. The summary worksheet is built from the run's
@@ -130,7 +137,13 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     return summaryX(rows.map((r) => ({ name: r.name, metadata: byId.get(r.datasetId)?.data.metadata, labels: byId.get(r.datasetId)?.data.labels })), xChoice);
   };
 
-  const summarySheet = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice) => {
+  // The summary a "Plot ▸" chip made for this run and X choice, reused by the
+  // next chip so plotting A, τ and C adds one worksheet, not three.
+  // Tied to the run that produced it (`ran.current` is a fresh object each
+  // run): a re-run with another model or parameters must never plot the old
+  // summary, whose columns have the old layout.
+  const chipSheet = useRef<{ key: string; id: string; run: object | null } | null>(null);
+  const summarySheet = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice): string => {
     const run = ran.current ?? { model: modelName, columns };
     // In Library order, not run order: the batch starts with the active
     // worksheet, so selecting b1, b2, b3 with b3 active ran (and listed) b3
@@ -141,8 +154,23 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     // X per input: its position, or a parameter read off ITS OWN worksheet
     // (blank, and reported, where it has none).
     const x = xFor(rows, xChoice);
-    addWorksheetQuietly({ id: nextDatasetId(), name, data: batchSummaryData(rows, run.columns, run.model, x) }, "add curve fit summary worksheet");
+    const id = nextDatasetId();
+    addWorksheetQuietly({ id, name, data: batchSummaryData(rows, run.columns, run.model, x) }, "add curve fit summary worksheet");
     setStatus(`added the worksheet "${name}" to the Library (Undo removes)${summaryXNote(x) ? ` — ${summaryXNote(x)}` : ""}`);
+    return id;
+  };
+
+  const plotParameter = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice, column: number) => {
+    const key = JSON.stringify([ranRows.map((r) => r.datasetId), xChoice]);
+    const reuse = chipSheet.current?.key === key && chipSheet.current.run === ran.current && datasets.some((d) => d.id === chipSheet.current!.id);
+    // One click, one undo step: the new summary sheet, the activation and the
+    // X/Y/Y2 writes each record history, and a bare Ctrl+Z would otherwise stop
+    // in a half-applied state (the summary still there, the view already moved).
+    asOneEditStep(useApp.getState, "plot batch parameter", () => {
+      const id = reuse ? chipSheet.current!.id : summarySheet(ranRows, xChoice);
+      chipSheet.current = { key, id, run: ran.current };
+      plotSummaryParameter(id, column);
+    });
   };
 
   return <AnalysisBatchControls
@@ -151,11 +179,15 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     summaryColumns={columns}
     runItem={runItem}
     onSummarySheet={summarySheet}
+    defaultExpanded={multi}
+    expandSignal={expandSignal}
     afterRun={(ranRows, xChoice) => {
       // The same rows, in the same order, as the summary worksheet.
       const lib = libraryOrder(ranRows, datasets.map((d) => d.id));
       const inputs = inOrder(lib, xFor(lib, xChoice));
-      return <FitTableControls
+      return <>
+        <CurveFitBatchPlotChips columns={ran.current?.columns ?? columns} onPlot={(c) => plotParameter(ranRows, xChoice, c)} />
+        <FitTableControls
         sourceKey={`batch:${ranRows.map((r) => r.datasetId).join(",")}`}
         stats={["r2", "chiSqRed"]}
         build={(want) => batchFitTable(
@@ -164,7 +196,8 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
           want,
           ran.current?.fixed,
         )}
-      />;
+        />
+      </>;
     }}
   />;
 }
