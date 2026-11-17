@@ -8514,6 +8514,11 @@ export interface components {
              */
             constrain?: boolean;
             /**
+             * Deadline S
+             * @default 10
+             */
+            deadline_s?: number;
+            /**
              * Link Mode
              * @default None
              */
@@ -8525,6 +8530,11 @@ export interface components {
             model?: string;
             /** Peaks */
             peaks: components["schemas"]["PeakSeed"][];
+            /**
+             * Polish
+             * @default true
+             */
+            polish?: boolean;
             /** X */
             x: number[];
             /** Y */

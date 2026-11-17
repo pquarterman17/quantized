@@ -282,7 +282,9 @@ describe("AnalysisResultPanel", () => {
     expect(screen.getByText("1 total · 0 excluded")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Recalculate" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Table" }));
-    expect(screen.getByRole("columnheader", { name: "Center ± 1σ" })).toBeInTheDocument();
+    // A legacy fit measured no σ: the header promises none (UX audit 9 #3).
+    expect(screen.getByRole("columnheader", { name: "Center" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Center ± 1σ" })).not.toBeInTheDocument();
     expect(screen.getByText("31.2")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Figures" }));
@@ -291,6 +293,26 @@ describe("AnalysisResultPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit / Re-fit…" }));
     expect(useApp.getState()).toMatchObject({ activeId: "source", stageTab: "plot", peaksOpen: true, openAnalysisResultId: null });
+  });
+
+  it("states a polished peak fit's quality beside the freshness badge, and its ± 1σ", () => {
+    useApp.setState({ datasets: [source], activeId: "source", analysisResults: [], openAnalysisResultId: null });
+    publishFitResult("source", {
+      peaks: [{ center: 31.2, fwhm: 0.18, height: 120, bg: 4, eta: null, area: 23, status: "fitted(global)",
+        model: "Lorentzian", centerErr: 0.0123, fwhmErr: 0.01, heightErr: 2, areaErr: 1, etaErr: null }],
+      bgCoeffs: [4], R2: 0.941639, rmse: 100, nPeaks: 1, model: "Lorentzian",
+      solver: "nelder-mead+trf", converged: true, noiseSigma: 12,
+    }, "simultaneous", { bgDegree: 0, linkMode: "None", constrain: false, xKey: null, yKey: 0 });
+    useApp.setState({ openAnalysisResultId: "analysis-peaks-source", peaksOpen: false });
+
+    render(<AnalysisResultPanel />);
+    // "Current" is freshness only; the fit's own verdict is a separate, warn-toned row.
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText(/^Poor fit \(RMSE over 3× noise\)/).closest("[data-fit-status]"))
+      .toHaveAttribute("data-fit-status", "warn");
+    fireEvent.click(screen.getByRole("tab", { name: "Table" }));
+    expect(screen.getByRole("columnheader", { name: "Center ± 1σ" })).toBeInTheDocument();
+    expect(screen.getByText("31.200 ± 0.012")).toBeInTheDocument();
   });
 
   it("keeps statistical interpretation and tables inspectable and flags edited source data", async () => {

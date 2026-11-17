@@ -259,22 +259,24 @@ export function peakTableFromFit(
   keepExclusionsFrom?: PeakTable | null,
 ): PeakTable {
   const prior = carriedExclusions(result, keepExclusionsFrom);
+  const polished = result.solver === "nelder-mead+trf";
   return {
     version: PEAK_TABLE_VERSION,
     peaks: result.peaks.map((p, i) => ({
       id: nextPeakId(),
       center: p.center,
-      centerErr: null,
+      centerErr: errOrNull(p.centerErr),
       fwhm: p.fwhm,
-      fwhmErr: null,
+      fwhmErr: errOrNull(p.fwhmErr),
       height: p.height,
-      heightErr: null,
+      heightErr: errOrNull(p.heightErr),
       area: p.area,
       bg: p.bg,
       eta: p.eta,
       model: p.model,
       status: p.status,
       excluded: prior[i],
+      ...(polished ? polishedErrs(p, result.converged !== false) : {}),
     })),
     provenance: {
       datasetId: source.datasetId,
@@ -293,8 +295,34 @@ export function peakTableFromFit(
       fingerprint: source.fingerprint ?? null,
       ...(source.rowIds ? { rowIds: [...source.rowIds] } : {}),
       fittedAt: (source.now ?? new Date()).toISOString(),
+      ...(polished ? {
+        solver: result.solver,
+        ...(typeof result.converged === "boolean" ? { converged: result.converged } : {}),
+        noiseSigma: errOrNull(result.noiseSigma),
+      } : {}),
     },
   };
+}
+
+const errOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** Why a polished fit reports no 1σ for a field (calc/peak_multifit_polish). */
+export const POLISH_NO_ERR_REASON = "on a bound or undetermined: no covariance uncertainty";
+export const POLISH_NOT_CONVERGED_REASON = "the fit did not converge: no uncertainty";
+
+/** A polished row's optional columns: area/η errors, and the reason for each
+ *  null error of a field that has a value. */
+function polishedErrs(p: MultiFitResult["peaks"][number], converged: boolean): Partial<PeakTableEntry> {
+  const out: Partial<PeakTableEntry> = { areaErr: errOrNull(p.areaErr) };
+  if (p.eta !== null && Number.isFinite(p.eta)) out.etaErr = errOrNull(p.etaErr);
+  const reasons: Partial<Record<keyof typeof ERR_COLUMNS, string>> = {};
+  for (const f of ["center", "fwhm", "height", "area", "eta"] as const) {
+    const col = ERR_COLUMNS[f];
+    if (f === "eta" && !("etaErr" in out)) continue;
+    if (errOrNull(p[col]) === null) reasons[f] = converged ? POLISH_NO_ERR_REASON : POLISH_NOT_CONVERGED_REASON;
+  }
+  if (Object.keys(reasons).length) out.errReasons = reasons;
+  return out;
 }
 
 /** Re-hydrate the panel's display shape from the durable table, so a reopened
@@ -319,6 +347,11 @@ export function peakTableToFitResult(table: PeakTable): MultiFitResult {
     rmse: table.provenance.rmse,
     nPeaks: table.peaks.length,
     model: table.provenance.model,
+    ...(table.provenance.solver ? {
+      solver: table.provenance.solver,
+      ...(typeof table.provenance.converged === "boolean" ? { converged: table.provenance.converged } : {}),
+      noiseSigma: table.provenance.noiseSigma ?? null,
+    } : {}),
   };
 }
 
