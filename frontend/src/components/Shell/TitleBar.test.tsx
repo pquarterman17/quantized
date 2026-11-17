@@ -11,6 +11,7 @@ import { useApp } from "../../store/useApp";
 beforeEach(() => {
   useApp.setState({
     currentProject: null,
+    browserFileName: null,
     projectDirty: false,
     datasets: [],
     activeId: null,
@@ -54,5 +55,25 @@ describe("TitleBar — project identity (P1.2 box 1)", () => {
       "title",
       "/proj/nested/workspace.dwk",
     );
+  });
+});
+
+describe("TitleBar — browser file name and window title", () => {
+  it("shows a browser-opened file's name and titles the document with it", () => {
+    useApp.setState({ browserFileName: "MyRun.dwk" });
+    render(<TitleBar />);
+    expect(screen.getByText(/MyRun\.dwk/)).toBeInTheDocument();
+    expect(document.title).toBe("MyRun.dwk — Quantized");
+  });
+
+  it("marks unsaved changes in the document title", () => {
+    useApp.setState({ currentProject: { name: "MyRun.dwk", path: "/p/MyRun.dwk" }, projectDirty: true });
+    render(<TitleBar />);
+    expect(document.title).toBe("• MyRun.dwk — Quantized");
+  });
+
+  it("is plain 'Quantized' with no project", () => {
+    render(<TitleBar />);
+    expect(document.title).toBe("Quantized");
   });
 });

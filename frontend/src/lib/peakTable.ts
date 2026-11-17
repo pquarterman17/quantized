@@ -14,13 +14,16 @@
 // belongs to — the same additive-optional shape as `Dataset.fitSpec`, absent
 // meaning "no peak table", never an ad-hoc dict (CLAUDE.md's data contract).
 //
-// UNCERTAINTIES: ONE PRODUCER MEASURES THEM, THE LEGACY ONES DO NOT.
+// UNCERTAINTIES: TWO PRODUCERS MEASURE THEM, THE LEGACY ONES DO NOT.
 // `centerErr`/`fwhmErr`/`heightErr` (and the optional `areaErr`) are
-// `number | null`. The Peaks workshop's producers write `null`: neither
-// `calc/peak_multifit.fit_multi_peak` nor `calc/peak_fit.fit_peak` returns a
-// covariance or a standard error, and inventing one would be new numerics
-// with no MATLAB golden to check them against (CLAUDE.md's golden-parity
-// rule). The Peak analyzer's mixed-shape model fit (`calc/peak_model_fit.py`,
+// `number | null`. The Peaks workshop's "Fit each" (`calc/peak_fit.fit_peak`)
+// and every table saved before UX audit 9 write `null`. Its "Fit all
+// together" now polishes the MATLAB-parity simplex with bounded least squares
+// (`calc/peak_multifit_polish.py`; `provenance.solver` "nelder-mead+trf") and
+// fills the four columns plus `etaErr` from the Jacobian sandwich covariance —
+// a delegated standard algorithm beside the golden simplex, which stays
+// bit-for-bit behind `polish=False`. A null there (on a bound, undetermined,
+// not converged) carries its reason in `errReasons`. The Peak analyzer's mixed-shape model fit (`calc/peak_model_fit.py`,
 // P2.4) DOES return them — delta-method errors from the fit's own pinv
 // covariance — and its "Publish to peak table" action
 // (components/workshops/peakwizard/modelFitPeakTable.ts) fills the columns,
@@ -102,11 +105,22 @@ export interface FittedPeak {
   area: number;
   status: string;
   model: string;
+  /** 1σ from the polished simultaneous fit (calc/peak_multifit_polish.py):
+   *  present (possibly null — at a bound, undetermined, not converged) on a
+   *  polished /api/peaks/fit-multi result, absent from every other producer. */
+  centerErr?: number | null;
+  fwhmErr?: number | null;
+  heightErr?: number | null;
+  areaErr?: number | null;
+  etaErr?: number | null;
   [key: string]: unknown;
 }
 
 /** Result of a simultaneous multi-peak fit (/api/peaks/fit-multi). `R2`/`rmse`
- *  are NaN-serialized to null when synthesized from independent per-peak fits. */
+ *  are NaN-serialized to null when synthesized from independent per-peak fits.
+ *  The optional tail is the fit's own quality record (lib/peakFitStatus):
+ *  `solver` "nelder-mead+trf" for the app's polished fit, `converged`, and
+ *  `noiseSigma` — the detector's white-noise estimate of the fitted y. */
 export interface MultiFitResult {
   peaks: FittedPeak[];
   bgCoeffs: number[];
@@ -114,6 +128,10 @@ export interface MultiFitResult {
   rmse: number | null;
   nPeaks: number;
   model: string;
+  solver?: string;
+  converged?: boolean;
+  fitMessage?: string;
+  noiseSigma?: number | null;
 }
 
 /** Result of a single-peak window fit (/api/peaks/fit). */
@@ -269,6 +287,14 @@ export interface PeakTableProvenance {
   background?: string;
   /** The fit's own warnings, verbatim. */
   warnings?: string[];
+  // ── polished simultaneous fits only (UX audit 9 lane B) ─────────────────
+  /** "nelder-mead+trf": the Peaks workshop's fit-multi, polished with bounded
+   *  least squares and carrying per-row 1σ. Absent on every older record. */
+  solver?: string;
+  /** Whether the polish converged, and the data's white-noise estimate — the
+   *  inputs `peakFitStatus` judges beside R²/RMSE. */
+  converged?: boolean;
+  noiseSigma?: number | null;
 }
 
 /** A dataset's durable fitted-peak table. `version` is the record's own schema
@@ -333,6 +359,16 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   return entry;
 }
 
+/** The polished-fit quality fields, only for a record that has them. */
+function polishedProvenance(p: Record<string, unknown>): Partial<PeakTableProvenance> {
+  if (typeof p.solver !== "string" || !p.solver) return {};
+  return {
+    solver: p.solver,
+    ...(typeof p.converged === "boolean" ? { converged: p.converged } : {}),
+    noiseSigma: num(p.noiseSigma),
+  };
+}
+
 /** The model-fit provenance fields, only for a record that claims them. */
 function modelFitProvenance(p: Record<string, unknown>): Partial<PeakTableProvenance> {
   if (p.producer !== "model_fit") return {};
@@ -393,6 +429,7 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
         ? { rowIds: [...new Set(p.rowIds as number[])].sort((a, b) => a - b) }
         : {}),
       fittedAt: str(p.fittedAt),
+      ...polishedProvenance(p),
       ...modelFitProvenance(p),
     },
   };

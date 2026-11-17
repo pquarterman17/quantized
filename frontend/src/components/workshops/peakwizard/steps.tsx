@@ -6,6 +6,8 @@
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
+import { fmtValueErr } from "../../../lib/fitValueFormat";
+import { peakFitStatus } from "../../../lib/peakFitStatus";
 import { PEAK_LINK_MODES, PEAK_SHAPES, peakClamp } from "../../../lib/peakwizard";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
@@ -158,9 +160,14 @@ export function StepModel({ w }: { w: PeakWizardState }) {
   );
 }
 
+/** A value with its PDG-rounded 1σ when the fit reported one, else bare. */
+const fmtValueErrOr = (v: number, e: number | null | undefined): string =>
+  typeof e === "number" && Number.isFinite(e) && e > 0 ? fmtValueErr(v, e) : fmtNum(v);
+
 /** ④ Fit & review: run the simultaneous fit, per-peak table + GOF. */
 export function StepFitReview({ w }: { w: PeakWizardState }) {
   const r = w.fitResult;
+  const status = r ? peakFitStatus(r) : null;
   if (w.model.engine === "model") return <ModelFitStep w={w} />;
   return (
     <>
@@ -175,22 +182,19 @@ export function StepFitReview({ w }: { w: PeakWizardState }) {
       {r && (
         <div style={{ marginTop: 8 }}>
           <StatusDot
-            tone={r.R2 !== null && r.R2 > 0.9 ? "ok" : "warn"}
-            label={
-              <span>
-                {r.model} · R² = {fmtNum(r.R2)} · RMSE = {fmtNum(r.rmse)}
-              </span>
-            }
+            // lib/peakFitStatus: warn on non-convergence, R² < 0.98 or RMSE > 3× noise.
+            tone={r.R2 == null ? "warn" : status?.tone}
+            label={<span>{r.model} · R² = {fmtNum(r.R2)} · RMSE = {fmtNum(r.rmse)}{status?.tone === "warn" && ` · ${status.text.split(" · ")[0]}`}</span>}
           />
           <div style={{ marginTop: 6, maxHeight: "var(--qz-peak-table-h, 200px)", overflowY: "auto" }}>
             <DataTable
               columns={["#", "center", "FWHM", "height", "area"]}
               rows={r.peaks.map((p, i) => [
                 i + 1,
-                fmtNum(p.center),
-                fmtNum(p.fwhm),
-                fmtNum(p.height),
-                fmtNum(p.area),
+                fmtValueErrOr(p.center, p.centerErr),
+                fmtValueErrOr(p.fwhm, p.fwhmErr),
+                fmtValueErrOr(p.height, p.heightErr),
+                fmtValueErrOr(p.area, p.areaErr),
               ])}
             />
           </div>

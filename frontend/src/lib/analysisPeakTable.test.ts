@@ -20,8 +20,10 @@ const table: PeakTable = {
 describe("analysisPeakTableCsv", () => {
   it("exports uncertainty, exclusion, and spreadsheet-safe text", () => {
     const csv = analysisPeakTableCsv(table);
-    expect(csv).toContain("included,center,center_1sigma,fwhm,fwhm_1sigma");
-    expect(csv).toContain("false,31.7,0.02,0.15,,425,3,81,2,4,0.5,0.04");
+    // fwhm has no σ on any row, so no fwhm_1sigma column (UX audit 9 #3).
+    expect(csv).toContain("included,center,center_1sigma,fwhm,height,height_1sigma,area,area_1sigma,background,eta,eta_1sigma,model");
+    // Each value PDG-rounded to its σ: 31.7 ± 0.02 → 31.700 ± 0.020, η 0.5 ± 0.04 → 0.50 ± 0.04.
+    expect(csv).toContain("false,31.700,0.020,0.15,425.0,3.0,81.0,2.0,4,0.50,0.04");
     expect(csv).toContain(`"'=HYPERLINK(""bad"")"`);
     expect(csv).toContain("'+review");
   });

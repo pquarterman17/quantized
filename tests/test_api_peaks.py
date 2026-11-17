@@ -189,6 +189,22 @@ def test_fit_multi_endpoint() -> None:
     assert abs(centers[0] - 16.0) < 0.2
     assert abs(centers[1] - 24.0) < 0.2
     assert all(p["status"] == "fitted(global)" for p in out["peaks"])
+    # The app path polishes the parity simplex and reports 1-sigma errors.
+    assert out["solver"] == "nelder-mead+trf" and out["converged"] is True
+    assert all("centerErr" in p and "areaErr" in p for p in out["peaks"])
+    assert out["noiseSigma"] is None or out["noiseSigma"] >= 0
+
+
+def test_fit_multi_polish_off_is_the_matlab_parity_fit() -> None:
+    x, y = _two_lorentzians_bg()
+    resp = client.post("/api/peaks/fit-multi", json={
+        "x": x, "y": y, "polish": False,
+        "peaks": [{"center": 15.6, "fwhm": 1.0, "height": 18.0}],
+    })
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["solver"] == "nelder-mead"
+    assert "centerErr" not in out["peaks"][0]
 
 
 def test_fit_multi_unknown_model_rejected() -> None:
@@ -315,3 +331,14 @@ def test_find_unknown_background_method_is_422() -> None:
     x, y = _two_peaks()
     resp = client.post("/api/peaks/find", json={"x": x, "y": y, "bg_method": "als"})
     assert resp.status_code == 422
+
+
+def test_fit_multi_nan_in_y_is_dropped_not_a_500() -> None:
+    x, y = _two_lorentzians_bg()
+    y[3] = float("nan")
+    resp = client.post("/api/peaks/fit-multi", json={
+        "x": x, "y": [None if v != v else v for v in y],
+        "peaks": [{"center": 15.6, "fwhm": 1.0, "height": 18.0}],
+    })
+    assert resp.status_code in (200, 422)
+    assert resp.status_code != 500

@@ -131,13 +131,18 @@ def dropped_text_notes(
     data_tokens: Sequence[Sequence[str]],
     columns: Sequence[int],
 ) -> list[str]:
-    """One note per numeric column in ``columns`` whose text cells were read
-    as NaN (``red`` in ``nan, nan, nan, red, 6``), naming up to three.
+    """Notes on numeric columns in ``columns`` whose text cells were read as
+    NaN (``red`` in ``nan, nan, nan, red, 6``), naming up to three.
+
+    One affected column gets its own note. Several get ONE combined note
+    (``19 columns: text cells read as missing (e.g. 'CONC.', ...)``): a file
+    whose header rows landed in the data has the same few words in every
+    column, and a note apiece buried everything else the importer said.
 
     A missing-value token or NaN spelling was missing already, and a comma
     cell has its own note (`_decimal_comma.stray_comma_notes`); only columns
     with a NaN are inspected, so a clean file pays nothing."""
-    notes: list[str] = []
+    found: list[tuple[str, list[str]]] = []
     for c in columns:
         if c >= matrix.shape[1] or not np.isnan(matrix[:, c]).any():
             continue
@@ -151,14 +156,21 @@ def dropped_text_notes(
             if _is_missing(cell) or is_nan_word(cell):
                 continue
             dropped.append(cell)
-        if not dropped:
-            continue
-        distinct = list(dict.fromkeys(dropped))
+        if dropped:
+            found.append((names[c], dropped))
+    if not found:
+        return []
+    if len(found) > 1:
+        distinct = list(dict.fromkeys(d for _, cells in found for d in cells))
         shown = ", ".join(f"'{d}'" for d in distinct[:_EXAMPLES])
         more = "" if len(distinct) <= _EXAMPLES else ", ..."
-        n = len(dropped)
-        notes.append(
-            f"Column '{names[c]}' is numeric; {n} text cell{'' if n == 1 else 's'} "
-            f"({shown}{more}) {'was' if n == 1 else 'were'} read as missing (NaN)."
-        )
-    return notes
+        return [f"{len(found)} columns: text cells read as missing (e.g. {shown}{more})."]
+    name, dropped = found[0]
+    distinct = list(dict.fromkeys(dropped))
+    shown = ", ".join(f"'{d}'" for d in distinct[:_EXAMPLES])
+    more = "" if len(distinct) <= _EXAMPLES else ", ..."
+    n = len(dropped)
+    return [
+        f"Column '{name}' is numeric; {n} text cell{'' if n == 1 else 's'} "
+        f"({shown}{more}) {'was' if n == 1 else 'were'} read as missing (NaN)."
+    ]
