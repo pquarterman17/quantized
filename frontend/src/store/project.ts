@@ -40,6 +40,10 @@ export interface ProjectSlice {
    *  save/open of `currentProject`. Meaningless (but harmless) when
    *  `currentProject` is null — there is nothing named to compare against. */
   projectDirty: boolean;
+  /** A browser tab's file name (no durable path): the .dwk it opened or saved
+   *  through the File System Access picker. Display only — never an identity. */
+  browserFileName: string | null;
+  setBrowserFileName: (name: string | null) => void;
   /** Record a successful native open/save. Always clears `projectDirty` in
    *  the same update — the project now IS what's on disk. */
   setCurrentProject: (project: ProjectIdentity | null) => void;
@@ -56,6 +60,8 @@ export function createProjectSlice(set: SliceSet): ProjectSlice {
   return {
     currentProject: null,
     projectDirty: false,
+    browserFileName: null,
+    setBrowserFileName: (browserFileName) => set({ browserFileName }),
 
     setCurrentProject: (project) => set({ currentProject: project, projectDirty: false }),
     markProjectDirty: () => set({ projectDirty: true }),

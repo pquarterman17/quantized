@@ -122,6 +122,13 @@ class FitMultiPeakRequest(BaseModel):
     bg_degree: int = 1
     constrain: bool = False
     link_mode: str = "None"
+    # The app's fits polish the MATLAB-parity simplex with bounded least
+    # squares and return 1-sigma errors (calc.peak_multifit_polish); False is
+    # the bit-for-bit MATLAB onFitSimultaneous result, kept for parity checks.
+    polish: bool = True
+    # ONE wall-clock budget for the whole request (simplex + both polish
+    # starts); on running out the best point is returned with converged=false.
+    deadline_s: float = Field(default=10.0, gt=0.0, le=30.0)
 
 
 @router.post("/fit-multi")
@@ -138,7 +145,8 @@ def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
     result = call_calc(fit_multi_peak,
         req.x, req.y, seeds,
         model=req.model, bg_degree=req.bg_degree,
-        constrain=req.constrain, link_mode=req.link_mode,
+        constrain=req.constrain, link_mode=req.link_mode, polish=req.polish,
+        deadline_s=req.deadline_s,
     )
     out: dict[str, Any] = to_jsonable(result)
     return out

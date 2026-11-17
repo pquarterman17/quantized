@@ -4,8 +4,9 @@
 // background) or each independently, then show the fitted parameters + R².
 // "→ Report" lands the fitted peak table as a #36 report sheet in the library.
 //
-// Fitted tables are durable on the dataset; Peak analyzer model-fit tables
-// additionally show their standard errors through PeakValueCell.
+// Fitted tables are durable on the dataset; Peak analyzer model-fit tables and
+// polished simultaneous fits additionally show their standard errors through
+// PeakValueCell, and PeakFitSummary states the fit's quality.
 
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -13,6 +14,7 @@ import PeakFitControls from "./PeakFitControls";
 import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
+import PeakFitSummary from "./PeakFitSummary";
 import { DEFAULT_PEAK_FIND } from "./peakFindParams";
 import { peakReportResult, peakReportUnits } from "./peakReport";
 import { usePeakTableSelection } from "./peakSelection";
@@ -172,11 +174,13 @@ export default function PeaksPanel() {
       : null;
   const shown = entries ?? fitResult?.peaks ?? [];
   const metrics = entries && peakTable ? peakTable.provenance : fitResult;
-  // Errors are shown only for a table that measured them (a model fit's).
+  // Errors are shown only for a table that measured them: a model fit's, or a
+  // polished "Fit all together" (lib/peakTable.ts's UNCERTAINTIES note).
   const modelFit = entries !== null && peakTable?.provenance.producer === "model_fit";
+  const measured = modelFit || (entries !== null && !!peakTable?.provenance.solver);
   const fitRows = shown.map((p, i) => {
     const entry = entries?.[i];
-    const errOf = modelFit ? entry : undefined;
+    const errOf = measured ? entry : undefined;
     return [
       i + 1,
       <PeakValueCell key="c" value={p.center} field="center" entry={errOf} />,
@@ -325,22 +329,8 @@ export default function PeaksPanel() {
 
       {fitResult && fitResult.peaks.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
-            {metrics?.model} ·{" "}
-            {metrics?.R2 != null
-              ? `R² = ${fmtNum(metrics.R2)}`
-              : !entries
-                ? "" // table not yet paired with this fit (one frame on a switch)
-                : peakTable?.provenance.method === "independent"
-                  ? "independent fits"
-                  : modelFit && peakTable?.provenance.ssr != null
-                    ? "R² undefined" // an unedited model fit (SSR clears with R² on any edit)
-                    : "fit metrics cleared by manual changes"}
-            {modelFit && " · Peak analyzer model fit"}
-            {manualEditCount(shown) > 0 && ` · ${manualEditCount(shown)} edited by hand`}
-            {metrics?.rmse != null && ` · RMSE = ${fmtNum(metrics.rmse)}`}
-            {excludedCount > 0 && ` · ${excludedCount} excluded`}
-          </div>
+          <PeakFitSummary metrics={metrics ?? null} paired={entries !== null} peakTable={peakTable ?? null}
+            modelFit={modelFit} edited={manualEditCount(shown)} excluded={excludedCount} />
           <PeakTable
             ariaLabel="fitted peaks"
             columns={["#", "center", "height", "FWHM", "area", "incl."]}

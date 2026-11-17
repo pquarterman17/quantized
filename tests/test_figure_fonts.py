@@ -155,5 +155,6 @@ def test_every_renderer_resolves_a_preset_font_the_same_way(style: str) -> None:
     from quantized.calc.figure_fonts import font_family_rc
 
     rc = font_family_rc(figure_style(style))
-    assert rc["font.family"] == "sans-serif"
+    assert rc["font.family"][0] == "Liberation Sans"
+    assert rc["font.family"][-1] == "DejaVu Sans"
     assert rc["font.sans-serif"][0] == "Liberation Sans"

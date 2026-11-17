@@ -26,7 +26,7 @@ import { Button } from "../../primitives";
 import AnalysisResultFitOverview from "./AnalysisResultFitOverview";
 import AnalysisResultFitTable from "./AnalysisResultFitTable";
 import AnalysisResultFigures from "./AnalysisResultFigures";
-import AnalysisResultPeakTable from "./AnalysisResultPeakTable";
+import AnalysisResultPeakTable, { PeakFitQuality } from "./AnalysisResultPeakTable";
 import AnalysisResultRefl, { liveReflectivityFit, reflectivityFitIssues } from "./AnalysisResultRefl";
 import AnalysisResultSnapshot from "./AnalysisResultSnapshot";
 import AnalysisResultTables from "./AnalysisResultTables";
@@ -324,6 +324,7 @@ export default function AnalysisResultPanel() {
               <div><dt>Method</dt><dd>{peakTable?.provenance.method ?? "Unavailable"}</dd></div>
               <div><dt>X axis</dt><dd>{peakTable ? `${peakTable.provenance.xLabel || "Unknown"}${peakTable.provenance.xUnit ? ` (${peakTable.provenance.xUnit})` : ""}` : "Unavailable"}</dd></div>
               <div><dt>R²</dt><dd>{peakTable?.provenance.R2 == null ? "Not reported" : formatValue(peakTable.provenance.R2)}</dd></div>
+              <PeakFitQuality table={peakTable} />
               <div><dt>Fitted</dt><dd>{peakTable ? formatDate(peakTable.provenance.fittedAt) : "Unavailable"}</dd></div>
             </dl> : isFit ? <AnalysisResultFitOverview result={result} source={source} spec={fitSpec} busy={!!busy} onUpdateStatistics={source && fitReplayable ? () => void recalculate(true) : undefined} /> : <dl className="qz-analysis-summary">
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>

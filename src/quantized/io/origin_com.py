@@ -26,10 +26,11 @@ ranges is flaky in practice; LabTalk string commands are the reliable path
 ``ApplicationSI`` instance at a time — a dead/killed server faults every
 subsequent call).
 
-Scope note: this pushes data + long names/units only (matches the plan-item
-ask); it does not set column designations (X/Y/Y-error types) the way the
-``.ogs`` exporter does — a deliberate smaller surface for the first cut,
-worth revisiting once item 25 is live-verified against real Origin.
+Column designations (X / Y / Y-error / X-error / Z / label / disregard) are
+set the way the ``.ogs`` exporter sets them (``_column_roles.
+channel_designations`` -> ``wks.colN.type``). Without them every pushed
+column was a Y: Origin's readback of the plan-item-9 round trip (2026-11-16)
+showed Y-error / X-error / second-X columns arriving as Y.
 
 This repo's own tests never dispatch real COM — see ``tests/test_origin_com.py``
 (mock-based only, a fake ``win32com`` module injected via ``sys.modules``).
@@ -45,6 +46,7 @@ from typing import Any
 
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.io._column_roles import LABTALK_COLUMN_TYPE, channel_designations
 
 __all__ = ["com_available", "send_to_origin"]
 
@@ -109,6 +111,25 @@ def _label_column(app: Any, book: str, col: int, lname: str, unit: str) -> None:
         parts.append(f'{var}.unit$ = "{_escape_lt(unit)}";')
     if len(parts) == 1:
         return  # nothing to label
+    cmd = " ".join(parts)
+    if not app.Execute(cmd):
+        raise RuntimeError(f"Origin LabTalk command failed: {cmd}")
+
+
+def _designate_columns(app: Any, book: str, ds: DataStruct) -> None:
+    """One LabTalk ``Execute`` setting every column's designation: column 1
+    (the time / X axis) X, each value channel its declared role -- the same
+    rule and LabTalk codes as the ``.ogs`` export (``io/origin.py``).
+
+    Addressed through a ``range`` on ``[book]``, like ``_label_column``:
+    ``newbook ... option:=lsname`` makes ``book`` the LONG name and Origin
+    truncates the short one (``violin_single_point`` -> ``violinsinglep``), so
+    ``win -a <book>`` fails (Origin 2026b, 2026-11-16)."""
+    desig = ["X", *channel_designations(ds.metadata, list(ds.labels), keyword_fallback=True)]
+    parts = [
+        f"range __d{j} = [{book}]1!col({j}); __d{j}.type = {LABTALK_COLUMN_TYPE[d]};"
+        for j, d in enumerate(desig, start=1)
+    ]
     cmd = " ".join(parts)
     if not app.Execute(cmd):
         raise RuntimeError(f"Origin LabTalk command failed: {cmd}")
@@ -186,6 +207,7 @@ def send_to_origin(
             _label_column(app, book, 1, x_name, x_unit)
             for k, (label, unit) in enumerate(zip(ds.labels, ds.units, strict=True)):
                 _label_column(app, book, k + 2, label, unit)
+            _designate_columns(app, book, ds)
 
             books.append(book)
             rows_created.append(ds.n_points)

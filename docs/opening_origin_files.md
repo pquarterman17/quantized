@@ -221,7 +221,13 @@ quantized can hand data back to Origin colleagues two ways:
   and further X columns), long names, units, comments, and (optionally) a
   graph of every Y column against its nearest-preceding X with its error
   bars. This works with **every version of Origin** and is the
-  well-tested, cross-platform path — use it by default.
+  well-tested, cross-platform path — use it by default. **Known issue
+  (measured in Origin 2026b, 2026-11-16):** the script names its CSV by a
+  relative file name, which Origin does not resolve against the script's
+  folder, so run as downloaded it imports no rows. Until that is fixed
+  (ORIGIN_PLOT_TYPE_PARITY_PLAN #20), edit the `impASC fname:=` line to the
+  CSV's full path before running the script. The graph it builds is always
+  a scatter plot (#21).
 - **Native `.opj` project file.** quantized can also write a `.opj` file
   directly. Books of one X column plus Y columns **open in real
   OriginPro** (verified live on Origin 2026b, 2026-07-07: single- and

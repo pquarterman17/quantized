@@ -152,7 +152,12 @@ def font_family_rc(st: FigureStyle, *, chosen: bool = False) -> dict[str, Any]:
             f"Font '{font.requested}' is not installed; using the "
             f"metric-compatible {font.family} instead."
         )
-    return {"font.family": generic, f"font.{generic}": [font.family, fallback]}
+    # An explicit family LIST (not the bare generic) so matplotlib falls back
+    # PER GLYPH: Liberation Sans / Arimo lack U+207B (superscript minus) and
+    # U+2212 in some builds, which rendered as a LastResort tofu box in
+    # ``cm⁻¹`` and ``×10⁻³``; the DejaVu tail supplies the missing glyphs.
+    chain = [font.family] if font.family == fallback else [font.family, fallback]
+    return {"font.family": chain, f"font.{generic}": chain}
 
 
 def style_rc(st: FigureStyle, ov: Mapping[str, Any]) -> dict[str, Any]:
