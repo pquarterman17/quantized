@@ -248,7 +248,9 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     useApp.setState({
       folders: [fld("f1")],
       workbooks: [wb("w1", "f1")],
-      datasets: [ds("d1", "w1"), ds("solo")],
+      // Two sheets: a one-sheet workbook collapses into its sheet's row
+      // (LibraryTree.collapsed.test.tsx), and these tests drive the header.
+      datasets: [ds("d1", "w1"), ds("d1b", "w1"), ds("solo")],
       expandedFolders: ["f1"],
       expandedWorkbookIds: [],
       librarySelection: null,
@@ -270,7 +272,7 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     const s = useApp.getState();
     expect(s.workbooks.some((w) => w.id === "w1")).toBe(false); // workbook deleted
     expect(s.datasets.some((d) => d.id === "d1")).toBe(false); // member sent to trash
-    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id)).toEqual(["d1"]);
+    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id).sort()).toEqual(["d1", "d1b"]);
     expect(s.datasets.some((d) => d.id === "solo")).toBe(true); // the unrelated selected/active dataset untouched
   });
 
@@ -301,7 +303,7 @@ describe("LibraryTree — keyboard hijack guard: nested controls own their own k
     useApp.setState({
       folders: [],
       workbooks: [wb("w1")],
-      datasets: [ds("d1", "w1")],
+      datasets: [ds("d1", "w1"), ds("d1b", "w1")],
       expandedWorkbookIds: [],
       librarySelection: null,
       workbookLastChild: {},

@@ -48,7 +48,7 @@ export default function AnalysisResultSnapshot({
       {scientificValues.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{display(value)}</dd></div>)}
     </dl>}
     {typeof interpretation === "string" && <p className="qz-analysis-caption">{interpretation}</p>}
-    {!isCrystallite && <StatisticalReportingCard result={result} />}
+    {!isCrystallite && result.producer.id !== "analysis-batch" && <StatisticalReportingCard result={result} />}
   </>;
 
   if (view === "table") return result.tables?.length ? <div>

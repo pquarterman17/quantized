@@ -31,7 +31,14 @@ import { datasetCombineSeparateActions } from "../../lib/combineSeparateActions"
 import { datasetDerivedWorksheetActions } from "../../lib/derivedWorksheetActions";
 import { datasetMetaFactorsAction } from "../../lib/metaFactorsAction";
 import { withQuickPlot } from "../../lib/quickPlotActions";
+import type { WorkbookLibraryNode } from "../../lib/libraryHierarchy";
 import type { Dataset, FolderNode } from "../../lib/types";
+import {
+  COLLAPSED_SKIPPED_DATASET_ACTIONS,
+  collapsedDeleteItems,
+  collapsedMoveItems,
+  collapsedWorkbookItems,
+} from "./collapsedWorkbook";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 
@@ -45,8 +52,14 @@ export function buildDatasetRowMenu(
   onRename: () => void,
   onAddTag: () => void,
   onStageOpen?: () => void,
+  /** The single-sheet workbook this row stands for (collapsedWorkbook.ts). */
+  workbook?: WorkbookLibraryNode,
+  onFocusWorkbook?: () => void,
 ): ContextMenuItem[] {
   const { selectedIds } = useApp.getState();
+  // A collapsed row can read "selected" through its WORKBOOK's selection alone;
+  // only the dataset selection decides what a bulk action targets.
+  if (workbook && !selectedIds.includes(d.id)) selected = false;
   const selectedCount = selectedIds.length;
   const target: DatasetActionTarget = {
     dataset: d,
@@ -71,26 +84,30 @@ export function buildDatasetRowMenu(
     // Quick Plot right after the "plot" group (Plot (make active) / Plot in
     // new window), shared with paletteContextActions.ts so the two menu
     // surfaces can't drift apart on where it lands.
-    ...buildMenuItems(withQuickPlot(datasetCoreActions), target),
+    ...buildMenuItems(withQuickPlot(datasetCoreActions).filter((a) => !workbook || !COLLAPSED_SKIPPED_DATASET_ACTIONS.has(a.id)), target),
     // Move into a folder (project-organization item 3). Flat list of folders +
     // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
-    // header does the same.)
+    // header does the same.) A collapsed single-sheet workbook moves AS the
+    // workbook: a sheet's placement follows it, so the dataset move no-ops.
+    ...(workbook ? [{ separator: true } as ContextMenuItem, ...collapsedWorkbookItems(workbook, onRename, onStageOpen, onFocusWorkbook)] : []),
     { separator: true },
-    ...folders.map(
-      (f): ContextMenuItem => ({
-        label: moveLabel(`"${f.name}"`),
-        run: () => moveToFolder(moveIds, f.id),
-        disabled: moveIds.length === 1 && d.folderId === f.id,
-      }),
-    ),
-    ...(d.folderId || moveIds.length > 1
-      ? [
-          {
-            label: moveLabel("top level"),
-            run: () => moveToFolder(moveIds, null),
-          } as ContextMenuItem,
-        ]
-      : []),
+    ...(workbook ? collapsedMoveItems(workbook, moveIds, folders) : [
+      ...folders.map(
+        (f): ContextMenuItem => ({
+          label: moveLabel(`"${f.name}"`),
+          run: () => moveToFolder(moveIds, f.id),
+          disabled: moveIds.length === 1 && d.folderId === f.id,
+        }),
+      ),
+      ...(d.folderId || moveIds.length > 1
+        ? [
+            {
+              label: moveLabel("top level"),
+              run: () => moveToFolder(moveIds, null),
+            } as ContextMenuItem,
+          ]
+        : []),
+    ]),
     ...buildMenuItems([datasetNewFolderAction], target),
     // Batch-apply this dataset's corrections (only when it has any).
     ...(d.corrections ? [{ separator: true } as ContextMenuItem, ...buildMenuItems(datasetCorrectionsActions, target)] : []),
@@ -110,7 +127,9 @@ export function buildDatasetRowMenu(
     { separator: true },
     ...buildMenuItems(datasetMoveActions, target),
     { separator: true },
-    ...buildMenuItems(datasetRemoveActions, target),
+    // A lone collapsed row deletes the WORKBOOK (grouping + sheet, one Undo);
+    // inside a multi-selection the dataset registry's "Remove N selected" owns it.
+    ...(workbook && !(selected && selectedCount > 1) ? collapsedDeleteItems(workbook) : buildMenuItems(datasetRemoveActions, target)),
   ];
 }
 
