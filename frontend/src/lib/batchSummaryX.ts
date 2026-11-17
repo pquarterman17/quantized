@@ -70,16 +70,32 @@ function readMeta(i: SummaryXInput, path: MetaPath): Read {
 }
 
 const NAME_NUMBER = /(\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/i;
+const NAME_UNIT_AFTER = /^\s?(mK|K|mT|T|kOe|Oe|G)(?![A-Za-z])/;
 
-/** The first number in a name. A sign counts only when it does not follow a
+/** The number a name is read for: the one carrying a recognised unit
+ *  ("run3_010K" is 010 K, not the 3), else the first number. */
+function nameNumber(name: string): RegExpExecArray | null {
+  const all = new RegExp(NAME_NUMBER.source, "gi");
+  let first: RegExpExecArray | null = null;
+  for (let m = all.exec(name); m; m = all.exec(name)) {
+    first ??= m;
+    if (NAME_UNIT_AFTER.test(name.slice(m.index + m[0].length))) return m;
+  }
+  return first;
+}
+
+/** The chosen number in a name. A sign counts only when it does not follow a
  *  letter or digit ("Py-10K" is 10, "MvsH_-10K" is -10), and a range
  *  ("10-20K") is refused rather than read as its first end. */
 function readName(i: SummaryXInput): Read {
-  const m = NAME_NUMBER.exec(i.name);
+  const m = nameNumber(i.name);
   if (!m) return { why: "no number in its name" };
   const rest = i.name.slice(m.index + m[0].length);
   const range = /^\s*[-–]\s*[\d.]+/.exec(rest);
   if (range) return { why: `"${m[0]}${range[0]}" is a range` };
+  // The preferred number may be the END of a range ("10-20K" prefers the 20).
+  const lead = /[\d.]\s*[-–]\s*$/.exec(i.name.slice(0, m.index));
+  if (lead) return { why: `"${lead[0].trim()}${m[0]}" is a range` };
   const before = i.name[m.index - 1];
   const glued = /[A-Za-z0-9]/.test(i.name[m.index - 2] ?? "");
   const n = Number(m[0]);
@@ -107,19 +123,33 @@ function readParam(i: SummaryXInput, name: string): Read {
 // quantity for the axis title only; the values and the unit-agreement rules
 // above are untouched.
 const NAME_UNITS: Record<string, string> = { K: "Temperature", mK: "Temperature", T: "Field", mT: "Field", kOe: "Field", Oe: "Field", G: "Field" };
-const NAME_UNIT_AFTER = /^\s?(mK|K|mT|T|kOe|Oe|G)(?![A-Za-z])/;
-
 /** `{xName, xUnit}` read off the names ("Temperature", "K"), or null unless every
  *  input has a number followed by the same unit. */
 export function nameAxis(inputs: readonly SummaryXInput[]): { xName: string; xUnit: string } | null {
   let unit: string | null = null;
   for (const i of inputs) {
-    const m = NAME_NUMBER.exec(i.name);
+    const m = nameNumber(i.name);
     const u = m ? NAME_UNIT_AFTER.exec(i.name.slice(m.index + m[0].length))?.[1] : undefined;
     if (!u || (unit !== null && u !== unit)) return null;
     unit = u;
   }
   return unit ? { xName: NAME_UNITS[unit]!, xUnit: unit } : null;
+}
+
+// A name that holds a date ("2024-01-15", "15.01.2024", "20240115") is a label,
+// not a physical X.
+const DATE_LIKE = /(?:^|\D)(?:(?:19|20)\d{2}[-_./]\d{1,2}[-_./]\d{1,2}|\d{1,2}[-_./]\d{1,2}[-_./](?:19|20)\d{2}|(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?!\d)/;
+
+/** The "number in the name" X as a DEFAULT for a finished batch, or null when
+ *  it would not be a trend: every input must yield a number, at least two
+ *  distinct, and no name may read as a date. Anything else stays on input
+ *  order ("sample1_run2" would plot against the 1s). */
+export function defaultNameChoice(inputs: readonly SummaryXInput[]): SummaryXChoice | null {
+  if (inputs.some((i) => DATE_LIKE.test(i.name))) return null;
+  const named: SummaryXChoice = { source: { kind: "name" }, sort: true };
+  const r = summaryX(inputs, named);
+  if (r.missing.length > 0) return null;
+  return new Set(r.x).size >= 2 ? named : null;
 }
 
 function labelOf(s: SummaryXSource): string {

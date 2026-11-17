@@ -47,6 +47,8 @@ beforeEach(() => {
   }));
 });
 
+const p = (summary: Dataset, col: number): number[] => summary.data.values.map((r) => r[col]!);
+
 describe("CurveFitBatchSection — Plot ▸ parameter", () => {
   it("opens with the batch visible, runs in Library order, and plots only tau against Temperature (K)", async () => {
     render(<CurveFitBatchSection modelName="Exponential Decay" model={EXP} paramRows={[]} weightMode="none" manualKey={null} />);
@@ -75,5 +77,70 @@ describe("CurveFitBatchSection — Plot ▸ parameter", () => {
     const before = s.datasets.length;
     fireEvent.click(screen.getByRole("button", { name: "A" }));
     expect(useApp.getState().datasets).toHaveLength(before);
+  });
+
+  it("a re-run with another model never plots the old summary (stale chip sheet)", async () => {
+    const props = { paramRows: [], weightMode: "none" as const, manualKey: null };
+    const { rerender } = render(<CurveFitBatchSection modelName="Exponential Decay" model={EXP} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Exponential Decay) batch" }));
+    fireEvent.click(await screen.findByRole("button", { name: "tau" }));
+    const first = useApp.getState().datasets.at(-1)!;
+    expect(first.data.labels).toContain("tau");
+
+    const LINE: FitModel = { name: "Line", category: "poly", paramNames: ["m", "b"], nParams: 2, p0: [1, 0], lb: [], ub: [] };
+    vi.mocked(fitModel).mockImplementation(async (req) => ({
+      params: [2, req.y[0]!], errors: [0, 0], R2: 0.9, RMSE: 0.1, chiSqRed: 0.01, nPoints: 3,
+    }));
+    rerender(<CurveFitBatchSection modelName="Line" model={LINE} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Line) batch" }));
+    fireEvent.click(await screen.findByRole("button", { name: "b" }));
+
+    const s = useApp.getState();
+    const fresh = s.datasets.at(-1)!;
+    expect(fresh.id).not.toBe(first.id);
+    expect(s.activeId).toBe(fresh.id);
+    expect(fresh.name).toContain("Line");
+    expect(fresh.data.labels[s.yKeys![0]!]).toBe("b");
+    expect(p(fresh, s.yKeys![0]!)).toEqual([10, 50, 300]); // b = first y of each input
+  });
+
+  it("undoing the summary the chip made restores the previous view", async () => {
+    useApp.setState({ xKey: 0, yKeys: [0], y2Keys: [], stageTab: "worksheet" });
+    render(<CurveFitBatchSection modelName="Exponential Decay" model={EXP} paramRows={[]} weightMode="none" manualKey={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Exponential Decay) batch" }));
+    fireEvent.click(await screen.findByRole("button", { name: "tau" }));
+    expect(useApp.getState().datasets).toHaveLength(4);
+    useApp.getState().undo();
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["10K", "50K", "300K"]);
+    expect(s.activeId).toBe("300K");
+    expect(s.xKey).toBe(0);
+    expect(s.yKeys).toEqual([0]);
+    expect(s.y2Keys ?? []).toEqual([]);
+  });
+
+  it("'Fit N worksheets' can expand a section that was mounted collapsed", () => {
+    const one = [sheet(10)];
+    useAnalysisSelection.setState({
+      toolId: "curvefit",
+      selection: captureAnalysisSelection({
+        datasets: one, activeId: "10K", selectedIds: ["10K"], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: null, range: null,
+      }, "library"),
+    });
+    const props = { modelName: "Exponential Decay", model: EXP, paramRows: [], weightMode: "none" as const, manualKey: null };
+    const { rerender } = render(<CurveFitBatchSection {...props} />);
+    expect(screen.queryByRole("table")).toBeNull();
+    const datasets = [10, 50, 300].map(sheet);
+    useApp.setState({ datasets, selectedIds: datasets.map((d) => d.id) });
+    useAnalysisSelection.setState({
+      selection: captureAnalysisSelection({
+        datasets, activeId: "300K", selectedIds: datasets.map((d) => d.id), xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: null, range: null,
+      }, "library"),
+    });
+    expect(screen.queryByRole("table")).toBeNull(); // still collapsed: no action yet
+    rerender(<CurveFitBatchSection {...props} expandSignal={1} />);
+    expect(screen.getByRole("table")).toBeInTheDocument();
   });
 });

@@ -46,4 +46,29 @@ describe("CurveFitHeader", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fit" }));
     expect(f.onFit).toHaveBeenCalled();
   });
+
+  it("offers 'Fit active only' beside the batch button, and both read Fitting\u2026 while busy", () => {
+    seed(["a", "b"]);
+    const f = fit();
+    const { rerender } = render(<CurveFitHeader modelPicker={null} fit={f} />);
+    fireEvent.click(screen.getByRole("button", { name: "Fit active only" }));
+    expect(f.onFit).toHaveBeenCalledOnce();
+    expect(f.onTab).not.toHaveBeenCalled();
+    rerender(<CurveFitHeader modelPicker={null} fit={{ ...f, fitting: true }} />);
+    expect(screen.getAllByRole("button", { name: "Fitting\u2026" })).toHaveLength(2);
+  });
+
+  it("asks to expand the batch section when 'Fit N worksheets' is clicked", () => {
+    seed(["a", "b"]);
+    const onOpenBatch = vi.fn();
+    render(<CurveFitHeader modelPicker={null} fit={{ ...fit(), onOpenBatch }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Fit 2 worksheets" }));
+    expect(onOpenBatch).toHaveBeenCalledOnce();
+  });
+
+  it("has no 'Fit active only' for a single worksheet", () => {
+    seed(["a"]);
+    render(<CurveFitHeader modelPicker={null} fit={fit()} />);
+    expect(screen.queryByRole("button", { name: "Fit active only" })).toBeNull();
+  });
 });

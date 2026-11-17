@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { numericMetaFields, paramNamesOf, summaryX, summaryXMeta, summaryXNote, type SummaryXInput } from "./batchSummaryX";
+import { defaultNameChoice, numericMetaFields, paramNamesOf, summaryX, summaryXMeta, summaryXNote, type SummaryXInput } from "./batchSummaryX";
 
 const row = (index: number, name: string, ...cells: string[]) => ({ index, role: "label", name, cells });
 const inputs: SummaryXInput[] = [
@@ -51,7 +51,7 @@ describe("summaryX", () => {
 
   it("reads the first number in the name, blank when there is none", () => {
     const r = summaryX([{ name: "S1 300 K" }, { name: "sample" }, { name: "1e-3 T.dat" }], { source: { kind: "name" }, sort: false });
-    expect(r.x[0]).toBe(1);
+    expect(r.x[0]).toBe(300); // the number with a unit, not the S1
     expect(r.x[1]).toBeNaN();
     expect(r.x[2]).toBe(0.001);
     expect(r.missing).toEqual(["sample: no number in its name"]);
@@ -139,5 +139,22 @@ describe("summaryX", () => {
     expect(names("a_5T", "a_9T")).toMatchObject({ xName: "Field", xUnit: "T" });
     expect(names("a_10K", "a_20T")).toMatchObject({ xName: "Number in name", xUnit: "" });
     expect(names("S1", "S2")).toMatchObject({ xName: "Number in name", xUnit: "" });
+  });
+
+  it("reads the number that carries a recognised unit, not the first number (UX9-C)", () => {
+    const r = summaryX([{ name: "run3_010K" }, { name: "run3_050K" }], { source: { kind: "name" }, sort: false });
+    expect(r).toMatchObject({ x: [10, 50], xName: "Temperature", xUnit: "K" });
+    // No unit anywhere: still the first number.
+    expect(summaryX([{ name: "run3_010" }], { source: { kind: "name" }, sort: false }).x).toEqual([3]);
+  });
+
+  it("defaults to the number in the name only when it is a trend (UX9-C)", () => {
+    const d = (...n: string[]) => defaultNameChoice(n.map((name) => ({ name })));
+    expect(d("decay_010K", "decay_050K")).toEqual({ source: { kind: "name" }, sort: true });
+    expect(d("sample1_run2", "sample1_run2b")).toBeNull(); // one distinct X
+    expect(d("2024-01-15_a", "2024-01-16_a")).toBeNull(); // dates
+    expect(d("scan_20240115", "scan_20240116")).toBeNull();
+    expect(d("alpha", "beta")).toBeNull(); // nothing to read
+    expect(d("a_10", "b")).toBeNull(); // one input has none
   });
 });

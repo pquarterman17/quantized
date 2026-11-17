@@ -85,6 +85,8 @@ export interface CurveFitHeaderProps {
     status: { text: string; tone: FitStatusTone };
     tab: CurveFitTab;
     onTab: (t: CurveFitTab) => void;
+    /** "Fit N worksheets": expand the batch section (it may be mounted, collapsed). */
+    onOpenBatch?: () => void;
   };
 }
 
@@ -105,10 +107,15 @@ export default function CurveFitHeader({ modelPicker, range, fit }: CurveFitHead
             title={batch
               ? `Open the batch: fit ${scope} worksheets with this model (Run is one click away)`
               : "Fit the model to the selected data (the result opens in the Results tab)"}
-            onClick={batch ? () => fit.onTab("advanced") : fit.onFit}
+            onClick={batch ? () => (fit.onOpenBatch?.(), fit.onTab("advanced")) : fit.onFit}
           >
-            {batch ? `Fit ${scope} worksheets` : fit.fitting ? "Fitting…" : "Fit"}
+            {fit.fitting ? "Fitting…" : batch ? `Fit ${scope} worksheets` : "Fit"}
           </Button>
+          {batch && (
+            <Button size="sm" variant="ghost" disabled={fit.disabled} title="Fit only the active worksheet, not the batch (the result opens in the Results tab)" onClick={fit.onFit}>
+              {fit.fitting ? "Fitting…" : "Fit active only"}
+            </Button>
+          )}
           <Button size="sm" variant="ghost" disabled={fit.disabled} title="Fill the start values from the data without fitting" onClick={fit.onGuess}>
             Auto-guess
           </Button>

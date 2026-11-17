@@ -9,7 +9,7 @@ import { nextAnalysisResultId } from "../../../store/idSeq";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { analysisBatchRuntime, useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
-import { INDEX_X, numericMetaFields, summaryX, paramNamesOf, type SummaryXChoice } from "../../../lib/batchSummaryX";
+import { INDEX_X, defaultNameChoice, numericMetaFields, paramNamesOf, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { Button } from "../../primitives";
 import SummaryXPicker from "./SummaryXPicker";
 
@@ -37,6 +37,9 @@ interface Props {
   /** Open the batch table and Run button with the section (a multi-worksheet
    *  launch from a tool whose own Run is this batch). */
   defaultExpanded?: boolean;
+  /** Open the section each time this changes (a header action that means "the
+   *  batch": the section may be mounted already, and collapsed). */
+  expandSignal?: number;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -60,15 +63,24 @@ const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + s
  * has a deterministic boundary, and one durable result even after a partial
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
-  toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false,
+  toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
   const datasets = useApp((state) => state.datasets);
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [seenSignal, setSeenSignal] = useState(expandSignal);
+  if (seenSignal !== expandSignal) {
+    setSeenSignal(expandSignal);
+    setExpanded(true);
+  }
   const [running, setRunning] = useState(false);
   const [lastRows, setLastRows] = useState<RunRow[] | null>(null);
   const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
+  // Set once the user touches the X picker: a deliberate choice (even "Input
+  // order") is never replaced by the default below, in this run or a later one.
+  const userPickedX = useRef(false);
+  const pickX = (choice: SummaryXChoice) => { userPickedX.current = true; setXChoice(choice); };
   const cancelRef = useRef(false);
   const runningRef = useRef(false);
   const current = owner === toolId ? selection : null;
@@ -200,13 +212,9 @@ export default function AnalysisBatchControls({
       runningRef.current = false;
       setRunning(false);
       setLastRows(rows.map((row) => ({ ...row })));
-      // "010K, 050K, …": plot against the number in the name, sorted, unless
-      // the user has already picked an X.
-      setXChoice((choice) => {
-        if (choice.source.kind !== "index" || choice.sort) return choice;
-        const named: SummaryXChoice = { source: { kind: "name" }, sort: true };
-        return summaryX(rows.map((r) => ({ name: r.name })), named).missing.length === 0 ? named : choice;
-      });
+      // "010K, 050K, …": plot against the number in the name, sorted, when
+      // that is a trend (defaultNameChoice) and the user has not chosen an X.
+      if (!userPickedX.current) setXChoice(defaultNameChoice(rows.map((r) => ({ name: r.name }))) ?? INDEX_X);
     }
   };
 
@@ -247,7 +255,7 @@ export default function AnalysisBatchControls({
           {running ? "Running…" : `Run ${label} batch`}
         </Button>
         {onSummarySheet && lastRows && !running && lastRows.some((row) => row.status === "completed") && (<>
-          <SummaryXPicker choice={xChoice} onChange={setXChoice} metaFields={xFields} params={xParams} />
+          <SummaryXPicker choice={xChoice} onChange={pickX} metaFields={xFields} params={xParams} />
           <Button size="sm" onClick={() => onSummarySheet(lastRows, xChoice)} title="A worksheet with one row per input and a column per parameter and statistic, ready to plot">
             Create summary worksheet
           </Button>
