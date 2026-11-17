@@ -81,27 +81,47 @@ function runRedo(): void {
   toast(`redid: ${top.label}`);
 }
 
+/** The Edit-group history commands for the current stack-top labels. Exported
+ *  so the palette-ranking tests rank the REAL entries, not a copy. */
+export function buildHistoryActions(undoLabel: string | null, redoLabel: string | null): Action[] {
+  return [
+    {
+      id: "history-undo",
+      group: "Edit",
+      label: undoLabel ? `Undo ${undoLabel}` : "Undo",
+      shortcut: "⌘Z",
+      run: runUndo,
+    },
+    {
+      id: "history-redo",
+      group: "Edit",
+      label: redoLabel ? `Redo ${redoLabel}` : "Redo",
+      shortcut: "⌘⇧Z",
+      run: runRedo,
+    },
+    {
+      // The Edit menu lists this as its "Undo history" flyout (appMenuModel), so
+      // the menu skips this entry; the palette opens the same list as a picker.
+      id: "history-list",
+      group: "Edit",
+      label: "Undo history…",
+      description: "List the last 20 edits and jump back to any of them; Redo returns.",
+      keywords: "history undo history list steps timeline jump back revert earlier states",
+      paletteOnly: true,
+      run: () =>
+        void import("../../lib/undoHistory").then((m) => m.openUndoHistory(useApp.getState), () =>
+          toast("could not load undo history"),
+        ),
+    },
+  ];
+}
+
 export function useHistoryCommands(): void {
   const undoLabel = useApp((s) => s.history[s.history.length - 1]?.label ?? null);
   const redoLabel = useApp((s) => s.future[s.future.length - 1]?.label ?? null);
 
   useEffect(() => {
-    const actions: Action[] = [
-      {
-        id: "history-undo",
-        group: "Edit",
-        label: undoLabel ? `Undo ${undoLabel}` : "Undo",
-        shortcut: "⌘Z",
-        run: runUndo,
-      },
-      {
-        id: "history-redo",
-        group: "Edit",
-        label: redoLabel ? `Redo ${redoLabel}` : "Redo",
-        shortcut: "⌘⇧Z",
-        run: runRedo,
-      },
-    ];
+    const actions = buildHistoryActions(undoLabel, redoLabel);
     useCommands.getState().setMenuCommands("history", actions);
   }, [undoLabel, redoLabel]);
 

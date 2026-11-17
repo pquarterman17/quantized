@@ -29,6 +29,7 @@ import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bo
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { rangeCols, rangeRows } from "../../../lib/gridCursor";
+import { publishSheetBlockOps } from "../../../lib/editTargets";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
@@ -131,6 +132,10 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     // A live graph's sheet has no formula column (see WorksheetMenus): Ctrl+Q is inert there.
     onSetColumnValues: (col) => !ds.linkedCurves && setScv(col < 0 ? { kind: "new" } : { kind: "column", col }),
   });
+  // Edit > Cut / Copy / Delete reach this sheet's block operations (lib/editTargets).
+  const blockOpsRef = useRef(cursor.blockOps);
+  blockOpsRef.current = cursor.blockOps;
+  useEffect(() => publishSheetBlockOps(rootRef.current, () => blockOpsRef.current), []);
   const closeHeaderEdit = useCallback(() => setHeaderEdit(null), []);
   // N4: Ctrl+F / Ctrl+H. `tick` re-pulls focus into an already-open bar.
   const [find, setFind] = useState<{ replace: boolean; tick: number } | null>(null);

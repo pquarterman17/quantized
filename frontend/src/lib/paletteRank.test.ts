@@ -119,7 +119,7 @@ const BENCHMARK: Row[] = [
   { q: "recalculate", first: "recalc-now" },
   // Menu / context commands that ride the palette.
   { q: "rename", first: /^ctx\.dataset\..*rename$/ },
-  { q: "delete", first: /^ctx\.dataset\..*deletePermanently$/ },
+  { q: "delete", first: /^(ctx\.dataset\..*deletePermanently|edit-delete)$/, top3: ["edit-delete"] },
   { q: "duplicate", first: /^(ctx\.dataset\.dataset\.duplicate|duplicate)$/ },
 ];
 

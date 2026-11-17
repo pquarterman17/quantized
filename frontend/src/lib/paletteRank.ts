@@ -138,7 +138,9 @@ function termScore(t: string, p: Prepared, hits: Set<number>, fuzzyOk: boolean):
     // One letter is only ever the start of a label word ("y" in "Link Y axis"):
     // matching it anywhere else (descriptions, fuzzy) is noise.
     const one = p.label.find((x) => x.w.startsWith(t));
-    if (!one) return 0;
+    // ...or a keyword that IS that letter ("tau vs T": the T a curated keyword
+    // spells out), but never a prefix of a longer keyword.
+    if (!one) return p.keywords.some((x) => x.w === t) ? 20 : 0;
     hits.add(one.start);
     return 25;
   }
