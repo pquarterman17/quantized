@@ -168,13 +168,14 @@ export default function FigurePageView() {
             </Button>
           </div>
           {p.unresolvedSlots.length > 0 ? (
-            <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
-              Cannot save yet:
-              <ul style={{ margin: "2px 0 0", paddingLeft: 16 }}>
-                {p.unresolvedSlots.map((msg) => (
-                  <li key={msg}>{msg}</li>
-                ))}
-              </ul>
+            <div
+              role="note"
+              className="qzk-helptext qzk-msg"
+              style={{ color: "var(--text-dim)" }}
+              title={p.unresolvedSlots.join("\n")}
+            >
+              Export works now. Save needs {p.unresolvedSlots.length === 1 ? "1 plot" : `${p.unresolvedSlots.length} plots`}{" "}
+              saved as editable figures (hover for which).
             </div>
           ) : (
             !p.everSaved && (
@@ -300,6 +301,10 @@ export default function FigurePageView() {
 
         {/* Panel sources */}
         <div style={{ width: 190, display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
+            Click sources in order to fill the page. Library &#8250; Panel: side by side only
+            arranges windows on screen; this dialog builds the labelled (a)/(b) export page.
+          </div>
           <SourceList heading="Plot windows" sources={p.windowSources} onPick={p.assignToNext} />
           <div style={{ height: 4 }} />
           <DatasetSourceList sources={p.datasetSources} onPick={p.assignDataset} />

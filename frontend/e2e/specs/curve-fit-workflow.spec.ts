@@ -155,6 +155,12 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     const batch = panel.locator(".qzk-analysis-batch");
     // It collapsed to its 2 px border inside the scrolling flex body.
     expect((await batch.boundingBox())!.height).toBeGreaterThanOrEqual((await toggle.boundingBox())!.height);
+    // A multi-worksheet launch opens it already expanded (UX9-C); the toggle
+    // still collapses and reopens it.
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(panel.getByRole("button", { name: /Run Curve Fit .* batch/ })).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await toggle.click();
     await expect(panel.getByRole("button", { name: /Run Curve Fit .* batch/ })).toBeVisible();
   });

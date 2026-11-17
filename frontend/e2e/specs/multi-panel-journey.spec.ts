@@ -249,6 +249,15 @@ test("build a 2×2 page from four saved figures, link then unlink axes, rearrang
   const win = figurePageWindow(page);
   await expect(win).toBeVisible();
 
+  // UX9-G: the composer opens as 1×2 and auto-fits; this journey wants a 2×2.
+  const rowsInput = win
+    .locator("label.qzk-field-lbl", { hasText: "Grid (rows" })
+    .locator("xpath=following-sibling::div[1]//input")
+    .first();
+  await rowsInput.fill("2");
+  await rowsInput.press("Enter");
+  await expect(slot(win, 3)).toBeVisible();
+
   await assignPanel(win, 0, 0); // slot 0 <- figA1 (source-list position 0, insertion order)
   await assignPanel(win, 1, 1); // slot 1 <- figA2
   await assignPanel(win, 2, 2); // slot 2 <- figB1

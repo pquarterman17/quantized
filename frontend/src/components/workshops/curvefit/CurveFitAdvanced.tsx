@@ -35,6 +35,8 @@ export interface CurveFitAdvancedProps {
   customModels: CustomFitModel[];
   modelScan: ModelScanState;
   onApplyScanned: (kind: "registry" | "equation", name: string) => void;
+  /** Bumped by the header's "Fit N worksheets": opens the batch section. */
+  batchOpenSignal?: number;
 }
 
 export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
@@ -44,6 +46,7 @@ export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
       <CurveFitBatchSection
         modelName={p.modelName} model={p.registryModel} paramRows={p.paramRows}
         weightMode={p.weightMode} manualKey={p.manualKey} scaleErrors={p.scaleErrors}
+        expandSignal={p.batchOpenSignal}
       />
 
       {/* Save / apply named fit settings. */}

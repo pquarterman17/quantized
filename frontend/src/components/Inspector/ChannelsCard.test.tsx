@@ -222,3 +222,14 @@ describe("ChannelsCard layout + error consistency (figures-audit #10/#14)", () =
   });
 });
 
+describe("ChannelsCard waterfall slider labelling (UX9-D)", () => {
+  it("names the unit and hints that the Y axis reads offset values once stacked", () => {
+    render(<ChannelsCard active={dataset} />);
+    expect(screen.getByText("0% of range")).toBeInTheDocument();
+    expect(screen.queryByTestId("waterfall-axis-hint")).toBeNull();
+    fireEvent.change(screen.getByRole("slider", { name: "Waterfall" }), { target: { value: "30" } });
+    expect(screen.getByText("30% of range")).toBeInTheDocument();
+    expect(screen.getByTestId("waterfall-axis-hint")).toHaveTextContent(/offset values/);
+  });
+});
+

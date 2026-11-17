@@ -67,10 +67,10 @@ export default function WaterfallView() {
   }, [w.aligned, w.traceLabels, w.logY, theme, accent, canPlot]);
 
   return (
-    <ToolWindow id="waterfall" title="Waterfall" x={140} y={80} width={460} onClose={() => close(false)}>
+    <ToolWindow id="waterfall" title="Waterfall data export" x={140} y={80} width={460} onClose={() => close(false)}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div className="qzk-helptext">
-          Stack one channel across datasets. Defaults to your selection; tick rows to include.
+          Export the stacked data (CSV or 3-D). To draw a waterfall on the plot, use Plot, Layout, Waterfall.
         </div>
 
         {/* Included datasets */}

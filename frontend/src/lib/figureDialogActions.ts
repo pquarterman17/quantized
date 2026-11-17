@@ -3,6 +3,7 @@
 // in render (architecture.test.ts's getState()-in-render ratchet). Only the
 // lazy FigureDialogs chunk imports this module.
 
+import { applyWaterfall } from "../commands/waterfallCommand";
 import type { AxisId } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
 import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
@@ -42,7 +43,7 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void): void {
   }
   if (PLOT_TYPE_COMMANDS.has(id)) {
     // Gap-audit-2 #17: these open the tool the app already has for them.
-    if (id === "waterfall") s.setWaterfallOpen(true);
+    if (id === "waterfall") void applyWaterfall();
     else if (id === "ternary") openTernary?.();
     else s.setStackMode(true);
     s.setStageTab("plot");
