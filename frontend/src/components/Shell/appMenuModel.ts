@@ -71,7 +71,7 @@ export function undoHistoryMenuItems(): ContextMenuItem[] {
         checked: r.current,
         title: r.current ? "Current state" : `Jump back ${r.stepsBack} step${r.stepsBack === 1 ? "" : "s"} (Redo returns)`,
         shortcutLabel: r.current ? "current" : undefined,
-        run: () => void jumpBackInHistory(useApp.getState, r.stepsBack),
+        run: () => void jumpBackInHistory(useApp.getState, r.stepsBack, r.seq),
       })),
     },
   ];

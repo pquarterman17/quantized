@@ -104,12 +104,6 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "reset-tool-windows": { description: "Restore floating analysis windows to visible default positions and sizes." },
   plot: { description: "Switch the central stage to the interactive plot." },
   palette: { description: "Search available commands by name, purpose, alias, or shortcut." },
-  "edit-cut": { description: "Copy the selected worksheet cells, then blank them (undoable).", keywords: "cut cells clipboard block worksheet" },
-  "edit-copy": { description: "Copy the selected worksheet cells to the clipboard (no header; pastes back cleanly).", keywords: "copy cells clipboard block worksheet" },
-  "edit-delete": {
-    description: "Blank the selected worksheet cells, else delete the selected plot object, else remove the selected Library datasets.",
-    keywords: "delete remove clear cells annotation shape library selection",
-  },
   "paste-data": { description: "Create a dataset from tabular text currently on the clipboard.", keywords: "clipboard import tsv csv table" },
   help: {
     description: "Search tools, commands, import formats, shortcuts, and Origin migration guidance.",

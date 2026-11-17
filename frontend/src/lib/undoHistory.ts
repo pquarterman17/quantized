@@ -25,6 +25,9 @@ export interface UndoHistoryRow {
   /** How many undos land on the state right after this edit (0 = current). */
   stepsBack: number;
   current: boolean;
+  /** The entry's identity: a jump re-resolves it, so a stack that changed while
+   *  the menu was open can never land on a different state than the one clicked. */
+  seq: number;
 }
 
 /** The last `limit` history labels, newest first. */
@@ -32,14 +35,23 @@ export function undoHistoryRows(history: readonly HistoryEntry[], limit = UNDO_H
   return history
     .slice(-limit)
     .reverse()
-    .map((entry, stepsBack) => ({ label: entry.label, stepsBack, current: stepsBack === 0 }));
+    .map((entry, stepsBack) => ({ label: entry.label, stepsBack, current: stepsBack === 0, seq: entry.seq }));
 }
 
 const stepsText = (n: number): string => `${n} step${n === 1 ? "" : "s"}`;
 
 /** Undo `stepsBack` times in one synchronous run (React renders once).
  *  Clamped to the stack. Returns the steps undone. */
-export function jumpBackInHistory(get: () => AppState, stepsBack: number): number {
+export function jumpBackInHistory(get: () => AppState, stepsBack: number, seq?: number): number {
+  if (seq !== undefined) {
+    const h = get().history;
+    const at = h.findIndex((e) => e.seq === seq);
+    if (at < 0) {
+      toast("history changed — reopen Undo history");
+      return 0;
+    }
+    stepsBack = h.length - 1 - at;
+  }
   const n = Math.min(Math.max(0, Math.floor(stepsBack)), get().history.length);
   if (n === 0) return 0;
   for (let i = 0; i < n; i++) get().undo();
@@ -67,5 +79,7 @@ export async function openUndoHistory(get: () => AppState): Promise<void> {
     [{ key: "to", label: "State after", type: "select", default: rows[1] ? "1" : "0", options, optionLabels }],
     { confirmLabel: "Jump back", message: "Newest first. Jumping back keeps Redo, so you can return." },
   );
-  if (values) jumpBackInHistory(get, Number(values.to));
+  if (!values) return;
+  const row = rows.find((r) => String(r.stepsBack) === values.to);
+  if (row) jumpBackInHistory(get, row.stepsBack, row.seq);
 }

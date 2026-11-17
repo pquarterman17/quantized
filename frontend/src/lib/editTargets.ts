@@ -15,21 +15,54 @@ export interface SheetBlockOps {
   hasBlock: boolean;
 }
 
-let sheet: SheetBlockOps | null = null;
-
-/** The worksheet pane publishes its block operations (every render, so
- *  `hasBlock` is current). */
-export function registerSheetBlockOps(ops: SheetBlockOps): void {
-  sheet = ops;
+interface Entry {
+  root: Element | null;
+  get: () => SheetBlockOps;
 }
 
-/** Cleanup: drop `ops` only if it is still the published one (a second pane
- *  that registered since keeps its own). */
-export function unregisterSheetBlockOps(ops: SheetBlockOps): void {
-  if (sheet === ops) sheet = null;
+const entries = new Set<Entry>();
+/** The pane the user last worked in; null once they moved to anything else. */
+let focused: Entry | null = null;
+
+/** Surfaces that RUN commands (menus, palette, dialogs): interacting with them
+ *  must not make a stale cell selection look abandoned or acquired. */
+const TRANSIENT = '[role="menu"],[role="menubar"],[role="dialog"],[role="listbox"],[role="combobox"]';
+
+function onInteract(ev: Event): void {
+  const t = ev.target;
+  if (!(t instanceof Element)) return;
+  const hit = [...entries].find((e) => e.root?.contains(t));
+  if (hit) focused = hit;
+  else if (!t.closest(TRANSIENT)) focused = null; // plot, Library, inspector...: the sheet is no longer the target
 }
 
-/** The mounted worksheet's block operations, only when a cell block is selected. */
+function listen(on: boolean): void {
+  for (const type of ["pointerdown", "focusin"]) {
+    if (on) document.addEventListener(type, onInteract, true);
+    else document.removeEventListener(type, onInteract, true);
+  }
+}
+
+/** The worksheet pane publishes its block operations while mounted. `get` is
+ *  read live (the hook's object changes every render). The ops become the Edit
+ *  target only once the user has pointed or focused INTO `root`, and stop being
+ *  it as soon as they interact with another surface: a selection left behind in
+ *  a hidden or background sheet must never be what Edit > Delete clears.
+ *  Returns the unregister function. */
+export function publishSheetBlockOps(root: Element | null, get: () => SheetBlockOps): () => void {
+  const entry: Entry = { root, get };
+  if (entries.size === 0) listen(true);
+  entries.add(entry);
+  if (root?.contains(document.activeElement)) focused = entry;
+  return () => {
+    entries.delete(entry);
+    if (focused === entry) focused = null;
+    if (entries.size === 0) listen(false);
+  };
+}
+
+/** The focused worksheet's block operations, only when a cell block is selected. */
 export function sheetBlockOps(): SheetBlockOps | null {
-  return sheet?.hasBlock ? sheet : null;
+  const ops = focused?.get();
+  return ops?.hasBlock ? ops : null;
 }

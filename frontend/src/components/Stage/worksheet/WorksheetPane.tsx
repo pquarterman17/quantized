@@ -29,7 +29,7 @@ import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bo
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { rangeCols, rangeRows } from "../../../lib/gridCursor";
-import { registerSheetBlockOps, unregisterSheetBlockOps } from "../../../lib/editTargets";
+import { publishSheetBlockOps } from "../../../lib/editTargets";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
@@ -133,10 +133,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     onSetColumnValues: (col) => !ds.linkedCurves && setScv(col < 0 ? { kind: "new" } : { kind: "column", col }),
   });
   // Edit > Cut / Copy / Delete reach this sheet's block operations (lib/editTargets).
-  useEffect(() => {
-    registerSheetBlockOps(cursor.blockOps);
-    return () => unregisterSheetBlockOps(cursor.blockOps);
-  }, [cursor.blockOps]);
+  const blockOpsRef = useRef(cursor.blockOps);
+  blockOpsRef.current = cursor.blockOps;
+  useEffect(() => publishSheetBlockOps(rootRef.current, () => blockOpsRef.current), []);
   const closeHeaderEdit = useCallback(() => setHeaderEdit(null), []);
   // N4: Ctrl+F / Ctrl+H. `tick` re-pulls focus into an already-open bar.
   const [find, setFind] = useState<{ replace: boolean; tick: number } | null>(null);

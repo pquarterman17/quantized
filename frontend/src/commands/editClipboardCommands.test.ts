@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BlockOpsApi } from "../components/Stage/worksheet/useWorksheetBlockOps";
-import { registerSheetBlockOps, unregisterSheetBlockOps } from "../lib/editTargets";
+import { publishSheetBlockOps } from "../lib/editTargets";
 import { useApp } from "../store/useApp";
 import { buildEditClipboardCommands } from "./editClipboardCommands";
 
@@ -25,11 +25,26 @@ function ops(hasBlock: boolean): BlockOpsApi {
 }
 
 let registered: BlockOpsApi | null = null;
+let unpublish: (() => void) | null = null;
+let root: HTMLElement;
+/** Publish `o` as a worksheet pane and point into it (the user working in the sheet). */
+function publish(o: BlockOpsApi): void {
+  registered = o;
+  unpublish = publishSheetBlockOps(root, () => o);
+  inside.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+}
+let inside: HTMLElement;
+let outside: HTMLElement;
 beforeEach(() => {
+  document.body.innerHTML = '<div id="root"><span id="in"></span></div><div id="plot"></div>';
+  root = document.getElementById("root") as HTMLElement;
+  inside = document.getElementById("in") as HTMLElement;
+  outside = document.getElementById("plot") as HTMLElement;
   useApp.setState({ datasets: [], activeId: null, selectedIds: [], selectedAnnotationId: null, selectedShapeId: null });
 });
 afterEach(() => {
-  if (registered) unregisterSheetBlockOps(registered);
+  unpublish?.();
+  unpublish = null;
   registered = null;
 });
 
@@ -43,20 +58,39 @@ describe("Edit > Cut / Copy / Delete", () => {
   });
 
   it("cut / copy / delete drive the worksheet block ops when a block is selected", () => {
-    registered = ops(true);
-    registerSheetBlockOps(registered);
+    publish(ops(true));
     expect(isDisabled("edit-copy")).toBe(false);
     get("edit-copy").run();
     get("edit-cut").run();
     get("edit-delete").run();
-    expect(registered.copyBlock).toHaveBeenCalledTimes(1);
-    expect(registered.cutBlock).toHaveBeenCalledTimes(1);
-    expect(registered.clearBlock).toHaveBeenCalledTimes(1);
+    expect(registered?.copyBlock).toHaveBeenCalledTimes(1);
+    expect(registered?.cutBlock).toHaveBeenCalledTimes(1);
+    expect(registered?.clearBlock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stale cell selection stops being the target once the user works elsewhere", () => {
+    publish(ops(true));
+    expect(isDisabled("edit-delete")).toBe(false);
+    outside.dispatchEvent(new Event("pointerdown", { bubbles: true })); // the plot / Library
+    expect(isDisabled("edit-copy")).toBe(true);
+    expect(isDisabled("edit-delete")).toBe(true); // nothing else selected
+    get("edit-delete").run();
+    expect(registered?.clearBlock).not.toHaveBeenCalled();
+  });
+
+  it("opening a menu (role=menu) does not drop the sheet target; unmounting does", () => {
+    publish(ops(true));
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    document.body.append(menu);
+    menu.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(isDisabled("edit-copy")).toBe(false);
+    unpublish?.();
+    expect(isDisabled("edit-copy")).toBe(true);
   });
 
   it("a sheet with no block does not enable Cut / Copy", () => {
-    registered = ops(false);
-    registerSheetBlockOps(registered);
+    publish(ops(false));
     expect(isDisabled("edit-copy")).toBe(true);
     expect(isDisabled("edit-cut")).toBe(true);
   });

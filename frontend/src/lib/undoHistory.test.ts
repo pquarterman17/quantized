@@ -42,6 +42,16 @@ describe("jumpBackInHistory", () => {
     expect(useApp.getState().future).toHaveLength(0);
   });
 
+  it("resolves the clicked entry by identity when the stack moved under an open menu", () => {
+    addN(5);
+    const rows = undoHistoryRows(useApp.getState().history);
+    useApp.getState().addDataset({ id: "late0", name: "late0", data: raw }); // history changed while the flyout was open
+    useApp.getState().addDataset({ id: "late", name: "late", data: raw });
+    expect(jumpBackInHistory(useApp.getState, rows[2].stepsBack, rows[2].seq)).toBe(4); // 2 + the 2 new edits
+    expect(useApp.getState().datasets).toHaveLength(3); // the state right after the clicked edit
+    expect(jumpBackInHistory(useApp.getState, 1, -1)).toBe(0); // an entry that no longer exists
+  });
+
   it("clamps to the stack and ignores zero", () => {
     addN(2);
     expect(jumpBackInHistory(useApp.getState, 0)).toBe(0);

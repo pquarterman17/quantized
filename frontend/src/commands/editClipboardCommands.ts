@@ -5,6 +5,8 @@
 //   plot object   -> the annotation / shape context-menu Delete action
 //   Library items -> lib/datasetRemoval (the global Delete key's request path,
 //                    so the "confirm before removing" preference still applies)
+// Lazy-list only (appCommands.ts), so they carry their own description/keywords
+// instead of a commandDocs entry (that table is for the eager core list).
 // Each is disabled WITH a reason when nothing applies. The menu is evaluated
 // when it opens, so the predicates read live state.
 
@@ -27,6 +29,8 @@ export function buildEditClipboardCommands(s: StoreGet): Action[] {
       id: "edit-cut",
       group: "Edit",
       label: "Cut",
+      description: "Copy the selected worksheet cells, then blank them (undoable).",
+      keywords: "cut cells clipboard block worksheet",
       shortcut: "⌘X",
       disabled: () => sheetBlockOps() === null,
       disabledReason: NO_CELLS,
@@ -36,6 +40,8 @@ export function buildEditClipboardCommands(s: StoreGet): Action[] {
       id: "edit-copy",
       group: "Edit",
       label: "Copy",
+      description: "Copy the selected worksheet cells to the clipboard (no header; pastes back cleanly).",
+      keywords: "copy cells clipboard block worksheet",
       shortcut: "⌘C",
       disabled: () => sheetBlockOps() === null,
       disabledReason: NO_CELLS,
@@ -45,6 +51,8 @@ export function buildEditClipboardCommands(s: StoreGet): Action[] {
       id: "edit-delete",
       group: "Edit",
       label: "Delete",
+      description: "Blank the selected worksheet cells, else delete the selected plot object, else remove the selected Library datasets.",
+      keywords: "delete remove clear cells annotation shape library selection",
       shortcut: "Del",
       danger: true,
       disabled: () => !sheetBlockOps() && !hasObject() && deleteIds().length === 0,
