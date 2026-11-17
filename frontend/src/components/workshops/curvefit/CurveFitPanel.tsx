@@ -121,6 +121,7 @@ export default function CurveFitPanel() {
   } = useCurveFit();
   const byActive = byLevels.length > 0;
   // Reopening on a fit shows it; otherwise start at Setup. Fit switches here.
+  const [batchOpenSignal, setBatchOpenSignal] = useState(0);
   const [tab, setTab] = useState<CurveFitTab>(() => (result && !guessOnly) || active?.fitSpec?.params?.length ? "results" : "setup");
   const [runKind, setRunKind] = useState<"guess" | "fit">("fit"); // what `busy` is doing
 
@@ -283,14 +284,11 @@ export default function CurveFitPanel() {
         disabled: !active || busy,
         fitting: busy && runKind === "fit",
         onGuess: () => (setRunKind("guess"), void run("guess")),
-        onFit: () => {
-          setRunKind("fit");
-          setTab("results");
-          void run("fit");
-        },
+        onFit: () => (setRunKind("fit"), setTab("results"), void run("fit")),
         status,
         tab,
         onTab: setTab,
+        onOpenBatch: () => setBatchOpenSignal((n) => n + 1),
       }}
     />
   );
@@ -392,6 +390,7 @@ export default function CurveFitPanel() {
           customModels={customModels}
           modelScan={modelScan}
           onApplyScanned={applyScanned}
+          batchOpenSignal={batchOpenSignal}
         />
       </TabPanel>
     </ToolWindow>
