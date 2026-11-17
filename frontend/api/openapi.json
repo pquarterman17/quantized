@@ -6599,6 +6599,13 @@
             "title": "Constrain",
             "type": "boolean"
           },
+          "deadline_s": {
+            "default": 10.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 30.0,
+            "title": "Deadline S",
+            "type": "number"
+          },
           "link_mode": {
             "default": "None",
             "title": "Link Mode",

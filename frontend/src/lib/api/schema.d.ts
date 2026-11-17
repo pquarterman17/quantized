@@ -8514,6 +8514,11 @@ export interface components {
              */
             constrain?: boolean;
             /**
+             * Deadline S
+             * @default 10
+             */
+            deadline_s?: number;
+            /**
              * Link Mode
              * @default None
              */
