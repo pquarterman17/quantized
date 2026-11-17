@@ -75,10 +75,10 @@ export default function Card({
   if (!helpTopic) return details;
   // The help action is a SIBLING of the <details>, not inside <summary>
   // (interactive content in a summary is an axe nested-interactive failure);
-  // the wrapper keeps it visible while the card is collapsed.
+  // the wrapper keeps it visible while the card is collapsed. It comes FIRST in
+  // the DOM so Tab reaches it with the header, not after the card's body.
   return (
     <div className="qz-card-wrap">
-      {details}
       <button
         type="button"
         className="qz-card-help"
@@ -94,6 +94,7 @@ export default function Card({
         {/* Decorative: the accessible name comes from aria-label above. */}
         <span aria-hidden="true">?</span>
       </button>
+      {details}
     </div>
   );
 }
