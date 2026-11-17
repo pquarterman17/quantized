@@ -19,9 +19,22 @@ export function runQuickExport(s: StoreGet): Promise<void> {
   return runLazy("Loading figure export…", () => import("./exportFigureCommand"))
     .then((m) => m.runExportFigureCommand(s), onLoadFailure);
 }
+/** How the export view was opened, so its window is titled to match: Plot ▸
+ *  Export figure… says "Export figure", every other opener the "Publication
+ *  preview" it always was. Read once per open; the view resets it on close. */
+let viewLabel = "Publication preview";
+export const getFigureViewLabel = (): string => viewLabel;
+export const resetFigureViewLabel = (): void => { viewLabel = "Publication preview"; };
+
 /** Plot ▸ Publication preview…: a session on the focused plot window, else a
  *  detached draft of the active dataset's on-screen view. */
-export function openPublicationPreview(s: StoreGet): void {
+export function openPublicationPreview(s: StoreGet, label = "Publication preview"): void {
+  const wasOpen = s().figureBuilderOpen;
+  if (!wasOpen) viewLabel = label;
+  openPreview(s);
+  if (!wasOpen && !s().figureBuilderOpen) resetFigureViewLabel(); // refused: the next opener must not inherit it
+}
+function openPreview(s: StoreGet): void {
   if (s().figurePublicationSession) {
     s().setStatus("finish or cancel the current Publication Preview before opening another");
     return;
@@ -80,6 +93,6 @@ export function runExportFigureView(s: StoreGet): Promise<void> {
     return Promise.resolve();
   }
   if (!active || st.statMode || st.polarMode || stack || waterfall || st.composition?.kind === "spatial") return runQuickExport(s);
-  openPublicationPreview(s);
+  openPublicationPreview(s, "Export figure");
   return Promise.resolve();
 }
