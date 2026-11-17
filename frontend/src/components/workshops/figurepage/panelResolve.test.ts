@@ -313,5 +313,7 @@ describe("UX9-G solo-series legend", () => {
     expect(pagePanelSpec({ ...base, y2_keys: [1] }).overrides?.legend).toBeUndefined();
     const titled = pagePanelSpec({ ...base, overrides: { legend: { show: true, title: "T" } } });
     expect(titled.overrides?.legend?.show).toBe(true);
+    const placed = pagePanelSpec({ ...base, overrides: { legend: { show: true, loc: "custom", anchor: [0.2, 0.8] } } });
+    expect(placed.overrides?.legend?.show).toBe(true);
   });
 });

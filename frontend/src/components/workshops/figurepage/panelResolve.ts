@@ -117,7 +117,8 @@ function hideSoloLegend(spec: FigureSpec, ov: FigureOverrides | undefined): Figu
     spec.group_col === undefined &&
     !spec.encoding &&
     !spec.facets?.length;
-  if (!solo || ov?.legend?.title || ov?.legend?.show === false) return ov;
+  // A titled or hand-placed (dragged: `anchor`) legend is the user's choice.
+  if (!solo || ov?.legend?.title || ov?.legend?.anchor || ov?.legend?.show === false) return ov;
   return { ...ov, legend: { ...ov?.legend, show: false } };
 }
 
