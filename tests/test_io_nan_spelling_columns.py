@@ -108,3 +108,13 @@ def test_a_real_text_column_is_still_categorical(tmp_path: Path) -> None:
     assert list(ds.labels) == ["S"]
     assert _same(ds.values[:, 0], [0, 1, 2, 0])
     assert any("categorical" in n for n in ds.metadata.get("notes", []))
+
+
+def test_many_columns_with_dropped_text_get_one_combined_note(tmp_path: Path) -> None:
+    # Header rows landing in the data put the same words in every column: one
+    # note for the lot, not one per column.
+    rows = ["T,A,B,C", "1,1,1,1", "2,2,2,2", "3,3,3,3", "4,CONC.,CONC.,units", "5,5,5,5"]
+    ds = import_auto(_write(tmp_path, "\n".join(rows) + "\n"))
+    found = [n for n in ds.metadata.get("notes", []) if "read as missing" in n]
+    assert len(found) == 1
+    assert found[0].startswith("3 columns: text cells read as missing (e.g. 'CONC.', 'units'")

@@ -1,6 +1,8 @@
 // App title bar: brand · centred document title · panel + theme toggles.
 // Native window owns OS chrome (no traffic-light dots), matching fermiviewer.
 
+import { useEffect } from "react";
+
 import * as GLYPHS from "../../lib/glyphs";
 import { toggleInspector } from "../../store/inspectorToggle";
 import { useApp } from "../../store/useApp";
@@ -19,6 +21,13 @@ export default function TitleBar() {
   // was pre-P1.2 rather than showing a synthetic "Untitled".
   const currentProject = useApp((s) => s.currentProject);
   const projectDirty = useApp((s) => s.projectDirty);
+  // A browser tab has no path, but it knows the .dwk it opened or saved.
+  const browserFile = useApp((s) => s.browserFileName);
+  const projectName = currentProject?.name ?? browserFile;
+  // The window/tab title carries the same name and dirty marker.
+  useEffect(() => {
+    document.title = projectName ? `${projectDirty ? "• " : ""}${projectName} — Quantized` : "Quantized";
+  }, [projectName, projectDirty]);
 
   const name = active?.name ?? "";
   const ext = name.match(/\.[^.]+$/)?.[0] ?? "";
@@ -31,9 +40,9 @@ export default function TitleBar() {
           {GLYPHS.brand}
         </span>
         <span className="nm">Quantized</span>
-        {currentProject && (
-          <span className="qzk-project" title={currentProject.path}>
-            — {currentProject.name}
+        {projectName && (
+          <span className="qzk-project" title={currentProject?.path ?? projectName}>
+            — {projectName}
             {projectDirty && <span className="qzk-project-dirty"> •</span>}
           </span>
         )}
