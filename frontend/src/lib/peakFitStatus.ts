@@ -8,14 +8,19 @@
 // a green "Current" with no warning. The fit now polishes that simplex
 // (calc/peak_multifit_polish.py), and this verdict reads warn-tone when:
 //  * the polish did not converge (`converged === false`) — its last point is
-//    shown, without uncertainties;
-//  * R² < 0.98 — stricter than Curve Fit's 0.5 because a peak pattern's
-//    variance is dominated by the peaks themselves: a fit that misses one of
-//    five Si reflections still scores 0.94;
+//    shown, without uncertainties (this includes a fit stopped by the
+//    request's time budget);
 //  * RMSE > 3× the detector's white-noise estimate of the data
 //    (`noiseSigma`, calc/peak_noise.estimate_noise) — the residual is
-//    structure, not noise. The audit's scan, correctly fitted, sits at 1.65×
-//    (a linear background under a decaying one), so 3× leaves margin.
+//    structure, not noise. This is the PRIMARY quality rule: the audit's scan,
+//    correctly fitted, sits at 1.65× (a linear background under a decaying
+//    one), so 3× leaves margin; and it is scale-free where R² is not;
+//  * R² < 0.98 — ONLY as a fallback when there is no usable noise estimate
+//    (`noiseSigma` missing, non-finite or not positive; the backend sends null
+//    where the estimate is at its floor). R² misfires on correct fits to
+//    low-count Poisson data: two Gaussians (heights 100/60, baseline 5) drawn
+//    as poisson(0.1·true) over 600 points fit correctly at R² 0.74–0.79 yet
+//    RMSE/noise 0.95–2.0.
 // A record without the fields (a fit saved before they existed, an
 // independent per-peak fit) is judged on what it has; with nothing to judge
 // the tone is "ok" and the text the bare metrics.
@@ -24,9 +29,9 @@
 
 import { fmtR2, sigFigs } from "./fitValueFormat";
 
-/** A simultaneous fit below this R² is flagged. */
+/** Fallback only (no noise estimate): a simultaneous fit below this R² is flagged. */
 export const PEAK_POOR_R2 = 0.98;
-/** …and one whose RMSE exceeds this multiple of the data's noise. */
+/** The primary rule: RMSE exceeding this multiple of the data's noise is flagged. */
 export const PEAK_NOISE_RATIO = 3;
 
 export interface PeakFitQualityInput {
@@ -53,8 +58,11 @@ export function peakFitStatus(r: PeakFitQualityInput): PeakFitStatus {
   const ratio = fin(r.rmse) && fin(r.noiseSigma) && r.noiseSigma > 0 ? r.rmse / r.noiseSigma : null;
   if (fin(r.rmse)) parts.push(`RMSE ${sigFigs(r.rmse, 3)}${ratio === null ? "" : ` (${sigFigs(ratio, 2)}× noise)`}`);
   if (r.converged === false) reasons.push("did not converge");
-  if (fin(r.R2) && r.R2 < PEAK_POOR_R2) reasons.push(`R² below ${PEAK_POOR_R2}`);
-  if (ratio !== null && ratio > PEAK_NOISE_RATIO) reasons.push(`RMSE over ${PEAK_NOISE_RATIO}× noise`);
+  if (ratio !== null) {
+    if (ratio > PEAK_NOISE_RATIO) reasons.push(`RMSE over ${PEAK_NOISE_RATIO}× noise`);
+  } else if (fin(r.R2) && r.R2 < PEAK_POOR_R2) {
+    reasons.push(`R² below ${PEAK_POOR_R2} (no noise estimate)`);
+  }
   const metrics = parts.join(" · ");
   if (reasons.length === 0) return { tone: "ok", text: metrics, reasons };
   const verdict = r.converged === false

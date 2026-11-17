@@ -23,7 +23,7 @@ describe("PeakFitSummary (UX audit 9 #3)", () => {
     const { container } = render(<PeakFitSummary metrics={fit({ R2: 0.941639, rmse: 100.009 })} paired={false}
       peakTable={null} modelFit={false} edited={0} excluded={0} />);
     expect(statusOf(container)).toHaveAttribute("data-fit-status", "warn");
-    expect(screen.getByText(/^Poor fit \(R² below 0\.98, RMSE over 3× noise\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Poor fit \(RMSE over 3× noise\)/)).toBeInTheDocument();
   });
 
   it("warns when the polish did not converge", () => {

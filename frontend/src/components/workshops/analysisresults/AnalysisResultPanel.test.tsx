@@ -308,7 +308,7 @@ describe("AnalysisResultPanel", () => {
     render(<AnalysisResultPanel />);
     // "Current" is freshness only; the fit's own verdict is a separate, warn-toned row.
     expect(screen.getByText("Current")).toBeInTheDocument();
-    expect(screen.getByText(/^Poor fit \(R² below 0\.98, RMSE over 3× noise\)/).closest("[data-fit-status]"))
+    expect(screen.getByText(/^Poor fit \(RMSE over 3× noise\)/).closest("[data-fit-status]"))
       .toHaveAttribute("data-fit-status", "warn");
     fireEvent.click(screen.getByRole("tab", { name: "Table" }));
     expect(screen.getByRole("columnheader", { name: "Center ± 1σ" })).toBeInTheDocument();

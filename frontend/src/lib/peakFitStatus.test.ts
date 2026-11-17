@@ -21,8 +21,8 @@ describe("peakFitStatus", () => {
   it("warns on a fit stuck at R² 0.94 even when it converged (the audit's case)", () => {
     const s = peakFitStatus({ R2: 0.941639, rmse: 100.009, converged: true, noiseSigma: 12.1 });
     expect(s.tone).toBe("warn");
-    expect(s.reasons).toEqual(["R² below 0.98", "RMSE over 3× noise"]);
-    expect(s.text).toMatch(/^Poor fit \(R² below 0\.98, RMSE over 3× noise\) — check the seeds/);
+    expect(s.reasons).toEqual(["RMSE over 3× noise"]);
+    expect(s.text).toMatch(/^Poor fit \(RMSE over 3× noise\) — check the seeds/);
   });
 
   it("warns on a fit that did not converge, whatever its R²", () => {
@@ -36,6 +36,27 @@ describe("peakFitStatus", () => {
     const s = peakFitStatus({ R2: 0.995, rmse: 40, converged: true, noiseSigma: 12 });
     expect(s.tone).toBe("warn");
     expect(s.reasons).toEqual(["RMSE over 3× noise"]);
+  });
+
+  it("keeps a correct fit to low-count Poisson data ok despite a low R² (RMSE/noise is the rule)", () => {
+    // 2 Gaussians (100/60, baseline 5), poisson(0.1*true) x 600 points: the
+    // correct model measured R² 0.74-0.79 and RMSE/noise 0.95-2.0.
+    for (const [R2, ratio] of [[0.74, 0.95], [0.79, 2.0]]) {
+      const s = peakFitStatus({ R2, rmse: ratio * 1.1, converged: true, noiseSigma: 1.1 });
+      expect(s.tone).toBe("ok");
+      expect(s.reasons).toEqual([]);
+    }
+    // …and a genuinely bad fit of the same data still warns, on the ratio.
+    expect(peakFitStatus({ R2: 0.74, rmse: 4 * 1.1, converged: true, noiseSigma: 1.1 }).tone).toBe("warn");
+  });
+
+  it("falls back to R² < 0.98 when the noise estimate is missing, non-finite or at its floor (null)", () => {
+    for (const noiseSigma of [undefined, null, NaN, Infinity, 0]) {
+      const s = peakFitStatus({ R2: 0.9, rmse: 0.4, converged: true, noiseSigma });
+      expect(s.tone).toBe("warn");
+      expect(s.reasons).toEqual(["R² below 0.98 (no noise estimate)"]);
+      expect(peakFitStatus({ R2: 0.99, rmse: 0.4, converged: true, noiseSigma }).tone).toBe("ok");
+    }
   });
 
   it("judges an older record on what it has, and is quiet with nothing to judge", () => {

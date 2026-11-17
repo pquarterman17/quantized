@@ -13,6 +13,7 @@ global fit (the per-peak fit in ``peak_fit`` uses the full forms).
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -21,13 +22,15 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
 from quantized.calc.peak_multifit_polish import (
+    DEADLINE_S,
+    SKIP_NOISE_RATIO,
     Polish,
     free_bounds,
     linear_map,
     peak_sigmas,
     polish_fit,
 )
-from quantized.calc.peak_noise import estimate_noise
+from quantized.calc.peak_noise import estimate_noise, noise_floor
 from quantized.calc.peakshapes import pseudo_voigt_area
 
 __all__ = ["build_linked_packer", "compute_peak_area", "fit_multi_peak"]
@@ -36,6 +39,13 @@ _LN2 = math.log(2.0)
 _EPS = float(np.finfo(float).eps)
 
 ExpandFn = Callable[[NDArray[np.float64]], NDArray[np.float64]]
+# Share of a polished fit's budget the Nelder-Mead seed pass may use; the
+# bounded least-squares polish gets the rest.
+_SIMPLEX_SHARE = 0.4
+
+
+class _OutOfTime(Exception):
+    """Raised inside the simplex objective once its slice of the budget is gone."""
 
 
 def _composite_eval(
@@ -174,6 +184,7 @@ def fit_multi_peak(
     link_mode: str = "None",
     max_fev: int | None = None,
     polish: bool = False,
+    deadline_s: float | None = DEADLINE_S,
 ) -> dict[str, Any]:
     """Fit ``peaks`` + a polynomial background simultaneously. Port of
     ``peakAnalysis.onFitSimultaneous``.
@@ -201,9 +212,23 @@ def fit_multi_peak(
     why and how it diverges from MATLAB. ``polish=False`` (the default here) is
     the golden-parity path, unchanged; it reports ``converged`` as the
     simplex's own flag (False when the eval budget ran out) and no errors.
+
+    ``deadline_s`` (polish only; the parity path is never time-limited) is ONE
+    wall-clock budget for the whole call: the simplex may use 40 % of it, the
+    polish starts the rest. On running out, the best point so far is returned
+    with ``converged: False`` and no errors. Non-finite (x, y) points are
+    dropped before fitting.
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
+    if xv.size != yv.size:
+        raise ValueError("x and y must have the same length")
+    keep = np.isfinite(xv) & np.isfinite(yv)
+    if not np.all(keep):
+        xv, yv = xv[keep], yv[keep]
+    if xv.size < 2:
+        raise ValueError("need at least two finite (x, y) points to fit")
+    t_start = time.monotonic()
     n_peaks = len(peaks)
     if n_peaks < 1:
         raise ValueError("need at least one peak to fit")
@@ -240,19 +265,37 @@ def fit_multi_peak(
 
     n_free = int(np.asarray(p_free0).size)
     fev = 200 * n_free if max_fev is None else max_fev
-    res = minimize(
-        objective, p_free0, method="Nelder-Mead",
-        options={"maxiter": 30000, "maxfev": fev, "xatol": 1e-10, "fatol": 1e-14},
-    )
-    p_fit = expand(np.asarray(res.x, dtype=float))
-    extra: dict[str, Any] = {"solver": "nelder-mead", "converged": bool(res.success),
-                             "fitMessage": str(res.message)}
+    t_end = t_start + deadline_s if (polish and deadline_s is not None) else None
+    simplex_end = None if t_end is None else t_start + _SIMPLEX_SHARE * (t_end - t_start)
+    best: list[Any] = [np.asarray(p_free0, dtype=float), math.inf]
+    if simplex_end is None:
+        obj = objective
+    else:
+        def obj(pf: NDArray[np.float64]) -> float:
+            if time.monotonic() > simplex_end:
+                raise _OutOfTime
+            f = objective(pf)
+            if f < best[1]:
+                best[0], best[1] = np.array(pf, dtype=float), f
+            return f
+    try:
+        res = minimize(
+            obj, p_free0, method="Nelder-Mead",
+            options={"maxiter": 30000, "maxfev": fev, "xatol": 1e-10, "fatol": 1e-14},
+        )
+        x_simplex = np.asarray(res.x, dtype=float)
+        ok, msg = bool(res.success), str(res.message)
+    except _OutOfTime:
+        x_simplex = np.asarray(best[0], dtype=float)
+        ok, msg = False, f"simplex stopped at its share of the {deadline_s:g} s time limit"
+    p_fit = expand(x_simplex)
+    extra: dict[str, Any] = {"solver": "nelder-mead", "converged": ok, "fitMessage": msg}
     sigmas: list[dict[str, float | None]] | None = None
     if polish:
         p_fit, sigmas, extra = _polish(
-            model_eval, xv, yv, [("simplex", np.asarray(res.x, dtype=float)),
+            model_eval, xv, yv, [("simplex", x_simplex),
                                  ("seed", np.asarray(p_free0, dtype=float))],
-            expand, n_peaks, n_per_peak, seed_centers, center_bnd, model,
+            expand, n_peaks, n_per_peak, seed_centers, center_bnd, model, t_end,
         )
 
     bg_coeffs = p_fit[len(p_fit) - n_bg :]
@@ -294,7 +337,7 @@ def _polish(
     model_eval: ExpandFn, xv: NDArray[np.float64], yv: NDArray[np.float64],
     starts: list[tuple[str, NDArray[np.float64]]], expand: ExpandFn, n_peaks: int,
     n_per_peak: int, seed_centers: NDArray[np.float64],
-    center_bnd: NDArray[np.float64] | None, model: str,
+    center_bnd: NDArray[np.float64] | None, model: str, t_end: float | None = None,
 ) -> tuple[NDArray[np.float64], list[dict[str, float | None]], dict[str, Any]]:
     """Bounded LSQ polish of the simplex result (peak_multifit_polish)."""
     n_free = starts[0][1].size
@@ -307,14 +350,22 @@ def _polish(
     def residuals(pf: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.asarray(model_eval(pf) - yv, dtype=float)
 
+    noise = estimate_noise(yv)
     if not np.all(lo < hi):  # a zero-span x: no box to search, keep the simplex
         pol = Polish(x=starts[0][1], converged=False, message="x has no span to bound a polish",
                      usable=[False] * n_free)
     else:
-        pol = polish_fit(residuals, starts, lo, hi, fwhm_free, int(xv.size))
+        skip = (SKIP_NOISE_RATIO * noise) ** 2 * xv.size if (
+            math.isfinite(noise) and noise > 0.0) else None
+        pol = polish_fit(residuals, starts, lo, hi, fwhm_free, int(xv.size),
+                         t_end=t_end, skip_cost=skip)
     p_fit = expand(pol.x)
     extra: dict[str, Any] = {
         "solver": "nelder-mead+trf", "converged": pol.converged, "fitMessage": pol.message,
-        "polishStart": pol.start, "noiseSigma": estimate_noise(yv),
+        "polishStart": pol.start,
+        # None when the estimate sits at its 1e-6*max(y) floor (noise-free
+        # data: there is no noise to measure, so no ratio to judge a fit by).
+        "noiseSigma": noise if (math.isfinite(noise) and noise > noise_floor(yv) * (1 + 1e-9))
+        else None,
     }
     return p_fit, peak_sigmas(pol, emap, p_fit, n_peaks, n_per_peak, model), extra

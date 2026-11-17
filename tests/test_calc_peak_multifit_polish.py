@@ -157,3 +157,73 @@ def test_a_deliberately_bad_seed_reads_as_a_poor_fit() -> None:
     r = fit_multi_peak(x, y, seeds, polish=True)
     assert r["R2"] < 0.98
     assert r["rmse"] > 3.0 * r["noiseSigma"]
+
+
+def test_nan_points_are_dropped_before_fitting() -> None:
+    x = np.linspace(0.0, 20.0, 300)
+    y = 2.0 + _lor(x, 10.0, 8.0, 1.5) + np.random.default_rng(3).normal(0.0, 0.1, x.size)
+    y[[5, 120]] = np.nan
+    x[40] = np.inf
+    r = fit_multi_peak(x, y, [{"center": 8.2, "fwhm": 1.2, "height": 9.0}], polish=True)
+    assert r["converged"] and abs(r["peaks"][0]["center"] - 8.0) < 0.1
+    with pytest.raises(ValueError, match="finite"):
+        fit_multi_peak(x[:1], y[:1], [{"center": 8.2, "fwhm": 1.2, "height": 9.0}])
+
+
+def test_polish_start_seed_path_is_reachable() -> None:
+    """The raw-seed start wins when the simplex start lands in a worse minimum
+    (the audit's draw 2 had this shape); drive polish_fit directly with a
+    simplex start parked far from the peak and a good seed."""
+    from quantized.calc.peak_multifit_polish import polish_fit
+
+    x = np.linspace(0.0, 20.0, 300)
+    y = _lor(x, 10.0, 8.0, 1.5)
+
+    def resid(p: np.ndarray) -> np.ndarray:
+        return np.asarray(p[0] * (1.0 / (1.0 + 4.0 * ((x - p[1]) / p[2]) ** 2)) - y, dtype=float)
+
+    lo, hi = np.array([0.0, 0.0, 1e-3]), np.array([50.0, 20.0, 40.0])
+    pol = polish_fit(resid, [("simplex", np.array([0.0, 19.9, 0.01])),
+                             ("seed", np.array([9.0, 8.2, 1.3]))],
+                     lo, hi, np.array([False, False, True]), x.size)
+    assert pol.start == "seed" and pol.converged
+    np.testing.assert_allclose(pol.x, [10.0, 8.0, 1.5], rtol=1e-4)
+
+
+def test_second_start_skipped_when_first_is_within_noise() -> None:
+    x, y = _si_scan(0)
+    seeds, _ = find_peaks_robust(x, y)
+    r = fit_multi_peak(x, y, seeds, polish=True)
+    assert r["polishStart"] == "simplex" and r["converged"]
+
+
+def _many_peaks(n: int) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
+    rng = np.random.default_rng(11)
+    x = np.linspace(0.0, 100.0, 3000)
+    cs = np.linspace(3.0, 97.0, n)
+    y = 5.0 + sum(_lor(x, 50.0 + 5.0 * (k % 5), c, 1.0) for k, c in enumerate(cs))
+    y = y + rng.normal(0.0, 1.0, x.size)
+    seeds = [{"center": float(c) + 0.3, "fwhm": 1.6, "height": 40.0} for c in cs]
+    return x, y, seeds
+
+
+def test_twenty_peak_fit_respects_its_shared_budget() -> None:
+    import time
+
+    x, y, seeds = _many_peaks(20)
+    t0 = time.monotonic()
+    r = fit_multi_peak(x, y, seeds, polish=True, deadline_s=0.05)
+    elapsed = time.monotonic() - t0
+    assert elapsed < 10.0  # loose backstop; the budget is 0.05 s + one final pass
+    assert r["converged"] is False  # 20 peaks cannot converge in 50 ms: warn status shows
+    assert len(r["peaks"]) == 20 and all(math.isfinite(p["center"]) for p in r["peaks"])
+    assert all(p["centerErr"] is None for p in r["peaks"])
+
+
+def test_twenty_peak_fit_default_budget_is_bounded() -> None:
+    import time
+
+    x, y, seeds = _many_peaks(20)
+    t0 = time.monotonic()
+    fit_multi_peak(x, y, seeds, polish=True)  # default 10 s, shared by every stage
+    assert time.monotonic() - t0 < 30.0  # loose backstop (was up to 60+ s)

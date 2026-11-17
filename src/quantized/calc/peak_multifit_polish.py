@@ -48,6 +48,7 @@ never a number: the covariance of a constrained or unfinished fit is not a
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -61,9 +62,13 @@ from quantized.calc.peakshapes import AREA_G, AREA_L
 __all__ = ["Polish", "free_bounds", "linear_map", "peak_sigmas", "polish_fit"]
 
 ExpandFn = Callable[[NDArray[np.float64]], NDArray[np.float64]]
-# The polish's wall-clock budget. The audit's 5-peak fit takes ~0.1 s; a
-# 30-peak pattern on a slow machine stays well inside it.
-DEADLINE_S = 30.0
+# The whole request's default wall-clock budget (simplex + every polish start
+# share it; ``fit_multi_peak(deadline_s=...)``), the route's other-fit default.
+# The audit's 5-peak fit takes ~1 s; a 20-peak one 7-37 s uncapped.
+DEADLINE_S = 10.0
+# A converged first start whose RMSE is within this multiple of the data's
+# white-noise sigma is "as good as noise allows": the second start is skipped.
+SKIP_NOISE_RATIO = 1.5
 # A parameter this close (relative to its bound span, or absolutely for an
 # unbounded side) to a bound is at that bound: its covariance is not a sigma.
 _AT_BOUND = 1e-8
@@ -126,19 +131,33 @@ def polish_fit(
     residuals: Callable[[NDArray[np.float64]], NDArray[np.float64]],
     starts: list[tuple[str, NDArray[np.float64]]],
     lo: NDArray[np.float64], hi: NDArray[np.float64], fwhm_free: NDArray[np.bool_],
-    n_points: int,
+    n_points: int, *, t_end: float | None = None, skip_cost: float | None = None,
 ) -> Polish:
-    """Polish each start with bounded TRF; keep the lowest-cost converged one."""
+    """Polish each start with bounded TRF; keep the lowest-cost converged one.
+
+    ``t_end`` is the shared ``time.monotonic()`` deadline of the whole request:
+    each start gets the time left, no further start begins once it passed, and
+    the best result so far is returned (``converged`` False if the budget cut
+    it). ``skip_cost`` (sum of squares) ends the loop early when a start
+    converges at or below it."""
     if not starts:
         raise ValueError("polish_fit needs at least one start")
     best: tuple[tuple[int, float], str, BoundedFit] | None = None
     for name, p in starts:
+        left = None if t_end is None else t_end - time.monotonic()
+        if best is not None and left is not None and left <= 0.0:
+            break
         trial = solve_bounded(residuals, _feasible(p, lo, hi, fwhm_free), (lo, hi),
-                              max_nfev=200 * max(p.size, 1), deadline_s=DEADLINE_S)
+                              max_nfev=200 * max(p.size, 1),
+                              deadline_s=None if left is None else max(left, 1e-3))
         cost = float(np.sum(trial.residuals(trial.x) ** 2))
         rank = (0 if trial.status == "converged" else 1, cost)
         if best is None or rank < best[0]:
             best = (rank, name, trial)
+        if trial.status == "deadline" or (
+            trial.status == "converged" and skip_cost is not None and cost <= skip_cost
+        ):
+            break
     assert best is not None
     _, name, fit = best
     out = Polish(x=np.asarray(fit.x, dtype=float), converged=fit.status == "converged",
