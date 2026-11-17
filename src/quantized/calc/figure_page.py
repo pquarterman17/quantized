@@ -201,8 +201,9 @@ def render_figure_page(
     widths, box/ticks/grid). Page size: ``width_in`` defaults to the preset's
     figure width -- the journal-column convention the preset encodes (``aps``
     8.6 cm ~ 3.39 in single column; ``aps_double`` 17.8 cm ~ 7.0 in double
-    column, the APS sizes) -- and ``height_in`` defaults so each grid cell
-    keeps the preset's own aspect ratio. ``label_format`` / ``label_pos``
+    column, the APS sizes) -- and ``height_in`` defaults to the preset's
+    own stated height (APS double 17.8 x 6.5 cm) -- the panels split that page.
+    ``label_format`` / ``label_pos``
     control the auto panel labels (see :func:`panel_label`, :func:`_place_label`);
     a panel's explicit ``label`` wins over the auto sequence. Raises
     ``ValueError`` on any invalid spec (unknown format/style/label options,
@@ -262,11 +263,10 @@ def render_figure_page(
     elif height_in is None and stack:
         h = max(st.fig_height_in, st.fig_height_in * rows / 3)
     else:
-        h = (
-            float(height_in)
-            if height_in is not None
-            else w * (st.fig_height_in / st.fig_width_in) * (rows / cols)
-        )
+        # The preset's stated page height (APS double column 17.8 x 6.5 cm)
+        # is the PAGE; panels split it. It used to be scaled by rows/cols,
+        # halving a 1x2 page to 17.8 x 3.25 cm.
+        h = float(height_in) if height_in is not None else w * (st.fig_height_in / st.fig_width_in)
     if w <= 0 or h <= 0:
         raise ValueError("width_in and height_in must be positive")
 
