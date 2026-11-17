@@ -53,7 +53,7 @@ export function buildEditClipboardCommands(s: StoreGet): Action[] {
       label: "Delete",
       description: "Blank the selected worksheet cells, else delete the selected plot object, else remove the selected Library datasets.",
       keywords: "delete remove clear cells annotation shape library selection",
-      shortcut: "Del",
+      shortcut: "Delete",
       danger: true,
       disabled: () => !sheetBlockOps() && !hasObject() && deleteIds().length === 0,
       disabledReason: "Nothing selected to delete",
