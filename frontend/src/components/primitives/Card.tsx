@@ -36,7 +36,7 @@ export default function Card({
     // align its top and push what sits above it (a Selection section) away.
     if (revealN) ref.current?.querySelector("summary")?.scrollIntoView?.({ block: "nearest" });
   }, [revealN]);
-  return (
+  const details = (
     <details
       ref={ref}
       className="qz-card"
@@ -68,26 +68,33 @@ export default function Card({
             {count}
           </span>
         )}
-        {helpTopic && (
-          <button
-            type="button"
-            className="qz-card-help"
-            style={count == null ? { marginLeft: "auto" } : undefined}
-            aria-label={`Help for ${typeof title === "string" ? title : "this section"}`}
-            data-tip="Open related help"
-            data-tip-desc="Show Help already filtered to this section's related tools."
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              openHelpTopic(helpTopic);
-            }}
-          >
-            {/* Decorative: the accessible name comes from aria-label above. */}
-            <span aria-hidden="true">?</span>
-          </button>
-        )}
       </summary>
       <div className="qz-card-body">{children}</div>
     </details>
+  );
+  if (!helpTopic) return details;
+  // The help action is a SIBLING of the <details>, not inside <summary>
+  // (interactive content in a summary is an axe nested-interactive failure);
+  // the wrapper keeps it visible while the card is collapsed. It comes FIRST in
+  // the DOM so Tab reaches it with the header, not after the card's body.
+  return (
+    <div className="qz-card-wrap">
+      <button
+        type="button"
+        className="qz-card-help"
+        aria-label={`Help for ${typeof title === "string" ? title : "this section"}`}
+        data-tip="Open related help"
+        data-tip-desc="Show Help already filtered to this section's related tools."
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openHelpTopic(helpTopic);
+        }}
+      >
+        {/* Decorative: the accessible name comes from aria-label above. */}
+        <span aria-hidden="true">?</span>
+      </button>
+      {details}
+    </div>
   );
 }

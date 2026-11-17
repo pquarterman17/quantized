@@ -13,7 +13,8 @@ import { LIBRARY_NODE_GLYPH } from "./nodeIcons";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryFocus } from "./useLibraryFocus";
-import { useLibraryResize } from "./useLibraryResize";
+import { libraryResizeKeys, useLibraryResize } from "./useLibraryResize";
+import { LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "../../store/prefs";
 import { useRevealImported } from "./useRevealImported";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { useFileDropTarget } from "../../lib/fileDrop";
@@ -61,6 +62,7 @@ interface LibraryProps {
 }
 
 export default function Library({ viewMode: controlledViewMode, onViewModeChange }: LibraryProps = {}) {
+  const libraryPanelWidth = useApp((s) => s.libraryPanelWidth);
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
@@ -357,7 +359,12 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       <div
         className="qzk-lib-resizer"
         onPointerDown={startResize}
+        {...libraryResizeKeys}
         role="separator"
+        tabIndex={0}
+        aria-valuenow={libraryPanelWidth}
+        aria-valuemin={LIBRARY_PANEL_WIDTH_MIN}
+        aria-valuemax={LIBRARY_PANEL_WIDTH_MAX}
         aria-orientation="vertical"
         aria-label="Resize Library panel"
       />
