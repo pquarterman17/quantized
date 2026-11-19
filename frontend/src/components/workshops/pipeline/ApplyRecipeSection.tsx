@@ -9,6 +9,7 @@
 
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select, StatusDot } from "../../primitives";
+import OverlayOutputsButton from "../OverlayOutputsButton";
 import { useApplyRecipe, type PickState } from "./useApplyRecipe";
 import { runnableSteps, type Binding } from "../../../lib/recipePreflight";
 import type { ExpectedColumn } from "../../../lib/recipeExpect";
@@ -72,6 +73,7 @@ export default function ApplyRecipeSection({
   disabled = false,
   disabledReason,
   keepActive = false,
+  groupName,
 }: {
   recipe: AnalysisTemplate;
   onClose: () => void;
@@ -85,8 +87,10 @@ export default function ApplyRecipeSection({
   /** Hand the view back to the worksheet that was active before the run —
    *  for a launcher whose dialog works on the active worksheet. */
   keepActive?: boolean;
+  /** Group >= 2 outputs in a folder "<groupName> (N)" and offer Overlay. */
+  groupName?: string;
 }) {
-  const a = useApplyRecipe(recipe, keepActive);
+  const a = useApplyRecipe(recipe, keepActive, groupName);
   const columns = recipe.expects?.columns ?? [];
   const steps = runnableSteps(recipe.steps);
   const anyUnits = a.picks.some((p) => p.preflight.unitMismatch);
@@ -144,6 +148,7 @@ export default function ApplyRecipeSection({
           Close
         </Button>
       </div>
+      <OverlayOutputsButton ids={a.groupedIds} />
       {a.results && a.results.length > 0 && (
         <ul aria-label="Apply results" className="qzk-ds-meta" style={{ margin: "6px 0 0", paddingLeft: 16, whiteSpace: "normal" }}>
           {a.results.map((r) => (

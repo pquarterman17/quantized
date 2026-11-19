@@ -18,7 +18,8 @@ interface Props {
 }
 
 export default function PlotReadouts({ tool, readout, measurement, stats }: Props) {
-  if (tool === "cursor") {
+  // The keyboard cursor (usePlotKeyboard) reports through the same readout under any other tool.
+  if (tool === "cursor" || (readout && tool !== "region" && tool !== "measure" && tool !== "stats")) {
     if (!readout) return null;
     return (
       <div className="qzk-glass qzk-readout">
