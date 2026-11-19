@@ -1,5 +1,5 @@
 import type { AnalysisResult, AnalysisResultTable } from "./analysisResult";
-import type { Dataset } from "./types";
+import type { DataStruct, Dataset } from "./types";
 
 /** One output a result owns that "Freeze" could turn into an independent
  *  worksheet. Enumeration is pure and read-only: it never touches the result
@@ -44,12 +44,56 @@ export const linkedWorksheetOutputs: Adapter = (result, datasets) => {
   return out;
 };
 
-/** Numeric/blank-only tables become worksheets; a table with text cells has no
- *  faithful worksheet form here, so it is listed but not offered. */
+/** A table column is numeric (numbers/blanks), text (strings/blanks, stored as
+ *  a categorical channel: float codes plus `cat_levels`) or mixed (no faithful
+ *  worksheet form). */
+function columnKind(table: AnalysisResultTable, col: number): "numeric" | "text" | "mixed" {
+  let num = false, text = false;
+  for (const row of table.rows) {
+    const cell = row[col];
+    if (typeof cell === "number") num = true; else if (typeof cell === "string") text = true;
+  }
+  return num && text ? "mixed" : text ? "text" : "numeric";
+}
+
+/** Tables become worksheets; text columns become categorical channels. Only a
+ *  column mixing numbers and text (or a non-finite/boolean cell) is refused. */
 function tableReason(table: AnalysisResultTable): string | undefined {
   if (!table.rows.length || !table.columns.length) return "empty table";
-  return table.rows.every((row) => row.every((cell) => cell === null || typeof cell === "number"))
-    ? undefined : "contains text cells";
+  for (let col = 0; col < table.columns.length; col++) {
+    if (columnKind(table, col) === "mixed") return `column “${table.columns[col]}” mixes text and numbers`;
+  }
+  const odd = table.rows.some((row) => row.some((cell) => cell !== null && cell !== undefined && typeof cell !== "number" && typeof cell !== "string"));
+  return odd ? "contains unsupported cells" : undefined;
+}
+
+/** Worksheet form of a freezable table: rows numbered 1..n on X, numeric
+ *  columns as-is (blank -> NaN), text columns as categorical channels whose
+ *  levels are the distinct strings in first-appearance order (blank -> NaN). */
+export function tableToDataStruct(table: AnalysisResultTable, metadata: Record<string, unknown>): DataStruct {
+  const levels: Record<number, string[]> = {};
+  const codes = table.columns.map((_name, col) => {
+    if (columnKind(table, col) !== "text") return null;
+    const list: string[] = [];
+    levels[col] = list;
+    return new Map<string, number>();
+  });
+  const values = table.rows.map((row) => table.columns.map((_name, col) => {
+    const cell = row[col];
+    const map = codes[col];
+    if (map) {
+      if (typeof cell !== "string") return Number.NaN;
+      if (!map.has(cell)) { map.set(cell, levels[col].length); levels[col].push(cell); }
+      return map.get(cell)!;
+    }
+    return typeof cell === "number" ? cell : Number.NaN;
+  }));
+  return {
+    time: table.rows.map((_row, index) => index + 1), values,
+    labels: [...table.columns], units: table.columns.map(() => ""),
+    metadata: { xLabel: "Row", x_column_name: "Row", ...metadata },
+    ...(Object.keys(levels).length ? { cat_levels: levels } : {}),
+  };
 }
 
 /** Saved inline tables (`result.tables`), one output per table. */

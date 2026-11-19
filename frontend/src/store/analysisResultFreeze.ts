@@ -3,9 +3,9 @@
 // in ONE undo step. It reads the result and its linked worksheets and never
 // writes them; the only state it adds is the new datasets.
 
-import { enumerateFreezeOutputs, frozenOutputName, type FreezeOutput } from "../lib/analysisResultFreezeOutputs";
+import { enumerateFreezeOutputs, frozenOutputName, tableToDataStruct, type FreezeOutput } from "../lib/analysisResultFreezeOutputs";
 import { cloneDataStruct } from "../lib/dataset";
-import type { DataStruct, Dataset } from "../lib/types";
+import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import { useApp } from "./useApp";
 
@@ -59,12 +59,7 @@ export function freezeAnalysisOutputs(id: string, expected: readonly FreezeChoic
       };
     }
     const table = result.tables![Number(output.key.slice(4))];
-    const data: DataStruct = {
-      time: table.rows.map((_row, index) => index + 1),
-      values: table.rows.map((row) => row.map((cell) => (cell === null ? Number.NaN : cell as number))),
-      labels: [...table.columns], units: table.columns.map(() => ""),
-      metadata: { xLabel: "Row", frozenFrom: { resultId: result.id, resultName: result.name, table: table.title ?? null, frozenAt: stamp } },
-    };
+    const data = tableToDataStruct(table, { frozenFrom: { resultId: result.id, resultName: result.name, table: table.title ?? null, frozenAt: stamp } });
     return {
       id: nextDatasetId(), name, data,
       ...(home?.workbookId ? { workbookId: home.workbookId } : {}),

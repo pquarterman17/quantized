@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AnalysisResult } from "./analysisResult";
-import { FREEZE_ADAPTERS, enumerateFreezeOutputs, frozenOutputName } from "./analysisResultFreezeOutputs";
+import { FREEZE_ADAPTERS, enumerateFreezeOutputs, frozenOutputName, tableToDataStruct } from "./analysisResultFreezeOutputs";
 import type { Dataset } from "./types";
 
 const ds = (id: string, rows: number, derived: boolean): Dataset => ({
@@ -16,7 +16,8 @@ const result = (producer: string, extra: Partial<AnalysisResult> = {}): Analysis
 const datasets = [ds("o1", 5, true), ds("o2", 3, true), ds("o3", 2, false)];
 const tables = [
   { title: "Params", columns: ["a", "b"], rows: [[1, 2], [3, null]] },
-  { title: "Labels", columns: ["name", "v"], rows: [["x", 1]] },
+  { title: "Labels", columns: ["name", "v"], rows: [["x", 1], ["y", 2], ["x", null], [null, 4]] },
+  { title: "Mixed", columns: ["m"], rows: [["x"], [1]] },
   { columns: ["e"], rows: [] },
 ];
 
@@ -45,8 +46,9 @@ describe("freeze output adapters", () => {
     expect(out.map((o) => [o.key, o.label, o.kind, o.rows, o.cols, o.freezable, o.reason])).toEqual([
       ["ds:o2", "Fitted", "Linked worksheet", 3, 2, true, undefined],
       ["tbl:0", "Params", "Result table", 2, 2, true, undefined],
-      ["tbl:1", "Labels", "Result table", 1, 2, false, "contains text cells"],
-      ["tbl:2", "Table 3", "Result table", 0, 1, false, "empty table"],
+      ["tbl:1", "Labels", "Result table", 4, 2, true, undefined],
+      ["tbl:2", "Mixed", "Result table", 2, 1, false, "column “m” mixes text and numbers"],
+      ["tbl:3", "Table 4", "Result table", 0, 1, false, "empty table"],
     ]);
   });
   it.each(["peak-analysis", "curve-fit", "reflectivity-fit"])("%s owns no result-level output (data lives on the source)", (producer) => {
@@ -60,5 +62,16 @@ describe("freeze output adapters", () => {
   it("names frozen worksheets <result> — <output> (frozen)", () => {
     const [o] = enumerateFreezeOutputs(result("statistical-test", { tables }), datasets);
     expect(frozenOutputName(result("x"), o)).toBe("Result — Params (frozen)");
+  });
+  it("text columns become categorical channels (first-appearance levels, blank -> NaN)", () => {
+    const data = tableToDataStruct(tables[1], {});
+    expect(data.cat_levels).toEqual({ 0: ["x", "y"] });
+    expect(data.values[0][0]).toBe(0);
+    expect(data.values[1][0]).toBe(1);
+    expect(data.values[2][0]).toBe(0);
+    expect(Number.isNaN(data.values[3][0])).toBe(true);
+    expect(Number.isNaN(data.values[2][1])).toBe(true);
+    expect(data.values.map((r) => r[1]).filter(Number.isFinite)).toEqual([1, 2, 4]);
+    expect(data.time).toEqual([1, 2, 3, 4]);
   });
 });

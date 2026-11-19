@@ -53,6 +53,11 @@ describe("AnalysisResultFreeze chooser", () => {
     expect(useApp.getState().datasets.filter((d) => ["a", "b", "c"].includes(d.id))).toEqual(outBefore);
     act(() => useApp.getState().undo());
     expect(names()).toEqual(["Src", "Out a", "Out b", "Out c"]);
+    expect(useApp.getState().datasets.filter((d) => ["a", "b", "c"].includes(d.id))).toEqual(outBefore);
+    expect(useApp.getState().analysisResults[0]).toEqual(resultBefore);
+    act(() => useApp.getState().redo());
+    expect(names().slice(4)).toEqual(["Fit — Out a (frozen)", "Fit — Out c (frozen)"]);
+    expect(useApp.getState().datasets.filter((d) => ["a", "b", "c"].includes(d.id))).toEqual(outBefore);
   });
 
   it("refuses everything when a chosen output changed after it was ticked", async () => {
@@ -79,14 +84,15 @@ describe("AnalysisResultFreeze chooser", () => {
     expect(names().filter((n) => n.endsWith("(frozen)"))).toHaveLength(1);
   });
 
-  it("freezes a saved numeric result table into a worksheet and disables text tables", async () => {
+  it("freezes a saved numeric result table into a worksheet and converts text columns to categorical, refusing only mixed columns", async () => {
     useApp.setState({
       analysisResults: [{ ...base, producer: { id: "statistical-test", label: "T", version: 1 }, outputs: [],
-        tables: [{ title: "Params", columns: ["a", "b"], rows: [[1, 2], [3, null]] }, { title: "Words", columns: ["n"], rows: [["x"]] }] }],
+        tables: [{ title: "Params", columns: ["a", "b"], rows: [[1, 2], [3, null]] }, { title: "Words", columns: ["n", "v"], rows: [["x", 1], ["y", 2]] }, { title: "Mixed", columns: ["n"], rows: [["x"], [1]] }] }],
     });
     render(<Host />);
     fireEvent.click(screen.getByRole("button", { name: "Freeze…" }));
-    expect(screen.getByRole("checkbox", { name: "Words" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Mixed" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Words" })).toBeEnabled();
     fireEvent.click(screen.getByRole("checkbox", { name: "Params" }));
     fireEvent.click(screen.getByRole("button", { name: /Freeze selected \(1\)/ }));
     await waitFor(() => expect(names()).toContain("Fit — Params (frozen)"));
@@ -94,6 +100,11 @@ describe("AnalysisResultFreeze chooser", () => {
     expect(sheet.data.labels).toEqual(["a", "b"]);
     expect(sheet.data.values[1][0]).toBe(3);
     expect(Number.isNaN(sheet.data.values[1][1])).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Freeze…" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Words" }));
+    fireEvent.click(screen.getByRole("button", { name: /Freeze selected \(1\)/ }));
+    await waitFor(() => expect(names()).toContain("Fit — Words (frozen)"));
+    expect(useApp.getState().datasets.at(-1)!.data.cat_levels).toEqual({ 0: ["x", "y"] });
   });
 });
 
