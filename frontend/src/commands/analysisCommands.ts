@@ -7,6 +7,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import { useAnalysisCenter } from "../store/analysisCenter";
 import { useAnalysisExtras } from "../store/analysisExtras";
 import { useFitYByXStore } from "../store/fitYByX";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
@@ -26,7 +27,10 @@ function analyze(
   keywords: string,
   run: () => void,
 ): Action {
-  return { id, group: "Analyze", section, label, description, keywords, run };
+  // Every launch (menu, palette, Analysis Center) feeds the Analyze menu's
+  // "Recent analyses"; the center itself is a navigator, not an analysis.
+  const launch = id === "analysis-center" ? run : () => { useAnalysisCenter.getState().recordUse(id); run(); };
+  return { id, group: "Analyze", section, label, description, keywords, run: launch };
 }
 
 /** Build the Analyze-group curated palette actions against the live store
