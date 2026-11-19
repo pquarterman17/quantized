@@ -55,6 +55,50 @@ inconsistently exposed, and do not all share the same result lifecycle.
 - [ ] The Analyze menu is a launcher, not an analysis navigator. It does not
   show input requirements, compatibility with the current worksheet, recent
   analyses, or existing results.
+  - **Navigator slice landed** (`lib/analysisRequirements.ts`,
+    `lib/analysisNavigator.ts`; menu in `appMenuModel.ts`, palette in
+    `CommandPalette.tsx`). Every metadata-described Analyze item is shown
+    DISABLED with a one-line reason when the active worksheet does not fit
+    ("Needs a numeric Y column", "Needs 2 or more worksheets", "Needs a 2θ X
+    axis", ...); the menu and the palette read the same predicate
+    (`withAnalysisRequirements`), so they cannot disagree. Analyze opens with
+    "Recent analyses" (last 5, the Analysis Center's persisted `recent` list,
+    now fed by every launch path) and "Open results (N)" for the active
+    worksheet. Not yet done: the Analysis Center still evaluates its own
+    `compatibility()` (same metadata, longer messages, no worksheet-count or 2θ
+    check); converge it onto the predicate table.
+  - **Audit (2026-11-19): input needs vs. batch / By support.** "Batch" = run
+    over selected worksheets; "By" = per-level of a grouping column.
+
+    | Tool | Needs | Batch | By |
+    |------|-------|-------|----|
+    | Curve fit | numeric Y, 3+ rows | yes | yes |
+    | Surface fit | X,Y,Z or map | no | no |
+    | Optical gap (Tauc) | numeric Y | no | no |
+    | Ellipse fit | 2 numeric columns | no | no |
+    | Hysteresis | numeric Y (magnetometry) | yes | no |
+    | Magnetometry tools | numeric Y (magnetometry) | no | no |
+    | Find peaks | numeric Y | yes (integrate windows) | no |
+    | Peak analyzer (wizard) | numeric Y | yes | no |
+    | Baseline | numeric Y | recipe only | no |
+    | Reflectivity / Reflectometry view | numeric Y (refl/XRD) | no | no |
+    | RSM, ROI cuts | 2-D map | ROI cuts only | no |
+    | Williamson-Hall | any (typed peaks ok) | yes | no |
+    | Pawley, XRD reference | 2θ X axis | no | no |
+    | Film thickness FFT, Reflectivity FFT | numeric Y | no | no |
+    | Signal Processing | numeric Y | recipe only | no |
+    | Average curves | 2+ worksheets | n/a (is the batch) | no |
+    | SIMS | numeric Y (SIMS) | yes | no |
+    | Distribution | numeric Y | no | yes |
+    | Fit Y by X | X + Y | no | yes |
+    | Multivariate, Variability, Outlier screening, Stats tests/chooser | 2+ numeric / factors / numeric Y | no | no |
+    | Calculators, Digitizer | none | n/a | n/a |
+
+    Gaps (recorded, not built): Batch is missing for Surface fit, Optical gap,
+    Ellipse fit, Magnetometry tools, Pawley, XRD reference, both FFT tools,
+    Reflectivity, and every statistics tool; By is missing everywhere except
+    Curve fit, Distribution and Fit Y by X. Baseline and Signal Processing
+    reach batch only through Pipeline Studio recipes.
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.

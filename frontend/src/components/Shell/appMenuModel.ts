@@ -2,6 +2,8 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { reopenRecent } from "../../lib/reopenRecent";
 import type { RecentFile } from "../../lib/recentFiles";
 import { recentParentLabel, relativeTime } from "../../lib/recentLabels";
+import { recentAnalysisActions, resultsForDataset } from "../../lib/analysisNavigator";
+import { useAnalysisCenter } from "../../store/analysisCenter";
 import { jumpBackInHistory, undoHistoryRows } from "../../lib/undoHistory";
 import { runAction, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
@@ -75,6 +77,35 @@ export function undoHistoryMenuItems(): ContextMenuItem[] {
       })),
     },
   ];
+}
+
+/** The Analyze menu's navigator rows: "Recent analyses" (the last five tools
+ *  run, from the persisted Analysis Center list) and "Open results (N)" for
+ *  the active worksheet. Each is omitted when empty; disabled tools stay listed
+ *  with their reason (`leaf`). */
+function analyzeNavigatorItems(
+  actions: readonly Action[],
+  formatShortcut: (shortcut: string) => string,
+): ContextMenuItem[] {
+  const { analysisResults, activeId } = useApp.getState();
+  const recent = recentAnalysisActions(actions, useAnalysisCenter.getState().recent);
+  const results = resultsForDataset(analysisResults, activeId);
+  const rows: ContextMenuItem[] = [];
+  if (recent.length) {
+    rows.push({ header: "Recent analyses" });
+    for (const action of recent) rows.push(leaf(action, action.shortcut ? formatShortcut(action.shortcut) : undefined));
+  }
+  if (results.length) {
+    const open = (id: string) => () => useApp.setState({ openAnalysisResultId: id });
+    const title = "Reveal saved results for the active worksheet";
+    const label = `Open results (${results.length})`;
+    rows.push(
+      results.length === 1
+        ? { label, title, run: open(results[0]!.id) }
+        : { label, title, submenu: results.map((r) => ({ label: `${r.name} · ${r.producer.label}`, run: open(r.id) })) },
+    );
+  }
+  return rows.length ? [...rows, { separator: true }] : [];
 }
 
 type Dynamic<T> = T | (() => T);
@@ -218,6 +249,7 @@ export function buildAppMenuItems(
   }
 
   const result = [...roots];
+  if (group === "Analyze") result.unshift(...analyzeNavigatorItems(actions, formatShortcut));
   if (roots.length && sections.size) result.push({ separator: true });
   for (const [label, submenu] of sections) result.push({ label, submenu });
   if (group === "Edit") result.push(...undoHistoryMenuItems());

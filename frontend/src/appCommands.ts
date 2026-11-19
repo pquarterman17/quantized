@@ -23,6 +23,7 @@ import { buildEditDataExtras } from "./commands/editDataExtras";
 import { buildFileCommands } from "./commands/fileCommands";
 import { buildPlotCommands } from "./commands/plotCommands";
 import { buildUiCommands } from "./commands/uiCommands";
+import { withAnalysisRequirements } from "./lib/analysisRequirements";
 import type { StoreGet } from "./lib/exportActive";
 import type { Action } from "./store/commands";
 
@@ -34,7 +35,10 @@ export function buildAppActions(s: StoreGet): Action[] {
   return withCommandDocs([
     ...buildFileCommands(s),
     ...buildUiCommands(s),
-    ...buildAnalysisCommands(s),
+    ...withAnalysisRequirements(buildAnalysisCommands(s), () => {
+      const { datasets, activeId } = s();
+      return { datasets, dataset: datasets.find((d) => d.id === activeId) };
+    }),
     ...buildDataCommands(s),
     ...buildPlotCommands(s),
     ...buildDiscoveryCommands(s),

@@ -16,9 +16,9 @@ export const ANALYSIS_CATEGORIES = [
 ] as const;
 
 export type AnalysisCategory = (typeof ANALYSIS_CATEGORIES)[number];
-type Requirement = "none" | "dataset" | "continuous" | "two-continuous" | "three-continuous" | "variability" | "map";
+export type Requirement = "none" | "dataset" | "continuous" | "two-continuous" | "three-continuous" | "variability" | "map";
 
-interface AnalysisToolMetadata {
+export interface AnalysisToolMetadata {
   category: AnalysisCategory;
   requiredInputs: string;
   requirement: Requirement;
@@ -76,7 +76,7 @@ export interface AnalysisTool {
   searchText: string;
 }
 
-function dimensions(dataset: Dataset): { rows: number; columns: number; numericColumns: number; numericResponses: number } {
+export function dimensions(dataset: Dataset): { rows: number; columns: number; numericColumns: number; numericResponses: number } {
   const rows = dataset.pending?.rows ?? Math.max(dataset.data.time.length, dataset.data.values.length);
   // Every analysis selector exposes the x/time column as index -1. Count it
   // when populated so X + one response correctly enables multivariate work.
