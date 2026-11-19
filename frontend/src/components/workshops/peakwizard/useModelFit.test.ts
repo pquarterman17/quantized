@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { untilState } from "../../../test/untilState";
 import { modelFitResponse } from "./modelFit.testkit";
 import { usePeakWizard } from "./usePeakWizard";
 
@@ -62,6 +63,18 @@ function wizardWithTwoPeaks() {
   act(() => hook.result.current.addPeakAt(4));
   return hook;
 }
+
+/** Wait until step ① has really settled: the overlay is in the store AND the
+ *  hook has committed the estimate (`baselineBusy` false). The overlay alone is
+ *  NOT enough: it is a zustand write that lands in the fetch continuation,
+ *  before React commits that same continuation's `setResult`. A `run()` taken
+ *  in that gap closes over a render with no baseline, and the commit that
+ *  follows changes the content key and drops its answer (docs/testing.md). */
+const baselineSettled = (result: { current: ReturnType<typeof usePeakWizard> }, y0: number) =>
+  waitFor(() => {
+    expect(result.current.baselineBusy).toBe(false);
+    expect(useApp.getState().baselineOverlay?.y[0]).toBe(y0);
+  });
 
 describe("useModelFit — publish provenance (P2.1)", () => {
   const route = (failBaseline: boolean) => (i: number) => {
@@ -344,7 +357,7 @@ describe("useModelFit — invalidation from the content key", () => {
     useApp.setState({ datasets: [...useApp.getState().datasets, { id: "d2", name: "other", data: DATA }] });
     const { result } = wizardWithTwoPeaks();
     act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
-    await waitFor(() => expect(useApp.getState().baselineOverlay?.y[0]).toBe(0.25));
+    await baselineSettled(result, 0.25);
     await act(() => result.current.model.run());
     expect(result.current.model.result).not.toBeNull();
     const ours = useApp.getState().baselineOverlay;
@@ -364,11 +377,47 @@ describe("useModelFit — invalidation from the content key", () => {
       : json(200, modelFitResponse())));
     const { result } = wizardWithTwoPeaks();
     act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
-    await waitFor(() => expect(useApp.getState().baselineOverlay?.y[0]).toBe(0.25));
+    await baselineSettled(result, 0.25);
     await act(() => result.current.model.run());
     expect(useApp.getState().baselineOverlay?.y[0]).not.toBe(0.25);
     act(() => result.current.togglePeak(0));
     expect(useApp.getState().baselineOverlay).toMatchObject({ datasetId: "d1" });
     expect(useApp.getState().baselineOverlay?.y[0]).toBe(0.25);
+  });
+});
+
+describe("useModelFit — forcing the baseline-commit race (flake 2026-11)", () => {
+  it("the overlay lands in the store BEFORE the hook commits the estimate, so a run taken there is dropped", async () => {
+    // Hold the als answer, then release it and stop at the first store write
+    // (no clock, no poll): the continuation has written the overlay but React
+    // has not yet committed its batched setResult/setBaselineBusy.
+    stubFetch();
+    const { result } = wizardWithTwoPeaks();
+    act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+    await act(async () => {}); // let resolveDataset settle so the als request is issued and held
+    expect(pending).toHaveLength(1);
+    const landed = untilState(useApp, (s) => expect(s.baselineOverlay?.y[0]).toBe(0.25));
+    pending[0].resolve(json(200, { baseline: DATA.values.map(() => 0.25) }));
+    await landed;
+    expect(result.current.baselineBusy).toBe(true); // overlay visible, estimate not committed
+    // the race window: a run taken now fits with NO baseline subtracted, then
+    // the commit changes the content key and its answer is discarded
+    let run!: Promise<void>;
+    act(() => { run = result.current.model.run(); });
+    await waitFor(() => expect(result.current.baselineBusy).toBe(false));
+    await act(async () => {
+      pending[1].resolve(json(200, modelFitResponse()));
+      await run;
+    });
+    expect(result.current.model.result).toBeNull();
+    // the settled wait closes the window: a run taken after it is kept
+    await baselineSettled(result, 0.25);
+    let again!: Promise<void>;
+    act(() => { again = result.current.model.run(); });
+    await act(async () => {
+      pending[2].resolve(json(200, modelFitResponse()));
+      await again;
+    });
+    expect(result.current.model.result).not.toBeNull();
   });
 });
