@@ -2176,6 +2176,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
   // libraryPanel slice: UI state only
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
+  inspectorPanelWidth: "Inspector panel width preference; UI layout state, not data",
   revealTarget: "scroll-to target for Library tree; ephemeral, cleared after reveal",
   activeDrag: "active drag state for Library folder drag feedback; transient",
   activeDragPress:

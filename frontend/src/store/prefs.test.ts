@@ -130,4 +130,13 @@ describe("preferences", () => {
     localStorage.setItem("qz.prefs", JSON.stringify({ libraryPanelWidth: 1 }));
     expect(loadPrefs().libraryPanelWidth).toBe(LIBRARY_PANEL_WIDTH_MIN);
   });
+
+  it("inspectorPanelWidth defaults to 296 and clamps out-of-range values on load", () => {
+    localStorage.removeItem("qz.prefs");
+    expect(loadPrefs().inspectorPanelWidth).toBe(296);
+    localStorage.setItem("qz.prefs", JSON.stringify({ inspectorPanelWidth: 9999 }));
+    expect(loadPrefs().inspectorPanelWidth).toBe(560);
+    localStorage.setItem("qz.prefs", JSON.stringify({ inspectorPanelWidth: 1 }));
+    expect(loadPrefs().inspectorPanelWidth).toBe(240);
+  });
 });

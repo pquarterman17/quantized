@@ -82,6 +82,8 @@ export interface AppearancePrefsSlice {
   // (frames = aspect-preserving letterbox, window = fill). Read at apply time,
   // mirroring how `defaultGrid` seeds `showGrid`.
   defaultPanelFit: PanelFit;
+  /** The Inspector's resized width in CSS px (applied to --rw; `Prefs`). */
+  inspectorPanelWidth: number;
   setTheme: (theme: Theme) => void; // an explicit pick: pins themeMode too
   setThemeMode: (mode: ThemeMode) => void;
   setAccent: (accent: Accent) => void;
