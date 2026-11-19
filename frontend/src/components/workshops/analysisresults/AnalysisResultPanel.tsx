@@ -203,14 +203,6 @@ export default function AnalysisResultPanel() {
     try { await loadActions().then((m) => m.duplicateAnalysisResult(result.id), onLoadFailure); }
     finally { setBusy(null); }
   };
-  const freeze = async () => {
-    if (busy) return;
-    setBusy("freeze");
-    try {
-      const frozenId = await loadActions().then((m) => m.freezeAnalysisResult(result.id), () => { onLoadFailure(); return null; });
-      if (frozenId) setActive(frozenId);
-    } finally { setBusy(null); }
-  };
   const preparePlot = async (index: number) => loadActions()
     .then((m) => m.prepareAnalysisResultPlot(result.id, index), () => { onLoadFailure(); return null; });
   const openPlot = async (index: number) => {
@@ -270,11 +262,6 @@ export default function AnalysisResultPanel() {
   // own state: still openable, never recalculable.
   const sourceMissing = !!output && !source && result.sources.length > 0;
   const blocked = sourceMissing ? SOURCE_MISSING : undefined;
-  const freezeReason = result.outputs.length !== 1
-    ? "Freeze is available when a result has one linked output worksheet."
-    : !output?.derivedFrom
-      ? "The linked output is already independent or unavailable."
-      : "Create an independent worksheet from the current linked output.";
   const peakStale = !!(isPeak && source && peakTable && !peakTableMatchesData(peakTable, source));
   const fitStale = !!(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale));
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
@@ -303,12 +290,11 @@ export default function AnalysisResultPanel() {
           snapshotState={snapshotState ?? "source-missing"}
           recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
           hasReflFit={!!reflFit} hasFitSpec={!!fitSpec} fitReplayable={fitReplayable}
-          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputDerived={!!output?.derivedFrom}
-          blocked={blocked} freezeReason={freezeReason}
+          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} blocked={blocked} setBusy={setBusy} onFrozen={setActive}
           onOpenSource={() => { if (source) openTable(source.id); }} onOpenOutput={openOutput}
           onEdit={isSnapshot ? editSnapshot : isRefl ? editReflFit : isPeak ? editPeaks : editFit}
           onRecalculate={() => void recalculate()} onRerun={() => void rerun()}
-          onDuplicate={() => void duplicate()} onFreeze={() => void freeze()} onReport={() => void sendInlineReport()}
+          onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()}
           onRename={() => void rename()} onRemove={() => void remove()} />
         {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
           {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}

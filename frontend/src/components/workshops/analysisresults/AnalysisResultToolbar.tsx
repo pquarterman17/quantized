@@ -2,15 +2,17 @@ import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import type { Dataset } from "../../../lib/types";
 import { Button } from "../../primitives";
+import AnalysisResultFreeze from "./AnalysisResultFreeze";
 import AnalysisResultSnapshotToolbar from "./AnalysisResultSnapshotToolbar";
+import type { Dispatch, SetStateAction } from "react";
 import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 
 export default function AnalysisResultToolbar({
   result, source, status, busy, mode, snapshotState, recipeReady,
   hasReflFit, hasFitSpec, fitReplayable, hasOutput, outputHasRecipe,
-  outputDerived, blocked, freezeReason,
+  blocked, setBusy, onFrozen,
   onOpenSource, onOpenOutput, onEdit, onRecalculate, onRerun,
-  onDuplicate, onFreeze, onReport, onRename, onRemove,
+  onDuplicate, onReport, onRename, onRemove,
 }: {
   result: AnalysisResult;
   source?: Dataset;
@@ -24,16 +26,15 @@ export default function AnalysisResultToolbar({
   fitReplayable: boolean;
   hasOutput: boolean;
   outputHasRecipe: boolean;
-  outputDerived: boolean;
   blocked?: string;
-  freezeReason: string;
+  setBusy: Dispatch<SetStateAction<AnalysisResultBusy>>;
+  onFrozen: (datasetId: string) => void;
   onOpenSource: () => void;
   onOpenOutput: () => void;
   onEdit: () => void;
   onRecalculate: () => void;
   onRerun: () => void;
   onDuplicate: () => void;
-  onFreeze: () => void;
   onReport: () => void;
   onRename: () => void;
   onRemove: () => void;
@@ -42,7 +43,7 @@ export default function AnalysisResultToolbar({
     <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
     {mode === "snapshot" ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={recipeReady}
       state={snapshotState} busy={busy} onOpen={onOpenSource} onEdit={onEdit}
-      onDuplicate={onDuplicate} onReport={onReport} /> : mode === "reflectivity" ? <>
+      onDuplicate={onDuplicate} onReport={onReport} setBusy={setBusy} onFrozen={onFrozen} /> : mode === "reflectivity" ? <>
       <Button disabled={!hasReflFit || busy !== null} onClick={onEdit}>Open fit workbench</Button>
     </> : mode === "peaks" ? <>
       <Button disabled={!source || busy !== null} onClick={onOpenSource}>Open data</Button>
@@ -58,7 +59,7 @@ export default function AnalysisResultToolbar({
       <Button disabled={!source || !hasOutput || busy !== null} title={blocked} onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
       <Button disabled={!source || !outputHasRecipe || busy !== null} title={blocked} onClick={onRerun}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
       <Button disabled={result.outputs.length !== 1 || !hasOutput || busy !== null} title="Create a separate linked output worksheet and result." onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
-      <Button disabled={result.outputs.length !== 1 || !outputDerived || busy !== null} title={freezeReason} onClick={onFreeze}>{busy === "freeze" ? "Freezing…" : "Freeze data"}</Button>
+      <AnalysisResultFreeze result={result} busy={busy} setBusy={setBusy} onFrozen={onFrozen} />
     </>}
     <Button disabled={busy !== null} onClick={onRename}>Rename…</Button>
     <Button disabled={busy !== null} variant="danger" onClick={onRemove}>Delete…</Button>
