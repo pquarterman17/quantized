@@ -39,7 +39,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
 
 ### Confirmed product gaps
 
-- [ ] General signal processing has no coherent workbench. Common operations
+- [x] General signal processing has no coherent workbench. (Resolved: Analyze ▸ Signal Processing… workbench, incl. low-pass/band-pass filtering and cross-correlation, `components/workshops/signalprocessing/*`; multi-sheet apply groups outputs, #760.) Common operations
   are split between a collapsed Corrections card, the range gadget, and
   technique-specific FFT tools. General filtering and cross-correlation have
   backend implementations but no normal GUI path.
@@ -52,7 +52,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
 - [ ] Batch and `By` support is inconsistent. Users cannot assume that an
   analysis that works once can be run over selected worksheets or factor
   levels with the same controls.
-- [ ] The Analyze menu is a launcher, not an analysis navigator. It does not
+- [x] The Analyze menu is a launcher, not an analysis navigator. (Resolved by #764.) It does not
   show input requirements, compatibility with the current worksheet, recent
   analyses, or existing results.
   - **Navigator slice landed** (`lib/analysisRequirements.ts`,
