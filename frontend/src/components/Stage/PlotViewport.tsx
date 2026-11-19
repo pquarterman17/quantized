@@ -37,6 +37,7 @@ import { plotDecorNeeds, startupOverlayCount, useLazyPlotParts } from "./useLazy
 import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useResolvedLims } from "./useResolvedLims";
+import { usePlotKeyboard } from "./usePlotKeyboard";
 
 // The props interface lives in plotViewportProps.ts (moved verbatim to keep
 // this component under its 400-line ceiling); re-exported for importers.
@@ -368,5 +369,10 @@ export default function PlotViewport(props: PlotViewportProps) {
   );
   useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult) });
 
-  return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }} />;
+  const kb = usePlotKeyboard({ plotRef, payload: displayPayload, hidden: args.hidden, onViewChange: args.onViewChange, onReadout: args.onReadout, xLabel: args.xAxisLabel, yLabel: args.yAxisLabel });
+  return (
+    <div ref={hostRef} {...kb.hostProps} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }}>
+      <span className="qz-sr-only" aria-live="polite" data-plot-kb-live="">{kb.live}</span>
+    </div>
+  );
 }

@@ -19,6 +19,7 @@ export default function BatchApplyLauncher({
   setup,
   build,
   disabledReason,
+  groupName,
 }: {
   /** Identity of the dialog's current setup: the recipe is REBUILT whenever
    *  it changes, so an open batch panel always applies what the dialog shows
@@ -28,6 +29,9 @@ export default function BatchApplyLauncher({
   build: () => AnalysisTemplate;
   /** Why the setup cannot be batch-applied right now ("" = it can). */
   disabledReason: string;
+  /** Opt-in grouping: with >= 2 outputs they land in a folder
+   *  "<groupName> (N)" with an "Overlay these N" button. */
+  groupName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const running = useApp((s) => s.pipelineRunning);
@@ -60,7 +64,7 @@ export default function BatchApplyLauncher({
       {open && built.error && <p className="qz-error" role="alert">{built.error}</p>}
       {open && recipe && (
         <Suspense fallback={<div className="qzk-ds-meta">Loading…</div>}>
-          <ApplyRecipeSection recipe={recipe} onClose={() => setOpen(false)} disabled={running || Boolean(blocked)} disabledReason={blocked || undefined} keepActive />
+          <ApplyRecipeSection recipe={recipe} onClose={() => setOpen(false)} disabled={running || Boolean(blocked)} disabledReason={blocked || undefined} keepActive groupName={groupName} />
         </Suspense>
       )}
       {open && !recipe && !built.error && <Button onClick={() => setOpen(false)}>Close batch panel</Button>}
