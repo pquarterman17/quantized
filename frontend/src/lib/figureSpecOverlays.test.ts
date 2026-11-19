@@ -8,7 +8,7 @@ import type { FigureSpec } from "./api/figures";
 import { FIT_MARKER_MAX_POINTS, fitLineWidth } from "./fitOverlayStyle";
 import { resolveToHex } from "./color";
 import type { StoreGet } from "./exportActive";
-import { withAnalysisOverlays, type OverlayGrey, type OverlaySources, type OverlayView } from "./figureSpecOverlays";
+import { drawnOverlayLabels, withAnalysisOverlays, type OverlayGrey, type OverlaySources, type OverlayView } from "./figureSpecOverlays";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
@@ -113,6 +113,18 @@ describe("withAnalysisOverlays", () => {
     // the one plotted channel — exactly as `uplotSeries` colours it.
     expect(fit?.color).toBe(resolveToHex(seriesColor(1)));
     expect(peaks?.color).toBe(resolveToHex(seriesColor(2)));
+  });
+
+  it("carries no 'peaks' series or legend entry before any peak exists (screen agrees)", () => {
+    const view: TestView = { ...VIEW, peakOverlay: { datasetId: "d1", binding: SINGLE_X, y: [null, null, null, null] } };
+    const out = overlay(flat(), DS, view);
+    expect(out.dataset.labels).toEqual(["Intensity", "fit"]);
+    expect(out.series_styles?.some((st) => st?.legend === "peaks")).toBe(false);
+    expect(drawnOverlayLabels(DS, view, view)).toEqual(["fit"]);
+    // Only an empty peak overlay and nothing else: the spec is returned untouched.
+    const only: TestView = { ...view, fitOverlay: null };
+    const spec = flat();
+    expect(overlay(spec, DS, only)).toBe(spec);
   });
 
   it("draws another tool's fit (Quick Fit, peak envelope: no curveFit flag) as before: solid, data unmarked", () => {

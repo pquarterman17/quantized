@@ -28,6 +28,41 @@ test.describe("accessibility structure (UX9-H)", () => {
     await expect(sep).not.toHaveAttribute("aria-valuenow", String(before - 16));
   });
 
+  test("Inspector splitter: keyboard resize widens leftwards, resets, persists", async ({ page }) => {
+    await gotoApp(page);
+    const sep = page.getByRole("separator", { name: "Resize Inspector panel" });
+    const aside = page.locator(".qzk-inspector");
+    await sep.focus();
+    const before = Number(await sep.getAttribute("aria-valuenow"));
+    await page.keyboard.press("ArrowLeft");
+    await expect(sep).toHaveAttribute("aria-valuenow", String(before + 16));
+    await expect.poll(async () => (await aside.boundingBox())?.width).toBe(before + 16);
+    await page.reload();
+    await expect(page.getByRole("separator", { name: "Resize Inspector panel" })).toHaveAttribute(
+      "aria-valuenow",
+      String(before + 16),
+    );
+    await page.getByRole("separator", { name: "Resize Inspector panel" }).dblclick();
+    await expect(sep).toHaveAttribute("aria-valuenow", String(before));
+  });
+
+  test("Library header stays visible while the list is scrolled", async ({ page }) => {
+    await gotoApp(page);
+    const lib = page.locator(".qzk-library");
+    await lib.evaluate((el) => {
+      const pad = document.createElement("div");
+      pad.style.cssText = "height:2000px;flex:none";
+      el.appendChild(pad);
+      el.scrollTop = 300;
+    });
+    const head = page.locator(".qzk-lib-head");
+    const libBox = await lib.boundingBox();
+    const headBox = await head.boundingBox();
+    expect(headBox!.y).toBeGreaterThanOrEqual(libBox!.y - 1);
+    expect(headBox!.y).toBeLessThanOrEqual(libBox!.y + 2);
+    await expect(head.getByText("Library", { exact: true })).toBeInViewport();
+  });
+
   test("typing a model search shows a real list", async ({ page }) => {
     await gotoApp(page);
     await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("linear-ramp.csv"));

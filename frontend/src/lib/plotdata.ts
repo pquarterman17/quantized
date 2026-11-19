@@ -7,16 +7,9 @@ import type uPlot from "uplot";
 import { plotSeries } from "./api";
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { isCategorical } from "./modeling";
+import { peakOverlayEmpty } from "./peakOverlayEmpty";
 import { mapColumn } from "./plotColumnOps";
-import type {
-  BaselineOverlay,
-  ChannelRole,
-  DataStruct,
-  FitOverlay,
-  ModelingType,
-  PeakOverlay,
-  PlotSeriesResponse,
-} from "./types";
+import type { BaselineOverlay, ChannelRole, DataStruct, FitOverlay, ModelingType, PeakOverlay, PlotSeriesResponse } from "./types";
 import { waterfallApplies, waterfallStep } from "./waterfallOffset";
 
 export interface PlotSeriesSpec {
@@ -501,8 +494,9 @@ export function withPeakOverlay(
   overlay: PeakOverlay | null,
   activeId: string | null,
 ): PlotPayload {
-  if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
+  // No peaks yet (empty marker column): no series, so no legend row either.
+  const y = overlay && overlay.datasetId === activeId && !peakOverlayEmpty(overlay)
+    ? alignOverlayY(overlay.y, payload.data[0].length, payload.decimated) : null;
   if (y === null) return payload;
   return {
     ...payload,

@@ -704,6 +704,11 @@ describe("withPeakOverlay", () => {
     expect(p.series[1]).toEqual({ label: "peaks", unit: "", kind: "points", overlay: true });
   });
 
+  it("adds no legend row or series while the overlay holds no peaks", () => {
+    expect(withPeakOverlay(base, { datasetId: "d1", binding: SINGLE_X, y: [null, null, null] }, "d1")).toBe(base);
+    expect(withPeakOverlay(base, { datasetId: "d1", binding: SINGLE_X, y: [null, NaN, null] }, "d1")).toBe(base);
+  });
+
   it("is a no-op for a mismatched dataset or length", () => {
     expect(withPeakOverlay(base, { datasetId: "x", binding: SINGLE_X, y: [null, 1, null] }, "d1")).toBe(base);
     expect(withPeakOverlay(base, { datasetId: "d1", binding: SINGLE_X, y: [1] }, "d1")).toBe(base);

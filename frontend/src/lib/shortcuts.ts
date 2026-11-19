@@ -78,6 +78,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "M", desc: "Measure tool" },
       { keys: "I", desc: "Integrate tool (area under curve)" },
       { keys: "W", desc: "Peak / FWHM tool" },
+      { keys: "Tab", desc: "Focus the plot: ← → step points, ↑ ↓ switch series" },
+      { keys: "+ / −", desc: "Plot focused: zoom about the cursor; ⇧ + arrows pan; Home / 0 reset" },
       { keys: "Drag", desc: "Use the active tool over a region" },
       { keys: "Double-click", desc: "Reset / auto-scale the view" },
       { keys: "Right-click", desc: "Plot menu (log · grid · legend · copy · save…)" },

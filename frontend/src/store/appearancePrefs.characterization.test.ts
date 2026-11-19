@@ -54,6 +54,7 @@ const POISON: Prefs = {
   originBookClickOpens: "plot",
   defaultPanelFit: "window",
   libraryPanelWidth: 300,
+  inspectorPanelWidth: 380,
   copyFigureTransparent: true,
   opjWriteMatrices: true,
 };
@@ -77,6 +78,7 @@ const NEXT: Prefs = {
   originBookClickOpens: "worksheet",
   defaultPanelFit: "frames",
   libraryPanelWidth: 250,
+  inspectorPanelWidth: 320,
   copyFigureTransparent: false,
   opjWriteMatrices: false,
 };
@@ -184,5 +186,10 @@ describe("setPref (the Preferences dialog's generic writer)", () => {
   it("libraryPanelWidth applies live to the --lw custom property", () => {
     act().setPref("libraryPanelWidth", 333);
     expect(document.documentElement.style.getPropertyValue("--lw")).toBe("333px");
+  });
+
+  it("inspectorPanelWidth applies live to the --rw custom property", () => {
+    act().setPref("inspectorPanelWidth", 411);
+    expect(document.documentElement.style.getPropertyValue("--rw")).toBe("411px");
   });
 });
