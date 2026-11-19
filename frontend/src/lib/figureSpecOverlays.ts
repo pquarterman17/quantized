@@ -56,6 +56,7 @@ import { FIT_SERIES_LABEL, specCanCarryOverlays } from "./overlaySpecShape";
 import { fitLineWidth, traceWithFit } from "./fitOverlayStyle";
 import { perSeriesXDataset } from "./perSeriesX";
 import { shownCurves } from "./shownCurves";
+import { peakOverlayEmpty } from "./peakOverlayEmpty";
 import type { BaselineOverlay, Dataset, DefaultTrace, FitOverlay, OverlayBinding, PeakOverlay } from "./types";
 
 
@@ -151,7 +152,7 @@ export function withAnalysisOverlays(
  *  or another dataset's overlay is drawn nowhere, so is never "dropped"). */
 export function drawnOverlayLabels(ds: Dataset, view: OverlayView, sources: OverlaySources): string[] {
   const all: [string, FitOverlay | null][] = [
-    [FIT_SERIES_LABEL, sources.fitOverlay], ["baseline", sources.baselineOverlay], ["peaks", sources.peakOverlay],
+    [FIT_SERIES_LABEL, sources.fitOverlay], ["baseline", sources.baselineOverlay], ["peaks", peakOverlayEmpty(sources.peakOverlay) ? null : sources.peakOverlay],
   ];
   const mine = all.filter(([, o]) => o?.datasetId === ds.id);
   if (!mine.length) return [];
@@ -187,14 +188,14 @@ function appendOverlays(
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
   const mine = (o: { datasetId: string } | null) => o?.datasetId === ds.id;
-  if (!mine(sources.fitOverlay) && !mine(sources.baselineOverlay) && !mine(sources.peakOverlay)) return spec; // none to place
+  if (!mine(sources.fitOverlay) && !mine(sources.baselineOverlay) && !(mine(sources.peakOverlay) && !peakOverlayEmpty(sources.peakOverlay))) return spec; // none to place
   const { target, layout } = overlayTarget(ds, view);
   if (!drawsShownCurves(keys as number[], ds, view, layout.shown)) return spec; // fail closed
   const n = target.data.time.length;
   const candidates: [string, FitOverlay | null | undefined, boolean][] = [
     [FIT_SERIES_LABEL, placeOverlay(sources.fitOverlay, layout), false],
     ["baseline", placeOverlay(sources.baselineOverlay, layout), false],
-    ["peaks", placeOverlay(sources.peakOverlay, layout), true],
+    ["peaks", peakOverlayEmpty(sources.peakOverlay) ? null : placeOverlay(sources.peakOverlay, layout), true],
   ];
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is
   // (0 = not a band edge); an odd value is a lower edge.

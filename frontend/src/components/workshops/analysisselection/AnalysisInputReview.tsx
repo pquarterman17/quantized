@@ -41,21 +41,25 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
       if ("yKeys" in patch && patch.yKeys) setYKeys(patch.yKeys);
     }
   };
+  const first = selection.items[0] && datasets.find((entry) => entry.id === selection.items[0].datasetId);
+  const summary = selection.items.length > 1
+    ? `${selection.items.length} worksheets`
+    : first ? `${first.name} — ${first.data.labels[selection.items[0].yKeys[0] ?? -1] || "Y"} vs ${selection.items[0].xKey === null ? String(first.data.metadata.x_column_name ?? "X / time") : first.data.labels[selection.items[0].xKey] || "X"}` : "no worksheet";
   const errors = resolved.issues.filter((issue) => issue.severity === "error");
   return (
     <section className="qzk-analysis-input-review" aria-label="Review analysis inputs">
       <button type="button" className="qzk-analysis-input-review-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-        <span><strong>Review inputs</strong> · {selection.items.length} worksheet{selection.items.length === 1 ? "" : "s"}</span>
+        <span><strong>Analysing:</strong> {summary}</span>
         <span>{errors.length ? `${errors.length} blocked` : open ? "▾" : "▸"}</span>
       </button>
       {open && (
         <div className="qzk-analysis-input-review-body">
           <div className="qzk-analysis-input-review-actions">
             <span>{selection.source === "tool-default"
-              ? "Direct launch follows the current plot, selected rows, and active X range."
+              ? "Using the data on the current plot, including selected rows and the X range."
               : selection.items.length > 1 && !supportsBatch
-                ? "This tool will use the first worksheet."
-                : "Nothing runs until you confirm the tool action."}</span>
+                ? "Only the first worksheet is analysed by this tool."
+                : "Choose the columns to analyse below."}</span>
             <Button size="sm" onClick={() => seedAnalysisSelection(toolId, "library")}>Refresh from current selection</Button>
           </div>
           {selection.items.map((item, index) => {
