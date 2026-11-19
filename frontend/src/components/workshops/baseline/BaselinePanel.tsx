@@ -9,7 +9,7 @@
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
-import { plotSelectedTogether } from "../../../lib/plotSelectedTogether";
+import OverlayOutputsButton from "../OverlayOutputsButton";
 import { useApp } from "../../../store/useApp";
 import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
 
@@ -196,11 +196,7 @@ export default function BaselinePanel() {
           {`Apply to ${selectedCount} selected`}
         </Button>
       )}
-      {batchOutputIds.length >= 2 && (
-        <Button size="sm" onClick={() => void plotSelectedTogether(batchOutputIds)} style={{ marginTop: 8, width: "100%" }}>
-          {`◇ Overlay these ${batchOutputIds.length}`}
-        </Button>
-      )}
+      <OverlayOutputsButton ids={batchOutputIds} />
 
       {!active && (
         <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
