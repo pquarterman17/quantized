@@ -207,8 +207,15 @@ test("Exchange X-Y axes is blocked by a saved x-break in the window's document, 
   test.skip(!hasDocument, "the focused window has no document yet in this build");
   // Not exchanged: the command is refused (disabled) beside the saved break.
   await page.getByRole("menuitem", { name: "Plot" }).click().catch(() => undefined);
-  await runPaletteCommand(page, "Exchange X–Y axes");
+  // The palette lists it but inert (aria-disabled, reason shown): it cannot be clicked, so look, don't run.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+k");
+  await page.getByPlaceholder("Type a command…").fill("Exchange X–Y axes");
+  const blocked = page.locator(".qz-cmdk-item", { hasText: "Exchange X–Y axes" }).first();
+  await expect(blocked).toHaveAttribute("aria-disabled", "true");
+  await page.keyboard.press("Enter");
   expect(await exchanged(page)).toBe(false);
+  await page.keyboard.press("Escape");
   // Exchanged, then the break arrives (Break at gaps / the Figure Builder): the exchange is turned off, said so.
   await setBreak([]);
   await runPaletteCommand(page, "Exchange X–Y axes");

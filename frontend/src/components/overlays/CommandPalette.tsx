@@ -274,7 +274,11 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   aria-disabled={unavailable.has(a.id) || undefined}
                   className={`qz-cmdk-item${i === cursor ? " active" : ""}${unavailable.has(a.id) ? " disabled" : ""}`}
                   onMouseEnter={() => setCursor(i)}
-                  onMouseDown={() => run(a)}
+                  onMouseDown={(e) => {
+                    // A disabled row is inert: keep focus in the input (a blur would strand Escape/Enter).
+                    if (unavailable.has(a.id)) e.preventDefault();
+                    else run(a);
+                  }}
                 >
                   <span className="qz-cmdk-copy">
                     <span>{highlight(a.label, hits)}</span>
