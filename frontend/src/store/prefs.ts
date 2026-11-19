@@ -71,6 +71,13 @@ export function defaultLibraryPanelWidth(vw: number): number {
 export const LIBRARY_PANEL_WIDTH_DEFAULT = defaultLibraryPanelWidth(
   typeof window === "undefined" ? 1360 : window.innerWidth,
 );
+// Inspector (right panel) resize clamp. 296 is the long-standing fixed --rw
+// token (styles/spacing.css), now only the pre-boot fallback: the pref below
+// always sets --rw. The lower bound keeps the cards' two-column field rows
+// usable, the upper bound leaves the Stage room.
+export const INSPECTOR_PANEL_WIDTH_MIN = 240;
+export const INSPECTOR_PANEL_WIDTH_MAX = 560;
+export const INSPECTOR_PANEL_WIDTH_DEFAULT = 296;
 
 export interface Prefs {
   /** The EFFECTIVE theme (what <html data-theme> shows). Derived from
@@ -113,6 +120,8 @@ export interface Prefs {
   // part of the .dwk v2 shape), since it's per-project organization, not a
   // cross-project appearance preference.
   libraryPanelWidth: number;
+  // The Inspector's drag/keyboard-resized width in CSS px, applied to --rw.
+  inspectorPanelWidth: number;
   // MAIN_PLAN #35: background for "Copy figure". Transparent pastes
   // cleanly onto a coloured slide; opaque is safer for Word/print, where a
   // transparent PNG can pick up whatever is behind it. Opaque default —
@@ -145,6 +154,7 @@ export const PREF_DEFAULTS: Prefs = {
   originBookClickOpens: "worksheet",
   defaultPanelFit: "frames",
   libraryPanelWidth: LIBRARY_PANEL_WIDTH_DEFAULT,
+  inspectorPanelWidth: INSPECTOR_PANEL_WIDTH_DEFAULT,
   copyFigureTransparent: false,
   opjWriteMatrices: false,
 };
@@ -208,6 +218,12 @@ export function loadPrefs(): Prefs {
         LIBRARY_PANEL_WIDTH_MIN,
         LIBRARY_PANEL_WIDTH_MAX,
       ),
+      inspectorPanelWidth: num(
+        p.inspectorPanelWidth,
+        fb.inspectorPanelWidth,
+        INSPECTOR_PANEL_WIDTH_MIN,
+        INSPECTOR_PANEL_WIDTH_MAX,
+      ),
     };
   } catch {
     return fb;
@@ -238,6 +254,7 @@ export function prefsOf(s: AppState): Prefs {
     originBookClickOpens: s.originBookClickOpens,
     defaultPanelFit: s.defaultPanelFit,
     libraryPanelWidth: s.libraryPanelWidth,
+    inspectorPanelWidth: s.inspectorPanelWidth,
   };
 }
 
@@ -260,6 +277,7 @@ export function syncPrefs(s: AppState): void {
   if (s.reduceMotion) el.dataset.reduceMotion = "";
   else delete el.dataset.reduceMotion;
   el.style.setProperty("--lw", `${s.libraryPanelWidth}px`);
+  el.style.setProperty("--rw", `${s.inspectorPanelWidth}px`);
   setFormatOpts(s.sigFigs, s.notation);
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefsOf(s), [EXCLUDED_DISPLAY_KEY]: s.excludedDisplay }));
