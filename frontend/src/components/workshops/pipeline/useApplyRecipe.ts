@@ -34,9 +34,12 @@ export interface ApplyRecipeState {
   /** Stop the run (worksheet audit #15): the dataset in flight is rolled
    *  back, later ones are not run; finished ones stay. */
   cancel: () => void;
+  /** Outputs grouped in a folder by the last apply (>= 2 only; `groupName`
+   *  set), still in the workspace — what "Overlay these N" plots. */
+  groupedIds: string[];
 }
 
-export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false): ApplyRecipeState {
+export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false, groupName?: string): ApplyRecipeState {
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const activeId = useApp((s) => s.activeId);
@@ -48,6 +51,8 @@ export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false): Ap
   const [ackUnits, setAckUnits] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<ApplyResult[] | null>(null);
+  const [groupedIds, setGroupedIds] = useState<string[]>([]);
+  const liveGrouped = useApp((s) => groupedIds.filter((id) => s.datasets.some((d) => d.id === id)).join("|"));
   const controller = useRef<AbortController | null>(null);
   const columns = useMemo(() => recipe.expects?.columns ?? [], [recipe]);
 
@@ -91,20 +96,25 @@ export function useApplyRecipe(recipe: AnalysisTemplate, keepActive = false): Ap
     controller.current = ctl;
     setRunning(true);
     setResults([]);
+    setGroupedIds([]);
     try {
       const plans = picks.map((p) => ({ datasetId: p.ds.id, bindings: p.bindings }));
       // keepActive: launched from a dialog that works on the ACTIVE worksheet;
       // each output makes itself active, which would re-point the dialog at an
       // output, so applyRecipe hands the view back afterwards.
-      setResults(await applyRecipe(recipe, plans, { ackUnits, signal: ctl.signal, onProgress: (r) => setResults([...r]), keepActive }));
+      const groupFolderName = groupName ? (n: number) => `${groupName} (${n})` : undefined;
+      const done = await applyRecipe(recipe, plans, { ackUnits, signal: ctl.signal, onProgress: (r) => setResults([...r]), keepActive, groupFolderName });
+      setResults(done);
+      const outs = done.filter((r) => r.status === "ok" && r.outputId).map((r) => r.outputId as string);
+      if (groupFolderName && outs.length >= 2) setGroupedIds(outs);
     } finally {
       if (controller.current === ctl) controller.current = null;
       setRunning(false);
     }
-  }, [recipe, picks, ackUnits, keepActive]);
+  }, [recipe, picks, ackUnits, keepActive, groupName]);
 
   const cancel = useCallback(() => controller.current?.abort(), []);
 
   const ready = picks.filter((p) => !p.preflight.blocked).length;
-  return { datasets, picked, togglePick, picks, bind, ackUnits, setAckUnits, ready, running, results, apply, cancel };
+  return { datasets, picked, togglePick, picks, bind, ackUnits, setAckUnits, ready, running, results, apply, cancel, groupedIds: liveGrouped ? liveGrouped.split("|") : [] };
 }

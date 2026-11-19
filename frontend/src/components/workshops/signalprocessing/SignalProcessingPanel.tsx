@@ -382,7 +382,7 @@ export default function SignalProcessingPanel() {
             {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
             {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
-            <BatchApplyLauncher setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
+            <BatchApplyLauncher groupName={operationLabel(settings.operation)} setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
             <div className="qz-dialog-actions">
               <Button onClick={close}>Cancel</Button>
               <Button disabled={Boolean(validation) || !recipe || crossWorksheet} title={crossWorksheet ? "Cross-worksheet recipes retain project-specific source links and cannot yet be saved as reusable templates." : validation || undefined} onClick={() => void saveRecipe()}>Save recipe…</Button>
