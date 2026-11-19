@@ -1,5 +1,6 @@
 import { buildAnalysisCommands } from "../commands/analysisCommands";
 import { analysisTools, type AnalysisTool } from "../lib/analysisCenter";
+import { withAnalysisRequirements } from "../lib/analysisRequirements";
 import { ensureMapGate } from "../lib/mapdata";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Action } from "./commands";
@@ -13,7 +14,12 @@ import { useApp } from "./useApp";
  * imperative store reads out of React render modules without creating a
  * second command implementation. */
 export function analysisCenterActions(): Action[] {
-  return buildAnalysisCommands(useApp.getState);
+  // Same requirement predicate the Analyze menu and palette use (worksheet
+  // count, 2θ axis), so the three surfaces cannot disagree about a tool.
+  return withAnalysisRequirements(buildAnalysisCommands(useApp.getState), () => {
+    const { datasets, activeId } = useApp.getState();
+    return { datasets, dataset: datasets.find((d) => d.id === activeId) };
+  });
 }
 
 export function openAnalysisResult(id: string): void {

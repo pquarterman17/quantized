@@ -259,3 +259,25 @@ describe("CommandPalette ranked search and recents", () => {
     expect(screen.getByText("No matching commands")).toBeInTheDocument();
   });
 });
+
+describe("CommandPalette disabled commands", () => {
+  const blocked = { ...action, id: "blocked", label: "Blocked tool…", disabled: () => true, disabledReason: () => "Needs 2 or more worksheets" };
+
+  it("lists them with the reason, and neither Enter nor a click runs them", async () => {
+    render(<CommandPalette actions={[blocked]} />);
+    const input = screen.getByPlaceholderText("Type a command…");
+    await waitFor(() => expect(input).toHaveFocus());
+    const option = screen.getByRole("option", { name: "Blocked tool…" });
+    expect(option).toHaveAttribute("aria-disabled", "true");
+    expect(option).toHaveTextContent("Needs 2 or more worksheets");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(blocked.run).not.toHaveBeenCalled();
+    expect(useApp.getState().cmdkOpen).toBe(true);
+    // A click on the inert row must not blur the input (Escape would stop working).
+    expect(fireEvent.mouseDown(option)).toBe(false);
+    expect(blocked.run).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(useApp.getState().cmdkOpen).toBe(false);
+  });
+});

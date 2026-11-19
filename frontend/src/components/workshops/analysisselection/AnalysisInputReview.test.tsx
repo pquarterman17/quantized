@@ -59,4 +59,12 @@ describe("AnalysisInputReview", () => {
       { channel: 2, target: 1, axis: "y", side: "both" },
     ]);
   });
+
+  it("states in plain words what will be analysed", () => {
+    render(<AnalysisInputReview toolId="curvefit" singleY />);
+    expect(screen.getByText("experiment.csv — Signal vs X")).toBeInTheDocument();
+    expect(screen.queryByText(/Review inputs/)).toBeNull();
+    expect(screen.queryByText(/Direct launch/)).toBeNull();
+    expect(screen.getByText("Choose the columns to analyse below.")).toBeInTheDocument();
+  });
 });
