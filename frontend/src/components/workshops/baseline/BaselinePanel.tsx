@@ -86,7 +86,7 @@ export default function BaselinePanel() {
   };
 
   return (
-    <ToolWindow id="baseline" title="Baseline" width={320} onClose={close}>
+    <ToolWindow id="baseline" title="Baseline" width={320} dockable onClose={close}>
       <label className="qzk-field-lbl">Method</label>
       <Select
         options={METHODS}

@@ -32,7 +32,24 @@ function sideColumnWidth(self: string | undefined): number {
   return document.querySelector(".qzk-main")?.classList.contains("rc") ? 0 : inspectorWidth();
 }
 
+/** Left edge of the main plot's body (uPlot's `.u-over`), i.e. the right edge
+ *  of its Y-axis gutter (tick labels and the x10^n multiplier); 0 when no plot
+ *  is mounted. */
+function plotBodyLeft(): number {
+  const over = document.querySelector(".qzk-stage .u-over");
+  return over ? Math.max(0, Math.round(over.getBoundingClientRect().left)) : 0;
+}
+
+/** Pure placement: against the right edge of the stage (`room` px of viewport
+ *  left of the side column), but never left of the plot body when the window
+ *  fits there -- a window too wide for the plot overhangs the side column
+ *  instead of covering the Y-axis labels. */
+export function placeFloatingX(viewport: number, side: number, width: number, bodyLeft: number): number {
+  const edge = Math.max(GAP, Math.round(viewport - side - width - GAP));
+  return Math.max(edge, Math.min(bodyLeft, viewport - width - GAP));
+}
+
 export function floatingX(width: number, self?: string): number {
   if (typeof window === "undefined" || typeof document === "undefined") return 120;
-  return Math.max(GAP, Math.round(window.innerWidth - sideColumnWidth(self) - width - GAP));
+  return placeFloatingX(window.innerWidth, sideColumnWidth(self), width, plotBodyLeft());
 }
