@@ -271,7 +271,7 @@ export default function SignalProcessingPanel() {
   const xLabel = xAxis?.label.trim() || (typeof active?.data.metadata.xLabel === "string" ? active.data.metadata.xLabel.trim() : "") || "X";
   const xUnit = active ? xUnitOf(active.data) || xAxis?.unit.trim() || "" : "";
   return (
-    <ToolWindow id="signal-processing" title="Signal Processing" width={620} x={180} y={90} onClose={close}>
+    <ToolWindow id="signal-processing" title="Signal Processing" width={620} y={90} dockable onClose={close}>
       <div className="qz-signal-workbench">
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
         {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : (

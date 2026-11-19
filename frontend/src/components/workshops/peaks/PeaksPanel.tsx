@@ -261,7 +261,7 @@ export default function PeaksPanel() {
 
   return (
     <>
-    <ToolWindow id="peaks" title="Peaks" width={360} onClose={close}>
+    <ToolWindow id="peaks" title="Peaks" width={360} dockable onClose={close}>
       <PeakAnalysisInputs params={find.params} />
       {!active && (
         <div className="qzk-helptext" style={faint}>

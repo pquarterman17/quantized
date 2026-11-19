@@ -52,7 +52,7 @@ function clearOfLibrary(x: number): number {
 export default function ToolWindow({
   id,
   title,
-  x = 120,
+  x,
   y = 90,
   width = 360,
   onClose,
@@ -67,6 +67,7 @@ export default function ToolWindow({
    *  instance at a time, so their own name is a natural id). */
   id: string;
   title: ReactNode;
+  /** Default x of the floating window (a saved position wins). */
   x?: number;
   y?: number;
   width?: number;
@@ -90,7 +91,9 @@ export default function ToolWindow({
   const stored = useApp((s) => s.toolWindowLayout[id]);
   const setLayout = useApp((s) => s.setToolWindowLayout);
   const toggleCollapsed = useApp((s) => s.toggleToolWindowCollapsed);
-  const fallback = defaultToolWindowLayout(clearOfLibrary(x), y, width);
+  // A dock-capable window with no explicit x floats against the right edge of
+  // the stage (floatingX), never over the plot's Y-axis labels; others keep 120.
+  const fallback = defaultToolWindowLayout(clearOfLibrary(x ?? (dockable ? floatingX(width, id) : 120)), y, width);
   const layout = stored ?? fallback;
   const dock = useToolWindowDock(id, dockable, layout.width);
   const docked = dock.docked;

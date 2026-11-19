@@ -158,6 +158,29 @@ describe("ToolWindow docking", () => {
     expect(toolDockSnapshot().owner).toBeNull();
   });
 
+  it("a dockable window the user floated opens at the right edge, not over the plot's Y axis", () => {
+    undockToolWindow("fl");
+    Object.defineProperty(window, "innerWidth", { value: 1440, configurable: true });
+    render(
+      <ToolWindow id="fl" title="Baseline" width={320} dockable onClose={() => {}}>
+        <span />
+      </ToolWindow>,
+    );
+    const frame = document.querySelector<HTMLElement>("[data-tool-window='fl']")!;
+    expect(frame.style.left).toBe(`${1440 - 296 - 320 - 16}px`);
+  });
+
+  it("a user-moved dockable window keeps its stored position", () => {
+    undockToolWindow("fl2");
+    useApp.setState({ toolWindowLayout: { fl2: { x: 333, y: 150, width: 320, height: null, collapsed: false } } });
+    render(
+      <ToolWindow id="fl2" title="Baseline" width={320} dockable onClose={() => {}}>
+        <span />
+      </ToolWindow>,
+    );
+    expect(document.querySelector<HTMLElement>("[data-tool-window='fl2']")!.style.left).toBe("333px");
+  });
+
   it("a window without `dockable` never docks", () => {
     render(
       <ToolWindow id="plain" title="Find peaks" onClose={() => {}}>
