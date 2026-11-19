@@ -110,6 +110,9 @@
   border-radius: var(--radius-sm);
   cursor: default;
 }
+.qz-cmdk-item.disabled {
+  opacity: 0.5;
+}
 .qz-cmdk-copy {
   min-width: 0;
   display: flex;

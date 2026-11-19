@@ -153,6 +153,20 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     ];
   }, [allActions, query, usage]);
 
+  // Disabled commands stay listed (never hidden) with the menu's own reason,
+  // evaluated once per open/list change rather than per row per render.
+  const unavailable = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const a of allActions) {
+      const off = typeof a.disabled === "function" ? a.disabled() : a.disabled === true;
+      if (!off) continue;
+      const why = typeof a.disabledReason === "function" ? a.disabledReason() : a.disabledReason;
+      out.set(a.id, why ?? "Unavailable right now");
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read on every open
+  }, [allActions, open]);
+
   useEffect(() => {
     setCursor(0);
   }, [query]);
@@ -160,6 +174,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   if (!open) return null;
 
   const run = (a: Action) => {
+    if (unavailable.has(a.id)) return;
     close();
     if (!a.perEntity) recordUse(a.id);
     // P3.4 slice 2: routes through the shared chokepoint so an async
@@ -256,14 +271,15 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   aria-label={a.label}
                   aria-describedby={`${listId}-${i}-d ${listId}-${i}-m`}
                   aria-selected={i === cursor}
-                  className={`qz-cmdk-item${i === cursor ? " active" : ""}`}
+                  aria-disabled={unavailable.has(a.id) || undefined}
+                  className={`qz-cmdk-item${i === cursor ? " active" : ""}${unavailable.has(a.id) ? " disabled" : ""}`}
                   onMouseEnter={() => setCursor(i)}
                   onMouseDown={() => run(a)}
                 >
                   <span className="qz-cmdk-copy">
                     <span>{highlight(a.label, hits)}</span>
-                    {a.description && (
-                      <span id={`${listId}-${i}-d`} className="qz-cmdk-desc">{a.description}</span>
+                    {(unavailable.get(a.id) ?? a.description) && (
+                      <span id={`${listId}-${i}-d`} className="qz-cmdk-desc">{unavailable.get(a.id) ?? a.description}</span>
                     )}
                   </span>
                   <span id={`${listId}-${i}-m`} className="qz-cmdk-meta">
