@@ -16,7 +16,7 @@ test("Tab to the plot, ArrowRight shows a readout, + zooms, Home resets", async 
   await waitForDatasetCount(page, 1);
   await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
 
-  const host = page.getByRole("application", { name: /^Plot: .*arrow keys move the cursor/ });
+  const host = page.getByRole("application", { name: /^Plot: .*Arrows: cursor/ });
   await expect(host).toHaveAttribute("tabindex", "0");
   // Tab until the plot has focus (a bounded walk through the app chrome).
   await page.locator("body").click({ position: { x: 1, y: 1 } });

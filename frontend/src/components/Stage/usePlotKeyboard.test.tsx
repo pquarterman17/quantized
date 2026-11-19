@@ -89,7 +89,7 @@ describe("usePlotKeyboard", () => {
     const host = screen.getByTestId("host");
     expect(host.tabIndex).toBe(0);
     expect(host.getAttribute("role")).toBe("application");
-    expect(host.getAttribute("aria-label")).toMatch(/^Plot: Moment vs Field, arrow keys move the cursor/);
+    expect(host.getAttribute("aria-label")).toMatch(/^Plot: Moment vs Field\. Arrows/);
   });
 
   it("walks points in DATA order on a non-ascending x and announces them", async () => {
@@ -186,5 +186,42 @@ describe("usePlotKeyboard", () => {
     fireEvent.blur(host);
     expect(readouts[readouts.length - 1]).toBeNull();
     expect(screen.getByTestId("live").textContent).toBe("");
+  });
+
+  it("leaves unshifted Up/Down to the global dataset stepping until a cursor exists", async () => {
+    render(<Harness />);
+    const host = screen.getByTestId("host");
+    const down = (init: KeyboardEventInit) => {
+      const ev = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true, ...init });
+      act(() => { host.dispatchEvent(ev); });
+      return ev.defaultPrevented;
+    };
+    expect(down({})).toBe(false);
+    expect(down({ shiftKey: true })).toBe(true); // pan is ours
+    await key(host, "ArrowRight");
+    expect(down({})).toBe(true);
+  });
+
+  it("Escape clears the cursor without claiming the key", async () => {
+    render(<Harness />);
+    const host = screen.getByTestId("host");
+    await key(host, "ArrowRight");
+    const ev = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    act(() => { host.dispatchEvent(ev); });
+    expect(ev.defaultPrevented).toBe(false);
+    expect(readouts[readouts.length - 1]).toBeNull();
+  });
+
+  it("blur commits a pending zoom at once, and unmount leaves no timer behind", async () => {
+    const { unmount } = render(<Harness />);
+    const host = screen.getByTestId("host");
+    await key(host, "+");
+    expect(useApp.getState().viewHistory).toHaveLength(0);
+    fireEvent.blur(host);
+    expect(useApp.getState().viewHistory).toHaveLength(1);
+    await key(host, "+");
+    unmount();
+    expect(useApp.getState().viewHistory).toHaveLength(2);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

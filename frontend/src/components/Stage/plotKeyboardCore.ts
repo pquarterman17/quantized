@@ -45,6 +45,16 @@ export function flush(c: KbCtx): void {
   if (u && before) c.onViewChange?.(before, viewBounds(u));
 }
 
+/** Drop the cursor + readout and commit any coalesced view change (blur, pointer, Escape, unmount; `commit` false for new data, which must not cut a burst short). */
+export function reset(c: KbCtx, commit = true): void {
+  if (commit) flush(c);
+  if (!c.cur) return;
+  c.cur = null;
+  c.plotRef.current?.over.querySelector("[data-kb-cursor]")?.remove();
+  c.setLive("");
+  c.onReadout?.(null);
+}
+
 const yKey = (c: KbCtx, u: uPlot, s: number) => (c.payload!.series[s - 1]?.axis === 1 && u.scales.y2 ? "y2" : "y");
 
 function show(c: KbCtx, u: uPlot, s: number, i: number): void {

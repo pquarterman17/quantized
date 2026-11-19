@@ -33,28 +33,28 @@ export interface PlotKeyboardArgs {
 }
 
 const HANDLED = /^(Arrow(Left|Right|Up|Down)|[+=\-_0]|Home)$/;
-const load = () => import("./plotKeyboardCore");
+let core: typeof import("./plotKeyboardCore") | null = null;
+const load = () => import("./plotKeyboardCore").then((m) => (core = m));
 
 export function usePlotKeyboard({ plotRef, payload, hidden, onViewChange, onReadout, xLabel, yLabel }: PlotKeyboardArgs) {
   const [live, setLive] = useState("");
   const ctx = useRef<KbCtx>({ plotRef, payload, setLive, cur: null, pending: null, timer: null });
   Object.assign(ctx.current, { plotRef, payload, hidden, onViewChange, onReadout });
 
-  const clear = useCallback(() => {
-    const c = ctx.current;
-    c.cur = null;
-    c.plotRef.current?.over.querySelector("[data-kb-cursor]")?.remove();
-    setLive("");
-    c.onReadout?.(null);
-  }, []);
-  // A new payload invalidates the cursor.
-  useEffect(() => { if (ctx.current.cur) clear(); }, [payload, clear]);
+  // Everything stateful lives in the lazy core; nothing exists to reset until it has loaded.
+  const clear = useCallback(() => core?.reset(ctx.current), []);
+  // A new payload invalidates the cursor; unmount commits what is pending.
+  useEffect(() => { if (ctx.current.cur) core?.reset(ctx.current, false); }, [payload]);
+  useEffect(() => clear, [clear]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.target !== e.currentTarget || isEditingTarget(e.target) || e.altKey || e.ctrlKey || e.metaKey) return;
     const { key, shiftKey } = e;
+    if (key === "Escape") return clear(); // not claimed: the Escape ladder still runs
     if (!HANDLED.test(key) || !ctx.current.payload) return;
-    e.preventDefault(); // also keeps the global ArrowUp/Down dataset stepping out of it
+    // Unshifted Up/Down belong to the global prev/next-dataset stepping until a cursor exists.
+    if (!shiftKey && (key === "ArrowUp" || key === "ArrowDown") && !ctx.current.cur) return;
+    e.preventDefault(); // a handled key also stays out of the global arrows
     void load().then((m) => m.handleKey(ctx.current, key, shiftKey), () => {});
   };
 
@@ -64,7 +64,7 @@ export function usePlotKeyboard({ plotRef, payload, hidden, onViewChange, onRead
       tabIndex: 0,
       role: "application",
       "aria-roledescription": "2-D plot",
-      "aria-label": `${name}, arrow keys move the cursor, plus and minus zoom, shift with arrows pans, Home resets`,
+      "aria-label": `${name}. Arrows: cursor, +/-: zoom`,
       onKeyDown,
       onFocus: (e: FocusEvent<HTMLElement>) => { if (e.target === e.currentTarget) void load().catch(() => {}); },
       onBlur: clear,
