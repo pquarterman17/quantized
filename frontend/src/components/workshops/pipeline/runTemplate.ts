@@ -43,6 +43,7 @@
 // change would not make it safe. Recording is suppressed while it runs
 // (`pipelineRunning`), exactly like a folder batch.
 
+import { groupOutputsInFolder } from "../groupOutputs";
 import { executeSteps, PipelineCancelledError } from "./executeSteps";
 import { reportEmit } from "../../../lib/api";
 import {
@@ -207,7 +208,16 @@ export async function asOneUndoStep<T>(label: string, fn: () => Promise<T>): Pro
 export async function applyRecipe(
   recipe: AnalysisTemplate,
   plans: readonly ApplyPlan[],
-  opts: { ackUnits: boolean; signal?: AbortSignal; onProgress?: (results: readonly ApplyResult[]) => void; keepActive?: boolean },
+  opts: {
+    ackUnits: boolean;
+    signal?: AbortSignal;
+    onProgress?: (results: readonly ApplyResult[]) => void;
+    keepActive?: boolean;
+    /** Folder name for the outputs when >= 2 sheets succeed ("Normalise (3)"):
+     *  they are grouped under the sources' common Library folder INSIDE this
+     *  same undo step (components/workshops/groupOutputs.ts). */
+    groupFolderName?: (n: number) => string;
+  },
 ): Promise<ApplyResult[]> {
   const s = useApp.getState;
   s().setPipelineRunning(true);
@@ -224,6 +234,16 @@ export async function applyRecipe(
       }
       const ok = results.filter((r) => r.status === "ok").length;
       const cancelled = results.some((r) => r.status === "cancelled") ? " (cancelled)" : "";
+      const okOuts = results.filter((r) => r.status === "ok" && r.outputId);
+      if (opts.groupFolderName && okOuts.length >= 2) {
+        const sources = okOuts.map((r) => s().datasets.find((d) => d.id === r.datasetId)).filter((d) => !!d);
+        groupOutputsInFolder(s, {
+          label: `group ${okOuts.length} outputs`,
+          folderName: opts.groupFolderName(okOuts.length),
+          sources,
+          make: () => okOuts.map((r) => r.outputId as string),
+        });
+      }
       s().setStatus(`applied “${recipe.name}” to ${ok}/${results.length} dataset${results.length === 1 ? "" : "s"}${cancelled}`);
       return results;
     });

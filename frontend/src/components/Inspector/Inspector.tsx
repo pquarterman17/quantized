@@ -18,6 +18,7 @@ import AxesCard from "./AxesCard";
 import ChannelsCard from "./ChannelsCard";
 import ErrorRolesCard from "./ErrorRolesCard";
 import CorrectionsCard from "./CorrectionsCard";
+import InspectorResizer from "./InspectorResizer";
 import InspectorSelection from "./InspectorSelection";
 import MacroCard from "./MacroCard";
 import MapCard from "./MapCard";
@@ -46,6 +47,15 @@ const PLOT_TAB_ORDER = ["Channels", "Plot objects", "Axes", "Titles & labels", "
 const DATA_RANK = 99;
 
 export default function Inspector() {
+  return (
+    <>
+      <InspectorBody />
+      <InspectorResizer />
+    </>
+  );
+}
+
+function InspectorBody() {
   const active = useActiveDataset();
   // "Folder › Subfolder" breadcrumb for the active dataset (GUI_INTERACTION
   // #13 sub-item 2) — the Inspector is the Library's existing selection-

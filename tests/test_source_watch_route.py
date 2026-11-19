@@ -164,6 +164,11 @@ def test_a_hung_share_never_starves_a_healthy_volume(
     hung = [f"/mnt/hung/f{i}.dat" for i in range(source_watch.PER_VOLUME_INFLIGHT + 4)]
     monkeypatch.setattr(source_watch, "_mount_points", lambda: ("/mnt/hung", "/"))
     release, _calls = _hang_on(monkeypatch, "/mnt/hung/")
+    # The healthy files pass the per-volume cap in several retry rounds; 0.3 s
+    # was too tight for that on a loaded CI runner (macOS: the healthy volume
+    # still "pending"). The deadline only bounds how long the HUNG ones wait, so
+    # a roomier one keeps the property under test and costs ~2 s once.
+    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 2.0)
     healthy = []
     for i in range(20):  # more healthy files than any per-volume cap
         p = tmp_path / f"ok{i}.dat"

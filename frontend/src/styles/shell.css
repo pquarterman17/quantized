@@ -16,7 +16,7 @@ body {
 
 /* ── app grid ── */
 .qzk-app { display: grid; grid-template-rows: 38px 30px 1fr 24px; height: 100%; }
-.qzk-main { display: grid; grid-template-columns: var(--lw, 210px) 1fr var(--rw, 296px); min-height: 0; }
+.qzk-main { position: relative; display: grid; grid-template-columns: var(--lw, 210px) 1fr var(--rw, 296px); min-height: 0; }
 .qzk-main.lc { grid-template-columns: 0 1fr var(--rw, 296px); }
 .qzk-main.rc { grid-template-columns: var(--lw, 210px) 1fr 0; }
 .qzk-main.lc.rc { grid-template-columns: 0 1fr 0; } /* both collapsed: without this .rc won and the library stayed open */
@@ -165,7 +165,10 @@ body {
    own box rather than the nearest positioned ancestor further up the tree. */
 .qzk-library { position: relative; container-type: inline-size; background: var(--surface-1); border-right: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }
 .qzk-library.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; background: var(--accent-soft); }
-.qzk-lib-head { display: flex; align-items: center; justify-content: space-between; padding: 2px; }
+/* Sticky inside the scrolling .qzk-library: opaque, and it absorbs the panel's top
+   padding (sticky offsets are measured from the padding-inset edge, hence the
+   negative top) so scrolled rows never show above it and the title is never clipped. */
+.qzk-lib-head { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 2px; position: sticky; top: calc(-1 * var(--pad)); z-index: 3; background: var(--surface-1); margin-top: calc(-1 * var(--pad)); padding-top: calc(var(--pad) + 2px); }
 .qzk-lib-title { font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
 .qzk-library-focus { display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 5px 7px; background: var(--surface-2); color: var(--text-dim); font-size: var(--type-nano); }
 .qzk-library-focus-path { display: flex; min-width: 0; align-items: center; gap: 3px; overflow: hidden; }
@@ -602,6 +605,10 @@ body {
    border doesn't look permanently thick. */
 .qzk-lib-resizer { position: absolute; top: 0; bottom: 0; right: 0; width: 6px; cursor: col-resize; z-index: 2; }
 .qzk-lib-resizer:focus-visible { outline: none; background: var(--accent); opacity: 0.5; }
+/* Inspector width grip: straddles the Inspector's left edge (--rw from the right). */
+.qzk-insp-resizer { position: absolute; top: 0; bottom: 0; right: calc(var(--rw, 296px) - 3px); width: 6px; cursor: col-resize; z-index: 2; }
+.qzk-insp-resizer:focus-visible, .qzk-insp-resizer:hover, .qzk-insp-resizer:active { outline: none; background: var(--accent); opacity: 0.5; }
+.qzk-main.rc > .qzk-insp-resizer, .qzk-main.tooldock > .qzk-insp-resizer { display: none; }
 .qzk-lib-resizer:hover, .qzk-lib-resizer:active { background: var(--accent); opacity: 0.5; }
 
 /* Multi-select action bar (sub-item 3) — appears only while >=2 rows are

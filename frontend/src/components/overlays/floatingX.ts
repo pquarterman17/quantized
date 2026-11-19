@@ -9,14 +9,12 @@ import { dockColumnPx, dockWidthWithout } from "../../store/toolDock";
 
 const GAP = 16;
 
-// The Inspector's width, styles/spacing.css --rw: a fixed token, read once.
-let rwCache: number | null = null;
+/** The Inspector's live width: the --rw the Inspector pref / resize grip
+ *  writes inline on <html> (a cheap read, no style pass); the spacing.css
+ *  token is the pre-boot fallback. */
 function inspectorWidth(): number {
-  if (rwCache === null) {
-    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rw"));
-    rwCache = Number.isFinite(v) && v > 0 ? v : 296;
-  }
-  return rwCache;
+  const v = parseFloat(document.documentElement.style.getPropertyValue("--rw"));
+  return Number.isFinite(v) && v > 0 ? v : 296;
 }
 
 /** The Library's live width: 0 while collapsed, else the --lw the Library
