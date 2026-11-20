@@ -109,7 +109,11 @@ unreadable). It is a binding oracle, never a visibility oracle.
 (`book`, `x`, `y`, `recorded`), so the data stays imported and the Recover
 window names it. `hidden_in_origin` wins over any other omission reason.
 Fail closed in the other direction: when another token of the same layer
-names the same column without the hidden byte, the curve stays drawn. The
+names the same column without the hidden byte, the curve stays drawn -- also
+when that shown token carries another column id that binds the same (book, Y,
+sheet) and so collapses into the same curve (Absorption-D3 Graph1 layer 2: six
+`CuSCH3vac B` plots, three hidden; the kept curve keeps its own reason,
+`sheet_unknown`, instead of being reported hidden). The
 figure's fidelity reports `curve_visibility` as recovered, and a layer whose
 only omissions are hidden plots is no longer `curve_sheet_unresolved`.
 

@@ -196,6 +196,29 @@ def test_an_id_another_token_shows_stays_drawn() -> None:
     assert _omitted_all(fig) == []
 
 
+def test_a_shown_duplicate_under_another_id_unhides_the_kept_curve() -> None:
+    """Fail closed across ids: two ids that bind the same (book, Y, sheet)
+    collapse to one curve (Absorption-D3 Graph1 layer 2: six ``CuSCH3vac B``
+    plots, three hidden). When the first is hidden and a later one is shown,
+    the curve keeps its own reason, not ``hidden_in_origin`` -- so a shown
+    plot is never reported hidden and its loss stays ``curve_sheet_unresolved``."""
+    recs = (
+        _column_id_record(1, "A", "X")
+        + _column_id_record(2, "B", "X")
+        + _column_id_record(3, "C", "Y", partner=1)
+        + _column_id_record(5, "C", "Y", partner=1)
+    )
+    layer = _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+    head = _MAGIC + _opju_page_header("WBook") + recs + _opju_page_header("Graph1") + layer
+    for toks in (_hide(_token(3, 2)) + _token(5, 2), _token(5, 2) + _hide(_token(3, 2))):
+        fig = extract_figures_opju(head + toks)[0]
+        assert [n[3] for n in _omitted_all(fig)] == ["sheet_unknown"]
+        figs, _ = assess_origin_figures([fig], container="opju")
+        assert "curve_sheet_unresolved" in figs[0]["fidelity"]["omissions"]
+    both = extract_figures_opju(head + _hide(_token(3, 2)) + _hide(_token(5, 2)))[0]
+    assert [n[3] for n in _omitted_all(both)] == [HIDDEN_IN_ORIGIN]
+
+
 def test_fidelity_reports_hidden_plots_as_recovered_not_unresolved() -> None:
     hidden = {"book": "B1", "x": "A", "y": "C", "recorded": "B1", "reason": HIDDEN_IN_ORIGIN}
     other = {**hidden, "y": "D", "reason": "sheet_unknown"}

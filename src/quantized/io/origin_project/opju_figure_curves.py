@@ -364,6 +364,7 @@ def extract_curves_by_id(
     out: list[dict[str, str | float]] = []
     records: list[bytes | None] = []
     notes: list[dict[str, str]] = []  # per curve: its sheet note (reason "" = kept)
+    unhidden: list[str] = []  # per curve: its reason were it not hidden
     seen: dict[tuple[str, str, str], int] = {}  # key -> its curve's index
     placed: set[int] = set()  # indices of curves the second/third sheet signal placed
     sheet_x: dict[str, str] | None = None  # built on first need
@@ -426,6 +427,10 @@ def extract_curves_by_id(
             # Graph12 ``figSOPvsR_E`` x3, 4 of 15 rows first): undecoded, so a
             # curve only the new sheet signals place is withheld (plan item 67)
             k = seen[key]
+            if notes[k]["reason"] == HIDDEN_IN_ORIGIN and cid not in hidden:
+                # fail closed: a shown plot of the same (book, Y, sheet) under
+                # another id -- the kept curve is not "hidden" after all
+                notes[k]["reason"] = unhidden[k]
             if k in placed and not notes[k]["reason"]:
                 notes[k]["reason"] = "plotted_twice"
             continue
@@ -440,6 +445,7 @@ def extract_curves_by_id(
             reason = range_reason(b, record, sheet or book, y_col)
         # an error-bar DataPlot: bars drawn from designations, never a line
         reason = error_bar_reason(record) or reason
+        unhidden.append(reason)
         if cid in hidden:  # Origin does not draw it: no other reason applies
             reason = HIDDEN_IN_ORIGIN
         # the shipped 8f-tag reader stays authoritative for line/scatter
