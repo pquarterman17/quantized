@@ -32,17 +32,24 @@ export function deferOriginFigureApply(
   );
   if (pendingIds.length === 0) return false;
 
-  get().setStatus(`loading ${pendingIds.length} Origin source book${plural(pendingIds.length)}…`);
+  const loadingMsg = `loading ${pendingIds.length} Origin source book${plural(pendingIds.length)}…`;
+  get().setStatus(loadingMsg);
+  // Replace OUR loading message only — if anything else has since written the
+  // status line, leave it alone.
+  const settle = (done: string): void => {
+    if (get().status === loadingMsg) get().setStatus(done);
+  };
   void get()
     .resolveDatasets(pendingIds)
     .then(() => {
-      if (applySeq !== requestSeq) return;
+      if (applySeq !== requestSeq) return settle("Origin source books loaded");
       // Re-enter after every source swap lands. The second pass sees no
       // pending ids and executes useApp's existing synchronous apply path.
       get().applyOriginFigure(id, opts);
+      settle(`loaded ${pendingIds.length} Origin source book${plural(pendingIds.length)}`);
     })
     .catch((error: unknown) => {
-      if (applySeq !== requestSeq) return;
+      if (applySeq !== requestSeq) return settle("Origin source book load cancelled");
       const message = error instanceof Error ? error.message : "source book fetch failed";
       get().setStatus(`couldn't apply Origin figure — ${message}`, "danger");
       toast(`couldn't apply Origin figure — ${message}`, "danger");
