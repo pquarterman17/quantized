@@ -82,8 +82,9 @@ function logSpan(ds: DataStruct, xKey: number | null, chs: readonly number[]): n
 }
 
 /** The first plot of `ds` against `xKey`; `skip` = channels already hidden
- *  (error columns), kept in `yKeys` as they were and never grouped. */
-export function firstPlot(ds: DataStruct, xKey: number | null, skip: readonly number[] = []): FirstPlot {
+ *  (error columns), kept in `yKeys` as they were and never grouped;
+ *  `maxSeries` caps how many curves it plots (an Origin worksheet). */
+export function firstPlot(ds: DataStruct, xKey: number | null, skip: readonly number[] = [], maxSeries = Infinity): FirstPlot {
   const md = ds.metadata ?? {};
   const base = defaultDenseChannels(ds, xKey);
   const live = base.filter((c) => !skip.includes(c));
@@ -108,6 +109,11 @@ export function firstPlot(ds: DataStruct, xKey: number | null, skip: readonly nu
       const g2 = rest.filter((c) => key(c) === key(rest[0]));
       if (g2.length === 1) y2 = g2;
     }
+  }
+  // A cap keeps the first `maxSeries` of Y1 (then Y2): the rest stay in Channels.
+  if (y1.length + y2.length > maxSeries) {
+    y1 = y1.slice(0, maxSeries);
+    y2 = y2.slice(0, Math.max(0, maxSeries - y1.length));
   }
   const shown = new Set([...y1, ...y2]);
   return {
