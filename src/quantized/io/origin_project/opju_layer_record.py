@@ -60,15 +60,29 @@ above, every double is finite and within 1e-20..1e20 (or zero), each span
 is non-empty and each step is non-zero with the span's sign. Anything else
 is left to the other readers or stays undecoded (the page is then still
 reported, with Origin's saved preview, by ``opju_graph_pages``). A scale
-field other than ``01 00`` / ``08 01`` leaves that axis to the decade
+field other than ``01 00`` / ``08 01`` / ``04 01`` (Y) leaves that axis to the decade
 heuristic, as ``.opj`` does.
 
-**Not admitted (owner COM check wanted):** a Y scale field ``04 01``
-(``figures.opju`` fig_converge_3/4, Y 1e-4..10, drawn log in the preview)
-and the ``80 e9`` / other values some records carry at 98 (their
-fields then do not sit at these offsets, or the field means something
-else); the embedded (workbook-page) layer records of
-``electric_field_proj_median.opju``, whose Y block does not align.
+**Y scale field ``04 01`` = log10** (admitted 2026-11-20). Over every
+record-length-prefixed graph-page record of both corpora (public 351 +
+owner 104), the field at 98 reads ``01 00`` / ``00 00`` / ``04 00`` /
+``02 00`` (byte 99 = ``00``) or ``08 01`` / ``04 01`` (byte 99 = ``01``).
+Origin 2026b's COM ``layer.y.type`` (``axis_ranges.json``) is linear for
+every listed ``xx 00`` record (2,772) and log10 for every listed ``08 01``
+(16) and ``04 01`` (9) record: byte 99 is the log flag, byte 98 something
+else. ``04 01`` occurs only in ``figures.opju`` (falcon-sqh), 9 records,
+all listed by the oracle; their X/Y from/to match it, the Y step is 1
+(the value 21 of the 26 other decoded log-Y layers in the oracle projects
+carry), and the saved preview draws a log Y 1e-4..10. Admitted as
+``04 01`` only (not "any ``xx 01``"): no other ``xx 01`` value occurs.
+
+**Not admitted (owner COM check wanted):** the X scale field ``02 00``
+(12 records, both copies of the owner's ``Hc2 data``; no oracle) and the
+Y ``02 00`` of one record (``Sample_OriginPro_ResonatorData``); the
+``80 e9`` / other values some records carry at 98 (their fields then do not
+sit at these offsets, or the field means something else); the embedded
+(workbook-page) layer records of ``electric_field_proj_median.opju``, whose
+Y block does not align.
 """
 
 from __future__ import annotations
@@ -85,8 +99,9 @@ _X_FIELDS = (15, 23, 31)
 _Y_FIELDS = (58, 66, 74)
 _X_SCALE, _Y_SCALE = 55, 98
 _X_SCALES = frozenset({b"\x01\x00", b"\x00\x00", b"\x08\x01", b"\x03\x00"})
-_Y_SCALES = frozenset({b"\x01\x00", b"\x00\x00", b"\x04\x00", b"\x08\x01"})
-_LIN, _LOG = b"\x01\x00", b"\x08\x01"
+_Y_SCALES = frozenset({b"\x01\x00", b"\x00\x00", b"\x04\x00", b"\x08\x01", b"\x04\x01"})
+_LIN = b"\x01\x00"
+_LOGS = frozenset({b"\x08\x01", b"\x04\x01"})  # log10 (module docstring)
 _HEADS = frozenset({b"\x00\x00\x1f\x00", b"\x00\x00\x5f\x00"})
 
 LayerRecord = tuple[float, float, float, float, bool, bool, float, float]
@@ -133,7 +148,7 @@ def _axis(buf: bytes, fields: tuple[int, int, int]) -> tuple[float, float, float
 
 
 def _scale(flag: bytes, lo: float, hi: float) -> bool:
-    if flag == _LOG:
+    if flag in _LOGS:
         return True
     if flag == _LIN:
         return False

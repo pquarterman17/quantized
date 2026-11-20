@@ -101,15 +101,14 @@ histogram instead of drawing it as if it were the whole page.
 
 ## Still open (owner COM checks)
 
-* Y scale field `04 01` (`figures.opju` fig_converge_3/4: preview shows a log
-  Y 1e-4..10). Hypothesis: byte 99 is the scale type (0 linear, 1 log10),
-  byte 98 something else (`01`/`08`/`04`/`00` seen). One file only, so not
-  admitted. COM: `layer.y.type` on those pages, and on a `00 00` / `04 00`
-  record.
-* Records whose offset 98 reads `80 e9` and others (about 160 prefixed
-  anchors, e.g. `Figure 3 and 4 amplitude - rise time data.opju`,
-  `Cu-Induced-Softening plot.opju`): fields before it look plausible, but
-  the authenticator fails, so they stay with the old readers / undecoded.
-* Id-table-less streams (`BD_SC_all`, `BD_TC_all`, `RSOS_SC_all`, two `wxgf`
-  files): naming their decoded layers needs a book/graph page classifier
-  that does not rely on the id table.
+* ~~Y scale field `04 01`~~ solved 2026-11-20: log10 (byte 99 is the log
+  flag; COM `layer.y.type` log10 for all 9 records), see
+  `opju_embedded_graphs.md`.
+* Records whose offset 98 reads `80 e9` and others: re-surveyed 2026-11-20
+  over both corpora, they are ALL on workbook pages (embedded fit-report /
+  sparkline graphs: `80 e9` 85, unexpandable 83, `00 80` 28, ...), where the
+  fixed offsets are not read anyway. On graph pages every prefixed record
+  now reads except 13 (`02 00` X field: 12 in the two `Hc2 data` copies; one
+  `02 00` Y field), see `opju_embedded_graphs.md`.
+* ~~Id-table-less streams~~ solved 2026-11-20: a `_cart_object` page is a
+  graph page there (`opju_layer_pages`); all 9 oracle layers agree once named.

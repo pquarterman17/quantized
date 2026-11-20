@@ -40,7 +40,7 @@ import struct
 
 from quantized.io.origin_project.tree import _flatten, _FolderNode
 
-__all__ = ["opju_folder_paths"]
+__all__ = ["opju_folder_paths", "window_name_at"]
 
 # The subfolder separator precedes every child folder record: 4.3811 uses the
 # short form, 4.3380 the long one. Either shape also marks "leaf" when it lands
@@ -113,6 +113,14 @@ def _window_name(b: bytes, pos: int, length_byte: int) -> str | None:
     """The window name whose name field starts at ``pos`` (just past the
     ``00 00`` of a page header), or ``None`` when no known form validates --
     never a guess (see the grammar note above)."""
+    found = window_name_at(b, pos, length_byte)
+    return found[0] if found else None
+
+
+def window_name_at(b: bytes, pos: int, length_byte: int) -> tuple[str, int] | None:
+    """``(name, trail)`` for :func:`_window_name`: ``trail`` is the offset of
+    the hi-bit byte that ends a SHORT / RUN-ESCAPE name, ``-1`` for the LONG
+    form (which has none)."""
     nlen = length_byte - 2
     if nlen < 1:
         return None
@@ -122,7 +130,7 @@ def _window_name(b: bytes, pos: int, length_byte: int) -> str | None:
         if q >= len(b):
             return None
         if b[q] != _RUN_ESCAPE:  # SHORT form: any hi-bit trail
-            return name.decode("latin1") if b[q] >= 0x80 else None
+            return (name.decode("latin1"), q) if b[q] >= 0x80 else None
         ch = b[q + 1 : q + 2]
         if not _NAME_CHAR_RE.fullmatch(ch):
             return None
@@ -134,14 +142,14 @@ def _window_name(b: bytes, pos: int, length_byte: int) -> str | None:
                 return None
             name, q = name + seg, q + 1 + n
         if q < len(b) and 0x80 <= b[q] < _RUN_ESCAPE:
-            return name.decode("latin1")
+            return name.decode("latin1"), q
         return None
     run = _NAME_RUN_RE.match(b, pos)  # LONG form
     if run is None or not _LONG_NAME_LEN[0] <= len(run.group()) <= _LONG_NAME_LEN[1]:
         return None
     if nlen <= len(run.group()) or b[run.end() : run.end() + 1] != b"\x00":
         return None
-    return run.group().decode("latin1")
+    return run.group().decode("latin1"), -1
 
 
 def iter_opju_windows(b: bytes) -> list[tuple[int, str]]:
