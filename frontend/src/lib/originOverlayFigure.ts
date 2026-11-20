@@ -13,7 +13,7 @@ import {
   originCurveSeriesStyle,
   readableSheetCurveLabel,
 } from "./originCurveText";
-import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
+import { assembleOverlay, ORIGIN_OVERLAY_VERSION, textColumnLabels, type OverlayBound } from "./originOverlay";
 import { framesCoincide } from "./originPanels";
 import { textXLetter } from "./originRecordedX";
 import type { AxisFormat, TopAxis } from "./axisFormat";
@@ -135,16 +135,27 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
   // curveIdx tracks this curve's position among ALL of figure.curves (even
   // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
   // numbering Origin's legend uses across the whole layer, not per-book.
+  const bookOf = (c: { book: string }) =>
+    books.find((d) => String((d.data.metadata ?? {}).origin_book ?? "") === c.book);
+  // A recorded TEXT X (category positions 1..N, `textXLetter`) holds only when
+  // EVERY curve of the layer sits on one with the SAME cells: across books, a
+  // text-X curve beside a numeric-X one (or two books' differing text columns
+  // under one letter) is not one axis, so its text curves are left out
+  // (no channel -> dropped below), never drawn at positions on a guess.
+  const textKey = (c: { book: string; x?: string }): string | null => {
+    const d = bookOf(c);
+    return d && c.x && textXLetter(figure, d) === c.x ? JSON.stringify(textColumnLabels(d.data, c.x)) : null;
+  };
+  const keys = (figure.curves ?? []).filter((c) => bookOf(c)).map(textKey);
+  const categoryOk = keys.length > 0 && keys.every((k) => k !== null && k === keys[0]);
   figure.curves?.forEach((c, curveIdx) => {
-    const ds = books.find(
-      (d) => String((d.data.metadata ?? {}).origin_book ?? "") === c.book,
-    );
+    const ds = bookOf(c);
     if (!ds) return;
     const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
     const yCh = channelOf(meta, c.y);
     if (yCh < 0) return; // dropped/undecoded column — skip honestly
     // A recorded TEXT X (category positions 1..N, `textXLetter`) has no value channel.
-    const xText = c.x && textXLetter(figure, ds) === c.x ? c.x : undefined;
+    const xText = categoryOk && c.x && textXLetter(figure, ds) === c.x ? c.x : undefined;
     const xCh = xText ? -3 : c.x ? channelOf(meta, c.x) : -2;
     // An x-LETTER present in the figure but mapping to no decoded channel
     // (channelOf -> -1) must NOT be coerced to the time column (-2): blocks are

@@ -131,7 +131,9 @@ export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = f
 
   const first = blocks[0].ds.data.metadata ?? {};
   // Every block on ONE text X column: the axis shows its cells at 1..N.
-  const catLabels = blocks.every((b) => b.xText && b.xText === blocks[0].xText)
+  // Compared by the cells, not the letter: two books' "A" columns may differ.
+  const cellsOf = (b: Block) => (b.xText ? JSON.stringify(textColumnLabels(b.ds.data, b.xText)) : null);
+  const catLabels = blocks.every((b) => b.xText && cellsOf(b) === cellsOf(blocks[0]))
     ? textColumnLabels(blocks[0].ds.data, blocks[0].xText as string) : [];
   return {
     time,
