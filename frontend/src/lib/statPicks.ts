@@ -81,3 +81,13 @@ export function statColRefs(ds: Dataset | null, cols: StatCols): StatPickCols {
     color: ref(cols.color),
   };
 }
+
+/** `cats` (the Stat Stage's categorical columns) with the shared X/time column
+ *  (index -1) in front when `xGroup`: a saved pick groups by X. Only an
+ *  Origin grouped / stacked column chart sets that pick
+ *  (`originFigureSelection.figureBarState`: one category per row's X, which
+ *  the importer proved unique and evenly spaced), so X is otherwise never
+ *  offered and `maskStaleCategoricalPicks` keeps clearing any other X pick. */
+export function withPickedXGroup<C extends { index: number; label: string }>(cats: C[], xGroup: boolean): C[] {
+  return xGroup ? [{ index: -1, label: "X" } as C, ...cats] : cats;
+}

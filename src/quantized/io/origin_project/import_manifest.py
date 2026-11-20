@@ -32,6 +32,7 @@ from quantized.io.origin_project.graph_preview import (
 )
 from quantized.io.origin_project.integrity import apply_container_integrity
 from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
+from quantized.io.origin_project.opju_bar_kinds import apply_bar_kinds
 from quantized.io.origin_project.opju_curve_sheets import unbound_rebinds
 from quantized.io.origin_project.opju_embedded_graphs import unrecovered_embedded_graphs
 from quantized.io.origin_project.opju_error_bars import attach_error_bars
@@ -39,6 +40,7 @@ from quantized.io.origin_project.opju_graph_pages import (
     GraphPageReport,
     unrecovered_graph_pages,
 )
+from quantized.io.origin_project.opju_hist_cumulative import pair_histogram_cumulative
 from quantized.io.origin_project.opju_layer_kind import apply_layer_kinds
 from quantized.io.origin_project.opju_map_plots import bind_map_books
 from quantized.io.origin_project.opju_no_data import omit_unsaved_curves
@@ -76,6 +78,10 @@ def origin_figures_and_fidelity(
             raw_figs = unbound_rebinds(raw_figs, books)
             # polar / offset-stacked layers left out, bubble / colour-mapped noted
             raw_figs = apply_layer_kinds(raw_figs, raw)
+            # a histogram + cumulative-percent page drawn from Origin's own bins
+            raw_figs = pair_histogram_cumulative(raw_figs, books)
+            # column / bar / stacked / pie plot types resolved per layer
+            raw_figs = apply_bar_kinds(raw_figs, raw, books)
             # box / violin / strip / histogram curves: drawn from Y, or omitted
             raw_figs = apply_stat_kinds(raw_figs, raw)
             # a heatmap / contour / ternary kept only when its book was imported

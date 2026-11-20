@@ -24,7 +24,12 @@ quantized cannot draw them yet, so they stay the default line view.
 
 * **Column** -- byte 76 ``0xcb`` = Origin plot 203: ``"column"`` (bars from
   zero at each X); a layer keeps it only for its ONLY column series
-  (``opju_stat_plots``).
+  (``opju_stat_plots``) or draws several as a grouped bar chart
+  (``opju_bar_kinds``).
+* **Stacked column / stacked area / horizontal bar / kinds with no renderer**
+  -- 213, 214, 215 and 205 / 207 / 208 / 216 / 218 / 225 get a provisional
+  ``plotType`` (``LAYER_BAR_KINDS``) that ``opju_bar_kinds`` resolves per
+  layer: drawn, or left out (``plot_type_not_drawn``).
 * **Box / histogram with no X column** -- byte 76 206 (box, violin, strip)
   or 219 (histogram) with record X id 0 (``x_not_a_column``): the curve is
   kept from its Y alone (``x == ""``) with ``"box"`` / ``"histogram"``
@@ -81,6 +86,7 @@ from quantized.io.origin_project.opju_plot_gates import (
 __all__ = [
     "AREA_PLOT",
     "COLUMN_PLOT",
+    "LAYER_BAR_KINDS",
     "LINE_PLOT",
     "X_NOT_A_COLUMN",
     "apply_plot_kind",
@@ -97,6 +103,17 @@ X_NOT_A_COLUMN = "x_not_a_column"  # opju_curve_token_x: the record X id is 0
 _ROWLESS = {206: "box", 219: "histogram"}
 COLUMN_PLOT = 203  # Origin's vertical column plot (plotType "column")
 _MAP_TYPES = frozenset({105, 220, 226, 243})  # heatmap, image, contour, XYZ contour
+# Plot types whose look depends on the layer (``opju_bar_kinds`` resolves each
+# per layer, else leaves the curve out): 213 stacked column, 214 stacked area,
+# 215 horizontal bar; ``"not_drawn"`` = a kind quantized has no renderer for
+# (205 high-low-close, 207 floating column, 208 / 218 vector, 216 stacked bar,
+# 225 pie family). Codes: ORIGIN_PLOT_TYPE_PARITY_PLAN "Plot-type codes".
+LAYER_BAR_KINDS = {
+    213: "stacked_column",
+    214: "stacked_area",
+    215: "bar",
+    **dict.fromkeys((205, 207, 208, 216, 218, 225), "not_drawn"),
+}
 
 
 def apply_plot_kind(
@@ -115,6 +132,9 @@ def apply_plot_kind(
     kind = record[PLOT_TYPE_OFF]
     if kind == COLUMN_PLOT:
         curve["plotType"] = "column"
+    elif kind in LAYER_BAR_KINDS:
+        # resolved per layer (``opju_bar_kinds``): drawn, or left out
+        curve["plotType"] = LAYER_BAR_KINDS[kind]
     elif kind == AREA_PLOT:
         curve["plotType"] = "area"
     elif kind == LINE_PLOT and record[CONNECT_OFF] == STEP_HORIZONTAL:

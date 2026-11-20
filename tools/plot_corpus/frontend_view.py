@@ -172,10 +172,15 @@ _STAT_MODES = ("histogram", "box", "violin", "strip")
 def stat_view(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> tuple[str, int] | None:
     """``(mode, value channel)`` of the Stat stage ``figureStatState`` opens
     (``-1`` = the X column), or ``None`` when the figure stays on the XY
-    stage: every curve one of ``_STAT_MODES``, all the same."""
+    stage: every curve one of ``_STAT_MODES``, all the same, or a
+    ``bar_layout`` figure of column curves (mode ``"bar"``)."""
     curves = figure.get("curves") or []
     mode = curves[0].get("plotType") if curves else None
-    if mode not in _STAT_MODES or any(c.get("plotType") != mode for c in curves):
+    if figure.get("bar_layout") and mode == "column":
+        mode = "bar"  # the grouped / stacked bar chart (``figureBarState``)
+    elif mode not in _STAT_MODES:
+        return None
+    if any(c.get("plotType") != curves[0].get("plotType") for c in curves):
         return None
     meta = ds["metadata"]
     letters = _letters(meta) or []
@@ -261,10 +266,11 @@ def drawn_curves(
         mode, hv = sv
         if mode == "histogram":  # a histogram of the first curve's column
             ys = [x_letter if hv < 0 else letters[hv]]
-        else:  # one box / violin / strip per plotted channel
+        else:  # one box / violin / strip (or bar series) per plotted channel
             ys = [letters[k] for k in sel["yKeys"]] if sel is not None else []
+        x = str((figure.get("curves") or [{}])[0].get("x")) if mode == "bar" else None
         return {"dataset": book, "via": "stat", "kind": mode,
-                "curves": [{"book": book, "x": None, "y": y} for y in ys]}
+                "curves": [{"book": book, "x": x, "y": y} for y in ys]}
     if sel is not None:
         x = letters[sel["xKey"]] if sel["xKey"] is not None else x_letter
         curves = [{"book": book, "x": x, "y": letters[k]} for k in sel["yKeys"]]

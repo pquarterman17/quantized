@@ -415,13 +415,27 @@ None open.
          `duplicates` / `single_point` plot type match; real corpus: 67
          curves in 22 files now draw as bars, COM: 67 / 67 are
          `GetPlotType()` 203, the only 203 of their layer, same X.
-   - [ ] **Plot type residue.** Multi-series column layers (8 specimens,
-         e.g. `column/clean`) need side-by-side grouped bars (no XY-stage
-         renderer; the Stat bar mode summarises per column, #14); stacked
-         column 213, horizontal bar 215 / 216 and floating column 207 stay
-         undrawn as bars (fail closed: they draw by line style as before;
-         #10-#12 creation gaps). The `.opj` reader's own `column` / `bar`
-         mapping still overlaps multi-series bars.
+   - [x] ~~**Plot type residue: real corpus kinds drawn as lines.**~~
+         PARTLY FIXED 2026-11-20 (`opju_bar_kinds`, `opju_hist_cumulative`,
+         `docs/origin_re/plot_kinds.md`; plot type x page template x saved
+         preview on every changed page). Drawn: one stacked area per layer
+         as `area` (21 pages), the only 215 of a one-layer `Bar` page as a
+         horizontal bar (8), several 203 / `StackColumn` 213 series on one
+         unique, evenly spaced X as the Stat Stage bar chart grouped by X
+         (`bar_layout`, 10 layers), `HISTPROB` histogram + cumulative-percent
+         pages from Origin's own bin sheet (4, counts recomputed from the raw
+         column). Left out (`plot_type_not_drawn`) instead of drawn as lines:
+         pie / doughnut 225, 100 % (`StackColP`) or unproven stacks, several
+         215, floating column 207, vector 218 (92 curves, every page
+         preview-checked).
+   - [ ] **Plot type residue.** Multi-series column layers on several X
+         columns, uneven X or multi-layer pages still draw by line style;
+         100 % stacked column (needs the layer's 100 % flag + a percent stack
+         in the Stat Stage), grouped / stacked horizontal bars, floating
+         column, pie and stacked bar have no renderer (#10-#12 creation gaps).
+         Owner COM checks open: `SOP_meas` Graph67 orientation, `Graph_Template`
+         Graph1's upright 215 plot (`plot_kinds.md`). The `.opj` reader's own
+         `column` / `bar` mapping still overlaps multi-series bars.
    - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
          plots against the text categories; quantized draws against the row
          index. The same 5 specimens hold the only category-family omitted

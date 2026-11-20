@@ -1,0 +1,450 @@
+{
+  "public:2021555811-hub_UAV-Soil-Moisture-Systematic-Review/origin/soil deep.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L1:",
+      "reason": "pie (plot type 225, templates Pie2D): no pie renderer; Origin's previews of Graph3 and SOILDEEP1 show a pie, which was drawn as a line"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L1:",
+      "reason": "pie (plot type 225, templates Pie2D): no pie renderer; Origin's previews of Graph3 and SOILDEEP1 show a pie, which was drawn as a line"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    }
+  ],
+  "public:Bariumoxid_MIMOTechniques/Report/Graph_Template.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L4:",
+      "reason": "stacked column (213) on a user template in layer 4 of 32New / 32New_wMean / CQITCRLayerMod: plain vs 100 % stack not proven; previews show stacked columns, which were drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L4:",
+      "reason": "stacked column (213) on a user template in layer 4 of 32New / 32New_wMean / CQITCRLayerMod: plain vs 100 % stack not proven; previews show stacked columns, which were drawn as lines"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph1/L1:",
+      "reason": "two horizontal bar (215) plots in one layer: grouped horizontal bars are not drawn, and Origin's preview shows them upright (layer orientation not decoded); drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph1/L1:",
+      "reason": "two horizontal bar (215) plots in one layer: grouped horizontal bars are not drawn, and Origin's preview shows them upright (layer orientation not decoded); drawn as lines before"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:Bariumoxid_MIMOTechniques/Report/Graphs.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L4:",
+      "reason": "stacked column (213) on a user template in layer 4 of 32New / 32New_wMean / CQITCRLayerMod: plain vs 100 % stack not proven; previews show stacked columns, which were drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L4:",
+      "reason": "stacked column (213) on a user template in layer 4 of 32New / 32New_wMean / CQITCRLayerMod: plain vs 100 % stack not proven; previews show stacked columns, which were drawn as lines"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph1/L1:",
+      "reason": "two horizontal bar (215) plots in one layer: grouped horizontal bars are not drawn, and Origin's preview shows them upright (layer orientation not decoded); drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph1/L1:",
+      "reason": "two horizontal bar (215) plots in one layer: grouped horizontal bars are not drawn, and Origin's preview shows them upright (layer orientation not decoded); drawn as lines before"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:Surfacegrowthgroup_Long-range-correlations-in-discrete-kinetic-roughening/figure_data_origin/RSOS_SC_micstruc.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut (225, template Doughnut): no pie renderer; the *_CIR preview is a doughnut, which was drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut (225, template Doughnut): no pie renderer; the *_CIR preview is a doughnut, which was drawn as lines"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:Surfacegrowthgroup_Long-range-correlations-in-discrete-kinetic-roughening/figure_data_origin/RSOS_TC_micstruc.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut (225, template Doughnut): no pie renderer; the *_CIR preview is a doughnut, which was drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut (225, template Doughnut): no pie renderer; the *_CIR preview is a doughnut, which was drawn as lines"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:joyrajbanshi91_India-Land-Use/figure_code/main/Fig_3.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph2/L2:",
+      "reason": "stacked column (213) on a user template (Graph2 layer 2): the preview is a 100 % stack, which quantized cannot draw; drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph2/L2:",
+      "reason": "stacked column (213) on a user template (Graph2 layer 2): the preview is a 100 % stack, which quantized cannot draw; drawn as lines before"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:envdes_code_CMAQ_FLAML_Germany_2030/4_result_analysis/fig_6_a.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L1:",
+      "reason": "100 % stacked column (213, template StackColP) on Graph2 / Graph3: the preview runs 0..100 % from raw counts; quantized has no 100 % stack; drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L1:",
+      "reason": "100 % stacked column (213, template StackColP) on Graph2 / Graph3: the preview runs 0..100 % from raw counts; quantized has no 100 % stack; drawn as lines before"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "three column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns (preview), drawn as the Stat Stage grouped bar chart (bar_layout grouped)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/LSA_fig6.opju": [
+    {
+      "kind": "omission_added",
+      "contains": "error_bar_plot",
+      "reason": "the error-bar plots of the Graph6 / Graph8 curves that are now left out have no curve to attach to, so they are reported as omitted"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "/L1:",
+      "reason": "Graph6 / Graph8: a 215 horizontal bar beside a 203 column in one layer, a grouped horizontal chart (preview: two sideways series) quantized does not draw; drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L1:",
+      "reason": "Graph6 / Graph8: a 215 horizontal bar beside a 203 column in one layer, a grouped horizontal chart (preview: two sideways series) quantized does not draw; drawn as lines before"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "-> 'bar'",
+      "reason": "sole 215 plot on a one-layer Bar-template page: horizontal bar renderer, matching the horizontal previews of Graph1-5/7/9"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph9/L1:",
+      "reason": "two horizontal bar (215) series (tornado chart in the preview): grouped horizontal bars are not drawn; drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph9/L1:",
+      "reason": "two horizontal bar (215) series (tornado chart in the preview): grouped horizontal bars are not drawn; drawn as lines before"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph2/L1:",
+      "reason": "four column (203) series against the sheet's own unique, evenly spaced X: grouped columns in the preview, drawn as the Stat Stage grouped bar chart"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph14/L6:",
+      "reason": "nine horizontal bar (215) plots in panel 6 of a multi-panel page (preview: sideways bars): grouped horizontal bars are not drawn; drawn as lines before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph14/L6:",
+      "reason": "nine horizontal bar (215) plots in panel 6 of a multi-panel page (preview: sideways bars): grouped horizontal bars are not drawn; drawn as lines before"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph65/L5:",
+      "reason": "a 215 horizontal bar inside a multi-layer page: a turned panel inside a page is not drawn; drawn as a line before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph65/L5:",
+      "reason": "a 215 horizontal bar inside a multi-layer page: a turned panel inside a page is not drawn; drawn as a line before"
+    },
+    {
+      "kind": "curve_gained",
+      "contains": "@4 X=A Y=B",
+      "reason": "histogram + cumulative-percent page (Graph37/38/42/45): layer 1 is re-bound to Origin's own bin sheet H@4 (A = bin centre, B = counts), whose counts equal the binned column's recomputed bins; drawn with the cumulative line as a double-Y page"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "stat_layer_in_multi_layer_page",
+      "reason": "the same four histogram layers are now drawn from Origin's bin sheet instead of being left out"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph20/L1:",
+      "reason": "the only stacked-column (213) plot of a StackColumn page: a stack of one is the series, a column (upright columns in the preview)"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph67/L1:",
+      "reason": "sole 215 plot on a one-layer Bar-template page drawn as a horizontal bar. KNOWN DISAGREEMENT: Graph67's saved preview is upright, while Graph65 panel e draws the same V/W plot sideways; owner COM check of the layer orientation open (docs/origin_re/plot_kinds.md)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:zihaonian_MCM/paper_chart/Degree of impact of single stock commission changes on final returns.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L1:",
+      "reason": "floating column (207) on Graph26 / 511 / 512: no floating-column renderer; previews show floating bars / boxes, which were drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L1:",
+      "reason": "floating column (207) on Graph26 / 511 / 512: no floating-column renderer; previews show floating bars / boxes, which were drawn as lines"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    }
+  ],
+  "public:shawxgf_APFD-in-RAS-affect-tilapia-s-growth/30流场.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L2:",
+      "reason": "vector XYXY (218) in layer 2: no vector renderer; the preview is an arrow field, drawn as a line before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L2:",
+      "reason": "vector XYXY (218) in layer 2: no vector renderer; the preview is an arrow field, drawn as a line before"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:shawxgf_APFD-in-RAS-affect-tilapia-s-growth/50流场.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L2:",
+      "reason": "vector XYXY (218) in layer 2: no vector renderer; the preview is an arrow field, drawn as a line before"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L2:",
+      "reason": "vector XYXY (218) in layer 2: no vector renderer; the preview is an arrow field, drawn as a line before"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:PacoSanto_Data_Availability_papers/Communications Earth & Environment_Volcanic deposits from Mount Etna as high-fidelity lunar simulants for ISRU applications/Data/Raw and Analyzed/origin.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Graph17 (11 series) and Graph19 (7 series): stacked columns (213) on Origin's StackColumn template against the sheet's text X: the Stat Stage stacked bar chart, same stack order and heights as the previews"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:GuoBaolin0724_DyResEL_Ratio-i/Ratio-i/5_sidechain-az-gt0-occupied_draw.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "two column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns (preview), drawn as the Stat Stage grouped bar chart"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:ZhaoYuan-Group_DyResEL_Ratio-i/Ratio-i/5_sidechain-az-gt0-occupied_draw.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "two column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns (preview), drawn as the Stat Stage grouped bar chart"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:envdes_code_CMAQ_FLAML_Germany_2030/4_result_analysis/fig_7_a.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "several column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns, drawn as the Stat Stage grouped bar chart (bar_layout grouped)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:joyrajbanshi91_India-Land-Use/figure_code/supplementary/Supplemetary_Fig_9.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "several column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns, drawn as the Stat Stage grouped bar chart (bar_layout grouped)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_1.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "several column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns, drawn as the Stat Stage grouped bar chart (bar_layout grouped)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_2.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "several column (203) series against the sheet's own unique, evenly spaced X: Origin's grouped columns, drawn as the Stat Stage grouped bar chart (bar_layout grouped)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that lost curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked layer gains bar_marks_not_decoded (quantized's own bar colours, width and gaps)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the project-level union of the per-layer fidelity notes above"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_14.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "-> 'area'",
+      "reason": "the only stacked-area (214) plot of each StackArea-template layer: a stack of one is the series, an area filled to 0 (same filled shape as the previews)"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_16.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "-> 'area'",
+      "reason": "the only stacked-area (214) plot of each StackArea-template layer: a stack of one is the series, an area filled to 0 (same filled shape as the previews)"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_17.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "-> 'area'",
+      "reason": "the only stacked-area (214) plot of each StackArea-template layer: a stack of one is the series, an area filled to 0 (same filled shape as the previews)"
+    }
+  ]
+}
