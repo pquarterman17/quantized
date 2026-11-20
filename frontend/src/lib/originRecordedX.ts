@@ -39,10 +39,10 @@ export function recordedXConflicts(
   const book = String(meta.origin_book ?? "");
   const own = curveX(ds, sel.xKey);
   return (figure.curves ?? []).some((c) => {
-    // Only an X the curve record itself names (`.opju`, `xRecorded`). A `.opj`
-    // curve's X is INFERRED by the reader (nearest preceding X) and is no
-    // evidence: Moke.opj Graph8/9 infer x=E for y=B while Origin draws B
-    // against A -- letting it win flipped the loop.
+    // Only an X the curve record itself names (`xRecorded`: the .opju token or
+    // the .opj anchor). An X the reader only INFERS (nearest preceding X) is
+    // no evidence: Moke.opj Graph8/9 infer x=E for y=B while Origin draws B
+    // against A (the record's X) -- letting the inference win flipped the loop.
     if (c.book !== book || !c.x || !c.xRecorded) return false;
     const y = letters.indexOf(c.y);
     if (y < 0 || !sel.yKeys.includes(y)) return false;

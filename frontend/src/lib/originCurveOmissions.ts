@@ -31,14 +31,18 @@ const WHY: Record<string, (recorded: string) => string> = {
   histogram_of_several_columns: () => "a histogram of several columns is not rebuilt here (one column at a time is)",
   stat_plot_x_not_decoded: () => "Origin draws it as a box chart or histogram from an X not decoded yet",
   map_plot_not_decoded: () => "it is a heatmap or contour whose data could not be bound",
+  column_not_resolved: () => "the column it plots could not be identified in the project",
+  x_not_resolved: () => "no X column could be inferred for its workbook",
   data_not_saved: (r) => `${r} is linked to an external file (Origin Data Connector) and its data was not saved in the project`,
 };
 
 /** One line per omitted curve of `figure`, e.g. "Book1 column B (X A): the
- *  sheet it plots could not be proven". */
+ *  sheet it plots could not be proven"; a plot whose column is unknown reads
+ *  "A plot: ...". */
 export function omittedCurveLines(figure: OriginFigure): string[] {
   return ((figure.curve_sheet_omitted ?? []) as OriginCurveSheetOmission[]).map((o) => {
     const why = WHY[o.reason]?.(o.recorded) ?? o.reason.replaceAll("_", " ");
-    return `${o.book} column ${o.y}${o.x ? ` (X ${o.x})` : ""}: ${why}`;
+    const who = o.book ? `${o.book} column ${o.y}${o.x ? ` (X ${o.x})` : ""}` : "A plot";
+    return `${who}: ${why}`;
   });
 }

@@ -55,6 +55,19 @@ describe("omittedCurveLines", () => {
     });
   });
 
+  it("words an .opj plot whose column or X could not be resolved", () => {
+    const lines = omittedCurveLines(
+      fig([
+        { book: "", x: "", y: "", recorded: "", reason: "column_not_resolved" },
+        { book: "Ghost", x: "", y: "Q", recorded: "Ghost", reason: "x_not_resolved" },
+      ]),
+    );
+    expect(lines).toEqual([
+      "A plot: the column it plots could not be identified in the project",
+      "Ghost column Q: no X column could be inferred for its workbook",
+    ]);
+  });
+
   it("is empty for a figure with nothing left out", () => {
     expect(omittedCurveLines(fig())).toEqual([]);
   });

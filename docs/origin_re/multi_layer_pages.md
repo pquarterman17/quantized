@@ -22,7 +22,7 @@ column-storage blocks exist, with the same u16 id at offset 4, in book
 the name at `0x12` through an 8-byte window, so any name of 8 or more
 characters had no NUL inside it and the column was skipped.
 
-**Fix.** Read the field's real width, 12 bytes (`_SHORT_NAME_LIMIT`): `0x12`
+**Fix.** Read the field's real width, 12 bytes (`_SHORT_NAME_FIELD`, also #780 Lane D; see `curve_bindings_opj.md`): `0x12`
 to `0x1D`, at most 11 characters and a NUL. `0x1E` starts a separate u16
 (`0x0009` in 5,832 of the 6,103 corpus column blocks, the value the `.opj`
 writer emits; the writer also truncates names to 11). Every real column in

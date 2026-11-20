@@ -1291,6 +1291,17 @@ the shipped contract)
 
 ## Completed
 
+- ~~**`.opj` curve bindings from the anchor record + auto symbol colour
+  (lane D)**~~ (2026-11-20). The 12-byte short-name field brings back XMCD's
+  silently dropped curves (COM plot list 166 -> 244 of 245). Unresolved
+  plots are now `column_not_resolved`. The record X (offsets 35-38, as on
+  `.opju`) fixes hc2convert's lockin graphs (89/89 agree with the `Hc2 data`
+  save) and Moke Graph2/8/9; such curves carry `xRecorded` like `.opju`
+  ones, so the apply's A2 rule draws them against it (an inferred `.opj` X
+  still never wins). Hidden `.opj` plots are left out. An auto symbol
+  colour reads the line colour (657/660 preview hue checks). Evidence and
+  owner COM checks: `docs/origin_re/curve_bindings_opj.md`,
+  `docs/origin_re/curve_colors.md`.
 - ~~**Figure rendering vs Origin's own previews (Lane F)**~~ (2026-11-20).
   `.opju` curves carry `xRecorded` when the curve record names the X
   (item 70's decode), so the apply lets that X beat nearest-preceding-X
