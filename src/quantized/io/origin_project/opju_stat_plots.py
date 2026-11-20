@@ -163,7 +163,8 @@ def _single_column_only(fig: dict[str, Any]) -> dict[str, Any]:
     one: Origin draws a layer's column series side by side, quantized's bars
     from zero at each X would overlap them (module docstring)."""
     curves = fig.get("curves") or []
-    if sum(1 for c in curves if c.get("plotType") == "column") <= 1:
+    if fig.get("bar_layout") or sum(1 for c in curves if c.get("plotType") == "column") <= 1:
+        # a grouped / stacked layer the Stat Stage draws (``opju_bar_kinds``)
         return fig
     return {
         **fig,

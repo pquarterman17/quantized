@@ -107,10 +107,15 @@ def test_column_record_marks_the_column_plot_type() -> None:
     curve: dict[str, str | float] = {"book": "B", "x": "A", "y": "C"}
     apply_plot_kind(curve, _rec(203))
     assert curve["plotType"] == "column"
-    for code in (200, 213, 215, 207):
+    for code in (200, 201, 202):
         other: dict[str, str | float] = {"y": "C"}
         apply_plot_kind(other, _rec(code))
         assert "plotType" not in other
+    # 213 / 215 / 207 get a provisional kind ``opju_bar_kinds`` resolves per layer
+    for code, kind in ((213, "stacked_column"), (215, "bar"), (207, "not_drawn")):
+        provisional: dict[str, str | float] = {"y": "C"}
+        apply_plot_kind(provisional, _rec(code))
+        assert provisional["plotType"] == kind
     boxed: dict[str, str | float] = {"x": "A", "y": "C", "style": "line"}
     apply_plot_kind(boxed, _rec(206), "box")
     assert boxed == {"x": "", "y": "C", "plotType": "box"}
@@ -271,18 +276,18 @@ def test_realdata_box_layers_decode_to_origin(corpus_dir: Path) -> None:
 def test_realdata_single_histogram_and_unnamed_box_kind(corpus_dir: Path) -> None:
     """``SOP_meas`` Graph37: a histogram (COM 219, ``xof`` ``_A``) of
     ``SOPvsHPPC1`` T plus, since ``opju_layer_record`` decodes it, the page's
-    second layer (the cumulative-percent line Origin's saved preview shows),
-    so the histogram is omitted as a stat layer of a multi-layer page;
-    Graph80's page template names no box kind: omitted."""
+    second layer (the cumulative-percent line Origin's saved preview shows):
+    the histogram is drawn from Origin's own bin sheet (``opju_hist_cumulative``,
+    ``test_io_origin_opju_bar_kinds``), not as a stat layer of a multi-layer
+    page; Graph80's page template names no box kind: omitted."""
     rel = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
     figs = _figures(_path(corpus_dir, rel))
     layers = {f["layer"]: f for f in figs if f.get("name") == "Graph37"}
     assert sorted(layers) == [1, 2] and len(layers[2]["curves"]) == 1
-    assert layers[1]["curves"] == []
-    (note,) = layers[1]["curve_sheet_omitted"]
-    assert (note["book"], note["x"], note["y"], note["reason"]) == (
-        "SOPvsHPPC1", "", "T", STAT_LAYER_IN_PANELS
-    )
+    (bars,) = layers[1]["curves"]
+    assert (bars["book"], bars["plotType"]) == ("SOPvsHPPC1@4", "column")
+    assert layers[1]["histogram_source"] == {"book": "SOPvsHPPC1", "y": "T"}
+    assert not layers[1].get("curve_sheet_omitted")
     g80 = _fig(figs, "Graph80")
     assert g80["curves"] == []
     assert {o["reason"] for o in g80["curve_sheet_omitted"]} == {BOX_KIND_NOT_DECODED}

@@ -227,6 +227,7 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
     for note in (
         "histogram_bins_not_decoded", "box_marks_not_decoded", "marker_scale_not_decoded",
         "map_scale_not_decoded", "map_plot_not_decoded",  # opju_map_plots
+        "bar_width_not_decoded", "bar_marks_not_decoded",  # opju_hist_cumulative / opju_bar_kinds
         "script_objects_not_drawn",  # LabTalk buttons (figure_layers._is_script_object)
     ):
         if fig.get(note):  # drawn with quantized's own bins / box marks (`opju_stat_plots`)
