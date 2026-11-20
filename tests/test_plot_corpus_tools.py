@@ -164,6 +164,33 @@ def test_only_origin_application_is_dispatched() -> None:
         assert not pattern.search(py.read_text(encoding="utf-8")), py.name
 
 
+_ORIGIN_TOOL_DIRS = ("plot_corpus", "origin_compare", "origin_trial")
+
+
+def test_oracle_tools_never_dispatch_applicationsi_anywhere() -> None:
+    """Decode ledger R-18: ``Origin.ApplicationSI`` attaches to the owner's
+    open Origin, and ``Exit()`` then closes their unsaved work. Covers every
+    Origin tool directory, not only ``plot_corpus``."""
+    pattern = re.compile(r"Dispatch\w*\(\s*[\"']Origin\.ApplicationSI")
+    root = ROOT / "tools"
+    seen = 0
+    for sub in _ORIGIN_TOOL_DIRS:
+        for py in (root / sub).rglob("*.py"):
+            seen += 1
+            assert not pattern.search(py.read_text(encoding="utf-8")), py.name
+    assert seen > 0
+
+
+def test_origin_tools_never_kill_origin_by_image_name() -> None:
+    """Decode ledger R-17: a timeout once killed every Origin started since
+    the run began, taking the owner's window with it. Tools may kill only an
+    exact recorded PID, never by image name."""
+    pattern = re.compile(r"[\"']/IM[\"']|[\"'](pkill|killall)[\"']", re.IGNORECASE)
+    for sub in _ORIGIN_TOOL_DIRS:
+        for py in (ROOT / "tools" / sub).rglob("*.py"):
+            assert not pattern.search(py.read_text(encoding="utf-8")), py.name
+
+
 # -- origin_build: LabTalk emitted for a book ------------------------------------
 
 

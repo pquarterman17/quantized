@@ -142,6 +142,18 @@ def _book_long_name(book: str, books_meta: dict[str, BookMeta]) -> str:
     return clean_richtext(books_meta[book].long_name) if book in books_meta else book
 
 
+def _category_labels(
+    text_cols: list[tuple[str, list[str]]] | None, x_col: str | None, n: int
+) -> dict[str, object]:
+    """``x_category_labels``: the cells of a designated TEXT X column, one per
+    row, so the category axis shows them at x = 1..N (``.time``). Empty when
+    the X is not a text column."""
+    rows = next((r for c, r in text_cols or [] if c == x_col), None) if x_col else None
+    if rows is None:
+        return {}
+    return {"x_category_labels": [*rows, *[""] * (n - len(rows))][:n]}
+
+
 def _build_book(
     book: str,
     cols: Columns,
@@ -317,6 +329,7 @@ def _build_book(
             c: clean_richtext(m.comment) for c, m in col_meta.items() if m.comment
         },
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
+        **_category_labels(text_cols, declared_x if x_unrecovered else None, maxlen),
         "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
     }
     formats = {

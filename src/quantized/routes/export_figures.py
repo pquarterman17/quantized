@@ -28,7 +28,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field, StrictBool, field_validator, model_validator
 
-from quantized.calc.axis_dates import x_is_datetime
+from quantized.calc.axis_categories import x_axis_kind
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
 from quantized.calc.figure_overlay_scale import mark_overlay_styles
 from quantized.calc.figure_warnings import collect_figure_warnings
@@ -306,13 +306,13 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     if ds is None:
         ds = _request_dataset(req)
 
-    x_dt = x_is_datetime(ds.metadata, req.x_key)  # audit #7: a date X draws dates
+    x_dt = x_axis_kind(ds.metadata, req.x_key)  # a date X draws dates, a text X its labels
     if req.encoding is not None and req.encoding.active():  # P1.4, before group_col
         return replace(resolve_encoded_figure(
             ds, req.encoding, x_key=req.x_key, y_keys=req.y_keys, group_col=req.group_col,
             y2_keys=req.y2_keys, series_styles=req.series_styles, error_spans=req.error_spans,
             x_label=req.x_label, y_label=req.y_label, excluded=req,
-        ), x_is_datetime=x_dt)
+        ), x_axis=x_dt)
 
     if req.group_col is not None:
         if req.y2_keys:

@@ -29,7 +29,8 @@ export const ORIGIN_OVERLAY_VERSION = 3;
  */
 export interface OverlayBound {
   ds: Dataset;
-  xCh: number; // -2 = time column
+  xCh: number; // -2 = time column; -3 = a recorded TEXT column (`xText`, category positions)
+  xText?: string; // the text X column's Origin letter when xCh is -3
   yCh: number;
   label: string;
   unit: string;
@@ -60,6 +61,22 @@ function undedupe(d: DataStruct, c: number): string {
   return base !== label && (d.labels.includes(base) || d.metadata?.x_column_long === base) ? base : label;
 }
 
+/** The cells of Origin text column `letter` (`origin_text_columns`), trailing
+ *  blank rows dropped: one category per used row. */
+export function textColumnLabels(d: DataStruct, letter: string): string[] {
+  const cols = (d.metadata ?? {}).origin_text_columns as Record<string, unknown> | undefined;
+  const raw = cols && typeof cols === "object" ? cols[letter] : undefined;
+  const cells = Array.isArray(raw) ? raw.map(String) : [];
+  while (cells.length && cells[cells.length - 1] === "") cells.pop();
+  return cells;
+}
+
+/** A text X column's axis title: its Long Name (`origin_text_column_labels`), else its letter. */
+function textColumnTitle(d: DataStruct, letter: string): string {
+  const labels = (d.metadata ?? {}).origin_text_column_labels as Record<string, { long_name?: string }> | undefined;
+  return labels?.[letter]?.long_name || letter;
+}
+
 export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = false): DataStruct | null {
   const min = ownX ? 1 : 2;
   if (bound.length < min) return null;
@@ -67,15 +84,16 @@ export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = f
   interface Block {
     ds: Dataset;
     xCh: number; // -2 = the dataset's time column
+    xText?: string;
   }
-  const blockKey = (b: OverlayBound): string => `${b.ds.id}#${b.xCh}`;
+  const blockKey = (b: OverlayBound): string => `${b.ds.id}#${b.xText ? `t:${b.xText}` : b.xCh}`;
   const blocks: Block[] = [];
   const blockIndex = new Map<string, number>();
   for (const b of bound) {
     const key = blockKey(b);
     if (!blockIndex.has(key)) {
       blockIndex.set(key, blocks.length);
-      blocks.push({ ds: b.ds, xCh: b.xCh });
+      blocks.push({ ds: b.ds, xCh: b.xCh, xText: b.xText });
     }
   }
   if (blocks.length < min) return null;
@@ -92,9 +110,11 @@ export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = f
   blocks.forEach((blk, bi) => {
     const s = starts[bi];
     const n = blk.ds.data.time.length;
+    const cats = blk.xText ? textColumnLabels(blk.ds.data, blk.xText) : [];
     for (let i = 0; i < n; i++) {
-      time[s + i] =
-        blk.xCh === -2 ? blk.ds.data.time[i] : (blk.ds.data.values[i]?.[blk.xCh] ?? NaN);
+      time[s + i] = blk.xText
+        ? i < cats.length ? i + 1 : NaN // category i at x = i + 1, as Origin places it
+        : blk.xCh === -2 ? blk.ds.data.time[i] : (blk.ds.data.values[i]?.[blk.xCh] ?? NaN);
     }
   });
   const values: number[][] = Array.from({ length: total }, () =>
@@ -110,12 +130,18 @@ export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = f
   });
 
   const first = blocks[0].ds.data.metadata ?? {};
+  // Every block on ONE text X column: the axis shows its cells at 1..N.
+  // Compared by the cells, not the letter: two books' "A" columns may differ.
+  const cellsOf = (b: Block) => (b.xText ? JSON.stringify(textColumnLabels(b.ds.data, b.xText)) : null);
+  const catLabels = blocks.every((b) => b.xText && cellsOf(b) === cellsOf(blocks[0]))
+    ? textColumnLabels(blocks[0].ds.data, blocks[0].xText as string) : [];
   return {
     time,
     values,
     labels: bound.map((b) => b.label),
     units: bound.map((b) => b.unit),
     metadata: {
+      ...(catLabels.length ? { x_category_labels: catLabels } : {}),
       source_format: String((first as Record<string, unknown>).source_format ?? "overlay"),
       origin_overlay: true,
       origin_overlay_figure: figureName,
@@ -143,13 +169,13 @@ export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = f
       // A block on a value-channel X (a multi-X sheet, or a curve's recorded X)
       // is titled by THAT column, not the book's first X.
       // A DataStruct "H (2)" dedupe suffix is not the column's name: titled "H".
-      x_column_long: [...new Set(blocks.filter((b, i) => i === 0 || b.xCh >= 0).map(({ ds: { data: d }, xCh }) => String(
-        xCh >= 0 ? undedupe(d, xCh) : d.metadata?.x_column_long || d.metadata?.x_column_name || "",
+      x_column_long: [...new Set(blocks.filter((b, i) => i === 0 || b.xCh >= 0 || b.xText).map(({ ds: { data: d }, xCh, xText }) => String(
+        xText ? textColumnTitle(d, xText) : xCh >= 0 ? undedupe(d, xCh) : d.metadata?.x_column_long || d.metadata?.x_column_name || "",
       )))].filter(Boolean).join(" / "),
       // One shared x axis: list every block's unit ("Oe / K") rather than
       // titling a mixed overlay with the first source's unit alone.
-      x_column_unit: [...new Set(blocks.map(({ ds: { data: d }, xCh }) =>
-        xCh >= 0 ? d.units[xCh] : d.metadata?.x_column_unit))].filter(Boolean).join(" / "),
+      x_column_unit: [...new Set(blocks.map(({ ds: { data: d }, xCh, xText }) =>
+        xText ? "" : xCh >= 0 ? d.units[xCh] : d.metadata?.x_column_unit))].filter(Boolean).join(" / "),
     },
   };
 }
