@@ -97,4 +97,13 @@ describe("applyOriginFigure: asymmetric and X error bars", () => {
     expect(errors).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
     expect(useApp.getState().seriesStyles[0]?.errorBar).toBeUndefined();
   });
+
+  it("undo takes the written bindings back with the rest of the apply", () => {
+    useApp.getState().applyOriginFigure("plain");
+    const before = liveDoc().bindings.errors;
+    useApp.getState().applyOriginFigure("asym");
+    expect(liveDoc().bindings.errors).toHaveLength(3);
+    useApp.getState().undo();
+    expect(liveDoc().bindings.errors).toEqual(before);
+  });
 });

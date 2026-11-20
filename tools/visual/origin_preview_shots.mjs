@@ -26,7 +26,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import puppeteer from "puppeteer-core";
 
-import { REPO_ROOT, findChrome, killTree, parseArgs, waitForServer } from "./origin_shared.mjs";
+import { REPO_ROOT, chromeEnv, findChrome, killTree, parseArgs, waitForServer } from "./origin_shared.mjs";
 import { applyFigure, collapsePanels, importProjectViaUi, readFigureEntries } from "./origin_store_api.mjs";
 
 const args = parseArgs(process.argv.slice(2));
@@ -166,6 +166,7 @@ async function main() {
       executablePath: chrome,
       headless: "new",
       args: ["--no-sandbox", "--disable-gpu", "--force-device-scale-factor=1", "--hide-scrollbars"],
+      env: chromeEnv(), // non-ASCII project paths (origin_shared.chromeEnv)
     });
   try {
     let n = 0;

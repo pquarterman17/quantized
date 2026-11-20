@@ -236,3 +236,55 @@ On a machine with Origin 2026b:
 3. **An error plot naming no curve.** In `calibration_for_fig4.opju`,
    `win -a Graph3; layer -c;` then list the plots: Book6-8's error plots
    should be present with no visible bars (the preview says so).
+
+## Ledger entries (to merge)
+
+For `docs/origin_re/DECODE_LEDGER.md`. One line per fact or fix: field /
+behaviour → evidence → guarding test.
+
+* **Record offset 28 on an error-bar plot: `2` = filled band (`errBand`),
+  `0` = bars** → error plots read only 0 (762) / 2 (3,059); Origin previews of
+  `calibration_for_fig4` Graph2 (whiskers on exactly its two `0` plots, bands
+  on its four `2` plots), PerceivedRisk Graph1/29, `Fig3_e` Graph2, `成功率`
+  Graph1 → `tests/test_io_origin_error_bars.py::test_offset_28_two_is_a_filled_band`,
+  `::test_a_filled_error_plot_draws_a_band`,
+  `tests/test_io_origin_error_bars_realdata.py::test_realdata_a_filled_error_plot_is_a_band_with_its_own_halves`.
+* **Offset 23 bit `0x01` = plus half, `0x02` = minus half; an unequal pair
+  gives `yErrPlus` / `yErrMinus`** → `Graph_Template` column long names (14
+  halves, 0 exceptions); `32New` preview (`T - U .. T + V`); PerceivedRisk
+  Graph1 preview (band 1..2 over the line at x = 0..5, C = 1, B(minus) = 0,
+  D(plus) = 1; swapped would be 0..1) →
+  `tests/test_io_origin_error_bars.py::test_a_plus_and_minus_pair_draws_asymmetric_bars`,
+  `tests/test_io_origin_error_bars_realdata.py::test_realdata_halves_attach_plus_and_minus_by_their_authors_names`,
+  `::test_realdata_a_filled_error_plot_is_a_band_with_its_own_halves`.
+* **Offset 23 bit `0x10` = X-error plot (`xErr`, `xErrPlus` / `xErrMinus`),
+  whatever byte 76 says** → all 8 `0xe9` records + the 12 `0xe7` ones COM reads
+  as 233; `43Lollipop` preview stems from 0 to each point; owner MnN Graph10
+  Origin export →
+  `tests/test_io_origin_error_bars.py::test_bit_0x10_of_offset_23_is_an_x_error_plot`,
+  `::test_x_error_plots_draw_horizontal_bars`,
+  `tests/test_io_origin_error_bars_realdata.py::test_realdata_lollipop_x_halves_draw_stems_to_zero`.
+* **Two both-ways plots on one curve attach only when their columns are
+  equal (`yErr` from the first)** → all 420 public cases (PerceivedRisk `N` /
+  `P` on `O`) hold equal values; Graph29AA preview →
+  `tests/test_io_origin_error_bars.py::test_two_equal_both_ways_plots_draw_the_same_bars`,
+  `::test_anything_unproven_stays_left_out`.
+* **`error_bar_no_curve`: an error plot whose offset 35 names no data curve
+  of its layer draws nothing, and is not a loss** → `calibration_for_fig4`
+  Graph3 preview (no bars for Book6-8); PerceivedRisk Graph29-31 previews (no
+  whiskers from `F` / `H`) →
+  `tests/test_io_origin_error_bars.py::test_an_error_plot_naming_no_curve_draws_nothing`,
+  `::test_a_plot_the_decoder_skipped_is_not_absent`,
+  `tests/test_io_origin_error_bars_realdata.py::test_realdata_an_error_plot_naming_no_curve_is_not_a_loss`
+  (calibration only; the PerceivedRisk Graph29 "names another error plot"
+  case is UNGUARDED on real data, synthetic only).
+* **Regression fixed: the multi-panel page export dropped every error bar**
+  (both `errKeys` whiskers and spans; the cell canvas drew them) → reproduced
+  by exporting a spatial page whose panel carries `errKeys` →
+  `frontend/src/lib/spatialPageExport.test.ts::exports the bars the panel's canvas draws: Origin's asymmetric halves and the errKeys whiskers`.
+* **Frontend: the apply writes the asymmetric / X bindings into the focused
+  window's document; a later figure on the same book clears them** →
+  `frontend/src/store/originApplyErrorBars.test.ts::a later figure on the same book does not keep them`,
+  `::undo takes the written bindings back with the rest of the apply`. A
+  user's own window-only X / asymmetric binding is also cleared by a later
+  figure apply (it cannot be told from a previous figure's): UNGUARDED.

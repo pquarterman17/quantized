@@ -37,6 +37,7 @@ import puppeteer from "puppeteer-core";
 
 import {
   REPO_ROOT,
+  chromeEnv,
   exportsDirFor,
   findChrome,
   killTree,
@@ -138,6 +139,7 @@ async function main() {
       headless: "new",
       args: ["--no-sandbox", "--disable-gpu", "--force-device-scale-factor=1", "--hide-scrollbars"],
       defaultViewport: { width: 1200, height: 820 },
+      env: chromeEnv(), // non-ASCII project paths (origin_shared.chromeEnv)
     });
     const page = await browser.newPage();
     let pageErrors = [];
