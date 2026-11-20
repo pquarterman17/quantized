@@ -148,6 +148,14 @@ export interface LibraryPanelSlice {
    *  session, matching the component's old default. */
   originFidelitySectionExpanded: boolean;
   toggleOriginFidelitySectionExpanded: () => void;
+  /** Disclosure of the virtual "Unresolved Origin figures" groups
+   *  (lib/libraryHierarchy.ts `origin-group`), by group id. SESSION-ONLY like
+   *  `originFidelitySectionExpanded`: a group is derived, never stored, so a
+   *  saved project has nothing to restore it onto and it starts collapsed. */
+  expandedOriginGroupIds: string[];
+  toggleOriginGroupExpanded: (id: string) => void;
+  /** Idempotent disclosure (reveal / focus paths): never collapses. */
+  expandOriginGroup: (id: string) => void;
 }
 
 /** PR C: the active dataset's workbook is always disclosed — activation
@@ -220,5 +228,14 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     originFidelitySectionExpanded: false,
     toggleOriginFidelitySectionExpanded: () =>
       set((s) => ({ originFidelitySectionExpanded: !s.originFidelitySectionExpanded })),
+    expandedOriginGroupIds: [],
+    toggleOriginGroupExpanded: (id) =>
+      set((s) => ({
+        expandedOriginGroupIds: s.expandedOriginGroupIds.includes(id)
+          ? s.expandedOriginGroupIds.filter((x) => x !== id)
+          : [...s.expandedOriginGroupIds, id],
+      })),
+    expandOriginGroup: (id) =>
+      set((s) => (s.expandedOriginGroupIds.includes(id) ? {} : { expandedOriginGroupIds: [...s.expandedOriginGroupIds, id] })),
   };
 }

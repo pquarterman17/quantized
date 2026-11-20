@@ -367,4 +367,78 @@ describe("flattenLibraryHierarchy", () => {
     ]);
     expect(result.byKey.get("folder:proj")?.children.map((node) => node.key)).toEqual(["folder:sub", "workbook:bookB"]);
   });
+
+  describe("unresolved Origin figures group", () => {
+    // One import: project folder -> two books; datasets d1 (Book1), d2 (Book2).
+    const base = () => ({
+      folders: [folder("proj", null)],
+      workbooks: [workbook("w1", "proj"), workbook("w2", "proj")],
+      datasets: [dataset("d1", "w1", undefined, "Book1"), dataset("d2", "w2", undefined, "Book2")],
+    });
+    const ok = (id: string) => originFigure(id, "d1", ["d1", "d2"]); // bound, no curve bindings to fail
+    const lost = (id: string) => originFigure(id, null, ["d1", "d2"]);
+
+    it("gathers a project's unresolved entries under ONE node in the project folder; resolved stay put", () => {
+      const result = buildLibraryHierarchy({
+        ...base(), originFigures: [ok("g1"), lost("u1"), lost("u2"), lost("u3")],
+      });
+      const group = result.byKey.get("origin-group:unresolved-d1")!;
+      expect(group.parentKey).toBe("folder:proj");
+      expect(group.name).toBe("Unresolved Origin figures (3)");
+      expect(group.children.map((c) => c.key)).toEqual([
+        "origin-figure:u1", "origin-figure:u2", "origin-figure:u3",
+      ]);
+      expect(group.children.every((c) => c.depth === group.depth + 1 && c.parentKey === group.key)).toBe(true);
+      // The resolved graph keeps today's placement (its book), not the group.
+      expect(result.byKey.get("origin-figure:g1")!.parentKey).toBe("workbook:w1");
+      // Members keep their own source status (a placement-only fallback).
+      expect(result.byKey.get("origin-figure:u1")!.source.usedPlacementFallback).toBe(true);
+      expect([...result.byKey.values()].filter((n) => n.kind === "origin-group")).toHaveLength(1);
+    });
+
+    it("a lone unresolved entry stays a plain row, exactly as before", () => {
+      const result = buildLibraryHierarchy({ ...base(), originFigures: [ok("g1"), lost("u1")] });
+      expect([...result.byKey.values()].some((n) => n.kind === "origin-group")).toBe(false);
+      expect(result.byKey.get("origin-figure:u1")!.parentKey).toBe("workbook:w1");
+    });
+
+    it("groups per import and counts only that import's entries", () => {
+      const other = {
+        ...originFigure("v1", null, ["x1"]), stem: "two",
+      };
+      const result = buildLibraryHierarchy({
+        folders: [], workbooks: [workbook("wx")], datasets: [dataset("x1", "wx"), dataset("d1", "wx")],
+        originFigures: [lost("u1"), lost("u2"), other, { ...other, id: "v2" }, { ...other, id: "v3" }],
+      });
+      expect(result.byKey.get("origin-group:unresolved-x1")!.children).toHaveLength(3);
+      expect(result.byKey.get("origin-group:unresolved-d1")!.children).toHaveLength(2);
+      expect(result.byKey.get("origin-group:unresolved-d1")!.name).toBe("Unresolved Origin figures (2)");
+    });
+
+    it("judges 'unresolved' by the entry's resolution status (datasetId), never by name", () => {
+      const named = { ...lost("looks-resolved"), figure: { ...lost("x").figure, name: "Graph1" } };
+      const nameless = lost("unnamed-fig-ab12");
+      // Bound to a book: resolved, whatever its name looks like.
+      const bound = originFigure("unnamed-fig-bound", "d1", ["d1", "d2"]);
+      const result = buildLibraryHierarchy({ ...base(), originFigures: [bound, named, nameless] });
+      expect(result.byKey.get("origin-group:unresolved-d1")!.children.map((c) => c.key)).toEqual([
+        "origin-figure:looks-resolved", "origin-figure:unnamed-fig-ab12",
+      ]);
+      expect(result.byKey.get("origin-figure:unnamed-fig-bound")!.parentKey).toBe("workbook:w1");
+    });
+
+    it("flattens collapsed by default, expands on its own key, and is a container for filters", () => {
+      const result = buildLibraryHierarchy({ ...base(), originFigures: [lost("u1"), lost("u2")] });
+      const proj = new Set<LibraryNodeKey>(["folder:proj"]);
+      const closed = flattenLibraryHierarchy(result, proj).map((r) => r.node.key);
+      expect(closed).toContain("origin-group:unresolved-d1");
+      expect(closed).not.toContain("origin-figure:u1");
+      const open = flattenLibraryHierarchy(result, new Set([...proj, "origin-group:unresolved-d1" as LibraryNodeKey]));
+      const keys = open.map((r) => r.node.key);
+      expect(keys.slice(keys.indexOf("origin-group:unresolved-d1"))).toEqual([
+        "origin-group:unresolved-d1", "origin-figure:u1", "origin-figure:u2",
+      ]);
+      expect(open.find((r) => r.node.key === "origin-group:unresolved-d1")).toMatchObject({ hasChildren: true, expanded: true });
+    });
+  });
 });

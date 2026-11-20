@@ -43,7 +43,7 @@ export function collectionMembers(hierarchy: LibraryHierarchy, collection: Colle
   const terms = parseQuery(collection.query);
   const nodes: LibraryNode[] = [];
   flatten(hierarchy.roots, nodes);
-  return nodes.filter((node) => node.kind !== "folder" && libraryNodeMatches(node, terms));
+  return nodes.filter((node) => node.kind !== "folder" && node.kind !== "origin-group" && libraryNodeMatches(node, terms));
 }
 
 /** Validate persisted Collections at the untrusted .dwk boundary -- drops

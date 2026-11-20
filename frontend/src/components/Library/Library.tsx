@@ -120,6 +120,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       if (!parent) break;
       if (parent.kind === "folder" && !s.expandedFolders.includes(parent.entityId)) toggleFolderExpanded(parent.entityId);
       if (parent.kind === "workbook" && !s.expandedWorkbookIds.includes(parent.entityId)) toggleWorkbookExpanded(parent.entityId);
+      if (parent.kind === "origin-group") s.expandOriginGroup(parent.entityId);
       parentKey = parent.parentKey;
     }
     // Compatibility half (the pre-D2 contract): a legacy worksheet with a

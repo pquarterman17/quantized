@@ -57,6 +57,7 @@ export function useLibraryViewTransition(options: Options) {
         if (parent.kind === "workbook" && !options.expandedWorkbookIds.includes(parent.entityId)) {
           options.toggleWorkbookExpanded(parent.entityId);
         }
+        if (parent.kind === "origin-group") useApp.getState().expandOriginGroup(parent.entityId);
         parentKey = parent.parentKey;
       }
     }

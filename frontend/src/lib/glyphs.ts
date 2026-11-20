@@ -32,6 +32,9 @@ export const nodeWorkbook = "⊟";
 export const nodeWorksheet = "≡";
 export const nodeAnalysisResult = "⌬";
 export const nodeOriginFigure = "⌁";
+/** The virtual "Unresolved Origin figures" group: a circled slash, "nothing
+ *  bound here". Distinct from every node mark and row command glyph. */
+export const nodeOriginGroup = "⊘";
 export const nodeEditableFigure = "◇";
 export const nodePublicationFigure = "◆";
 export const nodePage = "▢";

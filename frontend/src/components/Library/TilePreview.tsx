@@ -96,7 +96,7 @@ function ArtifactPreview({ node }: { node: LibraryNode }) {
 
 export default function TilePreview({ node }: { node: LibraryNode }) {
   if (node.kind === "worksheet") return <WorksheetPreview node={node} />;
-  if (node.kind === "folder" || node.kind === "workbook") {
+  if (node.kind === "folder" || node.kind === "workbook" || node.kind === "origin-group") {
     const children = node.children.length;
     return (
       <div className="qzk-tile-placeholder">

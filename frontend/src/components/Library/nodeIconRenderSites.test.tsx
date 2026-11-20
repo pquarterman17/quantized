@@ -34,6 +34,7 @@ import EditableFiguresSection from "./EditableFiguresSection";
 import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_KINDS, LIBRARY_NODE_LABEL } from "./nodeIcons";
+import OriginGroupRow from "./OriginGroupRow";
 import PagesSection from "./PagesSection";
 import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
@@ -118,6 +119,16 @@ const workbookNode = () => {
   return node as Extract<LibraryNode, { kind: "workbook" }>;
 };
 
+const originGroupNode = () => {
+  // Two unresolved entries of one import make the derived group.
+  const lost = (id: string): OriginFigureEntry => ({ ...originFigure, id, datasetId: null });
+  const node = buildLibraryHierarchy({
+    folders: [], workbooks: [workbook], datasets: [dataset], originFigures: [lost("lost1"), lost("lost2")],
+  }).roots.flatMap((r) => [r, ...r.children]).find((n) => n.kind === "origin-group");
+  if (!node || node.kind !== "origin-group") throw new Error("fixture origin group missing");
+  return node as Extract<LibraryNode, { kind: "origin-group" }>;
+};
+
 const datasetRowProps = {
   active: false,
   selected: false,
@@ -163,6 +174,11 @@ const SITES: readonly RenderSite[] = [
     kind: "origin-figure",
     where: "FigureRow.tsx",
     render: () => render(<FigureRow entry={originFigure} treeMode />).container,
+  },
+  {
+    kind: "origin-group",
+    where: "OriginGroupRow.tsx",
+    render: () => render(<OriginGroupRow node={originGroupNode()} depth={0} expanded={false} />).container,
   },
   {
     kind: "editable-figure",

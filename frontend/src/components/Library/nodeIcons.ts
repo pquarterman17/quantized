@@ -67,6 +67,7 @@ export const LIBRARY_NODE_KINDS = [
   "worksheet",
   "analysis-result",
   "origin-figure",
+  "origin-group",
   "editable-figure",
   "publication-figure",
   "page",
@@ -83,6 +84,7 @@ export const LIBRARY_NODE_KINDS = [
  * | worksheet          | ≡     | U+2261     | free-standing rules, no box: the rows of one sheet. The lightest mark in the set, deliberately — a worksheet is by far the most numerous row in an imported Origin project. |
  * | analysis-result    | ⌬     | U+232C     | a linked analysis record: distinct from its worksheet output. |
  * | origin-figure      | ⌁     | U+2301     | a zigzag trace: a plotted graph recovered from Origin. Unchanged. |
+ * | origin-group       | ⊘     | U+2298     | a circled slash: the derived group of Origin graph entries with no bound source. |
  * | editable-figure    | ◇     | U+25C7     | outline diamond: a live figure document you can still edit. Unchanged. |
  * | publication-figure | ◆     | U+25C6     | solid diamond: the same family, set for publication. Replaces the old ◉/❄ pair, which swapped the TYPE mark to say "frozen" and so left a frozen publication figure with no type mark at all — frozen-ness is now its own ❄ status mark beside the name. |
  * | page               | ▢     | U+25A2     | a rounded empty square (▭ is the Rectangle shape tool): the blank canvas a figure page lays panels onto. |
@@ -94,6 +96,7 @@ export const LIBRARY_NODE_GLYPH: Record<LibraryNodeKind, string> = {
   worksheet: GLYPHS.nodeWorksheet,
   "analysis-result": GLYPHS.nodeAnalysisResult,
   "origin-figure": GLYPHS.nodeOriginFigure,
+  "origin-group": GLYPHS.nodeOriginGroup,
   "editable-figure": GLYPHS.nodeEditableFigure,
   "publication-figure": GLYPHS.nodePublicationFigure,
   page: GLYPHS.nodePage,
@@ -112,6 +115,7 @@ export const LIBRARY_NODE_LABEL: Record<LibraryNodeKind, string> = {
   worksheet: "Worksheet",
   "analysis-result": "Analysis result",
   "origin-figure": "Origin figure",
+  "origin-group": "Unresolved Origin figures",
   "editable-figure": "Editable figure",
   "publication-figure": "Publication figure",
   page: "Figure page",

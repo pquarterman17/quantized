@@ -33,6 +33,7 @@ export function useLibraryFocus(
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
   const expandedWorkbookIds = useLibraryStore((s) => s.expandedWorkbookIds);
   const toggleWorkbookExpanded = useLibraryStore((s) => s.toggleWorkbookExpanded);
+  const expandedOriginGroupIds = useLibraryStore((s) => s.expandedOriginGroupIds);
   const selection = useLibraryStore((s) => s.librarySelection);
   const selectedIds = useApp((s) => s.selectedIds);
   const [focusKey, setFocusKey] = useState<LibraryNodeKey | null>(null);
@@ -76,8 +77,9 @@ export function useLibraryFocus(
     const expandedKeys = new Set<LibraryNodeKey>();
     for (const id of expandedFolders) expandedKeys.add(`folder:${id}`);
     for (const id of expandedWorkbookIds) expandedKeys.add(`workbook:${id}`);
+    for (const id of expandedOriginGroupIds) expandedKeys.add(`origin-group:${id}`);
     return flattenLibraryHierarchy(displayHierarchy, expandedKeys);
-  }, [allRows, contentFilter, displayHierarchy, expandedFolders, expandedWorkbookIds, focusKey]);
+  }, [allRows, contentFilter, displayHierarchy, expandedFolders, expandedWorkbookIds, expandedOriginGroupIds, focusKey]);
 
   useEffect(() => {
     if (focusKey && !hierarchy.byKey.has(focusKey)) setFocusKey(null);
@@ -104,8 +106,12 @@ export function useLibraryFocus(
     () => new Set([...scopeContainers.workbooks].filter((id) => isExpandableWorkbook(hierarchy.byKey.get(`workbook:${id}`)))),
     [hierarchy, scopeContainers.workbooks],
   );
+  const expandableGroups = scopeContainers.originGroups;
   const setAllExpanded = (expanded: boolean): void => {
     useApp.setState((state) => ({
+      expandedOriginGroupIds: expanded
+        ? [...new Set([...state.expandedOriginGroupIds, ...expandableGroups])]
+        : state.expandedOriginGroupIds.filter((id) => !expandableGroups.has(id)),
       expandedFolders: expanded
         ? [...new Set([...state.expandedFolders, ...expandableFolders])]
         : state.expandedFolders.filter((id) => !expandableFolders.has(id)),
@@ -115,8 +121,10 @@ export function useLibraryFocus(
     }));
   };
   const canExpand = [...expandableFolders].some((id) => !expandedFolders.includes(id))
+    || [...expandableGroups].some((id) => !expandedOriginGroupIds.includes(id))
     || [...expandableWorkbooks].some((id) => !expandedWorkbookIds.includes(id));
   const canCollapse = [...expandableFolders].some((id) => expandedFolders.includes(id))
+    || [...expandableGroups].some((id) => expandedOriginGroupIds.includes(id))
     || [...expandableWorkbooks].some((id) => expandedWorkbookIds.includes(id));
 
   return {

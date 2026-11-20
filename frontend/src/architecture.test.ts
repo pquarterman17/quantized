@@ -2196,6 +2196,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // UI-only, session-local, and (unlike expandedWorkbookIds/librarySelection/
   // workbookLastChild) deliberately NOT persisted into `.dwk` either.
   originFidelitySectionExpanded: "Origin fidelity group disclosure; UI state, session-only, not .dwk-persisted, not an undoable edit",
+  expandedOriginGroupIds: "Unresolved-Origin-figures group disclosure (a derived Library node); UI state, session-only, not .dwk-persisted, not an undoable edit",
 
   // originImport slice: ephemeral seeds
   originWorksheetSeed: "pending worksheet from Origin import; consumed on apply, not persistent",
