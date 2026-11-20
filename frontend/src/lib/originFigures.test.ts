@@ -224,6 +224,32 @@ describe("figureChannelSelection", () => {
     });
   });
 
+  it("binds a text (category) X column to the row-index X instead of dropping the curves", () => {
+    // Origin plots a category X at index 1..n; the book's X never became
+    // numeric (`x_column_name` empty, `.time` = the row index). Before, the
+    // curves' x "A" matched nothing and the figure fell back to every channel.
+    const cat = book("b2", "Moke:Book3", {
+      origin_book: "Book3",
+      x_column_name: "",
+      origin_column_names: ["B", "C", "D", "E"],
+      column_designations: { A: "X", B: "Y", C: "Y", D: "Y", E: "Y" },
+      origin_text_columns: { A: ["As deposited", "325 °C", "525 °C"] },
+    });
+    const fig = figure({
+      curves: [
+        { book: "Book3", x: "A", y: "C" },
+        { book: "Book3", x: "A", y: "E" },
+      ],
+    });
+    expect(figureChannelSelection(fig, cat)).toMatchObject({ xKey: null, yKeys: [1, 3] });
+    // A text column that is NOT a designated X is never taken for the X.
+    const notX = book("b3", "Moke:Book3", {
+      ...cat.data.metadata,
+      column_designations: { A: "L", B: "Y", C: "Y", D: "Y", E: "Y" },
+    });
+    expect(figureChannelSelection(fig, notX)).toBeNull();
+  });
+
   it("collects multiple curves, deduplicated", () => {
     const fig = figure({
       curves: [
