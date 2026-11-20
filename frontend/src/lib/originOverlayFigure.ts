@@ -191,12 +191,13 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
     });
     const at = bound.length - 1; // this curve's overlay column
     // Origin's error-bar plot on this curve (OriginCurve.yErr): its column
-    // rides in the curve's own block, right after it, as whiskers only.{}
+    // rides in the curve's own block, right after it, as whiskers only. The
+    // block key includes a text X (`originOverlay.blockKey`), so it is copied.
     const eCh = c.yErr ? channelOf(meta, c.yErr) : -1;
     if (eCh >= 0 && eCh !== yCh) {
       errorCols[at] = bound.length;
       bound.push({
-        ds, xCh, yCh: eCh, label: `${c.book}: ${ds.data.labels[eCh] || c.yErr}`,
+        ds, xCh, ...(xText ? { xText } : {}), yCh: eCh, label: `${c.book}: ${ds.data.labels[eCh] || c.yErr}`,
         unit: ds.data.units[eCh] ?? "", style: null, designation: "Y-error", legendLabel: undefined,
       });
     }
@@ -205,7 +206,7 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
     for (const e of curveErrorBindings(c, yCh, (l) => channelOf(meta, l))) {
       roles.push({ ...e, channel: bound.length, target: at });
       bound.push({
-        ds, xCh, yCh: e.channel, label: `${c.book}: ${ds.data.labels[e.channel] || e.channel}`,
+        ds, xCh, ...(xText ? { xText } : {}), yCh: e.channel, label: `${c.book}: ${ds.data.labels[e.channel] || e.channel}`,
         unit: ds.data.units[e.channel] ?? "", style: null, designation: "Y", legendLabel: undefined,
       });
     }
