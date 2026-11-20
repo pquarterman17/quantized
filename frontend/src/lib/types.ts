@@ -198,7 +198,7 @@ export interface OriginCurve {
    *  opju_plot_kinds.py); "histogram", "box", "violin" or "strip" (`.opju`, a curve with
    *  no X column, `x` = "": opju_stat_plots.py). Absent for line/scatter and undecoded types. */
   plotType?: "column" | "bar" | "histogram" | "area" | "step" | "box" | "violin" | "strip";
-  sizeBy?: string; colorBy?: string; yErr?: string; // bubble size / colour-mapped column (opju_plot_kinds.py), Y error-bar column (opju_error_bars.py); same sheet
+  sizeBy?: string; colorBy?: string; yErr?: string; xRecorded?: boolean; // bubble size / colour column (opju_plot_kinds.py); yErr: Y error-bar column, same sheet (opju_error_bars.py); xRecorded: the .opju curve record names the X, so it beats nearest-preceding-X (A2)
 }
 
 export interface OriginFigure {

@@ -1291,6 +1291,14 @@ the shipped contract)
   colour reads the line colour (657/660 preview hue checks). Evidence and
   owner COM checks: `docs/origin_re/curve_bindings_opj.md`,
   `docs/origin_re/curve_colors.md`.
+- ~~**Figure rendering vs Origin's own previews (Lane F)**~~ (2026-11-20).
+  `.opju` curves carry `xRecorded` when the curve record names the X
+  (item 70's decode), so the apply lets that X beat nearest-preceding-X
+  (owner decision A2); a `.opj` X is inferred and never does. A designated
+  text (category) X gives `.time` 1..N (Origin's category index; 59 layers,
+  none starting at or below 0). Frontend: fail-closed empty layer, `%(?X)`
+  titles, cross-book double-Y. Evidence and the A4/A5 owner questions:
+  `docs/origin_re/curve_axis_fidelity.md` "Rendering rules".
 - ~~**Oracle graph pages with no decoded layer (lane C)**~~ (2026-11-20).
   Of the 782 COM-listed pages (`axis_ranges.json`) with no decoded layer on
   #775, 771 are graphs embedded in workbooks (528 sparklines the file does

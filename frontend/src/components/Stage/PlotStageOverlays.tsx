@@ -16,7 +16,7 @@ import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { lazyRegion } from "../../lib/lazyRegion";
-import { emptyGraphReason } from "../../lib/linkedCurvesLite";
+import { emptyGraphReason, NO_RESOLVED_CURVES_REASON } from "../../lib/linkedCurvesLite";
 import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -88,6 +88,8 @@ export interface PlotStageOverlaysProps {
 
 export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
   const hasLayers = useApp((s) => s.layers.length > 0);
+  // An explicit empty selection is the fail-closed Origin apply (A3), never a user pick.
+  const noCurves = useApp((s) => s.yKeys?.length === 0);
   return (
     <>
       {p.displayPayload && (
@@ -117,7 +119,9 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         </div>
       )}
 
-      {p.active && emptyGraphReason(p.active) && <EmptyGraphNotice reason={emptyGraphReason(p.active)!} />}
+      {p.active && (emptyGraphReason(p.active) || (noCurves && p.plotted.length === 0)) && (
+        <EmptyGraphNotice reason={emptyGraphReason(p.active) ?? NO_RESOLVED_CURVES_REASON} />
+      )}
 
       <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} />
       {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget }) && (

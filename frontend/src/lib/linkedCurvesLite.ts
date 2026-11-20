@@ -13,6 +13,12 @@ export function emptyGraphReason(ds: Pick<Dataset, "linkedCurves" | "data">): st
   return ds.linkedCurves && ds.data.time.length === 0 ? NO_CURVES_REASON : null;
 }
 
+/** Why an applied Origin graph draws nothing: it records curves, but none
+ *  resolved to a column with data or the importer left them out (Recover
+ *  lists each), so the apply left the plot EMPTY (`yKeys` is `[]`) instead of
+ *  falling back to every channel (phantom curves). */
+export const NO_RESOLVED_CURVES_REASON = "No curves: none of this graph's curves is drawn (see Recover for any left out)";
+
 /** What a saved curve that cannot be restored is bound to: nothing. */
 export const UNRESOLVED_SOURCE = "";
 

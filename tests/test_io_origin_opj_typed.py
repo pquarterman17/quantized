@@ -282,8 +282,12 @@ def test_all_text_book_keeps_its_cells_labels_units_and_comments(tmp_path: Path)
     # B also holds a number: it stays a channel, its text cells NaN.
     assert book.labels == ("Temp",) and book.units == ("K",)
     np.testing.assert_array_equal(book.values[:, 0], [np.nan, 5.5, np.nan])
-    # The X column is text, so `.time` is an honest row index, flagged.
-    assert book.time.tolist() == [0.0, 1.0, 2.0]
+    # The X column is text, so `.time` is an honest row index, flagged -- a
+    # CATEGORY index, 1-based as Origin places categories (A1b: Origin puts
+    # row r at x = r + 1, so a 0-based index hid the first category outside
+    # the decoded [0.5, N+0.5] axis). An undecoded NUMERIC X stays 0-based
+    # (test_undecoded_x_column_still_falls_back_to_a_row_index below).
+    assert book.time.tolist() == [1.0, 2.0, 3.0]
     assert meta["x_column_recovered"] is False and meta["x_column_unrecovered"] == "Conductance"
 
 

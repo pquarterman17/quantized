@@ -270,7 +270,15 @@ def _build_book(
     if x_unrecovered:
         # The designated X column is unrecoverable → synthetic 0..N-1 row index
         # as `.time`; every decoded column stays a value series (none consumed).
-        time = np.arange(maxlen, dtype=np.float64)
+        # A designated X that is a TEXT column is a category axis: Origin puts
+        # category i (row r, 0-based) at x = r + 1, so `.time` is 1..N there —
+        # the graph's decoded axis range then frames it as Origin does
+        # (whole-corpus check, both corpora, 59 graph layers: most ranges are
+        # exactly [0.5, N+0.5], the rest start between 0.2 and 0.9; none at
+        # or below 0, so a 0-based first category was always clipped).
+        # An undecoded numeric X keeps the 0-based placeholder.
+        category_x = declared_x is not None and declared_x in {c for c, _ in text_cols or []}
+        time = np.arange(maxlen, dtype=np.float64) + (1.0 if category_x else 0.0)
         values = np.column_stack(padded) if padded else np.empty((maxlen, 0))
         value_cols = [c for c, _ in ordered]
         x_meta = None

@@ -133,6 +133,7 @@ from quantized.io.origin_project.opju_curve_token_x import (
     HIDDEN_IN_ORIGIN,
     token_hidden,
     token_x,
+    token_x_id,
 )
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
@@ -396,6 +397,7 @@ def extract_curves_by_id(
         partner = table.x_partner.get(cid)
         # the token's own X (record offset 35) outranks the Y's designated X
         partner, x_reason = token_x(b, m.start() + 3, book, partner, table.ids)
+        recorded_x = token_x_id(b, m.start() + 3)  # the record's own X id, if written
         partner_info = table.ids.get(partner) if partner is not None else None
         if partner_info is not None and partner_info[0] == book:
             x_col = partner_info[1]
@@ -444,6 +446,10 @@ def extract_curves_by_id(
         if cid in newly or partner in newly:
             placed.add(len(out))
         curve: dict[str, str | float] = {"book": sheet or book, "x": x_col, "y": y_col}
+        if partner is not None and partner == recorded_x:
+            # the X is the one the curve record itself names (COM-checked
+            # decode): the frontend lets it win over nearest-preceding-X (A2)
+            curve["xRecorded"] = True
         record = stat_record
         if record is not None:
             curve.update(style_fields(record))

@@ -43,6 +43,7 @@ import type { ExportSeriesStyle } from "./publicationStyles";
 import { buildSpatialPageRequest } from "./spatialPageExport";
 import type { Dataset, DefaultTrace, SeriesStyle } from "./types";
 import { buildOpts } from "./uplotOpts";
+import { screenStrokeWidth } from "./uplotSeries";
 import { useApp } from "../store/useApp";
 
 const FIXTURE = join(
@@ -307,7 +308,8 @@ describe("widthless lines on the spatial, Graph Builder and polar exports, scree
   afterEach(() => vi.restoreAllMocks());
 
   it.each(CASES)("canvas: $name", (c) => {
-    expect(canvas(c)).toEqual(c.drawn);
+    // Screen only (A5): a drawn line is at least one device pixel; the export widths stay as is.
+    expect(canvas(c)).toEqual(c.drawn.map((d) => (d.width == null ? d : { ...d, width: screenStrokeWidth(d.width) })));
   });
 
   it.each(CASES)("request: $name", (c) => {

@@ -105,4 +105,29 @@ describe("PR #150 review — preview honesty probes", () => {
     // first-columns fallback would draw three series.
     expect(svg.match(/<polyline/g)).toHaveLength(1);
   });
+
+  it("a stat (histogram) layer is not previewed empty -- the same exclusion the apply makes", async () => {
+    const ds = {
+      id: "ob1", name: "Book1", workbookId: null,
+      data: {
+        time: [0, 1, 2],
+        values: [[NaN, 9], [NaN, 8], [NaN, 7]],
+        labels: ["B", "C"],
+        units: ["", ""],
+        metadata: { origin_book: "Book1", origin_column_names: ["B", "C"], x_column_name: "A" },
+      },
+    } as unknown as Dataset;
+    const mk = (plotType: string | undefined) => ({
+      key: "origin-figure:of1", entityId: "of1", kind: "origin-figure", name: "Graph1",
+      parentKey: null, depth: 0, children: [],
+      entity: { id: "of1", datasetId: "ob1", stem: "p", figure: { n_curves: 1, curves: [{ book: "Book1", x: "A", y: "B", plotType }] } },
+      source: { datasetIds: ["ob1"], missingDatasetIds: [], usedPlacementFallback: false },
+    } as never);
+    const svgOf = async (plotType: string | undefined) => decode((await generateFigureThumbnail(
+      resolveThumbnailRequest(mk(plotType), { datasets: [ds], editableFigures: [] }), new AbortController().signal)).url);
+    // Control: an unresolved XY curve fails closed (empty preview).
+    expect(await svgOf(undefined)).toContain("No plottable data");
+    // A histogram layer reads its own column on the Stat Stage: default view, not empty.
+    expect(await svgOf("histogram")).not.toContain("No plottable data");
+  });
 });
