@@ -144,20 +144,28 @@ def test_operators_are_banded_and_built_without_per_row_python_work() -> None:
 def test_large_propagation_is_fast_enough_loose_backstop() -> None:
     """A deliberately loose wall-clock backstop (the shape test above is the
     real guard): every propagation over 200k rows together in well under the
-    7 s the first version took for one."""
+    7 s the first version took for one.
+
+    The clock is PROCESS CPU time (``time.process_time``), not wall time: this
+    work is single-threaded, and a wall-clock reading also counts every
+    second the OS spends running other processes (a loaded CI box or a
+    parallel gate stalled one run to 9.2 s against the 6 s bound while the
+    work itself needs ~1 s of CPU). CPU time measures what the code did, so
+    the bound still trips on a real algorithmic regression and not on
+    scheduler starvation. The bound itself is unchanged."""
     import time
 
     x = np.cumsum(np.full(_BIG, 0.5))
     y = np.sin(x / 50.0)
     sigma = np.full(_BIG, 0.1)
-    start = time.perf_counter()
+    start = time.process_time()
     for method in ("moving", "savitzky-golay"):
         smooth = smoothing_operator(_BIG, method=method, window=5)
         linear_sigma(smooth, sigma)
         linear_sigma(compose(gradient_operator(x), smooth), sigma)
         cumulative_trapezoid_sigma(x, sigma, smooth @ y, pre=smooth)
     cumulative_trapezoid_sigma(x, sigma, y)
-    assert time.perf_counter() - start < 6.0
+    assert time.process_time() - start < 6.0
 
 
 def test_vectorised_smoothed_integral_handles_nan_like_the_loop_did() -> None:
