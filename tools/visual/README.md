@@ -94,8 +94,8 @@ side-by-side gallery against quantized's own render:
 cd frontend && npm run build       # build the SPA (served by qz itself below)
 cd ../tools/visual && npm install  # one-time; puppeteer-core
 
-# 1. Import the project through the REAL backend once, replay the Library's
-#    "click a figure" flow (addOriginFigures + applyOriginFigure) for every
+# 1. Import the project through the REAL backend + UI action once, replay the Library's
+#    "click a figure" flow (importFiles upload path + applyOriginFigure) for every
 #    decoded graph window, screenshot each, and write a structural report.
 node origin_figures.mjs --opj "<path>/PNR.opj" --project PNR
 
@@ -126,13 +126,17 @@ For `acceptance_matrix.mjs`, `--exports-root` names the shared `_exports`
 directory instead; its default corpus discovery is otherwise identical.
 
 `origin_figures.mjs` starts its own `uv run qz --no-browser` backend (default
-port 8793, override with `--port`) to parse the project — the SAME process
-also serves the just-built SPA, so no separate static server is needed — and
-kills the whole process tree on exit. It uploads via `/api/parsers/upload`
-— the path the GUI itself uses, never the path-based `/import`, so the
-harness exercises what a real user exercises — then drives the store
-directly through the `?harness` seam, exactly mirroring
-`useApp.importFiles`'s real book-naming + `addOriginFigures` call. Multi-layer
+port 8793, override with `--port`) — the SAME process also serves the
+just-built SPA, so no separate static server is needed — and kills the whole
+process tree on exit. The invocation is unchanged (`--opj`, `--project`,
+`--exports-root`, `--port`). It imports through the REAL UI action: the
+project file goes into an `<input type=file>` and `useApp.importFiles` (the
+lazy default upload path) runs on it, then `applyOriginFigure` is applied per
+figure, both through the `?harness` seam. All store contact lives in
+`origin_store_api.mjs`; `frontend/src/test/originHarnessContract.test.ts`
+(runs in CI, no private data) checks that module's `STORE_CONTRACT` against
+the real store, so a store API change fails CI instead of silently breaking
+the gallery run. Multi-layer
 graph windows (double-Y pairs, spatial multi-panel figures) are applied ONCE
 per graph-window family — clicking any one row applies the whole family, so
 screenshotting every layer separately would just duplicate shots.
