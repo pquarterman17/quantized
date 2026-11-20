@@ -1282,6 +1282,26 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Oracle graph pages with no decoded layer (lane C)**~~ (2026-11-20).
+  Of the 782 COM-listed pages (`axis_ranges.json`) with no decoded layer on
+  #775, 771 are graphs embedded in workbooks (528 sparklines the file does
+  not store; 243 `FitLine`/`Residual`/sparkline headers it does), 9 are
+  id-table-less pages decoded but unnamed, 2 have a `04 01` Y scale field.
+  Now: embedded headers are found (`opju_embedded_graphs`; 243/243 oracle
+  pages, 0 extras) and listed in the manifest (`embedded_graph_count`); a
+  workbook-page anchor is named after its header (12/12 oracle layers
+  agree); id-table-less `_cart_object` pages are graph pages
+  (`opju_layer_pages`, 9/9 agree); `04 01` reads as log10 (9/9 COM y.type).
+  A page counts as recovered only when a layer is imported, so 61 public
+  pages whose decoded layers were all filtered are now reported with their
+  previews. Oracle: pages decoded 1,514 -> 1,537, layers agreeing 2,783 ->
+  2,813, 0 disagreements / phantoms; every remaining page is an embedded
+  graph reported (231) or not stored (528). Public corpus: actionable
+  figures 3,192 -> 3,201, curves 7,829 -> 7,857, no project loses a figure,
+  curve or book; owner corpus unchanged except Hc2 Graph5 now reported.
+  `docs/origin_re/opju_embedded_graphs.md`. Open: sparkline count rule,
+  where `Residual` layers live, `02 00` scale fields.
+
 - ~~**Graph pages present but not recovered (`.opju` axis records)**~~
   (2026-11-20). 202 of the 211 `graphs_not_recovered` pages had every layer
   anchor, but no token-at-a-time axis reader decoded it. The anchor is the

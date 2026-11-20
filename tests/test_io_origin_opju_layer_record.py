@@ -74,6 +74,7 @@ def test_grammar_tokens() -> None:
     [
         (b"\x01\x00", b"\x01\x00", False, False),
         (b"\x08\x01", b"\x08\x01", True, True),
+        (b"\x01\x00", b"\x04\x01", False, True),  # 04 01: log10 (COM y.type)
     ],
 )
 def test_layer_record_fields(xs: bytes, ys: bytes, x_log: bool, y_log: bool) -> None:
@@ -96,7 +97,7 @@ def test_reversed_axis_is_read() -> None:
     "rec",
     [
         _layer(xs=b"\x80\xe9"),  # unadmitted scale field
-        _layer(ys=b"\x04\x01"),
+        _layer(ys=b"\x05\x01"),  # an xx 01 value no file carries
         _layer(x=(0.0, 10.0, -2.0)),  # step against the span
         _layer(y=(1.0, 1.0, 0.5)),  # empty span
         _layer(y=(0.0, 1.0, 0.0)),  # no step
