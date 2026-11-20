@@ -61,6 +61,21 @@ often do. Not changed here (column decode untouched); worth aligning.
   `optimal_MOI…fig5` Graph2/Graph5 X log, `SOP_meas` Graph4/Graph70 layers
   3/5/11 Y log). These records now decode the fixed-offset way.
 * Negative control: 0 of 222 unprefixed (coincidental) anchors accepted.
+* COM oracle (`ground_truth_public/axis_ranges.json`, Origin 2026b, 113
+  projects): every one of the 252 newly decoded named layers it lists (119
+  pages, 33 projects) and the 9 layers whose decode changed match Origin's
+  X/Y from/to (rel 1e-6), and every decoded scale matches `layer.x/y.type`
+  (5,534 linear, 32 log10 over all scored layers); no phantom layer.
+* Owner corpus: `Hc2 data` Graph34 (plan item 75) now decodes, X 0..9 step 2,
+  Y 0..7e-8 step 2e-8 with three curves, matching its saved preview
+  (nm-labelled ticks 0..60 step 20). `PNR.otpu` (styles-only before) now
+  decodes in full.
+* **Graph pages only.** On a workbook page the same records decode (one
+  embedded graph per book in the owner corpus), but their X spans the ROW
+  count while the curve reader binds the book's X column, so they would draw
+  a column against the wrong X. `figures_opju` reads fixed offsets only on
+  graph pages (and id-table-less streams); book-page records stay with the
+  older readers, as before (66 layers in the public corpus).
 * 423 records no other reader decodes; ranges and tick steps compared with the
   saved previews of 12 projects (merged/stacked panels, violin, histogram +
   cumulative layer, Julian-date axes, reversed log 1..1e-13, 1e9 values).
@@ -71,13 +86,13 @@ often do. Not changed here (column decode untouched); worth aligning.
 |---|---:|---:|
 | unrecovered graph pages | 211 | 12 |
 | projects with `graphs_not_recovered` | 82 | 5 |
-| graph records (layers) | 2,991 | 3,413 |
-| actionable figures | 2,841 | 3,235 |
-| figures with curves | 2,681 | 2,989 |
-| curves | 6,645 | 7,849 |
+| graph records (layers) | 2,991 | 3,347 |
+| actionable figures | 2,841 | 3,187 |
+| figures with curves | 2,681 | 2,954 |
+| curves | 6,645 | 7,807 |
 | status `unresolved` | 114 | 83 |
 
-Books unchanged (3,174). No project loses a figure or a curve. Four layers
+Books unchanged (3,174). No project loses a figure. Four layers
 lose a curve each: `SOP_meas` Graph37/38/42/45 layer 1 is a histogram whose
 page also holds a cumulative-percent line layer (visible in the preview);
 with layer 2 now decoded the page is multi-layer, and the existing stat rule
@@ -95,12 +110,6 @@ histogram instead of drawing it as if it were the whole page.
   anchors, e.g. `Figure 3 and 4 amplitude - rise time data.opju`,
   `Cu-Induced-Softening plot.opju`): fields before it look plausible, but
   the authenticator fails, so they stay with the old readers / undecoded.
-* Run `tests/test_io_origin_opju_page_attribution.py -m realdata` with
-  `test-data/origin/ground_truth_public/axis_ranges.json` present: it
-  scores every decoded layer (now including the new ones) against Origin
-  2026b COM. Not available in this environment.
-* Plan item 75 (Hc2 data Graph34 axis record: two doubles in one literal run)
-  is the case this reader handles by construction; confirm on Hc2 data.
 * Id-table-less streams (`BD_SC_all`, `BD_TC_all`, `RSOS_SC_all`, two `wxgf`
   files): naming their decoded layers needs a book/graph page classifier
   that does not rely on the id table.

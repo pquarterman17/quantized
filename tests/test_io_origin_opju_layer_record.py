@@ -10,6 +10,8 @@ import pytest
 
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_layer_record import expand_sparse, layer_record
+from test_io_origin_figures_opju import _column_id_record
+from test_io_origin_opju_page_attribution import _ONE, _header
 
 
 def _encode(buf: bytes) -> bytes:
@@ -116,3 +118,19 @@ def test_extract_figures_reads_record_no_other_form_decodes() -> None:
     got = (f["x_from"], f["x_to"], f["y_from"], f["y_to"], f["x_step"], f["y_step"])
     assert got == (0.0, 10.0, -1.0, 1.0, 2.0, 0.5)
     assert (f["x_log"], f["y_log"]) == (False, False)
+
+
+def test_record_on_a_workbook_page_is_not_read() -> None:
+    """Fixed offsets are read on GRAPH pages only. A workbook page's embedded
+    graphs (owner corpus: one per book, X spanning the ROW count, Y a column's
+    range) would otherwise become figures whose curve binds a column as X,
+    which they do not plot -- so a book-page record stays with the older
+    readers (none of which reads this one), exactly as before."""
+    recs = _column_id_record(1, "A", "X") + _column_id_record(2, "B", "Y", partner=1)
+    rec = b"\xb9\x01" + _encode(_layer()) + b"\x00" * 64
+    head = b"CPYUA 4.3811 222\n" + _header("WBook", _ONE) + recs
+    assert extract_figures_opju(head + rec) == []
+    figs = extract_figures_opju(head + _header("Graph1", _ONE) + rec)
+    assert [(f["name"], f["layer"], f["x_to"], f["y_to"]) for f in figs] == [
+        ("Graph1", 1, 10.0, 1.0)
+    ]

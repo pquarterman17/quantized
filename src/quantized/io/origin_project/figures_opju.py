@@ -371,12 +371,12 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         y_step: float | None = None
         real: _RealRecord | None = None
         if spec is None:
-            # the record read at its fixed .opj offsets (opju_layer_record) first
-            real = layer_record(b, anchor) or _parse_real_record(b, p, window_end)
-            if real is None:
-                # Neither form parsed: try the hybrid (specimen skeleton +
-                # real-form value tokens, §13.2 #13). Gated behind BOTH so it
-                # can never change a record the others already decode.
+            # fixed .opj offsets first (opju_layer_record) -- never on a book
+            # page: its embedded graphs' curve X is not proven (sparkline-like)
+            fixed = layer_record(b, anchor) if is_graph_page or legacy else None
+            real = fixed or _parse_real_record(b, p, window_end)
+            if real is None:  # no form parsed: the hybrid (specimen skeleton +
+                # real-form tokens, §13.2 #13), so it never changes a decode
                 spec = parse_hybrid_record(b, p)
         if spec is not None:
             x_from, x_to, y_from, y_to, type_byte, x_flag = spec

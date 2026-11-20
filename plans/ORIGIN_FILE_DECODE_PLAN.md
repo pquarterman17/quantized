@@ -1287,11 +1287,15 @@ the shipped contract)
   Positive control 2,934 / 2,937 existing decodes identical; the 3 range and
   8 scale disagreements are real-form misreads (saved previews); 0 of 222
   coincidental anchors accepted. Corpus (351 files): unrecovered pages
-  211 -> 12, layers 2,991 -> 3,413, actionable figures 2,841 -> 3,235, curves
-  6,645 -> 7,849; no project loses a figure or curve. Open: `04 01` Y scale
-  field, `80 e9`-at-98 records, id-table-less page naming, the COM
-  `axis_ranges.json` rescore (all in the doc). Likely covers item 75's axis
-  record sub-item (confirm on Hc2 data).
+  211 -> 12, layers 2,991 -> 3,347, actionable figures 2,841 -> 3,187, curves
+  6,645 -> 7,807; no project loses a figure (4 `SOP_meas` histograms are now
+  omitted as stat layers of a two-layer page). COM rescore
+  (`axis_ranges.json`): all 252 newly decoded named layers and the 9 changed
+  ones agree, scales included; 0 phantoms. Graph pages only: book-page
+  (embedded) records are not read this way (their curves bind a column as X
+  where Origin plots row number). Covers item 75's axis record (Hc2 data
+  Graph34 matches its saved preview). `PNR.otpu` now decodes in full. Open:
+  `04 01` Y scale field, `80 e9`-at-98 records, id-table-less page naming.
 
 - ~~**Restyled scatters drawn in the default palette**~~ (2026-11-20).
   Curve-record byte 310 was read as a colour terminator, so every symbol
