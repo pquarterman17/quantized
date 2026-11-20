@@ -40,10 +40,14 @@ variants -- the 4-byte size difference sits past offset 492):
   reference maps plot ids 200/201/202 to line/scatter/line+symbol, matching
   these bytes exactly. ``0xe7``/``0xe9`` (PNR corpus) remain unmapped --
   omitted, never guessed.
-* offsets 302-305 -- a constant ``0xFFFFFFF7`` "auto" sentinel u32.
-* offsets 306-309 -- the **symbol color** (ocolor u32 LE), terminator
-  ``0xff`` at 310 (the validity gate: hc2convert's 24 non-oracle anchors
-  carrying ``0x1e`` there get no color, fail-closed).
+* offsets 302-305 -- the symbol **fill** colour: ``0xFFFFFFF7`` "auto" on
+  most records, ``0xFFFFFFFC`` on restyled symbols, an explicit ocolor on
+  e.g. bubble plots (2026-11-20, ``_color_fields_aligned``).
+* offsets 306-309 -- the **symbol color** (ocolor u32 LE). Byte 310 is
+  ``0xff`` by default and 25-60 on restyled symbols (Hc2's Book2/Book3
+  scatters, hc2convert's 24 ``0x1e`` anchors): read through when the fill
+  field is a sentinel, see ``_color_fields_aligned`` and
+  ``docs/origin_re/curve_colors.md``.
 * offsets 362-365 -- the **line color** (ocolor u32 LE, no terminator).
 
 The plot's *effective* color (what the oracle's COM capture reports) is the
@@ -220,16 +224,42 @@ def ocolor_to_rgb(raw: int) -> str | None:
     return None  # auto/increment or an unrecognized type: no color, never guess
 
 
+# Offsets 302-305 hold the symbol FILL colour (``0xFFFFFFF7`` auto,
+# ``0xFFFFFFFC`` = -4, or an explicit ocolor: the COM-built bubble specimens
+# store their visible #467DE8 fill there while COM reports the edge colour,
+# black, at 306). Byte 310 is ``0xff`` on every Origin-default record but
+# 25/30/40/50/60 on symbol plots whose symbol the user restyled (Hc2 data's
+# Book2/Book3 scatters: Graph27 and Graph29 plot the same three columns and
+# their records differ ONLY at 310, 30 vs 40, and 482-483/386-387). The old
+# rule read 310 as a terminator, which left those plots uncoloured; it is the
+# alignment check that matters (a misaligned reconstruction has junk in
+# both). Evidence: docs/origin_re/curve_colors.md. Calibrated -- do not "fix".
+_FILL_SENTINELS = frozenset({0xFFFFFFF7, 0xFFFFFFFC})
+_FILL_COLOR_OFF = 302
+
+
+def _color_fields_aligned(record: bytes) -> bool:
+    """True when the colour group demonstrably sits at its offsets: byte 310
+    is the default ``0xff`` (the original gate), or the fill colour at 302 is
+    one of the two sentinels Origin writes (``auto`` / ``-4``). An explicit
+    fill colour with a non-default 310 stays unread: the edge colour at 306 is
+    then not what the plot visibly shows (the bubble specimens)."""
+    if record[_COLOR_TERM_OFF] == 0xFF:
+        return True
+    fill = int(struct.unpack_from("<I", record, _FILL_COLOR_OFF)[0])
+    return fill in _FILL_SENTINELS
+
+
 def raw_color(record: bytes) -> int | None:
     """The plot's effective ocolor from a curve-anchor record, in ORACLE
     (1-based-palette) form, or ``None`` (auto on disk / gates failed).
 
     Reads the symbol color (offset 306) for symbol plots (kind > 0) and the
     line color (offset 362) otherwise -- the rule the oracle verified 87/92.
-    Gated on the color-group terminator byte (``0xff`` at 310); a record
+    Gated on the record's alignment (:func:`_color_fields_aligned`); a record
     that fails it (or is too short) yields ``None``, never a guess.
     """
-    if len(record) < _LINE_COLOR_OFF + 4 or record[_COLOR_TERM_OFF] != 0xFF:
+    if len(record) < _LINE_COLOR_OFF + 4 or not _color_fields_aligned(record):
         return None
     off = _SYMBOL_COLOR_OFF if record[_SYMBOL_KIND_OFF] > 0 else _LINE_COLOR_OFF
     field = struct.unpack_from("<I", record, off)[0]
