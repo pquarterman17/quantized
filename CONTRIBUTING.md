@@ -23,6 +23,15 @@ cross-platform (`subprocess.run(..., shell=False)`, resolves `npm`/`npm.cmd`
 via `shutil.which`), prints each step and its elapsed time, and stops at the
 first failure. Flags: `--backend-only`, `--frontend-only`, `--skip-tests`.
 
+**Origin import changes** also run `uv run python tools/gate.py --origin`: it
+fingerprints every local Origin project (public + owner corpus; structure only,
+never values, never written into the repo) on HEAD and on a freshly built
+`origin/main` worktree, and fails on any difference (lost/gained curves,
+changed X binding, colour, hidden, omission reason, axis, books, figures).
+Every change must be listed with a reason in an explained-changes JSON
+(`--origin-allow FILE`). Without a corpus (CI) it skips. Details and the
+`snapshot` / `diff` / `check` subcommands: `tools/origin_regress.py --help`.
+
 Individual steps, if you want to run just one by hand:
 
 ```bash

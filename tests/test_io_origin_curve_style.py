@@ -134,6 +134,22 @@ def test_style_fields_palette_black_is_the_zero_field() -> None:
     assert style_fields(rec) == {"style": "scatter", "symbol": "square", "color": "#000000"}
 
 
+@pytest.mark.parametrize("connect", [0, 1, 8, 11, 12, 97])
+@pytest.mark.parametrize("style", [0xC8, 0xC9, 0xCA])
+def test_connect_byte_17_never_reaches_the_style(connect: int, style: int) -> None:
+    """Regression guard (decode ledger R-01): PRs #30/#31 read record byte 17
+    as a connect mode (``1`` = two-point segments) and were reverted by #32
+    after a corpus-wide false positive. No byte-17 value may change what
+    ``style_fields`` returns, and no connect/segment key may exist. The one
+    proven value (11, step) is handled in ``opju_plot_gates``, not here."""
+    base = bytearray(_record(kind=2, style=style, symbol_color=1, line_color=3, width500=500))
+    want = style_fields(bytes(base))
+    base[17] = connect
+    got = style_fields(bytes(base))
+    assert got == want
+    assert not any("connect" in k.lower() or "segment" in k.lower() for k in got)
+
+
 def test_style_fields_fail_closed_gates() -> None:
     # auto symbol AND auto / placeholder line on disk: no color key, never a
     # guessed default (an explicit line colour is read through, see

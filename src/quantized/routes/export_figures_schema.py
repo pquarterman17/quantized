@@ -34,6 +34,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from quantized.calc.axis_categories import XAxisKind, category_aware_x_fmt
 from quantized.calc.axis_dates import date_aware_x_fmt
 
 __all__ = [
@@ -350,14 +351,16 @@ class _ResolvedFigure:
     y2_label: str
     error_spans: Sequence[Mapping[str, Any] | None] | None = None
     # The plotted X is a timestamp column (`calc.axis_dates.x_is_datetime`):
-    # an auto X format then draws dates (`_x_tick_fmt`), as the screen does.
-    x_is_datetime: bool = False
+    # an auto X format then draws dates (`_x_tick_fmt`), as the screen does --
+    # or an Origin text (category) column, drawn as its labels at 1..N.
+    x_axis: XAxisKind = XAxisKind()
 
 
 def _x_tick_fmt(spec: TickFormatSpec | None, resolved: _ResolvedFigure) -> dict[str, Any] | None:
     """``_tick_fmt`` for the X axis, date-aware (worksheet audit #7):
     ``auto`` on a timestamp X draws calendar dates on export as on screen."""
-    fmt = date_aware_x_fmt(_tick_fmt(spec), resolved.x_is_datetime)
+    fmt = date_aware_x_fmt(_tick_fmt(spec), resolved.x_axis.is_datetime)
+    fmt = category_aware_x_fmt(fmt, resolved.x_axis.categories)
     return dict(fmt) if fmt is not None else None
 
 

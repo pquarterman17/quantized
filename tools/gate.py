@@ -16,6 +16,13 @@ Usage:
     uv run python tools/gate.py --backend-only   # ruff + mypy + pytest
     uv run python tools/gate.py --frontend-only  # npm lint + test + build
     uv run python tools/gate.py --skip-tests     # skip pytest and npm test
+    uv run python tools/gate.py --origin         # ONLY the Origin corpus before/after check
+
+``--origin`` runs ``tools/origin_regress.py check`` (HEAD vs a freshly built
+``origin/main`` in a temporary worktree) when a local Origin corpus exists
+(``test-data/origin``, ``QZ_ORIGIN_PUBLIC_CORPUS`` / ``QZ_ORIGIN_OWNER_CORPUS``);
+without one it skips with a message (CI has no corpus). Pass an explained-
+changes file with ``--origin-allow FILE``; every corpus change must be in it.
 
 Stops at the first failing step and exits with that step's return code.
 """
@@ -70,23 +77,61 @@ def _frontend_steps(skip_tests: bool) -> list[tuple[str, list[str]]]:
     return steps
 
 
+def _origin_corpus_present() -> bool:
+    sys.path.insert(0, str(ROOT / "tools"))
+    from origin_regress_lib import runner
+
+    return bool(runner.collect_files(runner.discover_corpora([])))
+
+
+def _origin_step(allow: str | None) -> int:
+    if not _origin_corpus_present():
+        print(
+            "gate: --origin skipped: no local Origin corpus (test-data/origin, "
+            "QZ_ORIGIN_PUBLIC_CORPUS, QZ_ORIGIN_OWNER_CORPUS)"
+        )
+        return 0
+    argv = [
+        "uv",
+        "run",
+        "python",
+        "tools/origin_regress.py",
+        "check",
+        "--base",
+        "origin/main",
+        "--fetch",
+    ]
+    if allow:
+        argv += ["--allow-file", allow]
+    _run("origin regress", argv, cwd=ROOT)
+    print("gate: origin corpus check passed")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run the quantized gate (lint + typecheck + tests + build)."
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--backend-only", action="store_true", help="run only ruff + mypy + pytest"
-    )
+    group.add_argument("--backend-only", action="store_true", help="run only ruff + mypy + pytest")
     group.add_argument(
         "--frontend-only", action="store_true", help="run only npm lint + test + build"
     )
+    parser.add_argument(
+        "--origin",
+        action="store_true",
+        help="run only the Origin corpus regression check vs origin/main (skips w/o corpus)",
+    )
+    parser.add_argument("--origin-allow", help="explained-changes JSON for --origin")
     parser.add_argument(
         "--skip-tests",
         action="store_true",
         help="skip pytest and npm test (still lints and builds)",
     )
     args = parser.parse_args(argv)
+
+    if args.origin:
+        return _origin_step(args.origin_allow)
 
     gate_start = time.monotonic()
 
