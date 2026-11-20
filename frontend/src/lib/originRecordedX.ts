@@ -26,6 +26,25 @@ function columns(ds: Dataset): { meta: Record<string, unknown>; letters: string[
   return { meta, letters, xLetter: String(meta.x_column_name ?? "") };
 }
 
+/** The text (category) column a layer's curves on `ds` RECORD as their X, when
+ *  they are all on ONE such column that is not the book's own X: Origin plots
+ *  them at category positions 1..N and prints the cells (Catchment A-E Graph1/2:
+ *  recorded X = the Month text column, axis 0.5..12.5, Jan..Dec ticks, per
+ *  Origin's saved preview and the decoded frame). Null otherwise -- a layer
+ *  that mixes a text X with numeric-X curves is not one axis, so its text
+ *  curves are left out (`recordedXOmissions`), never drawn on a guess. */
+export function textXLetter(figure: OriginFigure, ds: Dataset): string | null {
+  const { meta, xLetter } = columns(ds);
+  const text = meta.origin_text_columns;
+  if (!text || typeof text !== "object") return null;
+  const book = String(meta.origin_book ?? "");
+  const mine = (figure.curves ?? []).filter((c) => c.book === book);
+  const isText = (c: { x?: string; xRecorded?: boolean }) =>
+    !!c.x && !!c.xRecorded && !isDefaultX(meta, c.x, xLetter) && Object.prototype.hasOwnProperty.call(text, c.x);
+  const first = mine.find(isText);
+  return first && mine.every((c) => isText(c) && c.x === first.x) ? (first.x as string) : null;
+}
+
 /** True when some curve of `figure` on `ds` that the selection plots RECORDS
  *  an X (`OriginCurve.xRecorded`) the plot would not draw it against: the
  *  per-series view (`curveX` under the selection's `xKey`) gives it another X
@@ -33,8 +52,10 @@ function columns(ds: Dataset): { meta: Record<string, unknown>; letters: string[
 export function recordedXConflicts(
   figure: OriginFigure,
   ds: Dataset,
-  sel: { xKey: number | null; yKeys: number[] },
+  sel: { xKey: number | null; yKeys: number[] } | null,
 ): boolean {
+  if (textXLetter(figure, ds) !== null) return true; // category positions: never the plain X path
+  if (!sel) return false;
   const { meta, letters, xLetter } = columns(ds);
   const book = String(meta.origin_book ?? "");
   const own = curveX(ds, sel.xKey);
@@ -59,8 +80,9 @@ export function recordedXConflicts(
 export function recordedXOmissions(figure: OriginFigure, ds: Dataset): string[] {
   const { meta, letters, xLetter } = columns(ds);
   const book = String(meta.origin_book ?? "");
+  const category = textXLetter(figure, ds);
   return (figure.curves ?? [])
     .filter((c) => c.book === book && !!c.x && !!c.xRecorded && letters.includes(c.y)
-      && !isDefaultX(meta, c.x, xLetter) && !letters.includes(c.x))
+      && !isDefaultX(meta, c.x, xLetter) && !letters.includes(c.x) && c.x !== category)
     .map((c) => `${c.book} column ${c.y} (X ${c.x})`);
 }

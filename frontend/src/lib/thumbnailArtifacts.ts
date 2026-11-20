@@ -1,4 +1,6 @@
 import { figureChannelSelection, figureHasCurveEvidence, figureStatState } from "./originFigureSelection";
+import { textColumnLabels } from "./originOverlay";
+import { textXLetter } from "./originRecordedX";
 import type { ThumbnailRequest, ThumbnailResult } from "./thumbnailCache";
 import { plotSvgBody, svgResult } from "./thumbnailSvg";
 import type { DataStruct, Dataset } from "./types";
@@ -48,8 +50,29 @@ function selections(request: ThumbnailRequest): { x: number | null; y: number[] 
   return { x: null, y: null };
 }
 
+/** An Origin figure whose curves RECORD a text (category) X that is not the
+ *  book's own X (`textXLetter`): the apply draws them at positions 1..N
+ *  (`buildOverlayDataset`), which `figureChannelSelection` cannot bind, so
+ *  the preview builds the same positions here instead of staying empty. */
+function textXPreview(request: ThumbnailRequest): { data: DataStruct; y: number[] } | null {
+  const { node } = request;
+  if (node.kind !== "origin-figure") return null;
+  const dataset = datasetFrom(request);
+  const letter = dataset ? textXLetter(node.entity.figure, dataset) : null;
+  if (!dataset || !letter) return null;
+  const meta = (dataset.data.metadata ?? {}) as Record<string, unknown>;
+  const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
+  const book = String(meta.origin_book ?? "");
+  const y = [...new Set((node.entity.figure.curves ?? [])
+    .filter((c) => c.book === book).map((c) => letters.indexOf(c.y)).filter((i) => i >= 0))];
+  const n = textColumnLabels(dataset.data, letter).length;
+  return { data: { ...dataset.data, time: dataset.data.time.map((_, i) => (i < n ? i + 1 : NaN)) }, y };
+}
+
 export async function generateFigureThumbnail(request: ThumbnailRequest, signal: AbortSignal): Promise<ThumbnailResult> {
   if (signal.aborted) throw new DOMException("aborted", "AbortError");
+  const text = textXPreview(request);
+  if (text) return svgResult(plotSvgBody(text.data, null, text.y), request.node.name);
   const { x, y, empty } = selections(request);
   return svgResult(plotSvgBody(empty ? null : dataFor(request), x, y), request.node.name);
 }
