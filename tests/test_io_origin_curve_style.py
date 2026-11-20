@@ -149,8 +149,11 @@ def test_style_fields_palette_black_is_the_zero_field() -> None:
 
 
 def test_style_fields_fail_closed_gates() -> None:
-    # auto on disk: no color key, never a guessed default
-    assert "color" not in style_fields(_record(kind=2, style=0xC9))
+    # auto symbol AND auto / placeholder line on disk: no color key, never a
+    # guessed default (an explicit line colour is read through, see
+    # test_auto_symbol_colour_follows_an_explicit_line_colour)
+    for line in (0xFFFFFFF7, 0x81010151):
+        assert "color" not in style_fields(_record(kind=2, style=0xC9, line_color=line))
     # byte 310 not 0xff AND an explicit (non-sentinel) fill colour at 302:
     # the bubble-specimen shape, whose visible colour is the fill -> no color
     rec = bytearray(_record(kind=2, style=0xC9, symbol_color=0, term=0x00))
@@ -165,6 +168,20 @@ def test_style_fields_fail_closed_gates() -> None:
     assert "symbol" not in style_fields(_record(kind=9, style=0xC8, symbol_color=1))
     # a record too short to hold the line-color field decodes nothing
     assert style_fields(b"\x00" * 100) == {}
+
+
+@pytest.mark.parametrize(("line", "rgb"), [(0, "#000000"), (3, "#0000FF"), (0x01DF6F1A, "#1A6FDF")])
+@pytest.mark.parametrize("style", [0xC9, 0xCA])
+def test_auto_symbol_colour_follows_an_explicit_line_colour(
+    line: int, rgb: str, style: int
+) -> None:
+    """A symbol plot whose symbol colour is ``auto`` draws in its line colour
+    (saved previews: 657 of 660 hue-unique predictions present, public
+    UNTITLED.opju Graph3/5/6/7 black; docs/origin_re/curve_colors.md)."""
+    assert style_fields(_record(kind=2, style=style, line_color=line))["color"] == rgb
+    # an explicit symbol colour still wins over the line colour
+    rec = _record(kind=2, style=style, symbol_color=1, line_color=line)
+    assert style_fields(rec)["color"] == "#FF0000"
 
 
 @pytest.mark.parametrize("term", [0x1E, 0x28, 0x19, 0x32, 0x3C])
@@ -224,15 +241,19 @@ def test_increment_standalone_takes_first_list_color_and_groups_reset() -> None:
     colour (style_ungrouped specimen: all 8 curves #515151); a standalone
     plot also ends any open group, and a following head restarts at 0."""
     recs = [
-        _inc_record(0x29), _inc_record(0x19),  # group: [0], [1]
-        _inc_record(0x09),                     # standalone: [0]
-        _inc_record(0x29), _inc_record(0x19),  # new group: [0], [1]
+        _inc_record(0x29),
+        _inc_record(0x19),  # group: [0], [1]
+        _inc_record(0x09),  # standalone: [0]
+        _inc_record(0x29),
+        _inc_record(0x19),  # new group: [0], [1]
     ]
     colors = [c.get("color") for c in _curves_for(recs)]
     assert colors == [
-        SYSTEM_COLOR_LIST[0], SYSTEM_COLOR_LIST[1],
         SYSTEM_COLOR_LIST[0],
-        SYSTEM_COLOR_LIST[0], SYSTEM_COLOR_LIST[1],
+        SYSTEM_COLOR_LIST[1],
+        SYSTEM_COLOR_LIST[0],
+        SYSTEM_COLOR_LIST[0],
+        SYSTEM_COLOR_LIST[1],
     ]
 
 

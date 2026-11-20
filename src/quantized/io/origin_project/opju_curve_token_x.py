@@ -76,7 +76,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-__all__ = ["HIDDEN_IN_ORIGIN", "X_FIELD", "token_hidden", "token_x", "token_x_id"]
+__all__ = [
+    "HIDDEN_IN_ORIGIN",
+    "X_FIELD",
+    "bind_x",
+    "field_hidden",
+    "field_x_id",
+    "record_field",
+    "token_hidden",
+    "token_x",
+    "token_x_id",
+]
 
 X_FIELD = 35  # record offset of the X column id (u16 LE); marker at +2
 # The pair at offsets 37-38 that validates the field: ``21 61`` on most
@@ -148,22 +158,43 @@ def _x_field(b: bytes, tag_pos: int) -> bytes | None:
     return bytes(lit[X_FIELD:_END])
 
 
+def field_x_id(field: bytes | None) -> int | None:
+    """The X column id in a record's offsets 35-38 (``field``), ``0`` for
+    "no X column", or ``None`` when ``field`` is absent or has no marker."""
+    if field is None or len(field) < 4 or (field[2] & 0xDF, field[3] & 0xFE) not in _MARKERS:
+        return None
+    return int.from_bytes(field[:2], "little")
+
+
+def field_hidden(field: bytes | None) -> bool:
+    """True when a record's offsets 35-38 (``field``) mark a plot Origin
+    HIDES: offset 38 reads ``21`` (``61`` when shown; module docstring)."""
+    return (
+        field is not None
+        and len(field) >= 4
+        and field[3] == _HIDDEN_BYTE
+        and field[2] in _HIDDEN_PARTNERS
+    )
+
+
+def record_field(record: bytes) -> bytes | None:
+    """Offsets 35-38 of a LITERAL curve record -- the ``.opj`` curve anchor
+    (``opj_curves``), which the ``.opju`` token serializes -- or ``None``."""
+    return record[X_FIELD:_END] if len(record) >= _END else None
+
+
 def token_x_id(b: bytes, tag_pos: int) -> int | None:
     """The X column id the curve record at ``tag_pos`` (its ``80 01|03 <id>``
     chunk) stores, ``0`` for "no X column", or ``None`` when the record's X
     field is not literally present (zero-skipped, truncated, or no marker)."""
-    field = _x_field(b, tag_pos)
-    if field is None or (field[2] & 0xDF, field[3] & 0xFE) not in _MARKERS:
-        return None
-    return int.from_bytes(field[:2], "little")
+    return field_x_id(_x_field(b, tag_pos))
 
 
 def token_hidden(b: bytes, tag_pos: int) -> bool:
     """True when the curve record at ``tag_pos`` is a plot Origin HIDES:
     offset 38 reads ``21`` (``61`` when shown; module docstring). Fail
     closed: an unwalkable record or any other value is not hidden."""
-    field = _x_field(b, tag_pos)
-    return field is not None and field[3] == _HIDDEN_BYTE and field[2] in _HIDDEN_PARTNERS
+    return field_hidden(_x_field(b, tag_pos))
 
 
 def token_x(
@@ -175,6 +206,19 @@ def token_x(
 ) -> tuple[int | None, str]:
     """``(X column id to bind, omit reason)`` for the curve token at ``tag_pos``
     plotting a column of ``book`` whose designated X partner is ``partner``.
+    See :func:`bind_x`."""
+    return bind_x(token_x_id(b, tag_pos), book, partner, ids)
+
+
+def bind_x(
+    tx: int | None,
+    book: str,
+    partner: int | None,
+    ids: Mapping[int, tuple[str, str]],
+) -> tuple[int | None, str]:
+    """``(X column id to bind, omit reason)`` for a curve of ``book`` whose
+    record stores X id ``tx`` (:func:`field_x_id`) and whose designated X
+    partner is ``partner``.
 
     The record's own X wins when it is decodable. Fail closed when it names
     no column (``x_not_a_column``: row numbers / binned X), a column the id
@@ -183,7 +227,6 @@ def token_x(
     column of another book (``x_other_book``: the binding names one book).
     An undecodable X field keeps ``partner`` -- the binding shipped before.
     """
-    tx = token_x_id(b, tag_pos)
     if tx is None or tx == partner:
         return partner, ""
     if tx == 0:

@@ -130,3 +130,48 @@ On a machine with Origin 2026b:
    -- the student build's page limit stopped the 2026-07-06 capture at
    Graph11). Expected: `color` equals the decoded colour on all 52 plots, and
    byte 310 tracks the edge-thickness value.
+
+## Auto symbol colour follows the line colour (2026-11-20, visual class C6)
+
+**Symptom.** Public `UNTITLED.opju` Graph3/5/6/7 (tech_gabp): Origin's saved
+previews draw black line+symbol curves. quantized had no colour for them and
+drew them in a palette colour.
+
+**Root cause.** For a symbol plot (byte 23 > 0), `raw_color` reads the symbol
+colour at 306. These records store `auto` there (`F7 FF FF FF`) and an
+explicit line colour at 362 (palette 0 = black). Origin draws an `auto` symbol
+in the plot's line colour, as its Plot Details "Automatic" edge colour does.
+
+**Change.** When 306 is `auto` on a symbol plot, `raw_color` reads 362
+instead, but only when 362 is explicit (palette type 0 or RGB type 1). An
+auto or increment-placeholder line colour (`0x81010151`) still yields none.
+The alignment gate (310 / fill sentinel) is unchanged.
+
+**Evidence.**
+
+* Rendered oracle, public saved previews: for every page with a preview, each
+  predicted colour that no other curve on the page shares by hue (±0.08) was
+  looked for in the preview. 657 of 660 are present (≥ 5 pixels within ±0.04
+  hue). The 3 misses are a light blue and a violet on two SOP_meas pages,
+  and the blue of `figures.opju` `load`, a page quantized does not reproduce
+  (`unrecovered`) whose preview draws only its red series. 219 predictions
+  share a hue with another curve and were not counted.
+* Owner exports (full size, decisive): Moke Graph5/6 now decode `#515151` /
+  `#F14040`, and the export's pixels are exactly (81,81,81) / (241,64,64).
+  Moke Graph3 (black/orange/teal) and Graph4 (black, green) match by eye.
+* The COM curve-style oracle (hc2convert 49, Hc2 data 19, RockingCurve 8,
+  UnpolPlots 12 plots) and the increment specimens still pass unchanged.
+* Corpus diff (every drawn curve, both corpora): public 7,841 curves, 989 gain
+  a colour (777 of them SOP_meas), 0 change, 0 lose. Owner 1,360 curves,
+  91 gain (Moke and its three probe copies 20 each, XMCD 9,
+  SuperlatticeFits 2), 0 change, 0 lose.
+
+**Left open (diagnosed as `some_curve_colors`).** A line plot whose line colour
+is the increment placeholder with group-role byte 6 outside
+`{09, 29, 19}`: `0x21` (36 records), `0x20` (49), `0x11` (34), `0x01`/`0x00`
+(30). Public `Absorption-D3.opju` Graph2ABA plot 1 (role `0x21`) is one.
+The "high nibble = role" reading would make it the head (`#515151`).
+Previews check 20 of 26 member predictions, 6 miss, and the head and
+standalone colours are grey, which a 200 px preview cannot tell from black.
+Not proven, so not applied. COM: for Graph2ABA, `type $(layer.plot1.color)`
+and the group membership `layer.plot1.group`.

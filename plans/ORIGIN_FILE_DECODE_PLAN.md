@@ -1282,6 +1282,15 @@ the shipped contract)
 
 ## Completed
 
+- ~~**`.opj` curve bindings from the anchor record + auto symbol colour
+  (lane D)**~~ (2026-11-20). The 12-byte short-name field brings back XMCD's
+  silently dropped curves (COM plot list 166 -> 244 of 245). Unresolved
+  plots are now `column_not_resolved`. The record X (offsets 35-38, as on
+  `.opju`) fixes hc2convert's lockin graphs (89/89 agree with the `Hc2 data`
+  save) and Moke Graph2/8/9. Hidden `.opj` plots are left out. An auto symbol
+  colour reads the line colour (657/660 preview hue checks). Evidence and
+  owner COM checks: `docs/origin_re/curve_bindings_opj.md`,
+  `docs/origin_re/curve_colors.md`.
 - ~~**Oracle graph pages with no decoded layer (lane C)**~~ (2026-11-20).
   Of the 782 COM-listed pages (`axis_ranges.json`) with no decoded layer on
   #775, 771 are graphs embedded in workbooks (528 sparklines the file does
