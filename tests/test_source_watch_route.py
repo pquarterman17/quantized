@@ -210,7 +210,10 @@ def test_a_hung_share_never_starves_a_healthy_volume(
         # it only bounds how long the HUNG stats are waited on (they never finish).
         monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 0.3)
         assert {e["state"] for e in _stat(*hung)} == {"pending"}
-        assert source_watch._per_volume.get("/mnt/hung") == source_watch.PER_VOLUME_INFLIGHT
+        # Key it the way the route does (on Windows "/mnt/hung" is a path on the
+        # current drive, so its volume key is that drive, e.g. "d:").
+        hung_volume = source_watch._volume_key(os.path.abspath(hung[0]))
+        assert source_watch._per_volume.get(hung_volume) == source_watch.PER_VOLUME_INFLIGHT
         # Step 2: the healthy volume proceeds, in several retry rounds past its
         # own cap. Its deadline is a pure backstop: the request returns as soon
         # as every healthy stat is done, so it can be huge. (A 2 s deadline shared
