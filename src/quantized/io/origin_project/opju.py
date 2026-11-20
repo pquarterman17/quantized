@@ -24,7 +24,10 @@ not read, or read only in part — ``opju_book_checks``), the primary book
 carries the project's ``metadata["origin_worksheet_fidelity"]`` (see
 ``opju_worksheet``), and a project with no decodable column raises with a
 census of the record forms that were found instead of a bare "no worksheet
-columns".
+columns" — unless it has a graph page: then its books import as labelled
+empty placeholders so the graphs and saved previews still import
+(``opju_no_data``: Data Connector books saved without data, graph-only
+projects).
 
 Plan item 4's report-sheet residue (``opju_reports.py``) is folded in the
 same way ``.opj``'s ``text_cols``/``report_cols`` are: a book made entirely
@@ -59,7 +62,13 @@ from quantized.io.origin_project.opju_book_checks import (
 )
 from quantized.io.origin_project.opju_codec import scan_marked_columns, shared_fpc_decodes
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
+from quantized.io.origin_project.opju_graph_pages import unrecovered_graph_pages
 from quantized.io.origin_project.opju_loose_books import loose_books
+from quantized.io.origin_project.opju_no_data import (
+    UNAVAILABLE_KEY,
+    connector_books,
+    unavailable_reason,
+)
 from quantized.io.origin_project.opju_record_meta import (
     contradicted_books,
     record_column_metadata,
@@ -93,6 +102,8 @@ class _ParseResult:
     matrices: list[MatrixBook] = dataclasses.field(default_factory=list)
     column_status: dict[str, list[tuple[str, str]]] = dataclasses.field(default_factory=dict)
     losses: dict[str, dict[str, list[str]]] = dataclasses.field(default_factory=dict)
+    # book -> why it has no data (``opju_no_data``): only when nothing decoded
+    placeholders: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)
 
 
 def _undecoded_census(fidelity: dict[str, object]) -> str:
@@ -202,12 +213,24 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         marked = scan_marked_columns(b)
         scan = scan_worksheet(b, marked, [m for m, _, _ in reports])
     report_books = _group_named([(name, rows) for _, name, rows in reports])
+    empty = scan.fidelity.get("empty_books_omitted")
+    empty_books = [str(k) for k in empty] if isinstance(empty, list) else []
+    # connector books stored without their data (opju_no_data)
+    connectors = connector_books(b, empty_books)
+    placeholders: dict[str, dict[str, str]] = {}
     if not scan.columns and not scan.text_columns and not report_books and not scan.matrices:
-        raise fallback(
-            path,
-            f"no worksheet columns could be decoded from '{path.name}' "
-            f"({_undecoded_census(scan.fidelity)}).",
-        )
+        # Nothing to import from the worksheets: keep the project's graphs
+        # (and their saved previews) behind labelled empty books, unless it
+        # has no graph either (opju_no_data).
+        has_graph = unrecovered_graph_pages(b, set()).missing > 0
+        keys = (empty_books or [path.stem]) if has_graph else []
+        if not keys:
+            raise fallback(
+                path,
+                f"no worksheet columns could be decoded from '{path.name}' "
+                f"({_undecoded_census(scan.fidelity)}).",
+            )
+        placeholders = {k: unavailable_reason(k, connectors) for k in keys}
     books = _group(scan.columns)
     text_books = _group_named(scan.text_columns)
     loose = loose_books(b, dict.fromkeys([*books, *text_books, *report_books]))
@@ -215,7 +238,11 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         for group in (books, text_books, report_books):
             for k in loose:
                 group.pop(k, None)
-    fidelity = {**scan.fidelity, "loose_books_omitted": loose}
+    fidelity = {
+        **scan.fidelity,
+        "loose_books_omitted": loose,
+        "unsaved_books": [{"book": k, **v} for k, v in connectors.items()],
+    }
     columns_by_book = {k: [c for c, _ in v] for k, v in books.items()}
     for k, tcols in text_books.items():
         known = columns_by_book.setdefault(k, [])
@@ -246,6 +273,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
         matrices=scan.matrices,
         column_status=scan.column_status,
         losses=scan.losses,
+        placeholders=placeholders,
     )
 
 
@@ -302,6 +330,8 @@ def _book(parsed: _ParseResult, key: str, *, primary: bool = False) -> DataStruc
             extra["x_column_unrecovered_reason"] = reason
     if primary:
         extra["origin_worksheet_fidelity"] = parsed.fidelity
+    if key in parsed.placeholders:
+        extra[UNAVAILABLE_KEY] = parsed.placeholders[key]
     if key not in parsed.books and key in parsed.text_books:
         # `_build_book`'s empty-`cols` branch (a book with no numeric column)
         # carries only report metadata; a text-only book's content goes here.
@@ -339,9 +369,10 @@ def _matrix_book(parsed: _ParseResult, m: MatrixBook, *, primary: bool = False) 
 
 def _book_keys(parsed: _ParseResult) -> list[str]:
     """Every book with something to show: numeric books first (file order),
-    then text-only and report-only pseudo-books."""
+    then text-only and report-only pseudo-books, then the empty placeholders
+    of a project with no worksheet data (``opju_no_data``)."""
     keys = list(parsed.books)
-    for side in (parsed.text_books, parsed.report_books):
+    for side in (parsed.text_books, parsed.report_books, parsed.placeholders):
         keys += [k for k in side if k not in keys]
     return keys
 

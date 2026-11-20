@@ -355,7 +355,9 @@ def test_ragged_columns_pad_with_nan(tmp_path) -> None:
 
 def test_non_cpya_opj_raises_actionable_guidance(tmp_path) -> None:
     with pytest.raises(OriginProjectError) as exc:
-        import_auto(_write(tmp_path, "bogus.opj", b"not an origin file"))
+        # binary but not CPYA (a plain-text file gets its own message:
+        # test_io_origin_not_a_project.py)
+        import_auto(_write(tmp_path, "bogus.opj", b"\x00\x01not an origin file"))
     msg = str(exc.value)
     assert "bogus.opj" in msg and "Origin Viewer" in msg and "CSV" in msg
 

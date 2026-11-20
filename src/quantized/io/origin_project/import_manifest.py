@@ -39,6 +39,7 @@ from quantized.io.origin_project.opju_graph_pages import (
 )
 from quantized.io.origin_project.opju_layer_kind import apply_layer_kinds
 from quantized.io.origin_project.opju_map_plots import bind_map_books
+from quantized.io.origin_project.opju_no_data import omit_unsaved_curves
 from quantized.io.origin_project.opju_stat_plots import apply_stat_kinds
 from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_summary
 
@@ -63,9 +64,12 @@ def origin_figures_and_fidelity(
             raw_figs = extract_figures(raw)
             preview_diagnostics: list[PreviewDiagnostic] = []
         else:
+            # curves of a book whose data the file does not hold: omitted with
+            # that reason first (opju_no_data), before the sheet check below
+            raw_figs = omit_unsaved_curves(extract_figures_opju(raw), books)
             # curves re-bound to a sheet the import did not produce are
             # omitted + diagnosed, not left for the frontend to skip silently
-            raw_figs = unbound_rebinds(extract_figures_opju(raw), books)
+            raw_figs = unbound_rebinds(raw_figs, books)
             # polar / offset-stacked layers left out, bubble / colour-mapped noted
             raw_figs = apply_layer_kinds(raw_figs, raw)
             # box / violin / strip / histogram curves: drawn from Y, or omitted

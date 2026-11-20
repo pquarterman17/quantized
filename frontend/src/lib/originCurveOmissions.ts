@@ -18,6 +18,18 @@ const WHY: Record<string, (recorded: string) => string> = {
   worksheet_filter: () => "its workbook has a data filter; Origin plots only the rows it keeps",
   plot_type_not_drawn: () => "Origin draws it as a plot type not rebuilt here (e.g. a histogram)",
   hidden_in_origin: () => "hidden in the Origin graph (Origin does not draw it); its column is still imported",
+  x_not_a_column: () => "Origin plots it against row numbers or bins, not an X column",
+  x_column_unknown: () => "its X column could not be found in the project",
+  x_other_book: () => "its X column is in another workbook",
+  plot_row_range: () => "Origin plots only part of its rows; that range is not rebuilt here",
+  error_bar_plot: () => "it is an error-bar plot, not rebuilt as a curve here",
+  box_kind_not_decoded: () => "its box-chart kind (box, violin, strip…) could not be read",
+  stat_layer_in_multi_layer_page: () => "a statistics plot in a multi-panel graph is not rebuilt here",
+  stat_layer_of_several_books: () => "a statistics plot drawn from several workbooks is not rebuilt here",
+  histogram_of_several_columns: () => "a histogram of several columns is not rebuilt here (one column at a time is)",
+  stat_plot_x_not_decoded: () => "Origin draws it as a box chart or histogram from an X not decoded yet",
+  map_plot_not_decoded: () => "it is a heatmap or contour whose data could not be bound",
+  data_not_saved: (r) => `${r} is linked to an external file (Origin Data Connector) and its data was not saved in the project`,
 };
 
 /** One line per omitted curve of `figure`, e.g. "Book1 column B (X A): the
