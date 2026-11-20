@@ -163,6 +163,52 @@ describe("applyOriginFigure — cold lazy-chunk path", () => {
     expect(useApp.getState().macroSteps).toHaveLength(1);
   });
 
+  describe("source-book loading status", () => {
+    const pendingSetup = (resolveDatasets: () => Promise<Dataset[]>): void => {
+      useApp.setState({
+        datasets: [
+          { ...book("d2", "Book1"), pending: { kind: "path", path: "/p.opj", bookId: "b2", rows: 4, cols: 1 } },
+        ],
+        originFigures: [{ ...entry("b", figure("GraphB", 7)), datasetId: "d2", siblingIds: ["d2"] }],
+        resolveDatasets,
+      });
+    };
+
+    it("replaces the loading message once the apply lands", async () => {
+      pendingSetup(() => {
+        useApp.setState((st) => ({ datasets: st.datasets.map((d) => ({ ...book(d.id, "Book1") })) }));
+        return Promise.resolve(useApp.getState().datasets);
+      });
+      useApp.getState().applyOriginFigure("b");
+      await vi.waitFor(() => expect(useApp.getState().xLim).toEqual([0, 7]));
+      expect(useApp.getState().status).not.toContain("loading");
+      expect(useApp.getState().status).toBe("loaded 1 Origin source book");
+    });
+
+    it("replaces the loading message on failure", async () => {
+      pendingSetup(() => Promise.reject(new Error("boom")));
+      useApp.getState().applyOriginFigure("b");
+      await vi.waitFor(() => expect(useApp.getState().status).toContain("boom"));
+      expect(useApp.getState().status).not.toContain("loading");
+    });
+
+    it("clears the loading message when superseded (cancel)", async () => {
+      let release = (): void => {};
+      pendingSetup(() => new Promise<Dataset[]>((resolve) => {
+        release = () => resolve(useApp.getState().datasets);
+      }));
+      useApp.getState().applyOriginFigure("b");
+      await vi.waitFor(() => expect(useApp.getState().status).toContain("loading 1 Origin source book"));
+      // A newer request supersedes it (resolved sibling: synchronous path).
+      useApp.setState((st) => ({ originFigures: [...st.originFigures, entry("z", figure("GraphZ", 3))],
+        datasets: [...st.datasets, book("d1", "Book1")] }));
+      useApp.getState().applyOriginFigure("z");
+      useApp.getState().setStatus("loading 1 Origin source book…"); // still ours, stale
+      release();
+      await vi.waitFor(() => expect(useApp.getState().status).not.toContain("loading"));
+    });
+  });
+
   it("records exactly one macro step for a deferred apply", async () => {
     useApp.setState({ macroRecording: true, macroSteps: [] });
     useApp.getState().applyOriginFigure("a");

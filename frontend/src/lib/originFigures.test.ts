@@ -19,6 +19,7 @@ import {
   figureChannelSelection,
   figureSelectionState,
   figureStatState,
+  clampIntoAxis,
   originFigureAnnotations,
   originLegendFrameXY,
   originLegendPos,
@@ -1160,9 +1161,10 @@ describe("coincidentOverlayGroups / resolveSpatialPanels (decode-plan #36/#54 re
 describe("originFigureAnnotations", () => {
   it("maps annotation_marks to plot Annotations with generated ids", () => {
     const f = figure({
+      x_from: -10, x_to: 10, x_log: false, y_from: 0, y_to: 1, y_log: false,
       annotation_marks: [
         { text: "Field applied in-plane\nT = 1.3 K", x: -5.311, y: 0.4915 },
-        { text: "Peak label", x: 2.5, y: 100 },
+        { text: "Peak label", x: 2.5, y: 0.5 },
       ],
     });
     const anns = originFigureAnnotations([f], "fig-key");
@@ -1175,6 +1177,34 @@ describe("originFigureAnnotations", () => {
     });
     expect(anns[1].id).toBe("figann-fig-key-0-1");
     expect(new Set(anns.map((a) => a.id)).size).toBe(2); // ids unique
+  });
+
+  it("clamps a mark that hangs above/outside the frame inside it, keeping x", () => {
+    const f = figure({
+      x_from: 0, x_to: 10, x_log: false, y_from: 0, y_to: 100, y_log: false,
+      annotation_marks: [
+        { text: "above", x: 3, y: 112 }, // y above the frame top
+        { text: "inside", x: 4, y: 50 },
+        { text: "left-below", x: -2, y: -9 },
+      ],
+    });
+    const [above, inside, outside] = originFigureAnnotations([f], "k");
+    expect(above.x).toBe(3); // relative x untouched
+    expect(above.y).toBeCloseTo(92, 9); // 8% below the top edge
+    expect(inside).toMatchObject({ x: 4, y: 50 }); // in-frame marks never move
+    expect(outside.x).toBeCloseTo(0.2, 9);
+    expect(outside.y).toBeCloseTo(4, 9);
+  });
+
+  it("clampIntoAxis: log axes clamp in log10 space; unknown ranges pass through", () => {
+    const inset = { lo: 0.04, hi: 0.08 };
+    // log10 range [0, 4]: top inset 8% -> 10^(4 - 0.32)
+    expect(clampIntoAxis(1e6, 1, 1e4, true, inset)).toBeCloseTo(10 ** 3.68, 6);
+    expect(clampIntoAxis(100, 1, 1e4, true, inset)).toBe(100);
+    expect(clampIntoAxis(5, undefined, 10, false, inset)).toBe(5);
+    expect(clampIntoAxis(5, 3, 3, false, inset)).toBe(5);
+    // reversed axis (from > to) still clamps to the frame
+    expect(clampIntoAxis(120, 100, 0, false, inset)).toBeCloseTo(92, 9);
   });
 
   it("returns [] when the figure carries no marks (field absent or empty)", () => {

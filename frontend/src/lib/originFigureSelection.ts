@@ -294,6 +294,37 @@ export function doubleYPartner(
   if ((partner.figure.curves ?? []).length === 0) return null;
   return partner;
 }
+
+/** Pull a value that fell outside [from, to] back inside the frame, keeping
+ *  `inset` (axis fraction) of margin from the edge it crossed. A value already
+ *  inside — or an axis with no finite range — is returned untouched, so a
+ *  correctly placed mark never moves. Log axes clamp in log10 space (the same
+ *  space `annotation_marks` interpolates in). Frontend-only: the decoded
+ *  coordinates in the payload are never modified. */
+export function clampIntoAxis(
+  v: number,
+  from: number | undefined,
+  to: number | undefined,
+  log: boolean | undefined,
+  inset: { lo: number; hi: number },
+): number {
+  if (!Number.isFinite(v) || from == null || to == null) return v;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from === to) return v;
+  const useLog = !!log && from > 0 && to > 0 && v > 0;
+  const f = useLog ? Math.log10(from) : from;
+  const t = useLog ? Math.log10(to) : to;
+  const x = useLog ? Math.log10(v) : v;
+  const lo = Math.min(f, t);
+  const hi = Math.max(f, t);
+  const span = hi - lo;
+  // `inset.lo` is measured from the lower data edge, `inset.hi` from the upper.
+  const min = lo + span * inset.lo;
+  const max = hi - span * inset.hi;
+  if (x >= lo && x <= hi) return v; // inside the frame (even near an edge)
+  const c = x < lo ? min : max;
+  return useLog ? 10 ** c : c;
+}
+
 /** The store `annotations` an applied figure pins on the plot: every decoded
  *  positioned text mark (`annotation_marks`, data coords) of the given
  *  figure layer(s), mapped to the plot Annotation shape with ids generated
@@ -317,8 +348,12 @@ export function originFigureAnnotations(
     (f.annotation_marks ?? []).forEach((m, mi) => {
       out.push({
         id: `figann-${key}-${fi}-${mi}`,
-        x: m.x,
-        y: m.y,
+        // A mark Origin anchored outside the frame (its text box hangs off the
+        // layer edge) would render under the toolbar — pull it just inside.
+        // x stays put unless it left the frame; the text is baseline-anchored
+        // so the top margin is larger than the bottom one.
+        x: clampIntoAxis(m.x, f.x_from, f.x_to, f.x_log, { lo: 0.02, hi: 0.02 }),
+        y: clampIntoAxis(m.y, f.y_from, f.y_to, f.y_log, { lo: 0.04, hi: 0.08 }),
         text: m.text,
         ...(axisTag === 1 ? { axis: 1 as const } : {}),
       });
