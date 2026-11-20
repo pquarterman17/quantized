@@ -32,11 +32,15 @@ unknown (``reason`` ``sheet_unknown``) or its partner's sheet is not the
 curve's (``x_sheet_unproven``): the figure lists it in
 ``curve_sheet_omitted`` (``{book, x, y, recorded, reason}``, ``recorded`` =
 ``"Book@N"`` or ``""``), its legend caption goes with it, fidelity reports
-``curve_sheet_unresolved``, and the layer stays in the import even when
-every curve is omitted. ``unbound_rebinds`` adds the import-time check the
-byte decoder cannot make: a re-bound curve whose pseudo-book or column the
-importer did not produce is omitted the same way rather than silently
-skipped by the frontend.
+``curve_sheet_unresolved`` (only for these two: an omission whose sheet IS
+proven is reported as ``curves_left_out``, ``fidelity``), and the layer
+stays in the import even when every curve is omitted. A proven sheet on
+which no X column is found omits as ``sheet_x_not_found``
+(``missing_x_reason``).
+``unbound_rebinds`` adds the import-time check the byte decoder cannot
+make: a re-bound curve whose pseudo-book, Y column (``column_not_imported``)
+or X column (``x_not_imported``) the importer did not produce is omitted the
+same way rather than silently skipped by the frontend.
 
 **Evidence (Origin 2026b COM, 2026-11-15).** ``%Z`` per layer over 140
 layers of 9 files: 533 of 533 alignment-named sheets were the sheet Origin
@@ -52,7 +56,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_left
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from typing import Any, TypeVar
 
 from quantized.datastruct import DataStruct
@@ -61,6 +65,7 @@ from quantized.io.origin_project.opju_blocks import find_headers
 __all__ = [
     "curve_sheet",
     "dataset_sheet_order",
+    "missing_x_reason",
     "off_sheet_ids",
     "sheet_x_names",
     "unbound_rebinds",
@@ -81,23 +86,51 @@ def dataset_sheet_order(b: bytes) -> dict[tuple[str, str], list[str]]:
     byte run elsewhere in the file cannot reorder or lengthen the list.
     """
     out: dict[tuple[str, str], list[str]] = {}
-    for h in find_headers(b):
-        if not h.is_column:
-            continue
-        base, _, sheet = h.name.partition("@")
-        book, _, col = base.rpartition("_")
-        if not book:
-            continue
+    for book, col, sheet in _column_datasets(b):
         sheets = out.setdefault((book, col), [])
         if sheet not in sheets:
             sheets.append(sheet)
     return out
 
 
+def _column_datasets(b: bytes) -> Iterator[tuple[str, str, str]]:
+    """``(book, column, sheet suffix)`` of every worksheet column dataset."""
+    for h in find_headers(b):
+        if not h.is_column:
+            continue
+        base, _, sheet = h.name.partition("@")
+        book, _, col = base.rpartition("_")
+        if book:
+            yield book, col, sheet
+
+
+def _folded_sheet_order(b: bytes) -> dict[tuple[str, str], list[tuple[str, str]]]:
+    """``{(casefolded book, column): [(book as the dataset spells it, sheet
+    suffix), ...]}`` in file order: ``dataset_sheet_order`` with the book
+    name compared the way Origin compares names (case-insensitively)."""
+    out: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for book, col, sheet in _column_datasets(b):
+        entries = out.setdefault((book.casefold(), col), [])
+        if all(s != sheet for _, s in entries):
+            entries.append((book, sheet))
+    return out
+
+
 def off_sheet_ids(b: bytes, ids: Mapping[int, tuple[str, str]]) -> dict[int, str]:
     """Column id -> the sheet it is recorded on, for every id NOT provably
-    on its book's unsuffixed sheet: ``"Book@N"`` when the rank alignment
-    (module docstring) names the sheet, ``""`` when it cannot.
+    on its book's unsuffixed sheet as the id table spells the book:
+    ``"Book@N"`` when the rank alignment (module docstring) names the sheet,
+    ``""`` when it cannot.
+
+    When the datasets spelled exactly as the id table spells the book do not
+    align with its ids, book names compare case-insensitively, as Origin
+    compares them: a book renamed by case only (``Cusch3vac`` ->
+    ``CuSCH3vac``) keeps its old sheets' datasets under the old spelling and
+    writes new sheets' under the new one, so its ids align only against both
+    spellings together. The key then uses the DATASET's spelling, the name
+    the importer gives that sheet (``Cusch3vac@2``, or ``Cusch3vac`` for
+    sheet 1, which is then in the result too). Two id-table books whose
+    names differ only by case (none in the corpus) are matched exactly.
 
     An id absent from the result is plain: its binding to ``book`` is the
     sheet the importer models as ``book``.
@@ -105,18 +138,25 @@ def off_sheet_ids(b: bytes, ids: Mapping[int, tuple[str, str]]) -> dict[int, str
     by_name: dict[tuple[str, str], list[int]] = {}
     for cid, key in ids.items():
         by_name.setdefault(key, []).append(cid)
-    order = dataset_sheet_order(b)
+    folds: dict[str, set[str]] = {}
+    for book, _col in by_name:
+        folds.setdefault(book.casefold(), set()).add(book)
+    order = _folded_sheet_order(b)
     out: dict[int, str] = {}
     for (book, col), cids in by_name.items():
-        sheets = order.get((book, col), [])
-        if len(cids) == 1 and sheets in ([], [""]):
+        entries = order.get((book.casefold(), col), [])
+        exact = [e for e in entries if e[0] == book]
+        if len(folds[book.casefold()]) > 1 or (exact and len(exact) == len(cids)):
+            entries = exact  # the exact spelling aligns on its own: as before
+        if len(cids) == 1 and all(sheet == "" and sp == book for sp, sheet in entries):
             continue  # one column of that name, no other sheet has it
-        if len(sheets) != len(cids):
+        if len(entries) != len(cids):
             out.update(dict.fromkeys(cids, ""))  # can't align: no sheet is proven
             continue
-        for cid, sheet in zip(sorted(cids), sheets, strict=True):
-            if sheet:
-                out[cid] = f"{book}@{sheet}"
+        for cid, (spelling, sheet) in zip(sorted(cids), entries, strict=True):
+            bound = f"{spelling}@{sheet}" if sheet else spelling
+            if bound != book:
+                out[cid] = bound
     return out
 
 
@@ -126,7 +166,8 @@ def curve_sheet(
     """``(book key the curve binds to, omit reason)`` for the curve plotting
     column ``cid`` of ``book`` whose X partner (same book) is ``partner``.
 
-    The key is ``book`` for a sheet-1 column and ``"Book@N"`` for sheet N.
+    The key is ``book`` for a sheet-1 column (its datasets' spelling when
+    that differs by case: ``off_sheet_ids``) and ``"Book@N"`` for sheet N.
     The reason is ``""`` (keep), ``"sheet_unknown"`` (the key is then
     ``""``), or ``"x_sheet_unproven"``: a re-bound curve whose X partner is
     not proven on the same sheet, so its X column cannot be named in
@@ -161,6 +202,28 @@ def sheet_x_names(
     return out
 
 
+def missing_x_reason(
+    book: str,
+    ids: Mapping[int, tuple[str, str]],
+    x_ids: Iterable[int],
+    off_sheet: Mapping[int, str],
+) -> str:
+    """Why a re-bound curve with no stored X partner has no X on its sheet
+    (``sheet_x_names`` names none): ``"x_sheet_unproven"`` when an
+    X-designated column of ``book`` is of unknown sheet (it may be that
+    sheet's X), else ``"sheet_x_not_found"``: every X column the id table
+    holds for the book is proven on another sheet. The sheet then has no X,
+    or one whose record the table does not read (a Text X: plan item 67).
+    With none, Origin plots by row number or by column position (per-column
+    charts: ``Degree of impact ...`` Graph4A draws ``Book1A@2``'s 12 columns,
+    ids 448-459 with none missing, at X = 1..12 in its saved preview);
+    neither is decoded."""
+    for cid in x_ids:
+        if ids[cid][0] == book and off_sheet.get(cid) == "":
+            return "x_sheet_unproven"
+    return "sheet_x_not_found"
+
+
 def _book_columns(books: Iterable[DataStruct]) -> dict[str, tuple[str, frozenset[str]]]:
     """``origin_book`` -> (its X column name, its value column names)."""
     out: dict[str, tuple[str, frozenset[str]]] = {}
@@ -185,8 +248,10 @@ def _unbound_reason(
     y, x = str(curve.get("y", "")), str(curve.get("x", ""))
     if y == x_name and y not in values:
         return "y_is_sheet_x"  # the importer made the plotted Y the sheet's X
-    if y not in values or (x and x != x_name and x not in values):
+    if y not in values:
         return "column_not_imported"
+    if x and x != x_name and x not in values:
+        return "x_not_imported"  # the sheet's X (often a text column) is not imported
     return ""
 
 

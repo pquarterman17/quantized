@@ -112,10 +112,13 @@ Fail closed in the other direction: when another token of the same layer
 names the same column without the hidden byte, the curve stays drawn -- also
 when that shown token carries another column id that binds the same (book, Y,
 sheet) and so collapses into the same curve (Absorption-D3 Graph1 layer 2: six
-`CuSCH3vac B` plots, three hidden; the kept curve keeps its own reason,
-`sheet_unknown`, instead of being reported hidden). The
+`CuSCH3vac B` plots, three hidden; the kept curve kept its own reason,
+`sheet_unknown`, instead of being reported hidden -- since 2026-11-20 the
+six ids align to six sheets, so they no longer collapse: three are drawn and
+three reported hidden, `validation_log.md` "curve sheets"). The
 figure's fidelity reports `curve_visibility` as recovered, and a layer whose
-only omissions are hidden plots is no longer `curve_sheet_unresolved`.
+only omissions are hidden plots reports no curve loss
+(`fidelity_manifest.md`).
 
 Corpus diff vs main (590 `.opju`, 2026-11-20): 228 drawn curves leave 58
 layers in 17 projects, every one a `21` record; 0 curves added; 20 curves that

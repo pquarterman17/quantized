@@ -118,7 +118,11 @@ from quantized.io.origin_project.curve_style_color import (
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.opju_column_fixed import fixed_column_record, record_code
 from quantized.io.origin_project.opju_curve_range import range_reason
-from quantized.io.origin_project.opju_curve_sheets import curve_sheet, sheet_x_names
+from quantized.io.origin_project.opju_curve_sheets import (
+    curve_sheet,
+    missing_x_reason,
+    sheet_x_names,
+)
 from quantized.io.origin_project.opju_curve_token import (
     CURVE_TOKEN,
     column_id_records,
@@ -402,7 +406,7 @@ def extract_curves_by_id(
             if sheet_x is None:
                 sheet_x = sheet_x_names(table.ids, table.x_ids, off)
             x_col = sheet_x.get(sheet, x_col)
-            reason = "" if sheet in sheet_x else "x_sheet_unproven"
+            reason = "" if sheet in sheet_x else missing_x_reason(book, table.ids, table.x_ids, off)
         # the token IS the sparse form of the .opj curve-anchor record; the
         # id chunk's 0x80 tag sits 3 bytes into the regex match
         stat_record = opju_style_record(b, m.start() + 3)
