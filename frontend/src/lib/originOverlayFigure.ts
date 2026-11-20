@@ -110,7 +110,7 @@ export function overlayCurveLabels(data: DataStruct | null | undefined): Record<
  *  channel, label, style, legend caption), in curve order. Curves whose
  *  letters don't map to decoded channels are skipped -- partial recall must
  *  degrade gracefully, never invent data. */
-function boundCurves(figure: OriginFigure, books: Dataset[]): OverlayBound[] {
+function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBound[]; errorCols: Record<number, number> } {
   // Resolve each curve to (dataset, x-channel, y-channel) up front.
   const legend = figure.legend_labels ?? [];
   // The nth entry of figure.curves' own display name (undefined where the
@@ -129,6 +129,7 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): OverlayBound[] {
     return yCh >= 0 ? curveDisplayName(ds, c.y, yCh) : undefined;
   });
   const bound: OverlayBound[] = [];
+  const errorCols: Record<number, number> = {}; // curve column -> its Origin error-bar column
   // curveIdx tracks this curve's position among ALL of figure.curves (even
   // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
   // numbering Origin's legend uses across the whole layer, not per-book.
@@ -169,8 +170,18 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): OverlayBound[] {
               curveNames[(figure.curves ?? []).findIndex((p) => p.book === c.book.split("@")[0])],
             ),
     });
+    // Origin's error-bar plot on this curve (OriginCurve.yErr): its column
+    // rides in the curve's own block, right after it, as whiskers only.
+    const eCh = c.yErr ? channelOf(meta, c.yErr) : -1;
+    if (eCh >= 0 && eCh !== yCh) {
+      errorCols[bound.length - 1] = bound.length;
+      bound.push({
+        ds, xCh, yCh: eCh, label: `${c.book}: ${ds.data.labels[eCh] || c.yErr}`,
+        unit: ds.data.units[eCh] ?? "", style: null, designation: "Y-error", legendLabel: undefined,
+      });
+    }
   });
-  return bound;
+  return { bound, errorCols };
 }
 
 /** Build the overlay DataStruct for a figure whose curves span ≥2 books, or
@@ -188,11 +199,20 @@ export function buildOverlayDataset(
   ownX = false,
 ): DataStruct | null {
   const main = boundCurves(figure, overlayBooks(figure, datasets));
-  const right = y2Figure ? boundCurves(y2Figure, overlayBooks(y2Figure, datasets)) : [];
-  const out = assembleOverlay([...main, ...right], figure.name || "", ownX);
-  if (!out || right.length === 0) return out;
-  const y2 = right.map((_, i) => main.length + i);
-  return { ...out, metadata: { ...out.metadata, origin_overlay_y2: y2 } };
+  const right = y2Figure
+    ? boundCurves(y2Figure, overlayBooks(y2Figure, datasets))
+    : { bound: [] as OverlayBound[], errorCols: {} as Record<number, number> };
+  const out = assembleOverlay([...main.bound, ...right.bound], figure.name || "", ownX);
+  if (!out) return out;
+  // Error-bar columns (#778) for BOTH layers; the right layer's indices sit
+  // after the main layer's, so they shift by main.bound.length.
+  const n = main.bound.length;
+  const errorCols: Record<number, number> = { ...main.errorCols };
+  for (const [k, v] of Object.entries(right.errorCols)) errorCols[Number(k) + n] = v + n;
+  const extra: Record<string, unknown> = {};
+  if (right.bound.length) extra.origin_overlay_y2 = right.bound.map((_, i) => n + i);
+  if (Object.keys(errorCols).length) extra.origin_overlay_errors = errorCols;
+  return Object.keys(extra).length ? { ...out, metadata: { ...out.metadata, ...extra } } : out;
 }
 
 /** The overlay columns `buildOverlayDataset` put on the right axis; [] for
@@ -225,4 +245,18 @@ export function overlayDoubleYPair<T extends { figure: OriginFigure }>(family: T
   // frames keep the spatial multi-panel apply (fail closed toward it).
   if (!a.frame || !b.frame || !framesCoincide(a.frame, b.frame)) return null;
   return [lower, upper];
+}
+
+/** An overlay's Origin error-bar columns (`origin_overlay_errors`, stamped by
+ *  `buildOverlayDataset`): curve column -> error column, and the error
+ *  columns themselves (whiskers, never their own series). */
+export function overlayErrorState(data: DataStruct | null | undefined): { errKeys: Record<number, number>; errorColumns: number[] } {
+  const raw = (data?.metadata ?? {})["origin_overlay_errors"];
+  const errKeys: Record<number, number> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (Number.isInteger(Number(k)) && Number.isInteger(v)) errKeys[Number(k)] = v as number;
+    }
+  }
+  return { errKeys, errorColumns: Object.values(errKeys).sort((a, b) => a - b) };
 }

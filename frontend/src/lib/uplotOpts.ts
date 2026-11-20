@@ -918,12 +918,12 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     plugins.push(regionShadePlugin(args.regionShades));
   }
   if (args.errorSpans && args.errorSpans.size > 0) {
-    // The richer payload supersedes the legacy one for every column it
-    // covers; anything it does not cover still falls through below.
+    // The richer payload supersedes the legacy (vertical) one for every column
+    // it gives a Y span; an X-only span leaves that column's Y bars below.
     plugins.push(errorSpansPlugin(args.errorSpans, inkDimColor, ERROR_CAP_HALF_PX));
   }
   const legacyBars = args.errorBars
-    ? new Map([...args.errorBars].filter(([col]) => !args.errorSpans?.has(col)))
+    ? new Map([...args.errorBars].filter(([col]) => !args.errorSpans?.get(col)?.some((s) => s.axis === "y")))
     : undefined;
   if (legacyBars && legacyBars.size > 0) {
     plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));

@@ -20,7 +20,7 @@ import type { Dataset, DataStruct, SeriesStyle } from "./types";
 
 /** Derived-overlay schema. Increment when construction or binding semantics
  * change so persisted workspaces cannot silently reuse older geometry. */
-export const ORIGIN_OVERLAY_VERSION = 2;
+export const ORIGIN_OVERLAY_VERSION = 3;
 
 /** One resolved overlay curve: which dataset it comes from, its (x, y)
  *  channel binding, and the display/style metadata `assembleOverlay` stamps

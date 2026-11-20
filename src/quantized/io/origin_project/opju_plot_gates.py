@@ -21,11 +21,12 @@ oracle.
 **Error-bar plots are not curves.** Byte 76 is Origin's plot type
 (``0xc8`` = 200 line ...); ``0xe7`` = 231 and ``0xe9`` = 233 are the Y- and
 X-error-bar plots (OriginLab ``plotxy`` ids; ``tools/plot_corpus`` README).
-Such a DataPlot draws bars on the curve before it, from the error column the
-token names; quantized draws error bars from the column designation, so a
-curve bound to that column is a phantom line: it is omitted
+Such a DataPlot draws bars from the error column the token names, on the
+curve its record's X field names (``opju_error_bars``: not the curve before
+it). A curve bound to that column would be a phantom line: it is omitted
 (``error_bar_plot``), its legend caption with it (``without_captions``
-renumbers the rest, so no kept curve's caption changes).
+renumbers the rest, so no kept curve's caption changes), and its bars are
+attached to the decorated curve as ``yErr`` where proven.
 
 Evidence (Origin 2026b COM ``DataPlot::GetPlotType()`` per plot,
 2026-11-15): the ``error_columns`` specimens' error tokens store 231 / 233
@@ -35,10 +36,8 @@ plots (2,725 + 1 type-matched, 12 0xe7 tokens that Origin reads 233), and
 none of the 1,731 decoded tokens with any other byte is. Every one was a
 curve drawn against the wrong X before (the bar's own X is the Y it
 decorates). Resolved legend captions of all 1,395 kept curves on those
-layers are unchanged. Bars that still draw from designations: 109 Y-error
-bars attach to Origin's Y; 2,616 Y-error and 13 X-error bars are lost
-(mostly books whose designations do not decode) -- an omission, not a wrong
-line.
+layers are unchanged. (2026-11-15 numbers; ``opju_error_bars`` has the bars
+recovered since.)
 """
 
 from __future__ import annotations

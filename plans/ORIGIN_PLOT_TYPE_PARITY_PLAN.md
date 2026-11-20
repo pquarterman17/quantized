@@ -213,10 +213,25 @@ None open.
          and 2,616 Y-error bars are lost because their column's designation
          does not decode (2,447), it is not Y-error (95) or pairs with
          another Y (60) / an undrawn Y (14) -- an omission, never a line.
-   - [ ] **Error bars lost with the phantom lines** (2,616 Y-error + 13
-         X-error on the real corpus, above): bind a bar to the Y it
-         decorates from the token itself (its record X = the decorated Y),
-         not only from designations; X-error whiskers need a renderer.
+   - [x] ~~**Error bars lost with the phantom lines**~~ FIXED 2026-11-20
+         (`opju_error_bars`, `docs/origin_re/error_bars.md`): the plot
+         record's X field (offset 35) names the decorated curve, offset 23
+         its direction (1 plus, 2 minus, 3 both; bit 0x10 = X error, which
+         is what makes 12 0xe7 tokens Origin's 233). A curve gets `yErr`
+         from one both-ways plot or two equal halves; `.opj` uses the same
+         record (its error plots were drawn as lines). Public: 1,803 ->
+         882 figures with `error_bar_plots`, 1,845 plots on 1,207 curves
+         attached; owner: 149 plots, 167 `.opj` phantom lines gone.
+   - [ ] **Asymmetric error bars on a figure**: 874 public halves (437
+         curves, mostly PerceivedRisk) have proven plus/minus columns that
+         differ; the figure path carries one symmetric `errKeys` column per
+         curve. Needs the halves as the figure's error bindings (the
+         renderer already draws asymmetric spans).
+   - [ ] **Two both-ways error plots on one curve** (420 public): which
+         one Origin draws (or a band + bars) needs the COM check in
+         `error_bars.md`.
+   - [ ] **X-error bars from a figure's own plots** (13 public, 12 owner):
+         bind them as the curve's X error (book roles draw some today).
    - [x] ~~**Step drawn as a line**~~ FIXED 2026-11-15: curve record byte 17
          = 11 is `line.connect` 7 (13 specimens, 39 curves; 0 of 7,103
          corpus records), so the line style is withheld

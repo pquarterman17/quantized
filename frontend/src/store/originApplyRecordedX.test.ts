@@ -133,3 +133,34 @@ describe("applyOriginFigure: the recorded X wins (A2)", () => {
     expect(useApp.getState().xKey).toBe(2);
   });
 });
+
+describe("applyOriginFigure: a recorded-X figure keeps its Origin error bars (#778 x A2)", () => {
+  it("the overlay carries the yErr column as a whisker on I, hidden as a series", () => {
+    const withErr: Dataset = {
+      id: "d1", name: "C:Book1",
+      data: {
+        ...book,
+        values: book.values.map((r, i) => [...r, 0.5 + i]),
+        labels: [...book.labels, "dS err"],
+        units: [...book.units, ""],
+        metadata: {
+          ...book.metadata,
+          origin_column_names: ["B", "D", "G", "I", "J"],
+          column_designations: { ...(book.metadata.column_designations as object), J: "Y-error" },
+        },
+      },
+    };
+    useApp.setState({
+      datasets: [withErr],
+      originFigures: [entry("E", [{ book: "Book1", x: "D", y: "I", xRecorded: true, yErr: "J" } as never])],
+    });
+    useApp.getState().applyOriginFigure("E");
+    const s = useApp.getState();
+    const shown = s.datasets.find((d) => d.id === s.activeId)!;
+    expect(shown.data.metadata?.origin_overlay).toBe(true);
+    expect(s.yKeys).toEqual([0]);
+    expect(s.hiddenChannels).toEqual([1]);
+    expect(s.errKeys?.[0]).toBeDefined();
+    expect(drawn(1).map(([, y]) => y)).toEqual([0.5, 1.5, 2.5]);
+  });
+});

@@ -280,6 +280,7 @@ def _build_layer(
         t for t in bucket_texts["annotations"] if not _AUTO_TITLE.match(t) and "\\l(" not in t
     ]
     legend_ns = [int(n) for t in all_texts for n in _LEGEND_RE.findall(t)]
+    omitted: list[tuple[int, dict[str, str]]] = []  # error-bar plots (opj_curves)
     return {
         "name": name,
         "layer": layer_no,
@@ -341,5 +342,9 @@ def _build_layer(
             else None
         ),
         # item 2: curves attributed positionally to THIS layer only.
-        "curves": extract_curves(blocks, start, end, id_map, x_columns, col_order),
+        "curves": extract_curves(blocks, start, end, id_map, x_columns, col_order, omitted),
+        # error-bar plots left out (opj_curves), and their plot indices: the
+        # window pass drops their legend captions (figures.extract_figures)
+        **({"curve_sheet_omitted": [n for _, n in omitted]} if omitted else {}),
+        **({"_omitted_at": [i for i, _ in omitted]} if omitted else {}),
     }

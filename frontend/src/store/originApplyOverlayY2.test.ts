@@ -94,3 +94,35 @@ describe("overlayDoubleYPair", () => {
     expect(overlayDoubleYPair([a, b, layer("L3", 3, ["B1"])])).toBeNull();
   });
 });
+
+describe("applyOriginFigure — cross-book double-Y keeps Origin error bars (#778 x A8)", () => {
+  const withErr = (name: string, scale: number): DataStruct => ({
+    ...book(name, scale),
+    values: [[scale, 0.01], [2 * scale, 0.02], [3 * scale, 0.03]],
+    labels: [`${name} y`, `${name} err`],
+    units: ["", ""],
+    metadata: { origin_book: name, x_column_name: "A", origin_column_names: ["B", "C"] },
+  });
+
+  it("whiskers follow their curve on both axes and are never their own series", () => {
+    const ds = [
+      { id: "d1", name: "P:B1", data: withErr("B1", 0.1) },
+      { id: "d2", name: "P:B2", data: book("B2", 0.2) },
+      { id: "d3", name: "P:B3", data: withErr("B3", 1.5) },
+    ];
+    const l1 = layer("L1", 1, ["B1", "B2"]);
+    const l2 = layer("L2", 2, ["B3"]);
+    l1.figure.curves[0] = { book: "B1", x: "A", y: "B", yErr: "C" } as typeof l1.figure.curves[0];
+    l2.figure.curves[0] = { book: "B3", x: "A", y: "B", yErr: "C" } as typeof l2.figure.curves[0];
+    useApp.setState({ datasets: ds, originFigures: [l1, l2] });
+    useApp.getState().applyOriginFigure("L1");
+    const s = useApp.getState();
+    const shown = s.datasets.find((d) => d.id === s.activeId)!;
+    // columns: B1 y, B1 err, B2 y, B3 y, B3 err
+    expect(shown.data.labels).toEqual(["B1: B1 y", "B1: B1 err", "B2: B2 y", "B3: B3 y", "B3: B3 err"]);
+    expect(s.yKeys).toEqual([0, 2, 3]);
+    expect(s.y2Keys).toEqual([3]);
+    expect(s.hiddenChannels).toEqual([1, 4]);
+    expect(s.errKeys).toMatchObject({ 0: expect.anything(), 3: expect.anything() });
+  });
+});

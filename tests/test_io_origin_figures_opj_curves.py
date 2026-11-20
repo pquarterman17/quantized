@@ -174,14 +174,15 @@ def test_extract_curves_resolves_single_curve() -> None:
 
 @pytest.mark.parametrize(
     ("byte76", "expected"),
-    [(203, "column"), (215, "bar"), (219, "histogram"), (200, None), (206, None), (231, None)],
+    [(203, "column"), (215, "bar"), (219, "histogram"), (200, None), (206, None)],
 )
 def test_extract_curves_names_only_oracle_proven_plot_types(
     byte76: int, expected: str | None
 ) -> None:
     """u8 @76 of the anchor is the plot type; 203/215/219 are named on
     LabPlot's bar-column / histogram oracle, anything else carries no
-    ``plotType`` (200 is the line ``style`` decoded elsewhere)."""
+    ``plotType`` (200 is the line ``style`` decoded elsewhere; 231 / 233,
+    error-bar plots, are not curves: test_io_origin_error_bars)."""
     anchor = bytearray(519)
     anchor[0:4] = b"\x01\x00\x00\x00"
     struct.pack_into("<H", anchor, 4, 7)

@@ -186,6 +186,28 @@ function withMarkerColumns(
   return out;
 }
 
+/** Origin's own error-bar bindings for `figure`'s curves on `ds`
+ *  (`OriginCurve.yErr`): the curve's y channel -> its error channel. */
+export function figureCurveErrKeys(figure: OriginFigure, ds: Dataset): Record<number, number> {
+  const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
+  const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
+  const out: Record<number, number> = {};
+  for (const c of figure.curves ?? []) {
+    const y = letters.indexOf(c.y);
+    const e = c.yErr && c.book === String(meta.origin_book ?? "") ? letters.indexOf(c.yErr) : -1;
+    if (y >= 0 && e >= 0 && e !== y) out[y] = e;
+  }
+  return out;
+}
+
+/** `base` error pairings with the figure's own (`figureCurveErrKeys`) on top:
+ *  an error channel the figure binds to one curve feeds no other. */
+export function withCurveErrKeys(base: Record<number, number>, own: Record<number, number>): Record<number, number> {
+  const taken = new Set(Object.values(own));
+  const out = Object.fromEntries(Object.entries(base).filter(([, e]) => !taken.has(e))) as Record<number, number>;
+  return { ...out, ...own };
+}
+
 /** Whether a curve's X letter is the book's DEFAULT X (`.time`): the
  *  recovered X column, or — when that X is a text/category column that never
  *  became numeric (`x_column_name` empty, `.time` = the row index) — that
@@ -305,7 +327,13 @@ export function figureChannelSelection(
     curveIdx++;
   }
   if (yKeys.length === 0) return null;
-  return { xKey, yKeys, styles, labels, errKeys: originErrKeys(ds.data), hiddenChannels: originHiddenChannels(ds.data) };
+  const own = figureCurveErrKeys(figure, ds);
+  const hidden = new Set([...originHiddenChannels(ds.data), ...Object.values(own)]);
+  return {
+    xKey, yKeys, styles, labels,
+    errKeys: withCurveErrKeys(originErrKeys(ds.data), own),
+    hiddenChannels: [...hidden].sort((a, b) => a - b),
+  };
 }
 /** The other layer's entry when `entry` is one half of a genuine Origin
  *  "double-Y" pair: EXACTLY 2 layer-entries share the window (rules out

@@ -841,6 +841,49 @@ reason there). Realdata oracles:
 note). For `sheet_x_not_found` (Degree-of-impact, 24 curves), confirm the
 plot type (box / per-column) before any decode is attempted.
 
+## 2026-11-20 — error-bar plots attached to their curve (no Origin install)
+
+`opju_error_bars` (evidence: `error_bars.md`). An error-bar plot's record
+names the curve it decorates (offset 35) and its direction (offset 23).
+Checked against:
+
+* Origin's exported graphs: `Fixed Lambdas SI` NbAl, `UnpolPlots`
+  NdNiO3NR, `MnN_Diffusion_PNR` Graph10.
+* COM plot lists: `plots.json` / `graphs.json`.
+* Saved page previews: `Graph_Template` 32New (bar extents measured),
+  `Fig3_e` Graph1 (hidden, no bars) and Graph2 (shown, bands).
+* The authors' column names: `Lower_Bound` / `Upper_Bound`,
+  `XerrMinus` / `XerrPlus`.
+
+**Corpus delta.**
+
+Public (351 files):
+
+* Figures with `error_bar_plots`: 1,803 -> 882 (main `854a542c`).
+* 1,135 figures gain bars: 1,207 curves, from 1,845 error plots.
+* Curves: 7,829 -> 7,823. The -6 are `DO.opj`'s six error plots, drawn as
+  lines before.
+* No other curve, figure or book changed.
+
+Owner (104 files):
+
+* 109 figures gain bars, from 149 plots.
+* Curves: 1,458 -> 1,297. The 161 removed are all `.opj` error plots,
+  drawn as lines before: `MnN_Diffusion_PNR` 127, `SuperlatticeFits` 34.
+* `error_bar_plots`: 24 -> 31 figures. `.opj` reports its X-error and
+  undecoded error plots now.
+* Moke, PNR (an LFS pointer here) and RockingCurve are unchanged.
+
+Gallery (real UI, `applyOriginFigure` + stage screenshot) vs Origin's images:
+
+* Fixed Lambdas Graph1: bars on the SA scatter only.
+* UnpolPlots NdNiO3NR and Graph2.
+* MnN Graph10: Y and X bars, no dSA line.
+* Extended Data Fig. 6 SE_Figure.
+* Figure_1: bars right; its column style and axis range are not decoded,
+  which predates this change.
+* PerceivedRisk Graph29: Origin draws bands, quantized whiskers.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

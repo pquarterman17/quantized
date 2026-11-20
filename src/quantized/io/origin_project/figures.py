@@ -166,6 +166,7 @@ from quantized.io.origin_project.opj_curves import (
     column_id_map,
     x_columns_from_designations,
 )
+from quantized.io.origin_project.opju_curve_sheets import without_captions
 from quantized.io.origin_project.windows import _is_window_header
 
 __all__ = ["extract_figures"]
@@ -226,6 +227,9 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         # live in ONE legend object but caption every layer's curves —
         # distribute them across this window's dicts (item 41).
         distribute_legend_layers(window_figs)
+        for fig in window_figs:  # an error-bar plot left out takes its caption
+            if at := fig.pop("_omitted_at", None):
+                fig["legend_labels"] = without_captions(fig["legend_labels"], set(at))
         figures.extend(window_figs)
         i = win_end
     return figures
