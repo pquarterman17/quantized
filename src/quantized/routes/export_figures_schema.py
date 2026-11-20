@@ -301,6 +301,8 @@ class TickFormatSpec(BaseModel):
     digits: float = 2
     # Figures-audit #6: the Axis dialog's optional extras (``calc.axis_extras``).
     divide: float | None = Field(default=None, gt=0)
+    # False: no "x factor" offset text (Origin's own "Divide by" draws none).
+    divideMark: bool | None = None
     minor: int | None = Field(default=None, ge=0, le=20)
     ticks: Literal["in", "out", "both"] | None = None
     size: float | None = Field(default=None, gt=0, le=72)

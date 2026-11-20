@@ -10,6 +10,7 @@
 import { spatialComposition } from "../lib/composition";
 import { figureLabel, type OriginFigureEntry } from "../lib/originFigures";
 import { buildOverlayDataset, originOverlayDataset, topAxisPatch } from "../lib/originOverlayFigure";
+import { originDividePatch } from "../lib/originTickDivide";
 import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import type { Dataset } from "../lib/types";
 import { lit } from "../lib/macro";
@@ -104,7 +105,7 @@ export function applySpatialPanels(
     // when the page didn't decode. Enables the "page" fit + page export.
     pageSetup: pageSetupFromDecoded(family[0].figure.page ?? null),
     ...ORIGIN_FIGURE_AXIS,
-    ...topAxisPatch(get().xFmt),
+    ...originDividePatch(get(), {}, topAxisPatch(get().xFmt).xFmt), // panels carry their own factors
     hiddenChannels: [],
     // Spatial bands live on each SpatialPanel; clear only the singleton
     // overlay list so a prior single plot cannot leak into this view.

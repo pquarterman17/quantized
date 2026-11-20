@@ -87,8 +87,8 @@ since 2026-07-11 (item 41) — floating textbox/line annotations are
 ``region_shades`` by ``opj_shapes.py`` — item 41 — before name routing
 runs), and everything else
 (``__LayerInfoStorage``/``__BCO2``/``__FRAMESRCDATAINFOS``/``3D`` — internal
-storage/config objects; ``OB``/``OL``/``OR``/``X1``/``X2`` — composite-layout
-axis-break sub-objects seen only in double-Y/stacked graphs;
+storage/config objects; ``OB``/``OL``/``OR``/``OT`` — an axis' tick-label "Divide by"
+factor, decoded by ``opj_tick_divide``; ``X1``/``X2`` — composite-layout sub-objects;
 ``RLX*``/``RLY*`` — reference lines) is a different, unrelated object, not
 routed anywhere.
 
@@ -166,6 +166,7 @@ from quantized.io.origin_project.opj_curves import (
     column_id_map,
     x_columns_from_designations,
 )
+from quantized.io.origin_project.opj_page_marks import place_window_marks
 from quantized.io.origin_project.opju_curve_sheets import without_captions
 from quantized.io.origin_project.windows import _is_window_header
 
@@ -212,7 +213,8 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         for pos, layer_start in enumerate(layer_starts):
             layer_end = layer_starts[pos + 1] if pos + 1 < len(layer_starts) else win_end
             fig = _build_layer(
-                blocks, id_map, x_columns, col_order, name, pos + 1, layer_start, layer_end
+                blocks, id_map, x_columns, col_order, name, pos + 1, layer_start, layer_end,
+                (page["width"], page["height"]) if page else None,
             )
             # Page size (u16 pair @35 of the window header): with the layer
             # frame quad this places every panel of a multi-panel page.
@@ -227,6 +229,9 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         # live in ONE legend object but caption every layer's curves —
         # distribute them across this window's dicts (item 41).
         distribute_legend_layers(window_figs)
+        # Free text onto the panel Origin draws it on (page-attached labels,
+        # titles placed beside another layer): opj_page_marks.
+        place_window_marks(window_figs)
         for fig in window_figs:  # an error-bar plot left out takes its caption
             if at := fig.pop("_omitted_at", None):
                 fig["legend_labels"] = without_captions(fig["legend_labels"], set(at))

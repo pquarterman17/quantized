@@ -15,9 +15,9 @@ import { buildOpts } from "./uplotOpts";
 const BBOX = { left: 60, top: 30, width: 400, height: 300 };
 
 /** Run the extras' draw hook on a fake uPlot and record each fillText. */
-function drawn(side: 1 | 2 | 3, font: uPlot.Axis["font"] | [string, number]) {
+function drawn(side: 1 | 2 | 3, font: uPlot.Axis["font"] | [string, number], divideMark?: boolean) {
   const axes: uPlot.Axis[] = [{ side, font: font as uPlot.Axis["font"] }];
-  const plugin = applyAxisExtras(axes, [{ mode: "auto", digits: 2, divide: 1000 }], ["linear"], "#000");
+  const plugin = applyAxisExtras(axes, [{ mode: "auto", digits: 2, divide: 1000, divideMark }], ["linear"], "#000");
   const texts: { text: string; x: number; y: number; font: string }[] = [];
   const ctx = {
     font: "",
@@ -55,6 +55,11 @@ describe("divide-by factor placement (canvas)", () => {
     const [t] = drawn(2, ["14px JetBrains Mono", 14]);
     expect(t.y).toBeGreaterThan(BBOX.top + BBOX.height + 14);
     expect(t.x).toBe(BBOX.left + BBOX.width);
+  });
+
+  it("an imported Origin axis' Divide by draws no factor text (divideMark: false), as Origin", () => {
+    expect(drawn(3, ["14px JetBrains Mono", 14], false)).toEqual([]);
+    expect(drawn(2, ["14px JetBrains Mono", 14], false)).toEqual([]);
   });
 
   it("reads uPlot's initialised [font, px] axis font and a CSS string alike", () => {

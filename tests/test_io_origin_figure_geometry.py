@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import json
 import struct
-from pathlib import Path
 
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.io.origin_project.figure_geometry import (
     opj_layer_frame,
     opj_page_size,
@@ -20,19 +20,7 @@ from quantized.io.origin_project.figure_geometry import (
     opju_page_size,
 )
 
-
-def _resolve_corpus_dir() -> Path:
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
-
-
-_TD = _resolve_corpus_dir()
+_TD = origin_corpus_dir()
 _GT = _TD / "specimens" / "ground_truth"
 
 

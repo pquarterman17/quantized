@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 import math
 import struct
-from pathlib import Path
 
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.io.origin_project.annotation_marks import (
     build_mark,
     frac_to_data,
@@ -29,22 +29,7 @@ from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
 
-
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus; walks up from
-    ``__file__`` for a ``test-data`` sibling so this still resolves inside a
-    worktree agent -- mirrors ``test_io_origin_ground_truth.py``."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
-
-
-_TD = _resolve_corpus_dir()
+_TD = origin_corpus_dir()
 
 # ── the confirmed fraction→data formula (values from the COM oracle) ─────────
 
@@ -396,12 +381,11 @@ def test_realdata_legend_positions_match_com_oracle() -> None:
     case-insensitive legend-object routing) the 2 misses — Moke's
     stacked-panel `Graph4` L1 and its `Graph10` L3 copy, whose legend object
     is named lowercase ``legend`` — now decode too, giving 55 exact. Those
-    two legends report their oracle x1/y1 in LAYER-FRACTION attach units (x
-    from the left, y from the TOP), not data coords — the decoded data-coord
-    point maps back to the oracle fraction to 4-5 significant figures on
-    both instances ((1.329-0.9)/2.2 = 0.19500 = the oracle's 0.195 exactly),
-    i.e. the SAME visual position in a different unit mode — so the compare
-    accepts either interpretation, never a looser tolerance."""
+    two legends are PAGE-attached (oracle ``attach == 1``): their x1/y1 are
+    PAGE fractions (y from the page top). Until 2026-11-20 they were read as
+    layer fractions, and this test accepted that because the raw numbers
+    agree; Graph10's lower legend then sat mid-panel. They are now compared
+    in page-fraction space only, through the layer frame and page size."""
     from quantized.io.origin_project.figures import extract_figures
     from quantized.io.origin_project.figures_opju import extract_figures_opju
 
@@ -414,7 +398,7 @@ def test_realdata_legend_positions_match_com_oracle() -> None:
         ("UnpolPlots", "UnpolPlots.opju"),
         ("Fixed Lambdas SI", "Fixed Lambdas SI.opju"),
     ]
-    ok = wrong = miss = 0
+    ok = wrong = miss = attach_page = 0
     for stem, fname in stems:
         oracle_path = _TD / "specimens" / "ground_truth" / stem / "graph_extras.json"
         src = _TD / fname
@@ -435,34 +419,37 @@ def test_realdata_legend_positions_match_com_oracle() -> None:
                 ordered = sorted(cand, key=lambda f: f["layer"])
                 if len(ordered) < lay["layer"]:
                     continue
-                got = ordered[lay["layer"] - 1].get("legend_pos")
+                fig = ordered[lay["layer"] - 1]
+                got = fig.get("legend_pos")
                 if got is None:
                     miss += 1
                     continue
-                xspan = abs(lay["x_to"] - lay["x_from"]) or 1.0
-                yspan = abs(lay["y_to"] - lay["y_from"]) or 1.0
-                data_match = (
-                    abs(got["x"] - leg["x1"]) / xspan < 0.005
-                    and abs(got["y"] - leg["y1"]) / yspan < 0.005
-                )
-                # Layer-fraction attach units (see docstring): the oracle's
-                # x1/y1 ARE the fractions our decoded data point maps back to.
-                frac_x = (got["x"] - lay["x_from"]) / (lay["x_to"] - lay["x_from"])
-                frac_y = (lay["y_to"] - got["y"]) / (lay["y_to"] - lay["y_from"])
-                frac_match = (
-                    abs(frac_x - leg["x1"]) < 0.005 and abs(frac_y - leg["y1"]) < 0.005
-                )
-                if data_match or frac_match:
+                if leg.get("attach") == 1:
+                    # Page-attached (see docstring): x1/y1 are page fractions.
+                    fr, pg = fig["frame"], fig["page"]
+                    fx = (got["x"] - lay["x_from"]) / (lay["x_to"] - lay["x_from"])
+                    fy = (lay["y_to"] - got["y"]) / (lay["y_to"] - lay["y_from"])
+                    px = (fr["left"] + fx * (fr["right"] - fr["left"])) / pg["width"]
+                    py = (fr["top"] + fy * (fr["bottom"] - fr["top"])) / pg["height"]
+                    match = abs(px - leg["x1"]) < 0.005 and abs(py - leg["y1"]) < 0.005
+                    attach_page += match
+                else:
+                    xspan = abs(lay["x_to"] - lay["x_from"]) or 1.0
+                    yspan = abs(lay["y_to"] - lay["y_from"]) or 1.0
+                    match = (
+                        abs(got["x"] - leg["x1"]) / xspan < 0.005
+                        and abs(got["y"] - leg["y1"]) / yspan < 0.005
+                    )
+                if match:
                     ok += 1
                 else:
                     wrong += 1
     if ok == 0 and wrong == 0 and miss == 0:
         pytest.skip("graph_extras oracle not present on this machine")
     assert wrong == 0, f"{wrong} legend positions decoded WRONG"
-    # Floor re-ratcheted 50 -> 55 (review finding: the frac_match acceptance
-    # added for the two attach-unit legends widened the oracle for ALL
-    # legends; the higher floor claws back the slack the OR introduced).
     assert ok >= 55, f"legend-position coverage regressed ({ok} exact, {miss} missed)"
+    if any(stem == "Moke" for stem, _ in stems) and (_TD / "Moke.opj").exists():
+        assert attach_page == 2, "Moke's two page-attached legends must match in page space"
 
 
 # ── §13.2 #4 (2026-07-06): the expanded 111-instance oracle sweep ─────────────
@@ -477,9 +464,11 @@ def test_realdata_annotation_positions_expanded_oracle_sweep() -> None:
     page-box + layer-frame + diagonal-anchor-signature decode, the .opju
     ``86 13`` / ``85 1f`` tag flavours, exact owned-block text ('X'/'*'/'Si'
     peak labels), and log-axis fraction mapping. Matching is one-to-one
-    nearest (several objects can share a 1-char text); ``attach != 0``
-    objects are compared in FRACTION space (Origin reports their x1/y1 in
-    the object's own attach coordinates). Baseline: >=100 exact, 0 wrong.
+    nearest (several objects can share a 1-char text); ``attach == 1``
+    (page-attached) objects are compared in PAGE-fraction space, which is
+    how Origin reports their x1/y1 (Moke Graph10 "(a)"/"(b)"; 2026-11-20 --
+    before then they were read as layer fractions and "(b)" sat in the top
+    panel). Baseline: >=100 exact, 0 wrong.
     Layer-1/2 duplicate Text objects of UnpolPlots' composite Graph3 are a
     documented over-emission (on-disk objects Origin does not enumerate) —
     extra marks are not counted as wrong, only bad POSITIONS are."""
@@ -512,7 +501,8 @@ def test_realdata_annotation_positions_expanded_oracle_sweep() -> None:
             for m in f.get("annotation_marks", []):
                 marks_by_graph.setdefault(f["name"], []).append(
                     {**m, "_xr": (f["x_from"], f["x_to"], f["x_log"]),
-                     "_yr": (f["y_from"], f["y_to"], f["y_log"])}
+                     "_yr": (f["y_from"], f["y_to"], f["y_log"]),
+                     "_frame": f.get("frame"), "_page": f.get("page")}
                 )
         for gname, anns in oracle.items():
             marks = marks_by_graph.get(gname, [])
@@ -529,9 +519,10 @@ def test_realdata_annotation_positions_expanded_oracle_sweep() -> None:
 
                 def err(m, a=a, xspan=xspan, yspan=yspan):
                     if a["attach"] != 0:
-                        # attach!=0: oracle x1/y1 are the object's own attach
-                        # coords (fractions; y measured from the frame TOP) --
-                        # compare our mark's fracs.
+                        # attach=1 (page): oracle x1/y1 are PAGE fractions (y
+                        # from the page top) -- map our mark (in the data
+                        # coords of the panel it was placed on) back to the
+                        # page through that panel's frame.
                         xf, xt, xlog = m["_xr"]
                         yf, yt, ylog = m["_yr"]
                         if xlog and xf > 0 and xt > 0 and m["x"] > 0:
@@ -544,7 +535,12 @@ def test_realdata_annotation_positions_expanded_oracle_sweep() -> None:
                                 math.log10(yt) - math.log10(yf))
                         else:
                             fy = (yt - m["y"]) / (yt - yf) if yt != yf else float("nan")
-                        return abs(fx - a["x1"]) + abs(fy - a["y1"])
+                        fr, pg = m["_frame"], m["_page"]
+                        if a["attach"] != 1 or not fr or not pg:
+                            return float("inf")  # no other attach mode is decoded
+                        px = (fr["left"] + fx * (fr["right"] - fr["left"])) / pg["width"]
+                        py = (fr["top"] + fy * (fr["bottom"] - fr["top"])) / pg["height"]
+                        return abs(px - a["x1"]) + abs(py - a["y1"])
                     return abs(m["x"] - a["x1"]) / xspan + abs(m["y"] - a["y1"]) / yspan
 
                 best = min(err(m) for m in cands)

@@ -158,6 +158,8 @@ which one is stale. Nothing was changed.
   X data (Z, -10..255.8 Å) and the decoded axis (-10..270, step 50) match the
   owner's COM axis check (structural report x_range "ok"). Origin's tick
   labels read 0..25 because of the axis's tick-label "Divide by" factor (10),
-  a display field that is still undecoded (the same field as the ×1e9 Y factor
-  in `hc2_open_gaps.md`). COM: `type $(layer.x.label.divideby)` (expected 10).
-  A specimen saved with and without the factor would locate it.
+  a display field that is still undecoded **in `.opju`** (the same field as the
+  ×1e9 Y factor in `hc2_open_gaps.md`). COM: `type $(layer.x.label.divideby)`
+  (expected 10). A specimen saved with and without the factor would locate it.
+  In `.opj` the factor is decoded and applied (`OB`/`OL`/`OR` objects, lane M:
+  [`page_text_and_tick_divide.md`](page_text_and_tick_divide.md)).

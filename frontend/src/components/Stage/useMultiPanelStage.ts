@@ -436,8 +436,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           y2Scale: secondaryAxisFromPanel(p).scale,
           y2Step: p.y2Step ?? null,
           y2AxisLabel: p.y2AxisLabel,
-          xFmt,
-          yFmt,
+          xFmt: { ...xFmt, ...p.fmt?.x }, // + this layer's own "Divide by" (SpatialPanel.fmt)
+          yFmt: { ...yFmt, ...p.fmt?.y },
+          y2Fmt: p.fmt?.y2 ? { ...yFmt, ...p.fmt.y2 } : undefined,
           showGrid,
           axisBox: showAxisBox,
           fontSize,

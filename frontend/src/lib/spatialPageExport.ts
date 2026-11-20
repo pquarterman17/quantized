@@ -148,6 +148,13 @@ function panelOverrides(
   }) ?? undefined;
 }
 
+/** A panel's axis format on the wire: the page's own (none without an
+ *  appearance) with the panel's override merged over it (`SpatialPanel.fmt`). */
+function panelFmtParam(base: AxisFormat | undefined, own: Partial<AxisFormat> | undefined): AxisFormat | undefined {
+  if (!base && !own) return undefined;
+  return axisFmtParam({ ...(base ?? { mode: "auto", digits: 2 }), ...own });
+}
+
 function spatialPanelFigure(
   panel: SpatialPanel,
   dataset: DataStruct,
@@ -172,7 +179,8 @@ function spatialPanelFigure(
     // below, which are likewise `undefined` without one); "auto" is the
     // value `axisFmtParam` maps back to `undefined` on the wire, so the
     // no-appearance request stays byte-identical to before.
-    fmt: appearance?.yFmt ?? { mode: "auto", digits: 2 },
+    // A layer's own right-axis "Divide by" (SpatialPanel.fmt), as the screen.
+    fmt: { ...(appearance?.yFmt ?? { mode: "auto", digits: 2 }), ...panel.fmt?.y2 },
   });
   const y2Set = new Set(y2Axis?.keys ?? []);
   const decodedLabels = panel.seriesLabels ?? {};
@@ -208,8 +216,8 @@ function spatialPanelFigure(
     // synthesize — see SpatialPanel.xAxisLabel's own doc); undefined = auto.
     x_label: panel.xAxisLabel === null ? "" : panel.xAxisLabel,
     y_label: panel.yAxisLabel ?? fallbackYLabel,
-    x_fmt: appearance ? axisFmtParam(appearance.xFmt) : undefined,
-    y_fmt: appearance ? axisFmtParam(appearance.yFmt) : undefined,
+    x_fmt: panelFmtParam(appearance?.xFmt, panel.fmt?.x),
+    y_fmt: panelFmtParam(appearance?.yFmt, panel.fmt?.y),
     x_step: panel.xStep,
     y_step: panel.yStep,
     // No `positions`: this `plotted` is `spatialPlottedChannels(panel)`, the
