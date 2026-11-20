@@ -15,6 +15,7 @@ from typing import Any, Literal, NotRequired, TypedDict
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.graph_preview import PreviewDiagnostic
 from quantized.io.origin_project.integrity import ContainerIntegrity
+from quantized.io.origin_project.opju_curve_token_x import HIDDEN_IN_ORIGIN
 
 __all__ = [
     "assess_origin_figures",
@@ -128,6 +129,11 @@ def _filter_reason(fig: dict[str, Any], sources: tuple[str, ...]) -> str | None:
     )
 
 
+def _omitted_reasons(fig: dict[str, Any]) -> list[str]:
+    notes = fig.get("curve_sheet_omitted") or []
+    return [str(n.get("reason", "")) if isinstance(n, dict) else "" for n in notes]
+
+
 def _recovered_groups(fig: dict[str, Any]) -> list[str]:
     recovered = ["axis_ranges", "axis_scales"]
     if fig.get("saved_preview"):
@@ -148,6 +154,10 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
         recovered.append("region_shades")
     if fig.get("frame") and fig.get("page"):
         recovered.append("layer_geometry")
+    if HIDDEN_IN_ORIGIN in _omitted_reasons(fig):
+        # plots hidden in Origin, left out as `hidden_in_origin` (decoded:
+        # `opju_curve_token_x.token_hidden`); each one rides on the figure
+        recovered.append("curve_visibility")
     curves = fig.get("curves")
     if isinstance(curves, list) and curves:
         if any(isinstance(c, dict) and c.get("style") for c in curves):
@@ -183,9 +193,10 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         # The per-curve detail is the figure's own `curve_sheet_notes`; the
         # frontend words it against the books that were actually imported.
         omissions.append("curve_sheet_mismatch")
-    if fig.get("curve_sheet_omitted"):
+    if any(r != HIDDEN_IN_ORIGIN for r in _omitted_reasons(fig)):
         # `.opju`: curves left out, not drawn from the wrong sheet
         # (`opju_curve_sheets`); the per-curve detail rides on the figure.
+        # A plot Origin itself hides (`hidden_in_origin`) is not a loss.
         omissions.append("curve_sheet_unresolved")
     if fig.get("marker_encoding_not_decoded"):
         # bubble / colour-mapped scatter: X/Y drawn, size/colour map not

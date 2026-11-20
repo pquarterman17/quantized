@@ -278,15 +278,20 @@ def _import(corpus_dir: Path, rel: str) -> tuple[list[dict[str, object]], dict[s
 
 @pytest.mark.realdata
 def test_realdata_pedotpss_graph7_binds_every_plotted_column(corpus_dir: Path) -> None:
-    """Origin plots Book1_B@2 ... Book1_AU@2 (46 curves) against Book1_A@2;
-    before the u8 id forms only AC..AU (19) were decoded."""
+    """Origin's layer holds Book1_B@2 ... Book1_AU@2 (46 plots, COM) against
+    Book1_A@2; before the u8 id forms only AC..AU (19) were decoded. 19 of the
+    46 are HIDDEN in Origin (record offset 38 ``21``; the saved page preview
+    draws only the other 27 -- ``docs/origin_re/curve_visibility.md``): every
+    one is bound, the 19 are left out as ``hidden_in_origin``."""
     import numpy as np
 
     figs, books = _import(corpus_dir, _PEDOT)
     (f,) = [f for f in figs if (f["name"], f["layer"]) == ("Graph7", 1)]
     curves = f["curves"]  # type: ignore[index]
-    assert len(curves) == 46
-    assert {c["book"] for c in curves} == {"Book1@2"}
+    hidden = f["curve_sheet_omitted"]  # type: ignore[index]
+    assert len(curves) == 27 and len(hidden) == 19
+    assert {n["reason"] for n in hidden} == {"hidden_in_origin"}  # type: ignore[index]
+    assert {c["book"] for c in curves} | {n["recorded"] for n in hidden} == {"Book1@2"}  # type: ignore[index]
     assert [c["y"] for c in curves][:3] == ["B", "C", "D"]
     ds = books["Book1@2"]
     names = list(ds.metadata["origin_column_names"])  # type: ignore[attr-defined]
