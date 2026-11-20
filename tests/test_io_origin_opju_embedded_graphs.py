@@ -111,3 +111,29 @@ def test_id_table_less_stream_names_its_cart_pages() -> None:
     assert [(f["name"], f["layer"], f["x_to"]) for f in figs] == [("Plot1", 1, 10.0)]
     plain = _HEAD + _header("Data1", _ONE) + b"\x00" * 16 + rec
     assert [(f["name"], f["layer"]) for f in extract_figures_opju(plain)] == [("", 1)]
+
+
+def test_manifest_reports_filtered_pages_and_embedded_graphs() -> None:
+    """The import census: a graph page whose only decoded layer is filtered
+    (no curves, no source) is still reported as unrecovered, and a workbook's
+    embedded graph header is listed under ``embedded_graphs``."""
+    from quantized.io.origin_project.import_manifest import origin_figures_and_fidelity
+
+    b = (
+        _HEAD
+        + _header("Book1", _ONE)
+        + _COLS
+        + _embedded("FitLine1")
+        + b"\x00" * 8
+        + _header("Plot1", _ONE)
+        + b"\x00\x0c_cart_object\x00"
+        + _record()
+    )
+    assert [f["name"] for f in extract_figures_opju(b)] == ["Plot1"]  # decoded...
+    figs, manifest = origin_figures_and_fidelity(b, ".opju", books=[])
+    assert figs == []  # ...but filtered, so not imported
+    assert [f["name"] for f in manifest["filtered_figures"]] == ["Plot1"]
+    assert manifest.get("unrecovered_graph_count") == 1
+    assert [g["page_name"] for g in manifest.get("unrecovered_graphs", [])] == ["Plot1"]
+    assert manifest.get("embedded_graph_count") == 1
+    assert manifest.get("embedded_graphs") == [{"page_name": "FitLine1", "host_book": "Book1"}]
