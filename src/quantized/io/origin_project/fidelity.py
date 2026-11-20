@@ -64,6 +64,10 @@ class OriginFidelityManifest(TypedDict):
     # saved image where one is attributable. Added at import time.
     unrecovered_graph_count: NotRequired[int]
     unrecovered_graphs: NotRequired[list[dict[str, object]]]
+    # ``.opju`` graphs embedded in a workbook (fit-report / sparkline graphs,
+    # ``opju_embedded_graphs``) not recovered: total and the first listed.
+    embedded_graph_count: NotRequired[int]
+    embedded_graphs: NotRequired[list[dict[str, str]]]
 
 
 def origin_figure_decode_failure(

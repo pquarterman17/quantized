@@ -92,7 +92,8 @@ XML tag when one appears near the graph (an unambiguous, low-false-positive
 signal, unlike blind name-scanning) and ``n_curves`` from the legend text's
 ``\\l(n)`` indices, mirroring ``figures.py`` exactly. The per-layer graph
 *window name* (Origin's "Graph1" etc.) comes from the enclosing page header
-for graph pages (``""`` for embedded graphs and legacy streams). ``layer`` is
+for graph pages, or from the embedded graph header before it on a workbook
+page (``opju_layer_pages``; ``""`` when neither applies). ``layer`` is
 the anchor's 1-based ORDINAL within its graph page, counted over every anchor
 whether or not its record decodes: an undecodable layer leaves a gap in the
 numbering (fail closed) rather than renumbering the layers after it.
@@ -132,11 +133,7 @@ from typing import Any
 
 from quantized.io.origin_project.annotation_marks import _AUTO_TITLE
 from quantized.io.origin_project.annotation_marks import _clean_annotations as _drop_internal_noise
-from quantized.io.origin_project.figure_geometry import (
-    opju_anchor_has_length_prefix,
-    opju_layer_frame,
-    opju_page_size,
-)
+from quantized.io.origin_project.figure_geometry import opju_layer_frame, opju_page_size
 from quantized.io.origin_project.figure_layers import _log_heuristic
 from quantized.io.origin_project.figure_text import _LEGEND_RE, _texts_in
 from quantized.io.origin_project.opju_axis_real_form import (
@@ -161,6 +158,7 @@ from quantized.io.origin_project.opju_figure_curves import (
     opju_pages,
 )
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
+from quantized.io.origin_project.opju_layer_pages import LayerPages
 from quantized.io.origin_project.opju_layer_record import layer_record
 from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
@@ -194,8 +192,18 @@ _MAX_FLAT_ANNOTATIONS = 64  # flat-scrape cap (routed text uncapped; XRD peak la
 # A graph window's embedded PNG thumbnail decodes as junk "text": these chunk
 # names open that blob, so they mark where real annotation text ends.
 _PNG_MARKERS = (
-    "IHDR", "IDAT", "IEND", "PLTE", "pHYs", "tEXt",
-    "zTXt", "iTXt", "sRGB", "gAMA", "cHRM", "bKGD",
+    "IHDR",
+    "IDAT",
+    "IEND",
+    "PLTE",
+    "pHYs",
+    "tEXt",
+    "zTXt",
+    "iTXt",
+    "sRGB",
+    "gAMA",
+    "cHRM",
+    "bKGD",
 )
 
 
@@ -218,6 +226,7 @@ def _clean_annotations(titles: list[str]) -> list[str]:
             break  # PNG image data begins here; the rest of the list is binary junk
         truncated.append(t)
     return _drop_internal_noise(truncated)
+
 
 # ── specimen-form value spans (item 14) ───────────────────────────────────────
 
@@ -279,11 +288,13 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     "Curve-to-dataset binding" section). ``name`` is the figure's own
     window name (``"Graph1"`` …) when its anchor falls inside a graph
     *page* span and the file carries an id table; ``layer`` is then the
-    1-based anchor index within that page. Embedded fit-report graphs
-    (anchors inside a workbook page) and legacy/id-table-less streams keep
-    ``name == ""``/``layer == 1``. A multi-layer graph window (e.g. a
-    double-Y or free-panel layout) yields one dict per layer rather than
-    nesting them, since the shipped payload shape is flat. Composite
+    1-based anchor index within that page. An anchor inside a workbook page
+    takes the name of the embedded graph header before it (fit-report /
+    sparkline graphs, ``opju_embedded_graphs``) and its ordinal after it; an
+    id-table-less stream names its ``_cart_object`` pages the same way
+    (``opju_layer_pages``). Anything else keeps ``name == ""``/``layer == 1``.
+    A multi-layer graph window (e.g. a double-Y or free-panel layout) yields
+    one dict per layer rather than nesting them, since the shipped payload shape is flat. Composite
     windows that *reference* an already-encoded layer share its single
     anchor (see the module docstring).
 
@@ -306,60 +317,26 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         books_meta = book_metadata_from_bytes(b, book_columns)
         book_counts_all = allocated_columns_from_bytes(b)
     off_sheet, gates = ({}, None) if legacy else sheet_map_with_segments(b, table)
-    page_starts = [off for off, _name in pages]
-    page_layers: dict[int, int] = {}  # page index -> anchors seen so far (the layer ordinal)
-    anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
-
-    def _is_graph_page(pi: int) -> bool:
-        # owns no column records; needs the id table to tell book pages apart
-        return not legacy and pi >= 0 and pages[pi][1] not in table.book_pages | maps.pages
-
-    # On a GRAPH page whose anchors carry the record-length varint, a bare
-    # 4-byte match without it is a coincidence inside another block (an id
-    # table ``03 00 00 1f 03 00 00 20 ...``, a style block), not a layer. It is
-    # removed BEFORE the loop: left in the anchor list it would still be the
-    # ``next_anchor`` that ends the previous REAL layer's window and truncate
-    # that layer's curves, frame, text and axis record. A graph page with no
-    # such anchor (legacy/synthetic streams) keeps every match.
-    anchor_pages = [bisect_right(page_starts, a) - 1 for a in anchors]
-    prefixed = [opju_anchor_has_length_prefix(b, a) for a in anchors]
-    prefixed_pages = {
-        pi
-        for pi, ok in zip(anchor_pages, prefixed, strict=True)
-        if ok and _is_graph_page(pi)
-    }
-    kept = [
-        (a, pi)
-        for a, pi, ok in zip(anchors, anchor_pages, prefixed, strict=True)
-        if ok or pi not in prefixed_pages
-    ]
+    # page attribution, layer ordinals and coincidental-anchor removal
+    # (opju_layer_pages: graph pages, id-table-less cart pages, embedded graphs)
+    lp = LayerPages(b, pages, table.book_pages, maps.pages, legacy)
+    page_starts = lp.starts
+    kept, dropped = lp.kept_anchors(sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL)))
     # Dropped anchors still mark where the layer's TEXT ends: what follows one
     # is a different block (measured: Figure 6 Graph3 layer 9 -- an id table,
     # then a 640 KB embedded CorelDRAW zip), whose bytes the flat scrape reads
     # as junk "annotations". Curves/frame/axis scan the full window to the next
     # real anchor; the text scan stops here, exactly where it did before.
-    dropped = sorted(set(anchors) - {a for a, _ in kept})
     for idx, (anchor, page_idx) in enumerate(kept):
         p = anchor + len(_ANCHOR)
         next_anchor = kept[idx + 1][0] if idx + 1 < len(kept) else len(b)
         # Scope the window by the containing page span (see opju_figure_curves):
         # an anchor's curves/axis record never extend past its own page.
-        if page_idx >= 0:
-            page_end = page_starts[page_idx + 1] if page_idx + 1 < len(pages) else len(b)
-            page_name = pages[page_idx][1]
-        else:
-            page_end, page_name = len(b), None
+        page_end = lp.end_of(page_idx) if page_idx >= 0 else len(b)
         window_end = min(next_anchor, page_end)
-        # A GRAPH page (owns no column records; needs the id table) numbers its
-        # layers by the anchor's ORDINAL within the page -- counted BEFORE any
-        # decode attempt, so an undecodable record leaves a GAP in the layer
-        # numbers instead of shifting every later layer onto the wrong index
-        # (fail closed; Origin's layer N is the Nth anchor, decoded or not).
-        # Anchors inside a workbook/report page are embedded (fit-report)
-        # graphs: unnamed, layer 1.
-        is_graph_page = _is_graph_page(page_idx)
-        if is_graph_page:
-            page_layers[page_idx] = page_layers.get(page_idx, 0) + 1
+        # name / layer: counted BEFORE any decode attempt (opju_layer_pages)
+        is_graph_page = lp.is_graph_page(page_idx)
+        name, layer = lp.name_layer(anchor, page_idx)
         # Layer frame quad (12 00 20 22 marker; figure_geometry) -- with
         # the page size this places every panel of a multi-panel page.
         frame = opju_layer_frame(b, anchor, window_end)
@@ -412,27 +389,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
         )
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
-        routed = routed_figure_text(
-            b, anchor, text_end, (x_from, x_to, y_from, y_to), x_log, y_log
-        )
-        # Graph-page figures get the page's own window name ("Graph1", ...)
-        # and the 1-based anchor ordinal counted above. Name attachment needs
-        # the id table (it is what tells book pages apart), so legacy streams
-        # keep the historical ""/1.
-        if is_graph_page:
-            layer = page_layers[page_idx]
-            name = page_name
-        else:
-            name, layer = "", 1
+        routed = routed_figure_text(b, anchor, text_end, (x_from, x_to, y_from, y_to), x_log, y_log)
         omitted: list[tuple[int, dict[str, str]]] = []  # (plot index, note): sheet unproven
         if legacy:
             curves = extract_curves(
                 b, anchor, window_end, book_columns, books_meta, book_counts_all
             )
         else:
-            curves = extract_curves_by_id(
-                b, anchor, window_end, table, off_sheet, omitted, gates
-            )
+            curves = extract_curves_by_id(b, anchor, window_end, table, off_sheet, omitted, gates)
         figures.append(
             {
                 "name": name,
@@ -476,8 +440,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_step": y_step,
                 "_page_idx": page_idx,
                 "curves": curves,  # + a heatmap / contour / ternary plot (opju_map_plots):
-                **layer_map(b, anchor, window_end, maps, off_sheet,
-                            pages[page_idx] if is_graph_page else None),
+                **layer_map(
+                    b,
+                    anchor,
+                    window_end,
+                    maps,
+                    off_sheet,
+                    pages[page_idx] if is_graph_page and not legacy else None,
+                ),
                 **({"curve_sheet_omitted": [n for _, n in omitted]} if omitted else {}),
             }
         )
@@ -493,8 +463,6 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     for f in figures:
         pi = f.pop("_page_idx")
         f["page"] = (
-            opju_page_size(b, page_starts[pi], frames_by_page.get(pi, []))
-            if pi >= 0
-            else None
+            opju_page_size(b, page_starts[pi], frames_by_page.get(pi, [])) if pi >= 0 else None
         )
     return figures
