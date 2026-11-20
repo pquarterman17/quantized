@@ -15,6 +15,9 @@ import { TOAST_ACTION_TTL, toast, type ToastAction } from "./toasts";
 import type { AppState } from "./useApp";
 import { bookErrorLayer } from "./windowDefaults";
 
+/** Most series an Origin worksheet's first plot draws. */
+export const MAX_BOOK_SERIES = 8;
+
 /** What `datasetViewDefaults` reads: the column labels the pick was made for
  *  (`of`: a dataset whose labels differ ignores it), the Y set when columns
  *  were left off, the Y2 set, and the decades that open Y on log. */
@@ -26,13 +29,18 @@ export interface FirstPlotHint {
 }
 
 /** `ds` with its first plot stored in `metadata.first_plot` (any earlier one
- *  dropped; none stored when nothing changes). Never for an Origin book (its
- *  graphs and designations are the authority) or a parser-flagged 2-D map. */
+ *  dropped; none stored when nothing changes). Never for a parser-flagged 2-D
+ *  map. An Origin book gets it too (its designations still decide the hidden
+ *  channels, via `bookErrorLayer`), capped at MAX_BOOK_SERIES: a raw project
+ *  worksheet is not a graph, and 33 columns against the first is noise. Its
+ *  recovered graphs, when it has any, replace this view on import. */
 export function withFirstPlot(ds: Dataset): Dataset {
   const { first_plot: _earlier, ...md } = ds.data.metadata ?? {};
   const plain = { ...ds, data: { ...ds.data, metadata: md } };
-  if (md.origin_book != null || md.is2D === true || ds.data.labels.length === 0) return plain;
-  const fp = firstPlot(ds.data, textAxisFallbackChannel(ds), bookErrorLayer(ds).hiddenChannels);
+  if (md.is2D === true || ds.data.labels.length === 0) return plain;
+  const xKey = textAxisFallbackChannel(ds);
+  const hidden = bookErrorLayer(ds).hiddenChannels;
+  const fp = firstPlot(ds.data, xKey, hidden, md.origin_book != null ? MAX_BOOK_SERIES : undefined);
   if (!fp.yKeys && !fp.y2Keys && !fp.logDecades) return plain;
   const hint: FirstPlotHint = {
     of: ds.data.labels,
@@ -92,7 +100,8 @@ export async function presentFirstPlot(get: () => AppState, lead: string, id: st
     const shown = fp.y;
     const left = defaultDenseChannels(d, s.xKey).filter((c) => !shown.includes(c) && !s.hiddenChannels.includes(c));
     if (left.length > 0) {
-      notes.push(`${left.map((c) => d.labels[c]).join(", ")} not plotted`);
+      const names = left.slice(0, 3).map((c) => d.labels[c]).join(", ");
+      notes.push(`${names}${left.length > 3 ? ` and ${left.length - 3} more` : ""} not plotted`);
       // One left-off quantity (Temperature) gets the free right axis; more
       // than one unit is never crammed onto one Y2, so those join Y1.
       const oneUnit = !fp.y2 && new Set(left.map((c) => d.units[c] ?? "")).size === 1;

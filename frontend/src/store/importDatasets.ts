@@ -32,8 +32,6 @@ import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
 import { importSummary } from "../lib/importFailureHint";
-import { originImportNotice } from "../lib/originImportNotice";
-import { buildOriginFigureEntries } from "../lib/originFigureEntries";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
   isLazyBookEntry,
@@ -44,6 +42,7 @@ import {
 import { deriveWorkbooks } from "../lib/workbooks";
 import { sheetDatasetName, splitSheets } from "../lib/workbookSheets";
 import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
+import { attachOriginGraphs, type OpenFirstGraph } from "./originOpenFirst";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import type { StructurePreset } from "./crystalStructures";
@@ -142,6 +141,7 @@ function addFromPayload(
   origin: ImportOrigin,
   targetFolderId: string | undefined,
   historyToken: HistoryBatchToken | undefined,
+  openFirst?: OpenFirstGraph,
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
@@ -176,7 +176,7 @@ function addFromPayload(
       if (isPrimaryBookMarker(book)) {
         primaryId = id;
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
-        get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
+        get().addDataset(withFirstPlot({ id, name, data: bookData, ...src, ...roles, importedAt }), historyToken);
       } else if (isLazyBookEntry(book)) {
         // The preview's rows are the book's FULL metadata's rows only when the
         // backend says so; when it sampled them it also says WHICH rows it kept,
@@ -209,7 +209,7 @@ function addFromPayload(
           ? { ...book.metadata, [PREVIEW_SOURCE_ROWS]: sourceRows }
           : book.metadata;
         const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: bookMeta };
-        get().addDataset({
+        get().addDataset(withFirstPlot({
           id,
           name,
           data: bookData,
@@ -227,9 +227,9 @@ function addFromPayload(
           ...src,
           ...roles,
           importedAt,
-        }, historyToken);
+        }), historyToken);
       } else {
-        get().addDataset({ id, name, data: book, ...src, ...roles, importedAt }, historyToken);
+        get().addDataset(withFirstPlot({ id, name, data: book, ...src, ...roles, importedAt }), historyToken);
       }
       newIds.push(id);
     }
@@ -331,15 +331,7 @@ function addFromPayload(
     }));
   }
   set({ worksheetId: null }); // the Worksheet tab shows the import, not a book opened earlier
-  const siblings = get().datasets.filter((d) => newIds.includes(d.id));
-  if (figures?.length) get().addOriginFigures(buildOriginFigureEntries(stem, figures, siblings));
-  if (fidelity) {
-    get().addOriginFidelity(stem, fidelity, newIds);
-    const note = originImportNotice(stem, fidelity, () => {
-      if (!get().originFidelitySectionExpanded) get().toggleOriginFidelitySectionExpanded();
-    }); // truncated file / lost worksheet data -> danger with "Show what is missing"
-    toast(note.msg, note.kind, note.opts);
-  }
+  attachOriginGraphs(get, stem, figures, fidelity, newIds, openFirst);
   get().recordMacro(`Import ${origin.name}`, `qz.import(${lit(origin.name)})`, {
     kind: "import",
     params: { name: origin.name },
@@ -412,6 +404,8 @@ async function runImport<T>(
   let lastItem: T | undefined; // ...and the item itself, for the toast's wizard hand-off
   let cancelled = false;
   const createdIds: string[] = [];
+  // Only a self-reporting batch (presentOutcome) opens a project's first graph.
+  const openFirst = presentOutcome ? { opened: false } : undefined;
   const structures: StructurePreset[] = []; // .cif: lattice presets, not datasets
   const noted: { name: string; notes: string[] }[] = []; // parser notes (importNotes.ts)
   try {
@@ -428,7 +422,7 @@ async function runImport<T>(
         if ("structure" in loaded) structures.push(loaded.structure);
         else {
           noted.push({ name: describe(item), notes: parserNotes(loaded.data) });
-          createdIds.push(...addFromPayload(set, get, loaded.data, loaded.origin, targetFolderId, historyToken));
+          createdIds.push(...addFromPayload(set, get, loaded.data, loaded.origin, targetFolderId, historyToken, openFirst));
         }
         added += 1;
       } catch (e) {

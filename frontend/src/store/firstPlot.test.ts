@@ -73,12 +73,24 @@ describe("datasetViewDefaults applies the first plot", () => {
     expect(datasetViewDefaults(edited).yKeys).toBeNull();
   });
 
-  it("withFirstPlot stores only what changes, and never for an Origin book", () => {
+  it("withFirstPlot stores only what changes", () => {
     expect(VSM.data.metadata.first_plot).toEqual({ of: ["Moment", "Temperature"], y: [0] });
     expect(XRR.data.metadata.first_plot).toEqual({ of: ["R"], log: expect.any(Number) });
-    const origin = withFirstPlot({ ...VSM, data: { ...VSM.data, metadata: { ...VSM.data.metadata, origin_book: "Book1" } } });
-    expect(origin.data.metadata.first_plot).toBeUndefined(); // the stale pick is dropped too
-    expect(datasetViewDefaults(origin).yKeys).toBeNull();
+  });
+
+  it("an Origin book gets the heuristics too, capped so a wide worksheet never plots every column", () => {
+    const cols = Array.from({ length: 24 }, (_, c) => ({ name: `C${c}`, unit: "", v: (i: number) => (c + 1) * Math.sin(i / 7 + c) }));
+    const md = { origin_book: "Book1" };
+    const wide = data(cols, field, "Field", "Oe");
+    const book = withFirstPlot({ id: "ob", name: "Book1", data: { ...wide, metadata: { ...wide.metadata, ...md } } });
+    expect(book.data.metadata.first_plot).toEqual({ of: wide.labels, y: [0, 1, 2, 3, 4, 5, 6, 7] });
+    expect(datasetViewDefaults(book).yKeys).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    // ...and monitor columns are left off like any import.
+    const vsm = withFirstPlot({ ...VSM, data: { ...VSM.data, metadata: { ...VSM.data.metadata, ...md } } });
+    expect(datasetViewDefaults(vsm).yKeys).toEqual([0]);
+    // A non-Origin file of the same width is not capped.
+    const plain = withFirstPlot({ id: "p", name: "p.csv", data: wide });
+    expect(plain.data.metadata.first_plot).toBeUndefined();
   });
 
   it("a copy with the same labels whose Y went <= 0 does not inherit log Y", () => {
