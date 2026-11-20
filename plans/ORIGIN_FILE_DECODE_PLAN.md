@@ -14,7 +14,7 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (#73: `.opju` labels bound to their own column
+**Updated:** 2026-11-20 (restyled-scatter colours read through record byte 310, 92 curves gain Origin's colour, 0 change; items 75-76 booked, see Completed.) Earlier: 2026-11-15 (#73: `.opju` labels bound to their own column
 record by name, inside the book's window: on 113 COM-checked files wrong
 designations / long names / units 781 -> 0, 0 right -> wrong, 8 curves
 restored, error bars attached 109 -> 745; residue #74.) Earlier: #72:
@@ -523,8 +523,13 @@ Official model references used for this routing:
     Drive this item from the existing
     Origin↔Quantized gallery and structural report, ordered by how many real
     graphs visibly differ.
-    - Per-curve visibility/hidden state, using new independent ground truth;
-      do not reopen #42 from the currently confounded PNR bytes alone.
+    - [x] **Per-curve visibility/hidden state, `.opju`** (2026-11-20, see
+      Completed): record offset 38 `21` = hidden, `61` = shown; evidence in
+      `docs/origin_re/curve_visibility.md`. Still open: the `.opj` anchor
+      (same offset, 39 `21` records in XMCD / SuperlatticeFits / MnN, no
+      rendered oracle checked) and `PNR.opj`'s undrawn T++/T-- lines, which do
+      NOT carry this bit (a different mechanism; do not reopen #42 from the
+      PNR bytes alone). Owner COM check: the doc's last section.
     - Worksheet-unit→axis-unit conversion with a typed, tested dimensional
       conversion model (including the evidenced Å↔nm cases), applied to data,
       limits, ticks, annotations, and regions together—never title-only.
@@ -1089,6 +1094,40 @@ work.
     - [ ] Absent, fail closed: 2,354 long names, 379 units, 39 X long
           names on COM-covered columns (sheets whose records do not cover
           every decoded column, or a contradicted positional reading)
+    - [ ] Hc2 data Graph40's magenta "error bars" (2026-11-20): NOT an
+          error-bar plot -- the file has 0 type-231/233 records, 0 records
+          with byte 37 = `30` (corpus-wide that byte marks error-bar plots
+          only, 3,605 of 3,605), and no Y-error designation. The bars sit on
+          the endpoints of the layer's stored fit ranges (`[1:9]`, `[9:12]`):
+          most likely Origin's fit data-range markers. Nothing is drawn wrong;
+          COM check in `docs/origin_re/hc2_open_gaps.md`
+
+75. **Hc2 data Graph34 (xi_GL vs T) -- two decode gaps** -- booked
+    2026-11-20 (`docs/origin_re/hc2_open_gaps.md`, with the COM query). The
+    page has a saved preview but yields no figure (`unrecovered_graphs`).
+    - [ ] Axis record: Y is 0 .. 6.97e-8 m step 2e-8 (labels in nm, an
+          undecoded x1e9 display factor), and the two non-round doubles sit
+          in ONE 16-byte literal, which `opju_axis_real_form` (one value
+          token per double) cannot split. Parse the record with the generic
+          run-length grammar instead, gated by a controlled specimen
+    - [ ] Binding: the plots name ids 1773-1777, which no column record in
+          the id table carries (it jumps 1766 -> 1814); the data are imported
+          as `Book4` (Nb/Al xi, Nb/Au xi) and `Book5` (B). Find the records
+          that give those books their ids
+
+76. **Bar / column / strip plots drawn in the wrong colour** -- booked
+    2026-11-20 from the generated COM corpus (`generated/*/oracle.json`,
+    per-plot `color`): of 295 decoded colours checked, 236 match and 59
+    mismatch, all on plot types quantized draws from a non-colour field:
+    36 bar / column / stacked plots (record byte 76 `0xcb`, `0xd5`, `0xd7`,
+    `0xd8`; we draw `#FF0000` / `#0000FF` / `#00FF00`, COM reports the fill
+    `#FDC897` or black) and 23 strip plots (`0xce`; we draw `#515151` /
+    black, COM reports -1). Pre-existing on main; untouched by the
+    restyled-symbol change (`docs/origin_re/curve_colors.md`).
+    - [ ] Find the fill-colour field of a bar record (a COM-built specimen
+          that changes only the fill) and what COM colour -1 means on a
+          strip plot, or withhold `color` for these plot types until then
+          (fail closed)
 
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
@@ -1116,6 +1155,12 @@ item 40 CLOSED same day, see Completed)
     a project-wide convention (also Graph1's /10). Evidence:
     docs/origin_project_format.md section 6.3. Reopen ONLY with a
     specimen where visibility and book membership decouple.
+    **2026-11-20:** that specimen exists for `.opju` -- Hc2 data Graph3
+    hides three plots of the same book whose other three stay shown, and
+    the earlier `hc2convert.opj` save has the same three plots shown: their
+    records differ at offset 38 only (`61` -> `21`). Shipped for `.opju`
+    (item 52 sub-item, `docs/origin_re/curve_visibility.md`). PNR's T++/T--
+    read `61` there, so their gap stays as documented above.
 
 ### Tier 3 — Nice-to-Have
 
@@ -1231,6 +1276,48 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**Restyled scatters drawn in the default palette**~~ (2026-11-20).
+  Curve-record byte 310 was read as a colour terminator, so every symbol
+  plot the user had restyled (310 = 25-60 instead of `FF`) lost its colour
+  (fidelity `some_curve_colors`; Hc2 data's Book2/Book3 graphs drew purple /
+  teal / amber instead of grey / red / blue). The colour is now read when 310
+  is `FF` or the symbol-fill field at 302 holds Origin's `auto` / `-4`
+  sentinel (`curve_style_color._color_fields_aligned`). Evidence
+  (`docs/origin_re/curve_colors.md`): Hc2 Graph27 vs Graph29 plot the same
+  columns and differ only at 310; Origin's saved previews show the decoded
+  System-Color-List blue on 6 of 6 pages and none on 7 of 7 pages without it;
+  the bubble specimens (explicit fill, COM edge colour black, render blue)
+  stay uncoloured. Corpus diff vs main `a92459d9` (590 `.opju` + 106 `.opj`):
+  92 curves gain a colour (Hc2 29 + its converted copy 29, hc2convert 24,
+  10 public curves whose saved previews match), 0 changed, 0 lost, nothing else
+  differs; Moke / RockingCurve screenshots pixel-identical, the 12 changed
+  Hc2 screenshots are exactly the 12 affected graphs. Graph40 / Graph34 /
+  bar colours booked (items 74, 75, 76).
+- ~~**Hidden `.opju` plots drawn as curves**~~ (2026-11-20). Regression
+  surfaced by #690 (item 70): Hc2 data Graph3/7/9/15/22/35 drew 6 curves
+  where Origin draws 3, because the raw lock-in plots the user had hidden
+  gained a resolvable X. The curve record's offset 38 is the plot's Show
+  bit (`61` shown, `21` hidden; `opju_curve_token_x.token_hidden`). A hidden
+  plot is left out as `curve_sheet_omitted` reason `hidden_in_origin` with
+  its full binding (data still imported; Recover names it); an id another
+  token of the layer shows stays drawn. Evidence
+  (`docs/origin_re/curve_visibility.md`): the same 15 plots shown in
+  `hc2convert.opj` and hidden in `Hc2 data.opju` differ at offset 38 only,
+  86 shared shown plots never there; every decisively readable saved page
+  preview draws exactly the `61` plots (Hc2 lock-in graphs + Graph36, EIS,
+  UV-vis Tauc, 拟合, Figure_12/15, PALS, Fig3_e, pedotpss Graph7 re-plotted
+  from its data); the bit spans every plot style and connect-mode value;
+  0 `21` records in the COM-built specimens and the COM-verified
+  RockingCurve / UnpolPlots / Fixed Lambdas SI / XAS. Corpus diff vs main
+  (590 `.opju`): 228 drawn curves leave 58 layers of 17 projects, all `21`
+  records, 0 added; 20 curves already omitted for another reason (Hc2
+  Graph37's 4 `x_token_differs` among them) are now `hidden_in_origin`, so
+  item 67's counts drop by those. COM `layer.plot` lists include hidden
+  plots (item 70's "Origin plots" for Hc2's raw lock-in plots, pedotpss
+  Graph7's 46): a binding oracle, never a visibility oracle. Graph36 (6
+  hidden) and Graph39/40 (1 / 2) fixed too; Graph37's hidden fits were
+  already omitted and are relabelled.
 
 - ~~**#73 `windows_opju` binds labels to columns by POSITION**~~
   (2026-11-15, on `68714642`). Marker bytes inside label text (`!a` =
@@ -1432,7 +1519,10 @@ the shipped contract)
   `21 21` layers: main 380 wrong-X + 3 phantom → branch 0 wrong, 0 phantom;
   271 + 36 curves newly match Origin (Hc2 data's lockin graphs had been
   undrawable: X `A` absent from those books, Origin plots `AE`/`AC`/`R`);
-  the 6 main matches that change X still match (identical columns). Fixed
+  [2026-11-20: the COM list includes plots hidden in the graph -- 18 of
+  those Hc2 lock-in curves are hidden in Origin and drew as extra curves
+  until the offset-38 Show bit was decoded; see Completed, "Hidden `.opju`
+  plots"]; the 6 main matches that change X still match (identical columns). Fixed
   the plan's named cases: SOP_meas Graph72 (omitted, Row Numbers), Figure4
   Graph1 (omitted, `Book1_B` has no column record), ResonatorData
   RawAndFit#2 (now `K`/`L`, matches), SOP_meas Graph16/Graph41#6 (omitted).

@@ -1,5 +1,6 @@
-"""``.opju`` curve binding: embedded report-graph page headers (plan item 69)
-and the X column a curve token stores for itself (item 70).
+"""``.opju`` curve binding: embedded report-graph page headers (plan item 69),
+the X column a curve token stores for itself (item 70) and the record's
+shown/hidden bit (offset 38, ``docs/origin_re/curve_visibility.md``).
 
 Synthetic bytes only (invented names) for the shapes; the ``realdata`` anchors
 check the decoded binding against what Origin 2026b COM reported plotted
@@ -13,8 +14,15 @@ from typing import Any
 
 import pytest
 
+from quantized.io.origin_project.fidelity import assess_origin_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
-from quantized.io.origin_project.opju_curve_token_x import X_FIELD, token_x, token_x_id
+from quantized.io.origin_project.opju_curve_token_x import (
+    HIDDEN_IN_ORIGIN,
+    X_FIELD,
+    token_hidden,
+    token_x,
+    token_x_id,
+)
 from quantized.io.origin_project.opju_embedded_pages import is_embedded_page, span_pages
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
 from test_io_origin_figures_opju import _column_id_record, _layer_bytes, _opju_page_header
@@ -131,6 +139,105 @@ def test_curve_whose_x_column_is_unknown_is_omitted() -> None:
     assert figs[0]["curve_sheet_omitted"][0]["reason"] == "x_column_unknown"
 
 
+# ── offset 38 bit 0x40: the plot is shown ─────────────────────────────────────
+
+
+def _hide(tok: bytes, pair: bytes = b"\x21\x21") -> bytes:
+    """The same record with Origin's "hidden" form of the offset-37/38 pair."""
+    return tok.replace(b"\x21\x61", pair)
+
+
+def test_token_hidden_reads_offset_38() -> None:
+    tok = _token(3, 2)
+    assert not token_hidden(tok, 4)  # 21 61: shown
+    assert token_hidden(_hide(tok), 4)  # 21 21: hidden
+    assert token_hidden(_hide(tok, b"\x30\x21"), 4)  # a hidden Y-error plot
+    assert token_x_id(_hide(tok), 4) == 2  # the X still decodes
+    # fail closed: no X field, or any other byte, is not "hidden"
+    assert not token_hidden(_token(3, None), 4)
+    assert not token_hidden(_hide(tok, b"\x21\x60"), 4)
+    assert not token_hidden(_hide(tok, b"\x21\x01"), 4)
+    # offset 38 = 21 without its corpus partner byte at 37 is not "hidden"
+    assert not token_hidden(_hide(tok, b"\x00\x21"), 4)
+    assert not token_hidden(_hide(tok, b"\x61\x21"), 4)
+
+
+def _omitted_all(fig: dict[str, Any]) -> list[tuple[str, str, str, str]]:
+    return [(n["book"], n["x"], n["y"], n["reason"]) for n in fig.get("curve_sheet_omitted") or []]
+
+
+def test_hidden_plot_is_left_out_and_diagnosed_not_dropped() -> None:
+    """Graph3 shape: a shown and a hidden plot of one book in one layer."""
+    recs = (
+        _column_id_record(1, "A", "X")
+        + _column_id_record(2, "B", "X")
+        + _column_id_record(3, "C", "Y", partner=1)
+        + _column_id_record(4, "D", "Y", partner=1)
+    )
+    layer = _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+    blob = (
+        _MAGIC + _opju_page_header("WBook") + recs + _opju_page_header("Graph1") + layer
+        + _hide(_token(3, 2)) + _token(4, 2)
+    )
+    fig = extract_figures_opju(blob)[0]
+    assert [(c["book"], c["x"], c["y"]) for c in fig["curves"]] == [("WBook", "B", "D")]
+    # the hidden one keeps its full binding, so it can still be shown on request
+    assert _omitted_all(fig) == [("WBook", "B", "C", HIDDEN_IN_ORIGIN)]
+
+
+def test_hidden_wins_over_another_omission_reason() -> None:
+    fig = extract_figures_opju(_blob(_hide(_token(3, 77))))[0]
+    assert fig["curves"] == []
+    assert _omitted_all(fig)[0][3] == HIDDEN_IN_ORIGIN  # not x_column_unknown
+
+
+def test_an_id_another_token_shows_stays_drawn() -> None:
+    """Fail closed: when the layer also holds a shown token of the same column
+    (Origin plots a column twice, one copy hidden), the curve is still drawn."""
+    fig = extract_figures_opju(_blob(_hide(_token(3, 2)), _token(3, 2)))[0]
+    assert [(c["book"], c["x"], c["y"]) for c in fig["curves"]] == [("WBook", "B", "C")]
+    assert _omitted_all(fig) == []
+
+
+def test_a_shown_duplicate_under_another_id_unhides_the_kept_curve() -> None:
+    """Fail closed across ids: two ids that bind the same (book, Y, sheet)
+    collapse to one curve (Absorption-D3 Graph1 layer 2: six ``CuSCH3vac B``
+    plots, three hidden). When the first is hidden and a later one is shown,
+    the curve keeps its own reason, not ``hidden_in_origin`` -- so a shown
+    plot is never reported hidden and its loss stays ``curve_sheet_unresolved``."""
+    recs = (
+        _column_id_record(1, "A", "X")
+        + _column_id_record(2, "B", "X")
+        + _column_id_record(3, "C", "Y", partner=1)
+        + _column_id_record(5, "C", "Y", partner=1)
+    )
+    layer = _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+    head = _MAGIC + _opju_page_header("WBook") + recs + _opju_page_header("Graph1") + layer
+    for toks in (_hide(_token(3, 2)) + _token(5, 2), _token(5, 2) + _hide(_token(3, 2))):
+        fig = extract_figures_opju(head + toks)[0]
+        assert [n[3] for n in _omitted_all(fig)] == ["sheet_unknown"]
+        figs, _ = assess_origin_figures([fig], container="opju")
+        assert "curve_sheet_unresolved" in figs[0]["fidelity"]["omissions"]
+    both = extract_figures_opju(head + _hide(_token(3, 2)) + _hide(_token(5, 2)))[0]
+    assert [n[3] for n in _omitted_all(both)] == [HIDDEN_IN_ORIGIN]
+
+
+def test_fidelity_reports_hidden_plots_as_recovered_not_unresolved() -> None:
+    hidden = {"book": "B1", "x": "A", "y": "C", "recorded": "B1", "reason": HIDDEN_IN_ORIGIN}
+    other = {**hidden, "y": "D", "reason": "sheet_unknown"}
+    curves = [{"book": "B1", "x": "A", "y": "E"}]
+    figs, _ = assess_origin_figures(
+        [{"name": "G1", "curves": curves, "curve_sheet_omitted": [hidden]}], container="opju"
+    )
+    assert "curve_visibility" in figs[0]["fidelity"]["recovered"]
+    assert "curve_sheet_unresolved" not in figs[0]["fidelity"]["omissions"]
+    figs, _ = assess_origin_figures(
+        [{"name": "G1", "curves": curves, "curve_sheet_omitted": [hidden, other]}],
+        container="opju",
+    )
+    assert "curve_sheet_unresolved" in figs[0]["fidelity"]["omissions"]
+
+
 # ── realdata anchors (Origin 2026b COM, 2026-11-15) ───────────────────────────
 
 _RISE = "origin/public/MeyerJackson_Minis-JGP-2024/Figure 3 and 4 amplitude - rise time data.opju"
@@ -204,3 +311,23 @@ def test_realdata_numeric_x_column_now_binds(corpus_dir: Path) -> None:
         ("C", "B"), ("E", "B"), ("F", "B"), ("H", "B")
     }
     assert _omitted(fig) == []
+
+
+_HC2 = "origin/Hc2 data.opju"
+
+
+@pytest.mark.realdata
+def test_realdata_hc2_hidden_raw_lockin_plots_are_left_out(corpus_dir: Path) -> None:
+    """Origin's own page preview of Graph3 draws the normalized ``AR/AT/AV``
+    only; the raw ``E/G/I`` plots are hidden there (offset 38 ``21``) and were
+    shown, byte-identical but for that byte, in the earlier ``hc2convert``
+    save (``docs/origin_re/curve_visibility.md``)."""
+    g3 = _layer(corpus_dir, _HC2, "Graph3", 1)
+    assert [(c["x"], c["y"]) for c in g3["curves"]] == [("AQ", "AR"), ("AS", "AT"), ("AU", "AV")]
+    assert [(b, y, r) for b, _x, y, r in _omitted_all(g3)] == [
+        ("A6221LockinD2", y, HIDDEN_IN_ORIGIN) for y in ("E", "G", "I")
+    ]
+    assert g3["legend_labels"] == ["Nb", "Nb/Al", "Nb/Au"]  # Origin's legend
+    g1 = _layer(corpus_dir, _HC2, "Graph1", 1)  # COM-identical: every plot shown
+    assert [c["y"] for c in g1["curves"]] == ["E", "G", "I"]
+    assert _omitted_all(g1) == []
