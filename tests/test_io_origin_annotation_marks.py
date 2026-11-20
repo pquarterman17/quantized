@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 import math
 import struct
-from pathlib import Path
 
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.io.origin_project.annotation_marks import (
     build_mark,
     frac_to_data,
@@ -29,22 +29,7 @@ from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
 
-
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus; walks up from
-    ``__file__`` for a ``test-data`` sibling so this still resolves inside a
-    worktree agent -- mirrors ``test_io_origin_ground_truth.py``."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
-
-
-_TD = _resolve_corpus_dir()
+_TD = origin_corpus_dir()
 
 # ── the confirmed fraction→data formula (values from the COM oracle) ─────────
 
