@@ -79,6 +79,19 @@ closes the real `XMCD.opj` failure mode: 128 detected records become 67
 actionable figures and 61 retained diagnostic summaries, not 61 disabled
 Library rows.
 
+`.opju` curves left out of a layer (`curve_sheet_omitted`, one entry per
+curve with its `reason`) map to three codes by what was not proven
+(2026-11-20; before, every one of them was `curve_sheet_unresolved`):
+
+- `curve_sheet_unresolved` — the curve's SHEET is not proven
+  (`sheet_unknown`, `x_sheet_unproven`). 0 public-corpus figures today.
+- `error_bar_plots` — an error-bar DataPlot is not drawn as a line; its bars
+  draw only from a decoded error-column designation (`opju_plot_gates`).
+- `curves_left_out` — the sheet is proven, but the X, the rows, the plot
+  kind or the imported column is not (every other non-hidden reason).
+
+A plot Origin hides (`hidden_in_origin`) is not a loss and adds no code.
+
 The parser route owns only serialization and the malformed-figure fallback.
 If optional graph extraction raises, workbook import still succeeds and the
 manifest reports `figure_decode_error`.

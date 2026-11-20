@@ -10,7 +10,9 @@ export interface OriginFidelityEntry {
 const LABELS: Record<string, string> = {
   advanced_axis_types: "advanced axis types",
   curve_sheet_mismatch: "curves to check: recorded on another sheet",
-  curve_sheet_unresolved: "curves left out (sheet, X or rows not proven): see Recover",
+  curve_sheet_unresolved: "curves left out (their sheet not proven): see Recover",
+  curves_left_out: "curves left out (X, rows or plot type not proven): see Recover",
+  error_bar_plots: "error-bar plots drawn only from decoded error columns",
   exact_curve_bindings: "exact curve bindings",
   figure_decode_error: "graph decode failed",
   graph_content_unattributed: "graph content found but its window not identified",

@@ -15,6 +15,8 @@ describe("omittedCurveLines", () => {
       { book: "Book1", x: "A", y: "C", recorded: "Book1@3", reason: "x_sheet_unproven" },
       { book: "Cu5", x: "A", y: "B", recorded: "Cu5@2", reason: "book_not_imported" },
       { book: "Book2", x: "A", y: "D", recorded: "Book2@4", reason: "column_not_imported" },
+      { book: "Book2", x: "A", y: "E", recorded: "Book2@4", reason: "x_not_imported" },
+      { book: "Book1A", x: "A", y: "B", recorded: "Book1A@2", reason: "sheet_x_not_found" },
       { book: "Book2", x: "B", y: "B", recorded: "Book2@5", reason: "y_is_sheet_x" },
       { book: "Book31", x: "H", y: "H", recorded: "Book31", reason: "y_is_x_column" },
       { book: "Book4", x: "A", y: "I", recorded: "Book4", reason: "x_token_differs" },
@@ -28,6 +30,8 @@ describe("omittedCurveLines", () => {
       "Book1 column C (X A): the sheet of its X column could not be proven (Y is on Book1@3)",
       "Cu5 column B (X A): sheet Cu5@2 was not imported",
       "Book2 column D (X A): that column of Book2@4 was not imported",
+      "Book2 column E (X A): its X column on Book2@4 was not imported (often a text column)",
+      "Book1A column B (X A): no X column was found on Book1A@2; Origin may plot it by row or column position",
       "Book2 column B (X B): Book2@5 was imported with this column as its X",
       "Book31 column H (X H): it plots an X column, against an X stored in a form not decoded yet",
       "Book4 column I (X A): the graph stores another X for it, in a form not decoded yet",
@@ -36,6 +40,19 @@ describe("omittedCurveLines", () => {
       "Lockin column E (X AE): hidden in the Origin graph (Origin does not draw it); its column is still imported",
       "Book9 column E: some new reason",
     ]);
+  });
+
+  it("words every reason the .opju reader emits for a plot type it does not rebuild", () => {
+    const reasons = [
+      "x_not_a_column", "x_column_unknown", "x_other_book", "plot_row_range", "error_bar_plot",
+      "box_kind_not_decoded", "stat_layer_in_multi_layer_page", "stat_layer_of_several_books",
+      "histogram_of_several_columns", "stat_plot_x_not_decoded", "map_plot_not_decoded",
+    ];
+    const lines = omittedCurveLines(fig(reasons.map((reason) => ({ book: "B", x: "A", y: "C", recorded: "B", reason }))));
+    lines.forEach((line, i) => {
+      expect(line.startsWith("B column C (X A): ")).toBe(true);
+      expect(line).not.toBe(`B column C (X A): ${reasons[i].replaceAll("_", " ")}`); // worded, not the raw-code fallback
+    });
   });
 
   it("is empty for a figure with nothing left out", () => {

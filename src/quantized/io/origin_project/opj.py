@@ -58,6 +58,7 @@ from numpy.typing import NDArray
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import (
     NAME_RE,
+    bad_header,
     decode_doubles,
     decode_inline_text,
     decode_report_strings,
@@ -284,7 +285,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
     from before."""
     b = path.read_bytes() if raw is None else raw
     if not b.startswith(b"CPYA"):
-        raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")
+        raise bad_header(path, b, "CPYA .opj")
     blocks = list(walk_blocks(b))
     sheets = matrix_sheets(blocks)
     scan = scan_datasets(blocks, sheets.keys())

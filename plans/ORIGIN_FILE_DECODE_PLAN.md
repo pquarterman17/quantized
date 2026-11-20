@@ -962,12 +962,16 @@ work.
           `01` (not `09`) and marker `21 50` (not `21 51`), 90 such X
           records + 21 `21 60` corpus-wide. Needs the categorical-X import
           below; admitting the records without it only renames the omission
-    - [ ] 8 `sheet_unknown` on Absorption-D3 `CuSCH3vac`: the window is
-          `CuSCH3vac` but sheets 1-5 store `Cusch3vac_A[@N]` datasets and
-          sheet 6 `CuSCH3vac_A@6` (Origin names are case-insensitive); the
-          importer keys pseudo-books by the dataset spelling, so the fix must
-          align case-insensitively AND bind to the dataset's spelling
-          (`Cusch3vac@4` for PBE0, COM) — 1 book in 359 files
+    - [x] ~~8 `sheet_unknown` on Absorption-D3 `CuSCH3vac`~~ FIXED
+          2026-11-20: `off_sheet_ids` aligns case-insensitively when the
+          exact spelling does not align and binds to the dataset's spelling
+          (`Cusch3vac@4` for PBE0); +16 curves, checked against the window's
+          sheet names and Graph1's saved preview (`validation_log.md`
+          "curve sheets")
+    - [ ] 24 `sheet_x_not_found` (was `x_sheet_unproven`; Degree-of-impact
+          `Book1A@2`, `Book10@3`, `Book10A@3`): the sheet is proven but no X
+          record is on it; the previews are per-column charts (X = column
+          position). Confirm the plot type over COM before decoding
     - [ ] 5 `sheet_unknown` on origin_scientific_colors `Colors` (204
           sheets): most column records write the designation in a
           zero-skip form (`8f 02 01 50`, `8d 04 <partner> 01 60`, no `09`
@@ -982,7 +986,8 @@ work.
           the X the decoder would use. Over COM, dropping the first gate
           drew 4 curves against the wrong X and dropping both 12 (and 14
           more identical): find which reference Origin uses and release them
-    - [ ] `column_not_imported` (57): 39 have a Text X column (Figure4,
+    - [ ] `column_not_imported` (57; since 2026-11-20 the 79 whose missing
+          column is the X read `x_not_imported`): 39 have a Text X column (Figure4,
           soil deep: Origin's own `A@N` numeric count is 0; drawing needs a
           categorical X axis) and 18 a report-sheet X (生化指标非线性
           `A@2`); import them as categorical X / report columns
@@ -1276,6 +1281,54 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**Graph pages present but not recovered (`.opju` axis records)**~~
+  (2026-11-20). 202 of the 211 `graphs_not_recovered` pages had every layer
+  anchor, but no token-at-a-time axis reader decoded it. The anchor is the
+  first sparse chunk of the `.opj` layer block itself; expanded with CPYUA's
+  grammar the axis fields sit at the `.opj` offsets
+  (`opju_layer_record`, tried before the real-form reader, authenticated by
+  both scale fields + step/span sign; `docs/origin_re/opju_layer_record.md`).
+  Positive control 2,934 / 2,937 existing decodes identical; the 3 range and
+  8 scale disagreements are real-form misreads (saved previews); 0 of 222
+  coincidental anchors accepted. Corpus (351 files): unrecovered pages
+  211 -> 12, layers 2,991 -> 3,347, actionable figures 2,841 -> 3,187, curves
+  6,645 -> 7,807; no project loses a figure (4 `SOP_meas` histograms are now
+  omitted as stat layers of a two-layer page). COM rescore
+  (`axis_ranges.json`): all 252 newly decoded named layers and the 9 changed
+  ones agree, scales included; 0 phantoms. Graph pages only: book-page
+  (embedded) records are not read this way (their curves bind a column as X
+  where Origin plots row number). Covers item 75's axis record (Hc2 data
+  Graph34 matches its saved preview). `PNR.otpu` now decodes in full. Open:
+  `04 01` Y scale field, `80 e9`-at-98 records, id-table-less page naming.
+
+- ~~**`curve_sheet_unresolved` over-reported; a case-renamed book's sheets
+  unbound**~~ (2026-11-20, item 67). The code was raised for every omitted
+  curve: of 1,951 public-corpus figures, 1,772 only had error-bar plots and
+  138 other proven-sheet reasons; 41 had a sheet-related reason, and only
+  Absorption-D3's 8 `sheet_unknown` were an unproven sheet. Fidelity now
+  splits `curve_sheet_unresolved` (sheet not proven) / `error_bar_plots` /
+  `curves_left_out`; the X-missing omissions read `x_not_imported` /
+  `sheet_x_not_found`; `off_sheet_ids` aligns a book renamed by case only
+  (+16 Absorption-D3 curves, window sheet names + saved preview + COM note
+  agree). Corpus: `curve_sheet_unresolved` 1,951 -> 0, 0 curves lost or
+  re-bound elsewhere (`docs/origin_re/validation_log.md` "curve sheets").
+
+- ~~**Unreadable `.opju` projects that are not decoder gaps**~~ (2026-11-20).
+  Four real CPYUA projects failed "no worksheet columns could be decoded":
+  two hold Data Connector books saved without their data (every record
+  1 allocated / 0 used rows; the book's page names `CSV_Connector` /
+  `Excel_Connector` and the source path; 83 of the corpus's 87 connector
+  books carry data — the negative controls; saved previews show the plotted
+  data), two are graph-only (no dataset header; a pasted raster image). They
+  now import labelled empty books (`origin_worksheet_unavailable`), their
+  graphs with saved previews, and the loss `data_not_saved`; curves of an
+  unsaved book are omitted with that reason (`opju_no_data.py`). Git LFS
+  pointers / text files get an accurate message instead of "bad header"
+  (`container.bad_header`). The 160 "empty actionable graph layers" are 5 map
+  layers (not empty) + 155 layers whose every curve is omitted fail-closed
+  with a reason (0 genuinely empty); the reasons now read as sentences.
+  Evidence + owner-COM check: `docs/origin_re/opju_no_worksheet_data.md`.
 
 - ~~**Restyled scatters drawn in the default palette**~~ (2026-11-20).
   Curve-record byte 310 was read as a colour terminator, so every symbol

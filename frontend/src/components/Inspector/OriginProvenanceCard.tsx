@@ -146,13 +146,17 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
   const xUnconfirmed =
     typeof meta.x_column_unrecovered_reason === "string" ? meta.x_column_unrecovered_reason : "";
   const losses = bookLosses(meta.origin_worksheet_losses);
+  // `.opju` with no worksheet data in the file (io/origin_project/opju_no_data.py):
+  // an empty, labelled book that carries the project's graphs — say why.
+  const unavailableRaw = meta.origin_worksheet_unavailable as { detail?: unknown } | undefined;
+  const unavailable = typeof unavailableRaw?.detail === "string" ? unavailableRaw.detail : "";
   const lossy = losses.some((l) => l.kind !== UNVERIFIED_KIND);
 
   const hasLog = records.length > 0 || rawLog.length > 0;
   const hasColumnSections = reportKeys.length > 0 || textKeys.length > 0;
   if (
     !active ||
-    (noteWindows.length === 0 && !hasLog && !hasColumnSections && !xUnrecovered && losses.length === 0)
+    (noteWindows.length === 0 && !hasLog && !hasColumnSections && !xUnrecovered && losses.length === 0 && !unavailable)
   )
     return null;
 
@@ -163,8 +167,16 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
     <Card
       title="Origin provenance"
       count={noteWindows.length + records.length + reportKeys.length + textKeys.length || undefined}
-      defaultOpen={xUnrecovered || lossy}
+      defaultOpen={xUnrecovered || lossy || Boolean(unavailable)}
     >
+      {unavailable && (
+        <div
+          role="note"
+          style={{ marginBottom: 10, fontSize: "var(--font-size-sm)", color: "var(--text-faint)", lineHeight: 1.4 }}
+        >
+          <span style={{ color: "var(--accent)" }}>⚠</span> No worksheet data — {unavailable}
+        </div>
+      )}
       {xUnrecovered && (
         <div
           style={{
