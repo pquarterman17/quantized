@@ -41,7 +41,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from quantized.datastruct import DataStruct
-from quantized.io.origin_project.container import fallback
+from quantized.io.origin_project.container import bad_header, fallback
 from quantized.io.origin_project.opj import (
     Columns,
     TextColumns,
@@ -196,7 +196,7 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
     shared with the structural record reader (``shared_fpc_decodes``)."""
     b = path.read_bytes() if raw is None else raw
     if not b.startswith(b"CPYUA"):
-        raise fallback(path, f"'{path.name}' does not look like a CPYUA .opju (bad header).")
+        raise bad_header(path, b, "CPYUA .opju")
     reports = scan_marked_report_columns(b)
     with shared_fpc_decodes(b):
         marked = scan_marked_columns(b)

@@ -21,6 +21,7 @@ __all__ = [
     "ORIGIN_MISSING",
     "NAME_RE",
     "OriginProjectError",
+    "bad_header",
     "decode_doubles",
     "decode_inline_text",
     "decode_report_strings",
@@ -58,6 +59,56 @@ def fallback(path: Path, detail: str) -> OriginProjectError:
         f"{detail} For now, open '{path.name}' in {_VIEWER} and export the "
         f"worksheet(s) to CSV or ASCII, then import that file here."
     )
+
+
+_LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
+_LFS_SIZE = re.compile(rb"^size (\d{1,15})\s*$", re.MULTILINE)
+_OTHER_ORIGIN = {b"CPYA": "a CPYA .opj", b"CPYUA": "a CPYUA .opju"}
+
+
+def bad_header(path: Path, b: bytes, expected: str) -> OriginProjectError:
+    """The error for a file whose first bytes are not an Origin project header.
+
+    ``expected`` names the container that was wanted (e.g. ``"CPYUA .opju"``).
+    A file that is plainly something else gets a message saying what it IS,
+    instead of the Origin Viewer advice (no viewer can open a pointer stub):
+
+    * a Git LFS pointer (the text stub git leaves when the real file was not
+      fetched) — the fix is ``git lfs pull``;
+    * the other Origin container under the wrong extension;
+    * an empty file, or a plain-text file.
+
+    Anything else keeps the generic "bad header" message and the viewer advice.
+    """
+    name = path.name
+    if b.startswith(_LFS_POINTER):
+        size = _LFS_SIZE.search(b[:1024])
+        real = f" (the real file is {int(size.group(1)):,} bytes)" if size else ""
+        return OriginProjectError(
+            f"'{name}' is a Git LFS pointer, not the Origin project itself{real}. "
+            "Fetch the real file with `git lfs pull` (or download it from the "
+            "repository's web page), then import that."
+        )
+    for magic, kind in sorted(_OTHER_ORIGIN.items(), key=lambda kv: -len(kv[0])):
+        if b.startswith(magic) and not expected.startswith(magic.decode()):
+            return OriginProjectError(
+                f"'{name}' is {kind} project saved under the wrong extension; "
+                f"rename it to {kind.rsplit(' ', 1)[1]} and import it again."
+            )
+    if not b:
+        return OriginProjectError(f"'{name}' is empty (0 bytes), not an Origin project.")
+    head = b[:4096]
+    if b"\x00" not in head:
+        try:
+            head.decode("utf-8")
+        except UnicodeDecodeError as exc:  # a multi-byte char cut at 4096 is still text
+            if exc.start < len(head) - 4:
+                return fallback(path, f"'{name}' does not look like a {expected} (bad header).")
+        return OriginProjectError(
+            f"'{name}' is a plain-text file, not an Origin project (a real {expected} "
+            "starts with a binary Origin header). Check that the right file was chosen."
+        )
+    return fallback(path, f"'{name}' does not look like a {expected} (bad header).")
 
 
 def walk_blocks(b: bytes) -> Iterator[tuple[int, bytes]]:
