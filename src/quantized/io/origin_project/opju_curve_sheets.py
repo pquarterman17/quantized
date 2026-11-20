@@ -107,11 +107,13 @@ def _column_datasets(b: bytes) -> Iterator[tuple[str, str, str]]:
 def _folded_sheet_order(b: bytes) -> dict[tuple[str, str], list[tuple[str, str]]]:
     """``{(casefolded book, column): [(book as the dataset spells it, sheet
     suffix), ...]}`` in file order: ``dataset_sheet_order`` with the book
-    name compared the way Origin compares names (case-insensitively)."""
+    name compared the way Origin compares names (case-insensitively). A
+    sheet suffix held under BOTH spellings stays twice (fail closed: the
+    count then cannot align, rather than the first spelling winning)."""
     out: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for book, col, sheet in _column_datasets(b):
         entries = out.setdefault((book.casefold(), col), [])
-        if all(s != sheet for _, s in entries):
+        if (book, sheet) not in entries:
             entries.append((book, sheet))
     return out
 

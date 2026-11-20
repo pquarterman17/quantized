@@ -31,7 +31,7 @@ describe("omittedCurveLines", () => {
       "Cu5 column B (X A): sheet Cu5@2 was not imported",
       "Book2 column D (X A): that column of Book2@4 was not imported",
       "Book2 column E (X A): its X column on Book2@4 was not imported (often a text column)",
-      "Book1A column B (X A): no X column was found on Book1A@2; Origin plots it by row or column position",
+      "Book1A column B (X A): no X column was found on Book1A@2; Origin may plot it by row or column position",
       "Book2 column B (X B): Book2@5 was imported with this column as its X",
       "Book31 column H (X H): it plots an X column, against an X stored in a form not decoded yet",
       "Book4 column I (X A): the graph stores another X for it, in a form not decoded yet",

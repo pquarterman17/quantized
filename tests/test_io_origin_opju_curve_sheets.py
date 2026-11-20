@@ -215,6 +215,9 @@ def test_off_sheet_ids_folds_a_book_renamed_by_case() -> None:
     assert off_sheet_ids(b, twin) == {1: "BOOK@3", 2: ""}
     # folded counts still differ: nothing proven (fail closed)
     assert off_sheet_ids(_name("Book_B") + _name("BOOK_B@3"), ids) == dict.fromkeys(ids, "")
+    # one sheet held under both spellings: ambiguous, nothing proven
+    dup = _name("Book_B") + _name("Book_B@2") + _name("BOOK_B@2") + _name("BOOK_B@3")
+    assert off_sheet_ids(dup, ids) == dict.fromkeys(ids, "")
 
 
 def test_a_curve_of_a_case_renamed_book_binds_its_datasets_spelling() -> None:
