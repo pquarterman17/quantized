@@ -167,6 +167,26 @@ function withMarkerColumns(
   return out;
 }
 
+/** Whether a curve's X letter is the book's DEFAULT X (`.time`): the
+ *  recovered X column, or — when that X is a text/category column that never
+ *  became numeric (`x_column_name` empty, `.time` = the row index) — that
+ *  designated-X text column itself: Origin plots a category X at its index.
+ *  Without this a text-X graph lost every binding and fell back to plotting
+ *  all of the book's channels. (Origin's index is 1-based while `.time`
+ *  starts at 0, so the first category can sit left of the decoded xLim --
+ *  a separate, backend-side gap.) */
+function isDefaultX(meta: Record<string, unknown>, letter: string | undefined, xLetter: string): boolean {
+  if (!letter || letter === xLetter) return true;
+  if (xLetter !== "") return false;
+  const text = meta.origin_text_columns;
+  const designations = meta.column_designations;
+  return (
+    !!text && typeof text === "object" && Object.prototype.hasOwnProperty.call(text, letter)
+    && !!designations && typeof designations === "object"
+    && (designations as Record<string, unknown>)[letter] === "X"
+  );
+}
+
 /** Channel selection for a figure's decoded curves on its resolved dataset:
  *  maps each curve's Origin column letter through the dataset's
  *  `origin_column_names` metadata (value-channel letters, in channel order)
@@ -225,7 +245,7 @@ export function figureChannelSelection(
       if (yIdx < 0) return false;
       const yCellsExist = ds.data.values.some((row) => yIdx < row.length);
       if (requireMaterializedData && yCellsExist && !ds.data.values.some((row) => Number.isFinite(row[yIdx]))) return false;
-      if (!c.x || c.x === xLetter) return !requireMaterializedData || ds.data.time.some(Number.isFinite);
+      if (isDefaultX(meta, c.x, xLetter)) return !requireMaterializedData || ds.data.time.some(Number.isFinite);
       const xIdx = letters.indexOf(c.x);
       if (xIdx < 0) return false;
       const xCellsExist = ds.data.values.some((row) => xIdx < row.length);
@@ -246,8 +266,9 @@ export function figureChannelSelection(
     const yCellsExist = ds.data.values.some((row) => yIdx < row.length);
     const yHasData = !requireMaterializedData || !yCellsExist || ds.data.values.some((row) => Number.isFinite(row[yIdx]));
     if (!yHasData) continue; // decoded-but-empty formula/result column — never produce a blank plot
-    const requestedX = curve.x && curve.x !== xLetter ? letters.indexOf(curve.x) : -1;
-    if (curve.x && curve.x !== xLetter && requestedX < 0) continue;
+    const defaultX = isDefaultX(meta, curve.x, xLetter);
+    const requestedX = defaultX ? -1 : letters.indexOf(curve.x);
+    if (!defaultX && requestedX < 0) continue;
     const xCellsExist = requestedX < 0 || ds.data.values.some((row) => requestedX < row.length);
     const xHasData = requestedX >= 0
       ? ds.data.values.some((row) => Number.isFinite(row[requestedX]))
@@ -256,9 +277,7 @@ export function figureChannelSelection(
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
     const st = withMarkerColumns(originCurveSeriesStyle(curve), curve, letters);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
-    if (curve.x && curve.x !== xLetter) {
-      if (requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
-    }
+    if (!defaultX && requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
     const caption = curveIdx < legend.length && legend[curveIdx]
       ? legendCaption(legend[curveIdx], curveNames)
       : undefined;

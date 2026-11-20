@@ -30,10 +30,8 @@ export async function importProjectViaUi(page, opjPath) {
     input.type = "file";
     input.id = "qzup";
     document.body.appendChild(input);
-    const s = window.__qz.useApp.getState();
-    s.setLeftCollapsed?.(true);
-    s.setRightCollapsed?.(true);
   });
+  await collapsePanels(page);
   const input = await page.$("#qzup");
   await input.uploadFile(opjPath);
   return page.evaluate(async (opts) => {
@@ -41,6 +39,15 @@ export async function importProjectViaUi(page, opjPath) {
     const ids = await window.__qz.useApp.getState().importFiles(files, opts);
     return ids ?? [];
   }, IMPORT_OPTS);
+}
+
+/** Collapse the Library + Inspector so the plot stage gets the width. The
+ *  store has only `toggleLeft`/`toggleRight` (no setters -- the old optional
+ *  `setLeftCollapsed?.()` calls here were silent no-ops), so set the two
+ *  layout flags directly; importing a project re-opens them, so callers
+ *  repeat this after an import settles. */
+export async function collapsePanels(page) {
+  await page.evaluate(() => window.__qz.useApp.setState({ leftCollapsed: true, rightCollapsed: true }));
 }
 
 /** Library figure entries (+ dataset names/folders) the import produced. */
