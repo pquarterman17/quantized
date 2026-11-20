@@ -219,10 +219,10 @@ None open.
          its direction (1 plus, 2 minus, 3 both; bit 0x10 = X error, which
          is what makes 12 0xe7 tokens Origin's 233). A curve gets `yErr`
          from one both-ways plot or two equal halves; `.opj` uses the same
-         record (its error plots were drawn as lines). Public: 1,777 ->
-         870 figures with `error_bar_plots`, 1,817 plots on 1,185 curves
+         record (its error plots were drawn as lines). Public: 1,803 ->
+         882 figures with `error_bar_plots`, 1,845 plots on 1,207 curves
          attached; owner: 149 plots, 167 `.opj` phantom lines gone.
-   - [ ] **Asymmetric error bars on a figure**: 866 public halves (433
+   - [ ] **Asymmetric error bars on a figure**: 874 public halves (437
          curves, mostly PerceivedRisk) have proven plus/minus columns that
          differ; the figure path carries one symmetric `errKeys` column per
          curve. Needs the halves as the figure's error bindings (the

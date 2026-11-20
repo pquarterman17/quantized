@@ -859,16 +859,16 @@ Checked against:
 
 Public (351 files):
 
-* Figures with `error_bar_plots`: 1,777 -> 870.
-* 1,115 figures gain bars: 1,185 curves, from 1,817 error plots.
-* Curves: 6,661 -> 6,655. The -6 are `DO.opj`'s six error plots, drawn as
+* Figures with `error_bar_plots`: 1,803 -> 882 (main `854a542c`).
+* 1,135 figures gain bars: 1,207 curves, from 1,845 error plots.
+* Curves: 7,829 -> 7,823. The -6 are `DO.opj`'s six error plots, drawn as
   lines before.
 * No other curve, figure or book changed.
 
 Owner (104 files):
 
 * 109 figures gain bars, from 149 plots.
-* Curves: 1,452 -> 1,291. The 161 removed are all `.opj` error plots,
+* Curves: 1,458 -> 1,297. The 161 removed are all `.opj` error plots,
   drawn as lines before: `MnN_Diffusion_PNR` 127, `SuperlatticeFits` 34.
 * `error_bar_plots`: 24 -> 31 figures. `.opj` reports its X-error and
   undecoded error plots now.

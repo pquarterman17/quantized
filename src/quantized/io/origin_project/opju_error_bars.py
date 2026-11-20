@@ -20,12 +20,12 @@ Evidence (``docs/origin_re/error_bars.md``):
   scatter, not on the ``K`` line before ``J``. ``UnpolPlots`` NdNiO3NR plots
   ``H`` (dR Fresnel) FIRST, then ``G``; ``H`` names ``G``, and the bars are
   on ``G``.
-* Distribution (both corpora, 3,601 decoded error-bar records): every X
-  field names a column of the error column's own book; 3,173 name exactly
-  one data curve of the same layer, none names two; the other 428 name a
+* Distribution (both corpora, 3,654 decoded error-bar records): every X
+  field names a column of the error column's own book; 3,214 name exactly
+  one data curve of the same layer, none names two; the other 440 name a
   column the layer does not plot (left out).
 * Direction, record offset 23: bit ``0x01`` = plus, ``0x02`` = minus
-  (1,458 records read 3 = both; 1,065 curves carry a ``1`` + ``2`` pair).
+  (1,491 records read 3 = both; 1,075 curves carry a ``1`` + ``2`` pair).
   Proven on ``Graph_Template.opju``: 14 halves on columns their author
   named ``Lower_Bound`` / ``LB_*`` / ``XerrMinus*`` (2) and ``Upper_Bound``
   / ``UB_*`` / ``XerrPlus*`` (1), and Origin's saved preview of ``32New``

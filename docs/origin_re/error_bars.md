@@ -5,8 +5,8 @@ An Origin error-bar plot is a DataPlot of its own, Origin plot type 231
 (`opju_plot_gates`, PR #704). Before this change the bars were drawn only
 where the error column's worksheet designation paired it with a Y. Most
 designations do not decode, or the error column is designated Y, so most
-bars were lost: 1,777 public and 24 owner figures carried the fidelity code
-`error_bar_plots`.
+bars were lost: 1,777 public figures (1,803 once #775 recovered more graph
+pages) and 24 owner figures carried the fidelity code `error_bar_plots`.
 
 `io/origin_project/opju_error_bars.py` now reads the binding from the plot
 record itself. It sets `yErr` on the curve the bars decorate, where that is
@@ -47,18 +47,18 @@ several plots away from it.
   Now it draws Y bars from `J` and X bars from `dQ` on SA, with no `dSA`
   line.
 
-**Distribution.** 3,609 error-bar records reconstruct across the two
-corpora (`.opju`). 3,601 have a decoded column.
+**Distribution.** 3,663 error-bar records reconstruct across the two
+corpora (`.opju`). 3,654 have a decoded column.
 
 * Every X field names a column of the error column's own book.
-* 3,173 name exactly one data curve of the same layer. None names two.
-* The other 428 name a column the layer does not plot: 424 in
+* 3,214 name exactly one data curve of the same layer. None names two.
+* The other 440 name a column the layer does not plot: 436 in
   PerceivedRisk, 4 in `calibration_for_fig4`. They stay left out.
 
-**Direction.** The 3,601 decoded records split as follows:
+**Direction.** The 3,654 decoded records split as follows:
 
-* Offset 23 = `3` (both ways) on 1,458 records.
-* `1` + `2` on 1,065 curves that have two error plots: the plus half and the
+* Offset 23 = `3` (both ways) on 1,491 records.
+* `1` + `2` on 1,075 curves that have two error plots: the plus half and the
   minus half.
 * `0x11` / `0x12` / `0x13` with byte 76 `0xe9` on all 8 `0xe9` records.
 * `0x11` / `0x12` with byte 76 `0xe7` on 12 records. The 2026-11-15 COM
@@ -81,13 +81,13 @@ X-error records. So bit `0x10`, not byte 76, decides the axis.
 
 **Negative controls.**
 
-* The 5 hidden error plots (`30 21`, public `Fig3_e` Graph1) never link.
+* The 6 hidden error plots (`30 21`; 5 in public `Fig3_e` Graph1) never link.
   Origin's preview draws no bars there (`curve_visibility.md`). The same
   file's Graph2 plots the same columns of sheet 2 with SHOWN error plots
   (`30 61`). Its preview draws an error band on every curve, and all 5
   curves get their `yErr`.
-* The 2 `10 40` records (BET) never link.
-* The 1 record with offset 23 = `0x43` never links.
+* The 4 `10 40` records (BET) never link, nor does any other flag value
+  at offset 23.
 * No data curve's record links: it has no `0xe7` / `0xe9` byte.
 * `Hc2 data.opju` has 0 error-bar records. Its Graph40 magenta bars stay
   undrawn, which is right (`hc2_open_gaps.md`).
@@ -124,12 +124,12 @@ Public counts are both containers. Owner counts include the `specimens/converted
 
 | case | public | owner |
 |---|---|---|
-| plus/minus halves with different values: asymmetric bars, which the figure path cannot carry yet (direction proven, see above) | 866 | 0 |
+| plus/minus halves with different values: asymmetric bars, which the figure path cannot carry yet (direction proven, see above) | 874 | 0 |
 | two both-ways error plots on one curve | 420 | 0 |
-| no link: X field names no plotted curve, hidden, unread flags or pair | 437 | 24 |
+| no link: X field names no plotted curve, unread flags or pair | 451 | 24 |
 | X-error plots: horizontal bars come only from book roles | 13 | 12 |
-| curve's book not imported | 25 | 0 |
-| **attached** | **1,817 plots on 1,185 curves, 1,115 figures** | **149 plots, 109 figures** |
+| curve's book not imported | 27 | 0 |
+| **attached** | **1,845 plots on 1,207 curves, 1,135 figures** | **149 plots, 109 figures** |
 
 The bars' look is not decoded: whiskers or a filled band (PerceivedRisk
 draws bands), cap and colour. quantized draws plain whiskers in the
