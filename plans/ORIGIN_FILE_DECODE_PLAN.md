@@ -1277,6 +1277,22 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Unreadable `.opju` projects that are not decoder gaps**~~ (2026-11-20).
+  Four real CPYUA projects failed "no worksheet columns could be decoded":
+  two hold Data Connector books saved without their data (every record
+  1 allocated / 0 used rows; the book's page names `CSV_Connector` /
+  `Excel_Connector` and the source path; 83 of the corpus's 87 connector
+  books carry data — the negative controls; saved previews show the plotted
+  data), two are graph-only (no dataset header; a pasted raster image). They
+  now import labelled empty books (`origin_worksheet_unavailable`), their
+  graphs with saved previews, and the loss `data_not_saved`; curves of an
+  unsaved book are omitted with that reason (`opju_no_data.py`). Git LFS
+  pointers / text files get an accurate message instead of "bad header"
+  (`container.bad_header`). The 160 "empty actionable graph layers" are 5 map
+  layers (not empty) + 155 layers whose every curve is omitted fail-closed
+  with a reason (0 genuinely empty); the reasons now read as sentences.
+  Evidence + owner-COM check: `docs/origin_re/opju_no_worksheet_data.md`.
+
 - ~~**Restyled scatters drawn in the default palette**~~ (2026-11-20).
   Curve-record byte 310 was read as a colour terminator, so every symbol
   plot the user had restyled (310 = 25-60 instead of `FF`) lost its colour

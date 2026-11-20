@@ -44,6 +44,7 @@ const HIDDEN_METADATA_KEYS = new Set([
   "origin_worksheet_losses",
   "origin_worksheet_fidelity",
   "x_column_unrecovered_reason",
+  "origin_worksheet_unavailable",
   PREVIEW_SOURCE_ROWS,
   FIT_ROW_IDENTITIES,
   "first_plot", // wiring: the import-time first-plot pick (lib/firstPlot.ts)
