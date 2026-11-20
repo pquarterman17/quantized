@@ -37,6 +37,15 @@ const draw = (valueRange?: [number, number]): Extract<StatDrawData, { mode: "bar
   mode: "bar", data: bars([[70, 72]]), valueLabel: "y", groupLabel: "x", stacked: false, valueRange,
 });
 
+/** Every method a spy (measureText answers a width), every property settable. */
+function fakeCtx(): CanvasRenderingContext2D {
+  const t: Record<string | symbol, unknown> = {};
+  return new Proxy(t, {
+    get: (o, k) => (k in o ? o[k] : (o[k] = vi.fn(() => ({ width: 10 })))),
+    set: (o, k, v) => ((o[k] = v), true),
+  }) as unknown as CanvasRenderingContext2D;
+}
+
 describe("the bar chart's value axis", () => {
   it("is the saved Origin Y range when there is one, else autoscaled from 0", () => {
     expect(barDomain(draw([65, 75]))).toEqual([65, 75]);
@@ -46,19 +55,13 @@ describe("the bar chart's value axis", () => {
   });
 
   it("clips the bars to the plot frame only under a fixed range", () => {
-    const ctx = new Proxy({} as Record<string, unknown>, {
-      get: (t, k) => (k in t ? t[k] : (t[k as string] = vi.fn(() => ({ width: 10 })))),
-      set: (t, k, v) => ((t[k as string] = v), true),
-    }) as unknown as CanvasRenderingContext2D;
+    const ctx = fakeCtx();
     const rect = { x: 10, y: 10, w: 200, h: 100 };
     drawBar(ctx, rect, draw([65, 75]), "#000", "#888");
     expect(ctx.clip).toHaveBeenCalledTimes(1);
     expect(ctx.rect).toHaveBeenCalledWith(10, 10, 200, 100);
     expect(ctx.restore).toHaveBeenCalled();
-    const plain = new Proxy({} as Record<string, unknown>, {
-      get: (t, k) => (k in t ? t[k] : (t[k as string] = vi.fn(() => ({ width: 10 })))),
-      set: (t, k, v) => ((t[k as string] = v), true),
-    }) as unknown as CanvasRenderingContext2D;
+    const plain = fakeCtx();
     drawBar(plain, rect, draw(), "#000", "#888");
     expect(plain.clip).not.toHaveBeenCalled();
   });
