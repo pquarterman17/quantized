@@ -30,7 +30,10 @@ from quantized.io.origin_project.annotation_marks import (
     _clean_annotations,
     build_mark,
     frac_to_data,
+    opj_object_anchor,
+    opj_object_box,
     opj_object_fractions,
+    opj_text_rotation,
 )
 from quantized.io.origin_project.figure_geometry import opj_layer_frame
 from quantized.io.origin_project.figure_text import (
@@ -43,6 +46,7 @@ from quantized.io.origin_project.figure_text import (
 )
 from quantized.io.origin_project.opj_curves import extract_curves
 from quantized.io.origin_project.opj_shapes import SHAPE_TYPE, build_region_shade
+from quantized.io.origin_project.opj_tick_divide import opj_tick_divide
 from quantized.io.origin_project.origin_richtext import clean_richtext
 from quantized.io.origin_project.windows import _cstring
 
@@ -60,6 +64,27 @@ __all__ = [
 # (the longest, "__FRAMESRCDATAINFOS", is 19 chars).
 _OBJ_NAME_OFFSET = 70
 _OBJ_NAME_LIMIT = 24
+
+# A text object with an attached LabTalk script (an Origin "Programming
+# Control" button): header payload byte 57 is non-zero, and the object owns a
+# FOURTH block after header/format/text that holds the script itself (an
+# empty or 1-byte NUL block on every other object). Origin's own exports never
+# draw these (docs/origin_re/opj_figures.md, "Script (button) objects").
+_OBJ_SCRIPT_FLAG_OFFSET = 57
+
+
+def _is_script_object(blocks: list[tuple[int, bytes]], k: int, end: int) -> bool:
+    """The 133-byte object header at ``blocks[k]`` is a script (button) object:
+    its script flag is set AND its script block holds text. Both are required:
+    every corpus instance has both or neither, and a caption is withheld only
+    when the script itself is there to show what the object is."""
+    payload = blocks[k][1]
+    if len(payload) <= _OBJ_SCRIPT_FLAG_OFFSET or payload[_OBJ_SCRIPT_FLAG_OFFSET] == 0:
+        return False
+    if k + 3 >= end:
+        return False
+    size, script = blocks[k + 3]
+    return size != 133 and bool(script.strip(b"\x00 \t\r\n"))
 
 # Y-axis scale flag: 2 bytes at the layer-continuation payload's offset 98/99
 # (see the module docstring). Any other value falls back to the heuristic.
@@ -154,6 +179,7 @@ def _build_layer(
     layer_no: int,
     start: int,
     end: int,
+    page: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """One layer's plot-state dict: axis ranges from its own
     layer-continuation block (``blocks[start]``); curves/curve-count/
@@ -215,15 +241,22 @@ def _build_layer(
     legend_fracs: tuple[float, float] | None = None
     # Region-shape objects (Rect* bands, item 41 — see opj_shapes.py).
     shades: list[dict[str, Any]] = []
+    script_objects = 0  # LabTalk button objects, never drawn (_is_script_object)
+    tick_divide: dict[str, float] = {}  # axis side -> tick-label factor (opj_tick_divide)
+
+    mark_geom: dict[str, Any] | None = None  # page anchor + box, for the window pass
 
     def _flush_mark() -> None:
-        nonlocal mark_fracs
+        nonlocal mark_fracs, mark_geom
         mark = build_mark(
             mark_fracs, mark_lines, x_from, x_to, y_from, y_to, x_log, y_log_final
         )
         if mark is not None:
+            if mark_geom is not None:
+                mark["_geom"] = mark_geom  # popped by opj_page_marks.place_window_marks
             marks.append(mark)
         mark_fracs = None
+        mark_geom = None
         mark_lines.clear()
 
     for k in range(start + 1, end):
@@ -245,13 +278,26 @@ def _build_layer(
                 shades.append(shade)
             continue
         if size == 133 and len(payload) > 2:
-            bucket = _object_bucket(_cstring(payload, _OBJ_NAME_OFFSET, _OBJ_NAME_LIMIT))
+            obj_name = _cstring(payload, _OBJ_NAME_OFFSET, _OBJ_NAME_LIMIT)
+            if divide := opj_tick_divide(obj_name, blocks, k, end):
+                tick_divide[divide[0]] = divide[1]
+            bucket = _object_bucket(obj_name)
+            if bucket == "annotations" and _is_script_object(blocks, k, end):
+                bucket = "ignore"  # neither its caption nor its script is drawn
+                script_objects += 1
             _flush_mark()
             mark_active = bucket == "annotations"
             if mark_active:
-                mark_fracs = opj_object_fractions(payload, frame)
+                mark_fracs = opj_object_fractions(payload, frame, page)
+                anchor = opj_object_anchor(payload, frame, page)
+                if anchor is not None:
+                    mark_geom = {
+                        "anchor": anchor,
+                        "box": opj_object_box(payload),
+                        "rotation": opj_text_rotation(blocks[k + 1][1]) if k + 1 < end else None,
+                    }
             if bucket == "legend" and legend_fracs is None:
-                legend_fracs = opj_object_fractions(payload, frame)
+                legend_fracs = opj_object_fractions(payload, frame, page)
             # Never text-scan the header block itself: its geometry floats can
             # contain printable accidents that would land in the just-set
             # bucket (hc2convert's Graph13-18 all surfaced a bogus y_title
@@ -347,4 +393,8 @@ def _build_layer(
         # window pass drops their legend captions (figures.extract_figures)
         **({"curve_sheet_omitted": [n for _, n in omitted]} if omitted else {}),
         **({"_omitted_at": [i for i, _ in omitted]} if omitted else {}),
+        # LabTalk button objects left undrawn, as Origin's exports leave them.
+        **({"script_objects_not_drawn": script_objects} if script_objects else {}),
+        # Tick labels drawn as value / factor, per axis side (opj_tick_divide).
+        **({"tick_label_divide": tick_divide} if tick_divide else {}),
     }

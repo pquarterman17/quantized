@@ -22,6 +22,9 @@ export interface AxisFormat {
    *  (`lib/axisExtras.ts`, `calc/axis_extras.py`): tick labels show
    *  value ÷ `divide`, with "×divide" at the axis end; */
   divide?: number;
+  /** `false`: no "×divide" text, as Origin's own "Divide by" draws none (an
+   *  imported Origin axis, `lib/originTickDivide.ts`); absent = shown; */
+  divideMark?: boolean;
   /** minor ticks between majors (0/absent = none); */
   minor?: number;
   /** tick-mark direction (absent = "out", today's look); */
@@ -141,6 +144,7 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     mode,
     digits,
     ...(pos(divide, Infinity) ? { divide } : {}),
+    ...(pos(divide, Infinity) && fmt.divideMark === false ? { divideMark: false } : {}),
     ...(Number.isInteger(minor) && pos(minor, 20) ? { minor } : {}),
     ...(ticks === "in" || ticks === "out" || ticks === "both" ? { ticks } : {}),
     ...(pos(size, 72) ? { size } : {}),

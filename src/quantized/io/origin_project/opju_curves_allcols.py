@@ -156,7 +156,7 @@ from collections.abc import Mapping
 
 from quantized.io.origin_project.opju_codec import _NAME, curve_plot_style
 
-__all__ = ["extract_curves_allcols"]
+__all__ = ["extract_curves_allcols", "in_style_holder"]
 
 # <flag:1> 01 01 01 80 01 <val:1> -- see module docstring. Unlike the shipped
 # 0x03 family, no fixed terminator byte was found, so none is required here.
@@ -169,6 +169,25 @@ _CURVE_RE = re.compile(rb"[\x00-\xff]\x01\x01\x01\x80\x01(.)")
 # later book's cumulative ordinal base (2026-07-06 genericity audit) —
 # ``_letter_index`` already handles arbitrary-width bijective base-26.
 _PURE_COLUMN = re.compile(r"[A-Z]+")
+
+# A token that opens a STYLE-HOLDER object (Origin's saved plot-style
+# templates, named "Style", "Style1", ...: length byte, name, then
+# ``a2|a3 01 28 aa 00 80`` right before the token) references a column for
+# the template, not a plot (2026-11-20, lane M). Whole corpus: 5 such hits in
+# 2 files (SerialCore Bqqbar.opju 4, MeyerJackson Minis "Figure 3 and 4" 1),
+# each followed by 0x84 / 0x80 instead of the 0x83 every one of the 897
+# plot tokens carries. Bqqbar Graph2's saved preview draws no A-vs-A
+# diagonal and no C-vs-A curve, the two bindings these hits added.
+_STYLE_HOLDER = re.compile(rb"Style\d*[\xa2\xa3]\x01\x28\xaa\x00\x80")
+
+
+def in_style_holder(b: bytes, token: int) -> bool:
+    """The token at ``token`` opens a style-holder object (comment above)."""
+    for n in (5, 6, 7):  # "Style", "Style1".."Style9", "Style10".."Style99"
+        p = token - 6 - n
+        if p > 0 and b[p - 1] == n and _STYLE_HOLDER.fullmatch(b, p, token):
+            return True
+    return False
 
 
 def _letter_index(letters: str) -> int:
@@ -249,6 +268,8 @@ def extract_curves_allcols(
     ordmap = _cumulative_ordinals(book_counts)
     out: list[dict[str, str | float]] = []
     for m in _CURVE_RE.finditer(b, start, end):
+        if in_style_holder(b, m.start()):
+            continue  # a plot-style template's column reference, not a plot
         info = ordmap.get(m.group(1)[0])
         if info is None:
             continue
