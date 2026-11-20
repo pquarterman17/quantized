@@ -74,3 +74,10 @@ def test_unknown_binary_keeps_the_generic_bad_header_advice() -> None:
     msg = str(bad_header(Path("b.opju"), b"\x00\x01\x02garbage\xff\xfe", "CPYUA .opju"))
     assert "does not look like a CPYUA .opju (bad header)" in msg
     assert "Origin Viewer" in msg
+
+
+def test_short_binary_is_not_called_text() -> None:
+    """A file shorter than the sniff window has no cut character to excuse:
+    an invalid UTF-8 byte anywhere in it means binary."""
+    msg = str(bad_header(Path("s.opju"), b"\xff\xfe", "CPYUA .opju"))
+    assert "bad header" in msg and "plain-text" not in msg

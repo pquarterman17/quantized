@@ -75,6 +75,10 @@ Instead of failing the whole project (`opju._parse`):
   books with `metadata["origin_worksheet_unavailable"] = {reason, detail
   [, connector, source]}`. The Inspector's Origin provenance card shows the
   detail. A project with no data **and** no graph still raises.
+  So does one whose scan found any record it could not read (an undecoded
+  form, a damaged header, a checksum or budget failure, an unshaped matrix,
+  a report column: `opju_no_data.nothing_left_unread`) — the data may be in
+  the file, so the import fails closed with its census.
 - Connector books saved without data are listed in the worksheet fidelity
   report (`unsaved_books`) and summarised as the loss `data_not_saved` —
   also for `稳定性.opju`, whose other books import normally.

@@ -21,6 +21,7 @@ from quantized.io.origin_project.opju_no_data import (
     DATA_NOT_SAVED,
     UNAVAILABLE_KEY,
     _paths,
+    nothing_left_unread,
     omit_unsaved_curves,
     unavailable_reason,
 )
@@ -98,6 +99,39 @@ def test_worksheet_summary_lists_unsaved_books_as_a_loss() -> None:
     )
     assert summary["status"] == "partial"
     assert summary["losses"] == [{"code": "data_not_saved", "count": 1, "examples": ["Book1"]}]
+
+
+_CLEAN: dict[str, object] = {
+    "undecoded": [],
+    "records_without_header": 0,
+    "checksum_failed": {"count": 0, "examples": []},
+    "over_decode_budget": {"count": 0, "examples": []},
+    "matrix_datasets": [],
+    "report_columns": 0,
+    "columns_without_header": {"count": 0, "examples": []},
+    "empty_books_omitted": ["Book1"],
+}
+
+
+@pytest.mark.parametrize(
+    "unread",
+    [
+        {"undecoded": [{"form": "dataset", "reason": "r", "count": 1, "examples": ["A"]}]},
+        {"records_without_header": 2},
+        {"checksum_failed": {"count": 1, "examples": ["Book1_A"]}},
+        {"over_decode_budget": {"count": 1, "examples": ["Book1_A"]}},
+        {"matrix_datasets": [{"name": "MBook1"}]},
+        {"report_columns": 3},
+        {"columns_without_header": {"count": 1, "examples": ["Book1_A"]}},
+    ],
+)
+def test_any_record_found_but_not_read_blocks_the_placeholder_import(
+    unread: dict[str, object],
+) -> None:
+    """Fail closed: a damaged or undecoded record means the data may be in
+    the file, so the project must not 'open' as empty placeholder books."""
+    assert nothing_left_unread(_CLEAN)
+    assert not nothing_left_unread({**_CLEAN, **unread})
 
 
 # ── realdata: every Data Connector book in the public corpus ─────────────────
@@ -209,3 +243,28 @@ def test_corpus_projects_without_any_dataset_import_their_graphs() -> None:
         assert graphs and all(g.get("saved_preview") for g in graphs), path.name
     if not seen:
         pytest.skip("no dataset-free project in the corpus")
+
+
+@pytest.mark.realdata
+def test_corpus_no_data_project_with_an_unread_record_still_raises(monkeypatch) -> None:
+    """The real Data Connector project, with one record reported as found
+    but not read, must keep failing with the census instead of importing
+    placeholders (the guard is wired into ``opju._parse``)."""
+    from quantized.io.origin_project import OriginProjectError, opju, read_origin_project_all
+
+    if _CORPUS is None:
+        pytest.skip("public Origin corpus not available")
+    path = next(iter(sorted(_CORPUS.rglob("61 PDOS.opju"))), None)
+    if path is None:
+        pytest.skip("61 PDOS.opju not in the corpus")
+    real = opju.scan_worksheet
+
+    def damaged(*args: object, **kwargs: object) -> object:
+        scan = real(*args, **kwargs)  # type: ignore[arg-type]
+        scan.fidelity["records_without_header"] = 1
+        return scan
+
+    read_origin_project_all(path)  # imports as placeholders when clean
+    monkeypatch.setattr(opju, "scan_worksheet", damaged)
+    with pytest.raises(OriginProjectError, match="no worksheet columns could be decoded"):
+        read_origin_project_all(path)

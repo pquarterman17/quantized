@@ -67,6 +67,7 @@ from quantized.io.origin_project.opju_loose_books import loose_books
 from quantized.io.origin_project.opju_no_data import (
     UNAVAILABLE_KEY,
     connector_books,
+    nothing_left_unread,
     unavailable_reason,
 )
 from quantized.io.origin_project.opju_record_meta import (
@@ -221,9 +222,11 @@ def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
     if not scan.columns and not scan.text_columns and not report_books and not scan.matrices:
         # Nothing to import from the worksheets: keep the project's graphs
         # (and their saved previews) behind labelled empty books, unless it
-        # has no graph either (opju_no_data).
+        # has no graph either, or a record was found but not read: then the
+        # data may be in the file, and the import fails closed (opju_no_data).
         has_graph = unrecovered_graph_pages(b, set()).missing > 0
-        keys = (empty_books or [path.stem]) if has_graph else []
+        clean = nothing_left_unread(scan.fidelity)
+        keys = (empty_books or [path.stem]) if has_graph and clean else []
         if not keys:
             raise fallback(
                 path,

@@ -43,6 +43,7 @@ __all__ = [
     "DATA_NOT_SAVED",
     "UNAVAILABLE_KEY",
     "connector_books",
+    "nothing_left_unread",
     "omit_unsaved_curves",
     "unavailable_reason",
 ]
@@ -104,6 +105,35 @@ def connector_books(b: bytes, books: Iterable[str]) -> dict[str, dict[str, str]]
         source = max(paths, key=len) if paths else ""
         out[book] = {"connector": kind.group(1).decode("ascii"), "source": source}
     return out
+
+
+def nothing_left_unread(fidelity: Mapping[str, object]) -> bool:
+    """True when the worksheet scan found no record it failed to read.
+
+    The placeholder import is only for a project whose worksheets are proven
+    to HOLD no data (empty books, no dataset at all). A record that was found
+    but not read — an undecoded form, a damaged header, a checksum failure,
+    an over-budget column, an unshaped matrix, a report column — means the
+    data may be in the file: that keeps failing closed with its census."""
+
+    def _count(key: str) -> int:
+        v = fidelity.get(key)
+        if isinstance(v, Mapping):
+            v = v.get("count", 0)
+        if isinstance(v, (list, tuple)):
+            return len(v)
+        return v if isinstance(v, int) else 0
+
+    keys = (
+        "undecoded",
+        "records_without_header",
+        "checksum_failed",
+        "over_decode_budget",
+        "matrix_datasets",
+        "report_columns",
+        "columns_without_header",
+    )
+    return all(_count(k) == 0 for k in keys)
 
 
 def unavailable_reason(book: str, connectors: Mapping[str, Mapping[str, str]]) -> dict[str, str]:

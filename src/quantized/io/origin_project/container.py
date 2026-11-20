@@ -102,7 +102,9 @@ def bad_header(path: Path, b: bytes, expected: str) -> OriginProjectError:
         try:
             head.decode("utf-8")
         except UnicodeDecodeError as exc:  # a multi-byte char cut at 4096 is still text
-            if exc.start < len(head) - 4:
+            # only the 4096-byte cut may split a character: an invalid byte
+            # anywhere else (or in a file shorter than the window) is binary
+            if len(b) <= len(head) or exc.start < len(head) - 4:
                 return fallback(path, f"'{name}' does not look like a {expected} (bad header).")
         return OriginProjectError(
             f"'{name}' is a plain-text file, not an Origin project (a real {expected} "
