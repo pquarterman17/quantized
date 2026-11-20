@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.io.origin_project.curve_style_color import (
     ORIGIN_PALETTE,
     SYSTEM_COLOR_LIST,
@@ -32,22 +33,7 @@ from quantized.io.origin_project.curve_style_color import (
     style_fields,
 )
 
-
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus; walks up from
-    ``__file__`` so this still resolves inside a worktree agent -- mirrors
-    ``test_io_origin_ground_truth.py``."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
-
-
-_TD = _resolve_corpus_dir()
+_TD = origin_corpus_dir()
 _GT = _TD / "specimens" / "ground_truth"
 _REF = re.compile(r"\[([^\]]+)\][^!]*!([A-Z]{1,2})")
 _ORACLE_STEMS = ["hc2convert", "Hc2 data", "RockingCurve", "UnpolPlots"]

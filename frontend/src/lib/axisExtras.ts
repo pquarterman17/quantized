@@ -123,7 +123,7 @@ export function applyAxisExtras(
 }
 
 function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
-  const dividedAxes = extras.filter((e) => e.fmt.divide && e.fmt.divide > 0 && e.fmt.divide !== 1).map((e) => e.idx);
+  const dividedAxes = extras.filter((e) => e.fmt.divide && e.fmt.divide > 0 && e.fmt.divide !== 1 && e.fmt.divideMark !== false).map((e) => e.idx);
   return {
     // A band above the frame for a Y / Y2 factor, so it is never clipped.
     ...(dividedAxes.length ? { opts: (_u: uPlot, o: uPlot.Options) => reserveDivideBand(o, dividedAxes) } : {}),
@@ -192,7 +192,7 @@ function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
             }
           }
           if (breaks && marks && !horizontal) drawBreakMarks(u, key, edge, breaks, pr);
-          if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1) {
+          if (fmt.divide && fmt.divide > 0 && fmt.divide !== 1 && fmt.divideMark !== false) {
             // Outside the frame, where the export's offset text sits, in the
             // axis' own tick font (lib/axisDivideLabel.ts): inside the corner
             // it was small and under the legend.

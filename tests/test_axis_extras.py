@@ -33,6 +33,19 @@ def test_divide_scales_labels_and_shows_the_factor() -> None:
     plt.close(fig)
 
 
+def test_origin_divide_scales_labels_without_the_factor_text() -> None:
+    """An imported Origin axis' "Divide by" (``divideMark: false``): the labels
+    divide, but Origin draws no factor text, so the export draws none."""
+    fig, ax = plt.subplots()
+    ax.plot([0, 1, 2, 3], [0, 1000, 2000, 3000])
+    apply_tick_formats(ax, None, {"mode": "auto", "digits": 2, "divide": 10, "divideMark": False})
+    _drawn(ax)
+    labels = [t.get_text() for t in ax.get_yticklabels() if t.get_text()]
+    assert "100" in labels and "300" in labels
+    assert ax.yaxis.get_offset_text().get_text() == ""
+    plt.close(fig)
+
+
 def test_minor_ticks_direction_and_font_size() -> None:
     fig, ax = plt.subplots()
     ax.plot([0, 10], [0, 1])

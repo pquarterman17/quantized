@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from origin_corpus import has_project, origin_corpus_dir
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project import (
     OriginProjectError,
@@ -25,23 +26,7 @@ from quantized.io.origin_project import (
 from quantized.io.origin_project.opju_codec import scan_columns
 from quantized.io.origin_project.writer import opj_bytes
 
-
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus; walks up from ``__file__``
-    for a ``test-data`` sibling so this still resolves inside a worktree agent
-    (an extra ``.claude/worktrees/<name>`` deep) -- mirrors
-    ``test_io_origin_figures_opju.py``'s ``_resolve_spec_dir``."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
-
-
-_CORPUS = _resolve_corpus_dir()
+_CORPUS = origin_corpus_dir()
 
 
 def _needs(*names: str) -> pytest.MarkDecorator:
@@ -215,7 +200,8 @@ def test_version_anchors_43227_and_43380() -> None:
 
 @pytest.mark.realdata
 @pytest.mark.skipif(
-    not (_CORPUS / "PNR.opj").exists(), reason="127 MB PNR.opj not in local corpus"
+    not has_project(_CORPUS / "PNR.opj"),
+    reason="127 MB PNR.opj not in local corpus (or an un-fetched LFS pointer)",
 )
 def test_perf_budget_127mb_project() -> None:
     """The biggest corpus project must parse (books + names) within budget."""

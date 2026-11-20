@@ -36,8 +36,9 @@ on a LOG axis is unverified — the linear formula above is applied regardless
 panel-label Texts use an ``86 13`` tag and UnpolPlots.opju one ``85 1f``
 variant — same neighbourhood, different framing, no oracle coverage — so
 those objects keep their text in ``annotations`` but ship no position. The
-oracle's ``attach`` mode (all captured instances are 0 = layer-scale) is not
-decoded; a non-zero attach presumably reinterprets the fractions.
+oracle's ``attach`` mode is decoded for ``.opj`` (2026-11-20): attach 1 =
+PAGE fractions, header byte 40 bit 0 (:func:`opj_page_attached`). ``.opju``
+page attachment is not decoded.
 
 Pure library: bytes in → dicts out. No fastapi/pydantic/routes imports.
 """
@@ -55,7 +56,10 @@ __all__ = [
     "build_mark",
     "frac_to_data",
     "opj_object_box",
+    "opj_object_anchor",
     "opj_object_fractions",
+    "opj_page_attached",
+    "opj_text_rotation",
     "opj_text_fractions",
     "opju_text_fractions",
     "page_point_fractions",
@@ -113,6 +117,8 @@ _OPJ_BOX_OFFSET = 3
 # horizontal text, offset for rotated labels.
 _OPJ_FRACA_OFFSET = 19
 _OPJ_FRACB_OFFSET = 27
+# .opj: attach mode, bit 0 = position stored as PAGE fractions (opj_page_attached).
+_OPJ_ATTACH_OFFSET = 40
 
 # .opju: the position field's tag pair and its fixed distance before the
 # object-name header (see module docstring). The `80 00` right after frac_b
@@ -206,8 +212,65 @@ def opj_text_fractions(payload: bytes) -> tuple[float, float] | None:
     return frac_a, frac_b
 
 
+def opj_page_attached(payload: bytes) -> bool:
+    """The object's position is stored relative to the PAGE, not its layer.
+
+    Header payload byte 40, bit 0 (solved 2026-11-20, lane M). Proof is the
+    independent page box at offsets 3-10: across every ``Text*``/``Legend``
+    object in a graph window of both corpora (771 with box, frame and page
+    size), every object with the bit set whose fraction pair lands on its box
+    lands there as PAGE fractions (``frac * page size``: 252 of 254; the two
+    misses are LabTalk button objects, never drawn), and no object with the
+    bit clear lands there as page fractions only (layer fit: 526 of 529).
+    Moke Graph10's panel labels "(a)"/"(b)" and its lower legend are
+    page-attached; read as layer fractions they landed mid-panel."""
+    return len(payload) > _OPJ_ATTACH_OFFSET and bool(payload[_OPJ_ATTACH_OFFSET] & 1)
+
+
+def opj_text_rotation(format_payload: bytes) -> int | None:
+    """A text object's rotation in tenths of a degree: u16 LE at offset 2 of
+    its 103-byte FORMAT block (the block right after the 133-byte header).
+    Across both corpora every ``YL``/``YR`` axis title reads 900 and every
+    ``XB``/``XT`` 0 (243 and 334 objects), every wide horizontal ``Text*``
+    box reads 0 (204), and tall ``Text*`` boxes read 900 or 450. ``None`` for
+    any other block shape."""
+    if len(format_payload) != 103:
+        return None
+    return int(struct.unpack_from("<H", format_payload, 2)[0])
+
+
+def opj_object_anchor(
+    payload: bytes,
+    frame: tuple[int, int, int, int] | None,
+    page: tuple[int, int] | None,
+) -> tuple[float, float] | None:
+    """The object's anchor point in PAGE units (see :func:`opj_object_fractions`
+    for which point that is), or ``None`` when it cannot be placed: no frame,
+    or a page-attached object without a decoded page size (never guessed)."""
+    fracs = opj_text_fractions(payload)
+    if frame is None or fracs is None:
+        return None
+    fl, ft, fr, fb = frame
+    if opj_page_attached(payload):
+        if page is None:
+            return None
+        anchor_x, anchor_y = fracs[0] * page[0], fracs[1] * page[1]
+    else:
+        anchor_x = fl + fracs[0] * (fr - fl)
+        anchor_y = ft + fracs[1] * (fb - ft)
+    box = opj_object_box(payload)
+    if box is not None:
+        dx = anchor_x - box[0]
+        dy = anchor_y - box[3]
+        if dx > 0 > dy and abs(dx + dy) <= 0.25 * dx:
+            return float(box[0]), float(box[3])
+    return anchor_x, anchor_y
+
+
 def opj_object_fractions(
-    payload: bytes, frame: tuple[int, int, int, int] | None
+    payload: bytes,
+    frame: tuple[int, int, int, int] | None,
+    page: tuple[int, int] | None = None,
 ) -> tuple[float, float] | None:
     """Anchor fractions for one ``.opj`` object header (solved 2026-07-06 vs
     the 111-instance annotations oracle; hoisted out of ``figures.py``
@@ -224,21 +287,26 @@ def opj_object_fractions(
     diagonal — so the test is geometric, not a corpus threshold. Rotated:
     anchor at the box bottom-left (the text-start corner Origin itself
     reports); everything else: the fraction pair (the pre-2026-07-06
-    behaviour, still exact for those)."""
+    behaviour, still exact for those).
+
+    A PAGE-attached object (:func:`opj_page_attached`) stores page fractions
+    instead; they are converted to this layer's frame fractions, which needs
+    the page size and the frame (``None`` without them, never guessed)."""
     fracs = opj_text_fractions(payload)
-    if frame is None or fracs is None:
-        return fracs
-    box = opj_object_box(payload)
-    if box is None:
-        return fracs
-    fl, ft, fr, fb = frame
-    anchor_x = fl + fracs[0] * (fr - fl)
-    anchor_y = ft + fracs[1] * (fb - ft)
-    dx = anchor_x - box[0]
-    dy = anchor_y - box[3]
-    if dx > 0 > dy and abs(dx + dy) <= 0.25 * dx:
-        return page_point_fractions(box[0], box[3], frame)
-    return fracs
+    if fracs is None:
+        return None
+    if not opj_page_attached(payload):
+        if frame is None:
+            return fracs
+        anchor = opj_object_anchor(payload, frame, page)
+        fl, ft, fr, fb = frame
+        if anchor is None or anchor == (fl + fracs[0] * (fr - fl), ft + fracs[1] * (fb - ft)):
+            return fracs  # unrotated: the stored pair itself, exactly as before
+        return page_point_fractions(anchor[0], anchor[1], frame)
+    anchor = opj_object_anchor(payload, frame, page)
+    if anchor is None or frame is None:
+        return None
+    return page_point_fractions(anchor[0], anchor[1], frame)
 
 
 def opju_text_fractions(b: bytes, header_pos: int) -> tuple[float, float] | None:

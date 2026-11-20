@@ -16392,6 +16392,17 @@
             ],
             "title": "Divide"
           },
+          "divideMark": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dividemark"
+          },
           "grid": {
             "anyOf": [
               {

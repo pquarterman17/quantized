@@ -59,9 +59,10 @@ class _DividedFormatter(Formatter):
     """Wraps an axis' formatter so each label reads ``value / divide``, and
     reports the factor as the axis offset text."""
 
-    def __init__(self, inner: Formatter | None, divide: float) -> None:
+    def __init__(self, inner: Formatter | None, divide: float, mark: bool = True) -> None:
         self.inner = inner
         self.divide = divide
+        self.mark = mark  # False: Origin's "Divide by", which shows no factor text
 
     def set_axis(self, axis: Any) -> None:
         super().set_axis(axis)
@@ -75,7 +76,7 @@ class _DividedFormatter(Formatter):
         return str(self.inner(v, pos))
 
     def get_offset(self) -> str:
-        return divide_offset_text(self.divide)
+        return divide_offset_text(self.divide) if self.mark else ""
 
 
 def _escape_math(text: str) -> str:
@@ -136,7 +137,9 @@ def _apply_one(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any
         # matplotlib's own default formatter carries an offset/scientific
         # notation of its own; a plain "%g" label is what the screen shows.
         keep = inner if type(inner).__module__.startswith("quantized") else None
-        axis.set_major_formatter(_DividedFormatter(keep, divide))
+        axis.set_major_formatter(
+            _DividedFormatter(keep, divide, fmt.get("divideMark") is not False)
+        )
     prefix, suffix = _affix(fmt.get("prefix")), _affix(fmt.get("suffix"))
     if prefix or suffix:
         axis.set_major_formatter(_AffixFormatter(axis.get_major_formatter(), prefix, suffix))

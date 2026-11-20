@@ -1291,6 +1291,17 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Graph-page text, tick-label "Divide by", style holders (lane M)**~~
+  (2026-11-20). `.opj`: LabTalk button objects (header byte 57 + a script
+  block) are not drawn (A7); page-attached text (byte 40 bit 0) reads page
+  fractions (COM `attach = 1`); a multi-layer page's free text goes to the
+  panel it sits beside, and a rotated text left of a panel fills its blank
+  Y title (XMCD GraphT* layers 2/3, Moke Graph10 "(b)"); the `OB`/`OL`/`OR`
+  objects are each axis' "Divide by" factor, drawn without a "x10" mark
+  (Moke H in mT, SuperlatticeFits, MnN). `.opju`: style-holder tokens are
+  not plots (Bqqbar Graph2 now binds D vs C). XMCD Graph25, top-X in 3+
+  layer pages and Figure_1 diagnosed; `.opju` "Divide by" still undecoded.
+  Evidence: `docs/origin_re/page_text_and_tick_divide.md`.
 - ~~**`.opj` curve bindings from the anchor record + auto symbol colour
   (lane D)**~~ (2026-11-20). The 12-byte short-name field brings back XMCD's
   silently dropped curves (COM plot list 166 -> 244 of 245). Unresolved
