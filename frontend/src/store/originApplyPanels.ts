@@ -43,7 +43,10 @@ export function layerOverlays(
       return meta.origin_overlay_source === member.id && meta.origin_overlay_entry === member.id;
     });
     const name = `${member.stem}:${figureLabel(member)} (overlay)`;
-    const ds = originOverlayDataset(existing?.id ?? nextDatasetId(), name, data, member.id, member.id, existing);
+    // `origin_overlay_panel` marks it as rebuilt by EVERY apply of its window
+    // (the re-apply discard check, `confirmOriginReapplyDiscard`, asks for it).
+    const marked = { ...data, metadata: { ...data.metadata, origin_overlay_panel: true } };
+    const ds = originOverlayDataset(existing?.id ?? nextDatasetId(), name, marked, member.id, member.id, existing);
     staged.push(ds);
     return { ...member, datasetId: ds.id };
   });

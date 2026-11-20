@@ -138,8 +138,9 @@ export function confirmOriginReapplyDiscard(
   const all = get().originFigures;
   const familyIds = new Set(figureLayerFamily(entry, all).map((member) => member.id));
   // B1: a window of stacked cross-book layers rebuilds EVERY layer's own
-  // overlay (stamped with that layer as source and entry), not only the
-  // clicked one's, so an edit on any of them is about to be lost too.
+  // overlay (`origin_overlay_panel`, store/originApplyPanels.ts), not only the
+  // clicked one's, so an edit on any of them is about to be lost too. A plain
+  // clicked-layer overlay of a sibling layer is not rebuilt and never counts.
   const rebuilt = get().datasets.filter((d) => {
     const metadata = d.data.metadata ?? {};
     const sourceId = String(metadata.origin_overlay_source ?? "");
@@ -147,7 +148,7 @@ export function confirmOriginReapplyDiscard(
     return familyIds.has(sourceId) && (
       refreshedBy === entry.id
       || (refreshedBy == null && sourceId === entry.id)
-      || (familyIds.size > 1 && refreshedBy === sourceId)
+      || metadata.origin_overlay_panel === true
     );
   });
   let existing: Dataset | undefined;
