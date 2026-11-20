@@ -25,7 +25,6 @@ const WHY: Record<string, (recorded: string) => string> = {
   x_column_unknown: () => "its X column could not be found in the project",
   x_other_book: () => "its X column is in another workbook",
   plot_row_range: () => "Origin plots only part of its rows; that range is not rebuilt here",
-  error_bar_plot: () => "it is an error-bar plot, not rebuilt as a curve here",
   box_kind_not_decoded: () => "its box-chart kind (box, violin, strip…) could not be read",
   stat_layer_in_multi_layer_page: () => "a statistics plot in a multi-panel graph is not rebuilt here",
   stat_layer_of_several_books: () => "a statistics plot drawn from several workbooks is not rebuilt here",
