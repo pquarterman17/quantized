@@ -166,10 +166,16 @@ def test_large_map_import_and_regrid_wall_clock_backstop(map_fixture_path: Path)
     """
     ceiling_s = 6.0
 
-    t0 = time.perf_counter()
+    # PROCESS CPU time, not wall time: the work is single-threaded, and wall
+    # time also counts every second the OS gives to other processes (a
+    # parallel gate or loaded CI box starved this past the 6 s ceiling while
+    # the work needs ~0.6 s of CPU). CPU time still trips on a real
+    # algorithmic regression (griddata/Qhull) and ignores scheduler
+    # starvation. The ceiling itself is unchanged.
+    t0 = time.process_time()
     ds = import_auto(map_fixture_path)
     map_from_datastruct(ds, 0, 1, 2, MapState(nx=200, ny=200))
-    elapsed = time.perf_counter() - t0
+    elapsed = time.process_time() - t0
 
     assert elapsed < ceiling_s, (
         f"large-map import+regrid took {elapsed:.2f}s against an "
