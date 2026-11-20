@@ -120,6 +120,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "RecipeMapView.view3d": (ws) => {
     ws.plotRecipes![0].map = { colormap: "magma", logZ: false, colorLimits: null, view3d: { kind: "waterfall", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", zoom: 1, dropLines: false } };
   },
+  "StatPicks.barPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", barStack: true, barPercent: true }; }),
+  "StatPicks.valueRange": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", valueRange: [65, 75] }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -285,6 +287,7 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/\.(view|decor|decorations)\.regionShades\[\]$/, "RegionShade"],
   [/\.(view|decorations)\.inset$/, "InsetView"],
   [/\.statMarks\.[^.[\]]+$/, "StatMarks"],
+  [/\.view\.statPicks$/, "StatPicks"],
   [/\.overrides$/, "FigureOverrides"],
   [/\.overrides\.shapes\[\]$/, "OverrideShape"],
   [/\.overrides\.ref_lines\[\]$/, "OverrideRefLine"],

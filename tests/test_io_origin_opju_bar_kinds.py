@@ -140,6 +140,11 @@ def test_a_turned_layer_draws_nothing_else_and_unknown_orientation_fails_closed(
     # a line in a turned layer would put its points where Origin does not
     (line,) = _apply([_fig(["column", "line"], axes_exchanged=True)])
     assert line["curves"] == []
+    # ...with no bar in the layer too; an upright line layer is untouched
+    (lines,) = _apply([_fig(["line", "line"], axes_exchanged=True)])
+    assert lines["curves"] == [] and _reasons(lines) == [PLOT_TYPE_NOT_DRAWN] * 2
+    (upright,) = _apply([_fig(["line"], axes_exchanged=False)])
+    assert upright["curves"][0]["plotType"] == "line" and not _reasons(upright)
     # no layer flag: a bar's orientation is unknown, so it and its columns go
     (unknown,) = _apply([_fig(["bar", "column"])])
     assert unknown["curves"] == [] and _reasons(unknown) == [PLOT_TYPE_NOT_DRAWN] * 2

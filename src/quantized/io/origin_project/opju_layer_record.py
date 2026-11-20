@@ -88,7 +88,7 @@ Y block does not align.
 Origin's horizontal bar chart is a layer whose X and Y axes are exchanged
 (X runs up the left side). In the record that continues past the Y scale
 field as ``00 10 ...`` (byte 100-101; 3,595 of the 3,795 expandable records
-of both corpora), bit ``0x40`` of byte 104 is set on exactly 26 layers and
+of both corpora), bit ``0x40`` of byte 104 is set on exactly 21 layers and
 every one is drawn sideways in Origin's saved preview: ``LSA_fig6`` Graph1-9,
 ``TEA_ExcelGraphs`` Graph9/13/15/16/19, ``SOP_meas`` panels Graph14 L6,
 Graph40 L5/L9, Graph55 L5, Graph65 L5, ``Degree of impact`` Graph278 L1/L2

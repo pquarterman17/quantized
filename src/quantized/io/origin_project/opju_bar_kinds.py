@@ -255,7 +255,9 @@ def apply_bar_kinds(
     out: list[dict[str, Any]] = []
     for fig in figs:
         kinds = {str(c.get("plotType")) for c in fig.get("curves") or []}
-        if not kinds & (_PROVISIONAL | {"column"}):
+        # an exchanged-axes layer is resolved whatever it plots: a line drawn
+        # upright there puts its points where Origin does not (``_turned``)
+        if not kinds & (_PROVISIONAL | {"column"}) and fig.get("axes_exchanged") is not True:
             out.append(fig)
             continue
         name = str(fig.get("name") or "")

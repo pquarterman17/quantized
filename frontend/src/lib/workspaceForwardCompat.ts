@@ -70,7 +70,7 @@ import type { SeriesStyle } from "./seriesStyleTypes";
 import type { FigureOverrides } from "./figureOverrides";
 import type { MapAnnotation } from "./mapView";
 import type { InsetView } from "./plotviewDecor";
-import type { StatMarks } from "./plotviewSanitize";
+import type { StatMarks, StatPicks } from "./plotviewSanitize";
 import type { Annotation, Dataset, ReferenceStick, RefLine, RegionShade, Shape } from "./types";
 
 export type V034Class = "v034" | "gated" | "kept-by-034" | "derived";
@@ -165,6 +165,12 @@ export const INSET_VIEW: Classify<InsetView> = { x: V, y: V, y2: V, yZoom: V, at
 export const STAT_MARKS: Classify<StatMarks> = {
   points: V, jitter: V, jitterWidth: V, summary: V, errorBars: V, connectMeans: V, labelRotation: V, labelWrap: V,
 };
+// The Stat Stage picks (`PlotView.statPicks`): 0.34's sanitizeStatPicks keeps
+// only the keys it lists, so an Origin 100 % stack would reopen as a plain
+// stack of raw values, and its saved Y range would be lost.
+export const STAT_PICKS: Classify<StatPicks> = {
+  mode: V, dist: V, bins: V, fit: V, barStack: V, cols: V, barPercent: G, valueRange: G,
+};
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
 // The export-request object persisted in figure documents (publication deltas,
@@ -256,6 +262,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   RegionShade: REGION_SHADE,
   InsetView: INSET_VIEW,
   StatMarks: STAT_MARKS,
+  StatPicks: STAT_PICKS,
   MapAnnotation: MAP_ANNOTATION,
   FigureOverrides: FIGURE_OVERRIDES,
   OverrideShape: OVERRIDE_SHAPE,
@@ -327,6 +334,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
     if (!isObj(v)) return;
     if ("seriesStyles" in v && "yFmt" in v) checkType(v, "mark" in v && "axisBreaks" in v ? "RecipeVisual" : "PlotView", found);
     if (key === "xFmt" || key === "yFmt" || key === "y2Fmt") checkType(v, "AxisFormat", found);
+    if (key === "statPicks") checkType(v, "StatPicks", found);
     for (const [k, x] of Object.entries(v)) visit(x, k);
   };
   for (const [k, x] of Object.entries(doc)) {

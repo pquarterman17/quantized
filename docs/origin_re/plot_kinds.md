@@ -133,7 +133,7 @@ every graph-layer record that authenticates (`layer_record`) and continues as
 ### Exchanged X/Y axes: byte 104, bit `0x40`
 
 Origin's horizontal bar chart is a LAYER whose X and Y axes are exchanged.
-Bit `0x40` of byte 104 is set on exactly 26 graph layers, and every one is
+Bit `0x40` of byte 104 is set on exactly 21 graph layers, and every one is
 drawn sideways in Origin's saved preview, whatever its plot type:
 
 | layers with the bit | plot types | preview |
@@ -274,7 +274,7 @@ field/behaviour → evidence → guarding test. `T` = `tests/test_io_origin_opju
 These REPLACE the Lane P entries for the horizontal-bar rule (`Bar` template)
 and for the 100 % stack (`StackColP` left out).
 
-* layer record byte 104 bit `0x40` = X/Y axes exchanged (Origin's horizontal bar layout), read only on an authenticated record continuing `00 10` at 100-101 (`opju_layer_record.layer_flags`, figure key `axes_exchanged`) → DIST 26 of 3,595 layers, all sideways in their previews, every plot type (215, 203, none); NEG every other 215 layer upright in its preview (`SOP_meas` Graph67, `Graph_Template` / `Graphs` Graph1) and no line / scatter curve in a flagged layer; PREV → `L::test_layer_flags`, `L::test_layer_flags_fail_closed`, `T::test_realdata_bar_orientation_is_the_layers`, `T::test_realdata_stacked_area_and_horizontal_bar_pages`
+* layer record byte 104 bit `0x40` = X/Y axes exchanged (Origin's horizontal bar layout), read only on an authenticated record continuing `00 10` at 100-101 (`opju_layer_record.layer_flags`, figure key `axes_exchanged`) → DIST 21 of 3,595 layers, all sideways in their previews, every plot type (215, 203, none); NEG every other 215 layer upright in its preview (`SOP_meas` Graph67, `Graph_Template` / `Graphs` Graph1) and no line / scatter curve in a flagged layer; PREV → `L::test_layer_flags`, `L::test_layer_flags_fail_closed`, `T::test_realdata_bar_orientation_is_the_layers`, `T::test_realdata_stacked_area_and_horizontal_bar_pages`
 * layer record byte 187 bit `0x02` = stack normalised to 100 % (figure key `stack_percent`) → DIST 3 layers (`fig_6_a` Graph2 / 3, `Fig_3` Graph2 L2), all 213 with 0..100 % previews; NEG plain stacks (Etna Graph17 / 19, `SOP_meas` Graph20, `Graph_Template` / `Graphs` L4 user templates on a 0..1 axis) read 0; agrees with the independent `StackColP` / `StackColumn` template field on every page that has one → `L::test_layer_flags`, `T::test_realdata_grouped_stacked_and_pie`
 * RULE (replaces the `Bar`-template rule): bar orientation is the LAYER's, not the plot type's. Flag set: the one bar / column plot of a one-layer page → `bar` (sideways), anything else in the layer left out; flag clear: a 215 plot → `column`; flag unknown: 215 left out with its columns → `T::test_the_layer_not_the_plot_type_turns_the_bars`, `T::test_a_turned_layer_draws_nothing_else_and_unknown_orientation_fails_closed`
 * RULE: 213 stacks follow the layer's 100 % flag (template only as a fallback): set → `bar_layout: "percent"` (Stat Stage stacked bar normalised per category, `barMatrix.percentBars`), clear → `stacked`; a lone 213 of a 100 % layer and stacks on multi-layer pages stay left out → `T::test_stacked_columns_follow_the_layers_100_percent_flag`, `T::test_single_series_on_a_100_percent_stack_page_is_left_out`, `frontend/src/lib/originBarShape.test.ts`, `frontend/src/components/Stage/useStatStage.originBars.test.ts`

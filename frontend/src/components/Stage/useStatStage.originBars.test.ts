@@ -66,6 +66,21 @@ describe("useStatStage: an Origin column chart grouped by X", () => {
     expect(spec.values).toEqual([[25, 75], [50, 50], [25, 75]]);
   });
 
+  it("changing the layout or a column drops the saved range (a 100 % axis must not clip a raw stack)", () => {
+    const picks: StatPicks = { mode: "bar", barStack: true, barPercent: true, valueRange: [0, 100], cols: COLS };
+    const onPicksChange = vi.fn();
+    const { result } = renderHook((p: UseStatStageParams) => useStatStage(p), { initialProps: { ...params(picks), onPicksChange } });
+    const after = (): StatPicks => (onPicksChange.mock.lastCall![0] as (p: StatPicks) => StatPicks)(picks);
+    act(() => result.current.setBarLayout("percent")); // no change: the range stays
+    expect(after()).toBe(picks);
+    act(() => result.current.setBarLayout("stacked"));
+    expect(after()).toEqual({ mode: "bar", barStack: true, barPercent: false, cols: COLS });
+    act(() => result.current.setValueCol(1));
+    expect(after()).not.toHaveProperty("valueRange");
+    act(() => result.current.setMode("box")); // the bar values are unchanged: kept
+    expect(after().valueRange).toEqual([0, 100]);
+  });
+
   it("no saved range: the export autoscales as before (no y_domain sent)", async () => {
     const { result } = renderHook((p: UseStatStageParams) => useStatStage(p), { initialProps: params({ mode: "bar", barStack: false, cols: COLS }) });
     await waitFor(() => expect(result.current.draw?.mode).toBe("bar"));

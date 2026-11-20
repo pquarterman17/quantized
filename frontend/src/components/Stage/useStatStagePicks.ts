@@ -120,15 +120,27 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
   const defaults = useMemo(() => defaultStatCols(active), [active?.id]);
   const cols = useMemo(() => resolveStatCols(active, picks.cols, defaults), [active, picks.cols, defaults]);
 
+  // An Origin layer's saved Y range (`valueRange`) fits the bars it was saved
+  // with: a pick that changes what the bars are (a column, the layout, a
+  // "send to statistics") drops it, back to autoscale, so a 100 % chart's
+  // 0..100 never clips the raw stack it is switched to. Undo restores it.
+  const freed = (p: StatPicks): StatPicks => {
+    if (p.valueRange === undefined) return p;
+    const out = { ...p };
+    delete out.valueRange;
+    return out;
+  };
+
   // One column pick: re-resolve the CURRENT saved set (not this render's) so
   // two picks in one tick compose, then save all five labelled from `active`.
   const setCol = (key: keyof StatCols) => (i: number | null) =>
     write((p) => {
       const now = statColRefs(active, resolveStatCols(active, p.cols, defaults));
-      return { ...p, cols: { ...now, [key]: i == null ? null : statColRef(active, i) } };
+      const cols = { ...now, [key]: i == null ? null : statColRef(active, i) };
+      return JSON.stringify(cols) === JSON.stringify(p.cols) ? p : { ...freed(p), cols };
     }, "pick statistics column");
   const setPick = <K extends "mode" | "dist" | "bins" | "fit" | "barStack">(key: K) => (v: StatPicks[K]) =>
-    write((p) => ({ ...p, [key]: v }), "change statistics plot");
+    write((p) => (p[key] === v ? p : { ...(key === "barStack" ? freed(p) : p), [key]: v }), "change statistics plot");
 
   // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
   // box/violin/bar spec it "sent to stage" (mirrors the reflectivity SLD seed).
@@ -145,7 +157,7 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
       facet: seed.facetCol ?? null,
       color: seed.colorCol ?? null,
     };
-    write((p) => ({ ...p, mode: seed.mode, cols: statColRefs(active, sent) }), "send to statistics");
+    write((p) => ({ ...freed(p), mode: seed.mode, cols: statColRefs(active, sent) }), "send to statistics");
     onSeedConsumed();
     // `active` only labels the sent columns: a dataset change must not re-send.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,7 +197,10 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setBarStack: setPick("barStack"),
     barPercent: !!picks.barStack && !!picks.barPercent,
     setBarLayout: (l) =>
-      write((p) => ({ ...p, barStack: l !== "grouped", barPercent: l === "percent" }), "change statistics plot"),
+      write((p) => {
+        const now = p.barPercent && p.barStack ? "percent" : p.barStack ? "stacked" : "grouped";
+        return now === l ? p : { ...freed(p), barStack: l !== "grouped", barPercent: l === "percent" };
+      }, "change statistics plot"),
     valueRange: picks.valueRange ?? null,
   };
 }
