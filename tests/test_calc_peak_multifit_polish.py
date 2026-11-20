@@ -193,7 +193,11 @@ def test_polish_start_seed_path_is_reachable() -> None:
 def test_second_start_skipped_when_first_is_within_noise() -> None:
     x, y = _si_scan(0)
     seeds, _ = find_peaks_robust(x, y)
-    r = fit_multi_peak(x, y, seeds, polish=True)
+    # deadline_s=None: this asserts WHICH start won (the skip rule), not the
+    # time budget. The default 10 s wall-clock deadline is shared by simplex
+    # and polish, so on a starved box it cut the fit (converged False, or the
+    # seed start run) -- a load-dependent outcome unrelated to the property.
+    r = fit_multi_peak(x, y, seeds, polish=True, deadline_s=None)
     assert r["polishStart"] == "simplex" and r["converged"]
 
 
@@ -211,9 +215,9 @@ def test_twenty_peak_fit_respects_its_shared_budget() -> None:
     import time
 
     x, y, seeds = _many_peaks(20)
-    t0 = time.monotonic()
+    t0 = time.process_time()  # CPU time: wall time also counts other processes' slices
     r = fit_multi_peak(x, y, seeds, polish=True, deadline_s=0.05)
-    elapsed = time.monotonic() - t0
+    elapsed = time.process_time() - t0
     assert elapsed < 10.0  # loose backstop; the budget is 0.05 s + one final pass
     assert r["converged"] is False  # 20 peaks cannot converge in 50 ms: warn status shows
     assert len(r["peaks"]) == 20 and all(math.isfinite(p["center"]) for p in r["peaks"])
