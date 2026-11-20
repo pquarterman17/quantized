@@ -14,7 +14,7 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-11-15 (#73: `.opju` labels bound to their own column
+**Updated:** 2026-11-20 (restyled-scatter colours read through record byte 310, 92 curves gain Origin's colour, 0 change; items 75-76 booked, see Completed.) Earlier: 2026-11-15 (#73: `.opju` labels bound to their own column
 record by name, inside the book's window: on 113 COM-checked files wrong
 designations / long names / units 781 -> 0, 0 right -> wrong, 8 curves
 restored, error bars attached 109 -> 745; residue #74.) Earlier: #72:
@@ -1094,6 +1094,40 @@ work.
     - [ ] Absent, fail closed: 2,354 long names, 379 units, 39 X long
           names on COM-covered columns (sheets whose records do not cover
           every decoded column, or a contradicted positional reading)
+    - [ ] Hc2 data Graph40's magenta "error bars" (2026-11-20): NOT an
+          error-bar plot -- the file has 0 type-231/233 records, 0 records
+          with byte 37 = `30` (corpus-wide that byte marks error-bar plots
+          only, 3,605 of 3,605), and no Y-error designation. The bars sit on
+          the endpoints of the layer's stored fit ranges (`[1:9]`, `[9:12]`):
+          most likely Origin's fit data-range markers. Nothing is drawn wrong;
+          COM check in `docs/origin_re/hc2_open_gaps.md`
+
+75. **Hc2 data Graph34 (xi_GL vs T) -- two decode gaps** -- booked
+    2026-11-20 (`docs/origin_re/hc2_open_gaps.md`, with the COM query). The
+    page has a saved preview but yields no figure (`unrecovered_graphs`).
+    - [ ] Axis record: Y is 0 .. 6.97e-8 m step 2e-8 (labels in nm, an
+          undecoded x1e9 display factor), and the two non-round doubles sit
+          in ONE 16-byte literal, which `opju_axis_real_form` (one value
+          token per double) cannot split. Parse the record with the generic
+          run-length grammar instead, gated by a controlled specimen
+    - [ ] Binding: the plots name ids 1773-1777, which no column record in
+          the id table carries (it jumps 1766 -> 1814); the data are imported
+          as `Book4` (Nb/Al xi, Nb/Au xi) and `Book5` (B). Find the records
+          that give those books their ids
+
+76. **Bar / column / strip plots drawn in the wrong colour** -- booked
+    2026-11-20 from the generated COM corpus (`generated/*/oracle.json`,
+    per-plot `color`): of 295 decoded colours checked, 236 match and 59
+    mismatch, all on plot types quantized draws from a non-colour field:
+    36 bar / column / stacked plots (record byte 76 `0xcb`, `0xd5`, `0xd7`,
+    `0xd8`; we draw `#FF0000` / `#0000FF` / `#00FF00`, COM reports the fill
+    `#FDC897` or black) and 23 strip plots (`0xce`; we draw `#515151` /
+    black, COM reports -1). Pre-existing on main; untouched by the
+    restyled-symbol change (`docs/origin_re/curve_colors.md`).
+    - [ ] Find the fill-colour field of a bar record (a COM-built specimen
+          that changes only the fill) and what COM colour -1 means on a
+          strip plot, or withhold `color` for these plot types until then
+          (fail closed)
 
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
@@ -1243,6 +1277,23 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Restyled scatters drawn in the default palette**~~ (2026-11-20).
+  Curve-record byte 310 was read as a colour terminator, so every symbol
+  plot the user had restyled (310 = 25-60 instead of `FF`) lost its colour
+  (fidelity `some_curve_colors`; Hc2 data's Book2/Book3 graphs drew purple /
+  teal / amber instead of grey / red / blue). The colour is now read when 310
+  is `FF` or the symbol-fill field at 302 holds Origin's `auto` / `-4`
+  sentinel (`curve_style_color._color_fields_aligned`). Evidence
+  (`docs/origin_re/curve_colors.md`): Hc2 Graph27 vs Graph29 plot the same
+  columns and differ only at 310; Origin's saved previews show the decoded
+  System-Color-List blue on 6 of 6 pages and none on 7 of 7 pages without it;
+  the bubble specimens (explicit fill, COM edge colour black, render blue)
+  stay uncoloured. Corpus diff vs main `a92459d9` (590 `.opju` + 106 `.opj`):
+  92 curves gain a colour (Hc2 30 + its converted copy 30, hc2convert 22,
+  10 public curves without a preview), 0 changed, 0 lost, nothing else
+  differs; Moke / RockingCurve screenshots pixel-identical, the 12 changed
+  Hc2 screenshots are exactly the 12 affected graphs. Graph40 / Graph34 /
+  bar colours booked (items 74, 75, 76).
 - ~~**Hidden `.opju` plots drawn as curves**~~ (2026-11-20). Regression
   surfaced by #690 (item 70): Hc2 data Graph3/7/9/15/22/35 drew 6 curves
   where Origin draws 3, because the raw lock-in plots the user had hidden
