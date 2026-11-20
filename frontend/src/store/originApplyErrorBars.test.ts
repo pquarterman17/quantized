@@ -1,0 +1,182 @@
+// Origin error-bar plots beyond one symmetric Y column (io/origin_project/
+// opju_error_bars.py): asymmetric Y halves (`yErrPlus`/`yErrMinus`), X bars
+// (`xErr`) and a filled band (`errBand`). The apply writes the bindings into
+// the focused window's document, so the canvas spans and the export's
+// `error_spans` come from one list, and the band rides the curve's style.
+
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { ErrorBinding } from "../lib/errorRoles";
+import { buildErrorSpans } from "../lib/errorbars";
+import { buildFigureSpecFromDocument } from "../lib/figureSpec";
+import type { Dataset, DataStruct, OriginCurve } from "../lib/types";
+import { liveWindowDocument } from "./liveWindowDocument";
+import { loadOriginApplyLibs } from "./originApplyLibs";
+import { parseWorkspace } from "../lib/workspace";
+import { serializeWorkspace } from "../lib/workspaceSerialize";
+import { useApp } from "./useApp";
+import { withWindowDocumentErrors } from "./windowDocuments";
+import { mainWindow } from "./windowDefaults";
+
+vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+
+beforeAll(async () => {
+  await loadOriginApplyLibs();
+});
+
+// channels: B (Y), C (+err), D (-err), E (X err)
+const book: DataStruct = {
+  time: [1, 2, 3],
+  values: [
+    [10, 1, 3, 0.5],
+    [20, 2, 4, 0.5],
+    [30, 1, 5, 0.5],
+  ],
+  labels: ["B", "C", "D", "E"],
+  units: ["", "", "", ""],
+  metadata: {
+    origin_book: "Book1",
+    x_column_name: "A",
+    origin_column_names: ["B", "C", "D", "E"],
+    column_designations: { A: "X", B: "Y", C: "Y", D: "Y", E: "Y" },
+  },
+};
+const ds: Dataset = { id: "d1", name: "P:Book1", data: book };
+
+const entry = (id: string, curves: OriginCurve[]) => ({
+  id, stem: "P", datasetId: "d1", siblingIds: ["d1"],
+  figure: {
+    name: id, x_from: 0, x_to: 4, x_log: false, y_from: 0, y_to: 40, y_log: false,
+    n_curves: curves.length, annotations: [] as string[], curves,
+  },
+});
+
+const ASYM: OriginCurve = { book: "Book1", x: "A", y: "B", yErrPlus: "C", yErrMinus: "D", xErr: "E", errBand: true };
+
+function liveDoc() {
+  const s = useApp.getState();
+  const win = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+  return liveWindowDocument(s, win)!;
+}
+
+beforeEach(() => {
+  useApp.setState({
+    datasets: [ds], activeId: null, history: [], future: [], macroSteps: [],
+    xKey: null, yKeys: null, hiddenChannels: [], errKeys: {},
+    plotWindows: [mainWindow(null, "w1")], focusedWindowId: "w1",
+    originFigures: [
+      entry("asym", [ASYM]),
+      entry("plain", [{ book: "Book1", x: "A", y: "B", yErr: "C" }]),
+    ],
+  });
+});
+
+describe("applyOriginFigure: asymmetric and X error bars", () => {
+  it("draws Origin's plus / minus halves and X bars, on screen and in the export", () => {
+    useApp.getState().applyOriginFigure("asym");
+    const s = useApp.getState();
+    expect(s.yKeys).toEqual([0]);
+    const errors = liveDoc().bindings.errors;
+    expect(errors).toEqual(expect.arrayContaining([
+      { channel: 1, target: 0, axis: "y", side: "+", origin: true },
+      { channel: 2, target: 0, axis: "y", side: "-", origin: true },
+      { channel: 3, target: 0, axis: "x", side: "both", origin: true },
+    ]));
+    // the canvas: up by C, down by D, sideways by E
+    const spans = buildErrorSpans(book, [0], errors).get(1)!;
+    expect(spans.find((e) => e.axis === "y")).toEqual({ axis: "y", plus: [1, 2, 1], minus: [3, 4, 5] });
+    expect(spans.find((e) => e.axis === "x")).toEqual({ axis: "x", plus: [0.5, 0.5, 0.5], minus: [0.5, 0.5, 0.5] });
+    // the band rides the curve's style
+    expect(s.seriesStyles[0]?.errorBar).toEqual({ band: true });
+    // the export draws the same spans
+    const spec = buildFigureSpecFromDocument(liveDoc(), ds, "P");
+    expect(spec.error_spans?.[0]?.y).toEqual({ plus: [1, 2, 1], minus: [3, 4, 5] });
+    expect(spec.error_spans?.[0]?.x).toEqual({ plus: [0.5, 0.5, 0.5], minus: [0.5, 0.5, 0.5] });
+  });
+
+  it("a later figure on the same book does not keep them", () => {
+    useApp.getState().applyOriginFigure("asym");
+    useApp.getState().applyOriginFigure("plain");
+    const errors = liveDoc().bindings.errors;
+    expect(errors).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+    expect(useApp.getState().seriesStyles[0]?.errorBar).toBeUndefined();
+  });
+
+  it("undo takes the written bindings back with the rest of the apply", () => {
+    useApp.getState().applyOriginFigure("plain");
+    const before = liveDoc().bindings.errors;
+    useApp.getState().applyOriginFigure("asym");
+    expect(liveDoc().bindings.errors).toHaveLength(3);
+    useApp.getState().undo();
+    expect(liveDoc().bindings.errors).toEqual(before);
+  });
+
+  // The user's own window-only bindings, made in the Graph Builder wells.
+  const USER_X = { channel: 3, target: 0, axis: "x" as const, side: "both" as const };
+  const USER_ASYM = { channel: 2, target: 0, axis: "y" as const, side: "+" as const };
+  const bindAsUser = (...errors: ErrorBinding[]) => {
+    const s = useApp.getState();
+    useApp.setState(withWindowDocumentErrors(s.plotWindows, s.focusedWindowId ?? "", errors));
+  };
+  const userOnly = () => liveDoc().bindings.errors.filter((b) => b.origin !== true);
+  const originOnly = () => liveDoc().bindings.errors.filter((b) => b.origin === true);
+
+  it("keeps a user's own X and asymmetric bindings through an apply and a re-apply", () => {
+    useApp.getState().applyOriginFigure("plain");
+    bindAsUser(USER_X, USER_ASYM);
+    useApp.getState().applyOriginFigure("plain");
+    expect(userOnly()).toEqual(expect.arrayContaining([USER_X, USER_ASYM]));
+    useApp.getState().applyOriginFigure("asym");
+    useApp.getState().applyOriginFigure("plain");
+    expect(userOnly()).toEqual(expect.arrayContaining([USER_X, USER_ASYM]));
+    expect(originOnly()).toEqual([]);
+  });
+
+  it("replaces an Origin-written binding on the next apply", () => {
+    useApp.getState().applyOriginFigure("asym");
+    expect(originOnly()).toHaveLength(3);
+    useApp.getState().applyOriginFigure("asym");
+    expect(originOnly()).toHaveLength(3);
+    useApp.getState().applyOriginFigure("plain");
+    expect(originOnly()).toEqual([]);
+  });
+
+  it("a user binding on the same series wins over the figure's", () => {
+    // The user bound C as the X bar of series 0; the figure binds E there.
+    const user = { channel: 1, target: 0, axis: "x" as const, side: "both" as const };
+    useApp.getState().applyOriginFigure("plain");
+    bindAsUser(user);
+    useApp.getState().applyOriginFigure("asym");
+    const errors = liveDoc().bindings.errors;
+    expect(errors).toContainEqual(user);
+    expect(errors.filter((b) => b.axis === "x")).toEqual([user]);
+    // its other, unconflicting halves still land
+    expect(originOnly()).toContainEqual({ channel: 2, target: 0, axis: "y", side: "-", origin: true });
+  });
+
+  it("the marker survives save and reopen, so the reopened window still replaces it", () => {
+    useApp.getState().applyOriginFigure("asym");
+    const s0 = useApp.getState();
+    const extra = { channel: 0, target: 1, axis: "x" as const, side: "both" as const };
+    useApp.setState(withWindowDocumentErrors(s0.plotWindows, s0.focusedWindowId ?? "", [...liveDoc().bindings.errors, extra]));
+    const st = useApp.getState();
+    const text = serializeWorkspace({ ...st, plotWindows: st.windowsForSave() });
+    useApp.setState(useApp.getInitialState(), true);
+    useApp.getState().loadWorkspace(parseWorkspace(text));
+    expect(originOnly()).toHaveLength(3);
+    expect(userOnly()).toContainEqual(extra);
+    useApp.getState().applyOriginFigure("plain");
+    expect(originOnly()).toEqual([]);
+    expect(userOnly()).toContainEqual(extra);
+  });
+
+  it("undo restores the marked bindings with the user's intact", () => {
+    useApp.getState().applyOriginFigure("plain");
+    bindAsUser(USER_X);
+    useApp.getState().applyOriginFigure("asym");
+    useApp.getState().applyOriginFigure("plain");
+    useApp.getState().undo();
+    expect(originOnly()).toHaveLength(2)  // the X bar is the user's: theirs wins;
+    expect(userOnly()).toContainEqual(USER_X);
+  });
+});

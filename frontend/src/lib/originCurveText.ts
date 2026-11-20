@@ -20,7 +20,7 @@ const MARKER_SHAPES: ReadonlySet<string> = new Set([
  *  marker glyph). Returns null when nothing was decoded, so callers leave that
  *  series to the default trace/palette rather than forcing a look. */
 export function originCurveSeriesStyle(
-  curve: Pick<OriginCurve, "style" | "color" | "symbol" | "lineWidth" | "symbolSize" | "plotType"> | undefined,
+  curve: Pick<OriginCurve, "style" | "color" | "symbol" | "lineWidth" | "symbolSize" | "plotType" | "errBand"> | undefined,
 ): SeriesStyle | null {
   if (!curve) return null;
   const out: SeriesStyle = {};
@@ -61,6 +61,8 @@ export function originCurveSeriesStyle(
     const kind = curve.plotType === "area" ? { fill: "under" as const } : { step: "post" as const };
     return { ...(out.color ? { color: out.color } : {}), width: out.width ?? 1.5, ...kind };
   }
+  // Origin fills this curve's Y error as a band (record offset 28, opju_error_bars.py)
+  if (curve.errBand) out.errorBar = { band: true };
   return Object.keys(out).length > 0 ? out : null;
 }
 // A leading swatch marker Origin's own legend text carries per curve

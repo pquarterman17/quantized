@@ -1,0 +1,148 @@
+{
+ "public:Bariumoxid_MIMOTechniques/Report/Graph*.opju": [
+  {
+   "kind": "error_role_changed",
+   "contains": "yErrPlus None -> '",
+   "reason": "A plus (offset 23 bit 0x01) and minus (0x02) error plot with different columns: asymmetric bars. Minus/plus proven by Graph_Template long names (Lower/Upper_Bound), 32New preview (T-U..T+V) and PerceivedRisk Graph1 preview (band 1..2 above the line = minus B 0, plus D 1; swapped reading 0..1 does not match)."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "yErrMinus None -> '",
+   "reason": "A plus (offset 23 bit 0x01) and minus (0x02) error plot with different columns: asymmetric bars. Minus/plus proven by Graph_Template long names (Lower/Upper_Bound), 32New preview (T-U..T+V) and PerceivedRisk Graph1 preview (band 1..2 above the line = minus B 0, plus D 1; swapped reading 0..1 does not match)."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "xErrPlus None -> '",
+   "reason": "Offset 23 bit 0x10 marks an X-error plot; a plus/minus pair gives xErrPlus/xErrMinus. 43Lollipop preview draws stems from 0 to each point, exactly min(0,x)..max(0,x) from these halves."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "xErrMinus None -> '",
+   "reason": "Offset 23 bit 0x10 marks an X-error plot; a plus/minus pair gives xErrPlus/xErrMinus. 43Lollipop preview draws stems from 0 to each point, exactly min(0,x)..max(0,x) from these halves."
+  },
+  {
+   "kind": "omission_removed",
+   "contains": "(error_bar_plot ",
+   "reason": "The error-bar plot is now drawn as its curve's bars (fields above), so its left-out note is gone."
+  },
+  {
+   "kind": "fidelity_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  },
+  {
+   "kind": "project_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  }
+ ],
+ "public:he-xiaolin_Online-perceived-risk-study/*/PerceivedRiskandPrediction.opju": [
+  {
+   "kind": "error_role_changed",
+   "contains": "errBand None -> True",
+   "reason": "Record offset 28 == 2 on every error plot of the curve: Origin fills the Y error as a band (errBand). Verified against Origin's saved previews: calibration_for_fig4 Graph1-4 (bands only on its 2 plots, whiskers on the 0 plots), PerceivedRisk Graph1/29/29AA, Fig3_e Graph2, 成功率 Graph1 (review E2)."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "yErrPlus None -> '",
+   "reason": "A plus (offset 23 bit 0x01) and minus (0x02) error plot with different columns: asymmetric bars. Minus/plus proven by Graph_Template long names (Lower/Upper_Bound), 32New preview (T-U..T+V) and PerceivedRisk Graph1 preview (band 1..2 above the line = minus B 0, plus D 1; swapped reading 0..1 does not match)."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "yErrMinus None -> '",
+   "reason": "A plus (offset 23 bit 0x01) and minus (0x02) error plot with different columns: asymmetric bars. Minus/plus proven by Graph_Template long names (Lower/Upper_Bound), 32New preview (T-U..T+V) and PerceivedRisk Graph1 preview (band 1..2 above the line = minus B 0, plus D 1; swapped reading 0..1 does not match)."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "yErr None -> '",
+   "reason": "Two both-ways plots (or a plus/minus pair) whose columns hold equal values on every row: the bars are the same whichever Origin draws, so yErr from the first (PerceivedRisk N/P on O, Graph29AA preview shows the narrow band)."
+  },
+  {
+   "kind": "omission_removed",
+   "contains": "(error_bar_plot ",
+   "reason": "The error-bar plot is now drawn as its curve's bars (fields above), so its left-out note is gone."
+  },
+  {
+   "kind": "omission_reason_changed",
+   "contains": "} -> error_bar_no_curve",
+   "reason": "The error plot's offset 35 names no data curve of its layer (a column the layer does not plot, or another error plot's column); Origin draws nothing for it: calibration_for_fig4 Graph3/Graph4 previews show no bars for Book6-8/Book18, PerceivedRisk Graph29-31 previews show no whiskers from F/H. Reclassified as error_bar_no_curve, not a loss."
+  },
+  {
+   "kind": "fidelity_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  },
+  {
+   "kind": "project_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  }
+ ],
+ "public:pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/calibration_for_fig4.opju": [
+  {
+   "kind": "error_role_changed",
+   "contains": "errBand None -> True",
+   "reason": "Record offset 28 == 2 on every error plot of the curve: Origin fills the Y error as a band (errBand). Verified against Origin's saved previews: calibration_for_fig4 Graph1-4 (bands only on its 2 plots, whiskers on the 0 plots), PerceivedRisk Graph1/29/29AA, Fig3_e Graph2, 成功率 Graph1 (review E2)."
+  },
+  {
+   "kind": "omission_reason_changed",
+   "contains": "} -> error_bar_no_curve",
+   "reason": "The error plot's offset 35 names no data curve of its layer (a column the layer does not plot, or another error plot's column); Origin draws nothing for it: calibration_for_fig4 Graph3/Graph4 previews show no bars for Book6-8/Book18, PerceivedRisk Graph29-31 previews show no whiskers from F/H. Reclassified as error_bar_no_curve, not a loss."
+  },
+  {
+   "kind": "fidelity_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  },
+  {
+   "kind": "project_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  }
+ ],
+ "public:pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/NS1del_vs_WT.opju": [
+  {
+   "kind": "error_role_changed",
+   "contains": "errBand None -> True",
+   "reason": "Record offset 28 == 2 on every error plot of the curve: Origin fills the Y error as a band (errBand). Verified against Origin's saved previews: calibration_for_fig4 Graph1-4 (bands only on its 2 plots, whiskers on the 0 plots), PerceivedRisk Graph1/29/29AA, Fig3_e Graph2, 成功率 Graph1 (review E2)."
+  }
+ ],
+ "public:stunnerx_CTDHNN-data-code/code/*/plot/*.opju": [
+  {
+   "kind": "error_role_changed",
+   "contains": "errBand None -> True",
+   "reason": "Record offset 28 == 2 on every error plot of the curve: Origin fills the Y error as a band (errBand). Verified against Origin's saved previews: calibration_for_fig4 Graph1-4 (bands only on its 2 plots, whiskers on the 0 plots), PerceivedRisk Graph1/29/29AA, Fig3_e Graph2, 成功率 Graph1 (review E2)."
+  }
+ ],
+ "public:zihaonian_MCM/paper_chart/Degree of impact of single stock commission changes on final returns.opju": [
+  {
+   "kind": "error_role_changed",
+   "contains": "yErrPlus None -> '",
+   "reason": "A plus (offset 23 bit 0x01) and minus (0x02) error plot with different columns: asymmetric bars. Minus/plus proven by Graph_Template long names (Lower/Upper_Bound), 32New preview (T-U..T+V) and PerceivedRisk Graph1 preview (band 1..2 above the line = minus B 0, plus D 1; swapped reading 0..1 does not match)."
+  },
+  {
+   "kind": "error_role_changed",
+   "contains": "yErrMinus None -> '",
+   "reason": "A plus (offset 23 bit 0x01) and minus (0x02) error plot with different columns: asymmetric bars. Minus/plus proven by Graph_Template long names (Lower/Upper_Bound), 32New preview (T-U..T+V) and PerceivedRisk Graph1 preview (band 1..2 above the line = minus B 0, plus D 1; swapped reading 0..1 does not match)."
+  },
+  {
+   "kind": "omission_removed",
+   "contains": "(error_bar_plot ",
+   "reason": "The error-bar plot is now drawn as its curve's bars (fields above), so its left-out note is gone."
+  }
+ ],
+ "owner:MnN_Diffusion_PNR.opj": [
+  {
+   "kind": "error_role_changed",
+   "contains": "xErr None -> '",
+   "reason": "Offset 23 bit 0x10 X-error plot (both ways) on the dQ column: xErr. Origin's own export of MnN Graph10 draws these horizontal bars on the SA points."
+  },
+  {
+   "kind": "omission_removed",
+   "contains": "(error_bar_plot ",
+   "reason": "The error-bar plot is now drawn as its curve's bars (fields above), so its left-out note is gone."
+  },
+  {
+   "kind": "fidelity_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  },
+  {
+   "kind": "project_omissions_changed",
+   "reason": "Only change: the error_bar_plots fidelity code is dropped because every error plot of the figure is now attached or proven to draw nothing (verified: no other code added or removed)."
+  }
+ ]
+}

@@ -884,6 +884,36 @@ Gallery (real UI, `applyOriginFigure` + stage screenshot) vs Origin's images:
   which predates this change.
 * PerceivedRisk Graph29: Origin draws bands, quantized whiskers.
 
+## 2026-11-20 — the rest of the error bars: asymmetric, X, bands, orphans (no Origin install)
+
+Lane E2 (`error_bars.md`, "The rest of the bars"). Measured against main
+`97a8be72` with `sweep2.py` and a payload counter.
+
+Public (351 files):
+
+* Figures with `error_bar_plots`: 882 -> 14. Error plots left out
+  1,785 -> 39; 440 more are `error_bar_no_curve` (Origin draws nothing).
+* Curves gaining fields: `yErrPlus`/`yErrMinus` 437, `xErrPlus`/`xErrMinus`
+  6, `yErr` 1,207 -> 1,417, `errBand` 1,743. Figures with bars 1,135 -> 1,784.
+* Curves, figures, books, statuses and every other fidelity code unchanged
+  (7,841 curves, 3,219 figures, 3,180 books; 0 projects lost anything).
+
+Owner (104 files):
+
+* `error_bar_plots`: 12 -> 0 figures. MnN Graph6-12's 12 X plots attach
+  as `xErr`. No band in the owner corpus (all offset 28 = `0`).
+* Curves, figures and books unchanged (1,360 / 563 / 645). Moke and
+  RockingCurve render unchanged; PNR.opj is an LFS pointer here, not
+  verified.
+
+Gallery (real UI vs Origin's previews / exports): PerceivedRisk Graph1
+(asymmetric band), Graph29AA (narrow band on `O`), `43Lollipop` (X stems
+to zero), `32New` (asymmetric bars in all three panels; nothing before),
+`calibration_for_fig4` Graph2/3 (bands on the fits, bars on the data),
+MnN Graph10 (Y and X bars), Fixed Lambdas Graph1, UnpolPlots NdNiO3NR.
+`Fig3_e` Graph2 and `成功率` Graph1 could not be shot (the harness found no
+entry for those non-ASCII names; not an error-bar issue).
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

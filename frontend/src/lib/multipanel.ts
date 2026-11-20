@@ -8,6 +8,7 @@ import type { AxisFormat } from "./axisFormat";
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
 import { cyclesPastPalette, displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
+import type { ErrorBinding } from "./errorRoles";
 import type { Annotation, RegionShade, SeriesStyle } from "./types";
 
 /** One payload per plotted series: each keeps the shared x column + a single
@@ -75,6 +76,9 @@ export interface SpatialPanel {
    *  instead of a bare series for the error column (item A fix: the spatial
    *  multi-panel path never applied error pairing at all). */
   errKeys?: Record<number, number>;
+  /** This panel's Origin asymmetric / X error bars (lib/originCurveErrorRoles),
+   *  drawn as spans on screen (`spatialPanelFetch`) and in the page export. */
+  errors?: ErrorBinding[];
   /** This panel's Origin-hidden channels (`errorbars.originHiddenChannels`)
    *  — paired error / secondary-X columns Origin never draws as their own
    *  curve. Unlike the single-plot path (which keeps them in an interactive

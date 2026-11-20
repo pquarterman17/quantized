@@ -81,3 +81,20 @@ describe("fetchSpatialPanel draws excluded rows as the app mode says", () => {
     expect(fetchPlot.mock.calls[1][6]).not.toBeNull();
   });
 });
+
+describe("fetchSpatialPanel: Origin's asymmetric / X error bars (lane E2)", () => {
+  it("builds the panel's spans from its own error bindings, keyed like the payload", async () => {
+    const ds: Dataset = {
+      id: "d1",
+      name: "book",
+      data: { time: [0, 1, 2], values: [[1, 0.1, 0.3], [2, 0.2, 0.4], [3, 0.1, 0.5]], labels: ["y", "up", "x"], units: ["", "", ""], metadata: {} },
+    };
+    const p: SpatialPanel = {
+      ...PANEL, hiddenChannels: [1, 2],
+      errors: [{ channel: 1, target: 0, axis: "y", side: "+" }, { channel: 2, target: 0, axis: "x", side: "both" }],
+    };
+    const { errorSpans } = await fetchSpatialPanel(p, ds, "Line", "grey");
+    // half a Y pair draws nothing (never invents the other side); the X bars draw
+    expect(errorSpans.get(1)).toEqual([{ axis: "x", plus: [0.3, 0.4, 0.5], minus: [0.3, 0.4, 0.5] }]);
+  });
+});

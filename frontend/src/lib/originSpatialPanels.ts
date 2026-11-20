@@ -68,6 +68,7 @@ export function resolveFigurePanels(
       ...(legend.legendTitle ? { legendTitle: legend.legendTitle } : {}),
       ...(legend.legendFrameXY ? { legendFrameXY: legend.legendFrameXY } : {}),
       errKeys: sel.errKeys,
+      ...(sel.errors?.length ? { errors: sel.errors } : {}),
       hiddenChannels: sel.hiddenChannels,
       xStep: fig.x_step ?? null,
       yStep: fig.y_step ?? null,
@@ -98,6 +99,7 @@ function overlaySelection(ds: Dataset): NonNullable<ReturnType<typeof figureChan
     styles: overlayCurveStyles(ds.data),
     labels: overlayCurveLabels(ds.data),
     errKeys: errs.errKeys,
+    errors: errs.roles,
     hiddenChannels: errs.errorColumns,
   };
 }

@@ -8,7 +8,7 @@
 // omitted (`lib/exportPageCommand.ts`), so the page shows what it exports.
 
 import { resolveSecondaryAxis, secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns } from "../../lib/errorbars";
+import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
 import { spatialPlottedChannels, type SpatialPanel } from "../../lib/multipanel";
 import {
   DECIMATE_MIN_POINTS,
@@ -27,6 +27,8 @@ import type { ExcludedDisplay } from "../../store/useApp";
 export interface SpatialFetch {
   payload: PlotPayload;
   errorBars: Map<number, (number | null)[]>;
+  /** Origin's asymmetric / X error bars (`SpatialPanel.errors`), same keying. */
+  errorSpans: Map<number, ErrorSpan[]>;
 }
 
 /** Fetch panel `p` over its own dataset `ds` (the caller triggers a lazy
@@ -70,7 +72,7 @@ export async function fetchSpatialPanel(
     decimationRequestEligible({
       defaultTrace,
       hasErrorBars: Object.keys(p.errKeys ?? {}).length > 0,
-      hasErrorSpans: errorBindingsApplyToPlotted(ds.errorRoles, plottedChannels, { xErrorRenders: false }),
+      hasErrorSpans: !!p.errors?.length || errorBindingsApplyToPlotted(ds.errorRoles, plottedChannels, { xErrorRenders: false }),
       hasColorByColumns: false,
     })
       ? defaultDecimateWidthHint()
@@ -83,5 +85,6 @@ export async function fetchSpatialPanel(
     // keyed to the SAME plottedChannels order the payload's series
     // are in.
     errorBars: buildErrorColumns(ds.data, plottedChannels, p.errKeys ?? {}),
+    errorSpans: buildErrorSpans(ds.data, plottedChannels, p.errors ?? []),
   };
 }

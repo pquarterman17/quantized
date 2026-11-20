@@ -395,7 +395,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       panels.forEach((p, i) => {
         const entry = spatialPayloads[i];
         if (!entry) return;
-        const { payload: pp, errorBars } = entry;
+        const { payload: pp, errorBars, errorSpans } = entry;
         const rect = decodedRects?.[i] ?? {
           left: colLefts[p.col], top: rowTops[p.row], width: colW[p.col], height: rowH[p.row],
         };
@@ -452,7 +452,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           // Item A (PNR.opj Book14 Graph11 repro): draw whiskers for this
           // panel's Y-error-designated columns instead of the multi-panel
           // path silently rendering them (or, pre-fix, nothing at all).
-          errorBars,
+          errorBars, errorSpans,
           // Item B: faithful per-layer x title (null = Origin decoded an
           // explicitly blank title — force blank, never synthesize).
           xAxisLabel: p.xAxisLabel,
