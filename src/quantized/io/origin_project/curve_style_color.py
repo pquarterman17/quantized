@@ -268,6 +268,12 @@ def raw_color(record: bytes) -> int | None:
         return None
     off = _SYMBOL_COLOR_OFF if record[_SYMBOL_KIND_OFF] > 0 else _LINE_COLOR_OFF
     field = struct.unpack_from("<I", record, off)[0]
+    if field == _AUTO and off == _SYMBOL_COLOR_OFF:
+        # An "auto" symbol colour follows the plot's line colour when that is
+        # explicit (palette / RGB); a placeholder or auto line stays None.
+        # Evidence: docs/origin_re/curve_colors.md "Auto symbol colour".
+        line = struct.unpack_from("<I", record, _LINE_COLOR_OFF)[0]
+        field = line if line >> 24 in (0, 1) else _AUTO
     if field == _AUTO:
         return None  # auto/increment: resolved Origin-side, not decodable here
     kind = field >> 24

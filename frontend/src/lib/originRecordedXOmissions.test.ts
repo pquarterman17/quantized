@@ -16,7 +16,7 @@ describe("recordedXOmissions", () => {
   it("fires for a curve whose RECORDED X did not import", () => {
     expect(recordedXOmissions(fig([{ book: "Book1", x: "Q", y: "B", xRecorded: true }]), ds)).toEqual(["Book1 column B (X Q)"]);
   });
-  it("is silent for an INFERRED X (.opj: no xRecorded)", () => {
+  it("is silent for an INFERRED X (no xRecorded)", () => {
     expect(recordedXOmissions(fig([{ book: "Book1", x: "Q", y: "B" }]), ds)).toEqual([]);
   });
 });

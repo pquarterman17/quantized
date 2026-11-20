@@ -83,14 +83,17 @@ committed as if they were the *primary* sheet's data, mislabeling Book4's
 per window. This was orthogonal to the curve/column-id decode here (which uses
 its own more permissive scan and never touches ``windows.py``).
 
-**X is a structural inference, exactly as in ``.opju`` (`book_x_columns`).**
-No oracle (Moke's or XRD's ``index.json``) records which column is plotted as
-X -- only the axis *range*, which doesn't identify a column. Exactly
-mirroring ``opju_curves.py``'s "X is not decoded" section: ``x`` is inferred
-as the book's own designated-X column (primary sheet, designation byte ``3``)
-falling back to the sheet's first column when no column is explicitly marked
-X. This is unverified against any oracle, here or in the ``.opju`` sibling --
-a documented structural assumption, not a decoded value.
+**X: the record's own field first, then a structural inference.** The
+anchor is the record ``.opju`` serializes, so its offsets 35-38 hold the
+plot's X column id + designation pair (``opju_curve_token_x``, COM-verified
+there). Since 2026-11-20 that field wins when its pair validates
+(``_record_x``; evidence: ``docs/origin_re/curve_bindings_opj.md`` --
+``hc2convert.opj`` binds 89/89 shared curves to the same X as its
+COM-verified ``.opju`` save, Moke Graph8's hysteresis runs the way Origin's
+export draws it only against the record X). Without a valid field, ``x`` is
+inferred as the nearest preceding X-designated column, falling back to the
+book's designated X / first column: a documented structural assumption.
+A plot Origin hides (offset 38 ``21``) is left out as ``hidden_in_origin``.
 
 **Validation (2026-07-04, both required oracle files).**
 
@@ -129,8 +132,16 @@ import struct
 from collections.abc import Sequence
 
 from quantized.io.origin_project.curve_style_color import apply_increment_colors, style_fields
+from quantized.io.origin_project.opju_curve_token_x import (
+    HIDDEN_IN_ORIGIN,
+    bind_x,
+    field_hidden,
+    field_x_id,
+    record_field,
+)
 from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
+from quantized.io.origin_project.opju_plot_kinds import rowless_kind
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
 __all__ = [
@@ -154,6 +165,16 @@ _DATAPLOT_MAGIC = b"\x58\x00\x00\x00\x98\x03\x40\xb3"
 # windows.py's plot-designation enum (0=Y, 3=X, ...) -- see its `_DESIGNATION`.
 _DESIGNATION_X = 3
 
+# A column-storage block's short-name FIELD is 12 bytes at 0x12 (up to 11
+# chars + NUL; the next field starts at 0x1E). The old 8-byte window rejected
+# every 8-11 char name ("averages", "difference"), so curves on those columns
+# vanished (XMCD.opj, docs/origin_re/curve_bindings_opj.md).
+_SHORT_NAME_FIELD = 12
+
+# `curve_sheet_omitted` reasons for a real plot whose binding does not resolve.
+COLUMN_NOT_RESOLVED = "column_not_resolved"  # its column id names no column
+X_NOT_RESOLVED = "x_not_resolved"  # its book has no inferable X column
+
 
 def _column_short_name(payload: bytes) -> str | None:
     """A column-storage block's short name (e.g. ``"B"``), or ``None``.
@@ -164,7 +185,7 @@ def _column_short_name(payload: bytes) -> str | None:
     most real columns in this corpus (see module docstring)."""
     if len(payload) < 500:
         return None
-    name = _cstring(payload, 0x12, 8)
+    name = _cstring(payload, 0x12, _SHORT_NAME_FIELD)
     return name if name and name[0].isalpha() else None
 
 
@@ -314,6 +335,30 @@ def _plot_type(payload: bytes) -> dict[str, str]:
     return {"plotType": kind} if kind else {}
 
 
+def _record_x(
+    record: bytes, book: str, inferred: str | None, id_map: dict[int, tuple[str, str]]
+) -> tuple[str | None, str, bool]:
+    """``(X column name, omit reason, recorded)`` for a curve of ``book``
+    whose X was inferred as ``inferred``: the X id the anchor record itself
+    stores at offsets 35-36 (``opju_curve_token_x.bind_x``, the same record
+    the ``.opju`` token serializes) when its marker validates, else
+    ``inferred``. ``recorded`` is True only for the record's own X -- the
+    curve then carries ``xRecorded`` exactly like a ``.opju`` curve, so the
+    frontend draws it against that X, never its nearest-preceding X (A2).
+
+    A record X of 0 on a box / histogram plot keeps ``inferred`` (those were
+    drawn before; ``opju_plot_kinds.rowless_kind``). See
+    ``docs/origin_re/curve_bindings_opj.md`` for the evidence."""
+    if not book:
+        return inferred, "", False
+    tx, reason = bind_x(field_x_id(record_field(record)), book, None, id_map)
+    if reason and rowless_kind(reason, record) is not None:
+        return inferred, "", False
+    if tx is None:
+        return inferred, reason, False
+    return id_map[tx][1], "", True
+
+
 def _nearest_preceding_x(order: Sequence[tuple[str, int]], y_short: str) -> str | None:
     """The X-designated column (byte ``3``) nearest-preceding ``y_short`` in
     worksheet column order, or ``None`` when ``y_short`` is not on this sheet
@@ -345,7 +390,8 @@ def extract_curves(
     :func:`book_column_designations`) is supplied -- Origin's real multi-X
     pairing -- else the book-level designated X in ``x_columns``. A curve
     whose id doesn't resolve to a known column, or whose book has no inferable
-    X column, is silently dropped -- never guessed. The anchor payload is also
+    X column, is left out (never guessed) and appended to ``omitted`` with
+    reason ``column_not_resolved`` / ``x_not_resolved``. The anchor payload is also
     the curve's fixed style record
     (``curve_style_color.py``: symbol color/kind, line color, line-vs-
     scatter -- oracle-verified on ``hc2convert.opj``), so any decodable
@@ -359,6 +405,7 @@ def extract_curves(
     out: list[dict[str, str | float]] = []
     records: list[bytes | None] = []
     cids: list[int] = []
+    unresolved: list[str] = []  # per plot: why its binding failed, or ""
     last = min(end, len(blocks) - 1)
     for j in range(start, last):
         _, payload = blocks[j]
@@ -368,23 +415,35 @@ def extract_curves(
         if npayload[:8] != _DATAPLOT_MAGIC:
             continue
         cid = struct.unpack_from("<H", payload, 4)[0]
-        info = id_map.get(cid)
-        if info is None:
-            continue
-        book, col = info
+        book, col = id_map.get(cid, ("", ""))
         # Per-curve X: the nearest preceding X-designated column on the book's
         # sheet (Origin's real multi-X pairing); fall back to the book-level
         # designated X only when that can't be resolved.
         x: str | None = None
-        if col_order is not None and book in col_order:
+        if book and col_order is not None and book in col_order:
             x = _nearest_preceding_x(col_order[book], col)
-        if x is None:
+        if book and x is None:
             x = x_columns.get(book)
-        if x is None:
-            continue  # unknown/columnless book: drop, never guess
-        out.append({"book": book, "x": x, "y": col, **style_fields(payload), **_plot_type(payload)})
+        # The record's OWN X (offsets 35-38, opju_curve_token_x) outranks the
+        # inference above, exactly as in `.opju` (module docstring).
+        x, x_reason, recorded = _record_x(payload, book, x, id_map)
+        # A real plot (anchor + DataPlot) whose binding does not resolve stays
+        # in plot order -- colour increments and legend captions count it --
+        # and is left out below with a named reason: never guessed, never silent.
+        why = (
+            HIDDEN_IN_ORIGIN
+            if field_hidden(record_field(payload))
+            else COLUMN_NOT_RESOLVED
+            if not book
+            else x_reason or (X_NOT_RESOLVED if x is None else "")
+        )
+        curve: dict[str, str | float] = {"book": book, "x": x or "", "y": col}
+        if recorded:
+            curve["xRecorded"] = True  # the record names the X: it wins (A2)
+        out.append({**curve, **style_fields(payload), **_plot_type(payload)})
         records.append(payload)
         cids.append(cid)
+        unresolved.append(why)
     # auto/increment placeholders resolve by group role + plot order
     # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
     apply_increment_colors(out, records)
@@ -394,9 +453,10 @@ def extract_curves(
             "x": str(c["x"]),
             "y": str(c["y"]),
             "recorded": book,
-            "reason": error_bar_reason(r),
+            # a hidden plot is `hidden_in_origin` whatever else it is (.opju rule)
+            "reason": why if why == HIDDEN_IN_ORIGIN else error_bar_reason(r) or why,
         }
-        for c, r in zip(out, records, strict=True)
+        for c, r, why in zip(out, records, unresolved, strict=True)
         for book in (str(c["book"]),)
     ]
     link_error_plots(notes, cids, [error_link(r) for r in records])
