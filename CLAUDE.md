@@ -333,6 +333,7 @@ Practical conventions discovered while porting — follow them to stay green.
   loaded 400+ page `.opju` files fine).
 
 ### Origin graph-recovery safety (2026-07-13 incident)
+- Origin import changes must pass `uv run python tools/gate.py --origin` and explain every corpus change.
 - **Read and update `docs/origin_re/DECODE_LEDGER.md`** before and with any
   Origin decode, binding or apply change: proven facts (each with its guarding
   test), owner decisions, and the regression history. Every fix or newly
