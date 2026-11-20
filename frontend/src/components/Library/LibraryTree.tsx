@@ -49,6 +49,7 @@ function toggleExpand(node: LibraryNode): void {
   const s = useApp.getState();
   if (node.kind === "folder") s.toggleFolderExpanded(node.entityId);
   else if (node.kind === "workbook") s.toggleWorkbookExpanded(node.entityId);
+  else if (node.kind === "origin-group") s.toggleOriginGroupExpanded(node.entityId);
 }
 
 interface Props {

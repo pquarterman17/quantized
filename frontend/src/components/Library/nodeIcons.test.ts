@@ -39,6 +39,7 @@ const ALL_KINDS = [
   "worksheet",
   "analysis-result",
   "origin-figure",
+  "origin-group",
   "editable-figure",
   "publication-figure",
   "page",

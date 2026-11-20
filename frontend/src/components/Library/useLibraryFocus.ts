@@ -10,6 +10,7 @@ import {
   collapsedSheetOf,
   flattenLibraryHierarchy,
   type FlatLibraryNode,
+  expandedKeySet,
   type LibraryHierarchy,
   type LibraryNode,
   type LibraryNodeKey,
@@ -33,6 +34,7 @@ export function useLibraryFocus(
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
   const expandedWorkbookIds = useLibraryStore((s) => s.expandedWorkbookIds);
   const toggleWorkbookExpanded = useLibraryStore((s) => s.toggleWorkbookExpanded);
+  const expandedOriginGroupIds = useLibraryStore((s) => s.expandedOriginGroupIds);
   const selection = useLibraryStore((s) => s.librarySelection);
   const selectedIds = useApp((s) => s.selectedIds);
   const [focusKey, setFocusKey] = useState<LibraryNodeKey | null>(null);
@@ -73,11 +75,8 @@ export function useLibraryFocus(
   }, [focusedNode, hierarchy]);
   const rows = useMemo(() => {
     if (!focusKey && contentFilter === "all") return allRows;
-    const expandedKeys = new Set<LibraryNodeKey>();
-    for (const id of expandedFolders) expandedKeys.add(`folder:${id}`);
-    for (const id of expandedWorkbookIds) expandedKeys.add(`workbook:${id}`);
-    return flattenLibraryHierarchy(displayHierarchy, expandedKeys);
-  }, [allRows, contentFilter, displayHierarchy, expandedFolders, expandedWorkbookIds, focusKey]);
+    return flattenLibraryHierarchy(displayHierarchy, expandedKeySet(expandedFolders, expandedWorkbookIds, expandedOriginGroupIds));
+  }, [allRows, contentFilter, displayHierarchy, expandedFolders, expandedWorkbookIds, expandedOriginGroupIds, focusKey]);
 
   useEffect(() => {
     if (focusKey && !hierarchy.byKey.has(focusKey)) setFocusKey(null);
@@ -104,20 +103,22 @@ export function useLibraryFocus(
     () => new Set([...scopeContainers.workbooks].filter((id) => isExpandableWorkbook(hierarchy.byKey.get(`workbook:${id}`)))),
     [hierarchy, scopeContainers.workbooks],
   );
+  const disclosures = [
+    [expandableFolders, expandedFolders],
+    [expandableWorkbooks, expandedWorkbookIds],
+    [scopeContainers.originGroups, expandedOriginGroupIds],
+  ] as const;
   const setAllExpanded = (expanded: boolean): void => {
+    const next = (have: readonly string[], want: ReadonlySet<string>): string[] =>
+      expanded ? [...new Set([...have, ...want])] : have.filter((id) => !want.has(id));
     useApp.setState((state) => ({
-      expandedFolders: expanded
-        ? [...new Set([...state.expandedFolders, ...expandableFolders])]
-        : state.expandedFolders.filter((id) => !expandableFolders.has(id)),
-      expandedWorkbookIds: expanded
-        ? [...new Set([...state.expandedWorkbookIds, ...expandableWorkbooks])]
-        : state.expandedWorkbookIds.filter((id) => !expandableWorkbooks.has(id)),
+      expandedFolders: next(state.expandedFolders, expandableFolders),
+      expandedWorkbookIds: next(state.expandedWorkbookIds, expandableWorkbooks),
+      expandedOriginGroupIds: next(state.expandedOriginGroupIds, scopeContainers.originGroups),
     }));
   };
-  const canExpand = [...expandableFolders].some((id) => !expandedFolders.includes(id))
-    || [...expandableWorkbooks].some((id) => !expandedWorkbookIds.includes(id));
-  const canCollapse = [...expandableFolders].some((id) => expandedFolders.includes(id))
-    || [...expandableWorkbooks].some((id) => expandedWorkbookIds.includes(id));
+  const canExpand = disclosures.some(([want, have]) => [...want].some((id) => !have.includes(id)));
+  const canCollapse = disclosures.some(([want, have]) => [...want].some((id) => have.includes(id)));
 
   return {
     focusActive: Boolean(focusKey), focusedNode, candidateNode, focusPath, focusOn,

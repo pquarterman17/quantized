@@ -148,6 +148,12 @@ export interface LibraryPanelSlice {
    *  session, matching the component's old default. */
   originFidelitySectionExpanded: boolean;
   toggleOriginFidelitySectionExpanded: () => void;
+  /** Disclosure of the virtual "Unresolved Origin figures" groups
+   *  (lib/libraryHierarchy.ts `origin-group`), by group id. SESSION-ONLY like
+   *  `originFidelitySectionExpanded`: a group is derived, never stored, so a
+   *  saved project has nothing to restore it onto and it starts collapsed. */
+  expandedOriginGroupIds: string[];
+  toggleOriginGroupExpanded: (id: string) => void;
 }
 
 /** PR C: the active dataset's workbook is always disclosed — activation
@@ -171,6 +177,9 @@ export function workbookDisclosurePatch(
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 
+const toggled = (ids: string[], id: string): string[] =>
+  ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
+
 export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): LibraryPanelSlice {
   return {
     libraryPanelWidth: initialWidth,
@@ -193,11 +202,7 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
       set({ activeDrag, activeDragPress: activeDrag == null ? null : lastPointerPress() }),
     expandedWorkbookIds: [],
     toggleWorkbookExpanded: (id) =>
-      set((s) => ({
-        expandedWorkbookIds: s.expandedWorkbookIds.includes(id)
-          ? s.expandedWorkbookIds.filter((x) => x !== id)
-          : [...s.expandedWorkbookIds, id],
-      })),
+      set((s) => ({ expandedWorkbookIds: toggled(s.expandedWorkbookIds, id) })),
     librarySelection: null,
     // L0.25 selection coherence (P1 fix): the tree's folder/workbook
     // selection and the dataset selection are mutually exclusive. Setting a
@@ -220,5 +225,8 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     originFidelitySectionExpanded: false,
     toggleOriginFidelitySectionExpanded: () =>
       set((s) => ({ originFidelitySectionExpanded: !s.originFidelitySectionExpanded })),
+    expandedOriginGroupIds: [],
+    toggleOriginGroupExpanded: (id) =>
+      set((s) => ({ expandedOriginGroupIds: toggled(s.expandedOriginGroupIds, id) })),
   };
 }

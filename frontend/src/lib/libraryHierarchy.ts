@@ -19,6 +19,7 @@ export type LibraryNodeKind =
   | "worksheet"
   | "analysis-result"
   | "origin-figure"
+  | "origin-group"
   | "editable-figure"
   | "publication-figure"
   | "page"
@@ -51,10 +52,23 @@ export type LibraryNode =
   | (LibraryNodeBase & { kind: "worksheet"; entity: Dataset })
   | (LibraryNodeBase & { kind: "analysis-result"; entity: AnalysisResult })
   | (LibraryNodeBase & { kind: "origin-figure"; entity: OriginFigureEntry })
+  | (LibraryNodeBase & { kind: "origin-group"; entity: OriginFigureGroup })
   | (LibraryNodeBase & { kind: "editable-figure"; entity: FigureDocument })
   | (LibraryNodeBase & { kind: "publication-figure"; entity: FigureDoc })
   | (LibraryNodeBase & { kind: "page"; entity: PageDocument })
   | (LibraryNodeBase & { kind: "report"; entity: ReportEntry });
+
+/** The VIRTUAL container (never stored, never persisted) that gathers one
+ *  Origin import's UNRESOLVED graph entries so a large project does not bury
+ *  its books under dozens of rows that draw nothing. Derived by
+ *  `buildLibraryHierarchy` from `originFigures`; its id is import-scoped. */
+export interface OriginFigureGroup {
+  id: string;
+  /** The import's file stem (the figures' own `stem`). */
+  stem: string;
+  /** How many unresolved figures it holds. */
+  count: number;
+}
 
 export interface LibraryHierarchyInput {
   folders: readonly FolderNode[];
@@ -75,7 +89,7 @@ export interface LibraryHierarchy {
 }
 
 interface DraftNode extends Omit<LibraryNodeBase, "children"> {
-  entity: FolderNode | WorkbookNode | Dataset | AnalysisResult | OriginFigureEntry | FigureDocument | FigureDoc | PageDocument | ReportEntry;
+  entity: FolderNode | WorkbookNode | Dataset | AnalysisResult | OriginFigureEntry | OriginFigureGroup | FigureDocument | FigureDoc | PageDocument | ReportEntry;
   children: DraftNode[];
   section: number;
   /** The entity's own sort key where one exists (folders/workbooks/
@@ -306,9 +320,40 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
   (input.analysisResults ?? []).forEach((result, index) =>
     place("analysis-result", result, result.name, 2, index,
       [...result.sources, ...result.outputs].map((ref) => ref.datasetId)));
-  (input.originFigures ?? []).forEach((figure, index) =>
-    place("origin-figure", figure, figureLabel(figure), 3, index,
-      originSourceIds(figure, input.originFigures ?? [], input.datasets), figure.siblingIds));
+  const originFigures = input.originFigures ?? [];
+  // Unresolved = the store's own `datasetId === null` (the Details "Source:
+  // Unresolved" fact, never a guess from names), per import, from 2 members up
+  // (a group of one hides nothing). The heavier curve-binding resolver stays
+  // out: this module is eager, that one is a lazy chunk.
+  const byImport = new Map<string, OriginFigureEntry[]>();
+  for (const f of originFigures) {
+    const k = f.siblingIds[0] ?? f.stem;
+    if (f.datasetId == null) byImport.set(k, [...(byImport.get(k) ?? []), f]);
+  }
+  const groupOf = new Map<string, DraftNode>();
+  for (const [importKey, members] of byImport) {
+    if (members.length < 2) continue;
+    const siblings = new Set(members[0].siblingIds);
+    const workbookIds = [...new Set(input.datasets
+      .filter((d) => siblings.has(d.id)).map((d) => d.workbookId)
+      .filter((id): id is string => Boolean(id && workbookById.has(id))))];
+    const folderId = commonFolderId(workbookIds, workbookById, folderById);
+    const group: OriginFigureGroup = { id: `unresolved-${importKey}`, stem: members[0].stem, count: members.length };
+    const node = add("origin-group", group, `Unresolved Origin figures (${members.length})`,
+      folderId ? keyOf("folder", folderId) : null, 3, originFigures.indexOf(members[0]));
+    for (const member of members) groupOf.set(member.id, node);
+  }
+  originFigures.forEach((figure, index) => {
+    const group = groupOf.get(figure.id);
+    const sourceIds = originSourceIds(figure, originFigures, input.datasets);
+    if (!group) {
+      place("origin-figure", figure, figureLabel(figure), 3, index, sourceIds, figure.siblingIds);
+      return;
+    }
+    // A grouped entry keeps its own source status; only its PARENT changes.
+    add("origin-figure", figure, figureLabel(figure), group.key, 3, index,
+      ownerForSources(sourceIds, figure.siblingIds).source);
+  });
   (input.editableFigures ?? []).forEach((figure, index) =>
     place("editable-figure", figure, figure.name, 4, index, figure.bindings.datasetId ? [figure.bindings.datasetId] : []));
   (input.publicationFigures ?? []).forEach((figure, index) =>
@@ -391,6 +436,17 @@ export interface FlatLibraryNode {
    *  (collapsedSheetOf). `node` is then the SHEET, re-parented/re-depthed to
    *  the workbook's place so keyboard nav and ARIA levels read as one row. */
   workbook?: WorkbookLibraryNode;
+}
+
+/** The disclosure keys a flatten wants, from the three expansion lists. */
+export function expandedKeySet(
+  folders: readonly string[], workbooks: readonly string[], groups: readonly string[],
+): Set<LibraryNodeKey> {
+  return new Set<LibraryNodeKey>([
+    ...folders.map((id) => keyOf("folder", id)),
+    ...workbooks.map((id) => keyOf("workbook", id)),
+    ...groups.map((id) => keyOf("origin-group", id)),
+  ]);
 }
 
 /** Flatten visible rows without rebuilding ownership. Expansion uses canonical

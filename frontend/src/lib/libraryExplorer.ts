@@ -8,6 +8,12 @@ const CONTENT_KINDS: Record<Exclude<LibraryContentFilter, "all">, ReadonlySet<Li
   reports: new Set(["report"]),
 };
 
+/** Nodes that hold others and are browsed INTO (Tiles) / filtered by their
+ *  contents rather than matched themselves. */
+export function isContainerKind(kind: LibraryNode["kind"] | undefined): boolean {
+  return kind === "folder" || kind === "workbook" || kind === "origin-group";
+}
+
 /**
  * Filter Library content without flattening its location. Folder/workbook
  * ancestors are retained only when they lead to a matching item, so a dense
@@ -25,7 +31,7 @@ export function filterLibraryHierarchy(
     const children = node.children
       .map((child) => visit(child, node.key, depth + 1))
       .filter((child): child is LibraryNode => child != null);
-    const container = node.kind === "folder" || node.kind === "workbook";
+    const container = isContainerKind(node.kind);
     if ((!container && !accepted.has(node.kind)) || (container && children.length === 0)) return null;
     const kept = { ...node, parentKey, depth, children } as LibraryNode;
     byKey.set(kept.key, kept);
@@ -45,12 +51,10 @@ export function libraryNodeCount(hierarchy: LibraryHierarchy, collapsed = false)
   return hierarchy.byKey.size - (collapsed ? collapsedWorkbookCount(hierarchy) : 0);
 }
 
-export function libraryContainerIds(hierarchy: LibraryHierarchy): { folders: Set<string>; workbooks: Set<string> } {
-  const folders = new Set<string>();
-  const workbooks = new Set<string>();
-  for (const node of hierarchy.byKey.values()) {
-    if (node.kind === "folder") folders.add(node.entityId);
-    if (node.kind === "workbook") workbooks.add(node.entityId);
-  }
-  return { folders, workbooks };
+export function libraryContainerIds(
+  hierarchy: LibraryHierarchy,
+): { folders: Set<string>; workbooks: Set<string>; originGroups: Set<string> } {
+  const ids: Record<string, Set<string>> = { folder: new Set(), workbook: new Set(), "origin-group": new Set() };
+  for (const node of hierarchy.byKey.values()) ids[node.kind]?.add(node.entityId);
+  return { folders: ids.folder, workbooks: ids.workbook, originGroups: ids["origin-group"] };
 }

@@ -15,6 +15,7 @@ import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
+import { isContainerKind } from "../../lib/libraryExplorer";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import type { LibrarySelection } from "../../store/libraryPanel";
@@ -66,7 +67,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
   const initialKey = deriveSelectedKey(selection, selectedIds);
   const initialNode = initialKey ? hierarchy.byKey.get(initialKey) : undefined;
   const [containerKey, setContainerKey] = useState<LibraryNodeKey | null>(() =>
-    initialNode?.kind === "folder" || initialNode?.kind === "workbook" ? initialNode.key : initialNode?.parentKey ?? null,
+    isContainerKind(initialNode?.kind) ? initialNode!.key : initialNode?.parentKey ?? null,
   );
   const lastSelectionKey = useRef<LibraryNodeKey | null>(initialKey);
   const [rovingKey, setRovingKey] = useState<LibraryNodeKey | null>(initialKey);
@@ -85,7 +86,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
     lastSelectionKey.current = key;
     const node = hierarchy.byKey.get(key);
     if (!node) return;
-    const nextContainer = node.kind === "folder" || node.kind === "workbook" ? node.key : node.parentKey;
+    const nextContainer = isContainerKind(node.kind) ? node.key : node.parentKey;
     if (nextContainer !== containerKey) setContainerKey(nextContainer);
   }, [selection, selectedIds, hierarchy, containerKey]);
 
@@ -173,7 +174,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
 
   const selectOrBrowse = (node: LibraryNode): void => {
     selectLibraryNode(node);
-    if (node.kind === "folder" || node.kind === "workbook") setContainerKey(node.key);
+    if (isContainerKind(node.kind)) setContainerKey(node.key);
   };
 
   const openTileMenu = (node: LibraryNode, x: number, y: number): void => {
@@ -200,6 +201,10 @@ export default function LibraryWorkspace({ onClose }: Props) {
   // deliberately keep the workspace open. Recorded in
   // LIBRARY_WORKBOOK_UX_PLAN's change log alongside `opensInStage`'s note.
   const openFromTile = (node: LibraryNode): void => {
+    if (node.kind === "origin-group") {
+      setContainerKey(node.key); // in Tiles "open" a group = browse into it
+      return;
+    }
     openLibraryNode(node);
     if (opensInStage(node)) close();
   };

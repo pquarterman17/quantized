@@ -16,5 +16,9 @@ import { useApp } from "../store/useApp";
 export function selectLibraryNode(node: LibraryNode): void {
   const s = useApp.getState();
   if (node.kind === "worksheet") s.selectIds([node.entityId]);
+  // The virtual unresolved-figures group is a disclosure, never "current":
+  // its members are the selectable things (and `librarySelection` is
+  // persisted, which a derived node must never be).
+  else if (node.kind === "origin-group") return;
   else s.setLibrarySelection({ kind: node.kind, id: node.entityId });
 }

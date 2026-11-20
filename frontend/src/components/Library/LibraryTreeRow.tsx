@@ -2,6 +2,7 @@ import ArtifactRow from "./ArtifactRows";
 import DatasetRow from "./DatasetRow";
 import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
+import OriginGroupRow from "./OriginGroupRow";
 import WorkbookRow from "./WorkbookRow";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import type { TreeItemProps } from "../../lib/libraryTreeNav";
@@ -29,6 +30,8 @@ export default function LibraryTreeRow({ row, treeItem, selected, activeId, fold
       return <WorkbookRow node={node} depth={node.depth} expanded={expanded} hasChildren={hasChildren} treeItem={treeItem} onFocus={onFocusContainer ? () => onFocusContainer(node) : undefined} />;
     case "worksheet":
       return <DatasetRow dataset={node.entity} active={node.entity.id === activeId} selected={selected} showReorder={false} canMoveUp={false} canMoveDown={false} onFilterTag={onFilterTag} depth={node.depth} treeMode treeItem={treeItem} workbook={row.workbook} onFocusWorkbook={onFocusContainer && row.workbook ? () => onFocusContainer(row.workbook!) : undefined} />;
+    case "origin-group":
+      return <OriginGroupRow node={node} depth={node.depth} expanded={expanded} treeItem={treeItem} />;
     case "origin-figure":
       return <FigureRow entry={node.entity} depth={node.depth} treeMode treeItem={treeItem} />;
     default:

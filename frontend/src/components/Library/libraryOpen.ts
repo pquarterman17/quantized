@@ -127,6 +127,10 @@ export function openLibraryNode(node: LibraryNode): void {
     openWorkbookRemembered(node);
     return;
   }
+  if (node.kind === "origin-group") {
+    s.toggleOriginGroupExpanded(node.entityId); // a disclosure, like a folder
+    return;
+  }
   switch (node.kind) {
     case "worksheet":
       s.openFromLibrary(node.entityId); // re-audit #11: an Origin sheet's open plots it too

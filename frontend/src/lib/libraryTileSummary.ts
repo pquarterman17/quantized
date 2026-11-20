@@ -20,6 +20,8 @@ export function libraryTileSummary(node: LibraryNode): LibraryTileSummary {
   switch (node.kind) {
     case "folder":
       return { primary: count(node.children.length, "item"), secondary: "Folder", warning: null };
+    case "origin-group":
+      return { primary: count(node.children.length, "figure"), secondary: "No matching imported book", warning: null };
     case "workbook": {
       const worksheets = node.children.filter((child) => child.kind === "worksheet").length;
       const source = node.entity.source ? "Linked source" : "Project data";

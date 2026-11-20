@@ -9,9 +9,9 @@ import { useMemo } from "react";
 import {
   buildLibraryHierarchy,
   flattenLibraryHierarchy,
+  expandedKeySet,
   type FlatLibraryNode,
   type LibraryHierarchy,
-  type LibraryNodeKey,
 } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
@@ -35,6 +35,7 @@ export function useLibraryHierarchyModel(): LibraryHierarchyModel {
   const reports = useApp((s) => s.reports);
   const expandedFolders = useApp((s) => s.expandedFolders);
   const expandedWorkbookIds = useLibraryStore((s) => s.expandedWorkbookIds);
+  const expandedOriginGroupIds = useLibraryStore((s) => s.expandedOriginGroupIds);
 
   const hierarchy = useMemo(
     () =>
@@ -52,12 +53,10 @@ export function useLibraryHierarchyModel(): LibraryHierarchyModel {
     [folders, workbooks, datasets, analysisResults, originFigures, editableFigures, publicationFigures, pages, reports],
   );
 
-  const expandedKeys = useMemo(() => {
-    const keys = new Set<LibraryNodeKey>();
-    for (const id of expandedFolders) keys.add(`folder:${id}`);
-    for (const id of expandedWorkbookIds) keys.add(`workbook:${id}`);
-    return keys;
-  }, [expandedFolders, expandedWorkbookIds]);
+  const expandedKeys = useMemo(
+    () => expandedKeySet(expandedFolders, expandedWorkbookIds, expandedOriginGroupIds),
+    [expandedFolders, expandedWorkbookIds, expandedOriginGroupIds],
+  );
 
   const rows = useMemo(() => flattenLibraryHierarchy(hierarchy, expandedKeys), [hierarchy, expandedKeys]);
   return useMemo(() => ({ hierarchy, rows }), [hierarchy, rows]);

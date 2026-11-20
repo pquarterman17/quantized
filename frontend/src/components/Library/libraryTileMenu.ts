@@ -107,6 +107,12 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
       hooks.stageReturn,
     );
   }
+  if (node.kind === "origin-group") {
+    // A derived disclosure group: nothing to rename/move/delete. Its only
+    // command is the Tiles navigation into it.
+    const browse = hooks.browse;
+    return [{ label: "Browse", run: () => browse?.(node), disabled: browse == null, title: browse == null ? "available in Tiles view" : undefined }];
+  }
   if (node.kind === "workbook") {
     const browse = hooks.browse;
     return buildWorkbookRowMenu(node, renamePrompt(node, hooks),
