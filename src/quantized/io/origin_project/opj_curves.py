@@ -164,7 +164,6 @@ _DATAPLOT_MAGIC = b"\x58\x00\x00\x00\x98\x03\x40\xb3"
 
 # windows.py's plot-designation enum (0=Y, 3=X, ...) -- see its `_DESIGNATION`.
 _DESIGNATION_X = 3
-
 # A column-storage block's short-name FIELD is 12 bytes at 0x12 (up to 11
 # chars + NUL; the next field starts at 0x1E). The old 8-byte window rejected
 # every 8-11 char name ("averages", "difference"), so curves on those columns
@@ -182,7 +181,18 @@ def _column_short_name(payload: bytes) -> str | None:
     Printable, NUL-terminated, alpha-first, at payload offset ``0x12`` --
     mirrors ``windows.py``'s column-property-block layout but WITHOUT
     ``windows._is_column_block``'s stricter type-byte check, which misses
-    most real columns in this corpus (see module docstring)."""
+    most real columns in this corpus (see module docstring).
+
+    The name may run to ``_SHORT_NAME_FIELD - 1`` characters, the 12-byte
+    field's capacity: ``0x1E`` is a separate u16 (``0x0009`` in 5,832 of the
+    corpus's 6,103 column blocks; ``writer_blocks.py`` writes 9 there and
+    truncates names to 11). ``windows.py`` scans 20 bytes, which on real
+    columns finds the same NUL; past the field it only admits junk (two
+    non-column ``hc2convert.opj`` entries). An 8-byte limit used to drop
+    every name of 8+ characters (``difference``, ``asymmetry``), so every
+    curve plotting such a column lost its binding and its layer vanished
+    (XMCD.opj: 69 curve anchors, the GraphT* 3-panel pages; see
+    ``docs/origin_re/multi_layer_pages.md``)."""
     if len(payload) < 500:
         return None
     name = _cstring(payload, 0x12, _SHORT_NAME_FIELD)
