@@ -16,17 +16,14 @@ decoders already understand a template's bytes directly -- ``figures.
 extract_figures``/``figures_opju.extract_figures_opju`` take raw file bytes,
 not a parsed workbook, and a template's graph window(s) are laid out exactly
 like a project's: axis ranges, log flags, titles, legend text/labels, frame
-and page geometry all decoded verbatim, zero new code, against 4 of the 5
-corpus templates (``SLD_DoubleY.otp``, ``PNR-SF.otpu``, ``SLDdouble.otpu``,
-``UnpolFresnelNR.otpu``). The 5th, ``PNR.otpu``, carries exactly one axis
-anchor (``03 00 00 1f``) whose record matches NONE of the three existing
-``.opju`` axis-record forms (specimen / real / hybrid -- all return ``None``
-at that offset): a genuinely new, undocumented 4th record shape. Per the
-"conservative first decoder" scope, this is left undecoded and documented,
-not chased -- ``read_origin_template`` degrades that one file to a
-styles-only partial (see below) rather than guessing an axis record or
-failing the whole file, since its curve-style tokens decode fine
-independently.
+and page geometry all decoded verbatim, zero new code, against the corpus
+templates (``SLD_DoubleY.otp``, ``PNR-SF.otpu``, ``SLDdouble.otpu``,
+``UnpolFresnelNR.otpu``, and since 2026-11-20 ``PNR.otpu``, whose axis record
+matched none of the token-at-a-time forms but is the sparse ``.opj`` layer
+block ``opju_layer_record`` reads). A template whose axis record still decodes
+under no form degrades to a styles-only partial (see below) rather than
+guessing an axis record or failing the whole file, since its curve-style
+tokens decode independently.
 
 **What does NOT decode via the existing path: curve style.** A template
 carries no workbook columns, so ``opj_curves.extract_curves``/
@@ -303,7 +300,7 @@ def read_origin_template(path: Path) -> dict[str, Any]:
             "or an unrecognized template form."
         )
     # A layer can fail to decode (an axis-record shape this codebase doesn't
-    # recognize yet -- see module docstring's PNR.otpu note) while curve style
+    # recognize yet -- see the module docstring) while curve style
     # STILL decodes (it lives in an independent record); overrides then stays
     # None rather than the whole template failing -- an honest partial, not a
     # guess (per-curve style is real either way; only axis/legend is missing).

@@ -269,13 +269,19 @@ def test_realdata_box_layers_decode_to_origin(corpus_dir: Path) -> None:
 
 @pytest.mark.realdata
 def test_realdata_single_histogram_and_unnamed_box_kind(corpus_dir: Path) -> None:
-    """``SOP_meas`` Graph37: one histogram (COM 219, ``xof`` ``_A``) of
-    ``SOPvsHPPC1`` T; Graph80's page template names no box kind: omitted."""
+    """``SOP_meas`` Graph37: a histogram (COM 219, ``xof`` ``_A``) of
+    ``SOPvsHPPC1`` T plus, since ``opju_layer_record`` decodes it, the page's
+    second layer (the cumulative-percent line Origin's saved preview shows),
+    so the histogram is omitted as a stat layer of a multi-layer page;
+    Graph80's page template names no box kind: omitted."""
     rel = "origin/public/Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju"
     figs = _figures(_path(corpus_dir, rel))
-    (curve,) = _fig(figs, "Graph37")["curves"]
-    assert (curve["book"], curve["x"], curve["y"], curve["plotType"]) == (
-        "SOPvsHPPC1", "", "T", "histogram"
+    layers = {f["layer"]: f for f in figs if f.get("name") == "Graph37"}
+    assert sorted(layers) == [1, 2] and len(layers[2]["curves"]) == 1
+    assert layers[1]["curves"] == []
+    (note,) = layers[1]["curve_sheet_omitted"]
+    assert (note["book"], note["x"], note["y"], note["reason"]) == (
+        "SOPvsHPPC1", "", "T", STAT_LAYER_IN_PANELS
     )
     g80 = _fig(figs, "Graph80")
     assert g80["curves"] == []

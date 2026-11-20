@@ -1290,6 +1290,46 @@ the shipped contract)
   none starting at or below 0). Frontend: fail-closed empty layer, `%(?X)`
   titles, cross-book double-Y. Evidence and the A4/A5 owner questions:
   `docs/origin_re/curve_axis_fidelity.md` "Rendering rules".
+- ~~**Oracle graph pages with no decoded layer (lane C)**~~ (2026-11-20).
+  Of the 782 COM-listed pages (`axis_ranges.json`) with no decoded layer on
+  #775, 771 are graphs embedded in workbooks (528 sparklines the file does
+  not store; 243 `FitLine`/`Residual`/sparkline headers it does), 9 are
+  id-table-less pages decoded but unnamed, 2 have a `04 01` Y scale field.
+  Now: embedded headers are found (`opju_embedded_graphs`; 243/243 oracle
+  pages, 0 extras) and listed in the manifest (`embedded_graph_count`); a
+  workbook-page anchor is named after its header (12/12 oracle layers
+  agree); id-table-less `_cart_object` pages are graph pages
+  (`opju_layer_pages`, 9/9 agree); `04 01` reads as log10 (9/9 COM y.type).
+  A page counts as recovered only when a layer is imported, so 61 public
+  pages whose decoded layers were all filtered are now reported with their
+  previews. Oracle: pages decoded 1,514 -> 1,537, layers agreeing 2,783 ->
+  2,813, 0 disagreements / phantoms; every remaining page is an embedded
+  graph reported (231) or not stored (528). Public corpus: actionable
+  figures 3,192 -> 3,201, curves 7,829 -> 7,857, no project loses a figure,
+  curve or book; owner corpus unchanged except Hc2 Graph5 now reported.
+  `docs/origin_re/opju_embedded_graphs.md`. Open: sparkline count rule,
+  where `Residual` layers live, `02 00` scale fields.
+
+- ~~**Graph pages present but not recovered (`.opju` axis records)**~~
+  (2026-11-20). 202 of the 211 `graphs_not_recovered` pages had every layer
+  anchor, but no token-at-a-time axis reader decoded it. The anchor is the
+  first sparse chunk of the `.opj` layer block itself; expanded with CPYUA's
+  grammar the axis fields sit at the `.opj` offsets
+  (`opju_layer_record`, tried before the real-form reader, authenticated by
+  both scale fields + step/span sign; `docs/origin_re/opju_layer_record.md`).
+  Positive control 2,934 / 2,937 existing decodes identical; the 3 range and
+  8 scale disagreements are real-form misreads (saved previews); 0 of 222
+  coincidental anchors accepted. Corpus (351 files): unrecovered pages
+  211 -> 12, layers 2,991 -> 3,347, actionable figures 2,841 -> 3,187, curves
+  6,645 -> 7,807; no project loses a figure (4 `SOP_meas` histograms are now
+  omitted as stat layers of a two-layer page). COM rescore
+  (`axis_ranges.json`): all 252 newly decoded named layers and the 9 changed
+  ones agree, scales included; 0 phantoms. Graph pages only: book-page
+  (embedded) records are not read this way (their curves bind a column as X
+  where Origin plots row number). Covers item 75's axis record (Hc2 data
+  Graph34 matches its saved preview). `PNR.otpu` now decodes in full. Open:
+  `04 01` Y scale field, `80 e9`-at-98 records, id-table-less page naming.
+
 - ~~**`curve_sheet_unresolved` over-reported; a case-renamed book's sheets
   unbound**~~ (2026-11-20, item 67). The code was raised for every omitted
   curve: of 1,951 public-corpus figures, 1,772 only had error-bar plots and

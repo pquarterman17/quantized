@@ -338,7 +338,15 @@ def test_template_overrides_all_absent_is_none() -> None:
 
 realdata = pytest.mark.realdata
 
-_FULL_CASES = ["SLD_DoubleY.otp", "PNR-SF.otpu", "SLDdouble.otpu", "UnpolFresnelNR.otpu"]
+# PNR.otpu joined 2026-11-20: its axis record, which no token-at-a-time form
+# read, is the sparse ``.opj`` layer block ``opju_layer_record`` decodes.
+_FULL_CASES = [
+    "SLD_DoubleY.otp",
+    "PNR.otpu",
+    "PNR-SF.otpu",
+    "SLDdouble.otpu",
+    "UnpolFresnelNR.otpu",
+]
 
 
 @realdata
@@ -354,18 +362,3 @@ def test_realdata_corpus_templates_decode_a_full_style(corpus_dir: Path, fname: 
     assert "x_lim" in out["overrides"]
     assert out["seriesStyles"]  # at least one decoded curve style
     assert any(s for s in out["seriesStyles"] if s)  # at least one non-empty style
-
-
-@realdata
-def test_realdata_pnr_otpu_partial_styles_only(corpus_dir: Path) -> None:
-    """The documented one-off: PNR.otpu's single axis record matches none of
-    the three known ``.opju`` forms, but its curve style tokens still decode
-    -- overrides stays None, seriesStyles is populated."""
-    src = corpus_dir / "origin" / "PNR.otpu"
-    if not src.exists():
-        pytest.skip("'PNR.otpu' not present in the local corpus")
-    out = read_origin_template(src)
-    assert out["name"] == "PNR"
-    assert out["overrides"] is None
-    assert out["seriesStyles"]
-    assert any(s and s.get("color") for s in out["seriesStyles"])

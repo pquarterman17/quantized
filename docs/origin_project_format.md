@@ -3323,16 +3323,13 @@ no workbook column ever assigns the token's id). Book/x/y stay permanently
 absent for a template's curves by design, not by gap — there is no dataset
 for them to name.
 
-**One corpus file's axis record is a genuinely new, undecoded shape —
-`PNR.otpu`.** Its single axis anchor (`03 00 00 1f`) parses as `None` under
-all three known `.opju` axis-record forms (specimen §6.2's default-dialog
-form, real §6.2's "Real corpus" form, and the hybrid fallback) — a 4th
-record shape this pass does not characterize. Per the "conservative first
-decoder" scope for this item, it is left undecoded and documented here
-rather than chased with a new RE pass. Its curve-style tokens (6 of them)
-decode independently and fine (the tell that style really doesn't depend on
-the axis record at all) — `read_origin_template` degrades this ONE file to
-a styles-only partial (`overrides: null`, `seriesStyles` populated) rather
+**`PNR.otpu`'s axis record (decoded since 2026-11-20).** Its single axis
+anchor (`03 00 00 1f`) parsed as `None` under all three token-at-a-time
+`.opju` forms (specimen, real, hybrid). It is the sparse-encoded `.opj`
+layer block that `opju_layer_record` reads at fixed offsets
+(`docs/origin_re/opju_layer_record.md`), so the template now decodes in
+full. A template whose axis record no form reads still degrades to a
+styles-only partial (`overrides: null`, `seriesStyles` populated) rather
 than failing the whole import or guessing an axis record.
 
 **Mapping to `GraphTemplate` (`frontend/src/lib/figuredoc.ts`) — honestly
@@ -3376,7 +3373,7 @@ shape's own limitation rather than adding a new one:
 | File | Container | Layer(s) decoded | Curve styles decoded | Notes |
 |---|---|---|---|---|
 | `SLD_DoubleY.otp` | CPYA 4.3227 | 2 (double-Y) | 5 | full template |
-| `PNR.otpu` | CPYUA 4.3380 | 0 | 6 | axis record: new, undecoded shape — styles-only partial |
+| `PNR.otpu` | CPYUA 4.3380 | 1 | 6 | full template (axis record via `opju_layer_record`, 2026-11-20) |
 | `PNR-SF.otpu` | CPYUA 4.3380 | 1 | 12 | full template |
 | `SLDdouble.otpu` | CPYUA 4.3380 | 1 | 5 | full template |
 | `UnpolFresnelNR.otpu` | CPYUA 4.3380 | 1 | 3 | full template, legend position resolved |
