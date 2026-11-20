@@ -54,12 +54,15 @@ const rich = (b: ErrorBinding) => b.axis === "x" || b.side !== "both";
 const same = (a: ErrorBinding, b: ErrorBinding) =>
   a.channel === b.channel && a.target === b.target && a.axis === b.axis && a.side === b.side;
 
+const claims = (a: ErrorBinding, b: ErrorBinding) => a.channel === b.channel || (a.target === b.target && a.axis === b.axis);
+
 /** The document errors for an applied figure: the dataset's own richer roles
  *  (minus any the figure re-binds: the same channel, or the same curve and
- *  axis), the figure's, and the symmetric `errKeys` the view carries. Null
- *  when the document needs no write: the figure has none and the current
- *  document holds no richer binding the dataset does not (a previous
- *  figure's, which must not linger). */
+ *  axis), the figure's (marked `origin`), the user's own window-only richer
+ *  bindings, and the symmetric `errKeys` the view carries. A user binding wins
+ *  over a figure binding that claims the same channel or curve and axis. Null
+ *  when the document needs no write: the figure has none, and `current` holds
+ *  neither an earlier Origin-written binding to clear nor a user's to keep. */
 export function figureDocumentErrors(
   own: readonly ErrorBinding[],
   roles: readonly ErrorBinding[] | undefined,
@@ -67,9 +70,12 @@ export function figureDocumentErrors(
   errKeys: Readonly<Record<number, number>>,
 ): ErrorBinding[] | null {
   const base = (roles ?? []).filter(rich);
-  const stale = (current ?? []).some((b) => rich(b) && !base.some((r) => same(r, b)));
-  if (!own.length && !stale) return null;
-  const kept = base.filter((r) => !own.some((o) => o.channel === r.channel || (o.target === r.target && o.axis === r.axis)));
+  // The user's own: richer, unmarked, and not a dataset role.
+  const user = (current ?? []).filter((b) => rich(b) && b.origin !== true && !base.some((r) => same(r, b)));
+  const stale = (current ?? []).some((b) => b.origin === true);
+  if (!own.length && !stale && !user.length) return null;
+  const mine = own.filter((o) => !user.some((u) => claims(u, o))).map((o) => ({ ...o, origin: true as const }));
+  const kept = base.filter((r) => !mine.some((o) => claims(o, r)));
   const legacy = Object.entries(errKeys).map(([t, e]): ErrorBinding => ({ channel: e, target: Number(t), axis: "y", side: "both" }));
-  return [...kept, ...own, ...legacy];
+  return [...kept, ...mine, ...user, ...legacy];
 }

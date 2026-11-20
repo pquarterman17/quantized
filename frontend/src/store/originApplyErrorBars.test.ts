@@ -6,12 +6,16 @@
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ErrorBinding } from "../lib/errorRoles";
 import { buildErrorSpans } from "../lib/errorbars";
 import { buildFigureSpecFromDocument } from "../lib/figureSpec";
 import type { Dataset, DataStruct, OriginCurve } from "../lib/types";
 import { liveWindowDocument } from "./liveWindowDocument";
 import { loadOriginApplyLibs } from "./originApplyLibs";
+import { parseWorkspace } from "../lib/workspace";
+import { serializeWorkspace } from "../lib/workspaceSerialize";
 import { useApp } from "./useApp";
+import { withWindowDocumentErrors } from "./windowDocuments";
 import { mainWindow } from "./windowDefaults";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -74,9 +78,9 @@ describe("applyOriginFigure: asymmetric and X error bars", () => {
     expect(s.yKeys).toEqual([0]);
     const errors = liveDoc().bindings.errors;
     expect(errors).toEqual(expect.arrayContaining([
-      { channel: 1, target: 0, axis: "y", side: "+" },
-      { channel: 2, target: 0, axis: "y", side: "-" },
-      { channel: 3, target: 0, axis: "x", side: "both" },
+      { channel: 1, target: 0, axis: "y", side: "+", origin: true },
+      { channel: 2, target: 0, axis: "y", side: "-", origin: true },
+      { channel: 3, target: 0, axis: "x", side: "both", origin: true },
     ]));
     // the canvas: up by C, down by D, sideways by E
     const spans = buildErrorSpans(book, [0], errors).get(1)!;
@@ -105,5 +109,74 @@ describe("applyOriginFigure: asymmetric and X error bars", () => {
     expect(liveDoc().bindings.errors).toHaveLength(3);
     useApp.getState().undo();
     expect(liveDoc().bindings.errors).toEqual(before);
+  });
+
+  // The user's own window-only bindings, made in the Graph Builder wells.
+  const USER_X = { channel: 3, target: 0, axis: "x" as const, side: "both" as const };
+  const USER_ASYM = { channel: 2, target: 0, axis: "y" as const, side: "+" as const };
+  const bindAsUser = (...errors: ErrorBinding[]) => {
+    const s = useApp.getState();
+    useApp.setState(withWindowDocumentErrors(s.plotWindows, s.focusedWindowId ?? "", errors));
+  };
+  const userOnly = () => liveDoc().bindings.errors.filter((b) => b.origin !== true);
+  const originOnly = () => liveDoc().bindings.errors.filter((b) => b.origin === true);
+
+  it("keeps a user's own X and asymmetric bindings through an apply and a re-apply", () => {
+    useApp.getState().applyOriginFigure("plain");
+    bindAsUser(USER_X, USER_ASYM);
+    useApp.getState().applyOriginFigure("plain");
+    expect(userOnly()).toEqual(expect.arrayContaining([USER_X, USER_ASYM]));
+    useApp.getState().applyOriginFigure("asym");
+    useApp.getState().applyOriginFigure("plain");
+    expect(userOnly()).toEqual(expect.arrayContaining([USER_X, USER_ASYM]));
+    expect(originOnly()).toEqual([]);
+  });
+
+  it("replaces an Origin-written binding on the next apply", () => {
+    useApp.getState().applyOriginFigure("asym");
+    expect(originOnly()).toHaveLength(3);
+    useApp.getState().applyOriginFigure("asym");
+    expect(originOnly()).toHaveLength(3);
+    useApp.getState().applyOriginFigure("plain");
+    expect(originOnly()).toEqual([]);
+  });
+
+  it("a user binding on the same series wins over the figure's", () => {
+    // The user bound C as the X bar of series 0; the figure binds E there.
+    const user = { channel: 1, target: 0, axis: "x" as const, side: "both" as const };
+    useApp.getState().applyOriginFigure("plain");
+    bindAsUser(user);
+    useApp.getState().applyOriginFigure("asym");
+    const errors = liveDoc().bindings.errors;
+    expect(errors).toContainEqual(user);
+    expect(errors.filter((b) => b.axis === "x")).toEqual([user]);
+    // its other, unconflicting halves still land
+    expect(originOnly()).toContainEqual({ channel: 2, target: 0, axis: "y", side: "-", origin: true });
+  });
+
+  it("the marker survives save and reopen, so the reopened window still replaces it", () => {
+    useApp.getState().applyOriginFigure("asym");
+    const s0 = useApp.getState();
+    const extra = { channel: 0, target: 1, axis: "x" as const, side: "both" as const };
+    useApp.setState(withWindowDocumentErrors(s0.plotWindows, s0.focusedWindowId ?? "", [...liveDoc().bindings.errors, extra]));
+    const st = useApp.getState();
+    const text = serializeWorkspace({ ...st, plotWindows: st.windowsForSave() });
+    useApp.setState(useApp.getInitialState(), true);
+    useApp.getState().loadWorkspace(parseWorkspace(text));
+    expect(originOnly()).toHaveLength(3);
+    expect(userOnly()).toContainEqual(extra);
+    useApp.getState().applyOriginFigure("plain");
+    expect(originOnly()).toEqual([]);
+    expect(userOnly()).toContainEqual(extra);
+  });
+
+  it("undo restores the marked bindings with the user's intact", () => {
+    useApp.getState().applyOriginFigure("plain");
+    bindAsUser(USER_X);
+    useApp.getState().applyOriginFigure("asym");
+    useApp.getState().applyOriginFigure("plain");
+    useApp.getState().undo();
+    expect(originOnly()).toHaveLength(2)  // the X bar is the user's: theirs wins;
+    expect(userOnly()).toContainEqual(USER_X);
   });
 });

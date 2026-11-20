@@ -283,8 +283,20 @@ behaviour → evidence → guarding test.
   by exporting a spatial page whose panel carries `errKeys` →
   `frontend/src/lib/spatialPageExport.test.ts::exports the bars the panel's canvas draws: Origin's asymmetric halves and the errKeys whiskers`.
 * **Frontend: the apply writes the asymmetric / X bindings into the focused
-  window's document; a later figure on the same book clears them** →
+  window's document, marked `origin: true`; a later figure replaces exactly
+  the marked ones** →
   `frontend/src/store/originApplyErrorBars.test.ts::a later figure on the same book does not keep them`,
-  `::undo takes the written bindings back with the rest of the apply`. A
-  user's own window-only X / asymmetric binding is also cleared by a later
-  figure apply (it cannot be told from a previous figure's): UNGUARDED.
+  `::replaces an Origin-written binding on the next apply`,
+  `::undo takes the written bindings back with the rest of the apply`,
+  `::the marker survives save and reopen, so the reopened window still replaces it`.
+* **A user's own window-only X / asymmetric binding (Graph Builder wells,
+  unmarked) survives an Origin apply and a re-apply; on a conflict (same
+  channel, or same curve and axis) the user's wins and the figure's is
+  skipped** →
+  `frontend/src/store/originApplyErrorBars.test.ts::keeps a user's own X and asymmetric bindings through an apply and a re-apply`,
+  `::a user binding on the same series wins over the figure's`,
+  `frontend/src/lib/originCurveErrors.test.ts::merges the figure's bindings over the dataset's richer roles`.
+* **`ErrorBinding.origin` is gated for v0.34.0** (its `errorBindings` keeps
+  only channel/target/axis/side, so the marker would be dropped and the bar
+  taken for the user's) →
+  `frontend/src/lib/workspaceForwardCompat.test.ts` (`ErrorBinding.origin` case).

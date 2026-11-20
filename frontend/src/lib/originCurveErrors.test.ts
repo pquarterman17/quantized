@@ -106,12 +106,18 @@ describe("asymmetric / X error bars", () => {
       { channel: 3, target: -1, axis: "x" as const, side: "both" as const }, // kept
     ];
     expect(figureDocumentErrors(own, roles, [], { 2: 4 })).toEqual([
-      roles[1], own[0], { channel: 4, target: 2, axis: "y", side: "both" },
+      roles[1], { ...own[0], origin: true }, { channel: 4, target: 2, axis: "y", side: "both" },
     ]);
     // nothing to write: no figure bindings and nothing stale
     expect(figureDocumentErrors([], roles, roles, {})).toBeNull();
     // a previous figure's binding is cleared
-    expect(figureDocumentErrors([], roles, own, { 0: 2 })).toEqual([...roles, { channel: 2, target: 0, axis: "y", side: "both" }]);
+    const written = own.map((b) => ({ ...b, origin: true as const }));
+    expect(figureDocumentErrors([], roles, written, { 0: 2 })).toEqual([...roles, { channel: 2, target: 0, axis: "y", side: "both" }]);
+    // an unmarked one is the user's: kept as it is, never marked
+    expect(figureDocumentErrors([], roles, own, {})).toEqual([...roles, ...own]);
+    expect(figureDocumentErrors([], roles, [...roles, ...own], { 0: 2 })).toEqual([
+      ...roles, ...own, { channel: 2, target: 0, axis: "y", side: "both" },
+    ]);
   });
 
   it("a filled error plot draws its Y error as a band", () => {

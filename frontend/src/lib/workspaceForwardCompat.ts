@@ -60,6 +60,7 @@
 
 import type { AxisFormat } from "./axisFormat";
 import type { FigureSpec } from "./api/figures";
+import type { ErrorBinding } from "./errorRoles";
 import type { FigureDocument } from "./figureDocument";
 import type { MapViewState } from "./mapView";
 import type { PlotView, PlotWindow } from "./plotview";
@@ -122,6 +123,13 @@ export const EXPORT_SERIES_STYLE: Classify<ExportSeriesStyle> = {
 };
 
 // The canonical figure document: a window's `document`, an editable figure.
+// A document's error binding (`bindings.errors[]`). 0.34's `errorBindings`
+// rebuilds each element from channel/target/axis/side alone, so the Origin-apply
+// marker is dropped on open + save (measured the same way). The bar itself
+// survives; only the next Origin apply would then take it for the user's, so a
+// file holding a marker is written as version 6.
+export const ERROR_BINDING: Classify<ErrorBinding> = { channel: V, target: V, axis: V, side: V, origin: G };
+
 export const FIGURE_DOCUMENT: Classify<FigureDocument> = {
   schema: V, version: V, id: V, name: V, bindings: V, data: V, plot: V, output: V, publication: V,
   overlays: D,
@@ -272,6 +280,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   RecipeMapView: RECIPE_MAP_VIEW,
   Dataset: DATASET,
   FigureDocument: FIGURE_DOCUMENT,
+  ErrorBinding: ERROR_BINDING,
 };
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
@@ -293,6 +302,12 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
 }
 
+function checkDocument(d: unknown, found: Set<string>): void {
+  checkType(d, "FigureDocument", found);
+  const errors = isObj(d) && isObj(d.bindings) ? d.bindings.errors : undefined;
+  for (const b of Array.isArray(errors) ? errors : []) checkType(b, "ErrorBinding", found);
+}
+
 /** The gated features (`Type.field`) in a serialized `.dwk` document: what
  *  v0.34.0 would lose on open + save. Empty for a file 0.34 reads in full. */
 export function featuresV034WouldDrop(doc: unknown): string[] {
@@ -304,9 +319,9 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
   for (const d of datasets) checkType(d, "Dataset", found);
   for (const w of Array.isArray(doc.plotWindows) ? doc.plotWindows : []) {
     checkType(w, "PlotWindow", found);
-    if (isObj(w)) checkType(w.document, "FigureDocument", found);
+    if (isObj(w)) checkDocument(w.document, found);
   }
-  for (const f of Array.isArray(doc.editableFigures) ? doc.editableFigures : []) checkType(f, "FigureDocument", found);
+  for (const f of Array.isArray(doc.editableFigures) ? doc.editableFigures : []) checkDocument(f, found);
   for (const s of Array.isArray(doc.savedPlotSpecs) ? doc.savedPlotSpecs : []) {
     if (isObj(s) && isObj(s.spec)) checkType(s.spec.display, "DisplayBlock", found);
   }

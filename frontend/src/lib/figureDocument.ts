@@ -318,7 +318,8 @@ function errorBindings(value: unknown): ErrorBinding[] {
     if (!Number.isInteger(target) || (target as number) < -1) return [];
     if (axis !== "x" && axis !== "y") return [];
     if (side !== "both" && side !== "+" && side !== "-") return [];
-    return [{ channel: channel as number, target: target as number, axis, side }];
+    // The Origin-apply marker (ErrorBinding.origin) rides along; only `true` counts.
+    return [{ channel: channel as number, target: target as number, axis, side, ...(candidate.origin === true ? { origin: true as const } : {}) }];
   });
 }
 

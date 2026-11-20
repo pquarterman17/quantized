@@ -71,6 +71,10 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxisOf = { 1: 3 };
   }),
   "PlotView.seriesRamp": (ws) => editView(ws, (v) => { v.seriesRamp = { map: "viridis" }; }),
+  "ErrorBinding.origin": (ws) => {
+    const doc = plotWindow(ws).document!;
+    doc.bindings = { ...doc.bindings, errors: [...doc.bindings.errors, { channel: 1, target: 0, axis: "x", side: "both", origin: true }] };
+  },
   "PlotWindow.linkYGroup": (ws) => { plotWindow(ws).linkYGroup = 1; },
   "AxisFormat.prob": (ws) => editFmt(ws, { prob: "percent" }),
   "AxisFormat.custom": (ws) => editFmt(ws, { custom: { at: [1, 2] } }),
@@ -269,6 +273,7 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/^\$\.plotWindows\[\]\.document$/, "FigureDocument"],
   [/^\$\.editableFigures\[\]$/, "FigureDocument"],
   [/\.view$/, "PlotView"],
+  [/\.bindings\.errors\[\]$/, "ErrorBinding"],
   [/\.(xFmt|yFmt|y2Fmt)$/, "AxisFormat"],
   [/\.seriesStyles\[\]$/, "ExportSeriesStyle"],
   [/\.seriesStyles\.[^.[\]]+$/, "SeriesStyle"],

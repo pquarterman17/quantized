@@ -77,13 +77,26 @@ export function originFigureSourceDatasetIds(
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
-/** Origin's asymmetric / X error bars (`own`, lib/originCurveErrorRoles) into
- *  the focused window's document errors, which the canvas and the export both
- *  draw from; the symmetric ones already ride `errKeys`. */
-function applyFigureErrors(set: SliceSet, get: SliceGet, own: ErrorBinding[], ds: Dataset | undefined): void {
+/** The focused plot window's document errors and the dataset they index,
+ *  taken BEFORE the apply: `setActive` re-seeds a window's errors from its
+ *  dataset's roles, which would drop the user's own window-only bindings. */
+interface PriorErrors { datasetId: string | null; errors: readonly ErrorBinding[] }
+function priorErrors(get: SliceGet): PriorErrors | null {
   const s = get();
   const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
-  const current = win?.kind === "plot" ? win.document?.bindings.errors : undefined;
+  return win?.kind === "plot" && win.document ? { datasetId: win.datasetId, errors: win.document.bindings.errors } : null;
+}
+
+/** Origin's asymmetric / X error bars (`own`, lib/originCurveErrorRoles) into
+ *  the focused window's document errors, which the canvas and the export both
+ *  draw from; the symmetric ones already ride `errKeys`. `prior` carries the
+ *  user's own bindings across the apply's re-seed, while the window stays on
+ *  the same dataset (channel indices mean nothing on another). */
+function applyFigureErrors(set: SliceSet, get: SliceGet, own: ErrorBinding[], ds: Dataset | undefined, prior: PriorErrors | null): void {
+  const s = get();
+  const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+  const now = win?.kind === "plot" ? win.document?.bindings.errors : undefined;
+  const current = prior && win?.datasetId === prior.datasetId ? prior.errors : now;
   const errors = figureDocumentErrors(own, ds?.errorRoles, current, s.errKeys);
   if (errors) set(withWindowDocumentErrors(s.plotWindows, s.focusedWindowId ?? "", errors));
 }
@@ -121,6 +134,7 @@ export function runOriginFigureApply(
     const winId = s.createWindow(entry.datasetId, undefined, title);
     s.focusWindow(winId);
   }
+  const prior = priorErrors(get);
   const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
   // Source mappings first, then Origin's `%(?X)`-style axis-title codes
   // resolved from each layer's own curve columns (A6).
@@ -246,7 +260,7 @@ export function runOriginFigureApply(
         // header (decode #52; position only when decoded, never guessed).
         ...libs.originLegendState(main),
       });
-      applyFigureErrors(set, get, errs.roles, refreshed);
+      applyFigureErrors(set, get, errs.roles, refreshed, prior);
       get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
       return;
     }
@@ -318,7 +332,7 @@ export function runOriginFigureApply(
         ...libs.originLegendState(lower.figure),
       });
       const meta = dsForPartner.data.metadata ?? {};
-      applyFigureErrors(set, get, [lower.figure, upper.figure].flatMap((f) => figureCurveErrorBindings(f, meta)), dsForPartner);
+      applyFigureErrors(set, get, [lower.figure, upper.figure].flatMap((f) => figureCurveErrorBindings(f, meta)), dsForPartner, prior);
       get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
       return;
     }
@@ -384,7 +398,7 @@ export function runOriginFigureApply(
     // Origin's own error-bar plots (OriginCurve.yErr) over the book's pairings.
     ...(ds ? { errKeys: libs.withCurveErrKeys(bookErrorLayer(ds).errKeys, libs.figureCurveErrKeys(fig, ds)) } : {}),
   });
-  applyFigureErrors(set, get, ds ? figureCurveErrorBindings(fig, ds.data.metadata ?? {}) : [], ds);
+  applyFigureErrors(set, get, ds ? figureCurveErrorBindings(fig, ds.data.metadata ?? {}) : [], ds, prior);
   // A ternary figure opens the ternary workshop on Origin's A, B, C columns.
   libs.queueFigureTernary(fig, ds);
   if (failClosed) {
