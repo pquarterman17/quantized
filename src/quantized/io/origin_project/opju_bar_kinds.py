@@ -26,7 +26,8 @@ depends on the layer's other plots:
   draws them side by side (203) or stacked (213) per X. That is the Stat
   Stage bar chart grouped by the X column with one bar per row, so the
   figure gets ``bar_layout`` ``"grouped"`` / ``"stacked"`` when every curve
-  of a one-layer page is one, all on one sheet against one X, no curve has
+  of a one-layer page is one, all on one sheet against the sheet's own X
+  column (another X column never reaches the stage), no curve has
   an error bar and that X (from the imported book) holds unique, evenly
   spaced values where it is finite -- the frontend then opens the Stat Stage
   (``originFigureSelection.figureBarState``; the stage offers X as a group
@@ -119,6 +120,23 @@ def _even_unique_x(books: Sequence[Any], book: str, col: str) -> bool:
     return bool(d[0] > 0 and np.allclose(d, d[0], rtol=1e-9, atol=0.0))
 
 
+def _is_book_x(books: Sequence[Any], book: str, col: str) -> bool:
+    """``True`` when ``col`` is the imported book's own X (``.time``): its X
+    column, or a text X that never became numeric (``book_column``). Only
+    that X reaches the Stat Stage: a curve recorded against another column
+    is drawn by the frontend's own-X overlay (``recordedXConflicts``), which
+    never opens the stage, and the stage offers no numeric column as a group
+    (``statPicks.withPickedXGroup`` covers the X alone)."""
+    for bk in books:
+        meta = getattr(bk, "metadata", {}) or {}
+        if str(meta.get("origin_book") or "") != book:
+            continue
+        names = [str(n) for n in meta.get("origin_column_names") or []]
+        x_name = str(meta.get("x_column_name") or "")
+        return col == x_name if x_name else col not in names
+    return False
+
+
 def _bar_layout(curves: list[dict[str, Any]], kind: str, layers: int, books: Sequence[Any]) -> bool:
     """The several-series column layer is Origin's grouped / stacked bar
     chart quantized's Stat Stage draws (module docstring)."""
@@ -128,7 +146,8 @@ def _bar_layout(curves: list[dict[str, Any]], kind: str, layers: int, books: Seq
         return False
     if any(c.get("yErr") for c in curves):
         return False
-    return _even_unique_x(books, str(curves[0].get("book")), str(curves[0].get("x")))
+    book, x = str(curves[0].get("book")), str(curves[0].get("x"))
+    return _is_book_x(books, book, x) and _even_unique_x(books, book, x)
 
 
 def _left_out(fig: dict[str, Any], positions: list[int]) -> dict[str, Any]:

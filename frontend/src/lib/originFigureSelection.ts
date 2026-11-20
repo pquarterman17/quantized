@@ -175,11 +175,12 @@ function figureBarState(
 ): { statMode?: true; statPicks?: StatPicks } {
   const xName = String(meta.x_column_name ?? "");
   const x = curves[0].x;
-  const group = x === xName || (!xName && !letters.includes(x)) ? -1 : letters.indexOf(x);
+  // Only the sheet's own X (as the importer requires): the stage offers no
+  // other numeric column as a group (`statPicks.withPickedXGroup`).
+  if (xName ? x !== xName : letters.includes(x)) return {};
   const value = letters.indexOf(curves[0].y);
-  if (group === -1 && x !== xName && xName) return {};
   if (value < 0 || curves.some((c) => c.x !== x || c.book !== curves[0].book)) return {};
-  const cols: StatCols = { group, group2: null, value, facet: null, color: null };
+  const cols: StatCols = { group: -1, group2: null, value, facet: null, color: null };
   return { statMode: true, statPicks: { mode: "bar", barStack: layout === "stacked", cols: statColRefs(ds, cols) } };
 }
 

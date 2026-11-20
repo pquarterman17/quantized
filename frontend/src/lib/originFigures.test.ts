@@ -1539,8 +1539,8 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
     });
     expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("A") }), two)).toEqual(picks(false, [-1, ""]));
     expect(figureStatState(figure({ bar_layout: "stacked", curves: cols("A") }), two)).toEqual(picks(true, [-1, ""]));
-    // another column as X groups by that column
-    expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("C") }), two)).toEqual(picks(false, [1, "Width"]));
+    // another column as X: not the stage (it offers no numeric column as a group)
+    expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("C") }), two)).toEqual({});
     // a text X that never became numeric (no x_column_name) is the row index
     const textX: Dataset = { ...two, data: { ...two.data, metadata: { ...two.data.metadata, x_column_name: "" } } };
     expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("A") }), textX)).toEqual(picks(false, [-1, ""]));

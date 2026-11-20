@@ -187,6 +187,11 @@ def test_grouped_fails_closed() -> None:
         assert BAR_LAYOUT not in f
     (unknown,) = _apply([_fig(["column", "column"])], books=[])
     assert BAR_LAYOUT not in unknown
+    # every curve against one X, but not the sheet's own X column: the
+    # frontend draws such a layer with its own-X overlay, never the stage
+    # (SOP_meas Graph75 drew four overlapping bars on one X)
+    (not_book_x,) = _apply([_fig(["column", "column"], x="D")])
+    assert BAR_LAYOUT not in not_book_x
 
 
 def test_text_x_is_the_row_index() -> None:
