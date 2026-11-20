@@ -118,7 +118,7 @@ def _filter_reason(fig: dict[str, Any], sources: tuple[str, ...]) -> str | None:
     if fig.get("curves") or fig.get("map") or fig.get("ternary") or fig.get("curve_sheet_omitted"):
         return None
     if _source_resolves(fig, sources):
-        # A layer whose curves were left out for their sheet is a real user
+        # A layer whose curves were all left out is a real user
         # graph: it stays, and its fidelity says why it has no curves.
         return None
     hint = str(fig.get("source_hint") or "").strip()
@@ -132,6 +132,26 @@ def _filter_reason(fig: dict[str, Any], sources: tuple[str, ...]) -> str | None:
 def _omitted_reasons(fig: dict[str, Any]) -> list[str]:
     notes = fig.get("curve_sheet_omitted") or []
     return [str(n.get("reason", "")) if isinstance(n, dict) else "" for n in notes]
+
+
+# `.opju` curves left out (`curve_sheet_omitted`), by what is not proven.
+# The per-curve detail rides on the figure. Only a sheet that is NOT proven
+# is `curve_sheet_unresolved`; most omissions are on a proven sheet.
+_SHEET_UNPROVEN = frozenset({"sheet_unknown", "x_sheet_unproven"})  # opju_curve_sheets
+_ERROR_BAR_PLOT = "error_bar_plot"  # opju_plot_gates: bars drawn from designations only
+
+
+def _left_out_codes(reasons: list[str]) -> list[str]:
+    """Fidelity codes for a figure's omitted curves. A plot Origin itself
+    hides (`hidden_in_origin`) is not a loss."""
+    codes = []
+    if any(r in _SHEET_UNPROVEN for r in reasons):
+        codes.append("curve_sheet_unresolved")
+    if _ERROR_BAR_PLOT in reasons:
+        codes.append("error_bar_plots")
+    if any(r not in _SHEET_UNPROVEN | {HIDDEN_IN_ORIGIN, _ERROR_BAR_PLOT} for r in reasons):
+        codes.append("curves_left_out")  # X, rows, plot kind or data not proven
+    return codes
 
 
 def _recovered_groups(fig: dict[str, Any]) -> list[str]:
@@ -193,11 +213,7 @@ def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
         # The per-curve detail is the figure's own `curve_sheet_notes`; the
         # frontend words it against the books that were actually imported.
         omissions.append("curve_sheet_mismatch")
-    if any(r != HIDDEN_IN_ORIGIN for r in _omitted_reasons(fig)):
-        # `.opju`: curves left out, not drawn from the wrong sheet
-        # (`opju_curve_sheets`); the per-curve detail rides on the figure.
-        # A plot Origin itself hides (`hidden_in_origin`) is not a loss.
-        omissions.append("curve_sheet_unresolved")
+    omissions.extend(_left_out_codes(_omitted_reasons(fig)))
     if fig.get("marker_encoding_not_decoded"):
         # bubble / colour-mapped scatter: X/Y drawn, size/colour map not
         # (`opju_layer_kind`)

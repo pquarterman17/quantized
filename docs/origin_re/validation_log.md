@@ -763,6 +763,84 @@ Rules: `docs/origin_project_format.md` §3.5 "Fail-closed rules added by the
   stay out of `axis_ranges.json`: enumerated this way, every unlisted page
   would score as a phantom.
 
+## 2026-11-20 — curve sheets: what `curve_sheet_unresolved` really counted (no Origin install)
+
+**Question.** 1,951 of 2,841 actionable public-corpus figures carried
+`curve_sheet_unresolved`. How many curves are bound to an unproven or wrong
+sheet of a multi-sheet book?
+
+**Answer: almost none.** The code was raised for ANY omitted curve except a
+hidden one. By the omitted curves' reasons (main `9fe23400`): 1,772 figures
+only `error_bar_plot` (63 on single-sheet books, 1,709 on multi-sheet ones,
+nearly all the two copies of `PerceivedRiskandPrediction.opju`; the sheet
+is proven, the bars are just not lines), 138 other proven-sheet reasons
+(`x_not_a_column`, stat layers, row ranges, filters, token X; 67 single-,
+71 multi-sheet), and 41 with a sheet-related reason in 7 projects:
+
+| reason | curves | what it was |
+|---|---:|---|
+| `column_not_imported` | 79 | sheet proven; the missing column is the X (Text / report X: soil deep, Figure4, TEA, 生化指标非线性, RSOS_SC, Degree-of-impact Book278@2). Now `x_not_imported`. |
+| `x_sheet_unproven` | 24 | sheet proven; no X record on it (Degree-of-impact `Book1A@2`, `Book10@3`, `Book10A@3`; ids contiguous, none missing; the saved previews are per-column charts at X = 1..12 / 1..6). Now `sheet_x_not_found`. |
+| `sheet_unknown` | 8 | Absorption-D3 `CuSCH3vac`: **ambiguous**, fixed below. |
+| `book_not_imported` | 2 | Absorption-D3 `Cu5Cys4wat@2/@3`: sheet proven, sheets are empty (`empty_books_omitted`); Origin draws nothing either. |
+
+No figure had a curve drawn from a wrong sheet: every kept re-bound curve
+names an imported `Book@N` and column. The 3 `curve_sheet_mismatch`
+figures are `.opj` (`DO.opj` Graph1/Graph6, `strings_testing.opj` Graph1):
+the curves name a book that is not imported, so nothing is drawn; owner
+decision 2026-11-13 ("report, do not re-bind") stands.
+
+**Fix 1: a book renamed by case only.** Window `CuSCH3vac` holds 6 sheets
+whose datasets are `Cusch3vac_B`, `@2` … `@5` and `CuSCH3vac_B@6`; its 6
+`B` ids (4, 6, 8, 10, 12, 154) faced 1 exact-spelling dataset, so none was
+proven. `off_sheet_ids` now falls back to a case-insensitive match (Origin
+names are case-insensitive; `opju_loose_books` already compares windows this
+way) only when the exact spelling does not align, and keys each sheet by the
+dataset's spelling, which is the importer's book name (`Cusch3vac@4`).
+Oracles, each independent of the rank alignment:
+
+- the window's sheet segments (signal S) name the sheets B_HandH_Lyp,
+  CAM-B3Lyp, M06-2X, PBE0, wB97X, CCSD and hold ids 4, 6, 8, 10, 12, 154 in
+  that order; the five graphs named after a functional now plot exactly
+  that sheet (PBE0 -> `Cusch3vac@4`), and in each the four sibling books
+  (rank-proven before) are on the same sheet number;
+- `Graph1`'s saved preview: legend BHandHLyp / CAM / M06 / PBE0 / wB97X /
+  STEOM-CCSD with peaks 0.35 at 200 nm, 0.36 at 207, 0.34 at 202, 0.24 at
+  228, 0.48 at 194 and 0.025 at 249 -- the six re-bound sheets' maxima in
+  that order (`Cusch3vac` 0.353 at 200.2 … `CuSCH3vac@6` 0.025 at 249.3);
+  layer 2 (the inset) shows only red / blue / orange, the three ids not
+  hidden (`@2`, `@3`, `@6`);
+- plan item 67's COM note: Origin plots `Cusch3vac@4` in PBE0.
+
+Negative controls: the exact spelling wins whenever it aligns (corpus: 1
+book in 351 files has a second spelling); two id-table books differing only
+by case are matched exactly; a folded count that still differs proves
+nothing (synthetic tests).
+
+**Fix 2: fidelity says what was not proven.** `curve_sheet_unresolved` is
+now raised only for `sheet_unknown` / `x_sheet_unproven`; `error_bar_plot`
+gives `error_bar_plots`, every other non-hidden reason `curves_left_out`
+(`fidelity_manifest.md`).
+
+**Corpus delta (351 files, `tools`-free sweep of `_import_with_books`).**
+`curve_sheet_unresolved` 1,951 -> 0 figures; `error_bar_plots` 1,777,
+`curves_left_out` 171, `curve_sheet_mismatch` 3 (unchanged). Curves
+6,645 -> 6,661: +16, all in Absorption-D3 (PBE0, B_HandH_Lyp, wB97X,
+CAM-B3Lyp, M06-2X one each, Graph1 L1 six, L2 three, COMP_Cu two). 0 curves
+lost or re-bound elsewhere, 0 figures or books changed; 32 more figures
+change only an omission reason (above). Owner corpus (104 lab projects,
+specimens and probes; Hc2, Moke, PNR, RockingCurve among them): 501 figures
+and 1,452 curves before and after with identical bindings and omission
+reasons; `curve_sheet_unresolved` 56 -> 0 (24 `error_bar_plots` on
+single-sheet books, 32 `curves_left_out` in Hc2 data; no sheet-related
+reason there). Realdata oracles:
+`tests/test_io_origin_opju_sheet_oracles.py` (Altaxo paired `.opj`/`.opju`
++ the sibling-sheet check).
+
+**Owner COM check left:** none needed for the re-bindings (preview + COM
+note). For `sheet_x_not_found` (Degree-of-impact, 24 curves), confirm the
+plot type (box / per-column) before any decode is attempted.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
