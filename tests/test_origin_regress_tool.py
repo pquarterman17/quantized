@@ -231,3 +231,82 @@ def test_fingerprint_is_value_free_and_deterministic() -> None:
     assert fp["figures"][0]["curves"][0] == {"book": "B1", "x": "A", "y": "B", "yErrPlus": "C"}
     assert fp["figures"][0]["omitted"][0]["reason"] == "hidden_in_origin"
     assert fpl.fingerprint_payload(payload) == fp
+
+
+def _fig(name: str | None, layer: int = 1, y: str = "B", **kw: Any) -> dict[str, Any]:
+    f = copy.deepcopy(_proj([_curve(y=y)])["figures"][0])
+    f["name"] = name
+    f["layer"] = layer
+    f.update(kw)
+    return f
+
+
+def _multi(*figs: dict[str, Any]) -> dict[str, Any]:
+    p = _proj()
+    p["figures"] = list(figs)
+    p["actionable"] = len(figs)
+    return p
+
+
+def test_unnamed_and_duplicate_named_figures_are_all_checked() -> None:
+    base = _multi(_fig(None, y="B"), _fig(None, y="C"), _fig("G", y="B"), _fig("G", y="C"))
+    assert dfl.diff_snapshots(_snap(p=base), _snap(p=copy.deepcopy(base))) == []
+    # a regression in the SECOND unnamed and the SECOND duplicate-named figure
+    head = copy.deepcopy(base)
+    head["figures"][1]["curves"][0]["y"] = "Z"
+    head["figures"][3]["curves"] = []
+    ch = dfl.diff_snapshots(_snap(p=base), _snap(p=head))
+    details = " | ".join(c.detail for c in ch)
+    assert "<unnamed>/L1#1" in details and "G/L1#1" in details
+    assert "<unnamed>/L1#0" not in details and "G/L1#0" not in details
+    # dropping one of two unnamed figures is a lost figure, not silence
+    head2 = copy.deepcopy(base)
+    del head2["figures"][1]
+    assert _kinds(dfl.diff_snapshots(_snap(p=base), _snap(p=head2))) >= {"figure_lost"}
+    # the fingerprint itself keeps every figure with its position
+    payload = {
+        "origin_fidelity": {},
+        "figures": [{"name": None, "curves": [{"book": "B1"}]}, {"name": None, "curves": []}],
+    }
+    fp = fpl.fingerprint_payload(payload)
+    assert [f["idx"] for f in fp["figures"]] == [0, 1] and fp["actionable"] == 2
+
+
+def test_unbound_omitted_entries_are_keyed_uniquely() -> None:
+    base = _proj()
+    base["figures"][0]["omitted"] = [{"reason": "a"}, {"reason": "a"}, {"reason": "b"}]
+    assert dfl.diff_snapshots(_snap(p=base), _snap(p=copy.deepcopy(base))) == []
+    head = copy.deepcopy(base)
+    head["figures"][0]["omitted"].pop()  # lose one of the unbound entries
+    assert _kinds(dfl.diff_snapshots(_snap(p=base), _snap(p=head))) == {"omission_removed"}
+    head = copy.deepcopy(base)
+    head["figures"][0]["omitted"].append({"reason": "a"})  # a third identical one
+    assert _kinds(dfl.diff_snapshots(_snap(p=base), _snap(p=head))) == {"omission_added"}
+    head = copy.deepcopy(base)
+    head["figures"][0]["omitted"][2] = {"reason": "c"}
+    assert _kinds(dfl.diff_snapshots(_snap(p=base), _snap(p=head))) == {"omission_reason_changed"}
+    # the fingerprint keeps entries that carry no book/X/Y at all
+    fig = {"name": "G", "omitted_curves": [{"reason": "r1"}, {"reason": "r2", "note": "n"}]}
+    assert fpl.figure_fp(fig)["omitted"] == [
+        {"reason": "r1"},
+        {"note": "n", "reason": "r2"},
+    ]
+
+
+def test_timeouts_never_compare_equal() -> None:
+    t = {"error": "timeout"}
+    assert _kinds(dfl.diff_snapshots(_snap(p=t), _snap(p=t))) == {"incomplete"}
+    assert _kinds(dfl.diff_snapshots(_snap(p=_proj()), _snap(p=t))) == {"incomplete"}
+    dead = {"error": "worker_died"}
+    assert _kinds(dfl.diff_snapshots(_snap(p=dead), _snap(p=_proj()))) == {"incomplete"}
+
+
+def test_snapshot_reports_totals_and_incomplete(tmp_path: Path) -> None:
+    fp = fpl.fingerprint_payload(
+        {"origin_fidelity": {}, "figures": [{"name": "G", "curves": [{"book": "B"}] * 3}]}
+    )
+    assert rn.totals({"a": fp, "b": {"error": "timeout"}}) == {
+        "figures": 1,
+        "curves": 3,
+        "errors": 1,
+    }

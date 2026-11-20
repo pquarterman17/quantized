@@ -85,18 +85,63 @@ def _diff_curves(proj: str, fig: str, base: list[Any], head: list[Any]) -> list[
     return out
 
 
+UNNAMED = "<unnamed>"
+# Not "the same answer": the file was never fingerprinted. Two of these must
+# never compare equal, or a slow file silently drops out of every check.
+INCOMPLETE = ("timeout", "worker_died")
+
+
 def _fig_keys(figs: list[dict[str, Any]]) -> dict[tuple[Any, ...], dict[str, Any]]:
+    """Unique key per figure: (name, layer, nth occurrence of that pair).
+
+    A missing/empty name becomes ``<unnamed>`` so unnamed figures pair up by
+    order instead of colliding on ``None`` or being skipped.
+    """
     seen: Counter[tuple[Any, Any]] = Counter()
     out: dict[tuple[Any, ...], dict[str, Any]] = {}
     for f in figs:
-        base = (f.get("name"), f.get("layer"))
+        base = (f.get("name") or UNNAMED, f.get("layer"))
         out[(*base, seen[base])] = f
         seen[base] += 1
     return out
 
 
-def _omit_map(f: dict[str, Any]) -> dict[tuple[Any, ...], str]:
-    return {_bkey(o): str(o.get("reason")) for o in f.get("omitted", [])}
+def _fig_label(k: tuple[Any, ...]) -> str:
+    return f"{k[0]}/L{k[1]}" + (f"#{k[2]}" if k[2] or k[0] == UNNAMED else "")
+
+
+def _omit_map(f: dict[str, Any]) -> dict[tuple[Any, ...], list[str]]:
+    """Omitted entries grouped by binding, each group a list (a multiset).
+
+    Entries sharing a binding - or having none at all - stay separate list
+    items rather than collapsing onto one dict key.
+    """
+    out: dict[tuple[Any, ...], list[str]] = {}
+    for o in f.get("omitted", []):
+        out.setdefault(_bkey(o), []).append(str(o.get("reason")) + _extra(o))
+    return out
+
+
+def _extra(o: dict[str, Any]) -> str:
+    rest = {k: v for k, v in o.items() if k not in ("book", "sheet", "x", "y", "reason")}
+    return f" {json.dumps(rest, sort_keys=True, default=str)}" if rest else ""
+
+
+def _diff_omissions(proj: str, name: str, b: dict[str, Any], h: dict[str, Any]) -> list[Change]:
+    out: list[Change] = []
+    ob, oh = _omit_map(b), _omit_map(h)
+    for k in sorted(set(ob) | set(oh), key=repr):
+        lab = f"{name}: {k[0]} X={k[2]} Y={k[3]}"
+        left, right = Counter(ob.get(k, [])), Counter(oh.get(k, []))
+        lost = sorted((left - right).elements())
+        gained = sorted((right - left).elements())
+        for old, new in zip(lost, gained, strict=False):
+            out.append(Change(proj, "omission_reason_changed", f"{lab}: {old} -> {new}"))
+        for old in lost[len(gained) :]:
+            out.append(Change(proj, "omission_removed", f"{lab} ({old})"))
+        for new in gained[len(lost) :]:
+            out.append(Change(proj, "omission_added", f"{lab} ({new})"))
+    return out
 
 
 def _diff_figure(proj: str, name: str, b: dict[str, Any], h: dict[str, Any]) -> list[Change]:
@@ -108,15 +153,7 @@ def _diff_figure(proj: str, name: str, b: dict[str, Any], h: dict[str, Any]) -> 
                     proj, "axis_changed", f"{name}: {k} {b['axes'].get(k)} -> {h['axes'].get(k)}"
                 )
             )
-    ob, oh = _omit_map(b), _omit_map(h)
-    for k in sorted(set(ob) | set(oh), key=repr):
-        lab = f"{name}: {k[0]} X={k[2]} Y={k[3]}"
-        if k not in oh:
-            out.append(Change(proj, "omission_removed", f"{lab} ({ob[k]})"))
-        elif k not in ob:
-            out.append(Change(proj, "omission_added", f"{lab} ({oh[k]})"))
-        elif ob[k] != oh[k]:
-            out.append(Change(proj, "omission_reason_changed", f"{lab}: {ob[k]} -> {oh[k]}"))
+    out += _diff_omissions(proj, name, b, h)
     if b.get("fid") != h.get("fid"):
         out.append(
             Change(proj, "fidelity_omissions_changed", f"{name}: {b.get('fid')} -> {h.get('fid')}")
@@ -125,6 +162,15 @@ def _diff_figure(proj: str, name: str, b: dict[str, Any], h: dict[str, Any]) -> 
 
 
 def diff_project(proj: str, b: dict[str, Any], h: dict[str, Any]) -> list[Change]:
+    for side, fp in (("base", b), ("head", h)):
+        if fp.get("error") in INCOMPLETE:
+            return [
+                Change(
+                    proj,
+                    "incomplete",
+                    f"{side} snapshot has no fingerprint ({fp['error']}): cannot be compared",
+                )
+            ]
     if b.get("error") or h.get("error"):
         if b.get("error") != h.get("error"):
             return [
@@ -161,15 +207,13 @@ def diff_project(proj: str, b: dict[str, Any], h: dict[str, Any]) -> list[Change
             )
     fb, fh = _fig_keys(b.get("figures", [])), _fig_keys(h.get("figures", []))
     for k in fb.keys() - fh.keys():
-        out.append(
-            Change(proj, "figure_lost", f"{k[0]} (layer {k[1]}, {len(fb[k]['curves'])} curves)")
-        )
+        out.append(Change(proj, "figure_lost", f"{_fig_label(k)} ({len(fb[k]['curves'])} curves)"))
     for k in fh.keys() - fb.keys():
         out.append(
-            Change(proj, "figure_gained", f"{k[0]} (layer {k[1]}, {len(fh[k]['curves'])} curves)")
+            Change(proj, "figure_gained", f"{_fig_label(k)} ({len(fh[k]['curves'])} curves)")
         )
     for k in sorted(fb.keys() & fh.keys(), key=repr):
-        out += _diff_figure(proj, f"{k[0]}/L{k[1]}", fb[k], fh[k])
+        out += _diff_figure(proj, _fig_label(k), fb[k], fh[k])
     return out
 
 

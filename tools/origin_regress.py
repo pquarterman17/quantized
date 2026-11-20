@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from origin_regress_lib import diff as dfl  # noqa: E402
 from origin_regress_lib import runner as rn  # noqa: E402
+from origin_regress_lib.fingerprint import SCHEMA  # noqa: E402
 
 REPO = rn.REPO
 
@@ -81,6 +82,9 @@ def _report(base: dict[str, Any], head: dict[str, Any], args: argparse.Namespace
         print(f"{len(explained)} change(s) explained by the allow-file")
     for r in stale:
         print(f"warning: allow entry matched nothing (stale?): {r['project']} {r['kind']}")
+    for label, snap in (("base", base), ("head", head)):
+        m = snap["meta"]
+        print(f"{label}: {m.get('figures', '?')} figures, {m.get('curves', '?')} curves")
     print(
         f"base {base['meta'].get('sha', '?')[:10]} vs head {head['meta'].get('sha', '?')[:10]}: "
         f"{len(changes)} unexplained change(s)"
@@ -94,7 +98,14 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     rn.refuse_in_repo(out)
     snap = _take(args, REPO / "src", sha)
     _write(out, snap)
-    print(f"wrote {out} ({snap['meta']['files']} files, {snap['meta']['seconds']}s)")
+    m = snap["meta"]
+    print(
+        f"wrote {out} ({m['files']} files, {m['figures']} figures, {m['curves']} curves, "
+        f"{m['errors']} errors, {m['seconds']}s)"
+    )
+    if m["incomplete"]:
+        print(f"origin_regress: INCOMPLETE snapshot, no fingerprint for: {m['incomplete']}")
+        return 1
     return 0
 
 
@@ -105,7 +116,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
 
 def _base_snapshot(args: argparse.Namespace, sha: str, corpus_id: str) -> dict[str, Any]:
-    cache = rn.baseline_dir() / f"base-{sha}-{corpus_id}.json"
+    cache = rn.baseline_dir() / f"base-s{SCHEMA}-{sha}-{corpus_id}.json"
     if cache.is_file() and not args.no_cache:
         print(f"base snapshot cached: {cache}")
         return dict(json.loads(cache.read_text("utf-8")))
@@ -118,7 +129,8 @@ def _base_snapshot(args: argparse.Namespace, sha: str, corpus_id: str) -> dict[s
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(wt)], cwd=REPO, check=False)
         shutil.rmtree(tmp, ignore_errors=True)
-    _write(cache, snap)
+    if not snap["meta"]["incomplete"]:  # never cache a base that is missing files
+        _write(cache, snap)
     return snap
 
 
@@ -149,7 +161,9 @@ def main(argv: list[str] | None = None) -> int:
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--corpus", action="append", default=[], metavar="[LABEL=]PATH")
         p.add_argument("--jobs", type=int, default=8)
-        p.add_argument("--timeout", type=float, default=300.0, help="seconds per file")
+        p.add_argument(
+            "--timeout", type=float, default=300.0, help="seconds per file (one solo retry at 2x)"
+        )
 
     def reporting(p: argparse.ArgumentParser) -> None:
         p.add_argument("--allow-file", help="JSON of explained changes (each with a reason)")

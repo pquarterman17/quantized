@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-SCHEMA = 1
+SCHEMA = 2  # 2: figures carry idx/page; omitted entries keep every field
 _AXIS_KEYS = ("x_from", "x_to", "x_log", "y_from", "y_to", "y_log")
 # Curve fields kept verbatim; any field whose name suggests an error role
 # (yErr / plus / minus / xErr / band) is kept too, so new roles are seen.
@@ -42,15 +42,18 @@ def curve_fp(c: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def figure_fp(f: dict[str, Any]) -> dict[str, Any]:
-    omitted = []
-    for key in _OMIT_LISTS:
-        for o in f.get(key) or []:
-            omitted.append(
-                {k: _scalar(o.get(k)) for k in ("book", "sheet", "x", "y", "reason") if k in o}
-            )
+def figure_fp(f: dict[str, Any], idx: int = 0) -> dict[str, Any]:
+    # Every field of an omitted entry is kept (not just book/X/Y), so entries
+    # that lack a binding stay distinguishable instead of collapsing together.
+    omitted = [
+        {k: _scalar(v) for k, v in sorted(o.items())}
+        for key in _OMIT_LISTS
+        for o in f.get(key) or []
+    ]
     return {
+        "idx": idx,
         "name": f.get("name"),
+        "page": _scalar(f.get("page")),
         "layer": f.get("layer"),
         "axes": {k: _scalar(f.get(k)) for k in _AXIS_KEYS},
         "curves": [curve_fp(c) for c in f.get("curves") or []],
@@ -82,7 +85,7 @@ def fingerprint_payload(p: dict[str, Any]) -> dict[str, Any]:
         "unrecovered": m.get("unrecovered_graph_count", 0),
         "embedded": m.get("embedded_graph_count", 0),
         "books": [book_fp(b) for b in p.get("books") or []],
-        "figures": [figure_fp(f) for f in p.get("figures") or []],
+        "figures": [figure_fp(f, i) for i, f in enumerate(p.get("figures") or [])],
     }
 
 

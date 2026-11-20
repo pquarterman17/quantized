@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from .diff import INCOMPLETE
 from .fingerprint import SCHEMA
 
 SUFFIXES = {".opj", ".opju"}
@@ -197,8 +198,32 @@ def snapshot(
         results = dict(ex.map(one, items))
     for w in workers:
         w.kill()
+    # A timeout under parallel load is not an answer. Retry the stragglers one
+    # at a time (nothing else competing for memory/CPU) with a doubled budget.
+    solo = _Worker(src)
+    for key, fp in list(results.items()):
+        if fp.get("error") in INCOMPLETE:
+            results[key] = solo.run(key, files[key], timeout * 2)
+    solo.kill()
     return {
         "schema": SCHEMA,
-        "meta": {**meta, "files": len(items), "seconds": round(time.monotonic() - start, 1)},
+        "meta": {
+            **meta,
+            "files": len(items),
+            "seconds": round(time.monotonic() - start, 1),
+            "incomplete": sorted(k for k, fp in results.items() if fp.get("error") in INCOMPLETE),
+            **totals(results),
+        },
         "projects": dict(sorted(results.items())),
+    }
+
+
+def totals(projects: dict[str, dict[str, Any]]) -> dict[str, int]:
+    """Figure/curve/error counts, so a snapshot can be reconciled against any
+    independent sweep (and a silently-shrunk one is visible at a glance)."""
+    figs = [f for fp in projects.values() for f in fp.get("figures", [])]
+    return {
+        "figures": len(figs),
+        "curves": sum(len(f.get("curves", [])) for f in figs),
+        "errors": sum(1 for fp in projects.values() if "error" in fp),
     }
