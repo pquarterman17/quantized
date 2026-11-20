@@ -161,6 +161,7 @@ from quantized.io.origin_project.opju_figure_curves import (
     opju_pages,
 )
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
+from quantized.io.origin_project.opju_layer_record import layer_record
 from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 
@@ -188,9 +189,7 @@ _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hi
 _OptF = float | None
 _OptB = bool | None
 _RealRecord = tuple[float, float, float, float, _OptB, _OptB, _OptF, _OptF]
-# Flat-scrape annotation cap (routed grammar is uncapped): 64 keeps a real XRD
-# graph's peak labels, still a runaway guard (2026-07-06 genericity audit).
-_MAX_FLAT_ANNOTATIONS = 64
+_MAX_FLAT_ANNOTATIONS = 64  # flat-scrape cap (routed text uncapped; XRD peak labels)
 
 # A graph window's embedded PNG thumbnail decodes as junk "text": these chunk
 # names open that blob, so they mark where real annotation text ends.
@@ -372,11 +371,12 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         y_step: float | None = None
         real: _RealRecord | None = None
         if spec is None:
-            real = _parse_real_record(b, p, window_end)
-            if real is None:
-                # Neither form parsed: try the hybrid (specimen skeleton +
-                # real-form value tokens, §13.2 #13). Gated behind BOTH so it
-                # can never change a record the others already decode.
+            # fixed .opj offsets first (opju_layer_record) -- never on a book
+            # page: its embedded graphs' curve X is not proven (sparkline-like)
+            fixed = layer_record(b, anchor) if is_graph_page or legacy else None
+            real = fixed or _parse_real_record(b, p, window_end)
+            if real is None:  # no form parsed: the hybrid (specimen skeleton +
+                # real-form tokens, §13.2 #13), so it never changes a decode
                 spec = parse_hybrid_record(b, p)
         if spec is not None:
             x_from, x_to, y_from, y_to, type_byte, x_flag = spec
