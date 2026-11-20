@@ -129,6 +129,8 @@ import struct
 from collections.abc import Sequence
 
 from quantized.io.origin_project.curve_style_color import apply_increment_colors, style_fields
+from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
+from quantized.io.origin_project.opju_plot_gates import error_bar_reason
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
 __all__ = [
@@ -333,6 +335,7 @@ def extract_curves(
     id_map: dict[int, tuple[str, str]],
     x_columns: dict[str, str],
     col_order: dict[str, list[tuple[str, int]]] | None = None,
+    omitted: list[tuple[int, dict[str, str]]] | None = None,
 ) -> list[dict[str, str | float]]:
     """Every curve's ``{book, x, y}`` binding found in ``blocks[start:end)``.
 
@@ -347,9 +350,15 @@ def extract_curves(
     (``curve_style_color.py``: symbol color/kind, line color, line-vs-
     scatter -- oracle-verified on ``hc2convert.opj``), so any decodable
     ``color``/``symbol``/``style`` keys ride along; undecodable fields
-    (auto color, unmapped bytes) are absent, never defaulted."""
+    (auto color, unmapped bytes) are absent, never defaulted.
+
+    An error-bar plot (byte 76 = plot 231 / 233, ``opju_plot_gates``) is not
+    a curve: it is left out and appended to ``omitted`` as ``(plot index,
+    {book, x, y, recorded, reason: "error_bar_plot"})``, linked to the curve
+    it decorates where its record names one (``opju_error_bars``)."""
     out: list[dict[str, str | float]] = []
     records: list[bytes | None] = []
+    cids: list[int] = []
     last = min(end, len(blocks) - 1)
     for j in range(start, last):
         _, payload = blocks[j]
@@ -375,7 +384,22 @@ def extract_curves(
             continue  # unknown/columnless book: drop, never guess
         out.append({"book": book, "x": x, "y": col, **style_fields(payload), **_plot_type(payload)})
         records.append(payload)
+        cids.append(cid)
     # auto/increment placeholders resolve by group role + plot order
     # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
     apply_increment_colors(out, records)
-    return out
+    notes = [
+        {
+            "book": book,
+            "x": str(c["x"]),
+            "y": str(c["y"]),
+            "recorded": book,
+            "reason": error_bar_reason(r),
+        }
+        for c, r in zip(out, records, strict=True)
+        for book in (str(c["book"]),)
+    ]
+    link_error_plots(notes, cids, [error_link(r) for r in records])
+    if omitted is not None:
+        omitted.extend((i, n) for i, n in enumerate(notes) if n["reason"])
+    return [c for c, n in zip(out, notes, strict=True) if not n["reason"]]

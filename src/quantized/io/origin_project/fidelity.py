@@ -138,7 +138,7 @@ def _omitted_reasons(fig: dict[str, Any]) -> list[str]:
 # The per-curve detail rides on the figure. Only a sheet that is NOT proven
 # is `curve_sheet_unresolved`; most omissions are on a proven sheet.
 _SHEET_UNPROVEN = frozenset({"sheet_unknown", "x_sheet_unproven"})  # opju_curve_sheets
-_ERROR_BAR_PLOT = "error_bar_plot"  # opju_plot_gates: bars drawn from designations only
+_ERROR_BAR_PLOT = "error_bar_plot"  # opju_error_bars: an error-bar plot not attached
 
 
 def _left_out_codes(reasons: list[str]) -> list[str]:
@@ -192,6 +192,8 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
             recovered.append("symbol_size")
         if any(isinstance(c, dict) and c.get("style") == "line_symbol" for c in curves):
             recovered.append("line_symbol_mode")
+        if any(isinstance(c, dict) and c.get("yErr") for c in curves):
+            recovered.append("error_bars")  # opju_error_bars: plot -> its curve's yErr
     return recovered
 
 

@@ -18,7 +18,9 @@ import { spatialComposition } from "../lib/composition";
 import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
-import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
+import {
+  buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles, overlayErrorState,
+} from "../lib/originOverlayFigure";
 import { originFigureWithSourceMappings } from "../lib/originSources";
 import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
@@ -27,6 +29,7 @@ import { nextDatasetId } from "./idSeq";
 import type { OriginApplyLibs } from "./originApplyLibs";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
+import { bookErrorLayer } from "./windowDefaults";
 
 export { originFigureWithSourceMappings } from "../lib/originSources";
 
@@ -167,6 +170,7 @@ export function runOriginFigureApply(
       get().setActive(targetId);
       const src = refreshed.data;
       const n = src?.labels.length ?? 0;
+      const errs = overlayErrorState(src); // Origin error-bar columns: whiskers only
       set({
         // F4.4 review L1: every branch below that installs a plot onto an
         // ALREADY-active dataset must clear the durable `facetKey`
@@ -189,8 +193,9 @@ export function runOriginFigureApply(
         xScale: scaleFromLog(fig.x_log), // Origin's own axis type is boolean-only
         yScale: scaleFromLog(fig.y_log),
         xKey: null,
-        yKeys: Array.from({ length: n }, (_, i) => i),
-        hiddenChannels: [],
+        yKeys: Array.from({ length: n }, (_, i) => i).filter((i) => !errs.errorColumns.includes(i)),
+        hiddenChannels: errs.errorColumns,
+        errKeys: libs.withCurveErrKeys(bookErrorLayer(refreshed).errKeys, errs.errKeys),
         // Restore each overlay column's decoded line/scatter look + legend caption.
         seriesStyles: overlayCurveStyles(src),
         seriesLabels: overlayCurveLabels(src),
@@ -252,6 +257,11 @@ export function runOriginFigureApply(
         // structural Origin error/X-column hiding, except when the saved
         // graph explicitly plots that column as a curve.
         hiddenChannels: originHiddenChannels(dsForPartner.data).filter((key) => !plotted.includes(key)),
+        // Origin's own error-bar plots (OriginCurve.yErr) over the book's pairings.
+        errKeys: libs.withCurveErrKeys(
+          libs.withCurveErrKeys(bookErrorLayer(dsForPartner).errKeys, libs.figureCurveErrKeys(lower.figure, dsForPartner)),
+          libs.figureCurveErrKeys(upper.figure, dsForPartner),
+        ),
         y2Keys: partnerSel.yKeys,
         // Layer 2's own axis state -> the secondary axis (13.2 #6): range,
         // log flag, and title (falls back to auto when undecoded).
@@ -360,6 +370,8 @@ export function runOriginFigureApply(
     hiddenChannels: ds
       ? originHiddenChannels(ds.data).filter((key) => selection ? !selection.yKeys.includes(key) : true)
       : [],
+    // Origin's own error-bar plots (OriginCurve.yErr) over the book's pairings.
+    ...(ds ? { errKeys: libs.withCurveErrKeys(bookErrorLayer(ds).errKeys, libs.figureCurveErrKeys(fig, ds)) } : {}),
   });
   // A ternary figure opens the ternary workshop on Origin's A, B, C columns.
   libs.queueFigureTernary(fig, ds);

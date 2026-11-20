@@ -33,6 +33,7 @@ from quantized.io.origin_project.graph_preview import (
 from quantized.io.origin_project.integrity import apply_container_integrity
 from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
 from quantized.io.origin_project.opju_curve_sheets import unbound_rebinds
+from quantized.io.origin_project.opju_error_bars import attach_error_bars
 from quantized.io.origin_project.opju_graph_pages import (
     GraphPageReport,
     unrecovered_graph_pages,
@@ -61,7 +62,8 @@ def origin_figures_and_fidelity(
     missed = GraphPageReport(0, [])
     try:
         if container == "opj":
-            raw_figs = extract_figures(raw)
+            # an error-bar plot's bars drawn on the curve it decorates, if proven
+            raw_figs = attach_error_bars(extract_figures(raw), books)
             preview_diagnostics: list[PreviewDiagnostic] = []
         else:
             # curves of a book whose data the file does not hold: omitted with
@@ -76,6 +78,8 @@ def origin_figures_and_fidelity(
             raw_figs = apply_stat_kinds(raw_figs, raw)
             # a heatmap / contour / ternary kept only when its book was imported
             raw_figs = bind_map_books(raw_figs, books)
+            # an error-bar plot's bars drawn on the curve it decorates, if proven
+            raw_figs = attach_error_bars(raw_figs, books)
             raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
             missed = unrecovered_graph_pages(raw, {str(f.get("name")) for f in raw_figs})
         figs, fidelity = assess_origin_figures(
