@@ -288,6 +288,8 @@ def test_all_text_book_keeps_its_cells_labels_units_and_comments(tmp_path: Path)
     # the decoded [0.5, N+0.5] axis). An undecoded NUMERIC X stays 0-based
     # (test_undecoded_x_column_still_falls_back_to_a_row_index below).
     assert book.time.tolist() == [1.0, 2.0, 3.0]
+    # ...and the axis ticks at those positions read the X column's cells.
+    assert meta["x_category_labels"] == ["1,1", "2,2", "3,3"]
     assert meta["x_column_recovered"] is False and meta["x_column_unrecovered"] == "Conductance"
 
 
@@ -748,6 +750,7 @@ def test_undecoded_x_column_still_falls_back_to_a_row_index(tmp_path: Path) -> N
     assert book.metadata["x_column_recovered"] is False
     assert book.metadata["x_column_unrecovered"] == "Field"
     assert book.time.tolist() == [0.0, 1.0] and book.labels == ("Moment",)
+    assert "x_category_labels" not in book.metadata  # negative control: not a text X
 
 
 # ── the walk keeps its place ─────────────────────────────────────────────────
