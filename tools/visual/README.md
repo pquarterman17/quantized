@@ -188,3 +188,47 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   graph failing geometry, canvas-paint, routing, or runtime checks make the
   command exit nonzero. Projects run sequentially so the largest Origin files
   never compete for backend/browser memory.
+
+## Origin preview oracle (corpus-wide visual correctness check)
+
+Structural checks cannot tell a RIGHT curve from a WRONG one (the Hc2 import
+passed every structural check while drawing phantom and wrong data). `.opju`
+graph pages embed a PNG that **Origin itself rendered** when the project was
+saved; `io/origin_project/graph_preview.py` attaches one to a figure only when
+exactly one valid PNG belongs to that named graph page (and to
+`origin_fidelity.unrecovered_graphs` for pages we do not reproduce). Those
+images are an independent rendered-Origin oracle for every `.opju`, with no COM
+export needed. Three local steps, all writing ONLY to a scratch `--out`
+directory (never the repo, never the corpus):
+
+```bash
+OUT=/path/to/scratch/visual
+# 1. Origin's saved previews + per-page decode facts -> $OUT/origin/, $OUT/pages.json
+uv run python tools/visual/origin_preview_extract.py --out $OUT [--files list.txt] [--jobs 8]
+# 2. our render of each previewed page (one backend, real importFiles +
+#    applyOriginFigure via origin_store_api.mjs, light theme) -> $OUT/ours/<pid>/
+cd frontend && npm run build && cd ../tools/visual && npm ci
+node origin_preview_shots.mjs --out $OUT --port 8931 --resume   # ~1 h for the public corpus
+# 1b. the owner corpus: graphs Origin EXPORTED itself (`_exports/<stem>/manifest.json`
+#     from the COM campaign above) are the better oracle -- full size, and .opj too.
+#     Merged into the same pages.json under another pid tag; ranked first.
+uv run python tools/visual/origin_preview_extract.py --out $OUT --tag o \
+    --files owner_list.txt --root <test-data>/origin --exports <test-data>/origin/_exports
+# 3. signals, suspicion ranking, side-by-side gallery -> $OUT/signals.json, $OUT/gallery.html
+uv run python tools/visual/origin_preview_report.py --out $OUT
+```
+
+The corpus is found like the realdata tests (`QZ_ORIGIN_PUBLIC_CORPUS`, or a
+`test-data/origin/public` ancestor sibling); the synthetic/generated specimens
+(and `origin/generated/`) are excluded. Signals (`origin_preview_signals.py`, unit-tested in
+`tests/test_origin_preview_signals.py`) are deliberately coarse because the
+previews are ~200 px thumbnails: plot area (Origin: axis frame from long dark
+runs; ours: the uPlot `.u-over` rects), ink fraction, number of distinctly
+coloured series (black curves are not counted), the ink bbox normalised to the
+plot area, and a dilated-overlap score between coarse ink occupancy grids. The
+score is a review order, not a verdict: expect false positives from legends,
+annotations, and Origin's black default curves against our palette colour.
+Known blind spots: ambiguous pages (more than one PNG) and `.opj` projects
+without a COM export are not covered; a saved preview can be stale (an empty
+template graph Origin never refreshed), and a figure whose decoded axis ranges AND curves
+are both wrong in the same way still looks consistent.
