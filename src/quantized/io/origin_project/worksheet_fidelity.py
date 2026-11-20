@@ -24,7 +24,10 @@ Loss codes (each ``{"code", "count", "examples"}``, examples at most
 * ``text_unresolved`` — text cells whose string table could not be read;
 * ``columns_without_header`` — columns found only by the marker scan;
 * ``records_without_header`` — dataset records whose header was not
-  recognized at all (a damaged file), so they could not be read.
+  recognized at all (a damaged file), so they could not be read;
+* ``data_not_saved`` — workbooks linked to an external file by an Origin
+  Data Connector whose data was not saved in the project
+  (``opju_no_data``); examples are the book names.
 
 An allocated but never-filled workbook (Origin's default empty "Book1") is
 not a loss — it holds no data — so it is not listed. ``unverified_columns``
@@ -87,6 +90,13 @@ def worksheet_fidelity_summary(fidelity: Mapping[str, object]) -> dict[str, obje
     ]
     add("matrices_not_imported", len(unshaped), unshaped)
     add("records_without_header", _int(fidelity.get("records_without_header")), [])
+    unsaved = fidelity.get("unsaved_books")
+    unsaved_names = [
+        str(u.get("book", ""))
+        for u in (unsaved if isinstance(unsaved, list) else [])
+        if isinstance(u, Mapping)
+    ]
+    add("data_not_saved", len(unsaved_names), unsaved_names)
     for key, code in _NAMED:
         entry = fidelity.get(key)
         if isinstance(entry, Mapping):

@@ -26,6 +26,10 @@ const WORKSHEET_LOSSES: Record<string, [string, string]> = {
   text_unresolved: ["column's text cells could not be read", "columns' text cells could not be read"],
   columns_without_header: ["column was found without its header", "columns were found without their header"],
   records_without_header: ["damaged record could not be read", "damaged records could not be read"],
+  data_not_saved: [
+    "workbook's data is not saved in the project (Origin Data Connector: import its source file)",
+    "workbooks' data are not saved in the project (Origin Data Connector: import their source files)",
+  ],
 };
 
 export function worksheetLossText(loss: OriginWorksheetLoss): string {

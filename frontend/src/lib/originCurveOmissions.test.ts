@@ -42,6 +42,19 @@ describe("omittedCurveLines", () => {
     ]);
   });
 
+  it("words every reason the .opju reader emits for a plot type it does not rebuild", () => {
+    const reasons = [
+      "x_not_a_column", "x_column_unknown", "x_other_book", "plot_row_range", "error_bar_plot",
+      "box_kind_not_decoded", "stat_layer_in_multi_layer_page", "stat_layer_of_several_books",
+      "histogram_of_several_columns", "stat_plot_x_not_decoded", "map_plot_not_decoded",
+    ];
+    const lines = omittedCurveLines(fig(reasons.map((reason) => ({ book: "B", x: "A", y: "C", recorded: "B", reason }))));
+    lines.forEach((line, i) => {
+      expect(line.startsWith("B column C (X A): ")).toBe(true);
+      expect(line).not.toBe(`B column C (X A): ${reasons[i].replaceAll("_", " ")}`); // worded, not the raw-code fallback
+    });
+  });
+
   it("is empty for a figure with nothing left out", () => {
     expect(omittedCurveLines(fig())).toEqual([]);
   });
