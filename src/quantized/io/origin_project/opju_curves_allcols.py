@@ -173,8 +173,9 @@ _PURE_COLUMN = re.compile(r"[A-Z]+")
 # A token that opens a STYLE-HOLDER object (Origin's saved plot-style
 # templates, named "Style", "Style1", ...: length byte, name, then
 # ``a2|a3 01 28 aa 00 80`` right before the token) references a column for
-# the template, not a plot (2026-11-20, lane M). Whole corpus: 5 such hits in
-# 2 files (SerialCore Bqqbar.opju 4, MeyerJackson Minis "Figure 3 and 4" 1),
+# the template, not a plot (2026-11-20, lane M). Whole corpus: 6 such hits in
+# 3 files (SerialCore Bqqbar.opju 4, MeyerJackson Minis "Figure 3 and 4" 1,
+# PacoSanto Etna origin.opju 1),
 # each followed by 0x84 / 0x80 instead of the 0x83 every one of the 897
 # plot tokens carries. Bqqbar Graph2's saved preview draws no A-vs-A
 # diagonal and no C-vs-A curve, the two bindings these hits added.

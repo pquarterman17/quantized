@@ -101,9 +101,12 @@ Origin saves plot-style templates as objects named `Style`, `Style1`, ...
 Their first field is shaped like a curve token
 (`<flag> 01 01 01 80 01 <ordinal>`), preceded by `a2|a3 01 28 aa 00 80`.
 
-- Both corpora: 5 such hits, in SerialCore Bqqbar (4) and MeyerJackson
-  Minis "Figure 3 and 4" (1). Each is followed by `0x84`/`0x80`, where every
-  one of the 897 plot tokens is followed by `0x83`.
+- Both corpora: 6 such hits, in SerialCore Bqqbar (4), MeyerJackson
+  Minis "Figure 3 and 4" (1) and PacoSanto Etna `origin.opju` (1, found by
+  the `origin_regress` check in review). Each is followed by `0x84`/`0x80`,
+  where every one of the 897 plot tokens is followed by `0x83`. The Etna hit
+  had bound Graph2's J to X = I; the real token records X = A, and in Book3
+  column I equals column A exactly, so the drawn curve is unchanged.
 - Read as plots, Bqqbar's four (A, B, C, D) came first in the file and won
   the per-layer `(book, y)` dedup against the real plot tokens. Graph2
   layer 1 drew A, B, C and D against A, including a short D-vs-A segment.
@@ -159,7 +162,7 @@ guarding test.
 - `.opj` `OB`/`OT`/`OL`/`OR` (type 0x06) = tick-label "Divide by" per axis side; 0 = none → Moke Graph10, SuperlatticeFits Graph10/14, MnN Graph6 exports; XMCD negative control → `tests/test_io_origin_opj_page_text.py::test_tick_divide_object`, `::test_tick_divide_needs_the_factor_object_type`, `::test_tick_divide_reaches_the_figure` (corpus values vs exports: UNGUARDED, no machine-readable oracle)
 - Origin "Divide by" drawn without the "×factor" text (`divideMark: false`), screen and export, all apply paths → Origin exports show none → `frontend/src/lib/originTickDivide.test.ts`, `frontend/src/lib/axisDivideLabel.test.ts::an imported Origin axis' Divide by draws no factor text`, `tests/test_axis_extras.py::test_origin_divide_scales_labels_without_the_factor_text`, `frontend/src/lib/workspaceForwardCompat.test.ts::AxisFormat.divideMark`
 - `.opju` "Divide by" (UnpolPlots Graph1, Hc2) → no `O*` objects in `.opju` → UNGUARDED (undecoded)
-- `.opju` style-holder (`Style\d*` + `a2|a3 01 28 aa 00 80`) curve tokens are not plots → 5 corpus hits, tail 0x84/0x80 vs 0x83 on 897 plot tokens; Bqqbar Graph2 and Minis Graph67 previews → `tests/test_io_origin_opju_style_holder.py::test_a_token_opening_a_style_holder_is_detected`, `::test_other_objects_are_not_style_holders`, `::test_style_holder_tokens_add_no_curve`, `::test_realdata_bqqbar_curves_come_from_plot_records`
+- `.opju` style-holder (`Style\d*` + `a2|a3 01 28 aa 00 80`) curve tokens are not plots → 6 corpus hits in 3 files, tail 0x84/0x80 vs 0x83 on 897 plot tokens; Bqqbar Graph2, Minis Graph67 and Etna Graph2 previews; `docs/origin_re/regress_allow/lane-m-page-text-tick-divide.json` → `tests/test_io_origin_opju_style_holder.py::test_a_token_opening_a_style_holder_is_detected`, `::test_other_objects_are_not_style_holders`, `::test_style_holder_tokens_add_no_curve`, `::test_realdata_bqqbar_curves_come_from_plot_records`
 - Regression fixed: style-holder tokens won the `(book, y)` dedup and dropped the real tokens' recorded X/style (Bqqbar D vs A) → preview → `tests/test_io_origin_opju_style_holder.py::test_realdata_bqqbar_curves_come_from_plot_records`
 - XMCD Graph25 has no curve anchor; Origin's own export is empty → file scan, export → UNGUARDED (count covered indirectly by `tests/test_io_origin_figures_opj_curves.py::test_realdata_curve_bindings_precision_and_recall_floor`)
 - Origin realdata tests resolve the corpus via `conftest.TEST_DATA_CORPUS` (`tests/origin_corpus.py`); LFS pointer = absent → 68 previously silent skips now run under the owner plugin → UNGUARDED (test infrastructure)
