@@ -1277,6 +1277,22 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Graph pages present but not recovered (`.opju` axis records)**~~
+  (2026-11-20). 202 of the 211 `graphs_not_recovered` pages had every layer
+  anchor, but no token-at-a-time axis reader decoded it. The anchor is the
+  first sparse chunk of the `.opj` layer block itself; expanded with CPYUA's
+  grammar the axis fields sit at the `.opj` offsets
+  (`opju_layer_record`, tried before the real-form reader, authenticated by
+  both scale fields + step/span sign; `docs/origin_re/opju_layer_record.md`).
+  Positive control 2,934 / 2,937 existing decodes identical; the 3 range and
+  8 scale disagreements are real-form misreads (saved previews); 0 of 222
+  coincidental anchors accepted. Corpus (351 files): unrecovered pages
+  211 -> 12, layers 2,991 -> 3,413, actionable figures 2,841 -> 3,235, curves
+  6,645 -> 7,849; no project loses a figure or curve. Open: `04 01` Y scale
+  field, `80 e9`-at-98 records, id-table-less page naming, the COM
+  `axis_ranges.json` rescore (all in the doc). Likely covers item 75's axis
+  record sub-item (confirm on Hc2 data).
+
 - ~~**Restyled scatters drawn in the default palette**~~ (2026-11-20).
   Curve-record byte 310 was read as a colour terminator, so every symbol
   plot the user had restyled (310 = 25-60 instead of `FF`) lost its colour

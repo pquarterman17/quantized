@@ -161,6 +161,7 @@ from quantized.io.origin_project.opju_figure_curves import (
     opju_pages,
 )
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
+from quantized.io.origin_project.opju_layer_record import layer_record
 from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 
@@ -188,9 +189,7 @@ _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hi
 _OptF = float | None
 _OptB = bool | None
 _RealRecord = tuple[float, float, float, float, _OptB, _OptB, _OptF, _OptF]
-# Flat-scrape annotation cap (routed grammar is uncapped): 64 keeps a real XRD
-# graph's peak labels, still a runaway guard (2026-07-06 genericity audit).
-_MAX_FLAT_ANNOTATIONS = 64
+_MAX_FLAT_ANNOTATIONS = 64  # flat-scrape cap (routed text uncapped; XRD peak labels)
 
 # A graph window's embedded PNG thumbnail decodes as junk "text": these chunk
 # names open that blob, so they mark where real annotation text ends.
@@ -372,7 +371,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         y_step: float | None = None
         real: _RealRecord | None = None
         if spec is None:
-            real = _parse_real_record(b, p, window_end)
+            # the record read at its fixed .opj offsets (opju_layer_record) first
+            real = layer_record(b, anchor) or _parse_real_record(b, p, window_end)
             if real is None:
                 # Neither form parsed: try the hybrid (specimen skeleton +
                 # real-form value tokens, §13.2 #13). Gated behind BOTH so it
