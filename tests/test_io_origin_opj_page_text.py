@@ -123,6 +123,9 @@ def test_script_object_needs_both_the_flag_and_a_script_block() -> None:
     assert not _is_script_object(no_flag, 0, len(no_flag))
     empty = [(len(p), p) for p in _button("Text", "a note", "")]  # the 1-byte NUL block
     assert not _is_script_object(empty, 0, len(empty))
+    # Only the corpus value 1 is proven; another flag value keeps the text drawn.
+    other = [(len(p), p) for p in _button("Text", "a label", "layer -a;", flag=2)]
+    assert not _is_script_object(other, 0, len(other))
 
 
 def test_button_caption_and_script_are_not_drawn_and_are_counted() -> None:
@@ -198,6 +201,22 @@ def test_unrotated_text_left_of_a_panel_stays_a_mark() -> None:
     _, bottom = extract_figures(data)
     assert bottom["y_title"] == ""
     assert [m["text"] for m in bottom["annotation_marks"]] == ["a note"]
+
+
+def test_unrotated_text_below_a_panel_is_that_panels_x_title() -> None:
+    # XMCD GraphT*: "photon energy (eV)" is free text in layer 1, centred
+    # below the lowest panel, whose own XB title is blank.
+    fx = (1500 - 708) / (3070 - 708)
+    fy = (3850 - 708) / (2126 - 708)
+    data = _two_panel_page(
+        _header("Text8", frac=(fx, fy), box=(1500, 3700, 2300, 3850)),
+        _format_block(rotation=0),
+        _text("photon energy (eV)"),
+    )
+    top, bottom = extract_figures(data)
+    assert top["annotation_marks"] == [] and top["x_title"] == ""
+    assert bottom["x_title"] == "photon energy (eV)"
+    assert bottom["annotation_marks"] == []
 
 
 def test_text_rotation_reads_tenths_of_a_degree() -> None:

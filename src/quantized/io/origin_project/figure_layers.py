@@ -71,6 +71,11 @@ _OBJ_NAME_LIMIT = 24
 # empty or 1-byte NUL block on every other object). Origin's own exports never
 # draw these (docs/origin_re/opj_figures.md, "Script (button) objects").
 _OBJ_SCRIPT_FLAG_OFFSET = 57
+# The only flag value seen (every corpus script object reads 1). The byte is
+# not yet named by COM (it may be the script's "Run After" mode, where other
+# modes belong to labels Origin does draw), so any other non-zero value keeps
+# the object drawn rather than hiding a real annotation on an unproven value.
+_OBJ_SCRIPT_FLAG_BUTTON = 1
 
 
 def _is_script_object(blocks: list[tuple[int, bytes]], k: int, end: int) -> bool:
@@ -79,7 +84,9 @@ def _is_script_object(blocks: list[tuple[int, bytes]], k: int, end: int) -> bool
     every corpus instance has both or neither, and a caption is withheld only
     when the script itself is there to show what the object is."""
     payload = blocks[k][1]
-    if len(payload) <= _OBJ_SCRIPT_FLAG_OFFSET or payload[_OBJ_SCRIPT_FLAG_OFFSET] == 0:
+    if len(payload) <= _OBJ_SCRIPT_FLAG_OFFSET:
+        return False
+    if payload[_OBJ_SCRIPT_FLAG_OFFSET] != _OBJ_SCRIPT_FLAG_BUTTON:
         return False
     if k + 3 >= end:
         return False
