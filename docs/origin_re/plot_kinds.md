@@ -49,7 +49,7 @@ render of the same page (`origin_preview_shots.mjs`).
 |---|---|---|---|
 | stacked area (214), one per layer | a stack of one is the series: `area` (fill to 0) | 21 (`Figure_14/16/17`, all `StackArea`) | filled curve, same shape |
 | horizontal bar (215), only curve of a one-layer `Bar` page | `bar` (turned plot, `lib/uplotOrient`) | 8 (`LSA_fig6` x7, `SOP_meas` Graph67) | `LSA_fig6` horizontal; Graph67's preview is upright, but the same V/W plot is drawn horizontally in `SOP_meas` Graph65 panel e, values equal (stale small preview suspected) |
-| stacked column (213), one series | a stack of one: `column` | 1 (`SOP_meas` Graph20) | |
+| stacked column (213), one series, not on a `StackColP` page | a stack of one: `column` (a 100 % stack of one is left out) | 1 (`SOP_meas` Graph20) | upright columns |
 | several column series (203) on one X | `bar_layout: grouped`: Stat Stage bar chart grouped by X | 8 (`fig_6_a` G1, `fig_7_a`, `5_sidechain` x2, `Supplemetary_Fig_9`, `Figure_1`, `Figure_2`, `TEA_ExcelGraphs` Graph2) | bars side by side per X, same order and heights |
 | several stacked columns (213) on a `StackColumn` page | `bar_layout: stacked` | 2 (Etna `origin.opju` Graph17 / 19) | same stack order (first plot at the bottom), heights |
 | histogram + cumulative percent | layer 1 re-bound to Origin's bin sheet (below) | 4 (`SOP_meas` Graph37 / 38 / 42 / 45) | bars 41 / 8 / 2 (Graph37), cumulative line on the right axis |
@@ -122,3 +122,25 @@ books and actionable figures unchanged. -92 curves left out as above, +4
 histogram layers drawn; 21 + 8 + 1 curves re-kinded (area, horizontal bar,
 column) and 10 layers moved to the Stat Stage bar chart. Owner corpus (104
 files): no change (every owner curve is 200-202).
+
+## Ledger entries (to merge)
+
+For `docs/origin_re/DECODE_LEDGER.md`. One line per fact or fix:
+field/behaviour → evidence → guarding test. `T` = `tests/test_io_origin_opju_bar_kinds.py`.
+
+* curve record byte 76 = `GetPlotType()` (mod 256); 213 / 214 / 215 → provisional `stacked_column` / `stacked_area` / `bar`, 205 / 207 / 208 / 216 / 218 / 225 → `not_drawn` → 231 `tools/plot_corpus` specimens, COM `GetPlotType()` (Origin 2026b, 2026-11-15) → `T::test_plot_type_byte_sets_the_provisional_kind`, `T::test_other_plot_types_get_no_layer_kind`
+* 214, the only stacked-area plot of a layer → `area` → `StackArea` template on all 21 public pages, previews (`Figure_14/16/17`) → `T::test_single_stacked_area_is_an_area_and_single_stack_a_column`, `T::test_realdata_stacked_area_and_horizontal_bar_pages`
+* 213, the only stacked-column plot of a layer and not on a `StackColP` page → `column` → `SOP_meas` Graph20 preview (`StackColu`) → `T::test_single_stacked_area_is_an_area_and_single_stack_a_column`, `T::test_single_series_on_a_100_percent_stack_page_is_left_out`
+* 215, the only curve of a one-layer `Bar`-template page → `bar` (horizontal) → `LSA_fig6` Graph1-5/7/9 previews (horizontal); CONTRADICTED by `SOP_meas` Graph67 (its preview is upright) → `T::test_single_horizontal_bar_kept_only_alone_on_a_one_layer_bar_page`, `T::test_realdata_stacked_area_and_horizontal_bar_pages` (Graph67 itself UNGUARDED; owner COM check open)
+* several 203 series on one sheet + one unique, evenly spaced X, one-layer page, no error bars → `bar_layout: grouped` (Stat Stage bar grouped by X) → previews `fig_6_a` G1, `fig_7_a`, `5_sidechain`, `TEA_ExcelGraphs` Graph2 → `T::test_several_columns_on_one_x_are_a_grouped_bar_chart`, `T::test_grouped_needs_unique_evenly_spaced_x`, `T::test_grouped_fails_closed`, `T::test_realdata_grouped_stacked_and_pie`, `frontend/src/lib/originFigures.test.ts::a grouped / stacked column layer opens the Stat Stage bar chart grouped by its X`
+* several 213 series on a `StackColu` page (same gates) → `bar_layout: stacked` → Etna `origin.opju` Graph17 / 19 previews → `T::test_stacked_columns_need_the_stackcolumn_template`, `T::test_realdata_grouped_stacked_and_pie`
+* Stat Stage offers X as a group only while a saved pick groups by X (`statPicks.withPickedXGroup`); the `[-1, ""]` pick round-trips → code read + unit test → `frontend/src/lib/statPicks.test.ts::withPickedXGroup`
+* histogram + cumulative-percent page: layer 1 row-less 219 of `H`.`T`, layer 2 on `H@N`, same frame / X range, a column of `H@N` equals `T`'s bin counts over `H@N`'s even X (left- or right-closed) → layer 1 re-bound to that counts column as `column` → `SOP_meas` Graph37 / 38 / 42 / 45 (`HISTPROB`; sheet columns = centre, counts, cumulative, cumulative %; counts recomputed from the raw column) → `T::test_histogram_layer_rebinds_to_origins_bin_counts`, `T::test_right_closed_bins_are_origins_too`, `T::test_counts_that_are_not_the_columns_bins_leave_the_page_alone`, `T::test_pairing_needs_the_same_frame_and_the_histograms_own_book`, `T::test_realdata_histogram_cumulative_pages_draw_origins_bins`
+* left out (`plot_type_not_drawn`), each formerly drawn as lines (92 public curves):
+  * pie / doughnut 225 (`soil deep` Graph3, SOILDEEP1; `RSOS_*_micstruc` *_CIR) → previews → `T::test_kinds_without_a_renderer_are_left_out_not_drawn_as_lines`, `T::test_realdata_grouped_stacked_and_pie` (soil deep Graph3 only; RSOS pages UNGUARDED by realdata)
+  * 100 % stacked column 213 on `StackColP` (`fig_6_a` Graph2 / 3) → previews 0..100 % → `T::test_stacked_columns_need_the_stackcolumn_template`, `T::test_realdata_grouped_stacked_and_pie`
+  * 213 on a user template (`Graph_Template` / `Graphs` 32New, 32New_wMean, CQITCRLayerMod L4; `Fig_3` Graph2 L2) → previews (stacked / 100 % columns) → `T::test_stacked_columns_need_the_stackcolumn_template` (corpus pages UNGUARDED by realdata)
+  * several 215, or 215 beside 203 (`LSA_fig6` Graph6 / 8, `TEA_ExcelGraphs` Graph9, `SOP_meas` Graph14 L6, `Graph_Template` / `Graphs` Graph1) → previews (grouped horizontal; `Graph_Template` Graph1 upright) → `T::test_single_horizontal_bar_kept_only_alone_on_a_one_layer_bar_page`, `T::test_realdata_stacked_area_and_horizontal_bar_pages` (LSA only; others UNGUARDED by realdata)
+  * 215 on a multi-layer page (`SOP_meas` Graph65 L5) → preview (sideways panel) → `T::test_single_horizontal_bar_kept_only_alone_on_a_one_layer_bar_page` (page UNGUARDED by realdata)
+  * floating column 207 (`Degree of impact` Graph26, 511, 512) → previews → `T::test_kinds_without_a_renderer_are_left_out_not_drawn_as_lines` (pages UNGUARDED by realdata)
+  * vector 218 (`30流场` Graph6, `50流场` Graph10 L2) → previews (arrow field) → `T::test_kinds_without_a_renderer_are_left_out_not_drawn_as_lines` (pages UNGUARDED by realdata)

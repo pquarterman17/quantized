@@ -100,6 +100,16 @@ def test_single_stacked_area_is_an_area_and_single_stack_a_column() -> None:
     assert c["curves"][0]["plotType"] == "column" and BAR_LAYOUT not in c
 
 
+def test_single_series_on_a_100_percent_stack_page_is_left_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Origin's StackColP draws one series as a flat 100 %, never its raw values
+    monkeypatch.setattr(opju_bar_kinds, "opju_pages", lambda b: [])
+    monkeypatch.setattr(opju_bar_kinds, "_template_kind", lambda b, p, n: "percent")
+    (f,) = _apply([_fig(["stacked_column"])])
+    assert f["curves"] == [] and _reasons(f) == [PLOT_TYPE_NOT_DRAWN]
+
+
 def test_single_horizontal_bar_kept_only_alone_on_a_one_layer_bar_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

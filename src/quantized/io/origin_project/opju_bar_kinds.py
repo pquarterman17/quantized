@@ -12,7 +12,8 @@ depends on the layer's other plots:
 * **one series = no stacking.** A stack of one series is the series itself
   (Origin stacks each plot on the ones before it). So a layer's ONLY
   stacked-area plot is quantized's ``"area"`` (fill down to Y = 0, the 204
-  look) and its only stacked-column plot is a ``"column"``. A layer's only
+  look) and its only stacked-column plot is a ``"column"`` -- unless the page
+  is a 100 % stack (``StackColP``), whose one series is a flat 100 %. A layer's only
   horizontal bar plot keeps ``"bar"`` (the ``.opj`` reader's horizontal bar,
   ``lib/uplotOrient``) when it is the only curve of a one-layer page made
   from Origin's ``Bar`` template (the 215 plot of ``Graph_Template`` Graph1,
@@ -172,8 +173,9 @@ def _resolve(
         # Origin turns the whole layer: its column plots run sideways too
         gone += bar + by_kind.get("column", [])
     stacked = by_kind.get("stacked_column", [])
-    if len(stacked) == 1 and "column" not in by_kind:
-        curves[stacked[0]]["plotType"] = "column"  # a stack of one
+    if len(stacked) == 1 and "column" not in by_kind and template != "percent":
+        # a stack of one (a 100 % stack of one is a flat 100 %: left out)
+        curves[stacked[0]]["plotType"] = "column"
     elif stacked and template == "stacked" and _bar_layout(curves, "stacked_column", layers, books):
         for i in stacked:
             curves[i]["plotType"] = "column"
