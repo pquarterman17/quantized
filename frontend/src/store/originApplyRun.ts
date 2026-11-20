@@ -31,6 +31,8 @@ import {
   topAxisPatch,
 } from "../lib/originOverlayFigure";
 import { withResolvedAxisTitles } from "../lib/originAxisTitles";
+import { figureCurveErrorBindings, figureDocumentErrors } from "../lib/originCurveErrorRoles";
+import type { ErrorBinding } from "../lib/errorRoles";
 import { recordedXConflicts, recordedXOmissions } from "../lib/originRecordedX";
 import { originFigureWithSourceMappings } from "../lib/originSources";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
@@ -42,6 +44,7 @@ import { ORIGIN_FIGURE_AXIS, ORIGIN_FIGURE_MODE_RESET, ORIGIN_FIGURE_Y2_RESET } 
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { bookErrorLayer } from "./windowDefaults";
+import { withWindowDocumentErrors } from "./windowDocuments";
 
 export { originFigureWithSourceMappings } from "../lib/originSources";
 
@@ -73,6 +76,17 @@ export function originFigureSourceDatasetIds(
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
+
+/** Origin's asymmetric / X error bars (`own`, lib/originCurveErrorRoles) into
+ *  the focused window's document errors, which the canvas and the export both
+ *  draw from; the symmetric ones already ride `errKeys`. */
+function applyFigureErrors(set: SliceSet, get: SliceGet, own: ErrorBinding[], ds: Dataset | undefined): void {
+  const s = get();
+  const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+  const current = win?.kind === "plot" ? win.document?.bindings.errors : undefined;
+  const errors = figureDocumentErrors(own, ds?.errorRoles, current, s.errKeys);
+  if (errors) set(withWindowDocumentErrors(s.plotWindows, s.focusedWindowId ?? "", errors));
+}
 
 /** Apply `entry` (figure `id`) to the store. Callers have already run every
  *  preflight and hold the loaded `libs`; `label` is the undo label the
@@ -232,6 +246,7 @@ export function runOriginFigureApply(
         // header (decode #52; position only when decoded, never guessed).
         ...libs.originLegendState(main),
       });
+      applyFigureErrors(set, get, errs.roles, refreshed);
       get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
       return;
     }
@@ -302,6 +317,8 @@ export function runOriginFigureApply(
         regionShades: libs.originRegionShades([lower.figure, upper.figure], entry.id, [0, 1]),
         ...libs.originLegendState(lower.figure),
       });
+      const meta = dsForPartner.data.metadata ?? {};
+      applyFigureErrors(set, get, [lower.figure, upper.figure].flatMap((f) => figureCurveErrorBindings(f, meta)), dsForPartner);
       get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
       return;
     }
@@ -367,6 +384,7 @@ export function runOriginFigureApply(
     // Origin's own error-bar plots (OriginCurve.yErr) over the book's pairings.
     ...(ds ? { errKeys: libs.withCurveErrKeys(bookErrorLayer(ds).errKeys, libs.figureCurveErrKeys(fig, ds)) } : {}),
   });
+  applyFigureErrors(set, get, ds ? figureCurveErrorBindings(fig, ds.data.metadata ?? {}) : [], ds);
   // A ternary figure opens the ternary workshop on Origin's A, B, C columns.
   libs.queueFigureTernary(fig, ds);
   if (failClosed) {

@@ -13,6 +13,8 @@ import {
   originCurveSeriesStyle,
   readableSheetCurveLabel,
 } from "./originCurveText";
+import { sanitizeBindings, type ErrorBinding } from "./errorRoles";
+import { curveErrorBindings } from "./originCurveErrorRoles";
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
 import { framesCoincide } from "./originPanels";
 import type { AxisFormat, TopAxis } from "./axisFormat";
@@ -111,7 +113,7 @@ export function overlayCurveLabels(data: DataStruct | null | undefined): Record<
  *  channel, label, style, legend caption), in curve order. Curves whose
  *  letters don't map to decoded channels are skipped -- partial recall must
  *  degrade gracefully, never invent data. */
-function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBound[]; errorCols: Record<number, number> } {
+function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBound[]; errorCols: Record<number, number>; roles: ErrorBinding[] } {
   // Resolve each curve to (dataset, x-channel, y-channel) up front.
   const legend = figure.legend_labels ?? [];
   // The nth entry of figure.curves' own display name (undefined where the
@@ -131,6 +133,7 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
   });
   const bound: OverlayBound[] = [];
   const errorCols: Record<number, number> = {}; // curve column -> its Origin error-bar column
+  const roles: ErrorBinding[] = []; // asymmetric / X error-bar columns (originCurveErrorRoles)
   // curveIdx tracks this curve's position among ALL of figure.curves (even
   // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
   // numbering Origin's legend uses across the whole layer, not per-book.
@@ -171,18 +174,28 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
               curveNames[(figure.curves ?? []).findIndex((p) => p.book === c.book.split("@")[0])],
             ),
     });
+    const at = bound.length - 1; // this curve's overlay column
     // Origin's error-bar plot on this curve (OriginCurve.yErr): its column
     // rides in the curve's own block, right after it, as whiskers only.
     const eCh = c.yErr ? channelOf(meta, c.yErr) : -1;
     if (eCh >= 0 && eCh !== yCh) {
-      errorCols[bound.length - 1] = bound.length;
+      errorCols[at] = bound.length;
       bound.push({
         ds, xCh, yCh: eCh, label: `${c.book}: ${ds.data.labels[eCh] || c.yErr}`,
         unit: ds.data.units[eCh] ?? "", style: null, designation: "Y-error", legendLabel: undefined,
       });
     }
+    // Its asymmetric / X bars: each column rides the same block, as "Y" so no
+    // designation pairing reads it as symmetric, and binds by overlay column.
+    for (const e of curveErrorBindings(c, yCh, (l) => channelOf(meta, l))) {
+      roles.push({ ...e, channel: bound.length, target: at });
+      bound.push({
+        ds, xCh, yCh: e.channel, label: `${c.book}: ${ds.data.labels[e.channel] || e.channel}`,
+        unit: ds.data.units[e.channel] ?? "", style: null, designation: "Y", legendLabel: undefined,
+      });
+    }
   });
-  return { bound, errorCols };
+  return { bound, errorCols, roles };
 }
 
 /** Build the overlay DataStruct for a figure whose curves span ≥2 books, or
@@ -205,7 +218,7 @@ export function buildOverlayDataset(
   const main = boundCurves(figure, overlayBooks(figure, datasets));
   const rightRaw = y2Figure
     ? boundCurves(y2Figure, overlayBooks(y2Figure, datasets))
-    : { bound: [] as OverlayBound[], errorCols: {} as Record<number, number> };
+    : { bound: [] as OverlayBound[], errorCols: {} as Record<number, number>, roles: [] as ErrorBinding[] };
   const right = topX ? { ...rightRaw, bound: onMainX(rightRaw.bound, topX) } : rightRaw;
   const out = assembleOverlay([...main.bound, ...right.bound], figure.name || "", ownX);
   if (!out) return out;
@@ -214,9 +227,11 @@ export function buildOverlayDataset(
   const n = main.bound.length;
   const errorCols: Record<number, number> = { ...main.errorCols };
   for (const [k, v] of Object.entries(right.errorCols)) errorCols[Number(k) + n] = v + n;
+  const roles = [...main.roles, ...right.roles.map((e) => ({ ...e, channel: e.channel + n, target: e.target + n }))];
   const extra: Record<string, unknown> = {};
   if (right.bound.length && !topX) extra.origin_overlay_y2 = right.bound.map((_, i) => n + i);
   if (Object.keys(errorCols).length) extra.origin_overlay_errors = errorCols;
+  if (roles.length) extra.origin_overlay_error_roles = roles;
   return Object.keys(extra).length ? { ...out, metadata: { ...out.metadata, ...extra } } : out;
 }
 
@@ -252,18 +267,24 @@ export function overlayDoubleYPair<T extends { figure: OriginFigure }>(family: T
   return [lower, upper];
 }
 
-/** An overlay's Origin error-bar columns (`origin_overlay_errors`, stamped by
- *  `buildOverlayDataset`): curve column -> error column, and the error
- *  columns themselves (whiskers, never their own series). */
-export function overlayErrorState(data: DataStruct | null | undefined): { errKeys: Record<number, number>; errorColumns: number[] } {
-  const raw = (data?.metadata ?? {})["origin_overlay_errors"];
+/** An overlay's Origin error-bar columns (`origin_overlay_errors` and
+ *  `origin_overlay_error_roles`, stamped by `buildOverlayDataset`): curve
+ *  column -> symmetric error column, the asymmetric / X bindings, and the
+ *  error columns themselves (whiskers, never their own series). */
+export function overlayErrorState(data: DataStruct | null | undefined): {
+  errKeys: Record<number, number>; roles: ErrorBinding[]; errorColumns: number[];
+} {
+  const meta = data?.metadata ?? {};
+  const raw = meta["origin_overlay_errors"];
   const errKeys: Record<number, number> = {};
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
       if (Number.isInteger(Number(k)) && Number.isInteger(v)) errKeys[Number(k)] = v as number;
     }
   }
-  return { errKeys, errorColumns: Object.values(errKeys).sort((a, b) => a - b) };
+  const roles = sanitizeBindings(meta["origin_overlay_error_roles"], data?.labels.length ?? 0) ?? [];
+  const cols = new Set([...Object.values(errKeys), ...roles.map((e) => e.channel)]);
+  return { errKeys, roles, errorColumns: [...cols].sort((a, b) => a - b) };
 }
 
 /** B2: where a top-X layer's own X lands on its host's X axis. Both layers

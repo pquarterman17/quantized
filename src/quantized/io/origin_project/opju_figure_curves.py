@@ -480,8 +480,10 @@ def extract_curves_by_id(
     # auto/increment placeholders resolve by group role + plot order
     # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
     apply_increment_colors(out, records)
-    # an error-bar plot's note names the curve it decorates (opju_error_bars)
-    link_error_plots(notes, cids, [error_link(r) for r in records])
+    # an error-bar plot's note names the curve it decorates (opju_error_bars);
+    # every token id of the layer, so a skipped plot is not taken for an absent one
+    layer_ids = {i for t in tokens if (i := token_id(b, t)) is not None}
+    link_error_plots(notes, cids, [error_link(r) for r in records], layer_ids)
     kept: list[dict[str, str | float]] = []
     for i, (curve, note) in enumerate(zip(out, notes, strict=True)):
         if not note["reason"]:

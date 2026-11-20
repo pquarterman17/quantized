@@ -469,3 +469,20 @@ describe("greyscale (print-safe) page export — P3.3 residual", () => {
     expect("greyscale" in spec!.panels[0].figure).toBe(false);
   });
 });
+
+describe("buildSpatialPageRequest error bars (Origin error-bar plots, lane E2)", () => {
+  it("exports the bars the panel's canvas draws: Origin's asymmetric halves and the errKeys whiskers", () => {
+    // channel 1 plotted with +0 / -2 halves, as the cell's spans draw them
+    const p = panel({
+      yKeys: [1], hiddenChannels: [0, 2],
+      errors: [{ channel: 0, target: 1, axis: "y", side: "+" }, { channel: 2, target: 1, axis: "y", side: "-" }],
+    });
+    const spec = buildSpatialPageRequest([p], new Map([["ds1", ds()]]), defaultPageSetup());
+    expect(spec!.panels[0].figure.error_spans).toEqual([{ y: { plus: [1, 3, 5], minus: [3, 5, 7] } }]);
+    // a symmetric errKeys pairing exports too (the cell draws it as whiskers)
+    const sym = buildSpatialPageRequest([panel({ yKeys: [1], hiddenChannels: [2], errKeys: { 1: 2 } })], new Map([["ds1", ds()]]), defaultPageSetup());
+    expect(sym!.panels[0].figure.error_spans).toEqual([{ y: { plus: [3, 5, 7], minus: [3, 5, 7] } }]);
+    // and a panel without bars carries no field
+    expect(buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup())!.panels[0].figure.error_spans).toBeUndefined();
+  });
+});

@@ -15,6 +15,7 @@ const WHY: Record<string, (recorded: string) => string> = {
   x_not_imported: (r) => `its X column on ${r} was not imported (often a text column)`,
   sheet_x_not_found: (r) => `no X column was found on ${r}; Origin may plot it by row or column position`,
   error_bar_plot: () => "it is an error-bar plot; its bars draw only from a decoded error column",
+  error_bar_no_curve: () => "it is an error-bar plot naming no curve of this graph layer; Origin draws no bars for it",
   y_is_sheet_x: (r) => `${r} was imported with this column as its X`,
   y_is_x_column: () => "it plots an X column, against an X stored in a form not decoded yet",
   x_token_differs: () => "the graph stores another X for it, in a form not decoded yet",

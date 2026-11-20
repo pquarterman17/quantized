@@ -48,7 +48,8 @@ import {
 import { traceSeriesStyles } from "./exportDefaultTrace";
 import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
-import { withSeriesLegends } from "./figureSpecSeries";
+import { legacyErrorBindings } from "./figureDocument";
+import { exportErrorSpans, withSeriesLegends } from "./figureSpecSeries";
 import { annotationSizePt, compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
@@ -198,6 +199,7 @@ function spatialPanelFigure(
     ? undefined
     : withUnit(dataset.labels[only], dataset.units[only]);
   const minorTicks = panel.xLog || panel.yLog || secondaryAxisIsLog(y2Axis);
+  const errors = [...(panel.errors ?? []), ...legacyErrorBindings(panel.errKeys ?? {})];
   return {
     dataset,
     x_key: panel.xKey ?? undefined,
@@ -239,6 +241,9 @@ function spatialPanelFigure(
         ) ?? null,
         legends,
       ) ?? undefined,
+    // The bars the cell canvas draws (`spatialPanelFetch`): Origin's
+    // asymmetric / X spans and the symmetric `errKeys` whiskers.
+    ...(errors.length ? { error_spans: exportErrorSpans(dataset, plotted, errors) } : {}),
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {
       y2Plotted: y2Axis !== null,
       minorTicks,

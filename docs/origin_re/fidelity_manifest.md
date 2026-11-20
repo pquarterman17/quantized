@@ -86,10 +86,13 @@ curve with its `reason`) map to three codes by what was not proven
 - `curve_sheet_unresolved` — the curve's SHEET is not proven
   (`sheet_unknown`, `x_sheet_unproven`). 0 public-corpus figures today.
 - `error_bar_plots` — an error-bar DataPlot is not drawn as a line, and its
-  bars could not be attached to the curve they decorate (asymmetric halves,
-  two plots on one curve, X error, or no proven curve:
+  bars could not be attached to the curve they decorate (the curve itself
+  or its error column did not import, an unread link, half a pair:
   `opju_error_bars`, `error_bars.md`). An attached one is no loss: its
-  curve carries `yErr` and the figure reports `error_bars` as recovered.
+  curve carries `yErr` / `yErrPlus`+`yErrMinus` / `xErr` (...) and the
+  figure reports `error_bars` as recovered. An error plot naming no curve
+  of its layer is `error_bar_no_curve`: Origin draws nothing, so it is no
+  loss either.
   `.opj` reports it too since 2026-11-20 (before, `.opj` drew the error
   column as a line).
 - `curves_left_out` — the sheet is proven, but the X, the rows, the plot

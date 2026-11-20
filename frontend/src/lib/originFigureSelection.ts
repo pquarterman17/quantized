@@ -13,6 +13,8 @@
 // curve style and legend-template helpers are `./originCurveText` (slice 18).
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
+import { figureCurveErrorBindings } from "./originCurveErrorRoles";
+import type { ErrorBinding } from "./errorRoles";
 import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 export { figureMapState, queueFigureTernary } from "./originFigureMap";
@@ -258,6 +260,9 @@ export function figureChannelSelection(
    *  never applied error pairing, so a "Y-error" column rendered as its own
    *  spurious series — see `resolveFigurePanels`). */
   errKeys: Record<number, number>;
+  /** Origin's asymmetric / X error bars on this figure's curves
+   *  (`originCurveErrorRoles.figureCurveErrorBindings`). */
+  errors?: ErrorBinding[];
   /** This book's Origin-hidden channels (`errorbars.originHiddenChannels`) —
    *  paired error / secondary-X columns Origin itself never draws as their
    *  own curve. Same dataset-level scope as `errKeys`. */
@@ -328,9 +333,10 @@ export function figureChannelSelection(
   }
   if (yKeys.length === 0) return null;
   const own = figureCurveErrKeys(figure, ds);
-  const hidden = new Set([...originHiddenChannels(ds.data), ...Object.values(own)]);
+  const errors = figureCurveErrorBindings(figure, meta); // asymmetric / X bars: whiskers only
+  const hidden = new Set([...originHiddenChannels(ds.data), ...Object.values(own), ...errors.map((e) => e.channel)]);
   return {
-    xKey, yKeys, styles, labels,
+    xKey, yKeys, styles, labels, ...(errors.length ? { errors } : {}),
     errKeys: withCurveErrKeys(originErrKeys(ds.data), own),
     hiddenChannels: [...hidden].sort((a, b) => a - b),
   };
