@@ -171,7 +171,7 @@ export function runOriginFigureApply(
   const bookDs = get().datasets.find((d) => d.id === entry.datasetId);
   const bookSel = bookDs ? libs.figureChannelSelection(fig, bookDs) : null;
   const ownX = (layerFamily.length < 2 || !!y2Pair || !!topPair)
-    && !!bookDs && !!bookSel && recordedXConflicts(fig, bookDs, bookSel);
+    && !!bookDs && recordedXConflicts(fig, bookDs, bookSel);
   const leftOut = bookDs ? recordedXOmissions(fig, bookDs) : [];
   if (leftOut.length) {
     toast(`${fig.name}: left out, its recorded X column did not import — ${leftOut.join("; ")}`, "info");

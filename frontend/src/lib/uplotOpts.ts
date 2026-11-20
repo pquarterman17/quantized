@@ -5,7 +5,7 @@ import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
 import { axisExtrasApplier, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
-import { categoricalTickFormatter } from "./categoricalTicks"; // moved out (line pin); re-exported
+import { categoricalTickFormatter, categoricalXAxis } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
 
 import type { ColorScatterSpec } from "./colorscatter";
@@ -1012,9 +1012,8 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
   // x values are ordinal positions, not physical quantities, so a fixed/sci
   // number format would show "1.0"/"2.0" instead of the real category names.
-  const xValues = payload.xCategories
-    ? categoricalTickFormatter(payload.xCategories)
-    : tickFormatter(xFmt, xScale);
+  const xCat = payload.xCategories ? categoricalXAxis(payload.xCategories, payload.xCategoryBase ?? 0, tickPx) : null;
+  const xValues = xCat ? xCat.values : tickFormatter(xFmt, xScale);
   const yValues = tickFormatter(yFmt, yScale);
   // y2Fmt null/undefined inherits yFmt (compatibility default — see the
   // BuildOptsArgs doc), but formatting still resolves against y2's OWN
@@ -1053,7 +1052,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   };
   // The automatic Y density (lib/uplotRightPad.ts) on a linear, numeric axis only.
   const ySpace = (scale: AxisScale, fmt?: AxisFormat) => (scale === "linear" && !isDateMode(fmt?.mode) ? { space: yTickSpace(tickPx) } : {});
-  const xSplits = splitsFor(xScale, xLim, args.xStep);
+  const xSplits = xCat?.splits ?? splitsFor(xScale, xLim, args.xStep);
   const ySplits = splitsFor(yScale, yLim, args.yStep);
   // Tick-area `size` (excludes the label, see uPlot's doc) scales with the
   // tick font too — x is a single text line (height-bound, uPlot's own
@@ -1077,7 +1076,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
       ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
-      ...(xScale === "linear" && !payload.xCategories ? { space: xTickSpace(tickPx, !scales.x.time) } : {}),
+      ...(xCat ? { space: xCat.space } : xScale === "linear" ? { space: xTickSpace(tickPx, !scales.x.time) } : {}),
     },
     {
       ...axis,

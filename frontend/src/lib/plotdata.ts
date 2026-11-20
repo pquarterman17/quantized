@@ -6,6 +6,7 @@ import type uPlot from "uplot";
 
 import { plotSeries } from "./api";
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { originCategoryX } from "./categoricalTicks";
 import { isCategorical } from "./modeling";
 import { peakOverlayEmpty } from "./peakOverlayEmpty";
 import { mapColumn } from "./plotColumnOps";
@@ -51,6 +52,9 @@ export interface PlotPayload {
    *  category-chart payloads; absent (undefined) for every ordinary
    *  numeric plot. */
   xCategories?: string[];
+  /** Position of `xCategories[0]` (default 0; 1 for an Origin text X, whose
+   *  category index is 1-based — `originCategoryX`). */
+  xCategoryBase?: number;
   /** P3.4: true when this payload was already min/max-bucket decimated by
    *  the server (its row set is a REDUCED, non-prefix subset of the dataset's
    *  full rows — see routes/plot.py + calc/decimate.py). Never set by the
@@ -135,7 +139,8 @@ export function categoricalXPayload(
   xKey: number | null,
   modelingType: ModelingType,
 ): PlotPayload {
-  if (xKey == null || !isCategorical(modelingType)) return payload;
+  if (xKey == null) return originCategoryX(payload, data, xKey);
+  if (!isCategorical(modelingType)) return payload;
   const levels = categoryLevels(data, xKey);
   if (levels.length === 0) return payload;
   const labels = resolveCategoryLabels(data, xKey, levels);

@@ -71,8 +71,10 @@ describe("x ticks are spaced by their drawn labels", () => {
     expect(at(spaceOf({ fontSize: 12, xFmt: { mode: "date", digits: 0 } }), ["0", "5"])).toBe(50);
   });
 
-  it("leaves log and categorical x axes to their own tick rules", () => {
+  it("leaves a log x axis to its own tick rule, and a categorical one to its label width", () => {
     expect(spaceOf({ xScale: "log" })).toBeUndefined();
-    expect(spaceOf({}, { ...payload, xCategories: ["a", "b", "c"] })).toBeUndefined();
+    // lib/categoricalTicks.categoricalXAxis: the longest label's width plus a gap, in px,
+    // not the numeric label-density rule (which assumes "-20,000"-style labels).
+    expect(spaceOf({ fontSize: 10 }, { ...payload, xCategories: ["a", "bb", "ccc"] })).toBe(3 * 10 * 0.6 + 8);
   });
 });
