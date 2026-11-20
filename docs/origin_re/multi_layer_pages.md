@@ -20,10 +20,16 @@ ids 351 and 352, but `column_id_map` had no entry for them. Their
 column-storage blocks exist, with the same u16 id at offset 4, in book
 `T106680019e9`, named `difference` and `asymmetry`. `_column_short_name` read
 the name at `0x12` through an 8-byte window, so any name of 8 or more
-characters had no NUL inside it and the column was skipped. The worksheet
-reader (`windows.py`) reads the same field through a 20-byte window.
+characters had no NUL inside it and the column was skipped.
 
-**Fix.** The same 20-byte window (`_SHORT_NAME_LIMIT`).
+**Fix.** Read the field's real width, 12 bytes (`_SHORT_NAME_LIMIT`): `0x12`
+to `0x1D`, at most 11 characters and a NUL. `0x1E` starts a separate u16
+(`0x0009` in 5,832 of the 6,103 corpus column blocks, the value the `.opj`
+writer emits; the writer also truncates names to 11). Every real column in
+the corpus ends its name inside those 12 bytes (longest: 11 characters). The
+read stops at the first NUL, so a wider window (`windows.py` scans 20) finds
+the same names on real columns and differs only on junk past the field: two
+non-column `hc2convert.opj` entries.
 
 **Evidence.**
 - Independent COM oracle `specimens/ground_truth/XMCD/index.json` (per graph,
@@ -31,8 +37,10 @@ reader (`windows.py`) reads the same field through a 20-byte window.
   0; layers whose curve list matches exactly 60 -> 127 of 128. The one miss
   (Graph25 layer 1) is unrelated and unchanged. Locked in
   `tests/test_io_origin_figures_opj_curves.py` (realdata, `XMCD` = 244).
-- Whole corpus (all 75 non-synthetic `.opj`, public and owner): the wider
-  window adds 582 id entries, changes 3 and removes none. All 69 curve
+- Whole corpus (all 75 non-synthetic `.opj`, public and owner), measured
+  with a 20-byte window: it adds 582 id entries, changes 3 and removes none
+  (the 12-byte window gives the same map minus the two `hc2convert` junk
+  entries). All 69 curve
   anchors it newly resolves are in `XMCD.opj`; unresolved anchors corpus-wide
   go 91 -> 22. The 3 changed entries were garbage before and are unused by
   any anchor (`XMCD` ids 182/376 read `('6 ', 'z?')`, now the real columns

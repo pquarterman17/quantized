@@ -125,19 +125,21 @@ def test_column_id_map_resolves_book_and_column() -> None:
 def test_column_id_map_keeps_short_names_of_eight_or_more_characters() -> None:
     """B1 (XMCD.opj GraphT*): an 8-byte name window dropped ``difference`` /
     ``asymmetry``, so every curve on them lost its binding and its layer.
-    The worksheet reader (``windows.py``) reads the same field 20 bytes wide;
-    a name with no NUL inside that window still resolves to nothing."""
+    The field is 12 bytes (11 characters + NUL); a name with no NUL inside
+    it resolves to nothing rather than reading into the next field."""
     blob = _synthetic_opj(
         _window_header("T1"),
         _column_block("normA", cid=10),
         _column_block("difference", cid=11),
         _column_block("asymmetry", cid=12),
-        _column_block("a" * 20, cid=13),
+        _column_block("a" * 11, cid=13),
+        _column_block("a" * 12, cid=14),
     )
     assert column_id_map(_blocks_of(blob)) == {
         10: ("T1", "normA"),
         11: ("T1", "difference"),
         12: ("T1", "asymmetry"),
+        13: ("T1", "a" * 11),
     }
 
 

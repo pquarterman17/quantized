@@ -10,6 +10,8 @@
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { askConfirm } from "../components/overlays/ConfirmDialog";
+
 import type { SpatialComposition } from "../lib/composition";
 import { overlayTopXPair, topXAxis, topXMap } from "../lib/originOverlayFigure";
 import { topForward } from "../lib/axisTop";
@@ -95,6 +97,26 @@ describe("B1: stacked layers that each plot several books keep every panel", () 
     expect(n).toBe(datasets.length + 2);
   });
 
+  it("undo takes the whole panel apply back, overlays included", () => {
+    useApp.getState().applyOriginFigure("L1");
+    expect(useApp.getState().datasets.length).toBe(datasets.length + 2);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(ids);
+    expect(useApp.getState().composition).toBeNull();
+  });
+
+  it("asks before a re-apply discards edits on ANOTHER layer's overlay", () => {
+    vi.mocked(askConfirm).mockReset().mockResolvedValue(false);
+    useApp.getState().applyOriginFigure("L1");
+    const s = useApp.getState();
+    const l2 = s.datasets.find((d) => d.data.metadata?.origin_overlay_entry === "L2")!;
+    useApp.setState({
+      datasets: s.datasets.map((d) => (d.id === l2.id ? { ...d, filter: [{ col: 0, kind: "range", min: 0 }] } : d)),
+    });
+    useApp.getState().applyOriginFigure("L1");
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+  });
+
   it("fails closed to the clicked layer's overlay when the frames are undecoded", () => {
     useApp.setState({
       originFigures: [layer("L1", 1, ["B1", "B2"], null), layer("L2", 2, ["B2", "B3"], null)],
@@ -155,6 +177,14 @@ describe("overlayTopXPair", () => {
     expect(overlayTopXPair([b, a])?.map((e) => e.id)).toEqual(["H", "T"]);
     expect(topXMap(a.figure, b.figure)).toEqual({ scale: 250, shift: 0 });
     expect(topXAxis(a.figure, b.figure)).toMatchObject({ kind: "linear", factor: 1 / 250, shift: -0 });
+  });
+
+  it("maps a reversed host X end to end (left to left, right to right)", () => {
+    const rev = { ...a.figure, x_from: 2500, x_to: 0 };
+    const m = topXMap(rev, b.figure);
+    expect([m.scale * 0 + m.shift, m.scale * 10 + m.shift]).toEqual([2500, 0]);
+    expect(topForward(topXAxis(rev, b.figure), 2500)).toBeCloseTo(0);
+    expect(topForward(topXAxis(rev, b.figure), 0)).toBeCloseTo(10);
   });
 
   it("never pairs: a double-Y (same X), separate panels, undecoded frames, a log X, no curves, or 3 layers", () => {
