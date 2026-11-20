@@ -71,6 +71,12 @@ export interface StatStagePicks {
   setFit: (f: string | null) => void;
   barStack: boolean;
   setBarStack: (s: boolean) => void;
+  /** A stacked bar normalised to 100 % per category (needs `barStack`). */
+  barPercent: boolean;
+  /** Grouped / stacked / 100 % stacked in one write. */
+  setBarLayout: (l: "grouped" | "stacked" | "percent") => void;
+  /** The value axis's saved range (an Origin layer's Y range), else null. */
+  valueRange: [number, number] | null;
 }
 
 export interface UseStatStagePicksParams {
@@ -177,5 +183,9 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setFit: setPick("fit"),
     barStack: picks.barStack ?? false,
     setBarStack: setPick("barStack"),
+    barPercent: !!picks.barStack && !!picks.barPercent,
+    setBarLayout: (l) =>
+      write((p) => ({ ...p, barStack: l !== "grouped", barPercent: l === "percent" }), "change statistics plot"),
+    valueRange: picks.valueRange ?? null,
   };
 }

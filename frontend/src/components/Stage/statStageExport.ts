@@ -436,6 +436,7 @@ export async function exportStatStage(
       ...colorWire(draw.colorLevels),
       axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
+      ...(draw.valueRange ? { y_domain: draw.valueRange } : {}), // an Origin layer's fixed Y
       caveat,
       ...noteWire(o.errorNote),
       fmt,

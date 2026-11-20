@@ -145,12 +145,18 @@ export interface StatPicks {
   bins?: string;
   fit?: string | null;
   barStack?: boolean;
+  /** A stacked bar chart normalised to 100 % per category (Origin's 100 %
+   *  stacked column, `originFigureSelection.figureBarState`). */
+  barPercent?: boolean;
+  /** The bar chart's value-axis range (an Origin layer's decoded Y range);
+   *  absent = autoscale. */
+  valueRange?: [number, number];
   cols?: StatPickCols;
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
   mode: ["box", "violin", "qq", "histogram", "bar", "strip"], dist: DISTRIBUTIONS, bins: BIN_RULES,
-  fit: [null, ...DISTRIBUTIONS], barStack: [true, false],
+  fit: [null, ...DISTRIBUTIONS], barStack: [true, false], barPercent: [true, false],
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";
@@ -163,6 +169,8 @@ export function sanitizeStatPicks(v: unknown): StatPicks {
   if (typeof v !== "object" || v === null) return out;
   const o = v as Record<string, unknown>;
   for (const k in STAT_PICK_VALUES) if (STAT_PICK_VALUES[k].includes(o[k])) out[k] = o[k];
+  const r = o.valueRange;
+  if (Array.isArray(r) && r.length === 2 && r[0] < r[1] && r.every(Number.isFinite)) out.valueRange = r;
   const c = o.cols as Record<string, unknown> | null;
   const keys = ["group", "group2", "value", "facet", "color"];
   if (typeof c === "object" && c && isColRef(c.value) && keys.every((k) => c[k] === null || isColRef(c[k]))) {

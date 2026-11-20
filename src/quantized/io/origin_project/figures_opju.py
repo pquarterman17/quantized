@@ -159,7 +159,7 @@ from quantized.io.origin_project.opju_figure_curves import (
 )
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
 from quantized.io.origin_project.opju_layer_pages import LayerPages
-from quantized.io.origin_project.opju_layer_record import layer_record
+from quantized.io.origin_project.opju_layer_record import layer_flags, layer_record
 from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 
@@ -407,6 +407,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_from": y_from,
                 "y_to": y_to,
                 "y_log": y_log,
+                # axes_exchanged / stack_percent, when the record proves them
+                **(layer_flags(b, anchor) if is_graph_page or legacy else {}),
                 "source_hint": _source_hint(b, anchor),
                 "n_curves": max(legend_ns) if legend_ns else 0,
                 # Routed per named text object when the window carries CPYUA's

@@ -18,9 +18,9 @@
 import type { BarSeriesStat } from "../../lib/barlayout";
 import { groupedBarSlots, stackedSegments, stackedTotal } from "../../lib/barMatrix";
 import { barCountAnchor } from "../../lib/groupAxis";
-import { barValueDomain, categorySlots } from "../../lib/statstage";
+import { categorySlots } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
-import { axisStyleOf, barDomainCandidates, barErrorHalf, drawMarks, type DrawMarks } from "./statDrawMarks";
+import { axisStyleOf, barDomain, barErrorHalf, drawMarks, type DrawMarks } from "./statDrawMarks";
 import { drawValueAxis, type Rect, type StatDrawData } from "./statRender";
 import { drawCategoryAxis } from "./statRenderAxes";
 import { drawJitteredPoints, drawSummaryGlyph } from "./statRenderBox";
@@ -86,9 +86,9 @@ export function drawBar(
   // call below, rather than once per group/series.
   const m = drawMarks(d);
 
-  // Domain candidates: every drawn extent (bar top/bottom ± error), always
-  // including 0 (barValueDomain's job) — shared with the click hit-test.
-  const domain = barValueDomain(barDomainCandidates(d, m));
+  // Domain: every drawn extent (bar top/bottom ± error), always including 0,
+  // or the draw's fixed `valueRange` — shared with the click hit-test.
+  const domain = barDomain(d, m);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const slots = categorySlots(groups.length);
   drawCategoryAxis(ctx, rect, slots, groups.map((g) => g.label), d.groupLabel, ink, muted, axisStyleOf(d));
@@ -97,6 +97,14 @@ export function drawBar(
   const showN = d.showN !== false;
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
+  // A fixed range (an Origin layer's zoomed Y) cuts bars at the frame, as Origin does.
+  const clip = !!d.valueRange;
+  if (clip) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+  }
 
   groups.forEach((g, gi) => {
     const slot = slots[gi];
@@ -151,4 +159,5 @@ export function drawBar(
       });
     }
   });
+  if (clip) ctx.restore();
 }

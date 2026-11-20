@@ -137,6 +137,9 @@ export type StatDrawData =
       /** Gates the per-bar `n=` captions (absent = shown). An empty category
        *  is a group whose every series has n=0 (`lib/groupAxis.padBarData`). */
       showN?: boolean;
+      /** The value axis's fixed range (an Origin layer's Y range), bars
+       *  clipped to it; null/absent = autoscale (`statDrawMarks.barDomain`). */
+      valueRange?: [number, number] | null;
       /** One per drawn category when threaded onto the axis (null/absent
        *  otherwise) — read only by the selection link, for the slot keys. */
       slots?: AxisSlot[] | null;

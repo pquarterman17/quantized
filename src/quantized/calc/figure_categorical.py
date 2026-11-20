@@ -198,6 +198,7 @@ def render_categorical_figure(
     height_in: float | None = None,
     dpi: int = 200,
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
+    y_domain: tuple[float, float] | None = None,
 ) -> bytes:
     """Render a grouped or stacked bar chart to image bytes.
 
@@ -214,7 +215,9 @@ def render_categorical_figure(
     ``calc.figure_group_notes.add_caveat``. Both default off --
     byte-identical to before. ``bar_marks`` (P2.6 box 1): raw points and the
     summary marker over grouped bars, and ``colors`` (P1.4 Color-by, one per
-    category), see ``_draw_categorical_bars``.
+    category), see ``_draw_categorical_bars``. ``y_domain``: the screen's
+    fixed value-axis range (``ax.set_ylim``, bars cut at the frame as on
+    screen); ``None`` autoscales.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -270,6 +273,8 @@ def render_categorical_figure(
             (outer or ax).set_xlabel(x_label)
         if y_label:
             ax.set_ylabel(y_label)
+        if y_domain is not None:
+            ax.set_ylim(*y_domain)
         if not st.box_on:
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)

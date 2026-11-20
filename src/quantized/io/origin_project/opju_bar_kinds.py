@@ -9,21 +9,24 @@ column, 213 stacked column, 214 stacked area, 215 horizontal bar; 205, 207,
 ``plotType``; this pass resolves it per LAYER, because what Origin draws
 depends on the layer's other plots:
 
+* **the layer turns the bars, not the plot type.** A layer whose X and Y
+  axes are exchanged (``axes_exchanged``, ``opju_layer_record.layer_flags``)
+  is Origin's horizontal bar layout: its one bar (215) or column (203) plot
+  of a one-layer page is drawn sideways (``"bar"``, ``lib/uplotOrient``);
+  anything else in such a layer is left out (grouped / stacked sideways bars
+  are not drawn). In an upright layer a 215 plot is drawn upright, i.e. it is
+  Origin's column (``SOP_meas`` Graph67, ``Graph_Template`` Graph1 previews),
+  and follows the column rules below. A 215 plot whose layer flag could not
+  be read is left out (orientation unknown), with any column beside it.
 * **one series = no stacking.** A stack of one series is the series itself
   (Origin stacks each plot on the ones before it). So a layer's ONLY
   stacked-area plot is quantized's ``"area"`` (fill down to Y = 0, the 204
-  look) and its only stacked-column plot is a ``"column"`` -- unless the page
-  is a 100 % stack (``StackColP``), whose one series is a flat 100 %. A layer's only
-  horizontal bar plot keeps ``"bar"`` (the ``.opj`` reader's horizontal bar,
-  ``lib/uplotOrient``) when it is the only curve of a one-layer page made
-  from Origin's ``Bar`` template (the 215 plot of ``Graph_Template`` Graph1,
-  a ``PAN2HORZ`` page, shows upright bars in its preview). A bar
-  plot turns Origin's whole layer: a column (203) plot beside it is drawn
-  sideways too (``LSA_fig6`` Graph6 / Graph8 previews: two horizontal bar
-  series, one 215 and one 203), a grouped horizontal chart quantized does not
-  draw, so both are left out.
-* **several column series** (203, or 213 on a ``StackColumn`` page): Origin
-  draws them side by side (203) or stacked (213) per X. That is the Stat
+  look) and its only stacked-column plot is a ``"column"`` -- unless the
+  layer is a 100 % stack, whose one series is a flat 100 %.
+* **several column series** (203, or 213): Origin draws them side by side
+  (203) or stacked (213) per X, the 213 stack normalised to 100 % when the
+  layer's ``stack_percent`` flag is set (else the page template:
+  ``StackColP`` 100 %, ``StackColumn`` plain; neither: left out). That is the Stat
   Stage bar chart grouped by the X column with one bar per row, so the
   figure gets ``bar_layout`` ``"grouped"`` / ``"stacked"`` when every curve
   of a one-layer page is one, all on one sheet against the sheet's own X
@@ -34,20 +37,21 @@ depends on the layer's other plots:
   only for that pick, ``statPicks.withPickedXGroup``). A category is one
   row, so its bar IS the row's value (n = 1: no error whisker). Otherwise several 203 series draw as
   before (by their line style, ``opju_stat_plots``).
-* **anything else** -- several stacked areas or horizontal bars, a stacked
-  column not on a ``StackColumn`` page (the 100 % stacked ``StackColP``
-  template reads back 213 too, and quantized has no 100 % stack), a
-  ``"not_drawn"`` kind -- is LEFT OUT (``plot_type_not_drawn``): drawn as
+* **anything else** -- several stacked areas, several sideways bars, a
+  stack whose 100 % flag is unknown, a stacked layer of a multi-layer page,
+  a ``"not_drawn"`` kind -- is LEFT OUT (``plot_type_not_drawn``): drawn as
   lines these show values where Origin shows none (a pie's slices, the
   unstacked tops of a stack).
 
-**The template signal** (``opju_layer_kind.page_layer_kind``): the page header
-names the template the graph was made from, cut to 9 characters. Origin's
+**The template signal** (``opju_layer_kind.page_layer_kind``, the fallback
+when the layer record does not authenticate): the page header names the
+template the graph was made from, cut to 9 characters. Origin's
 stacked-column template is ``StackColumn`` (``StackColu``) and its 100 %
 stacked one is cut to ``StackColP``; both read back 213 (plan: "270 -> 213";
-``fig_6_a`` Graph2's preview runs 0..100 % from raw counts). Real corpus
-(``.opju`` of ``test-data/origin/public``): 3 pages ``StackColu``, 2
-``StackColP``; every other 213 page names a user template and stays left out.
+``fig_6_a`` Graph2's preview runs 0..100 % from raw counts). It is not
+necessary: ``Fig_3`` Graph2 is a 100 % stack on a ``MergeGrap`` page, and the
+layer's own flag says so (``opju_layer_record``). Every corpus 213 layer has
+an authenticated record, so the template is not consulted there.
 
 Evidence and the per-page gallery check against Origin's saved previews are in
 ``docs/origin_re/plot_kinds.md``.
@@ -80,7 +84,6 @@ BAR_MARKS_NOT_DECODED = "bar_marks_not_decoded"
 _TEMPLATES = (
     (re.compile(rb"(?i)stackcolp"), "percent"),
     (re.compile(rb"(?i)stackcolu"), "stacked"),
-    (re.compile(rb"(?<![A-Za-z])Bar(?![A-Za-z])"), "bar"),  # Origin's Bar template
 )
 _PROVISIONAL = frozenset({"stacked_column", "stacked_area", "bar", "not_drawn"})
 
@@ -173,32 +176,62 @@ def _left_out(fig: dict[str, Any], positions: list[int]) -> dict[str, Any]:
     }
 
 
+def _turned(curves: list[dict[str, Any]], by_kind: dict[str, list[int]], layers: int) -> list[int]:
+    """An exchanged-axes layer (Origin's horizontal bar layout): its one bar
+    or column plot of a one-layer page is drawn sideways (``"bar"``,
+    ``lib/uplotOrient``); every other curve of it is returned, to be left out
+    -- grouped / stacked sideways bars are not drawn, and a line drawn upright
+    in a turned layer would put its points where Origin does not."""
+    if len(curves) == 1 and layers == 1 and set(by_kind) <= {"bar", "column"}:
+        curves[0]["plotType"] = "bar"
+        return []
+    return list(range(len(curves)))
+
+
+def _stack_percent(fig: dict[str, Any], template: str | None) -> bool | None:
+    """The layer's 100 % flag (``opju_layer_record.layer_flags``), else the
+    page template's (``StackColP`` / ``StackColumn``), else ``None``."""
+    flag = fig.get("stack_percent")
+    if isinstance(flag, bool):
+        return flag
+    return {"percent": True, "stacked": False}.get(template or "")
+
+
 def _resolve(
     fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any]
 ) -> dict[str, Any]:
     curves: list[dict[str, Any]] = [dict(c) for c in fig.get("curves") or []]
+    exchanged = fig.get("axes_exchanged")
+    if exchanged is False:
+        for c in curves:  # an upright layer: a 215 bar plot is Origin's column
+            if c.get("plotType") == "bar":
+                c["plotType"] = "column"
     by_kind: dict[str, list[int]] = {}
     for i, c in enumerate(curves):
         by_kind.setdefault(str(c.get("plotType")), []).append(i)
-    gone: list[int] = list(by_kind.get("not_drawn", []))
     out = dict(fig)
+    if exchanged is True:
+        turned = _turned(curves, by_kind, layers)
+        out["curves"] = curves
+        return _left_out(out, turned) if turned else out
+    gone: list[int] = list(by_kind.get("not_drawn", []))
     area = by_kind.get("stacked_area", [])
     if len(area) == 1:
         curves[area[0]]["plotType"] = "area"  # a stack of one
     else:
         gone += area
     bar = by_kind.get("bar", [])
-    if bar and not (len(curves) == 1 and layers == 1 and template == "bar"):
-        # Origin turns the whole layer: its column plots run sideways too
+    if bar:  # orientation unknown (no layer flag): fail closed
         gone += bar + by_kind.get("column", [])
     stacked = by_kind.get("stacked_column", [])
-    if len(stacked) == 1 and "column" not in by_kind and template != "percent":
+    percent = _stack_percent(fig, template)
+    if len(stacked) == 1 and "column" not in by_kind and percent is False:
         # a stack of one (a 100 % stack of one is a flat 100 %: left out)
         curves[stacked[0]]["plotType"] = "column"
-    elif stacked and template == "stacked" and _bar_layout(curves, "stacked_column", layers, books):
+    elif stacked and percent is not None and _bar_layout(curves, "stacked_column", layers, books):
         for i in stacked:
             curves[i]["plotType"] = "column"
-        out[BAR_LAYOUT] = "stacked"
+        out[BAR_LAYOUT] = "percent" if percent else "stacked"
         out[BAR_MARKS_NOT_DECODED] = True
     else:
         gone += stacked
@@ -226,7 +259,7 @@ def apply_bar_kinds(
             out.append(fig)
             continue
         name = str(fig.get("name") or "")
-        if kinds & {"stacked_column", "bar"} and name and name not in templates:
+        if "stacked_column" in kinds and name and name not in templates:
             if pages is None:
                 pages = opju_pages(b)
             templates[name] = _template_kind(b, pages, name)
@@ -236,7 +269,7 @@ def apply_bar_kinds(
 
 
 def _template_kind(b: bytes, pages: list[tuple[int, str]], name: str) -> str | None:
-    """``"stacked"`` / ``"percent"`` / ``"bar"`` from the page's template, else
+    """``"stacked"`` / ``"percent"`` from the page's template, else
     ``None``."""
     for off, page in pages:
         if page == name:

@@ -12,9 +12,8 @@
 // the box renderer itself (`statRenderBox`), which owns their jitter.
 
 import { stackedTotal } from "../../lib/barMatrix";
-import { barValueDomain } from "../../lib/statstage";
 import {
-  barDomainCandidates,
+  barDomain,
   barErrorHalf,
   boxValueDomain,
   drawMarks,
@@ -157,7 +156,7 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       // and every series' half-width below (a click hit-test, but the same
       // "don't re-derive per series" rule the painter follows).
       const barMarks = drawMarks(data);
-      const domain = barValueDomain(barDomainCandidates(data, barMarks));
+      const domain = barDomain(data, barMarks);
       const halfOf = (s: (typeof g.series)[number]) => {
         const h = barErrorHalf(data, s, barMarks);
         return Number.isFinite(h) ? h : 0;

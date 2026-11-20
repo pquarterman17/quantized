@@ -54,6 +54,8 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setFit: vi.fn(),
     barStack: false,
     setBarStack: vi.fn(),
+    barPercent: false,
+    setBarLayout: vi.fn(),
     marks: resolveStatMarks(overrides.mode ?? "box", {}),
     errorColumn: null,
     setMarks: vi.fn(),

@@ -128,3 +128,20 @@ export function withColumnErrors(
   }));
   return used.size ? { ...bd, groups, errorColumn: [...used].join(", ") } : bd;
 }
+
+/** A stacked bar chart normalised to 100 % per category (Origin's 100 %
+ *  stacked column, `PlotView.statPicks.barPercent`): every series' bar, SEM
+ *  and error scaled by 100 / the category's stacked total (a non-finite mean
+ *  counts 0, as `stackedSegments` stacks it). A category whose total is 0 has
+ *  no share to draw: its bars become NaN. The export posts these same values,
+ *  so screen and figure agree. */
+export function percentBars(bd: BarChartData): BarChartData {
+  const groups = bd.groups.map((g) => {
+    const total = stackedTotal(g.series);
+    const f = total !== 0 && Number.isFinite(total) ? 100 / total : NaN;
+    const scale = (s: BarSeriesStat): BarSeriesStat =>
+      ({ ...s, mean: s.mean * f, sem: s.sem * f, ...(s.err === undefined ? {} : { err: s.err * f }) });
+    return { ...g, series: g.series.map(scale) };
+  });
+  return { ...bd, groups };
+}

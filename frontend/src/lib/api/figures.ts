@@ -469,7 +469,7 @@ export interface CategoricalFigureSpec {
   caveat?: string | null; // P2.6 box 2: lib/groupAxis.balanceCaveat, as a footnote
   error_note?: string | null; // P2.6 box 1: lib/statMarks.errorBarNote, footnote line above it
   axis_style?: CategoryAxisStyleWire | null; // P2.6 box 1: label rotation / wrap
-  stacked?: boolean;
+  stacked?: boolean; y_domain?: [number, number] | null; // y_domain: a fixed value-axis range (an Origin layer's Y)
   fmt?: string;
   style?: string;
   title?: string;

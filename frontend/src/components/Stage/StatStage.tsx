@@ -43,9 +43,10 @@ const MODE_OPTIONS: { value: StatMode; label: string }[] = [
 /** The summary table's dock width, px (P2.6 box 4). */
 const DOCK_WIDTH = 340;
 
-const BAR_STACK_OPTIONS: { value: "grouped" | "stacked"; label: string }[] = [
+const BAR_STACK_OPTIONS: { value: "grouped" | "stacked" | "percent"; label: string }[] = [
   { value: "grouped", label: "Grouped" },
   { value: "stacked", label: "Stacked" },
+  { value: "percent", label: "100 %" },
 ];
 
 export default function StatStage() {
@@ -269,8 +270,8 @@ export default function StatStage() {
           <Picker label="layout">
             <SegmentedControl
               options={BAR_STACK_OPTIONS}
-              value={st.barStack ? "stacked" : "grouped"}
-              onChange={(v) => st.setBarStack(v === "stacked")}
+              value={st.barPercent ? "percent" : st.barStack ? "stacked" : "grouped"}
+              onChange={st.setBarLayout}
             />
           </Picker>
         )}
