@@ -111,7 +111,7 @@ export const SERIES_STYLE: Classify<SeriesStyle> = {
 
 export const AXIS_FORMAT: Classify<AxisFormat> = {
   mode: V, digits: V, divide: V, minor: V, ticks: V, size: V, base: V, breaks: V,
-  prob: G, custom: G, cross: G, reverse: G, rotate: G, offset: G, grid: G, top: G, prefix: G, suffix: G,
+  prob: G, custom: G, cross: G, reverse: G, rotate: G, offset: G, grid: G, top: G, prefix: G, suffix: G, divideMark: G,
 };
 
 // Publication (export) styles ARE sanitized by 0.34: new keys are dropped.
@@ -293,11 +293,13 @@ const present = (v: unknown): boolean =>
 const gatedOf = (m: Readonly<Record<string, V034Class>>): string[] => Object.keys(m).filter((k) => m[k] === "gated");
 const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSIFICATIONS).map(([t, m]) => [t, gatedOf(m)]));
 
+const FALSE_ONLY = new Set(["Annotation.dot", "AxisFormat.divideMark"]);
+
 function checkType(o: unknown, type: string, found: Set<string>): void {
   if (!isObj(o)) return;
   for (const k of GATED[type]) {
-    // `dot: false` is the only value that carries information (absent = true = dot).
-    if (type === "Annotation" && k === "dot" ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
+    // `dot: false` and `divideMark: false` are the only values that carry information (absent = shown).
+    if (FALSE_ONLY.has(`${type}.${k}`) ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
   }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
 }

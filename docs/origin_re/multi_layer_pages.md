@@ -121,8 +121,7 @@ is a git-LFS pointer in this extract and was not rendered.
 
 ## Not fixed here
 
-- Bqqbar Graph2's short orange segment near x = 100 is a layer-1 curve
-  binding question (curve decode), not layer composition.
-- The XMCD `GraphT*` layer 2/3 Y titles (`difference (arb. units)`, ...) are
-  not decoded (`y_title` is empty), and the LabTalk button script still shows
-  as text (A7).
+- ~~Bqqbar Graph2's short orange segment near x = 100~~: fixed by lane M
+  (style-holder tokens, [`page_text_and_tick_divide.md`](page_text_and_tick_divide.md)).
+- ~~The XMCD `GraphT*` layer 2/3 Y titles and the LabTalk button text (A7)~~:
+  fixed by lane M (same doc).

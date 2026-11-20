@@ -16,6 +16,7 @@ import {
 } from "./originFigureSelection";
 import type { OriginFigureEntry } from "./originFigures";
 import { overlayCurveLabels, overlayCurveStyles, overlayErrorState } from "./originOverlayFigure";
+import { originPanelFmt, withY2PanelFmt } from "./originTickDivide";
 import type { SpatialPanel } from "./multipanel";
 import { computePanelLayout, framesCoincide, pageNormalizedRect } from "./originPanels";
 import { pageValidRects } from "./panelLayout";
@@ -71,6 +72,8 @@ export function resolveFigurePanels(
       hiddenChannels: sel.hiddenChannels,
       xStep: fig.x_step ?? null,
       yStep: fig.y_step ?? null,
+      // This layer's own tick-label "Divide by" (lib/originTickDivide).
+      ...(originPanelFmt(fig) ? { fmt: originPanelFmt(fig) } : {}),
       // Each panel's OWN layer's marks, in that layer's own data coords —
       // annotation_marks are already recorded per-layer, so no coordinate
       // transform is needed (fix #5: multi-panel figures used to drop them).
@@ -234,6 +237,7 @@ function mergePanelWithY2(
     y2Log: y2.yLog,
     y2Step: y2.yStep,
     y2AxisLabel: y2Figure.y2_title || y2Figure.y_title || "",
+    ...(withY2PanelFmt(host.fmt, y2Figure) ? { fmt: withY2PanelFmt(host.fmt, y2Figure) } : {}),
     annotations: [
       ...(host.annotations ?? []),
       ...(y2.annotations ?? []).map((a) => ({ ...a, axis: 1 as const })),

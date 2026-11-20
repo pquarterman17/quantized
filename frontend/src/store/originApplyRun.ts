@@ -35,6 +35,7 @@ import { figureCurveErrorBindings, figureDocumentErrors } from "../lib/originCur
 import type { ErrorBinding } from "../lib/errorRoles";
 import { recordedXConflicts, recordedXOmissions } from "../lib/originRecordedX";
 import { originFigureWithSourceMappings } from "../lib/originSources";
+import { figureDivides, originDividePatch } from "../lib/originTickDivide";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
@@ -232,7 +233,8 @@ export function runOriginFigureApply(
         yStep: main.y_step ?? null,
         xScale: scaleFromLog(main.x_log), // Origin's own axis type is boolean-only
         yScale: scaleFromLog(main.y_log),
-        ...topAxisPatch(get().xFmt, top && topXAxis(main, top)), // B2: the top layer's own X
+        // B2: the top layer's own X; each axis' Origin "Divide by" (lib/originTickDivide).
+        ...originDividePatch(get(), figureDivides(main, right), topAxisPatch(get().xFmt, top && topXAxis(main, top)).xFmt),
         ...(right && y2.length ? {
           y2Keys: y2.filter((i) => !errs.errorColumns.includes(i)), // whiskers ride their curve, never a series
           y2Lim: [right.y_from, right.y_to] as [number, number],
@@ -296,7 +298,7 @@ export function runOriginFigureApply(
         yStep: lower.figure.y_step ?? null,
         xScale: scaleFromLog(lower.figure.x_log),
         yScale: scaleFromLog(lower.figure.y_log),
-        ...topAxisPatch(get().xFmt),
+        ...originDividePatch(get(), figureDivides(lower.figure, upper.figure), topAxisPatch(get().xFmt).xFmt),
         xKey: baseSel.xKey,
         // The plotted-channel list derives from yKeys ALONE (y2Keys only tags
         // which of them sit on the right axis), so yKeys must be the UNION of
@@ -379,7 +381,7 @@ export function runOriginFigureApply(
     yStep: fig.y_step ?? null,
     xScale: scaleFromLog(fig.x_log),
     yScale: scaleFromLog(fig.y_log),
-    ...topAxisPatch(get().xFmt),
+    ...originDividePatch(get(), figureDivides(fig), topAxisPatch(get().xFmt).xFmt),
     xAxisLabel: fig.x_title ?? "",
     yAxisLabel: fig.y_title ?? "",
     // Pin the figure's decoded floating text; REPLACE, never stack.

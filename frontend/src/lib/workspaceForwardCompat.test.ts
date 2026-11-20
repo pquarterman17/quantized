@@ -88,6 +88,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "AxisFormat.prefix": (ws) => editFmt(ws, { prefix: "$" }),
   "AxisFormat.suffix": (ws) => editFmt(ws, { suffix: " K" }),
+  "AxisFormat.divideMark": (ws) => editFmt(ws, { divide: 10, divideMark: false }),
   "AxisFormat.top": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, top: { kind: "reciprocal" } } as View["xFmt"]; }),
   "AxisFormat.base=2": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, base: "2" }; }),
   "ExportSeriesStyle.marker_fill": (ws) => editExport(ws, { marker_fill: "hollow" }),

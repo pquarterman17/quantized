@@ -135,6 +135,7 @@ from quantized.io.origin_project.opju_curve_token_x import (
     token_x,
     token_x_id,
 )
+from quantized.io.origin_project.opju_curves_allcols import in_style_holder
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
@@ -390,6 +391,9 @@ def extract_curves_by_id(
         cid = token_id(b, m)
         if cid is None or (not is_shipped_form(m) and cid in shipped):
             continue
+        if in_style_holder(b, m.start() - 1):
+            continue  # a plot-style template's column reference, not a plot
+
         info = table.ids.get(cid)
         if info is None:
             continue
