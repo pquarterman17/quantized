@@ -135,6 +135,7 @@ from quantized.io.origin_project.opju_curve_token_x import (
     token_x,
 )
 from quantized.io.origin_project.opju_embedded_pages import span_pages
+from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
 from quantized.io.origin_project.opju_plot_kinds import (
     apply_marker_modifiers,
@@ -368,6 +369,7 @@ def extract_curves_by_id(
     out: list[dict[str, str | float]] = []
     records: list[bytes | None] = []
     notes: list[dict[str, str]] = []  # per curve: its sheet note (reason "" = kept)
+    cids: list[int] = []  # per curve: its column id (opju_error_bars links)
     unhidden: list[str] = []  # per curve: its reason were it not hidden
     seen: dict[tuple[str, str, str], int] = {}  # key -> its curve's index
     placed: set[int] = set()  # indices of curves the second/third sheet signal placed
@@ -447,7 +449,8 @@ def extract_curves_by_id(
             curve.update(style_fields(record))
         if not reason:  # a plot of part of its column: no row-range binding
             reason = range_reason(b, record, sheet or book, y_col)
-        # an error-bar DataPlot: bars drawn from designations, never a line
+        # an error-bar DataPlot is never a line: its bars go on the curve it
+        # decorates where proven (opju_error_bars), else it stays left out
         reason = error_bar_reason(record) or reason
         unhidden.append(reason)
         if cid in hidden:  # Origin does not draw it: no other reason applies
@@ -466,10 +469,13 @@ def extract_curves_by_id(
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)
+        cids.append(cid)
         notes.append({"book": book, "x": x_col, "y": y_col, "recorded": sheet, "reason": reason})
     # auto/increment placeholders resolve by group role + plot order
     # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
     apply_increment_colors(out, records)
+    # an error-bar plot's note names the curve it decorates (opju_error_bars)
+    link_error_plots(notes, cids, [error_link(r) for r in records])
     kept: list[dict[str, str | float]] = []
     for i, (curve, note) in enumerate(zip(out, notes, strict=True)):
         if not note["reason"]:

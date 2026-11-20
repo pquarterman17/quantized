@@ -213,7 +213,7 @@ const existingOverlay = ds(
     metadata: {
       origin_overlay: true,
       origin_overlay_source: "fig-ov",
-      origin_overlay_version: 2,
+      origin_overlay_version: 3,
       origin_column_names: ["c0", "c1"],
       x_column_name: "A",
     },
@@ -842,6 +842,7 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
         "annotations",
         "composition",
         "datasets",
+        "errKeys", // Origin error-bar columns (overlayErrorState) on every apply
         "facetKey",
         "future",
         "gadgetBusy",
@@ -960,6 +961,7 @@ describe("applyOriginFigure — single-layer branch", () => {
     expect(changedSince(before)).toEqual([
       "annotations",
       "composition",
+      "errKeys", // the book's error layer + the figure's own yErr bars, every apply
       "facetKey",
       "future",
       "gadgetBusy",

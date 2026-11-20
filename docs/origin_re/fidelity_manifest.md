@@ -85,8 +85,13 @@ curve with its `reason`) map to three codes by what was not proven
 
 - `curve_sheet_unresolved` — the curve's SHEET is not proven
   (`sheet_unknown`, `x_sheet_unproven`). 0 public-corpus figures today.
-- `error_bar_plots` — an error-bar DataPlot is not drawn as a line; its bars
-  draw only from a decoded error-column designation (`opju_plot_gates`).
+- `error_bar_plots` — an error-bar DataPlot is not drawn as a line, and its
+  bars could not be attached to the curve they decorate (asymmetric halves,
+  two plots on one curve, X error, or no proven curve:
+  `opju_error_bars`, `error_bars.md`). An attached one is no loss: its
+  curve carries `yErr` and the figure reports `error_bars` as recovered.
+  `.opj` reports it too since 2026-11-20 (before, `.opj` drew the error
+  column as a line).
 - `curves_left_out` — the sheet is proven, but the X, the rows, the plot
   kind or the imported column is not (every other non-hidden reason).
 

@@ -135,9 +135,9 @@ fits among them) are now `hidden_in_origin`. `.opj` reading is unchanged.
   the 2026-07-11 byte scan found no anchor byte separating them, offset 38
   included. Whatever hides them there is a different mechanism (for example
   a line style of "none"), not this bit. Still open.
-* Hidden Y-error tokens (`30 21`, Fig3_e) were already left out as
-  `error_bar_plot`; whether the frontend still draws bars for those columns
-  from their designations was not checked.
+* Hidden Y-error tokens (`30 21`, Fig3_e Graph1) are left out as
+  `hidden_in_origin` and never attach as bars (`error_bars.md`). Graph2,
+  with the same plots shown, draws them.
 
 ## The COM check that would settle it
 

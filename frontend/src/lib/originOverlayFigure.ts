@@ -134,6 +134,7 @@ export function buildOverlayDataset(
     return yCh >= 0 ? curveDisplayName(ds, c.y, yCh) : undefined;
   });
   const bound: OverlayBound[] = [];
+  const errorCols: Record<number, number> = {}; // curve column -> its Origin error-bar column
   // curveIdx tracks this curve's position among ALL of figure.curves (even
   // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
   // numbering Origin's legend uses across the whole layer, not per-book.
@@ -174,6 +175,32 @@ export function buildOverlayDataset(
               curveNames[(figure.curves ?? []).findIndex((p) => p.book === c.book.split("@")[0])],
             ),
     });
+    // Origin's error-bar plot on this curve (OriginCurve.yErr): its column
+    // rides in the curve's own block, right after it, as whiskers only.
+    const eCh = c.yErr ? channelOf(meta, c.yErr) : -1;
+    if (eCh >= 0 && eCh !== yCh) {
+      errorCols[bound.length - 1] = bound.length;
+      bound.push({
+        ds, xCh, yCh: eCh, label: `${c.book}: ${ds.data.labels[eCh] || c.yErr}`,
+        unit: ds.data.units[eCh] ?? "", style: null, designation: "Y-error", legendLabel: undefined,
+      });
+    }
   });
-  return assembleOverlay(bound, figure.name || "");
+  const out = assembleOverlay(bound, figure.name || "");
+  if (!out || Object.keys(errorCols).length === 0) return out;
+  return { ...out, metadata: { ...out.metadata, origin_overlay_errors: errorCols } };
+}
+
+/** An overlay's Origin error-bar columns (`origin_overlay_errors`, stamped by
+ *  `buildOverlayDataset`): curve column -> error column, and the error
+ *  columns themselves (whiskers, never their own series). */
+export function overlayErrorState(data: DataStruct | null | undefined): { errKeys: Record<number, number>; errorColumns: number[] } {
+  const raw = (data?.metadata ?? {})["origin_overlay_errors"];
+  const errKeys: Record<number, number> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (Number.isInteger(Number(k)) && Number.isInteger(v)) errKeys[Number(k)] = v as number;
+    }
+  }
+  return { errKeys, errorColumns: Object.values(errKeys).sort((a, b) => a - b) };
 }

@@ -2712,7 +2712,7 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(overlays).toHaveLength(1);
     expect(overlays[0].id).toBe("old-overlay");
     expect(overlays[0].data.values).toEqual([[10, NaN], [NaN, 20]]);
-    expect(overlays[0].data.metadata.origin_overlay_version).toBe(2);
+    expect(overlays[0].data.metadata.origin_overlay_version).toBe(3);
     expect(overlays[0]).toMatchObject({
       notes: "keep this note", tags: ["reviewed"], folderId: "origin", order: 7,
     });
