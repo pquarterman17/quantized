@@ -1,0 +1,489 @@
+{
+  "public:2021555811-hub_UAV-Soil-Moisture-Systematic-Review/origin/soil deep.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L1:",
+      "reason": "pie / doughnut (plot type 225): no pie renderer exists (Graph Builder and Stat Stage have none); Origin's previews show pies, which were drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L1:",
+      "reason": "pie / doughnut (plot type 225): no pie renderer exists (Graph Builder and Stat Stage have none); Origin's previews show pies, which were drawn as lines"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    }
+  ],
+  "public:Surfacegrowthgroup_Long-range-correlations-in-discrete-kinetic-roughening/figure_data_origin/RSOS_SC_micstruc.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut pie / doughnut (plot type 225): no pie renderer exists (Graph Builder and Stat Stage have none); Origin's previews show pies, which were drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut pie / doughnut (plot type 225): no pie renderer exists (Graph Builder and Stat Stage have none); Origin's previews show pies, which were drawn as lines"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:Surfacegrowthgroup_Long-range-correlations-in-discrete-kinetic-roughening/figure_data_origin/RSOS_TC_micstruc.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut pie / doughnut (plot type 225): no pie renderer exists (Graph Builder and Stat Stage have none); Origin's previews show pies, which were drawn as lines"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "_CIR/L1:",
+      "reason": "doughnut pie / doughnut (plot type 225): no pie renderer exists (Graph Builder and Stat Stage have none); Origin's previews show pies, which were drawn as lines"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:Bariumoxid_MIMOTechniques/Report/Graph_Template.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L4:",
+      "reason": "plain stacked columns (213, layer 100 % flag clear) in panel 4 of a 4-layer page: the Stat Stage draws one-layer pages only; drawn as lines on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L4:",
+      "reason": "plain stacked columns (213, layer 100 % flag clear) in panel 4 of a 4-layer page: the Stat Stage draws one-layer pages only; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:Bariumoxid_MIMOTechniques/Report/Graphs.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "/L4:",
+      "reason": "plain stacked columns (213, layer 100 % flag clear) in panel 4 of a 4-layer page: the Stat Stage draws one-layer pages only; drawn as lines on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "/L4:",
+      "reason": "plain stacked columns (213, layer 100 % flag clear) in panel 4 of a 4-layer page: the Stat Stage draws one-layer pages only; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:GuoBaolin0724_DyResEL_Ratio-i/Ratio-i/5_sidechain-az-gt0-occupied_draw.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:ZhaoYuan-Group_DyResEL_Ratio-i/Ratio-i/5_sidechain-az-gt0-occupied_draw.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:joyrajbanshi91_India-Land-Use/figure_code/supplementary/Supplemetary_Fig_9.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_1.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_2.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:envdes_code_CMAQ_FLAML_Germany_2030/4_result_analysis/fig_7_a.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:envdes_code_CMAQ_FLAML_Germany_2030/4_result_analysis/fig_6_a.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph1/L1:",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph2/L1:",
+      "reason": "100 % stacked columns (213, layer 100 % flag set, StackColP): Stat Stage stacked bar chart normalised to 100 %; preview 0..100 % from raw counts; drawn as lines on main"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph3/L1:",
+      "reason": "100 % stacked columns (213, layer 100 % flag set, StackColP): Stat Stage stacked bar chart normalised to 100 %; preview 0..100 % from raw counts; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:PacoSanto_Data_Availability_papers/Communications Earth & Environment_Volcanic deposits from Mount Etna as high-fidelity lunar simulants for ISRU applications/Data/Raw and Analyzed/origin.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "stacked columns (213) with the layer's 100 % flag (byte 187 bit 0x02) clear: Stat Stage stacked bar chart; preview shows plain stacks"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_14.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "a lone stacked-area plot (214) is an area filled to 0 (StackArea template, previews)"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_16.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "a lone stacked-area plot (214) is an area filled to 0 (StackArea template, previews)"
+    }
+  ],
+  "public:mobilebandwidth_Artifacts/plots/Figure_17.opju": [
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "a lone stacked-area plot (214) is an area filled to 0 (StackArea template, previews)"
+    }
+  ],
+  "public:joyrajbanshi91_India-Land-Use/figure_code/main/Fig_3.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph2/L2:",
+      "reason": "100 % stacked columns (213, layer 100 % flag set; preview 0..100 %) on a 2-layer page: the Stat Stage draws one-layer pages only; drawn as lines on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph2/L2:",
+      "reason": "100 % stacked columns (213, layer 100 % flag set; preview 0..100 %) on a 2-layer page: the Stat Stage draws one-layer pages only; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph14/L6:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph14/L6:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph40/L5:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph40/L5:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph40/L9:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph40/L9:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph55/L5:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph55/L5:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph65/L5:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph65/L5:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph67/L1:",
+      "reason": "a 215 plot in an upright layer (exchanged-axes flag clear) is Origin's column: preview shows five upright bars"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph20/L1:",
+      "reason": "a lone stacked column (213, 100 % flag clear) is a column: preview shows upright bars"
+    },
+    {
+      "kind": "curve_gained",
+      "contains": "@4 X=A Y=B",
+      "reason": "histogram + cumulative-percent page (HISTPROB): layer 1 re-bound to Origin's own bin-count column, recomputed from the raw column at import"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "stat_layer_in_multi_layer_page",
+      "reason": "the same histogram layers, now drawn from Origin's bins"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:niloofarcrno_Techno-Economic-Model/TEA_ExcelGraphs.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph9/L1:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright (TEA Graph9: two series sharing one position, a tornado)"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph9/L1:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright (TEA Graph9: two series sharing one position, a tornado)"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph2/L1:",
+      "reason": "Stat Stage bar chart grouped by X (several 203 series on one sheet's own even X, one-layer page): previews show side-by-side columns; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/LSA_fig6.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph6/L1:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright; the bars' error-bar plots go with them"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph6/L1:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright; the bars' error-bar plots go with them"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph8/L1:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright; the bars' error-bar plots go with them"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph8/L1:",
+      "reason": "exchanged-axes layer (byte 104 bit 0x40 set, Origin's horizontal bar layout) holding several bar/column plots or sitting on a multi-layer page: sideways grouped bars / panels are not drawn; main drew them upright; the bars' error-bar plots go with them"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "",
+      "reason": "the one bar plot of a one-layer exchanged-axes layer is drawn sideways ('bar'): previews show horizontal bars"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:shawxgf_APFD-in-RAS-affect-tilapia-s-growth/30流场.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph6/L2:",
+      "reason": "vector XYXY (218): its end-point columns are not decoded and quantized has no vector renderer; the preview shows arrows, drawn as a line on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph6/L2:",
+      "reason": "vector XYXY (218): its end-point columns are not decoded and quantized has no vector renderer; the preview shows arrows, drawn as a line on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:shawxgf_APFD-in-RAS-affect-tilapia-s-growth/50流场.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph10/L2:",
+      "reason": "vector XYXY (218): its end-point columns are not decoded and quantized has no vector renderer; the preview shows arrows, drawn as a line on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph10/L2:",
+      "reason": "vector XYXY (218): its end-point columns are not decoded and quantized has no vector renderer; the preview shows arrows, drawn as a line on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ],
+  "public:zihaonian_MCM/paper_chart/Degree of impact of single stock commission changes on final returns.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph26/L1:",
+      "reason": "floating columns (207): no floating-column renderer; preview shows floating stacks, drawn as lines on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph26/L1:",
+      "reason": "floating columns (207): no floating-column renderer; preview shows floating stacks, drawn as lines on main"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph511/L1:",
+      "reason": "floating columns (207, error blocks): no renderer; drawn as lines on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph511/L1:",
+      "reason": "floating columns (207, error blocks): no renderer; drawn as lines on main"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph512/L1:",
+      "reason": "floating columns (207, error blocks): no renderer; drawn as lines on main"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph512/L1:",
+      "reason": "floating columns (207, error blocks): no renderer; drawn as lines on main"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "reason": "fidelity notes follow the curves: a layer that loses curves to plot_type_not_drawn gains curves_left_out / exact_curve_bindings and drops the style notes of curves it no longer draws; a grouped / stacked / 100 % layer gains bar_marks_not_decoded; a re-bound histogram layer gains bar_width_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ]
+}
