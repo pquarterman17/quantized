@@ -103,18 +103,37 @@ export function originLegendState(
   };
 }
 
+/** Whether a figure layer carries evidence of curves Origin draws: decoded
+ *  curve bindings, or curves the importer LEFT OUT with a reason
+ *  (`curve_sheet_omitted`). Such a layer must never fall back to "every
+ *  channel" when none of those curves resolves -- that draws phantom data
+ *  (Moke Graph2, hc2convert Graph1/4/6/7..11: 11-33 channels where Origin
+ *  draws one empty curve or three). A layer with no curve evidence at all
+ *  keeps the dataset-default view. */
+export function figureHasCurveEvidence(
+  figure: Pick<OriginFigure, "curves" | "curve_sheet_omitted" | "map" | "ternary">,
+): boolean {
+  // A heatmap / contour / ternary layer opens its own stage from its own
+  // columns (figureMapState / queueFigureTernary): not an XY fallback case.
+  if (figure.map || figure.ternary) return false;
+  return (figure.curves?.length ?? 0) > 0 || (figure.curve_sheet_omitted?.length ?? 0) > 0;
+}
+
 /** The channel-selection slice of a single-layer apply's plot state. When
- *  decoded bindings are absent, explicitly restore the dataset-default
- *  channel view. `setActive()` only derives that default on a genuine dataset
- *  switch; without this explicit fallback, applying a binding-less graph to
- *  the dataset already on Stage inherits stale/empty channel picks and can
- *  produce a blank plot. */
+ *  the figure has no curve evidence (`figureHasCurveEvidence`), explicitly
+ *  restore the dataset-default channel view: `setActive()` only derives that
+ *  default on a genuine dataset switch, so without this a binding-less graph
+ *  applied to the dataset already on Stage inherits stale channel picks.
+ *  When the figure DOES record curves but none of them resolved to a column
+ *  with data, the apply FAILS CLOSED: an empty plot (`yKeys: []`, which the
+ *  stage words with `NO_RESOLVED_CURVES_REASON`), never every channel. */
 export function figureSelectionState(
   sel: ReturnType<typeof figureChannelSelection>,
+  figure?: Parameters<typeof figureHasCurveEvidence>[0],
 ): { xKey: number | null; yKeys: number[] | null; seriesStyles: Record<number, SeriesStyle>; seriesLabels: Record<number, string> } {
-  return sel
-    ? { xKey: sel.xKey, yKeys: sel.yKeys, seriesStyles: sel.styles, seriesLabels: sel.labels }
-    : { xKey: null, yKeys: null, seriesStyles: {}, seriesLabels: {} };
+  if (sel) return { xKey: sel.xKey, yKeys: sel.yKeys, seriesStyles: sel.styles, seriesLabels: sel.labels };
+  const failClosed = !!figure && figureHasCurveEvidence(figure);
+  return { xKey: null, yKeys: failClosed ? [] : null, seriesStyles: {}, seriesLabels: {} };
 }
 /** The Stat Stage view for a figure whose every curve is an Origin
  *  histogram, box, violin or strip plot of one kind (`OriginCurve.plotType`):
@@ -194,10 +213,9 @@ export function withCurveErrKeys(base: Record<number, number>, own: Record<numbe
  *  became numeric (`x_column_name` empty, `.time` = the row index) — that
  *  designated-X text column itself: Origin plots a category X at its index.
  *  Without this a text-X graph lost every binding and fell back to plotting
- *  all of the book's channels. (Origin's index is 1-based while `.time`
- *  starts at 0, so the first category can sit left of the decoded xLim --
- *  a separate, backend-side gap.) */
-function isDefaultX(meta: Record<string, unknown>, letter: string | undefined, xLetter: string): boolean {
+ *  all of the book's channels. (`.time` of such a book is the 1-based
+ *  category index Origin plots at -- `opj_books._build_book`, A1b.) */
+export function isDefaultX(meta: Record<string, unknown>, letter: string | undefined, xLetter: string): boolean {
   if (!letter || letter === xLetter) return true;
   if (xLetter !== "") return false;
   const text = meta.origin_text_columns;
@@ -214,7 +232,9 @@ function isDefaultX(meta: Record<string, unknown>, letter: string | undefined, x
  *  `origin_column_names` metadata (value-channel letters, in channel order)
  *  onto `xKey`/`yKeys` indices. Returns null when nothing maps — the apply
  *  action then leaves the default view untouched (curves recall is partial,
- *  so "no selection" must stay graceful, never an empty plot). */
+ *  so "no selection" means the default view -- unless the figure has curve
+ *  evidence, where the apply fails closed to an empty plot instead, see
+ *  `figureSelectionState`). */
 export function figureChannelSelection(
   figure: OriginFigure,
   ds: Dataset,

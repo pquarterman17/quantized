@@ -8,9 +8,10 @@
 // so light mode keeps a TRUE black line and a later theme/background switch
 // re-resolves live (see `uplotOpts.ts`'s callers).
 //
-// Substitution is always achromatic (the caller's supplied ink token), never
-// a hue shift — researchers expect "the black curve" to stay black-ish/grey
-// (just inverted for legibility), not turn some arbitrary colour.
+// An achromatic colour (black/white/grey) is swapped for the caller's ink
+// token: researchers expect "the black curve" to stay black-ish/grey (just
+// inverted for legibility). A chromatic colour keeps its hue and is only
+// darkened (lightened on a dark canvas) until it reaches the threshold.
 //
 // Deliberately does NOT depend on canvas (unlike `lib/color.ts`'s
 // `resolveToHex`, which paints a 1x1 canvas to resolve OKLCH design tokens)
@@ -138,6 +139,52 @@ const MIN_CONTRAST = 2.2;
 const DEFAULT_INK_ON_DARK = "#eef0f6";
 const DEFAULT_INK_ON_LIGHT = "#1e1e26";
 
+/** Below this channel spread (0-255) a colour is achromatic: it has no hue to
+ *  keep, so it is swapped for the ink token (Origin's black on a dark canvas
+ *  must read as the ordinary ink, as it always has). */
+const ACHROMATIC_SPREAD = 12;
+
+function rgbToHsl([r, g, b]: [number, number, number]): [number, number, number] {
+  const R = r / 255, G = g / 255, B = b / 255;
+  const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+  const l = (mx + mn) / 2;
+  const d = mx - mn;
+  if (d === 0) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (mx === R) h = ((G - B) / d) % 6;
+  else if (mx === G) h = (B - R) / d + 2;
+  else h = (R - G) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+
+function toHex(rgb: [number, number, number]): string {
+  return `#${rgb.map((v) => Math.min(255, Math.max(0, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Keep the hue and saturation of a chromatic colour that is too close to the
+ *  background and move only its lightness: darker on a light canvas, lighter
+ *  on a dark one. The limit is the most extreme lightness that still meets
+ *  `MIN_CONTRAST` for this hue/saturation (found by bisection); the colour's
+ *  lightness is then scaled toward that limit proportionally, not clamped to
+ *  it, so two pale colours of one hue that differ in lightness stay distinct. */
+function shiftKeepingHue(rgb: [number, number, number], isDarkBg: boolean, bgL: number): string {
+  const [h, s, l] = rgbToHsl(rgb);
+  const passes = (lt: number) => contrastRatio(relativeLuminance(hslToRgb(h, s, lt)), bgL) >= MIN_CONTRAST;
+  // Light canvas: largest passing lightness (0 -> black always passes).
+  // Dark canvas: smallest passing lightness (1 -> white always passes).
+  let pass = isDarkBg ? 1 : 0;
+  let fail = l;
+  for (let i = 0; i < 24; i++) {
+    const mid = (pass + fail) / 2;
+    if (passes(mid)) pass = mid;
+    else fail = mid;
+  }
+  const limit = pass;
+  const out = isDarkBg ? 1 - (1 - l) * (1 - limit) : l * limit;
+  return toHex(hslToRgb(h, s, out));
+}
+
 /** Resolve a literal draw colour for legibility against the plot's
  *  EFFECTIVE background. `isDarkBg` is a plain boolean the caller has
  *  already resolved from that window's effective mode (`theme`/`light`/
@@ -154,14 +201,19 @@ const DEFAULT_INK_ON_LIGHT = "#1e1e26";
  *    (mid-tones, saturated colours, anything already visible — including a
  *    literal true black against a LIGHT background, so light mode keeps
  *    real black lines).
- *  - Contrast is poor (near-black-on-dark / near-white-on-light) →
- *    substitute `inkColor` (or the built-in fallback) — an achromatic swap,
- *    never a hue shift, so "the black curve" reads as black-ish/grey. */
+ *  - Contrast is poor and the colour is achromatic (near-black-on-dark /
+ *    near-white-on-light) → substitute `inkColor` (or the built-in
+ *    fallback), so "the black curve" reads as the ordinary ink.
+ *  - Contrast is poor and the colour is chromatic (#00FF00 or #FFFF80 on a
+ *    light canvas) → keep its hue and saturation and darken it (lighten it
+ *    on a dark canvas) just far enough to reach the contrast threshold;
+ *    returned as `#rrggbb`. */
 export function resolveDrawColor(color: string, isDarkBg: boolean, inkColor?: string): string {
   const rgb = parseColor(color);
   if (!rgb) return color;
   const fgL = relativeLuminance(rgb);
   const bgL = isDarkBg ? DARK_BG_LUMINANCE : LIGHT_BG_LUMINANCE;
   if (contrastRatio(fgL, bgL) >= MIN_CONTRAST) return color;
+  if (Math.max(...rgb) - Math.min(...rgb) >= ACHROMATIC_SPREAD) return shiftKeepingHue(rgb, isDarkBg, bgL);
   return inkColor || (isDarkBg ? DEFAULT_INK_ON_DARK : DEFAULT_INK_ON_LIGHT);
 }

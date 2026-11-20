@@ -48,6 +48,16 @@ export interface SeriesColors {
   isDarkBg: boolean;
 }
 
+/** On-screen stroke width: a drawn line (width > 0) is at least ONE device
+ *  pixel wide (uPlot widths are CSS px, so `1/devicePixelRatio`). Screen only:
+ *  the export keeps its own widths ("screen px read as pt", exportStyles.ts),
+ *  and a width of 0 (no line) stays 0. */
+export function screenStrokeWidth(width: number, dpr?: number): number {
+  if (!(width > 0)) return width;
+  const ratio = dpr ?? (typeof window !== "undefined" ? window.devicePixelRatio : 1);
+  return Math.max(width, 1 / (ratio > 0 ? ratio : 1));
+}
+
 /** uPlot `series` (index 0 = x) and `bands` for `payload`. `labels[i]` is
  *  display series `i`'s resolved legend label (undefined leaves it unset). */
 export function buildSeriesDefs(
@@ -187,7 +197,7 @@ export function buildSeriesDefs(
       const fitCurve = isFitSeries(s) && !seriesStyles?.[i];
       const trace = seriesTrace(style, fitCurve ? "Line" : s.overlay ? (args.defaultTrace ?? "Line") : dataTrace); // an explicit style opts out
       const lineW = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
-      const width = fitCurve ? fitLineWidth(lineW) : lineW;
+      const width = screenStrokeWidth(fitCurve ? fitLineWidth(lineW) : lineW);
       const dash = fitCurve ? FIT_DASH : style?.line ? DASH[style.line] : undefined;
       // Markers: glyph + size for an explicit `marker` style, or the plain 5px
       // circle of the Scatter / Line + markers default trace —

@@ -2676,6 +2676,7 @@ describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)
   const LAZY_IMPORTERS = [
     "/lib/originSpatialPanels.ts", // the other half of the same lazy pair
     "/lib/thumbnailArtifacts.ts", // reached only via lib/thumbnailGenerators
+    "/lib/originRecordedX.ts", // imported only by store/originApplyRun (the lazy apply body)
   ];
 
   it("scans the modules it claims to", () => {
