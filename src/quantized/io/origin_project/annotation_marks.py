@@ -36,8 +36,9 @@ on a LOG axis is unverified — the linear formula above is applied regardless
 panel-label Texts use an ``86 13`` tag and UnpolPlots.opju one ``85 1f``
 variant — same neighbourhood, different framing, no oracle coverage — so
 those objects keep their text in ``annotations`` but ship no position. The
-oracle's ``attach`` mode (all captured instances are 0 = layer-scale) is not
-decoded; a non-zero attach presumably reinterprets the fractions.
+oracle's ``attach`` mode is decoded for ``.opj`` (2026-11-20): attach 1 =
+PAGE fractions, header byte 40 bit 0 (:func:`opj_page_attached`). ``.opju``
+page attachment is not decoded.
 
 Pure library: bytes in → dicts out. No fastapi/pydantic/routes imports.
 """
