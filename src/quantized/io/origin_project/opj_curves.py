@@ -153,6 +153,8 @@ _DATAPLOT_MAGIC = b"\x58\x00\x00\x00\x98\x03\x40\xb3"
 
 # windows.py's plot-designation enum (0=Y, 3=X, ...) -- see its `_DESIGNATION`.
 _DESIGNATION_X = 3
+# Bytes scanned for the column short name's NUL (windows.py's own limit).
+_SHORT_NAME_LIMIT = 20
 
 
 def _column_short_name(payload: bytes) -> str | None:
@@ -161,10 +163,17 @@ def _column_short_name(payload: bytes) -> str | None:
     Printable, NUL-terminated, alpha-first, at payload offset ``0x12`` --
     mirrors ``windows.py``'s column-property-block layout but WITHOUT
     ``windows._is_column_block``'s stricter type-byte check, which misses
-    most real columns in this corpus (see module docstring)."""
+    most real columns in this corpus (see module docstring).
+
+    The name may run to ``_SHORT_NAME_LIMIT - 1`` characters -- the same
+    limit ``windows.py`` reads this field with. An 8-byte limit used to drop
+    every name of 8+ characters (``difference``, ``asymmetry``), so every
+    curve plotting such a column lost its binding and its layer vanished
+    (XMCD.opj: 69 curve anchors, the GraphT* 3-panel pages; see
+    ``docs/origin_re/multi_layer_pages.md``)."""
     if len(payload) < 500:
         return None
-    name = _cstring(payload, 0x12, 8)
+    name = _cstring(payload, 0x12, _SHORT_NAME_LIMIT)
     return name if name and name[0].isalpha() else None
 
 

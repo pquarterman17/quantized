@@ -122,6 +122,25 @@ def test_column_id_map_resolves_book_and_column() -> None:
     assert id_map == {10: ("Book1", "A"), 11: ("Book1", "B")}
 
 
+def test_column_id_map_keeps_short_names_of_eight_or_more_characters() -> None:
+    """B1 (XMCD.opj GraphT*): an 8-byte name window dropped ``difference`` /
+    ``asymmetry``, so every curve on them lost its binding and its layer.
+    The worksheet reader (``windows.py``) reads the same field 20 bytes wide;
+    a name with no NUL inside that window still resolves to nothing."""
+    blob = _synthetic_opj(
+        _window_header("T1"),
+        _column_block("normA", cid=10),
+        _column_block("difference", cid=11),
+        _column_block("asymmetry", cid=12),
+        _column_block("a" * 20, cid=13),
+    )
+    assert column_id_map(_blocks_of(blob)) == {
+        10: ("T1", "normA"),
+        11: ("T1", "difference"),
+        12: ("T1", "asymmetry"),
+    }
+
+
 def test_book_x_columns_picks_the_designated_x_column() -> None:
     blob = _synthetic_opj(
         _window_header("Book1"),
@@ -512,7 +531,7 @@ def _oracle_plots_by_graph(index_path: Path) -> dict[str, list[tuple[str, str]]]
 @pytest.mark.realdata
 @pytest.mark.parametrize(
     ("stem", "n_expected_reachable"),
-    [("Moke", 39), ("XRD", 12)],
+    [("Moke", 39), ("XRD", 12), ("XMCD", 244)],
 )
 def test_realdata_curve_bindings_precision_and_recall_floor(
     stem: str, n_expected_reachable: int
@@ -523,8 +542,9 @@ def test_realdata_curve_bindings_precision_and_recall_floor(
     all; 12/20 XRD, re-frozen 2026-07-06 against the replaced corpus file --
     all 12 real-graph plot refs decode exactly, the other 8 oracle refs are
     per-column sparkline windows with no curve-anchor record anywhere in the
-    file). See ``opj_curves.py``'s module docstring for the full byte-level
-    trail."""
+    file). XMCD: 244/245 (2026-11-20, B1 -- 166 before column names of 8+
+    characters resolved; the one miss is Graph25's single curve). See
+    ``opj_curves.py``'s module docstring for the full byte-level trail."""
     src = _CORPUS / f"{stem}.opj"
     index_path = _GT / stem / "index.json"
     if not src.exists() or not index_path.exists():

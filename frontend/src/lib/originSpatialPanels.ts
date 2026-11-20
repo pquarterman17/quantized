@@ -15,6 +15,7 @@ import {
   originRegionShades,
 } from "./originFigureSelection";
 import type { OriginFigureEntry } from "./originFigures";
+import { overlayCurveLabels, overlayCurveStyles, overlayErrorState } from "./originOverlayFigure";
 import type { SpatialPanel } from "./multipanel";
 import { computePanelLayout, framesCoincide, pageNormalizedRect } from "./originPanels";
 import { pageValidRects } from "./panelLayout";
@@ -37,7 +38,9 @@ export function resolveFigurePanels(
     if (!entry.datasetId) return null;
     const ds = datasets.find((d) => d.id === entry.datasetId);
     if (!ds) return null;
-    const sel = figureChannelSelection(entry.figure, ds);
+    // B1: a layer re-pointed at its own overlay (`store/originApplyPanels`)
+    // plots every overlay column; book letters do not apply there.
+    const sel = ds.data.metadata?.origin_overlay ? overlaySelection(ds) : figureChannelSelection(entry.figure, ds);
     if (!sel) return null;
     const fig = entry.figure;
     const legend = originLegendState(fig);
@@ -78,6 +81,22 @@ export function resolveFigurePanels(
     });
   }
   return out;
+}
+
+/** An overlay dataset's panel selection: every column, its stamped looks and
+ *  captions, error columns as whiskers (`buildOverlayDataset`). */
+function overlaySelection(ds: Dataset): NonNullable<ReturnType<typeof figureChannelSelection>> | null {
+  const errs = overlayErrorState(ds.data);
+  const yKeys = ds.data.labels.map((_, i) => i).filter((i) => !errs.errorColumns.includes(i));
+  if (!yKeys.length) return null;
+  return {
+    xKey: null,
+    yKeys,
+    styles: overlayCurveStyles(ds.data),
+    labels: overlayCurveLabels(ds.data),
+    errKeys: errs.errKeys,
+    hiddenChannels: errs.errorColumns,
+  };
 }
 
 /** A relative-tolerance range-equality check (both endpoints) — used to tell
