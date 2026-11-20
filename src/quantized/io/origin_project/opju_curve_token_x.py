@@ -94,6 +94,9 @@ _END = X_FIELD + 4  # the walk only needs to reach past the marker
 # offset 38 (bit 0x40 set = shown): ``21`` is the only hidden form observed
 # (``21 21`` / ``30 21``), so only that exact byte reads as hidden
 _HIDDEN_BYTE = 0x21
+# Offset 37 always reads 21 (30 on Y-error plots) beside a hidden offset 38
+# across the whole corpus (356/356); requiring it tightens the rule for free.
+_HIDDEN_PARTNERS = frozenset({0x21, 0x30})
 # the omission reason of a curve whose plot Origin hides (``curve_sheet_omitted``)
 HIDDEN_IN_ORIGIN = "hidden_in_origin"
 
@@ -160,7 +163,7 @@ def token_hidden(b: bytes, tag_pos: int) -> bool:
     offset 38 reads ``21`` (``61`` when shown; module docstring). Fail
     closed: an unwalkable record or any other value is not hidden."""
     field = _x_field(b, tag_pos)
-    return field is not None and field[3] == _HIDDEN_BYTE
+    return field is not None and field[3] == _HIDDEN_BYTE and field[2] in _HIDDEN_PARTNERS
 
 
 def token_x(

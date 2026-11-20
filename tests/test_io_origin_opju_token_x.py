@@ -157,6 +157,9 @@ def test_token_hidden_reads_offset_38() -> None:
     assert not token_hidden(_token(3, None), 4)
     assert not token_hidden(_hide(tok, b"\x21\x60"), 4)
     assert not token_hidden(_hide(tok, b"\x21\x01"), 4)
+    # offset 38 = 21 without its corpus partner byte at 37 is not "hidden"
+    assert not token_hidden(_hide(tok, b"\x00\x21"), 4)
+    assert not token_hidden(_hide(tok, b"\x61\x21"), 4)
 
 
 def _omitted_all(fig: dict[str, Any]) -> list[tuple[str, str, str, str]]:
