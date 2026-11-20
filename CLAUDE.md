@@ -333,6 +333,7 @@ Practical conventions discovered while porting — follow them to stay green.
   loaded 400+ page `.opju` files fine).
 
 ### Origin graph-recovery safety (2026-07-13 incident)
+- Origin import changes must pass `uv run python tools/gate.py --origin` and explain every corpus change.
 - Treat Origin graph recovery as one scientific pipeline: **file bytes ->
   per-curve `(book, X, Y)` binding -> dataset construction -> acquisition
   order -> renderer path -> axis state**. A local field decode is not valid if
