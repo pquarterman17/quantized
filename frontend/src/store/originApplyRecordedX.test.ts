@@ -3,8 +3,8 @@
 // Corpus case: Catchment A..E .opju Graph6 records x=D (Year), y=I, in a book
 // designated A(X) B C D(X) E F G(X) H I; nearest-preceding-X drew I against
 // G (Annual Precipitation, ~1000), off the decoded 1947..2002 axis -- an empty
-// plot. The rule needs an X the curve RECORD names (`xRecorded`, .opju);
-// a .opj X is inferred by the reader and never wins. Controls: a curve whose
+// plot. The rule needs an X the curve RECORD names (`xRecorded`: the .opju
+// token or the .opj anchor); an X the reader only infers never wins. Controls: a curve whose
 // recorded X IS its nearest preceding X (Moke-
 // style X,Y,X,Y books) keeps the plain apply; a curve with no recorded X keeps
 // the rule; a recorded X that did not import leaves the curve out with a
@@ -89,8 +89,8 @@ describe("applyOriginFigure: the recorded X wins (A2)", () => {
     expect(shown.data.metadata?.x_column_long).toBe("Year");
   });
 
-  it("control: an INFERRED X (no xRecorded: every .opj curve) is no evidence -- the rule stands", () => {
-    // Moke.opj Graph8/9: the reader infers x=E for y=B, Origin draws B vs A.
+  it("control: an INFERRED X (no xRecorded) is no evidence -- the rule stands", () => {
+    // Moke.opj Graph8/9: the old inference said x=E for y=B, Origin draws B vs A.
     useApp.getState().applyOriginFigure("inferred");
     const s = useApp.getState();
     expect(s.activeId).toBe("d1"); // no overlay dataset

@@ -90,6 +90,22 @@ with X id 0 keeps its shipped binding (`rowless_kind`; `histogram.opj`).
 * Negative control: a record without a valid pair keeps the inference
   (synthetic test). The error-bar `30 61` pair is never read as X.
 
+**Frontend agreement (`xRecorded`).** A curve whose X comes from this field
+carries `xRecorded`, exactly like a `.opju` curve, so the apply's A2 rule
+(`lib/originRecordedX.ts`) draws it against that X even where the frontend's
+nearest-preceding-X (in channel order) would pick another column. Without
+it the backend and the plot could disagree. Data-level case: `Moke.opj`
+Book4 lists its channels in a different order from the worksheet, and the
+frontend's nearest-preceding X for `M` and `H` is `I` (128 rows), while the
+record names `C` (52 rows, the same length as `M`) and `E` (161 rows, the
+same length as `H`). An X the reader only infers carries no flag and never
+wins. On the 111 Origin-exported owner `.opj` pages (Moke, hc2convert,
+XMCD, SuperlatticeFits, MnN_Diffusion_PNR, XRD) and Moke Graph1/7/12, the
+renders with and without the flag are pixel-identical: the multi-X figures
+already went through the per-curve-X overlay, which reads the backend X. So
+the flag closes a latent disagreement in the single-X path; it changes no
+current render in the corpus.
+
 ## 3. Hidden plots (offset 38 `21`)
 
 `.opju` already leaves out a plot whose offset 38 reads `21`

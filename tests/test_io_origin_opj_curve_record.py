@@ -130,11 +130,14 @@ def test_unresolved_plot_is_diagnosed_and_keeps_its_plot_index() -> None:
 def test_record_x_outranks_the_nearest_preceding_x() -> None:
     curves, _ = _bind(_book(*_COLS), _curve(4, x_id=1))  # inference says E
     assert (curves[0]["x"], curves[0]["y"]) == ("A", "difference")
+    # the record names the X, so the frontend lets it win (A2), as on .opju
+    assert curves[0]["xRecorded"] is True
 
 
 def test_record_x_without_its_marker_keeps_the_inference() -> None:
     curves, _ = _bind(_book(*_COLS), _curve(4, x_id=1, pair=b"\x30\x61"))  # Y-error pair
     assert curves[0]["x"] == "E"
+    assert "xRecorded" not in curves[0]  # an inferred X never wins over the frontend's rule
 
 
 def test_record_x_naming_no_known_column_fails_closed() -> None:
@@ -146,6 +149,7 @@ def test_record_x_naming_no_known_column_fails_closed() -> None:
 def test_record_x_zero_on_a_histogram_keeps_the_shipped_binding() -> None:
     curves, omitted = _bind(_book(*_COLS), _curve(2, x_id=0, pair=b"\x21\x51", kind=219))
     assert [(c["x"], c.get("plotType")) for c in curves] == [("A", "histogram")]
+    assert "xRecorded" not in curves[0]
     assert omitted == []
 
 

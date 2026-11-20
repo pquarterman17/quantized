@@ -337,23 +337,26 @@ def _plot_type(payload: bytes) -> dict[str, str]:
 
 def _record_x(
     record: bytes, book: str, inferred: str | None, id_map: dict[int, tuple[str, str]]
-) -> tuple[str | None, str]:
-    """``(X column name, omit reason)`` for a curve of ``book`` whose X was
-    inferred as ``inferred``: the X id the anchor record itself stores at
-    offsets 35-36 (``opju_curve_token_x.bind_x``, the same record the
-    ``.opju`` token serializes) when its marker validates, else ``inferred``.
+) -> tuple[str | None, str, bool]:
+    """``(X column name, omit reason, recorded)`` for a curve of ``book``
+    whose X was inferred as ``inferred``: the X id the anchor record itself
+    stores at offsets 35-36 (``opju_curve_token_x.bind_x``, the same record
+    the ``.opju`` token serializes) when its marker validates, else
+    ``inferred``. ``recorded`` is True only for the record's own X -- the
+    curve then carries ``xRecorded`` exactly like a ``.opju`` curve, so the
+    frontend draws it against that X, never its nearest-preceding X (A2).
 
     A record X of 0 on a box / histogram plot keeps ``inferred`` (those were
     drawn before; ``opju_plot_kinds.rowless_kind``). See
     ``docs/origin_re/curve_bindings_opj.md`` for the evidence."""
     if not book:
-        return inferred, ""
+        return inferred, "", False
     tx, reason = bind_x(field_x_id(record_field(record)), book, None, id_map)
     if reason and rowless_kind(reason, record) is not None:
-        return inferred, ""
+        return inferred, "", False
     if tx is None:
-        return inferred, reason
-    return id_map[tx][1], ""
+        return inferred, reason, False
+    return id_map[tx][1], "", True
 
 
 def _nearest_preceding_x(order: Sequence[tuple[str, int]], y_short: str) -> str | None:
@@ -423,7 +426,7 @@ def extract_curves(
             x = x_columns.get(book)
         # The record's OWN X (offsets 35-38, opju_curve_token_x) outranks the
         # inference above, exactly as in `.opju` (module docstring).
-        x, x_reason = _record_x(payload, book, x, id_map)
+        x, x_reason, recorded = _record_x(payload, book, x, id_map)
         # A real plot (anchor + DataPlot) whose binding does not resolve stays
         # in plot order -- colour increments and legend captions count it --
         # and is left out below with a named reason: never guessed, never silent.
@@ -434,9 +437,10 @@ def extract_curves(
             if not book
             else x_reason or (X_NOT_RESOLVED if x is None else "")
         )
-        out.append(
-            {"book": book, "x": x or "", "y": col, **style_fields(payload), **_plot_type(payload)}
-        )
+        curve: dict[str, str | float] = {"book": book, "x": x or "", "y": col}
+        if recorded:
+            curve["xRecorded"] = True  # the record names the X: it wins (A2)
+        out.append({**curve, **style_fields(payload), **_plot_type(payload)})
         records.append(payload)
         cids.append(cid)
         unresolved.append(why)

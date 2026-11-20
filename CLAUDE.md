@@ -352,10 +352,13 @@ Practical conventions discovered while porting — follow them to stay green.
   file records a curve's X column and that X decoded, the apply draws the
   curve against it, even where `lib/perSeriesX.ts`'s nearest-preceding-X rule
   would pick another X (`lib/originRecordedX.ts` routes such a figure through
-  the per-curve-X overlay). "Recorded" means the `.opju` curve record itself
-  names the X (`curve.xRecorded`, set in `opju_figure_curves.py`); a `.opj`
-  curve's X is INFERRED by the reader and never wins (Moke.opj Graph8/9: the
-  inferred x=E flipped the loop Origin draws against A). The
+  the per-curve-X overlay). "Recorded" means the curve record itself names
+  the X (`curve.xRecorded`): the `.opju` token (`opju_figure_curves.py`) and,
+  since lane D, the `.opj` curve anchor, which is the same record (offsets
+  35-38, `opj_curves._record_x`; hc2convert 89/89 equal its COM-verified
+  `.opju` save). A `.opj` X the reader only INFERS (no valid record field)
+  never carries `xRecorded` and never wins (Moke.opj Graph8/9: the inferred
+  x=E mirrors the loop; the record names A, which Origin draws). The
   nearest-preceding rule applies only when the file names no X for the
   curve. A recorded X that did not import is never replaced: the curve is
   left out with a diagnosis. Evidence: Etna `origin.opju` Graph16, Catchment
