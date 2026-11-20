@@ -348,6 +348,21 @@ Practical conventions discovered while porting — follow them to stay green.
   binds to its nearest-preceding X-designated column (`opj_curves.py`,
   `opju_curves*.py`). Never collapse them to the book's first X or form a
   sorted X union.
+- **A curve's recorded X wins** (owner decision 2026-11-20, A2). When the
+  file records a curve's X column and that X decoded, the apply draws the
+  curve against it, even where `lib/perSeriesX.ts`'s nearest-preceding-X rule
+  would pick another X (`lib/originRecordedX.ts` routes such a figure through
+  the per-curve-X overlay). "Recorded" means the `.opju` curve record itself
+  names the X (`curve.xRecorded`, set in `opju_figure_curves.py`); a `.opj`
+  curve's X is INFERRED by the reader and never wins (Moke.opj Graph8/9: the
+  inferred x=E flipped the loop Origin draws against A). The
+  nearest-preceding rule applies only when the file names no X for the
+  curve. A recorded X that did not import is never replaced: the curve is
+  left out with a diagnosis. Evidence: Etna `origin.opju` Graph16, Catchment
+  A-E Graph6 vs Origin's saved previews.
+- **A graph whose recorded curves all fail to resolve draws EMPTY with a note**
+  (A3), never the book's every channel (the old fallback drew 11-33 phantom
+  series on Moke Graph2 / hc2convert).
 - **Protect non-monotonic X.** Hysteresis loops need full-data X/Y extents,
   full-range line/marker path builders, and original row order preserved.
   Any curve-render change must exercise a non-ascending fixture and verify

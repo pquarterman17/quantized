@@ -14,6 +14,7 @@ import {
   readableSheetCurveLabel,
 } from "./originCurveText";
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
+import { framesCoincide } from "./originPanels";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Construct regenerated overlay geometry without carrying row/column-dependent
@@ -75,10 +76,6 @@ export function overlayBooks(figure: OriginFigure, datasets: Dataset[]): Dataset
   return out;
 }
 
-/** Build the overlay DataStruct for a figure whose curves span ≥2 books, or
- *  null when it doesn't (single-book figures use the plain channel-selection
- *  path). Curves whose letters don't map to decoded channels are skipped —
- *  partial recall must degrade gracefully, never invent data. */
 /** Recover the per-column line/scatter styles stamped by buildOverlayDataset
  *  into an overlay's metadata, as a channel-index → SeriesStyle map ready for
  *  the store's `seriesStyles`. Empty for a non-overlay dataset. */
@@ -109,13 +106,11 @@ export function overlayCurveLabels(data: DataStruct | null | undefined): Record<
   return out;
 }
 
-export function buildOverlayDataset(
-  figure: OriginFigure,
-  datasets: Dataset[],
-): DataStruct | null {
-  const books = overlayBooks(figure, datasets);
-  if (books.length === 0) return null;
-
+/** Each of `figure`'s curves resolved to an overlay column (dataset, x and y
+ *  channel, label, style, legend caption), in curve order. Curves whose
+ *  letters don't map to decoded channels are skipped -- partial recall must
+ *  degrade gracefully, never invent data. */
+function boundCurves(figure: OriginFigure, books: Dataset[]): OverlayBound[] {
   // Resolve each curve to (dataset, x-channel, y-channel) up front.
   const legend = figure.legend_labels ?? [];
   // The nth entry of figure.curves' own display name (undefined where the
@@ -175,5 +170,59 @@ export function buildOverlayDataset(
             ),
     });
   });
-  return assembleOverlay(bound, figure.name || "");
+  return bound;
+}
+
+/** Build the overlay DataStruct for a figure whose curves span ≥2 books, or
+ *  null when it doesn't (single-book figures use the plain channel-selection
+ *  path). `y2Figure` (A8): the right-axis layer of a double-Y graph window
+ *  (`overlayDoubleYPair`) -- its curves join the overlay AFTER the main
+ *  layer's, and their column indices are stamped as
+ *  `metadata.origin_overlay_y2` so the apply puts them on the right axis. */
+export function buildOverlayDataset(
+  figure: OriginFigure,
+  datasets: Dataset[],
+  y2Figure?: OriginFigure,
+  /** A2: build even a single-X overlay, because a curve's RECORDED X differs
+   *  from the X the plain path would draw it against (`recordedXConflicts`). */
+  ownX = false,
+): DataStruct | null {
+  const main = boundCurves(figure, overlayBooks(figure, datasets));
+  const right = y2Figure ? boundCurves(y2Figure, overlayBooks(y2Figure, datasets)) : [];
+  const out = assembleOverlay([...main, ...right], figure.name || "", ownX);
+  if (!out || right.length === 0) return out;
+  const y2 = right.map((_, i) => main.length + i);
+  return { ...out, metadata: { ...out.metadata, origin_overlay_y2: y2 } };
+}
+
+/** The overlay columns `buildOverlayDataset` put on the right axis; [] for
+ *  any other dataset. */
+export function overlayY2Columns(data: DataStruct | null | undefined): number[] {
+  const arr = (data?.metadata ?? {})["origin_overlay_y2"];
+  return Array.isArray(arr) ? arr.filter((v): v is number => Number.isInteger(v)) : [];
+}
+
+function rangesEqual(aFrom: number, aTo: number, bFrom: number, bTo: number): boolean {
+  const tol = 1e-6 * Math.max(1, Math.abs(aTo - aFrom));
+  return Math.abs(aFrom - bFrom) <= tol && Math.abs(aTo - bTo) <= tol;
+}
+
+/** [lower, upper] when `family` (one graph window's layers) is a double-Y
+ *  window, whichever datasets its layers use (`doubleYPartner` takes only a
+ *  same-dataset pair), so a cross-book main layer no longer drops its right-axis layer
+ *  (A8: Absorption-D3 Cys_Cu, CAM-B3Lyp). The spatial merge's geometry test
+ *  (`isFrameCoincidentY2Overlay`) minus its same-dataset rule: exactly two
+ *  layers, both with curves, the SAME X range, DIFFERENT Y ranges, and frames
+ *  that are decoded and coincide. null otherwise. */
+export function overlayDoubleYPair<T extends { figure: OriginFigure }>(family: T[]): [T, T] | null {
+  if (family.length !== 2) return null;
+  const [lower, upper] = [...family].sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
+  const [a, b] = [lower.figure, upper.figure];
+  if (!(a.curves ?? []).length || !(b.curves ?? []).length) return null;
+  if (!rangesEqual(a.x_from, a.x_to, b.x_from, b.x_to)) return null;
+  if (rangesEqual(a.y_from, a.y_to, b.y_from, b.y_to)) return null;
+  // Frames must be DECODED and coincide: two stacked panels with undecoded
+  // frames keep the spatial multi-panel apply (fail closed toward it).
+  if (!a.frame || !b.frame || !framesCoincide(a.frame, b.frame)) return null;
+  return [lower, upper];
 }

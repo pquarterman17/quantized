@@ -1282,6 +1282,14 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Figure rendering vs Origin's own previews (Lane F)**~~ (2026-11-20).
+  `.opju` curves carry `xRecorded` when the curve record names the X
+  (item 70's decode), so the apply lets that X beat nearest-preceding-X
+  (owner decision A2); a `.opj` X is inferred and never does. A designated
+  text (category) X gives `.time` 1..N (Origin's category index; 59 layers,
+  none starting at or below 0). Frontend: fail-closed empty layer, `%(?X)`
+  titles, cross-book double-Y. Evidence and the A4/A5 owner questions:
+  `docs/origin_re/curve_axis_fidelity.md` "Rendering rules".
 - ~~**`curve_sheet_unresolved` over-reported; a case-renamed book's sheets
   unbound**~~ (2026-11-20, item 67). The code was raised for every omitted
   curve: of 1,951 public-corpus figures, 1,772 only had error-bar plots and

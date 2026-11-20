@@ -127,6 +127,19 @@ def test_curve_binds_the_tokens_x_not_the_designated_partner() -> None:
     assert [(c["book"], c["x"], c["y"]) for c in figs[0]["curves"]] == [("WBook", "B", "C")]
 
 
+def test_curve_flags_an_x_its_record_names_and_only_then() -> None:
+    """``xRecorded`` (A2, owner decision 2026-11-20): the frontend lets a
+    curve's X beat its nearest-preceding-X rule only when the record itself
+    names that X -- also when it equals the designated partner. The partner
+    fallback used when the record writes no X field is NOT a recorded X."""
+    recorded = extract_figures_opju(_blob(_token(3, 2)))[0]["curves"][0]
+    assert recorded["x"] == "B" and recorded["xRecorded"] is True
+    same = extract_figures_opju(_blob(_token(3, 1)))[0]["curves"][0]
+    assert same["x"] == "A" and same["xRecorded"] is True
+    fallback = extract_figures_opju(_blob(_token(3, None)))[0]["curves"][0]
+    assert fallback["x"] == "A" and "xRecorded" not in fallback
+
+
 def test_curve_with_no_x_column_is_omitted_not_drawn_against_a_column() -> None:
     figs = extract_figures_opju(_blob(_token(3, 0)))
     assert figs[0]["curves"] == []

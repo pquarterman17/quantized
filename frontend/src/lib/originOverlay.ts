@@ -49,9 +49,20 @@ export interface OverlayBound {
  *  concatenation (never a sorted union) keeps each loop's point order intact
  *  so a non-monotonic hysteresis sweep renders correctly. Returns null for
  *  fewer than 2 bound curves, or fewer than 2 distinct x-blocks (not a real
- *  overlay — the plain channel-selection path handles those). */
-export function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStruct | null {
-  if (bound.length < 2) return null;
+ *  overlay — the plain channel-selection path handles those). `ownX`: the
+ *  Origin apply's recorded-X rule (A2) -- even ONE curve on one block is
+ *  built, because the plain path would redraw it against another X. */
+/** Channel `c`'s label without a DataStruct dedupe suffix: "H (2)" -> "H" when
+ *  "H" is another channel's label or the book's X name (a real dedupe). */
+function undedupe(d: DataStruct, c: number): string {
+  const label = d.labels[c] ?? "";
+  const base = label.replace(/ \(\d+\)$/, "");
+  return base !== label && (d.labels.includes(base) || d.metadata?.x_column_long === base) ? base : label;
+}
+
+export function assembleOverlay(bound: OverlayBound[], figureName = "", ownX = false): DataStruct | null {
+  const min = ownX ? 1 : 2;
+  if (bound.length < min) return null;
 
   interface Block {
     ds: Dataset;
@@ -67,7 +78,7 @@ export function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStr
       blocks.push({ ds: b.ds, xCh: b.xCh });
     }
   }
-  if (blocks.length < 2) return null;
+  if (blocks.length < min) return null;
   const starts: number[] = [];
   let total = 0;
   for (const blk of blocks) {
@@ -129,12 +140,16 @@ export function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStr
       x_column_name: "A",
       // The x-axis title reads `x_column_long || x_column_name`: a non-Origin
       // source (a QD loop's "Magnetic Field") has only a name, so carry it here.
-      x_column_long: String(
-        (first as Record<string, unknown>).x_column_long || (first as Record<string, unknown>).x_column_name || "",
-      ),
+      // A block on a value-channel X (a multi-X sheet, or a curve's recorded X)
+      // is titled by THAT column, not the book's first X.
+      // A DataStruct "H (2)" dedupe suffix is not the column's name: titled "H".
+      x_column_long: [...new Set(blocks.filter((b, i) => i === 0 || b.xCh >= 0).map(({ ds: { data: d }, xCh }) => String(
+        xCh >= 0 ? undedupe(d, xCh) : d.metadata?.x_column_long || d.metadata?.x_column_name || "",
+      )))].filter(Boolean).join(" / "),
       // One shared x axis: list every block's unit ("Oe / K") rather than
       // titling a mixed overlay with the first source's unit alone.
-      x_column_unit: [...new Set(blocks.map((b) => b.ds.data.metadata?.x_column_unit))].filter(Boolean).join(" / "),
+      x_column_unit: [...new Set(blocks.map(({ ds: { data: d }, xCh }) =>
+        xCh >= 0 ? d.units[xCh] : d.metadata?.x_column_unit))].filter(Boolean).join(" / "),
     },
   };
 }

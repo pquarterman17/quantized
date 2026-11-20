@@ -18,7 +18,16 @@ import { spatialComposition } from "../lib/composition";
 import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
-import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlayFigure";
+import {
+  buildOverlayDataset,
+  originOverlayDataset,
+  overlayCurveLabels,
+  overlayCurveStyles,
+  overlayDoubleYPair,
+  overlayY2Columns,
+} from "../lib/originOverlayFigure";
+import { withResolvedAxisTitles } from "../lib/originAxisTitles";
+import { recordedXConflicts, recordedXOmissions } from "../lib/originRecordedX";
 import { originFigureWithSourceMappings } from "../lib/originSources";
 import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
@@ -131,7 +140,11 @@ export function runOriginFigureApply(
     s.focusWindow(winId);
   }
   const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
-  const resolvedEntry = originFigureWithSourceMappings(entry, siblings);
+  // Source mappings first, then Origin's `%(?X)`-style axis-title codes
+  // resolved from each layer's own curve columns (A6).
+  const prepare = (member: OriginFigureEntry) =>
+    withResolvedAxisTitles(originFigureWithSourceMappings(member, siblings), siblings);
+  const resolvedEntry = prepare(entry);
   const fig = resolvedEntry.figure;
   // Cross-book figures (curves spanning ≥2 workbooks) materialize as an
   // overlay dataset (owner decision) so the combined graph Origin showed is
@@ -149,7 +162,23 @@ export function runOriginFigureApply(
   const overlaySource = layerFamily[0]?.id ?? entry.id;
   const existing = get().datasets.find((d) =>
     familyIds.has(String((d.data.metadata ?? {}).origin_overlay_source ?? "")));
-  const overlay = buildOverlayDataset(fig, siblings);
+  // A8: a double-Y window whose layers do not share one dataset builds ONE
+  // overlay -- the lower layer's curves on y, the upper layer's on y2 --
+  // instead of dropping the right-axis layer (Absorption-D3 Cys_Cu).
+  const y2Pair = overlayDoubleYPair(layerFamily.map(prepare));
+  const main = y2Pair ? y2Pair[0].figure : fig;
+  const right = y2Pair?.[1].figure;
+  // A2 (owner decision 2026-11-20): a curve's RECORDED X wins over the
+  // per-series nearest-preceding-X view; when they differ, the overlay draws
+  // each curve against its own recorded X column.
+  const bookDs = get().datasets.find((d) => d.id === entry.datasetId);
+  const bookSel = bookDs ? libs.figureChannelSelection(fig, bookDs) : null;
+  const ownX = !!bookDs && !!bookSel && recordedXConflicts(fig, bookDs, bookSel);
+  const leftOut = bookDs ? recordedXOmissions(fig, bookDs) : [];
+  if (leftOut.length) {
+    toast(`${fig.name}: left out, its recorded X column did not import — ${leftOut.join("; ")}`, "info");
+  }
+  const overlay = buildOverlayDataset(main, siblings, right, ownX);
   if (overlay) {
     const targetId = existing?.id ?? nextDatasetId();
     const refreshed = originOverlayDataset(targetId, overlayName, overlay, overlaySource, entry.id, existing);
@@ -167,6 +196,8 @@ export function runOriginFigureApply(
       get().setActive(targetId);
       const src = refreshed.data;
       const n = src?.labels.length ?? 0;
+      const y2 = overlayY2Columns(src);
+      const layers = right && y2.length ? [main, right] : [main];
       set({
         // F4.4 review L1: every branch below that installs a plot onto an
         // ALREADY-active dataset must clear the durable `facetKey`
@@ -182,12 +213,19 @@ export function runOriginFigureApply(
         ...ORIGIN_FIGURE_MODE_RESET,
         ...ORIGIN_FIGURE_Y2_RESET,
         ...ORIGIN_FIGURE_AXIS,
-        xLim: [fig.x_from, fig.x_to],
-        yLim: [fig.y_from, fig.y_to],
-        xStep: fig.x_step ?? null,
-        yStep: fig.y_step ?? null,
-        xScale: scaleFromLog(fig.x_log), // Origin's own axis type is boolean-only
-        yScale: scaleFromLog(fig.y_log),
+        xLim: [main.x_from, main.x_to],
+        yLim: [main.y_from, main.y_to],
+        xStep: main.x_step ?? null,
+        yStep: main.y_step ?? null,
+        xScale: scaleFromLog(main.x_log), // Origin's own axis type is boolean-only
+        yScale: scaleFromLog(main.y_log),
+        ...(right && y2.length ? {
+          y2Keys: y2,
+          y2Lim: [right.y_from, right.y_to] as [number, number],
+          y2Scale: scaleFromLog(right.y_log),
+          y2Step: right.y_step ?? null,
+          y2AxisLabel: right.y2_title || right.y_title || "",
+        } : {}),
         xKey: null,
         yKeys: Array.from({ length: n }, (_, i) => i),
         hiddenChannels: [],
@@ -195,17 +233,17 @@ export function runOriginFigureApply(
         seriesStyles: overlayCurveStyles(src),
         seriesLabels: overlayCurveLabels(src),
         // Origin's real axis titles ("" falls back to the data-derived label).
-        xAxisLabel: fig.x_title ?? "",
-        yAxisLabel: fig.y_title ?? "",
+        xAxisLabel: main.x_title ?? "",
+        yAxisLabel: main.y_title ?? "",
         // Pin the figure's decoded floating text; REPLACE so re-applying
-        // or switching figures never stacks stale marks.
-        annotations: libs.originFigureAnnotations([fig], entry.id),
+        // or switching figures never stacks stale marks (a y2 layer's on y2).
+        annotations: libs.originFigureAnnotations(layers, entry.id, [0, 1]),
         // Decoded Rect* region bands (item 41) — REPLACE, same lifecycle
         // as annotations (figures without shades clear the plot's bands).
-        regionShades: libs.originRegionShades([fig], entry.id),
+        regionShades: libs.originRegionShades(layers, entry.id, [0, 1]),
         // Origin's legend placement -> nearest corner preset + decoded title
         // header (decode #52; position only when decoded, never guessed).
-        ...libs.originLegendState(fig),
+        ...libs.originLegendState(main),
       });
       get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
       return;
@@ -217,11 +255,11 @@ export function runOriginFigureApply(
   // primary Y axis, layer-2 curves on the secondary (y2) axis — instead
   // of just the clicked layer's own curves. Axis range/log come from the
   // LOWER layer number (Origin draws layer 1's axis as the "main" one).
-  const mappedFigures = get().originFigures.map((member) => originFigureWithSourceMappings(member, siblings));
+  const mappedFigures = get().originFigures.map(prepare);
   const partner = libs.doubleYPartner(resolvedEntry, mappedFigures);
   const dsForPartner = partner ? get().datasets.find((d) => d.id === entry.datasetId) : null;
   if (partner && dsForPartner) {
-    const resolvedPartner = originFigureWithSourceMappings(partner, siblings);
+    const resolvedPartner = prepare(partner);
     const lower = (resolvedEntry.figure.layer ?? 1) <= (resolvedPartner.figure.layer ?? 1)
       ? resolvedEntry : resolvedPartner;
     const upper = lower === resolvedEntry ? resolvedPartner : resolvedEntry;
@@ -290,9 +328,7 @@ export function runOriginFigureApply(
   // to a dataset + plotted channels (all-or-nothing). Falls through to the
   // clicked layer's own single-layer apply below, with a status note, when
   // any layer doesn't resolve.
-  const family = figureLayerFamily(entry, get().originFigures).map(
-    (member) => originFigureWithSourceMappings(member, siblings),
-  );
+  const family = figureLayerFamily(entry, get().originFigures).map(prepare);
   if (family.length >= 2) {
     const spatialResult = libs.resolveSpatialPanels(family, get().datasets);
     if (spatialResult) {
@@ -335,6 +371,10 @@ export function runOriginFigureApply(
   // actually-plotted channels; without them the default view stands.
   const ds = get().datasets.find((d) => d.id === entry.datasetId);
   const selection = ds ? libs.figureChannelSelection(fig, ds) : null;
+  const statState = libs.figureStatState(fig, ds);
+  // A3: curves recorded but none resolved -> an empty plot, never every channel
+  // (a Stat Stage figure reads its own column, so it is not that case).
+  const failClosed = !selection && !statState.statMode && libs.figureHasCurveEvidence(fig);
   set({
     ...ORIGIN_FIGURE_MODE_RESET,
     ...ORIGIN_FIGURE_Y2_RESET,
@@ -351,9 +391,9 @@ export function runOriginFigureApply(
     annotations: libs.originFigureAnnotations([fig], entry.id),
     regionShades: libs.originRegionShades([fig], entry.id),
     ...libs.originLegendState(fig),
-    ...libs.figureSelectionState(selection),
+    ...libs.figureSelectionState(selection, failClosed ? fig : undefined),
     // An all-histogram figure opens on the Stat Stage's histogram.
-    ...libs.figureStatState(fig, ds),
+    ...statState,
     ...libs.figurePolarState(fig),
     // A heatmap / contour opens the Map tab on its matrix / XYZ columns.
     ...libs.figureMapState(fig, ds),
@@ -363,6 +403,10 @@ export function runOriginFigureApply(
   });
   // A ternary figure opens the ternary workshop on Origin's A, B, C columns.
   libs.queueFigureTernary(fig, ds);
+  if (failClosed) {
+    // Fail closed (A3): the stage stays empty and says why; never every channel.
+    toast(`${fig.name}: none of its curves resolved to a column with data — drawn empty, not guessed`, "info");
+  }
   if (Object.values(get().seriesStyles).some((st) => st?.bars === "horizontal")) {
     // The plot turns on its side (lib/uplotOrient): say what that switches off.
     toast(`${fig.name}: horizontal bars — pan, region and analysis tools and dragging lines, labels or shapes are off on this turned plot`, "info");
