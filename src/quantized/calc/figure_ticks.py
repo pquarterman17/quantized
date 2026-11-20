@@ -39,7 +39,9 @@ from typing import Any
 
 from matplotlib.ticker import Formatter, MultipleLocator
 
+from quantized.calc.axis_categories import CATEGORY_MODE
 from quantized.calc.axis_extras import apply_axis_extras
+from quantized.calc.figure_category_ticks import CategoryFormatter, apply_category_axis
 from quantized.calc.figure_tick_hint import HintLocator
 from quantized.calc.tick_hint import TickHint
 from quantized.calc.tick_multiplier import install_auto_formatter
@@ -268,6 +270,9 @@ def apply_tick_formats(
     chokepoint shared by ``figure.draw_series_axes`` (single-figure export +
     figure-page panels) and ``figure_break.render_breaks_impl`` (broken-axis
     panels) -- MAIN #24."""
+    if x_fmt and x_fmt.get("mode") == CATEGORY_MODE:  # Origin text X: labels at 1..N
+        apply_category_axis(ax, x_fmt)
+        x_fmt = None
     pairs = ((ax.xaxis, ax.get_xscale(), x_fmt), (ax.yaxis, ax.get_yscale(), y_fmt))
     for axis, scale, fmt in pairs:
         formatter = axis_tick_formatter(fmt)
@@ -323,6 +328,8 @@ def apply_tick_steps(
             return
         axis.set_major_locator(MultipleLocator(float(step)))
 
+    if isinstance(ax.xaxis.get_major_formatter(), CategoryFormatter):
+        x_step = None  # the category locator already thinned to integer positions
     if x_scale in ("linear", "log"):
         apply_one(ax.xaxis, ax.get_xlim(), x_step, x_scale, labels[0])
     if y_scale in ("linear", "log"):

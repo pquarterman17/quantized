@@ -15,6 +15,7 @@ import {
 } from "./originCurveText";
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
 import { framesCoincide } from "./originPanels";
+import { textXLetter } from "./originRecordedX";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Construct regenerated overlay geometry without carrying row/column-dependent
@@ -141,7 +142,9 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
     const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
     const yCh = channelOf(meta, c.y);
     if (yCh < 0) return; // dropped/undecoded column — skip honestly
-    const xCh = c.x ? channelOf(meta, c.x) : -2;
+    // A recorded TEXT X (category positions 1..N, `textXLetter`) has no value channel.
+    const xText = c.x && textXLetter(figure, ds) === c.x ? c.x : undefined;
+    const xCh = xText ? -3 : c.x ? channelOf(meta, c.x) : -2;
     // An x-LETTER present in the figure but mapping to no decoded channel
     // (channelOf -> -1) must NOT be coerced to the time column (-2): blocks are
     // keyed by (dataset, xCh), so a -2 alias would silently plot this curve
@@ -154,6 +157,7 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
     bound.push({
       ds,
       xCh,
+      ...(xText ? { xText } : {}),
       yCh,
       label: `${c.book}: ${label}`,
       unit: ds.data.units[yCh] ?? "",
