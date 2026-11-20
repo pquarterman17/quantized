@@ -54,13 +54,7 @@ export function libraryNodeCount(hierarchy: LibraryHierarchy, collapsed = false)
 export function libraryContainerIds(
   hierarchy: LibraryHierarchy,
 ): { folders: Set<string>; workbooks: Set<string>; originGroups: Set<string> } {
-  const folders = new Set<string>();
-  const workbooks = new Set<string>();
-  const originGroups = new Set<string>();
-  for (const node of hierarchy.byKey.values()) {
-    if (node.kind === "folder") folders.add(node.entityId);
-    if (node.kind === "workbook") workbooks.add(node.entityId);
-    if (node.kind === "origin-group") originGroups.add(node.entityId);
-  }
-  return { folders, workbooks, originGroups };
+  const ids: Record<string, Set<string>> = { folder: new Set(), workbook: new Set(), "origin-group": new Set() };
+  for (const node of hierarchy.byKey.values()) ids[node.kind]?.add(node.entityId);
+  return { folders: ids.folder, workbooks: ids.workbook, originGroups: ids["origin-group"] };
 }

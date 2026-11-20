@@ -10,6 +10,7 @@ import {
   saveLibraryViewMode,
   type LibraryViewMode,
 } from "../../lib/libraryViewPrefs";
+import { expandLibraryAncestors } from "../../lib/libraryReveal";
 import { useApp } from "../../store/useApp";
 
 interface Options {
@@ -17,10 +18,6 @@ interface Options {
   onModeChange?: (mode: LibraryViewMode) => void;
   hierarchy: LibraryHierarchy;
   rows: readonly FlatLibraryNode[];
-  expandedFolders: readonly string[];
-  expandedWorkbookIds: readonly string[];
-  toggleFolderExpanded: (id: string) => void;
-  toggleWorkbookExpanded: (id: string) => void;
 }
 
 export function useLibraryViewTransition(options: Options) {
@@ -47,19 +44,7 @@ export function useLibraryViewTransition(options: Options) {
 
     // A Details row can select a child whose Tree ancestors are collapsed.
     if (next === "tree" && pendingFocusKey.current) {
-      let parentKey = options.hierarchy.byKey.get(pendingFocusKey.current as LibraryNodeKey)?.parentKey ?? null;
-      while (parentKey) {
-        const parent = options.hierarchy.byKey.get(parentKey);
-        if (!parent) break;
-        if (parent.kind === "folder" && !options.expandedFolders.includes(parent.entityId)) {
-          options.toggleFolderExpanded(parent.entityId);
-        }
-        if (parent.kind === "workbook" && !options.expandedWorkbookIds.includes(parent.entityId)) {
-          options.toggleWorkbookExpanded(parent.entityId);
-        }
-        if (parent.kind === "origin-group") useApp.getState().expandOriginGroup(parent.entityId);
-        parentKey = parent.parentKey;
-      }
+      expandLibraryAncestors(options.hierarchy, pendingFocusKey.current as LibraryNodeKey);
     }
     if (options.onModeChange) options.onModeChange(next);
     else {

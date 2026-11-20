@@ -16,6 +16,7 @@ import { useLibraryFocus } from "./useLibraryFocus";
 import { libraryResizeKeys, useLibraryResize } from "./useLibraryResize";
 import { LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "../../store/prefs";
 import { useRevealImported } from "./useRevealImported";
+import { expandLibraryAncestors } from "../../lib/libraryReveal";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { useFileDropTarget } from "../../lib/fileDrop";
 import { folderPath } from "../../lib/foldertree";
@@ -71,10 +72,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const createFolder = useApp((s) => s.createFolder);
   const addSmartFolder = useApp((s) => s.addSmartFolder);
   const addCollection = useApp((s) => s.addCollection);
-  const expandedFolders = useApp((s) => s.expandedFolders);
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
-  const expandedWorkbookIds = useLibraryStore((s) => s.expandedWorkbookIds);
-  const toggleWorkbookExpanded = useLibraryStore((s) => s.toggleWorkbookExpanded);
   const revealTarget = useLibraryStore((s) => s.revealTarget);
   const clearReveal = useLibraryStore((s) => s.clearReveal);
   const requestReveal = useLibraryStore((s) => s.requestReveal);
@@ -91,8 +89,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const { dragging, props: dropProps } = useFileDropTarget((f) => importFiles(f));
   const { viewMode, changeViewMode, rememberLibraryFocus } = useLibraryViewTransition({
     controlledMode: controlledViewMode, onModeChange: onViewModeChange,
-    hierarchy, rows: allRows, expandedFolders, expandedWorkbookIds,
-    toggleFolderExpanded, toggleWorkbookExpanded,
+    hierarchy, rows: allRows,
   });
   const libraryFocus = useLibraryFocus(hierarchy, allRows, contentFilter);
   useRevealImported(datasets, activeId, libraryFocus.hierarchy, requestReveal);
@@ -113,16 +110,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     libraryFocus.clearFocus();
     if (!libraryFocus.projectHierarchy.byKey.has(key)) setContentFilter("all"); // the type filter would hide it
     setQuery("");
-    const s = useApp.getState();
-    let parentKey = node.parentKey;
-    while (parentKey) {
-      const parent = hierarchy.byKey.get(parentKey);
-      if (!parent) break;
-      if (parent.kind === "folder" && !s.expandedFolders.includes(parent.entityId)) toggleFolderExpanded(parent.entityId);
-      if (parent.kind === "workbook" && !s.expandedWorkbookIds.includes(parent.entityId)) toggleWorkbookExpanded(parent.entityId);
-      if (parent.kind === "origin-group") s.expandOriginGroup(parent.entityId);
-      parentKey = parent.parentKey;
-    }
+    expandLibraryAncestors(hierarchy, key);
     // Compatibility half (the pre-D2 contract): a legacy worksheet with a
     // folderId but no workbook sits at the hierarchy ROOT (nesting is
     // workbook-driven), so its folder ancestors don't appear in the parent

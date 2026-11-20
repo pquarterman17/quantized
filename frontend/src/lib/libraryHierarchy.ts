@@ -70,14 +70,6 @@ export interface OriginFigureGroup {
   count: number;
 }
 
-/** A project's unresolved graph entries collapse into one group from this
- *  many members up; a lone one stays a plain row (a group of one hides
- *  nothing and costs a click). */
-export const MIN_UNRESOLVED_GROUP = 2;
-
-/** The group's row label. One definition: tree, tiles, details, search. */
-export const originGroupLabel = (count: number): string => `Unresolved Origin figures (${count})`;
-
 export interface LibraryHierarchyInput {
   folders: readonly FolderNode[];
   workbooks: readonly WorkbookNode[];
@@ -216,26 +208,6 @@ function commonFolderId(
   return common;
 }
 
-/** Unresolved entries per import (insertion order), for imports holding at
- *  least MIN_UNRESOLVED_GROUP of them. "Unresolved" is the store's own
- *  resolution status (`datasetId === null`: no book of the import matched,
- *  `originFigureEntries.resolveFigureDataset`), the same fact the Details
- *  "Source: Unresolved" column reads -- never a guess from names. (The heavier
- *  curve-binding resolver is deliberately NOT pulled in here: this module is
- *  eager, that one is a lazy chunk.) */
-function groupUnresolvedOriginFigures(
-  figures: readonly OriginFigureEntry[],
-): Map<string, OriginFigureEntry[]> {
-  const byImport = new Map<string, OriginFigureEntry[]>();
-  for (const figure of figures) {
-    if (figure.datasetId != null) continue;
-    const key = figure.siblingIds[0] ?? figure.stem;
-    byImport.set(key, [...(byImport.get(key) ?? []), figure]);
-  }
-  for (const [key, members] of byImport) if (members.length < MIN_UNRESOLVED_GROUP) byImport.delete(key);
-  return byImport;
-}
-
 /** Build the one structural truth consumed by every Library presentation. */
 export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHierarchy {
   const warnings: string[] = [];
@@ -349,15 +321,25 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     place("analysis-result", result, result.name, 2, index,
       [...result.sources, ...result.outputs].map((ref) => ref.datasetId)));
   const originFigures = input.originFigures ?? [];
+  // Unresolved = the store's own `datasetId === null` (the Details "Source:
+  // Unresolved" fact, never a guess from names), per import, from 2 members up
+  // (a group of one hides nothing). The heavier curve-binding resolver stays
+  // out: this module is eager, that one is a lazy chunk.
+  const byImport = new Map<string, OriginFigureEntry[]>();
+  for (const f of originFigures) {
+    const k = f.siblingIds[0] ?? f.stem;
+    if (f.datasetId == null) byImport.set(k, [...(byImport.get(k) ?? []), f]);
+  }
   const groupOf = new Map<string, DraftNode>();
-  for (const [importKey, members] of groupUnresolvedOriginFigures(originFigures)) {
+  for (const [importKey, members] of byImport) {
+    if (members.length < 2) continue;
     const siblings = new Set(members[0].siblingIds);
     const workbookIds = [...new Set(input.datasets
       .filter((d) => siblings.has(d.id)).map((d) => d.workbookId)
       .filter((id): id is string => Boolean(id && workbookById.has(id))))];
     const folderId = commonFolderId(workbookIds, workbookById, folderById);
     const group: OriginFigureGroup = { id: `unresolved-${importKey}`, stem: members[0].stem, count: members.length };
-    const node = add("origin-group", group, originGroupLabel(group.count),
+    const node = add("origin-group", group, `Unresolved Origin figures (${members.length})`,
       folderId ? keyOf("folder", folderId) : null, 3, originFigures.indexOf(members[0]));
     for (const member of members) groupOf.set(member.id, node);
   }
@@ -454,6 +436,17 @@ export interface FlatLibraryNode {
    *  (collapsedSheetOf). `node` is then the SHEET, re-parented/re-depthed to
    *  the workbook's place so keyboard nav and ARIA levels read as one row. */
   workbook?: WorkbookLibraryNode;
+}
+
+/** The disclosure keys a flatten wants, from the three expansion lists. */
+export function expandedKeySet(
+  folders: readonly string[], workbooks: readonly string[], groups: readonly string[],
+): Set<LibraryNodeKey> {
+  return new Set<LibraryNodeKey>([
+    ...folders.map((id) => keyOf("folder", id)),
+    ...workbooks.map((id) => keyOf("workbook", id)),
+    ...groups.map((id) => keyOf("origin-group", id)),
+  ]);
 }
 
 /** Flatten visible rows without rebuilding ownership. Expansion uses canonical
