@@ -34,11 +34,15 @@ export async function importProjectViaUi(page, opjPath) {
   await collapsePanels(page);
   const input = await page.$("#qzup");
   await input.uploadFile(opjPath);
-  return page.evaluate(async (opts) => {
+  return page.evaluate(async (opts, path) => {
     const files = [...document.getElementById("qzup").files];
+    // Chrome leaves the input empty, with no error, when it cannot open the
+    // path (a non-ASCII name under a POSIX locale: origin_shared.chromeEnv).
+    // Importing nothing would report every page as a missing entry instead.
+    if (files.length === 0) throw new Error(`the browser could not open ${path} for upload`);
     const ids = await window.__qz.useApp.getState().importFiles(files, opts);
     return ids ?? [];
-  }, IMPORT_OPTS);
+  }, IMPORT_OPTS, opjPath);
 }
 
 /** Collapse the Library + Inspector so the plot stage gets the width. The

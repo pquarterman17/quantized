@@ -37,6 +37,9 @@ export interface ErrorBinding {
   target: number;
   axis: "x" | "y";
   side: ErrorSide;
+  /** Written by an Origin figure apply (lib/originCurveErrorRoles), not by the
+   *  user: the next apply replaces it, and leaves unmarked bindings alone. */
+  origin?: true;
 }
 
 /** Infer bindings from column LABELS ALONE, pairing each error column with

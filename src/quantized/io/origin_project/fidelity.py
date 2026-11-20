@@ -143,17 +143,22 @@ def _omitted_reasons(fig: dict[str, Any]) -> list[str]:
 # is `curve_sheet_unresolved`; most omissions are on a proven sheet.
 _SHEET_UNPROVEN = frozenset({"sheet_unknown", "x_sheet_unproven"})  # opju_curve_sheets
 _ERROR_BAR_PLOT = "error_bar_plot"  # opju_error_bars: an error-bar plot not attached
+# opju_error_bars: an error-bar plot naming no curve of its layer (Origin draws nothing)
+_ERROR_BAR_NO_CURVE = "error_bar_no_curve"
+_ERROR_FIELDS = ("yErr", "yErrPlus", "xErr", "xErrPlus")  # opju_error_bars: bars on a curve
 
 
 def _left_out_codes(reasons: list[str]) -> list[str]:
     """Fidelity codes for a figure's omitted curves. A plot Origin itself
-    hides (`hidden_in_origin`) is not a loss."""
+    hides (`hidden_in_origin`), or an error-bar plot it draws nothing for
+    (`error_bar_no_curve`), is not a loss."""
     codes = []
     if any(r in _SHEET_UNPROVEN for r in reasons):
         codes.append("curve_sheet_unresolved")
     if _ERROR_BAR_PLOT in reasons:
         codes.append("error_bar_plots")
-    if any(r not in _SHEET_UNPROVEN | {HIDDEN_IN_ORIGIN, _ERROR_BAR_PLOT} for r in reasons):
+    not_lost = {HIDDEN_IN_ORIGIN, _ERROR_BAR_PLOT, _ERROR_BAR_NO_CURVE}
+    if any(r not in _SHEET_UNPROVEN | not_lost for r in reasons):
         codes.append("curves_left_out")  # X, rows, plot kind or data not proven
     return codes
 
@@ -196,8 +201,8 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
             recovered.append("symbol_size")
         if any(isinstance(c, dict) and c.get("style") == "line_symbol" for c in curves):
             recovered.append("line_symbol_mode")
-        if any(isinstance(c, dict) and c.get("yErr") for c in curves):
-            recovered.append("error_bars")  # opju_error_bars: plot -> its curve's yErr
+        if any(isinstance(c, dict) and any(c.get(k) for k in _ERROR_FIELDS) for c in curves):
+            recovered.append("error_bars")  # opju_error_bars: plot -> its curve's bars
     return recovered
 
 

@@ -45,7 +45,7 @@ const book: DataStruct = {
 };
 const ds: Dataset = { id: "d1", name: "C:Book1", data: book };
 
-const entry = (id: string, curves: { book: string; x: string; y: string; xRecorded?: boolean }[]) => ({
+const entry = (id: string, curves: { book: string; x: string; y: string; xRecorded?: boolean; yErr?: string }[]) => ({
   id, stem: "C", datasetId: "d1", siblingIds: ["d1"],
   figure: {
     name: id, x_from: 0.5, x_to: 4.5, x_log: false, y_from: 0, y_to: 100, y_log: false,
@@ -62,6 +62,7 @@ beforeEach(() => {
       entry("Graph1", [{ book: "Book1", x: "A", y: "B", xRecorded: true }]),
       entry("mixed", [{ book: "Book1", x: "A", y: "B", xRecorded: true }, { book: "Book1", x: "D", y: "C", xRecorded: true }]),
       entry("inferred", [{ book: "Book1", x: "A", y: "B" }]),
+      entry("witherr", [{ book: "Book1", x: "A", y: "B", xRecorded: true, yErr: "C" }]),
     ],
   });
 });
@@ -86,6 +87,16 @@ describe("applyOriginFigure: a recorded text X draws over the categories", () =>
     expect(shown.data.values.slice(0, 4).map((r) => r[0])).toEqual([10, 20, 30, 40]);
     expect(shown.data.metadata?.x_column_long).toBe("Month");
     expect(s.xLim).toEqual([0.5, 4.5]);
+  });
+
+  it("a curve's Origin error column rides its own category block, row for row", () => {
+    useApp.getState().applyOriginFigure("witherr");
+    const s = useApp.getState();
+    const shown = s.datasets.find((d) => d.id === s.activeId)!;
+    expect(shown.data.metadata?.origin_overlay_errors).toEqual({ 0: 1 });
+    // one block: the error values sit on the same category rows as the curve
+    expect(shown.data.time.slice(0, 4)).toEqual([1, 2, 3, 4]);
+    expect(shown.data.values.slice(0, 4).map((r) => [r[0], r[1]])).toEqual([[10, 1], [20, 2], [30, 3], [40, 4]]);
   });
 
   it("control: a layer mixing a text X with a numeric X draws the numeric curve and says what it left out", () => {
