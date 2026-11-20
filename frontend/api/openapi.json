@@ -2174,6 +2174,27 @@
             "title": "X Label",
             "type": "string"
           },
+          "y_domain": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Domain"
+          },
           "y_label": {
             "default": "",
             "title": "Y Label",

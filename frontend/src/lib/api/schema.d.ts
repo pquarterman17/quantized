@@ -6867,6 +6867,11 @@ export interface components {
              * @default
              */
             x_label?: string;
+            /** Y Domain */
+            y_domain?: [
+                number,
+                number
+            ] | null;
             /**
              * Y Label
              * @default
