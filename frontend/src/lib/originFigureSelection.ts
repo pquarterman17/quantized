@@ -140,8 +140,9 @@ export function figureSelectionState(
  *  a histogram of the first curve's column, or one box / violin / strip per
  *  plotted column (no group column: the stage's per-plotted-channel fallback,
  *  the channels `figureChannelSelection` picks). `{}` for any other figure.
- *  (Column and bar curves stay on the XY stage, drawn as bars by their series
- *  style — `originCurveSeriesStyle`.) */
+ *  A grouped / stacked column layer (`bar_layout`) opens the Stat Stage bar
+ *  chart (`figureBarState`); other column and bar curves stay on the XY
+ *  stage, drawn as bars by their series style (`originCurveSeriesStyle`). */
 export function figureStatState(
   figure: OriginFigure,
   ds: Dataset | undefined,
@@ -149,14 +150,37 @@ export function figureStatState(
   const curves = figure.curves ?? [];
   const mode = curves[0]?.plotType;
   if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== mode)) return {};
-  if (mode !== "histogram" && mode !== "box" && mode !== "violin" && mode !== "strip") return {};
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
+  if (figure.bar_layout && mode === "column") return figureBarState(figure.bar_layout, curves, meta, letters, ds);
+  if (mode !== "histogram" && mode !== "box" && mode !== "violin" && mode !== "strip") return {};
   const y = curves[0].y;
   const value = y === String(meta.x_column_name ?? "") ? -1 : letters.indexOf(y);
   if (value === -1 && y !== String(meta.x_column_name ?? "")) return {};
   const cols: StatCols = { group: null, group2: null, value, facet: null, color: null };
   return { statMode: true, statPicks: { mode, cols: statColRefs(ds, cols) } };
+}
+
+/** Origin's grouped / stacked column chart (`OriginFigure.bar_layout`,
+ *  io/origin_project/opju_bar_kinds.py): the Stat Stage bar chart grouped by
+ *  the curves' one X column, one category per row (the importer proved the X
+ *  unique and evenly spaced), one series per plotted Y. A text X that never
+ *  became numeric is the row index (`.time`), as `isDefaultX` reads it. */
+function figureBarState(
+  layout: "grouped" | "stacked",
+  curves: OriginCurve[],
+  meta: Record<string, unknown>,
+  letters: string[],
+  ds: Dataset,
+): { statMode?: true; statPicks?: StatPicks } {
+  const xName = String(meta.x_column_name ?? "");
+  const x = curves[0].x;
+  const group = x === xName || (!xName && !letters.includes(x)) ? -1 : letters.indexOf(x);
+  const value = letters.indexOf(curves[0].y);
+  if (group === -1 && x !== xName && xName) return {};
+  if (value < 0 || curves.some((c) => c.x !== x || c.book !== curves[0].book)) return {};
+  const cols: StatCols = { group, group2: null, value, facet: null, color: null };
+  return { statMode: true, statPicks: { mode: "bar", barStack: layout === "stacked", cols: statColRefs(ds, cols) } };
 }
 
 /** An Origin Polar layer (`OriginFigure.coordinates`, theta = X in degrees,

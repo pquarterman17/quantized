@@ -52,6 +52,7 @@ import {
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
 import { statColorOf } from "../../lib/statColor";
+import { withPickedXGroup } from "../../lib/statPicks";
 import { withColumnErrors } from "../../lib/barMatrix";
 import { needsBarRaw } from "./statBarMarks";
 import { useStatBarSeries } from "./useStatBarSeries";
@@ -96,10 +97,12 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     () => (active ? active.data.labels.map((lab, i) => ({ index: i, label: lab })) : []),
     [active],
   );
+  // X joins the list only while a saved pick groups by it (`withPickedXGroup`).
+  const xGroup = params.picks?.cols?.group?.[0] === -1;
   const categoricalCols = useMemo<StatColumn[]>(() => {
     const cats = new Set(categoricalChannels(active));
-    return columns.filter((c) => cats.has(c.index));
-  }, [active, columns]);
+    return withPickedXGroup(columns.filter((c) => cats.has(c.index)), xGroup);
+  }, [active, columns, xGroup]);
 
   const plotted = useMemo(
     () =>

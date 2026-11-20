@@ -32,10 +32,16 @@ def test_step_connect_on_a_line_plot_is_a_step_and_drops_the_line_style() -> Non
 
 
 def test_other_records_get_no_plot_type() -> None:
-    for kind, connect in ((0xC8, 1), (0xC9, 0), (0xCA, 1), (0xD6, 1), (0xCC + 1, 1)):
+    for kind, connect in ((0xC8, 1), (0xC9, 0), (0xCA, 1), (0xD9, 1)):
         curve: dict[str, str | float] = {"book": "B", "x": "A", "y": "B", "style": "line"}
         apply_plot_kind(curve, _record(kind, connect))
         assert "plotType" not in curve, hex(kind)
+    # 214 stacked area / 205 high-low-close: a provisional kind ``opju_bar_kinds``
+    # resolves per layer (an area for a stack of one, else left out)
+    for kind, provisional in ((0xD6, "stacked_area"), (0xCD, "not_drawn")):
+        curve = {"book": "B", "x": "A", "y": "B", "style": "line"}
+        apply_plot_kind(curve, _record(kind, 1))
+        assert curve["plotType"] == provisional, hex(kind)
     curve = {"book": "B", "x": "A", "y": "B"}
     apply_plot_kind(curve, None)
     assert curve == {"book": "B", "x": "A", "y": "B"}

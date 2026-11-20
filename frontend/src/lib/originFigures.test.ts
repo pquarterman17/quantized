@@ -1527,6 +1527,30 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
     expect(figureStatState(mixed, book)).toEqual({});
   });
 
+  it("a grouped / stacked column layer opens the Stat Stage bar chart grouped by its X", () => {
+    const two: Dataset = {
+      ...book,
+      data: { ...book.data, values: [[5, 1], [6, 2], [7, 3]], labels: ["Height", "Width"], metadata: { ...book.data.metadata, origin_column_names: ["B", "C"] } },
+    };
+    const cols = (x: string) => [curve("column"), { ...curve("column"), y: "C" }].map((c) => ({ ...c, x }));
+    const picks = (barStack: boolean, group: [number, string]) => ({
+      statMode: true,
+      statPicks: { mode: "bar", barStack, cols: { group, group2: null, value: [0, "Height"], facet: null, color: null } },
+    });
+    expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("A") }), two)).toEqual(picks(false, [-1, ""]));
+    expect(figureStatState(figure({ bar_layout: "stacked", curves: cols("A") }), two)).toEqual(picks(true, [-1, ""]));
+    // another column as X groups by that column
+    expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("C") }), two)).toEqual(picks(false, [1, "Width"]));
+    // a text X that never became numeric (no x_column_name) is the row index
+    const textX: Dataset = { ...two, data: { ...two.data, metadata: { ...two.data.metadata, x_column_name: "" } } };
+    expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("A") }), textX)).toEqual(picks(false, [-1, ""]));
+    // fail closed: an unknown X, curves on two X columns, or no layout at all
+    expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("Q") }), two)).toEqual({});
+    const split = [curve("column"), { ...curve("column"), y: "C", x: "C" }];
+    expect(figureStatState(figure({ bar_layout: "grouped", curves: split }), two)).toEqual({});
+    expect(figureStatState(figure({ curves: cols("A") }), two)).toEqual({});
+  });
+
   it("line figures, mixed figures and unbound columns stay as they are", () => {
     expect(figureStatState(figure({ curves: [curve()] }), book)).toEqual({});
     const mixed = figure({ curves: [{ book: "Book1", x: "A", y: "A", plotType: "histogram" }, curve()] });
