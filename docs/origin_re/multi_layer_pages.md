@@ -86,6 +86,30 @@ and Origin's preview shows it on top; the axis-side flag itself is not
 decoded. Owner COM check: for `Bqqbar.opju` Graph2 layer 2, read
 `layer2.x2.showAxes` / `layer2.x.showAxes` (expect top shown, bottom hidden).
 
+## Re-render against Origin's own images
+
+Base (PR #779 head) and this change rendered with
+`tools/visual/origin_preview_shots.mjs` over 9 projects (111 pages): 65 pages
+byte-identical, 46 changed. Every changed page reviewed against Origin's
+export or saved preview moved toward it:
+
+- XMCD `GraphT*` (24 pages): one panel -> Origin's three stacked panels.
+- XMCD Graph11/14/18/21/26/27 (the C1 "missing curve" pages): curves on
+  long-named columns (`averages`, `difference`, ...) are now drawn, so each
+  page draws Origin's curve count: Graph11/14/18 2 -> 3, Graph21/26/27 1 -> 2.
+- XMCD Merged / Graph34 / Graph37, Moke Graph10, SuperlatticeFits Graph14,
+  PALS (6 pages), Figure-1 Graph1, SOP_meas composites: every layer as its own
+  panel in the decoded layout instead of the clicked layer only.
+- Fixed Lambdas SI Graph5/6: the two stacked panels with all 12 curves.
+- RockingCurve Graph3 panel (c): the multi-X layer now draws each curve on its
+  recorded X, so the 2θ = 2.2° curve runs to 2.0 with its peak at 1.1, as in
+  Origin's export (before: cut at 1.0, peak at 0.7).
+- Bqqbar Graph2: one plot with the 1/mu top axis.
+
+Gallery minimum: Moke (8 pages) and RockingCurve (4) are unchanged except
+Moke Graph10 and RockingCurve Graph3, both closer to Origin as above. PNR.opj
+is a git-LFS pointer in this extract and was not rendered.
+
 ## Not fixed here
 
 - Bqqbar Graph2's short orange segment near x = 100 is a layer-1 curve
