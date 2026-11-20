@@ -67,7 +67,7 @@ beforeEach(() => {
     originFigures: [
       entry("Graph6", [{ book: "Book1", x: "D", y: "I", xRecorded: true }]),
       entry("inferred", [{ book: "Book1", x: "D", y: "I" }]),
-      entry("nearest", [{ book: "Book1", x: "G", y: "I" }]),
+      entry("nearest", [{ book: "Book1", x: "G", y: "I", xRecorded: true }]),
       entry("lost", [{ book: "Book1", x: "Q", y: "I" }, { book: "Book1", x: "G", y: "I" }]),
     ],
   });
@@ -104,6 +104,25 @@ describe("applyOriginFigure: the recorded X wins (A2)", () => {
     expect(s.activeId).toBe("d1"); // no overlay dataset
     expect(s.xKey).toBe(2);
     expect(s.yKeys).toEqual([3]);
+  });
+
+  it("a multi-layer window keeps its other layers (the double-Y partner is not dropped)", () => {
+    // Layer 1's recorded X conflicts; the same-dataset double-Y apply must
+    // still run, never a one-layer overlay that drops layer 2.
+    const layer = (n: number, curves: { book: string; x: string; y: string; xRecorded?: boolean }[], y: [number, number]) => {
+      const e = entry(`W-${n}`, curves);
+      return { ...e, figure: { ...e.figure, name: "W", layer: n, y_from: y[0], y_to: y[1] } };
+    };
+    useApp.setState({
+      originFigures: [
+        layer(1, [{ book: "Book1", x: "D", y: "I", xRecorded: true }], [0, 60]),
+        layer(2, [{ book: "Book1", x: "G", y: "B" }], [0, 10]),
+      ],
+    });
+    useApp.getState().applyOriginFigure("W-1");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1"); // no one-layer overlay dataset
+    expect(s.y2Keys).toEqual([0]);
   });
 
   it("a recorded X that did not import leaves that curve out, with a diagnosis", () => {

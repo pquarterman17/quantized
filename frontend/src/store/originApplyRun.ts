@@ -170,10 +170,14 @@ export function runOriginFigureApply(
   const right = y2Pair?.[1].figure;
   // A2 (owner decision 2026-11-20): a curve's RECORDED X wins over the
   // per-series nearest-preceding-X view; when they differ, the overlay draws
-  // each curve against its own recorded X column.
+  // each curve against its own recorded X column. Only for a one-layer window
+  // (or the A8 pair, whose overlay carries both layers): the same-dataset
+  // double-Y and spatial multi-panel paths below would otherwise be skipped
+  // and every other layer dropped.
   const bookDs = get().datasets.find((d) => d.id === entry.datasetId);
   const bookSel = bookDs ? libs.figureChannelSelection(fig, bookDs) : null;
-  const ownX = !!bookDs && !!bookSel && recordedXConflicts(fig, bookDs, bookSel);
+  const ownX = (layerFamily.length < 2 || !!y2Pair)
+    && !!bookDs && !!bookSel && recordedXConflicts(fig, bookDs, bookSel);
   const leftOut = bookDs ? recordedXOmissions(fig, bookDs) : [];
   if (leftOut.length) {
     toast(`${fig.name}: left out, its recorded X column did not import — ${leftOut.join("; ")}`, "info");
