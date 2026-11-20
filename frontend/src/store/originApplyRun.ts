@@ -14,7 +14,6 @@
 // statically, or the bundler folds it back into the eager graph
 // (`src/architecture.test.ts`'s SEAMS list is the guard).
 
-import { spatialComposition } from "../lib/composition";
 import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
@@ -25,16 +24,21 @@ import {
   overlayCurveStyles,
   overlayDoubleYPair,
   overlayErrorState,
+  overlayTopXPair,
   overlayY2Columns,
+  topXAxis,
+  topXMap,
+  topAxisPatch,
 } from "../lib/originOverlayFigure";
 import { withResolvedAxisTitles } from "../lib/originAxisTitles";
 import { recordedXConflicts, recordedXOmissions } from "../lib/originRecordedX";
 import { originFigureWithSourceMappings } from "../lib/originSources";
-import { pageSetupFromDecoded } from "../lib/pageGeometry";
 import { dedupeWindowTitle, displayedWindowTitle, scaleFromLog } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import type { OriginApplyLibs } from "./originApplyLibs";
+import { applySpatialPanels, layerOverlays } from "./originApplyPanels";
+import { ORIGIN_FIGURE_AXIS, ORIGIN_FIGURE_MODE_RESET, ORIGIN_FIGURE_Y2_RESET } from "./originApplyState";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { bookErrorLayer } from "./windowDefaults";
@@ -69,44 +73,6 @@ export function originFigureSourceDatasetIds(
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-// Origin figures apply boxed + gridless (item 4; grid undecodable) — Origin's clean look, ticks still draw, user re-enables.
-// Origin figures apply gridless + boxed + a clean read-only legend (decode
-// #52); every apply branch spreads this, so `legendStatic` costs zero lines.
-const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: true };
-
-// Applying a recovered graph is a whole-view command, not a dataset switch.
-// `setActive()` deliberately preserves presentation choices when the target
-// dataset is already active, but that is dangerous here: a prior polar/stat/
-// stacked view can otherwise keep rendering instead of the recovered XY
-// graph, and stale Y2 membership can route its only curve to an old axis
-// range.  The corpus harness used to hide this real-UI bug by clearing these
-// fields before every screenshot.  Keep the reset beside the apply body so
-// every branch gets the same clean mode transition.
-const ORIGIN_FIGURE_MODE_RESET = {
-  stackMode: false,
-  insetMode: false,
-  exchangeXY: false, // a recovered graph is drawn as saved, never beside a stale exchange
-  polarMode: false,
-  statMode: false,
-  composition: null,
-  facetKey: null,
-  groupKey: null,
-  waterfall: 0,
-  waterfallDx: 0,
-  seriesOrder: null,
-  seriesRamp: null, // gap audit 4 review L1: a recovered graph never inherits the previous one's gradient
-};
-
-const ORIGIN_FIGURE_Y2_RESET = {
-  y2Keys: null,
-  y2Lim: null,
-  y2Scale: null,
-  y2Step: null,
-  y2AxisLabel: "",
-  yAxes: [],
-  yAxisOf: {},
-};
 
 /** Apply `entry` (figure `id`) to the store. Callers have already run every
  *  preflight and hold the loaded `libs`; `label` is the undo label the
@@ -168,8 +134,20 @@ export function runOriginFigureApply(
   // overlay -- the lower layer's curves on y, the upper layer's on y2 --
   // instead of dropping the right-axis layer (Absorption-D3 Cys_Cu).
   const y2Pair = overlayDoubleYPair(layerFamily.map(prepare));
-  const main = y2Pair ? y2Pair[0].figure : fig;
+  // B2, the mirror: the upper layer shares the frame and the Y axis but has
+  // its own X, drawn on top (SerialCore Bqqbar Graph2). Its curves join the
+  // overlay mapped onto the lower layer's X, and the top axis labels them.
+  const topPair = y2Pair ? null : overlayTopXPair(layerFamily.map(prepare));
+  const main = (y2Pair ?? topPair)?.[0].figure ?? fig;
   const right = y2Pair?.[1].figure;
+  const top = topPair?.[1].figure;
+  // B1: a >=2-layer window whose layers each plot several books keeps every
+  // layer as its own panel, each on its own overlay, when the page geometry
+  // is trusted; otherwise the clicked layer's overlay below, as before.
+  if (layerFamily.length >= 2 && !y2Pair && !topPair) {
+    const staged = layerOverlays(layerFamily.map(prepare), siblings, get().datasets);
+    if (staged && applySpatialPanels(set, get, entry, id, fig.name, staged.family, libs, staged.datasets)) return;
+  }
   // A2 (owner decision 2026-11-20): a curve's RECORDED X wins over the
   // per-series nearest-preceding-X view; when they differ, the overlay draws
   // each curve against its own recorded X column. Only for a one-layer window
@@ -178,13 +156,13 @@ export function runOriginFigureApply(
   // and every other layer dropped.
   const bookDs = get().datasets.find((d) => d.id === entry.datasetId);
   const bookSel = bookDs ? libs.figureChannelSelection(fig, bookDs) : null;
-  const ownX = (layerFamily.length < 2 || !!y2Pair)
+  const ownX = (layerFamily.length < 2 || !!y2Pair || !!topPair)
     && !!bookDs && recordedXConflicts(fig, bookDs, bookSel);
   const leftOut = bookDs ? recordedXOmissions(fig, bookDs) : [];
   if (leftOut.length) {
     toast(`${fig.name}: left out, its recorded X column did not import — ${leftOut.join("; ")}`, "info");
   }
-  const overlay = buildOverlayDataset(main, siblings, right, ownX);
+  const overlay = buildOverlayDataset(main, siblings, right ?? top, ownX, top && topXMap(main, top));
   if (overlay) {
     const targetId = existing?.id ?? nextDatasetId();
     const refreshed = originOverlayDataset(targetId, overlayName, overlay, overlaySource, entry.id, existing);
@@ -226,6 +204,7 @@ export function runOriginFigureApply(
         yStep: main.y_step ?? null,
         xScale: scaleFromLog(main.x_log), // Origin's own axis type is boolean-only
         yScale: scaleFromLog(main.y_log),
+        ...topAxisPatch(get().xFmt, top && topXAxis(main, top)), // B2: the top layer's own X
         ...(right && y2.length ? {
           y2Keys: y2.filter((i) => !errs.errorColumns.includes(i)), // whiskers ride their curve, never a series
           y2Lim: [right.y_from, right.y_to] as [number, number],
@@ -288,6 +267,7 @@ export function runOriginFigureApply(
         yStep: lower.figure.y_step ?? null,
         xScale: scaleFromLog(lower.figure.x_log),
         yScale: scaleFromLog(lower.figure.y_log),
+        ...topAxisPatch(get().xFmt),
         xKey: baseSel.xKey,
         // The plotted-channel list derives from yKeys ALONE (y2Keys only tags
         // which of them sit on the right axis), so yKeys must be the UNION of
@@ -343,37 +323,7 @@ export function runOriginFigureApply(
   // any layer doesn't resolve.
   const family = figureLayerFamily(entry, get().originFigures).map(prepare);
   if (family.length >= 2) {
-    const spatialResult = libs.resolveSpatialPanels(family, get().datasets);
-    if (spatialResult) {
-      const { panels: placed, layout, droppedOverlays } = spatialResult;
-      get().setActive(entry.datasetId);
-      // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
-      // every spatial panel (item 4) — Origin layers are boxed by default.
-      set({
-        ...ORIGIN_FIGURE_MODE_RESET,
-        ...ORIGIN_FIGURE_Y2_RESET,
-        stackMode: true,
-        composition: spatialComposition(placed),
-        // #54: a fresh tiled apply starts at the app-wide default fit
-        // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
-        // persists in `.dwk`.
-        // A trusted overlapping/inset composition must begin in page mode;
-        // the grid-oriented default would otherwise flatten its geometry.
-        panelFit: layout === "page" ? "page" : get().defaultPanelFit,
-        // #54 Stage 2: prefill the window's page from the figure's decoded
-        // page size — aspect-honest (Origin page units aren't physical), null
-        // when the page didn't decode. Enables the "page" fit + page export.
-        pageSetup: pageSetupFromDecoded(family[0].figure.page ?? null),
-        ...ORIGIN_FIGURE_AXIS,
-        hiddenChannels: [],
-        // Spatial bands live on each SpatialPanel; clear only the singleton
-        // overlay list so a prior single plot cannot leak into this view.
-        regionShades: [],
-      });
-      get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
-      for (const msg of libs.spatialApplyNotices(layout, placed.length, droppedOverlays)) toast(msg, "info");
-      return;
-    }
+    if (applySpatialPanels(set, get, entry, id, fig.name, family, libs)) return;
     toast(
       "multi-panel layout: not every layer resolved a dataset — showing this layer only",
       "info",
@@ -398,6 +348,7 @@ export function runOriginFigureApply(
     yStep: fig.y_step ?? null,
     xScale: scaleFromLog(fig.x_log),
     yScale: scaleFromLog(fig.y_log),
+    ...topAxisPatch(get().xFmt),
     xAxisLabel: fig.x_title ?? "",
     yAxisLabel: fig.y_title ?? "",
     // Pin the figure's decoded floating text; REPLACE, never stack.

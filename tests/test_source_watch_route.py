@@ -141,7 +141,23 @@ def test_two_windows_on_one_slow_file_both_get_the_real_answer(
     f = tmp_path / "slow.dat"
     f.write_text("x", encoding="utf-8")
     release, calls = _hang_on(monkeypatch, "slow")
-    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 5.0)
+    # Generous: it only bounds how long a request waits for a stat that is never
+    # released (a failure), not the passing path, which ends when release is set.
+    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 30.0)
+    # The two windows share one thread only if the SECOND request asks while the
+    # first stat is still in flight. A fixed sleep before release() assumed both
+    # requests got that far in 0.3 s; on a starved box the second one had not
+    # asked yet, the stat finished, and it (correctly) started a fresh one --
+    # "2 reads". Gate the release on both requests having asked instead.
+    asked = threading.Semaphore(0)
+    real_submit = source_watch._submit
+
+    def counting_submit(path: str) -> object:
+        fut = real_submit(path)  # joins or starts the in-flight stat
+        asked.release()  # once per request: a pending future is never re-submitted
+        return fut
+
+    monkeypatch.setattr(source_watch, "_submit", counting_submit)
     results: list[object] = []
 
     def window() -> None:
@@ -150,12 +166,32 @@ def test_two_windows_on_one_slow_file_both_get_the_real_answer(
     threads = [threading.Thread(target=window) for _ in range(2)]
     for t in threads:
         t.start()
-    threading.Event().wait(0.3)
-    release.set()  # a slow share answers after both windows asked
+    try:
+        for _ in range(2):
+            assert asked.acquire(timeout=30), "a window never reached the route"
+    finally:
+        release.set()  # a slow share answers after both windows asked
     for t in threads:
-        t.join(10)
+        t.join(30)
     assert results == ["ok", "ok"]
     assert len(calls) == 1
+
+
+def test_a_request_after_the_stat_finished_stats_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sharing is for IN-FLIGHT stats only: the control for the test above. A
+    second window that asks after the first stat finished gets a fresh read
+    (stale answers would hide a changed file), which is why that test must hold
+    the stat open until both windows have asked."""
+    f = tmp_path / "once.dat"
+    f.write_text("x", encoding="utf-8")
+    release, calls = _hang_on(monkeypatch, "once")
+    release.set()  # nothing hangs
+    assert _stat(str(f))[0]["state"] == "ok"
+    _drain()
+    assert _stat(str(f))[0]["state"] == "ok"
+    assert calls == [str(f), str(f)]
 
 
 def test_a_hung_share_never_starves_a_healthy_volume(
@@ -164,25 +200,36 @@ def test_a_hung_share_never_starves_a_healthy_volume(
     hung = [f"/mnt/hung/f{i}.dat" for i in range(source_watch.PER_VOLUME_INFLIGHT + 4)]
     monkeypatch.setattr(source_watch, "_mount_points", lambda: ("/mnt/hung", "/"))
     release, _calls = _hang_on(monkeypatch, "/mnt/hung/")
-    # The healthy files pass the per-volume cap in several retry rounds; 0.3 s
-    # was too tight for that on a loaded CI runner (macOS: the healthy volume
-    # still "pending"). The deadline only bounds how long the HUNG ones wait, so
-    # a roomier one keeps the property under test and costs ~2 s once.
-    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 2.0)
     healthy = []
     for i in range(20):  # more healthy files than any per-volume cap
         p = tmp_path / f"ok{i}.dat"
         p.write_text("1", encoding="utf-8")
         healthy.append(str(p))
     try:
-        first = _stat(*hung, *healthy)
-        assert {e["state"] for e in first[: len(hung)]} == {"pending"}
-        assert {e["state"] for e in first[len(hung) :]} == {"ok"}
-        # The hung volume is at its cap; the healthy one still proceeds, every time.
-        assert {e["state"] for e in _stat(*healthy)} == {"ok"}
-        assert sum(1 for t in threading.enumerate() if t.name == "qz-source-watch") <= (
-            source_watch.PER_VOLUME_INFLIGHT
-        )
+        # Step 1: fill the hung volume to its cap. A short deadline is fine here:
+        # it only bounds how long the HUNG stats are waited on (they never finish).
+        monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 0.3)
+        assert {e["state"] for e in _stat(*hung)} == {"pending"}
+        # Key it the way the route does (on Windows "/mnt/hung" is a path on the
+        # current drive, so its volume key is that drive, e.g. "d:").
+        hung_volume = source_watch._volume_key(os.path.abspath(hung[0]))
+        assert source_watch._per_volume.get(hung_volume) == source_watch.PER_VOLUME_INFLIGHT
+        # Step 2: the healthy volume proceeds, in several retry rounds past its
+        # own cap. Its deadline is a pure backstop: the request returns as soon
+        # as every healthy stat is done, so it can be huge. (A 2 s deadline shared
+        # with the hung stats still read "pending" when the process was starved
+        # for a few seconds -- the property is "never starved", not "fast".)
+        monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 60.0)
+        for _ in range(2):  # and every time
+            assert {e["state"] for e in _stat(*healthy)} == {"ok"}
+        # Finished healthy threads exit just after publishing their answer: wait
+        # for those, so only the hung stats (which cannot finish) are counted.
+        for _ in range(400):
+            live = sum(1 for t in threading.enumerate() if t.name == "qz-source-watch")
+            if live <= source_watch.PER_VOLUME_INFLIGHT:
+                break
+            threading.Event().wait(0.05)
+        assert live <= source_watch.PER_VOLUME_INFLIGHT
     finally:
         release.set()
     _drain()

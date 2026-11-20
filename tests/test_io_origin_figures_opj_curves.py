@@ -122,6 +122,27 @@ def test_column_id_map_resolves_book_and_column() -> None:
     assert id_map == {10: ("Book1", "A"), 11: ("Book1", "B")}
 
 
+def test_column_id_map_keeps_short_names_of_eight_or_more_characters() -> None:
+    """B1 (XMCD.opj GraphT*): an 8-byte name window dropped ``difference`` /
+    ``asymmetry``, so every curve on them lost its binding and its layer.
+    The field is 12 bytes (11 characters + NUL); a name with no NUL inside
+    it resolves to nothing rather than reading into the next field."""
+    blob = _synthetic_opj(
+        _window_header("T1"),
+        _column_block("normA", cid=10),
+        _column_block("difference", cid=11),
+        _column_block("asymmetry", cid=12),
+        _column_block("a" * 11, cid=13),
+        _column_block("a" * 12, cid=14),
+    )
+    assert column_id_map(_blocks_of(blob)) == {
+        10: ("T1", "normA"),
+        11: ("T1", "difference"),
+        12: ("T1", "asymmetry"),
+        13: ("T1", "a" * 11),
+    }
+
+
 def test_book_x_columns_picks_the_designated_x_column() -> None:
     blob = _synthetic_opj(
         _window_header("Book1"),
@@ -512,7 +533,7 @@ def _oracle_plots_by_graph(index_path: Path) -> dict[str, list[tuple[str, str]]]
 @pytest.mark.realdata
 @pytest.mark.parametrize(
     ("stem", "n_expected_reachable"),
-    [("Moke", 39), ("XRD", 12)],
+    [("Moke", 39), ("XRD", 12), ("XMCD", 239)],
 )
 def test_realdata_curve_bindings_precision_and_recall_floor(
     stem: str, n_expected_reachable: int
@@ -523,8 +544,12 @@ def test_realdata_curve_bindings_precision_and_recall_floor(
     all; 12/20 XRD, re-frozen 2026-07-06 against the replaced corpus file --
     all 12 real-graph plot refs decode exactly, the other 8 oracle refs are
     per-column sparkline windows with no curve-anchor record anywhere in the
-    file). See ``opj_curves.py``'s module docstring for the full byte-level
-    trail."""
+    file). XMCD: 239 drawn (2026-11-20, B1 -- 166 before column names of 8+
+    characters resolved): 244/245 resolve, and the 5 Origin hides are left
+    out as ``hidden_in_origin`` since #780, counted by
+    ``test_io_origin_opj_curve_record.py``; the one miss is Graph25's single
+    curve). See
+    ``opj_curves.py``'s module docstring for the full byte-level trail."""
     src = _CORPUS / f"{stem}.opj"
     index_path = _GT / stem / "index.json"
     if not src.exists() or not index_path.exists():

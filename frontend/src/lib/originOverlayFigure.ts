@@ -16,6 +16,7 @@ import {
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
 import { framesCoincide } from "./originPanels";
 import { textXLetter } from "./originRecordedX";
+import type { AxisFormat, TopAxis } from "./axisFormat";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Construct regenerated overlay geometry without carrying row/column-dependent
@@ -201,11 +202,15 @@ export function buildOverlayDataset(
   /** A2: build even a single-X overlay, because a curve's RECORDED X differs
    *  from the X the plain path would draw it against (`recordedXConflicts`). */
   ownX = false,
+  /** B2: `y2Figure` is instead a TOP-X layer (`overlayTopXPair`): its curves
+   *  share the main Y axis, and their X is mapped onto the main layer's X. */
+  topX?: TopXMap,
 ): DataStruct | null {
   const main = boundCurves(figure, overlayBooks(figure, datasets));
-  const right = y2Figure
+  const rightRaw = y2Figure
     ? boundCurves(y2Figure, overlayBooks(y2Figure, datasets))
     : { bound: [] as OverlayBound[], errorCols: {} as Record<number, number> };
+  const right = topX ? { ...rightRaw, bound: onMainX(rightRaw.bound, topX) } : rightRaw;
   const out = assembleOverlay([...main.bound, ...right.bound], figure.name || "", ownX);
   if (!out) return out;
   // Error-bar columns (#778) for BOTH layers; the right layer's indices sit
@@ -214,7 +219,7 @@ export function buildOverlayDataset(
   const errorCols: Record<number, number> = { ...main.errorCols };
   for (const [k, v] of Object.entries(right.errorCols)) errorCols[Number(k) + n] = v + n;
   const extra: Record<string, unknown> = {};
-  if (right.bound.length) extra.origin_overlay_y2 = right.bound.map((_, i) => n + i);
+  if (right.bound.length && !topX) extra.origin_overlay_y2 = right.bound.map((_, i) => n + i);
   if (Object.keys(errorCols).length) extra.origin_overlay_errors = errorCols;
   return Object.keys(extra).length ? { ...out, metadata: { ...out.metadata, ...extra } } : out;
 }
@@ -263,4 +268,73 @@ export function overlayErrorState(data: DataStruct | null | undefined): { errKey
     }
   }
   return { errKeys, errorColumns: Object.values(errKeys).sort((a, b) => a - b) };
+}
+
+/** B2: where a top-X layer's own X lands on its host's X axis. Both layers
+ *  fill the SAME frame (`overlayTopXPair`), so on linear axes an upper-layer
+ *  value `u` sits where the host's axis reads `scale * u + shift`. */
+export interface TopXMap {
+  scale: number;
+  shift: number;
+}
+
+/** [host, top] when `family` (one graph window's layers) is a top-X window:
+ *  the mirror of `overlayDoubleYPair` -- exactly two layers, both with
+ *  curves, whose decoded frames coincide, with the SAME Y range and Y scale
+ *  but a DIFFERENT X range (SerialCore Bqqbar Graph2: mu on the bottom, 1/mu
+ *  on top). Both X axes must be linear with a non-zero span, so the upper
+ *  layer's X maps onto the host's by one exact linear map (`topXMap`); a log
+ *  X would need a different map, so it fails closed to the panel apply. */
+export function overlayTopXPair<T extends { figure: OriginFigure }>(family: T[]): [T, T] | null {
+  if (family.length !== 2) return null;
+  const [lower, upper] = [...family].sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
+  const [a, b] = [lower.figure, upper.figure];
+  if (!(a.curves ?? []).length || !(b.curves ?? []).length) return null;
+  if (a.x_log || b.x_log || a.y_log !== b.y_log) return null;
+  if (!(a.x_to !== a.x_from && b.x_to !== b.x_from)) return null;
+  if (!rangesEqual(a.y_from, a.y_to, b.y_from, b.y_to)) return null;
+  if (rangesEqual(a.x_from, a.x_to, b.x_from, b.x_to)) return null;
+  if (!a.frame || !b.frame || !framesCoincide(a.frame, b.frame)) return null;
+  return [lower, upper];
+}
+
+/** The linear map from `top`'s X onto `host`'s X: both axes span the same
+ *  frame width, so their ranges' ends line up. */
+export function topXMap(host: OriginFigure, top: OriginFigure): TopXMap {
+  const scale = (host.x_to - host.x_from) / (top.x_to - top.x_from);
+  return { scale, shift: host.x_from - scale * top.x_from };
+}
+
+/** The top axis that labels the host's X in `top`'s own units: the inverse
+ *  of `topXMap`, as the Axis dialog's linear top axis (`lib/axisTop.ts`). */
+export function topXAxis(host: OriginFigure, top: OriginFigure): TopAxis {
+  const { scale, shift } = topXMap(host, top);
+  return { kind: "linear", factor: 1 / scale, shift: -shift / scale, ...(top.x_title ? { title: top.x_title } : {}) };
+}
+
+/** The `xFmt` patch that gives the plot Origin's top X axis `top` (B2), or
+ *  takes a previous one away: a recovered graph is a whole-view command, so
+ *  an earlier graph's top axis never leaks in. `{}` when nothing changes. */
+export function topAxisPatch(fmt: AxisFormat, top?: TopAxis): { xFmt?: AxisFormat } {
+  if (!top && !fmt.top) return {};
+  const { top: _old, ...rest } = fmt;
+  return { xFmt: top ? { ...rest, top } : rest };
+}
+
+/** `bound` re-pointed at copies of their datasets whose X column is mapped by
+ *  `m` (onto the host's X); one copy per (dataset, X column), so curves that
+ *  shared an X block still share one. Y values are untouched. */
+function onMainX(bound: OverlayBound[], m: TopXMap): OverlayBound[] {
+  const copies = new Map<string, Dataset>();
+  return bound.map((b) => {
+    const key = `${b.ds.id}#${b.xCh}`;
+    let ds = copies.get(key);
+    if (!ds) {
+      const d = b.ds.data;
+      const xs = b.xCh === -2 ? d.time : d.values.map((row) => row?.[b.xCh] ?? NaN);
+      ds = { ...b.ds, id: `${b.ds.id}#topx${b.xCh}`, data: { ...d, time: Array.from(xs, (x) => m.scale * x + m.shift) } };
+      copies.set(key, ds);
+    }
+    return { ...b, ds, xCh: -2 };
+  });
 }

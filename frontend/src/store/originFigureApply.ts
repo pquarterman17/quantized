@@ -137,18 +137,30 @@ export function confirmOriginReapplyDiscard(
   if (opts?.discardConfirmed) return false;
   const all = get().originFigures;
   const familyIds = new Set(figureLayerFamily(entry, all).map((member) => member.id));
-  const existing = get().datasets.find((d) => {
+  // B1: a window of stacked cross-book layers rebuilds EVERY layer's own
+  // overlay (`origin_overlay_panel`, store/originApplyPanels.ts), not only the
+  // clicked one's, so an edit on any of them is about to be lost too. A plain
+  // clicked-layer overlay of a sibling layer is not rebuilt and never counts.
+  const rebuilt = get().datasets.filter((d) => {
     const metadata = d.data.metadata ?? {};
     const sourceId = String(metadata.origin_overlay_source ?? "");
     const refreshedBy = metadata.origin_overlay_entry;
     return familyIds.has(sourceId) && (
       refreshedBy === entry.id
       || (refreshedBy == null && sourceId === entry.id)
+      || metadata.origin_overlay_panel === true
     );
   });
-  if (!existing) return false;
-  const edits = discardedEdits(existing);
-  if (!edits) return false;
+  let existing: Dataset | undefined;
+  let edits: string[] | null = null;
+  for (const d of rebuilt) {
+    edits = discardedEdits(d);
+    if (edits) {
+      existing = d;
+      break;
+    }
+  }
+  if (!existing || !edits) return false;
 
   const requestSeq = ++applySeq;
   void askConfirm(

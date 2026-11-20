@@ -530,6 +530,15 @@ Official model references used for this routing:
       rendered oracle checked) and `PNR.opj`'s undrawn T++/T-- lines, which do
       NOT carry this bit (a different mechanism; do not reopen #42 from the
       PNR bytes alone). Owner COM check: the doc's last section.
+    - [x] **Multi-layer pages, B1/B2** (2026-11-20,
+      `docs/origin_re/multi_layer_pages.md`): `.opj` column names of 8+
+      characters resolve (XMCD COM oracle 166 -> 244/245 curves, 0 wrong, the
+      GraphT* 3-panel pages); stacked layers that each plot several books keep
+      every panel on per-layer overlays when the geometry is trusted (Fixed
+      Lambdas SI Graph5/6); a same-frame, same-Y, other-X layer shares its
+      host's plot with a linear top axis (Bqqbar Graph2). Still open: the
+      top-axis SIDE is inferred, not decoded (owner COM check in the doc);
+      top-X relations inside 3+-layer pages stay separate panels.
     - Worksheet-unit→axis-unit conversion with a typed, tested dimensional
       conversion model (including the evidenced Å↔nm cases), applied to data,
       limits, ticks, annotations, and regions together—never title-only.
