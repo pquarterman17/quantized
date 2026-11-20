@@ -11,6 +11,7 @@ import { templateFitRequest } from "../../../lib/fitTemplateReplay";
 import { sanitizeFitTemplate } from "../../../lib/fitTemplates";
 import { statsVersionField } from "../../../lib/fitStatsVersion";
 import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
+import { editTargetIndex, formulaEditOf, LEGACY_EDIT } from "../../../lib/formulaEditStep";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analysisData } from "../../../lib/rowstate";
 import type { SignalBindOptions } from "../../../lib/signalRecipe";
@@ -156,6 +157,16 @@ export async function executeSteps(
             store().datasets.find((d) => d.id === target)?.data.labels.length ?? 0,
           );
           if (err) throw new Error(err);
+          const of = formulaEditOf(step);
+          if (of !== undefined) {
+            // An "Edit column": replace the column it edited, never append.
+            if (of === null) throw new Error(LEGACY_EDIT);
+            const at = editTargetIndex((store().datasets.find((d) => d.id === target)?.formulas ?? []).map((f) => f.name), of);
+            if (typeof at !== "number") throw new Error(at.error);
+            if (!store().updateFormula(target, at, { name, expr })) throw new Error(store().status || `couldn't edit the computed column "${of}"`);
+            log[step.id] = { status: "ok" };
+            break;
+          }
           if (!store().addFormula(target, name, expr)) {
             throw new Error(store().status || "couldn't add the computed column");
           }

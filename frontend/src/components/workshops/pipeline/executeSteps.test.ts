@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct } from "../../../lib/types";
+import { LEGACY_EDIT } from "../../../lib/formulaEditStep";
 import { makeStep, type PipelineStep } from "../../../lib/pipeline";
 import { useApp } from "../../../store/useApp";
 import { executeSteps, PipelineCancelledError } from "./executeSteps";
@@ -98,6 +99,51 @@ describe("executeSteps expression replay", () => {
     expect(result.log[step.id].status).toBe("ok");
     expect(output.values).toHaveLength(n);
     expect(output.values[n - 1]).toEqual([n - 1, (n - 1) * 2]);
+  });
+});
+
+describe("executeSteps formula-edit replay", () => {
+  const add = (name: string, expr: string) => makeStep("expression", `Add column ${name}`, "", { name, expr });
+  const edit = (of: string, name: string, expr: string) =>
+    makeStep("expression", `Edit column ${name}`, `qz.editColumn("${of}", "${name}", "${expr}")`, { name, expr, of });
+  const sheet = () => useApp.getState().datasets[0]!;
+
+  it("an edit recorded by updateFormula replays as a REPLACEMENT keyed by the old name, rename included", async () => {
+    // Record add + rename-and-edit for real, then replay the recording on a fresh sheet.
+    useApp.setState({ macroRecording: true, macroSteps: [], pipelineRunning: false });
+    expect(useApp.getState().addFormula("a", "r", "A + B")).toBe(true);
+    expect(useApp.getState().addFormula("a", "later", "D * 2")).toBe(true);
+    expect(useApp.getState().updateFormula("a", 0, { name: "ratio", expr: "B / A" })).toBe(true);
+    const steps = useApp.getState().macroSteps;
+    expect(steps[2]!.params).toEqual({ name: "ratio", expr: "B / A", of: "r" });
+    useApp.setState({ macroRecording: false, datasets: [ds()] });
+    const { log } = await executeSteps(steps, "a");
+    expect(Object.values(log).map((l) => l.status)).toEqual(["ok", "ok", "ok"]);
+    expect(sheet().formulas?.map((f) => f.name)).toEqual(["ratio", "later"]);
+    expect(sheet().data.labels).toEqual(["field", "moment", "sigma", "ratio", "later"]);
+    // Column letters did not shift: "later" (E) still reads D, the edited column.
+    expect(sheet().data.values[1]).toEqual([200, 20, 0.6, 0.1, 0.2]);
+  });
+
+  it("fails an edit, naming the column, when the target has no column of that name — nothing appended", async () => {
+    const step = edit("ghost", "ghost2", "A");
+    const { log } = await executeSteps([add("r", "A"), step], "a");
+    expect(log[step.id]).toEqual({ status: "failed", note: 'there is no computed column named "ghost" to edit' });
+    expect(sheet().formulas?.map((f) => f.name)).toEqual(["r"]);
+  });
+
+  it("refuses an ambiguous edit (two columns of that name) rather than guess", async () => {
+    const step = edit("r", "r", "B");
+    const { log } = await executeSteps([add("r", "A"), add("r", "A * 2"), step], "a");
+    expect(log[step.id]!.note).toMatch(/2 computed columns are named "r"/);
+    expect(sheet().formulas?.map((f) => f.expr)).toEqual(["A", "A * 2"]);
+  });
+
+  it("a legacy edit recorded without `of` fails with a clear message instead of appending", async () => {
+    const legacy = makeStep("expression", "Edit column ratio", 'qz.editColumn("ratio", "B / A")', { name: "ratio", expr: "B / A" });
+    const { log } = await executeSteps([add("r", "A + B"), legacy], "a");
+    expect(log[legacy.id]).toEqual({ status: "failed", note: LEGACY_EDIT });
+    expect(sheet().formulas?.map((f) => f.name)).toEqual(["r"]);
   });
 });
 

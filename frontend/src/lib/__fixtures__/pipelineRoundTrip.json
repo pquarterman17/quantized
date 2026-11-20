@@ -34,122 +34,122 @@
    [
     5.9750000000000005,
     3.1950000000000003,
-    2.3701095461658843,
-    3.173037948510591
+    1.370109546165884,
+    -0.5671811438211787
    ],
    [
     5.970000000000001,
     3.3900000000000006,
-    2.7610619469026547,
-    5.180104730059755
+    0.7610619469026547,
+    -1.8641430575508642
    ],
    [
     6.405,
     3.5849999999999995,
-    3.2866108786610884,
-    8.271000920764658
+    0.28661087866108814,
+    -2.448664351201872
    ],
    [
     5.42,
     3.78,
-    3.433862433862434,
-    9.463321869327075
+    -0.566137566137566,
+    -2.007577601572396
    ],
    [
     5.8549999999999995,
     3.975,
-    3.972955974842767,
-    13.36466845152627
+    -1.0270440251572328,
+    -1.3648912969014015
    ],
    [
     5.85,
     4.17,
-    4.402877697841727,
-    16.9666546976625
+    -1.5971223021582734,
+    0.13212232356177855
    ],
    [
     5.845,
     4.365,
-    4.8390607101947305,
-    20.998865076203014
+    -2.1609392898052695,
+    2.252015133476786
    ],
    [
     6.28,
     4.56,
-    5.37719298245614,
-    26.40821155334723
+    -2.6228070175438596,
+    4.373123834048982
    ],
    [
     5.295,
     4.755,
-    5.613564668769716,
-    29.211021590658884
+    -3.3864353312302837,
+    9.166857552803991
    ],
    [
     5.73,
     4.95,
-    6.157575757575758,
-    35.52199736956751
+    -3.8424242424242423,
+    12.370482218052349
    ],
    [
     5.7250000000000005,
     5.1450000000000005,
-    6.612730806608358,
-    41.33551149786614
+    -4.387269193391642,
+    16.85543375248227
    ],
    [
     5.720000000000001,
     5.34,
-    7.071161048689139,
-    47.6096664278782
+    -4.928838951310861,
+    21.901801259338868
    ],
    [
     6.154999999999999,
     5.535,
-    7.612014453477868,
-    55.46183679394491
+    -5.387985546522132,
+    26.549461003520342
    ],
    [
     5.17,
     5.7299999999999995,
-    7.902268760907504,
-    60.17208816943421
+    -6.097731239092496,
+    34.90856286402409
    ],
    [
     5.6049999999999995,
     5.925,
-    8.445991561181435,
-    68.96728533119767
+    -6.554008438818565,
+    40.58753849575462
    ],
    [
     5.6,
     6.12,
-    8.915032679738562,
-    77.11137576756668
+    -7.084967320261438,
+    47.830330015932695
    ],
    [
     5.595,
     6.315,
-    9.385985748218527,
-    85.73135323125832
+    -7.614014251781473,
+    55.60783779182841
    ],
    [
     6.03,
     6.51,
-    9.926267281105991,
-    96.07517630439358
+    -8.073732718894009,
+    62.729554184577914
    ],
    [
     6.025,
     6.505,
-    10.426210607225212,
-    106.25128008448881
+    -8.573789392774788,
+    71.05527700993076
    ]
   ],
   "labels": [
    "a · median(3)",
    "b · median(3)",
-   "ratio",
+   "r2",
    "sq"
   ]
  },
@@ -464,6 +464,6 @@
    "bg_interp": "linear"
   }
  },
- "script": "#!/usr/bin/env python3\n\"\"\"Quantized pipeline: reproducible analysis script (5 steps).\n\nRe-runs the recorded data pipeline headless with the public quantized.api\n(pip install quantized-lab). It runs in this process: no app or server is needed,\nand the project open in the app is not changed. Steps with no quantized.api\nequivalent are kept as comments that say so.\n\nUsage: python <this file> [INPUT ...] [--out OUT] --background FILE\n  INPUT  the file(s) the pipeline imports, in order (default: the recorded names)\n  OUT    where the final data goes: .csv, .tsv or .xlsx (default pipeline_output.csv)\n  FILE   the background each background-subtraction step subtracts, in step order (1)\n\"\"\"\n\nimport argparse\nimport sys\n\nimport quantized.api as qz\n\nRECORDED_INPUTS = [\"data.csv\"]\n\n\ndef main(argv=None):\n    parser = argparse.ArgumentParser(description=\"Re-run a recorded Quantized pipeline.\")\n    parser.add_argument(\"inputs\", nargs=\"*\", help=\"input file(s), in import order\")\n    parser.add_argument(\"--out\", default=\"pipeline_output.csv\", help=\"output table (.csv/.tsv/.xlsx)\")\n    parser.add_argument(\"--background\", action=\"append\", default=[], help=\"background file, one per background-subtraction step\")\n    args = parser.parse_args(argv)\n    if hasattr(sys.stdout, \"reconfigure\"):  # labels may hold μ etc.; a cp1252 console must not crash\n        sys.stdout.reconfigure(errors=\"backslashreplace\")\n    if not args.inputs and None not in RECORDED_INPUTS:\n        args.inputs = list(RECORDED_INPUTS)\n    if len(args.inputs) != len(RECORDED_INPUTS):\n        parser.error(f\"give {len(RECORDED_INPUTS)} input file(s)\")\n    if len(args.background) != 1:\n        parser.error(\"give 1 --background file(s), one per background-subtraction step\")\n    data = None\n    formulas = []  # the formula columns (name, expression), recomputed after each correction\n\n    # 1. Import data.csv\n    data = qz.load(args.inputs[0])\n    raw = data  # the uncorrected base that corrections start from\n    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import\n\n    # 2. Median filter · data.csv\n    # rows excluded or filtered in the app are not recorded; this uses every row\n    data = qz.run_signal_op(data, \"median\", [0, 1], {\"window\": 3}).data\n    raw = data  # a new dataset: its own base\n    roles = None  # with no error-column roles, as in the app\n\n    # 3. Add column ratio\n    base = data  # the worksheet before its formula columns\n    formulas.append((\"ratio\", \"A / B + x\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 4. Corrections → data\n    # Error-column roles changed by hand in the app are not recorded; this uses the roles seeded on import.\n    # The background is read from the file given with --background, as loaded: if it was corrected in the app, correct it here first.\n    background = qz.load(args.background[0])\n    base = qz.apply_corrections(raw, {\"yOff\": 0.5, \"yScale\": 2}, bg_dataset=background, bg_interp=\"linear\", error_bindings=roles)\n    data = qz.add_formula_columns(base, formulas)  # the formula columns, recomputed\n\n    # 5. Add column sq\n    formulas.append((\"sq\", \"C^2 - sqrt(abs(A))\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    if data is None:\n        print(\"nothing to save: no step loaded data\")\n        return 1\n    qz.save_table(data, args.out, overwrite=True, protect=args.inputs + args.background)  # replaces --out, never an input\n    print(f\"saved {args.out}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n",
- "template": "{\n  \"name\": \"Round trip\",\n  \"outputs\": [],\n  \"steps\": [\n    {\n      \"code\": \"qz.import(\\\"data.csv\\\")\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"import\",\n      \"label\": \"Import data.csv\",\n      \"params\": {\n        \"name\": \"data.csv\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"transform\",\n      \"label\": \"Median filter · data.csv\",\n      \"params\": {\n        \"args\": {\n          \"window\": 3\n        },\n        \"channels\": [\n          0,\n          1\n        ],\n        \"method\": \"median\",\n        \"op\": \"sigop\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Add column ratio\",\n      \"params\": {\n        \"expr\": \"A / B + x\",\n        \"name\": \"ratio\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"correction\",\n      \"label\": \"Corrections → data\",\n      \"params\": {\n        \"bg\": {\n          \"datasetId\": \"bg\",\n          \"interp\": \"linear\"\n        },\n        \"params\": {\n          \"yOff\": 0.5,\n          \"yScale\": 2\n        }\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Add column sq\",\n      \"params\": {\n        \"expr\": \"C^2 - sqrt(abs(A))\",\n        \"name\": \"sq\"\n      }\n    }\n  ],\n  \"version\": 1\n}\n"
+ "script": "#!/usr/bin/env python3\n\"\"\"Quantized pipeline: reproducible analysis script (6 steps).\n\nRe-runs the recorded data pipeline headless with the public quantized.api\n(pip install quantized-lab). It runs in this process: no app or server is needed,\nand the project open in the app is not changed. Steps with no quantized.api\nequivalent are kept as comments that say so.\n\nUsage: python <this file> [INPUT ...] [--out OUT] --background FILE\n  INPUT  the file(s) the pipeline imports, in order (default: the recorded names)\n  OUT    where the final data goes: .csv, .tsv or .xlsx (default pipeline_output.csv)\n  FILE   the background each background-subtraction step subtracts, in step order (1)\n\"\"\"\n\nimport argparse\nimport sys\n\nimport quantized.api as qz\n\nRECORDED_INPUTS = [\"data.csv\"]\n\n\ndef main(argv=None):\n    parser = argparse.ArgumentParser(description=\"Re-run a recorded Quantized pipeline.\")\n    parser.add_argument(\"inputs\", nargs=\"*\", help=\"input file(s), in import order\")\n    parser.add_argument(\"--out\", default=\"pipeline_output.csv\", help=\"output table (.csv/.tsv/.xlsx)\")\n    parser.add_argument(\"--background\", action=\"append\", default=[], help=\"background file, one per background-subtraction step\")\n    args = parser.parse_args(argv)\n    if hasattr(sys.stdout, \"reconfigure\"):  # labels may hold μ etc.; a cp1252 console must not crash\n        sys.stdout.reconfigure(errors=\"backslashreplace\")\n    if not args.inputs and None not in RECORDED_INPUTS:\n        args.inputs = list(RECORDED_INPUTS)\n    if len(args.inputs) != len(RECORDED_INPUTS):\n        parser.error(f\"give {len(RECORDED_INPUTS)} input file(s)\")\n    if len(args.background) != 1:\n        parser.error(\"give 1 --background file(s), one per background-subtraction step\")\n    data = None\n    formulas = []  # the formula columns (name, expression), recomputed after each correction\n\n    # 1. Import data.csv\n    data = qz.load(args.inputs[0])\n    raw = data  # the uncorrected base that corrections start from\n    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import\n\n    # 2. Median filter · data.csv\n    # rows excluded or filtered in the app are not recorded; this uses every row\n    data = qz.run_signal_op(data, \"median\", [0, 1], {\"window\": 3}).data\n    raw = data  # a new dataset: its own base\n    roles = None  # with no error-column roles, as in the app\n\n    # 3. Add column ratio\n    base = data  # the worksheet before its formula columns\n    formulas.append((\"ratio\", \"A / B + x\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 4. Corrections → data\n    # Error-column roles changed by hand in the app are not recorded; this uses the roles seeded on import.\n    # The background is read from the file given with --background, as loaded: if it was corrected in the app, correct it here first.\n    background = qz.load(args.background[0])\n    base = qz.apply_corrections(raw, {\"yOff\": 0.5, \"yScale\": 2}, bg_dataset=background, bg_interp=\"linear\", error_bindings=roles)\n    data = qz.add_formula_columns(base, formulas)  # the formula columns, recomputed\n\n    # 5. Add column sq\n    formulas.append((\"sq\", \"C^2 - sqrt(abs(A))\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 6. Edit column r2\n    formulas[0] = (\"r2\", \"A / B - x\")  # edits \"ratio\"\n    data = qz.add_formula_columns(base, formulas)\n\n    if data is None:\n        print(\"nothing to save: no step loaded data\")\n        return 1\n    qz.save_table(data, args.out, overwrite=True, protect=args.inputs + args.background)  # replaces --out, never an input\n    print(f\"saved {args.out}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n",
+ "template": "{\n  \"name\": \"Round trip\",\n  \"outputs\": [],\n  \"steps\": [\n    {\n      \"code\": \"qz.import(\\\"data.csv\\\")\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"import\",\n      \"label\": \"Import data.csv\",\n      \"params\": {\n        \"name\": \"data.csv\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"transform\",\n      \"label\": \"Median filter · data.csv\",\n      \"params\": {\n        \"args\": {\n          \"window\": 3\n        },\n        \"channels\": [\n          0,\n          1\n        ],\n        \"method\": \"median\",\n        \"op\": \"sigop\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Add column ratio\",\n      \"params\": {\n        \"expr\": \"A / B + x\",\n        \"name\": \"ratio\"\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"correction\",\n      \"label\": \"Corrections → data\",\n      \"params\": {\n        \"bg\": {\n          \"datasetId\": \"bg\",\n          \"interp\": \"linear\"\n        },\n        \"params\": {\n          \"yOff\": 0.5,\n          \"yScale\": 2\n        }\n      }\n    },\n    {\n      \"code\": \"\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Add column sq\",\n      \"params\": {\n        \"expr\": \"C^2 - sqrt(abs(A))\",\n        \"name\": \"sq\"\n      }\n    },\n    {\n      \"code\": \"qz.editColumn(\\\"ratio\\\", \\\"r2\\\", \\\"A / B - x\\\")\",\n      \"enabled\": true,\n      \"id\": \"\",\n      \"kind\": \"expression\",\n      \"label\": \"Edit column r2\",\n      \"params\": {\n        \"expr\": \"A / B - x\",\n        \"name\": \"r2\",\n        \"of\": \"ratio\"\n      }\n    }\n  ],\n  \"version\": 1\n}\n"
 }

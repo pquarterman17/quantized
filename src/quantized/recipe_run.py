@@ -19,8 +19,9 @@ What replays (step ``kind`` -> call):
 * ``reset``       back to that base (formula columns recomputed);
 * ``expression``  a formula column (``add_formula_columns``), when the
                   formula is in the headless subset (``calc/column_formula``);
-                  an EDITED formula is refused (its record carries only the
-                  new name, and the app's batch re-adds it as a new column);
+                  an EDITED formula (``params.of``: the column's name before
+                  the edit) replaces the formula column of that name, as the
+                  app's batch does -- one recorded without ``of`` is refused;
 * ``fit``         ``fit_model`` on the recorded channels, X range, starts,
                   bounds and held parameters;
 * ``transform``   ``resample`` (n points / step / range) via
@@ -149,11 +150,27 @@ def _enabled(step: Mapping[str, Any]) -> bool:
 
 
 def is_formula_edit(step: Mapping[str, Any]) -> bool:
-    """An "Edit column" recording: ``params`` carry the NEW name and formula
-    only (a rename loses the old name), and the app's own batch replays it as
-    an added column. Neither can be reproduced faithfully, so it is refused."""
+    """An "Edit column" recording (``lib/formulaEditStep.ts`` ``formulaEditOf``).
+
+    ``params.of`` names the column before the edit, and a replay replaces it.
+    A legacy edit (recorded before ``of`` existed) is recognised by its code
+    or label; it carries only the new name and is refused."""
+    p = step.get("params")
+    if isinstance(p, Mapping) and isinstance(p.get("of"), str):
+        return True
     code, label = str(step.get("code", "")), str(step.get("label", ""))
     return code.startswith("qz.editColumn(") or label.startswith("Edit column")
+
+
+def _edit_index(formulas: Sequence[tuple[str, str]], of: str) -> int:
+    """The one formula column named ``of`` (``editTargetIndex``): missing or
+    ambiguous fails the step rather than guess."""
+    hits = [i for i, (name, _) in enumerate(formulas) if name == of]
+    if len(hits) == 1:
+        return hits[0]
+    if hits:
+        raise ValueError(f"{len(hits)} formula columns are named {of!r}; the edit is ambiguous")
+    raise ValueError(f"there is no formula column named {of!r} to edit")
 
 
 def _background_steps(recipe: Recipe) -> int:
@@ -171,8 +188,11 @@ def _step_problem(step: Mapping[str, Any]) -> str | None:
     if kind == "expression":
         if not isinstance(p.get("name"), str) or not isinstance(p.get("expr"), str):
             return "this worksheet operation has no headless equivalent"
-        if is_formula_edit(step):
-            return "an edited formula column (re-record the pipeline with the final formula)"
+        if is_formula_edit(step) and not isinstance(p.get("of"), str):
+            return (
+                "an edited formula column recorded before edits kept the column's "
+                "previous name (re-record the pipeline)"
+            )
         if p.get("derived") is True:
             return "a derived column (units / error propagation) is evaluated only in the app"
         problem = formula_problem(str(p["expr"]))
@@ -315,7 +335,11 @@ def run_recipe(
                     )
                 continue
             if kind == "expression":
-                formulas.append((str(p["name"]), str(p["expr"])))
+                column = (str(p["name"]), str(p["expr"]))
+                if is_formula_edit(step):
+                    formulas[_edit_index(formulas, str(p["of"]))] = column
+                else:
+                    formulas.append(column)
                 if isinstance(p.get("errorOf"), str):
                     run.warnings.append(f"{label}: computed; its error-bar binding is not applied")
             elif kind == "correction":

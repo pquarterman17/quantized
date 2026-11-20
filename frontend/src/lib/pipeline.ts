@@ -6,6 +6,7 @@
 // (no React / store / fetch).
 
 import { compileFormula } from "./formula";
+import { editTargetIndex, formulaEditOf, LEGACY_EDIT } from "./formulaEditStep";
 import { headlessFormulaProblem } from "./formulaHeadless";
 import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
 import { channelIndexOf } from "./formulaRename";
@@ -259,15 +260,15 @@ function expressionLines(step: PipelineStep, g: Gen): Emit {
   if (p.derived === true) return { lines: [], changesData: true, unmapped: "derived columns (units and error propagation) are evaluated only in the app" };
   const problem = headlessFormulaProblem(p.expr);
   if (problem) return { lines: [], changesData: true, unmapped: `formula ${JSON.stringify(p.expr)} is evaluated only in the app: ${problem}` };
-  // An edit records only the NEW name and formula (a rename loses the old
-  // name), and the app's own Run pipeline re-adds it as a column: refused,
-  // like quantized/recipe_run.py's is_formula_edit.
-  if (step.code.startsWith("qz.editColumn(") || step.label.startsWith("Edit column")) {
-    return { lines: [], changesData: true, unmapped: "an edited formula column cannot be replayed exactly (its record holds only the new name and formula)" };
-  }
+  // An edit replaces the column it edited (lib/formulaEditStep.ts), as the app's
+  // Run pipeline does; the script holds only the pipeline's own columns.
+  const of = formulaEditOf(step);
+  if (of === null) return { lines: [], changesData: true, unmapped: LEGACY_EDIT };
+  const at = of === undefined ? g.formulas.length : editTargetIndex(g.formulas, of);
+  if (typeof at !== "number") return { lines: [], changesData: true, unmapped: `${at.error} among the columns this pipeline added` };
   const lines = g.formulas.length ? [] : [`${I}base = data  # the worksheet before its formula columns`];
-  lines.push(`${I}formulas.append((${py(p.name)}, ${py(p.expr)}))`);
-  g.formulas.push(p.name);
+  lines.push(of === undefined ? `${I}formulas.append((${py(p.name)}, ${py(p.expr)}))` : `${I}formulas[${at}] = (${py(p.name)}, ${py(p.expr)})  # edits ${py(of)}`);
+  g.formulas[at] = p.name;
   if (typeof p.errorOf === "string") lines.push(comment(`bound as column ${p.errorOf}'s error bars in the app; the binding is not applied here`));
   lines.push(`${I}data = qz.add_formula_columns(base, formulas)`);
   return { lines, changesData: true };

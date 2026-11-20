@@ -1,7 +1,7 @@
 // The app's pipeline, its exported script and `qz run` give the SAME numbers
 // (gap audit 5 #6). One recorded pipeline — import, a median filter (sigop
 // transform), a formula column, corrections with a background subtraction, a
-// second formula reading the first — is replayed here by the real
+// second formula reading the first, then an edit of the first — is replayed here by the real
 // `executeSteps` (store, formula evaluator, recompute-after-correction). Its
 // two backend calls are answered from `__fixtures__/pipelineRoundTripBackend
 // .json`, which tests/test_pipeline_round_trip.py writes from the real
@@ -60,6 +60,8 @@ const STEPS: PipelineStep[] = [
   makeStep("expression", "Add column ratio", "", { name: "ratio", expr: "A / B + x" }),
   makeStep("correction", "Corrections → data", "", { params: { yOff: 0.5, yScale: 2 }, bg: { datasetId: "bg", interp: "linear" } }),
   makeStep("expression", "Add column sq", "", { name: "sq", expr: "C^2 - sqrt(abs(A))" }),
+  // An edit (rename + new formula) replaces "ratio" in place; sq (D) reads it.
+  makeStep("expression", "Edit column r2", 'qz.editColumn("ratio", "r2", "A / B - x")', { name: "r2", expr: "A / B - x", of: "ratio" }),
 ];
 
 beforeEach(() => {
@@ -80,9 +82,9 @@ beforeEach(() => {
 describe("app pipeline vs exported script vs qz run", () => {
   it("pins the app's worksheet for tests/test_pipeline_round_trip.py", async () => {
     const run = await executeSteps(STEPS, "in");
-    expect(Object.values(run.log).map((l) => l.status)).toEqual(["skipped", "ok", "ok", "ok", "ok"]);
+    expect(Object.values(run.log).map((l) => l.status)).toEqual(["skipped", "ok", "ok", "ok", "ok", "ok"]);
     const out = useApp.getState().datasets.find((d) => d.id === run.target)!.data;
-    expect(out.labels).toEqual([...BACKEND.corrected.labels, "ratio", "sq"]);
+    expect(out.labels).toEqual([...BACKEND.corrected.labels, "r2", "sq"]);
     const script = pipelineToPython(STEPS);
     expect(script).not.toContain("NOT REPRODUCED");
     const fixture = {

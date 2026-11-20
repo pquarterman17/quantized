@@ -10,6 +10,7 @@
 // importer share this ONE `makeStep` counter); an eager module must import
 // from THIS file (architecture.test.ts's DRAGGED_OUT list is the guard).
 
+import { formulaEditOf } from "./formulaEditStep";
 import { lit } from "./macro";
 
 /** Step kinds. Runnable kinds re-execute against the active dataset;
@@ -48,7 +49,14 @@ export function makeStep(
 export function regenerateStep(step: PipelineStep): PipelineStep {
   const p = step.params;
   switch (step.kind) {
-    case "expression":
+    case "expression": {
+      // An "Edit column" stays one (lib/formulaEditStep.ts): relabelled as an
+      // add, a replay would append the column instead of replacing it.
+      const of = formulaEditOf(step);
+      if (of !== undefined) {
+        const was = of === null ? "" : `${lit(of)}, `;
+        return { ...step, label: `Edit column ${String(p.name ?? "")}`, code: `qz.editColumn(${was}${lit(p.name)}, ${lit(p.expr)})` };
+      }
       return {
         ...step,
         label: `Add column ${String(p.name ?? "")}`,
@@ -57,6 +65,7 @@ export function regenerateStep(step: PipelineStep): PipelineStep {
         // dropping it silently un-derived the σ column on the next re-run.
         code: `qz.addColumn(${lit(p.name)}, ${lit(p.expr)}${p.propagate ? ", { errors: true }" : ""})`,
       };
+    }
     case "correction":
       return {
         ...step,

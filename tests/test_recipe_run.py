@@ -89,6 +89,25 @@ def test_every_unreplayable_step_is_listed_up_front() -> None:
         run_recipe(parse_recipe(_recipe(*steps)), qz.DataStruct.create([0.0], [1.0]))
 
 
+def test_an_edit_replaces_the_formula_column_it_names() -> None:
+    data = qz.DataStruct.create([0.0, 1.0], [2.0, 4.0])
+    steps = [
+        _step("expression", "Add column r", {"name": "r", "expr": "A + 1"}),
+        _step("expression", "Add column s", {"name": "s", "expr": "B * 10"}),
+        _step("expression", "Edit column q", {"name": "q", "expr": "A * 3", "of": "r"}),
+    ]
+    recipe = parse_recipe(_recipe(*steps))
+    assert recipe_problems(recipe) == []
+    out = run_recipe(recipe, data).data
+    assert list(out.labels)[-2:] == ["q", "s"]  # renamed in place: no third column
+    np.testing.assert_array_equal(out.values[:, -2:], [[6.0, 60.0], [12.0, 120.0]])
+    for of, msg in [("zz", "no formula column named 'zz'"), ("s", "")]:
+        dup = [*steps[:2], _step("expression", "Add column s", {"name": "s", "expr": "A"})]
+        bad = [*dup, _step("expression", "Edit column t", {"name": "t", "expr": "A", "of": of})]
+        with pytest.raises(ValueError, match=msg or "2 formula columns are named 's'"):
+            run_recipe(parse_recipe(_recipe(*bad)), data)
+
+
 def test_one_background_file_per_background_step_in_order() -> None:
     def bg_step(interp: str) -> dict[str, Any]:
         bg = {"datasetId": "d", "interp": interp}

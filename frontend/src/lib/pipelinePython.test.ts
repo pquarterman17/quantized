@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { LEGACY_EDIT } from "./formulaEditStep";
 import { fitParamsForEdit, pipelineToPython, pipelineToScript, py } from "./pipeline";
 import { makeStep, type PipelineStep } from "./pipelineStep";
 import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
@@ -226,15 +227,29 @@ describe("pipelineToPython", () => {
     expect(s).toContain("    base = raw\n    data = qz.add_formula_columns(base, formulas)");
   });
 
-  it("refuses an edited formula column: its record holds only the new name (a rename loses the old)", () => {
+  it("an edited formula column replaces the one it edited (keyed by its old name, rename included)", () => {
     const s = pipelineToPython([
+      imported(),
+      makeStep("expression", "Add column r", "", { name: "r", expr: "A/B" }),
+      makeStep("expression", "Add column u", "", { name: "u", expr: "C*3" }),
+      makeStep("expression", "Edit column ratio", 'qz.editColumn("r", "ratio", "A/B*2")', { name: "ratio", expr: "A/B*2", of: "r" }),
+    ]);
+    expect(s).not.toContain("NOT REPRODUCED");
+    expect(s).toContain('    formulas[0] = ("ratio", "A/B*2")  # edits "r"\n    data = qz.add_formula_columns(base, formulas)');
+    expect(s.match(/formulas\.append/g)).toHaveLength(2);
+  });
+
+  it("refuses an edit of a column the pipeline did not add, and a legacy edit with no `of`", () => {
+    const missing = pipelineToPython([imported(), makeStep("expression", "Edit column z", "", { name: "z", expr: "A", of: "y" }), later()]);
+    expect(missing).toContain('NOT REPRODUCED: there is no computed column named "y" to edit among the columns this pipeline added');
+    const legacy = pipelineToPython([
       imported(),
       makeStep("expression", "Add column r", "", { name: "r", expr: "A/B" }),
       makeStep("expression", "Edit column ratio", 'qz.editColumn("ratio", "A/B*2")', { name: "ratio", expr: "A/B*2" }),
       later(),
     ]);
-    expect(s).toContain("NOT REPRODUCED: an edited formula column cannot be replayed exactly");
-    expect(s).not.toContain("qz.apply_corrections");
+    expect(legacy).toContain(`NOT REPRODUCED: ${LEGACY_EDIT}`);
+    expect(legacy).not.toContain("qz.apply_corrections");
   });
 
   it("corrects with the error-column roles the app seeds on import; a transform output has none", () => {

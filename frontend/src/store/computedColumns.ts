@@ -282,9 +282,11 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
         }),
       }));
-      get().recordMacro(`Edit column ${name}`, `qz.editColumn(${lit(name)}, ${lit(expr)})`, {
+      // `of` (the name BEFORE this edit) makes a replay replace that column
+      // rather than append another one (lib/formulaEditStep.ts).
+      get().recordMacro(`Edit column ${name}`, `qz.editColumn(${lit(current.name)}, ${lit(name)}, ${lit(expr)})`, {
         kind: "expression",
-        params: { name, expr },
+        params: { name, expr, of: current.name },
       });
       get().touchDataset(id); // recalc graph (#1): data changed
       refreshFitRefsLater(id, get); // finding 4: resolve a newly introduced fit()/fitval()

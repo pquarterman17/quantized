@@ -4,7 +4,8 @@ transform, end to end.
 
 One recorded pipeline -- import, median filter (a ``sigop`` transform), a
 formula column, corrections with a background subtraction, a second formula
-reading the first -- runs three ways:
+reading the first, then an edit (rename + new formula) of the first -- runs
+three ways:
 
 1. in the app: ``components/workshops/pipeline/pipelineRoundTrip.test.ts``
    replays it with the real ``executeSteps`` (the app's store, its formula
