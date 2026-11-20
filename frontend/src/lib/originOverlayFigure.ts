@@ -7,7 +7,12 @@
 // segment-concatenation core stays in the parent, which the eager "Plot
 // selected together" path also uses.
 
-import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
+import {
+  curveDisplayName,
+  legendCaption,
+  originCurveSeriesStyle,
+  readableSheetCurveLabel,
+} from "./originCurveText";
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, type OverlayBound } from "./originOverlay";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
@@ -161,7 +166,13 @@ export function buildOverlayDataset(
       legendLabel:
         curveIdx < legend.length && legend[curveIdx]
           ? legendCaption(legend[curveIdx], curveNames)
-          : undefined,
+          : readableSheetCurveLabel(
+              c.book,
+              c.y,
+              ds.data.labels[yCh] || "",
+              meta,
+              curveNames[(figure.curves ?? []).findIndex((p) => p.book === c.book.split("@")[0])],
+            ),
     });
   });
   return assembleOverlay(bound, figure.name || "");

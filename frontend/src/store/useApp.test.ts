@@ -3011,6 +3011,7 @@ describe("useApp applyOriginFigure (item 18)", () => {
           ...figureEntry,
           figure: {
             ...figureEntry.figure,
+            x_from: -6, x_to: 6, x_log: false, y_from: 0, y_to: 1, y_log: false,
             annotation_marks: [
               { text: "Field applied in-plane\nT = 1.3 K", x: -5.311, y: 0.4915 },
             ],

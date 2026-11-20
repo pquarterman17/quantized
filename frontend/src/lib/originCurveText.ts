@@ -119,3 +119,33 @@ export function legendCaption(
   const caption = resolveLegendTemplate(template, curveNames);
   return /[%$]\(/.test(caption) ? undefined : caption;
 }
+
+/** A readable legend label for a curve that has NO decoded legend entry and
+ *  whose Y column carries no long name/comment (so its label would be the raw
+ *  `Book2@19: B` sheet reference). Uses only what the payload already has:
+ *  - a fit-looking sheet (`sheet_name` / `origin_book_long` mentions "fit") →
+ *    "Fit of <parent curve name>" when a curve of the parent book (the part
+ *    before `@`) is in the same figure, else "Fit (<sheet long name>)";
+ *  - any other `Book@N` sheet → "<parent curve name> (sheet N)" when that
+ *    parent curve exists;
+ *  - otherwise undefined: leave the original label alone.
+ *  `yLabel` is the resolved column label; a bare column letter counts as
+ *  "no long name". Pure, so it is unit-testable on plain values. */
+export function readableSheetCurveLabel(
+  book: string,
+  yLetter: string,
+  yLabel: string,
+  meta: Record<string, unknown>,
+  parentName: string | undefined,
+): string | undefined {
+  const at = book.indexOf("@");
+  if (at <= 0) return undefined;
+  if (yLabel && yLabel !== yLetter) return undefined; // already has a real name
+  const long = String(meta.origin_book_long ?? "");
+  const sheet = String(meta.sheet_name ?? "");
+  if (/fit/i.test(`${sheet} ${long}`)) {
+    return parentName ? `Fit of ${parentName}` : `Fit (${long || sheet})`;
+  }
+  const n = book.slice(at + 1);
+  return parentName && n ? `${parentName} (sheet ${n})` : undefined;
+}

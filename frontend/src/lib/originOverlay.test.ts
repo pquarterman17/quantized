@@ -351,3 +351,47 @@ describe("buildOverlayDataset: unresolved x-letter (partial X decode)", () => {
     expect(buildOverlayDataset(fig, [partialX()])).toBeNull();
   });
 });
+
+describe("readable labels for sheet-reference curves", () => {
+  const sheet = (id: string, ref: string, extra: Record<string, unknown> = {}): Dataset => {
+    const b = book(id, ref, [1, 2], { B: [5, 6] });
+    return {
+      ...b,
+      data: { ...b.data, labels: ["B"], metadata: { ...b.data.metadata, ...extra } },
+    };
+  };
+  const parent = book("p", "Book2", [1, 2], { C: [1, 2] });
+  const fig = {
+    ...figure([
+      { book: "Book2", x: "A", y: "C" },
+      { book: "Book2@19", x: "A", y: "B" },
+    ]),
+    legend_labels: ["Data"],
+  };
+
+  it("names a fit sheet 'Fit of <parent curve>' instead of Book2@19: B", () => {
+    const fit = sheet("f", "Book2@19", { origin_book_long: "FitNLCurve1" });
+    const ds = buildOverlayDataset(fig, [parent, fit])!;
+    expect(overlayCurveLabels(ds)).toEqual({ 0: "Data", 1: "Fit of C-long" });
+  });
+
+  it("falls back to '<parent> (sheet N)' for a non-fit Book@N sheet, and leaves named columns alone", () => {
+    const plain = sheet("f", "Book2@19", { origin_book_long: "Book2 (sheet 19)" });
+    expect(overlayCurveLabels(buildOverlayDataset(fig, [parent, plain])!)[1]).toBe("C-long (sheet 19)");
+    const named = sheet("f", "Book2@19");
+    named.data.labels = ["Fitted Y"];
+    expect(overlayCurveLabels(buildOverlayDataset(fig, [parent, named])!)[1]).toBeUndefined();
+  });
+
+  it("keeps a decoded legend entry and a plain (non-@) book unchanged", () => {
+    const fit = sheet("f", "Book2@19", { origin_book_long: "FitNLCurve1" });
+    const withLegend = { ...fig, legend_labels: ["Data", "Mine"] };
+    expect(overlayCurveLabels(buildOverlayDataset(withLegend, [parent, fit])!)[1]).toBe("Mine");
+    const two = figure([
+      { book: "Book2", x: "A", y: "C" },
+      { book: "Book3", x: "A", y: "C" },
+    ]);
+    const q = book("q", "Book3", [1, 2], { C: [3, 4] });
+    expect(overlayCurveLabels(buildOverlayDataset(two, [parent, q])!)).toEqual({});
+  });
+});
