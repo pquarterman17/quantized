@@ -1,17 +1,19 @@
 // Per-figure screenshot + structural-report generator (Origin plan item #39:
 // "Side-by-side Origin<->quantized figure comparison campaign").
 //
-// Imports an Origin project through the REAL running backend exactly once
-// (POST /api/parsers/upload -- the path the GUI itself uses, never the
-// path-based /import), then
-// replays the Library's real "click a figure" flow --
-// `addOriginFigures` + `applyOriginFigure` via the `?harness` store seam
-// (frontend/src/main.tsx) -- for every decoded graph window, screenshotting
+// Imports an Origin project through the REAL running backend and the REAL UI
+// action (`useApp.importFiles` on a File from an <input type=file>, the lazy
+// default upload path -- never the path-based /import), then replays the
+// Library's real "click a figure" flow -- `applyOriginFigure` via the
+// `?harness` store seam (frontend/src/main.tsx) -- for every decoded graph window, screenshotting
 // the resulting `.qzk-stage` (works for both the single-panel PlotStage and
 // MultiPanelStage, which share that outer class). Multi-layer graph windows
 // (double-Y pairs, spatial multi-panel figures) apply ONCE per graph window
 // family, matching what a real user sees clicking any one of that window's
 // rows in the Library.
+//
+// All store contact lives in origin_store_api.mjs (contract-tested by
+// frontend/src/test/originHarnessContract.test.ts so it cannot drift silently).
 //
 // Output pairs 1:1 with the parallel COM-export oracle's manifest.json (same
 // short_name keys), so gallery.mjs can build a side-by-side comparison.
@@ -29,7 +31,7 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { basename, join, resolve } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import puppeteer from "puppeteer-core";
 
@@ -48,6 +50,7 @@ import {
   summarizeFigureFamily,
   summarizeRuntimeErrors,
 } from "./origin_acceptance.mjs";
+import { applyFigure, importProjectViaUi, readFigureEntries } from "./origin_store_api.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.opj || !args.project) {
@@ -113,6 +116,10 @@ async function main() {
   const backend = spawn("uv", ["run", "--no-sync", "qz", "--no-browser", "--port", String(PORT)], {
     cwd: REPO_ROOT,
     shell: process.platform === "win32",
+    // POSIX: own process group, so killTree's `kill(-pid)` reaches the real
+    // `qz` under `uv run`; otherwise it orphaned qz, whose open stdio pipes
+    // kept this node process alive forever after "done".
+    detached: process.platform !== "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
   const backendLogs = [];
@@ -125,47 +132,7 @@ async function main() {
     const up = await waitForServer(`${baseUrl}/`, 30000);
     if (!up) throw new Error(`backend did not come up on ${baseUrl} within 30s:\n${backendLogs.join("")}`);
 
-    const bytes = await readFile(OPJ_PATH);
-    console.log(`[2/5] uploading ${basename(OPJ_PATH)} (${bytes.length} bytes) …`);
-    const form = new FormData();
-    form.append("file", new Blob([bytes]), basename(OPJ_PATH));
-    const t0 = Date.now();
-    // ORIGIN_FILE_DECODE_PLAN #38: this script injects `payload.books[i].data`
-    // straight into the store (below) — it has no fetch-on-activate flow for
-    // the lazy default's preview-only non-primary entries, so it opts into
-    // the pre-#38 `full_books` escape hatch to keep getting every book's
-    // data inline, byte-for-byte the same shape this script always consumed.
-    const uploadRes = await fetch(`${baseUrl}/api/parsers/upload?full_books=true`, {
-      method: "POST",
-      body: form,
-      headers: { "X-Quantized-Token": API_TOKEN },
-    });
-    if (!uploadRes.ok) {
-      throw new Error(`upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
-    }
-    const payload = await uploadRes.json();
-    console.log(`      parsed in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-
-    const stem = basename(OPJ_PATH).replace(/\.[^.]+$/, "");
-    const figures = payload.figures || [];
-    let datasets;
-    if (Array.isArray(payload.books) && payload.books.length > 1) {
-      datasets = payload.books.map((book, i) => {
-        const meta = book.metadata || {};
-        const short = String(meta.origin_book ?? `Book${i + 1}`);
-        const long = String(meta.origin_book_long ?? "");
-        const label = long && long !== short ? `${short} — ${long}` : short;
-        return { id: `qzimport-${i}`, name: `${stem}:${label}`, data: book };
-      });
-    } else {
-      const data = { ...payload };
-      delete data.books;
-      delete data.figures;
-      datasets = [{ id: "qzimport-0", name: basename(OPJ_PATH), data }];
-    }
-    console.log(`      ${datasets.length} dataset(s), ${figures.length} figure entries (pre-family-grouping)`);
-
-    console.log(`[3/5] launching headless Chrome …`);
+    console.log(`[2/5] launching headless Chrome …`);
     browser = await puppeteer.launch({
       executablePath: CHROME,
       headless: "new",
@@ -182,33 +149,13 @@ async function main() {
     await page.goto(`${baseUrl}/?harness=1&token=${API_TOKEN}`, { waitUntil: "networkidle2", timeout: 30000 });
     await page.waitForFunction("window.__qz && window.__qz.useApp", { timeout: 15000 });
 
-    const { entries, datasetInfo } = await page.evaluate(
-      ({ stem, datasets, figures, ids }) => {
-        const { useApp } = window.__qz;
-        useApp.setState({
-          datasets: [],
-          folders: [],
-          expandedFolders: [],
-          activeId: null,
-          selectedIds: [],
-          originFigures: [],
-        });
-        const api = useApp.getState();
-        for (const d of datasets) api.addDataset(d);
-        if (figures.length) api.addOriginFigures(stem, figures, ids);
-        const state = useApp.getState();
-        return {
-          entries: state.originFigures,
-          datasetInfo: Object.fromEntries(
-            state.datasets.map((d) => [
-              d.id,
-              { name: d.name, folder: (d.data.metadata || {}).origin_folder_path ?? null },
-            ]),
-          ),
-        };
-      },
-      { stem, datasets, figures, ids: datasets.map((d) => d.id) },
-    );
+    const stem = basename(OPJ_PATH).replace(/\.[^.]+$/, "");
+    console.log(`[3/5] importing ${basename(OPJ_PATH)} through the UI importFiles path …`);
+    const t0 = Date.now();
+    const ids = await importProjectViaUi(page, OPJ_PATH);
+    await new Promise((r) => setTimeout(r, 1500));
+    console.log(`      ${ids.length} dataset(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    const { entries, datasetInfo } = await readFigureEntries(page);
     console.log(`      ${entries.length} figure entries resolved against ${Object.keys(datasetInfo).length} dataset(s)`);
 
     const families = groupFamilies(entries);
@@ -245,10 +192,7 @@ async function main() {
       // incompatible modes from the previous graph itself, or this campaign
       // should expose the bleed instead of hiding it.
       pageErrors = [];
-      await page.evaluate((id) => {
-        const { useApp } = window.__qz;
-        useApp.getState().applyOriginFigure(id);
-      }, representative.id);
+      await applyFigure(page, representative.id);
 
       await page.waitForSelector(".qzk-stage", { timeout: 6000 }).catch(() => {});
       await new Promise((r) => setTimeout(r, 650));
