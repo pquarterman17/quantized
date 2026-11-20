@@ -16,6 +16,17 @@ describe("OriginProvenanceCard", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("says why a placeholder book from a project with no worksheet data is empty", () => {
+    render(
+      <OriginProvenanceCard
+        active={ds({
+          origin_worksheet_unavailable: { reason: "data_not_saved", detail: "Book Book1 is linked to an external file." },
+        })}
+      />,
+    );
+    expect(screen.getByRole("note").textContent).toContain("No worksheet data — Book Book1 is linked to an external file.");
+  });
+
   it("renders nothing when active is null", () => {
     const { container } = render(<OriginProvenanceCard active={null} />);
     expect(container.firstChild).toBeNull();

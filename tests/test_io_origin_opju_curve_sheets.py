@@ -26,6 +26,7 @@ from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opju_curve_sheets import (
     curve_sheet,
     dataset_sheet_order,
+    missing_x_reason,
     off_sheet_ids,
     sheet_x_names,
     unbound_rebinds,
@@ -188,7 +189,42 @@ def test_later_sheet_curve_without_any_x_on_its_sheet_is_omitted() -> None:
     names = ["WBook_A", "WBook_B", "WBook_B@2"]
     figs = extract_figures_opju(_blob(names, _id_curve_token(0xBA, cid=4), records=records))
     assert figs[0]["curves"] == []
-    assert figs[0]["curve_sheet_omitted"][0]["reason"] == "x_sheet_unproven"
+    # the book's only X is proven on sheet 1, so sheet 2 (itself proven) has none
+    assert figs[0]["curve_sheet_omitted"][0]["reason"] == "sheet_x_not_found"
+
+
+def test_missing_x_reason_is_unproven_while_an_x_of_unknown_sheet_exists() -> None:
+    ids = {1: ("Bk", "A"), 3: ("Bk", "A"), 5: ("Cd", "A")}
+    assert missing_x_reason("Bk", ids, [1, 3, 5], {3: "", 5: ""}) == "x_sheet_unproven"
+    assert missing_x_reason("Bk", ids, [1, 3, 5], {3: "Bk@2", 5: ""}) == "sheet_x_not_found"
+
+
+def test_off_sheet_ids_folds_a_book_renamed_by_case() -> None:
+    """Origin compares names case-insensitively: a book renamed by case keeps
+    its old sheets' datasets under the old spelling. Its ids align against
+    both spellings, keyed by the dataset's spelling (the importer's book)."""
+    ids = {1: ("BOOK", "B"), 2: ("BOOK", "B"), 3: ("BOOK", "B")}
+    b = _name("Book_B") + _name("Book_B@2") + _name("BOOK_B@3")
+    assert off_sheet_ids(b, ids) == {1: "Book", 2: "Book@2", 3: "BOOK@3"}
+    # the exact spelling aligning on its own wins: nothing changes
+    exact = {1: ("Book", "B"), 2: ("Book", "B")}
+    b2 = _name("Book_B") + _name("Book_B@2") + _name("BOOK_B@3")
+    assert off_sheet_ids(b2, exact) == {2: "Book@2"}
+    # two id-table books differing only by case: exact matching only
+    twin = {1: ("BOOK", "B"), 2: ("Book", "B")}
+    assert off_sheet_ids(b, twin) == {1: "BOOK@3", 2: ""}
+    # folded counts still differ: nothing proven (fail closed)
+    assert off_sheet_ids(_name("Book_B") + _name("BOOK_B@3"), ids) == dict.fromkeys(ids, "")
+    # one sheet held under both spellings: ambiguous, nothing proven
+    dup = _name("Book_B") + _name("Book_B@2") + _name("BOOK_B@2") + _name("BOOK_B@3")
+    assert off_sheet_ids(dup, ids) == dict.fromkeys(ids, "")
+
+
+def test_a_curve_of_a_case_renamed_book_binds_its_datasets_spelling() -> None:
+    names = ["wbook_A", "wbook_B", "WBook_A@2", "WBook_B@2"]
+    for cid, want in ((2, "wbook"), (4, "WBook@2")):
+        figs = extract_figures_opju(_blob(names, _id_curve_token(0xBA, cid=cid)))
+        assert figs[0]["curves"] == [{"book": want, "x": "A", "y": "B"}]
 
 
 @pytest.mark.parametrize(
@@ -267,7 +303,7 @@ def test_unbound_rebinds_omits_what_the_import_cannot_draw() -> None:
     assert out["legend_labels"] == ["s1", "b"]
     assert [(n["recorded"], n["y"], n["reason"]) for n in out["curve_sheet_omitted"]] == [
         ("Bk@2", "A", "y_is_sheet_x"),
-        ("Bk@2", "C", "column_not_imported"),
+        ("Bk@2", "C", "x_not_imported"),
         ("Bk@3", "B", "book_not_imported"),
     ]
     assert {n["book"] for n in out["curve_sheet_omitted"]} == {"Bk"}
@@ -296,6 +332,24 @@ def test_fidelity_keeps_a_layer_whose_curves_were_all_omitted() -> None:
     for fig in actionable:
         assert "curve_sheet_unresolved" in fig["fidelity"]["omissions"]
     assert "curve_sheet_unresolved" in manifest["omissions"]
+
+
+@pytest.mark.parametrize(
+    ("reasons", "want"),
+    [
+        (["sheet_unknown"], ["curve_sheet_unresolved"]),
+        (["x_sheet_unproven", "error_bar_plot"], ["curve_sheet_unresolved", "error_bar_plots"]),
+        (["error_bar_plot"], ["error_bar_plots"]),  # a proven sheet: not a sheet loss
+        (["x_not_a_column", "x_not_imported"], ["curves_left_out"]),
+        (["sheet_x_not_found", "hidden_in_origin"], ["curves_left_out"]),
+        (["hidden_in_origin"], []),  # Origin does not draw it either
+    ],
+)
+def test_fidelity_names_what_an_omission_did_not_prove(reasons: list[str], want: list[str]) -> None:
+    notes = [{"book": "WBook", "x": "A", "y": "B", "recorded": "", "reason": r} for r in reasons]
+    (fig,), _manifest = assess_origin_figures([_fig(curve_sheet_omitted=notes)], container="opju")
+    codes = ("curve_sheet_unresolved", "error_bar_plots", "curves_left_out")
+    assert [c for c in fig["fidelity"]["omissions"] if c in codes] == want
 
 
 # ── realdata anchors (Origin 2026b COM, 2026-11-15) ──────────────────────────
