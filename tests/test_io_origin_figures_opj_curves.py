@@ -533,7 +533,7 @@ def _oracle_plots_by_graph(index_path: Path) -> dict[str, list[tuple[str, str]]]
 @pytest.mark.realdata
 @pytest.mark.parametrize(
     ("stem", "n_expected_reachable"),
-    [("Moke", 39), ("XRD", 12), ("XMCD", 244)],
+    [("Moke", 39), ("XRD", 12), ("XMCD", 239)],
 )
 def test_realdata_curve_bindings_precision_and_recall_floor(
     stem: str, n_expected_reachable: int
@@ -544,8 +544,11 @@ def test_realdata_curve_bindings_precision_and_recall_floor(
     all; 12/20 XRD, re-frozen 2026-07-06 against the replaced corpus file --
     all 12 real-graph plot refs decode exactly, the other 8 oracle refs are
     per-column sparkline windows with no curve-anchor record anywhere in the
-    file). XMCD: 244/245 (2026-11-20, B1 -- 166 before column names of 8+
-    characters resolved; the one miss is Graph25's single curve). See
+    file). XMCD: 239 drawn (2026-11-20, B1 -- 166 before column names of 8+
+    characters resolved): 244/245 resolve, and the 5 Origin hides are left
+    out as ``hidden_in_origin`` since #780, counted by
+    ``test_io_origin_opj_curve_record.py``; the one miss is Graph25's single
+    curve). See
     ``opj_curves.py``'s module docstring for the full byte-level trail."""
     src = _CORPUS / f"{stem}.opj"
     index_path = _GT / stem / "index.json"

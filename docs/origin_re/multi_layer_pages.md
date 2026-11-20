@@ -36,7 +36,8 @@ non-column `hc2convert.opj` entries.
   per layer plot lists): decoded curves correct 166 -> 244 of 245, wrong 0 ->
   0; layers whose curve list matches exactly 60 -> 127 of 128. The one miss
   (Graph25 layer 1) is unrelated and unchanged. Locked in
-  `tests/test_io_origin_figures_opj_curves.py` (realdata, `XMCD` = 244).
+  `tests/test_io_origin_figures_opj_curves.py` (realdata, `XMCD` = 239 drawn: since #780 the 5 plots Origin hides are left out as
+  `hidden_in_origin`, and `test_io_origin_opj_curve_record.py` counts them).
 - Whole corpus (all 75 non-synthetic `.opj`, public and owner), measured
   with a 20-byte window: it adds 582 id entries, changes 3 and removes none
   (the 12-byte window gives the same map minus the two `hc2convert` junk
