@@ -67,7 +67,14 @@ describe("applyOriginFigure fails closed when no recorded curve resolves (A3)", 
     const s = useApp.getState();
     expect(s.yKeys).toEqual([]);
     expect(s.xKey).toBeNull();
-    expect(useToasts.getState().toasts.map((t) => t.msg).join("\n")).toContain("none of its curves resolved");
+    expect(useToasts.getState().toasts.map((t) => t.msg).join("\n")).toContain(id === "omitted" ? "left out of the import" : "none of its curves resolved");
+  });
+
+  it("a layer whose only evidence is left-out curves never claims 'none resolved'", () => {
+    useApp.getState().applyOriginFigure("omitted");
+    const msg = useToasts.getState().toasts.map((t) => t.msg).join("\n");
+    expect(msg).not.toContain("none of its curves resolved");
+    expect(msg).toContain("Recover");
   });
 
   it("negative control: a figure with no curve evidence keeps the dataset-default view", () => {

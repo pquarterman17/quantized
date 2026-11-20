@@ -210,7 +210,9 @@ export function isDefaultX(meta: Record<string, unknown>, letter: string | undef
  *  `origin_column_names` metadata (value-channel letters, in channel order)
  *  onto `xKey`/`yKeys` indices. Returns null when nothing maps — the apply
  *  action then leaves the default view untouched (curves recall is partial,
- *  so "no selection" must stay graceful, never an empty plot). */
+ *  so "no selection" means the default view -- unless the figure has curve
+ *  evidence, where the apply fails closed to an empty plot instead, see
+ *  `figureSelectionState`). */
 export function figureChannelSelection(
   figure: OriginFigure,
   ds: Dataset,

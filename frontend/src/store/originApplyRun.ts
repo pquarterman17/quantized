@@ -409,7 +409,11 @@ export function runOriginFigureApply(
   libs.queueFigureTernary(fig, ds);
   if (failClosed) {
     // Fail closed (A3): the stage stays empty and says why; never every channel.
-    toast(`${fig.name}: none of its curves resolved to a column with data — drawn empty, not guessed`, "info");
+    // A layer whose only curve evidence is curves the importer left out says so (not "none resolved").
+    const leftOutOnly = (fig.curves?.length ?? 0) === 0;
+    toast(leftOutOnly
+      ? `${fig.name}: its curves were left out of the import — drawn empty, not guessed (see Recover for each one)`
+      : `${fig.name}: none of its curves resolved to a column with data — drawn empty, not guessed`, "info");
   }
   if (Object.values(get().seriesStyles).some((st) => st?.bars === "horizontal")) {
     // The plot turns on its side (lib/uplotOrient): say what that switches off.

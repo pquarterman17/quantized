@@ -1,4 +1,4 @@
-import { figureChannelSelection, figureHasCurveEvidence } from "./originFigureSelection";
+import { figureChannelSelection, figureHasCurveEvidence, figureStatState } from "./originFigureSelection";
 import type { ThumbnailRequest, ThumbnailResult } from "./thumbnailCache";
 import { plotSvgBody, svgResult } from "./thumbnailSvg";
 import type { DataStruct, Dataset } from "./types";
@@ -42,7 +42,8 @@ function selections(request: ThumbnailRequest): { x: number | null; y: number[] 
     const dataset = datasetFrom(request);
     const selection = dataset ? figureChannelSelection(node.entity.figure, dataset) : null;
     if (selection) return { x: selection.xKey, y: selection.yKeys };
-    if (figureHasCurveEvidence(node.entity.figure)) return { x: null, y: null, empty: true };
+    const stat = dataset ? figureStatState(node.entity.figure, dataset).statMode : undefined;
+    if (!stat && figureHasCurveEvidence(node.entity.figure)) return { x: null, y: null, empty: true };
   }
   return { x: null, y: null };
 }

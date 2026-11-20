@@ -60,7 +60,7 @@ export function recordedXOmissions(figure: OriginFigure, ds: Dataset): string[] 
   const { meta, letters, xLetter } = columns(ds);
   const book = String(meta.origin_book ?? "");
   return (figure.curves ?? [])
-    .filter((c) => c.book === book && !!c.x && letters.includes(c.y)
+    .filter((c) => c.book === book && !!c.x && !!c.xRecorded && letters.includes(c.y)
       && !isDefaultX(meta, c.x, xLetter) && !letters.includes(c.x))
     .map((c) => `${c.book} column ${c.y} (X ${c.x})`);
 }

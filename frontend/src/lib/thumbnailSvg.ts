@@ -26,7 +26,8 @@ export function plotSvgBody(
 ): string {
   const xIndex = xKey ?? -1;
   const available = data?.values[0]?.length ?? 0;
-  const keys = (yKeys?.length ? [...yKeys] : Array.from({ length: Math.min(3, available) }, (_, i) => i))
+  // null/undefined = the 3-channel default; an explicit [] previews EMPTY.
+  const keys = (yKeys ? [...yKeys] : Array.from({ length: Math.min(3, available) }, (_, i) => i))
     .filter((key) => key >= 0 && key < available && key !== xIndex)
     .slice(0, 4);
   const rows = data?.values ?? [];

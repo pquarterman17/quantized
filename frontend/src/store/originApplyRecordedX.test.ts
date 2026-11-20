@@ -68,7 +68,7 @@ beforeEach(() => {
       entry("Graph6", [{ book: "Book1", x: "D", y: "I", xRecorded: true }]),
       entry("inferred", [{ book: "Book1", x: "D", y: "I" }]),
       entry("nearest", [{ book: "Book1", x: "G", y: "I", xRecorded: true }]),
-      entry("lost", [{ book: "Book1", x: "Q", y: "I" }, { book: "Book1", x: "G", y: "I" }]),
+      entry("lost", [{ book: "Book1", x: "Q", y: "I", xRecorded: true }, { book: "Book1", x: "G", y: "I" }]),
     ],
   });
 });
