@@ -22,8 +22,12 @@ The old decoder read 310 as a terminator and gave no colour unless it was
 encodes is not proven (its values look like a percentage, e.g. a symbol edge
 thickness); the change does not read it. The new gate reads the colour when
 310 is `FF` (unchanged) **or** the fill field holds one of the two sentinels
-Origin writes (`auto`, `-4`). A record with an explicit fill and a non-`FF`
-310 stays uncoloured (see the bubble control below).
+Origin writes (`auto`, `-4`) **and** the record is a symbol plot (byte 23 >
+0, the only class the evidence covers; the corpus's one line-only record
+that would otherwise pass -- Hc2 data, fill `-4`, 310 = 30, line `#1A6FDF` --
+is not a drawn curve, so a line colour stays gated as before). A record with an
+explicit fill and a non-`FF` 310 stays uncoloured (see the bubble control
+below).
 
 ## Evidence
 
@@ -98,14 +102,15 @@ one, 0 other field changes, 0 curves added/removed.**
 
 | project | curves | oracle |
 |---|---|---|
-| Hc2 data.opju (and its copy `specimens/converted/Hc2 data.opju`) | 30 + 30 | previews (table above) |
-| hc2convert.opj (older save of the same project) | 22 | same plots, same bytes; no oracle of its own for Graph12+ |
-| Analiza-Spektroskopowa-Bialek / Protein_FTIR (Graph6) | 3 + 3 | none (no preview) |
-| SOP_meas fig_data_SOPvalid, 2020_cupcts Graph4, ResonatorData RawAndFit | 2 + 1 + 1 | none (no preview) |
+| Hc2 data.opju (and its copy `specimens/converted/Hc2 data.opju`) | 29 + 29 | previews (table above) |
+| hc2convert.opj (older save of the same project) | 24 | same plots, same bytes; no oracle of its own for Graph12+ |
+| Analiza-Spektroskopowa-Bialek / Protein_FTIR (Graph6) | 3 + 3 | saved preview: red x, orange +, olive + (`#F14040`, `#FF8000`, `#A67A13`) |
+| SOP_meas fig_data_SOPvalid, 2020_cupcts Graph4, ResonatorData RawAndFit | 2 + 1 + 1 | saved previews: blue o / red x; dark grey squares; light orange o |
 
 The 10 public curves are the same structural class (symbol plots, 310 in
-{40, 50, 60, 25}, sentinel fill) and have no preview to check; they are
-called out here as structurally justified only.
+{40, 50, 60, 25}) but with the `auto` fill (`F7`), not Hc2's `-4`; all 10
+have a saved preview, and each preview draws the decoded colour (checked by
+eye at 3-5x; an independent review, 2-3 px markers, so hue-level only).
 
 ## The COM check that would settle it
 

@@ -243,9 +243,14 @@ def _color_fields_aligned(record: bytes) -> bool:
     is the default ``0xff`` (the original gate), or the fill colour at 302 is
     one of the two sentinels Origin writes (``auto`` / ``-4``). An explicit
     fill colour with a non-default 310 stays unread: the edge colour at 306 is
-    then not what the plot visibly shows (the bubble specimens)."""
+    then not what the plot visibly shows (the bubble specimens). The
+    read-through is limited to symbol plots (kind > 0), the only class the
+    evidence covers (the corpus's only line record that would pass, in Hc2
+    data, is not a drawn curve), so a line colour at 362 stays gated."""
     if record[_COLOR_TERM_OFF] == 0xFF:
         return True
+    if record[_SYMBOL_KIND_OFF] == 0:
+        return False
     fill = int(struct.unpack_from("<I", record, _FILL_COLOR_OFF)[0])
     return fill in _FILL_SENTINELS
 

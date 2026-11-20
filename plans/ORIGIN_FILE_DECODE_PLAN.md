@@ -1289,8 +1289,8 @@ the shipped contract)
   System-Color-List blue on 6 of 6 pages and none on 7 of 7 pages without it;
   the bubble specimens (explicit fill, COM edge colour black, render blue)
   stay uncoloured. Corpus diff vs main `a92459d9` (590 `.opju` + 106 `.opj`):
-  92 curves gain a colour (Hc2 30 + its converted copy 30, hc2convert 22,
-  10 public curves without a preview), 0 changed, 0 lost, nothing else
+  92 curves gain a colour (Hc2 29 + its converted copy 29, hc2convert 24,
+  10 public curves whose saved previews match), 0 changed, 0 lost, nothing else
   differs; Moke / RockingCurve screenshots pixel-identical, the 12 changed
   Hc2 screenshots are exactly the 12 affected graphs. Graph40 / Graph34 /
   bar colours booked (items 74, 75, 76).

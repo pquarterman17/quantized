@@ -180,6 +180,10 @@ def test_style_fields_restyled_symbol_reads_through_byte_310(term: int, fill: in
     # a 0-based palette index reads the same way (Graph31/32: 1 -> red, 3 -> blue)
     struct.pack_into("<I", rec, 306, 3)
     assert style_fields(bytes(rec))["color"] == "#0000FF"
+    # a line-only record (kind 0) is outside the evidence: no read-through
+    line = bytearray(_record(kind=0, style=0xC8, line_color=0x01DF6F1A, term=term))
+    struct.pack_into("<I", line, 302, fill)
+    assert "color" not in style_fields(bytes(line))
 
 
 def test_style_fields_515_byte_variant_reads_the_same_offsets() -> None:
