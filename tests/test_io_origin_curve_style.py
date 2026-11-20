@@ -151,8 +151,11 @@ def test_style_fields_palette_black_is_the_zero_field() -> None:
 def test_style_fields_fail_closed_gates() -> None:
     # auto on disk: no color key, never a guessed default
     assert "color" not in style_fields(_record(kind=2, style=0xC9))
-    # missing 0xff terminator (hc2convert's 0x1e anchors): no color
-    assert "color" not in style_fields(_record(kind=2, style=0xC9, symbol_color=1, term=0x1E))
+    # byte 310 not 0xff AND an explicit (non-sentinel) fill colour at 302:
+    # the bubble-specimen shape, whose visible colour is the fill -> no color
+    rec = bytearray(_record(kind=2, style=0xC9, symbol_color=0, term=0x00))
+    struct.pack_into("<I", rec, 302, 0x01E87D46)
+    assert "color" not in style_fields(bytes(rec))
     # a disk palette index past the classic table: no color
     assert "color" not in style_fields(_record(kind=2, style=0xC9, symbol_color=24))
     # Official Origin plot:=202 / record 0xca is line+symbol. The unknown
@@ -162,6 +165,25 @@ def test_style_fields_fail_closed_gates() -> None:
     assert "symbol" not in style_fields(_record(kind=9, style=0xC8, symbol_color=1))
     # a record too short to hold the line-color field decodes nothing
     assert style_fields(b"\x00" * 100) == {}
+
+
+@pytest.mark.parametrize("term", [0x1E, 0x28, 0x19, 0x32, 0x3C])
+@pytest.mark.parametrize("fill", [0xFFFFFFF7, 0xFFFFFFFC])
+def test_style_fields_restyled_symbol_reads_through_byte_310(term: int, fill: int) -> None:
+    """Byte 310 is 0xff on default records and 25..60 on restyled symbols
+    (Hc2 Graph27 vs Graph29: same plots, records differ only at 310). With a
+    sentinel fill at 302 the edge colour at 306 is what Origin draws (the
+    saved previews of Hc2 Graph12/27-32/36-40, docs/origin_re/curve_colors.md)."""
+    rec = bytearray(_record(kind=2, style=0xC9, symbol_color=0x01DF6F1A, term=term))
+    struct.pack_into("<I", rec, 302, fill)
+    assert style_fields(bytes(rec))["color"] == "#1A6FDF"
+    # a 0-based palette index reads the same way (Graph31/32: 1 -> red, 3 -> blue)
+    struct.pack_into("<I", rec, 306, 3)
+    assert style_fields(bytes(rec))["color"] == "#0000FF"
+    # a line-only record (kind 0) is outside the evidence: no read-through
+    line = bytearray(_record(kind=0, style=0xC8, line_color=0x01DF6F1A, term=term))
+    struct.pack_into("<I", line, 302, fill)
+    assert "color" not in style_fields(bytes(line))
 
 
 def test_style_fields_515_byte_variant_reads_the_same_offsets() -> None:
