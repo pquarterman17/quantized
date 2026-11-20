@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project import (
     OriginProjectError,
@@ -36,23 +37,7 @@ from quantized.io.origin_project import (
 )
 from quantized.io.origin_project.origin_richtext import clean_richtext
 
-
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus; walks up from ``__file__``
-    for a ``test-data`` sibling so this still resolves inside a worktree agent
-    (an extra ``.claude/worktrees/<name>`` deep) -- mirrors
-    ``test_io_origin_figures_opju.py``'s ``_resolve_spec_dir``."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
-
-
-_TD = _resolve_corpus_dir()
+_TD = origin_corpus_dir()
 _GT = _TD / "specimens" / "ground_truth"
 
 pytestmark = pytest.mark.realdata

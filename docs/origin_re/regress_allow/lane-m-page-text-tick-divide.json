@@ -1,0 +1,80 @@
+{
+  "owner:XMCD.opj": [
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "'saved_graph_preview'] -> ['advanced_axis_types', 'graphic_objects', 'rich_text_run_formatting', 'saved_graph_preview', 'script_objects_not_drawn']",
+      "reason": "Lane M A7: the LabTalk button objects on every GraphT*/GraphGraphall page (header byte 57 = 1 plus a script block) are no longer drawn, as in Origin's own exports of those pages, and each layer that held them now reports the new script_objects_not_drawn omission. Only layers 1 and 3 hold buttons."
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "script_objects_not_drawn",
+      "reason": "Project-level roll-up of the same script_objects_not_drawn omission (LabTalk buttons not drawn, lane M A7)."
+    }
+  ],
+  "public:SerialCore_MassInequality/Bqqbar.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph2/L1: BqqbarFit X=A Y=A",
+      "reason": "Phantom from a Style-holder template token (lane M). Origin's saved Graph2 preview draws no A-vs-A diagonal."
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph2/L1: BqqbarFit X=A Y=C",
+      "reason": "Phantom from a Style-holder template token (lane M). The saved Graph2 preview has no C-vs-A curve; layer 1 shows the B(mu) line and the labelled D-vs-C points."
+    },
+    {
+      "kind": "binding_changed",
+      "contains": "BqqbarFit X=A Y=D -> BqqbarFit X=C Y=D",
+      "reason": "With the style-holder token gone, the real plot token wins the (book, y) dedup and binds D against its recorded X, C: the labelled points in the saved Graph2 preview."
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "BqqbarFit X=A Y=B: style None -> 'line'",
+      "reason": "The real plot token for B now wins the dedup and carries its recorded style. B(mu) is a line in the saved Graph2 preview."
+    },
+    {
+      "kind": "x_recorded_changed",
+      "contains": "BqqbarFit X=A Y=B: xRecorded None -> True",
+      "reason": "Same B curve, now read from the real plot token, which records its X (A)."
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph2/L1",
+      "reason": "some_curve_styles is no longer omitted: every Graph2 layer 1 curve now comes from a real plot token that carries its style."
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "some_curve_styles",
+      "reason": "Project-level roll-up of the Graph2 layer 1 change: some_curve_styles is no longer omitted."
+    }
+  ],
+  "public:MeyerJackson_Minis-JGP-2024/Figure 3 and 4 amplitude - rise time data.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph67/L4: HEKrisetime X=A Y=G",
+      "reason": "Phantom from a Style-holder template token (lane M). The saved Graph67 preview shows only the scatter plus fit line in that panel, and both remain."
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph67/L4",
+      "reason": "some_curve_styles is no longer omitted: the remaining Graph67 layer 4 curves are real plot tokens that carry their styles."
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "some_curve_styles",
+      "reason": "Project-level roll-up of the Graph67 layer 4 change: some_curve_styles is no longer omitted."
+    }
+  ],
+  "public:PacoSanto_Data_Availability_papers/*/origin.opju": [
+    {
+      "kind": "binding_changed",
+      "contains": "Graph2/L1: Book3 X=I Y=J -> Book3 X=A Y=J",
+      "reason": "A sixth style-holder token (missing from the lane's first count) had supplied X=I. The real plot token records X=A (xRecorded). In Book3, column I equals column A exactly (4096 rows, max diff 0), so the drawn curve is unchanged and matches the saved Graph2 preview."
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph2/L1",
+      "reason": "some_curve_styles is no longer omitted: both Graph2 layer 1 curves now come from real plot tokens that carry their styles."
+    }
+  ]
+}

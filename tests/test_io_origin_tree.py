@@ -19,11 +19,11 @@ recorded in ``docs/origin_project_format.md``.
 from __future__ import annotations
 
 import struct
-from pathlib import Path
 
 import numpy as np
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project import _with_folder_path, read_origin_books
 from quantized.io.origin_project.tree import _flatten, _FolderNode, opj_folder_paths
@@ -524,21 +524,9 @@ def test_with_folder_path_resolves_sheet_pseudo_books_through_base_book() -> Non
 # ── realdata (skips in CI / where the corpus is absent) ───────────────────────
 
 
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus (see
-    ``test_io_origin_project.py``'s ``_resolve_corpus_dir`` for why the
-    worktree-relative lookup needs the ``__file__``-walk fallback)."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
 
 
-_CORPUS = _resolve_corpus_dir()
+_CORPUS = origin_corpus_dir()
 
 
 def _needs(*names: str) -> pytest.MarkDecorator:

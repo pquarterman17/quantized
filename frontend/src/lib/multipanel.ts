@@ -4,6 +4,7 @@
 
 import type uPlot from "uplot";
 
+import type { AxisFormat } from "./axisFormat";
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
 import { cyclesPastPalette, displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
@@ -84,6 +85,10 @@ export interface SpatialPanel {
    *  (see `fixedLogAxisSplits`'s doc) — null/absent = undecoded. */
   xStep?: number | null;
   yStep?: number | null;
+  /** Per-panel overrides of the plot's axis formats, merged over them: an
+   *  Origin layer's own tick-label "Divide by" (`lib/originTickDivide.ts`).
+   *  `y2` is set whenever `y` is, so the right axis never inherits it. */
+  fmt?: { x?: Partial<AxisFormat>; y?: Partial<AxisFormat>; y2?: Partial<AxisFormat> };
   /** This panel's OWN layer's floating text marks, in its own data coords
    *  (fix #5 — a multi-panel apply used to drop every layer's annotations). */
   annotations?: Annotation[];

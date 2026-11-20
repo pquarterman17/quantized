@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from origin_corpus import origin_corpus_dir
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.opj_curves import (
     book_column_designations,
@@ -493,21 +494,9 @@ def test_figures_curves_scoped_to_own_window_not_the_next_graph() -> None:
 # ── realdata: Origin ground-truth oracle (Moke.opj + XRD.opj) ────────────────
 
 
-def _resolve_corpus_dir() -> Path:
-    """The local-only ``../test-data/origin`` corpus (see
-    ``test_io_origin_project.py``'s ``_resolve_corpus_dir`` for why the
-    ancestor-walk fallback is needed from a worktree agent's nesting depth)."""
-    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
-    if candidate.exists():
-        return candidate
-    for ancestor in Path(__file__).resolve().parents:
-        walked = ancestor / "test-data" / "origin"
-        if walked.exists():
-            return walked
-    return candidate
 
 
-_CORPUS = _resolve_corpus_dir()
+_CORPUS = origin_corpus_dir()
 _GT = _CORPUS / "specimens" / "ground_truth"
 
 
