@@ -125,7 +125,11 @@ from quantized.io.origin_project.opju_curve_token import (
     is_shipped_form,
     token_id,
 )
-from quantized.io.origin_project.opju_curve_token_x import token_x
+from quantized.io.origin_project.opju_curve_token_x import (
+    HIDDEN_IN_ORIGIN,
+    token_hidden,
+    token_x,
+)
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
 from quantized.io.origin_project.opju_plot_kinds import (
@@ -353,6 +357,8 @@ def extract_curves_by_id(
     when ``opju_sheet_signals.newly_proven_reason`` gives a reason, or when the
     layer plots it again (``plotted_twice``). Dedup is per
     ``(book, y, sheet)``, so a layer plotting ``B`` of two sheets keeps both.
+    A plot Origin HIDES (``opju_curve_token_x.token_hidden``) is omitted the
+    same way with reason ``hidden_in_origin``, whatever else is true of it.
     """
     off = off_sheet or {}
     out: list[dict[str, str | float]] = []
@@ -367,6 +373,11 @@ def extract_curves_by_id(
     # the forms read before (opju_curve_token): where one names the
     # same id, it keeps the curve (and its colour) the shipped dedup kept
     shipped = {token_id(b, t) for t in tokens if is_shipped_form(t)}
+    # plots Origin HIDES (record offset 38, opju_curve_token_x.token_hidden):
+    # left out as `hidden_in_origin`; an id another token of the layer does not
+    # mark hidden stays drawn (fail closed)
+    flags = [(token_id(b, t), token_hidden(b, t.start() + 3)) for t in tokens]
+    hidden = {c for c, h in flags if h} - {c for c, h in flags if not h}
     for m in tokens:
         cid = token_id(b, m)
         if cid is None or (not is_shipped_form(m) and cid in shipped):
@@ -429,6 +440,8 @@ def extract_curves_by_id(
             reason = range_reason(b, record, sheet or book, y_col)
         # an error-bar DataPlot: bars drawn from designations, never a line
         reason = error_bar_reason(record) or reason
+        if cid in hidden:  # Origin does not draw it: no other reason applies
+            reason = HIDDEN_IN_ORIGIN
         # the shipped 8f-tag reader stays authoritative for line/scatter
         style = curve_plot_style(b, m.start())
         if style:

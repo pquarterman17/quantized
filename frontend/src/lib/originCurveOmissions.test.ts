@@ -20,6 +20,7 @@ describe("omittedCurveLines", () => {
       { book: "Book4", x: "A", y: "I", recorded: "Book4", reason: "x_token_differs" },
       { book: "Book7", x: "A", y: "B", recorded: "Book7", reason: "worksheet_filter" },
       { book: "Book3", x: "H", y: "B", recorded: "Book3", reason: "plot_type_not_drawn" },
+      { book: "Lockin", x: "AE", y: "E", recorded: "Lockin", reason: "hidden_in_origin" },
       { book: "Book9", x: "", y: "E", recorded: "", reason: "some_new_reason" },
     ]));
     expect(lines).toEqual([
@@ -32,6 +33,7 @@ describe("omittedCurveLines", () => {
       "Book4 column I (X A): the graph stores another X for it, in a form not decoded yet",
       "Book7 column B (X A): its workbook has a data filter; Origin plots only the rows it keeps",
       "Book3 column B (X H): Origin draws it as a plot type not rebuilt here (e.g. a histogram)",
+      "Lockin column E (X AE): hidden in the Origin graph (Origin does not draw it); its column is still imported",
       "Book9 column E: some new reason",
     ]);
   });

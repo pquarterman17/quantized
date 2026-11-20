@@ -523,8 +523,13 @@ Official model references used for this routing:
     Drive this item from the existing
     Origin↔Quantized gallery and structural report, ordered by how many real
     graphs visibly differ.
-    - Per-curve visibility/hidden state, using new independent ground truth;
-      do not reopen #42 from the currently confounded PNR bytes alone.
+    - [x] **Per-curve visibility/hidden state, `.opju`** (2026-11-20, see
+      Completed): record offset 38 `21` = hidden, `61` = shown; evidence in
+      `docs/origin_re/curve_visibility.md`. Still open: the `.opj` anchor
+      (same offset, 39 `21` records in XMCD / SuperlatticeFits / MnN, no
+      rendered oracle checked) and `PNR.opj`'s undrawn T++/T-- lines, which do
+      NOT carry this bit (a different mechanism; do not reopen #42 from the
+      PNR bytes alone). Owner COM check: the doc's last section.
     - Worksheet-unit→axis-unit conversion with a typed, tested dimensional
       conversion model (including the evidenced Å↔nm cases), applied to data,
       limits, ticks, annotations, and regions together—never title-only.
@@ -1116,6 +1121,12 @@ item 40 CLOSED same day, see Completed)
     a project-wide convention (also Graph1's /10). Evidence:
     docs/origin_project_format.md section 6.3. Reopen ONLY with a
     specimen where visibility and book membership decouple.
+    **2026-11-20:** that specimen exists for `.opju` -- Hc2 data Graph3
+    hides three plots of the same book whose other three stay shown, and
+    the earlier `hc2convert.opj` save has the same three plots shown: their
+    records differ at offset 38 only (`61` -> `21`). Shipped for `.opju`
+    (item 52 sub-item, `docs/origin_re/curve_visibility.md`). PNR's T++/T--
+    read `61` there, so their gap stays as documented above.
 
 ### Tier 3 — Nice-to-Have
 
@@ -1231,6 +1242,31 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**Hidden `.opju` plots drawn as curves**~~ (2026-11-20). Regression
+  surfaced by #690 (item 70): Hc2 data Graph3/7/9/15/22/35 drew 6 curves
+  where Origin draws 3, because the raw lock-in plots the user had hidden
+  gained a resolvable X. The curve record's offset 38 is the plot's Show
+  bit (`61` shown, `21` hidden; `opju_curve_token_x.token_hidden`). A hidden
+  plot is left out as `curve_sheet_omitted` reason `hidden_in_origin` with
+  its full binding (data still imported; Recover names it); an id another
+  token of the layer shows stays drawn. Evidence
+  (`docs/origin_re/curve_visibility.md`): the same 15 plots shown in
+  `hc2convert.opj` and hidden in `Hc2 data.opju` differ at offset 38 only,
+  86 shared shown plots never there; every decisively readable saved page
+  preview draws exactly the `61` plots (Hc2 lock-in graphs + Graph36, EIS,
+  UV-vis Tauc, 拟合, Figure_12/15, PALS, Fig3_e, pedotpss Graph7 re-plotted
+  from its data); the bit spans every plot style and connect-mode value;
+  0 `21` records in the COM-built specimens and the COM-verified
+  RockingCurve / UnpolPlots / Fixed Lambdas SI / XAS. Corpus diff vs main
+  (590 `.opju`): 228 drawn curves leave 58 layers of 17 projects, all `21`
+  records, 0 added; 20 curves already omitted for another reason (Hc2
+  Graph37's 4 `x_token_differs` among them) are now `hidden_in_origin`, so
+  item 67's counts drop by those. COM `layer.plot` lists include hidden
+  plots (item 70's "Origin plots" for Hc2's raw lock-in plots, pedotpss
+  Graph7's 46): a binding oracle, never a visibility oracle. Graph36 (6
+  hidden) and Graph39/40 (1 / 2) fixed too; Graph37's hidden fits were
+  already omitted and are relabelled.
 
 - ~~**#73 `windows_opju` binds labels to columns by POSITION**~~
   (2026-11-15, on `68714642`). Marker bytes inside label text (`!a` =
@@ -1432,7 +1468,10 @@ the shipped contract)
   `21 21` layers: main 380 wrong-X + 3 phantom → branch 0 wrong, 0 phantom;
   271 + 36 curves newly match Origin (Hc2 data's lockin graphs had been
   undrawable: X `A` absent from those books, Origin plots `AE`/`AC`/`R`);
-  the 6 main matches that change X still match (identical columns). Fixed
+  [2026-11-20: the COM list includes plots hidden in the graph -- 18 of
+  those Hc2 lock-in curves are hidden in Origin and drew as extra curves
+  until the offset-38 Show bit was decoded; see Completed, "Hidden `.opju`
+  plots"]; the 6 main matches that change X still match (identical columns). Fixed
   the plan's named cases: SOP_meas Graph72 (omitted, Row Numbers), Figure4
   Graph1 (omitted, `Book1_B` has no column record), ResonatorData
   RawAndFit#2 (now `K`/`L`, matches), SOP_meas Graph16/Graph41#6 (omitted).
