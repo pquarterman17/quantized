@@ -578,6 +578,15 @@ menu names.
       reversal). Non-K temperature, unsupported units, field uncertainty,
       stale inputs, and incomplete sample context fail closed; ordinary least
       squares and exact sample quantities are disclosed rather than hidden.
+    - [x] M(H)-isotherm slice (backend/API only; UI is a follow-up): Maxwell
+      magnetic-entropy change + RCP (`POST /api/magnetic/entropy-change`,
+      `calc/magnetic_entropy.py`), Arrott/Arrott-Noakes lines with Tc from the
+      intercept sign change (`/arrott`, `calc/magnetic_critical.py`), and
+      law-of-approach-to-saturation Ms/a/b/chi_hf/K1 with standard errors
+      (`/approach-to-saturation`, `calc/magnetic_saturation.py`). Unit-aware
+      via `calc/magnetic_isotherms.py` (Oe/T/mT/A/m/kA/m; normalized M only,
+      fail-closed otherwise). M-uncertainty propagation into dS and Arrott Tc
+      is not done, so the parent item stays open.
 - [ ] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables.
 - [ ] Spectroscopy: peak-family presets, component area/ratio tables, and batch
