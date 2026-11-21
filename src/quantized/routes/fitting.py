@@ -39,6 +39,7 @@ from quantized.routes._fit_options import (
     resolve_weights,
     stats_kwargs,
 )
+from quantized.routes._fitresults import fit_response
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -112,6 +113,7 @@ def fit(req: FitRequest) -> dict[str, Any]:
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
         check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
+        weights = resolve_weights(req, len(req.x))
         result = curve_fit(
             req.x,
             req.y,
@@ -119,14 +121,14 @@ def fit(req: FitRequest) -> dict[str, Any]:
             p0,
             lower=lower,
             upper=upper,
-            weights=resolve_weights(req, len(req.x)),
+            weights=weights,
             fixed=req.fixed,
             calc_errors=req.calc_errors,
             **stats_kwargs(req),
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out: dict[str, Any] = to_jsonable(result)
+    out = fit_response(result, req.y, weights, req.return_residuals)
     out["statsVersion"] = req.stats_version
     return out
 
@@ -271,6 +273,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
                             lower, upper)
         p0 = auto_start(fcn, names, req.x, req.y, given=given, lower=lower, upper=upper,
                         fixed=req.fixed)
+        weights = resolve_weights(req, len(req.x))
         result = curve_fit(
             req.x,
             req.y,
@@ -278,7 +281,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             p0,
             lower=lower,
             upper=upper,
-            weights=resolve_weights(req, len(req.x)),
+            weights=weights,
             fixed=req.fixed,
             calc_errors=req.calc_errors,
             **stats_kwargs(req),
@@ -287,7 +290,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         positive_even_params(fcn, req.x, result, lower, upper, req.fixed)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out: dict[str, Any] = to_jsonable(result)
+    out = fit_response(result, req.y, weights, req.return_residuals)
     out["paramNames"] = names
     out["p0"] = p0  # the starts actually used (auto-derived where blank)
     out["statsVersion"] = req.stats_version

@@ -80,6 +80,7 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
       await result.current.fit();
     });
     expect(fitEquation).toHaveBeenCalledWith({
+      return_residuals: false,
       equation: "m*x + b",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],

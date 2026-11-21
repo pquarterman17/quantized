@@ -164,6 +164,9 @@ export interface FitRequest {
   /** The statistics definitions to report under (lib/fitStatsVersion.ts);
    *  absent = current. */
   stats_version?: number;
+  /** false: a lean response without `residuals`, plus a `resultId` for
+   *  /diagnostics (lib/fitResiduals.ts restores them). Absent = full. */
+  return_residuals?: boolean;
 }
 
 /** Bounded nonlinear least-squares fit of a named model. */

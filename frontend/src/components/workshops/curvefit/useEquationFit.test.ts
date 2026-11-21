@@ -142,6 +142,7 @@ describe("useEquationFit fitting", () => {
       await result.current.fit();
     });
     expect(fitEquation).toHaveBeenCalledWith({
+      return_residuals: false,
       equation: "m*x + b",
       x: [0, 2, 3],
       y: [10, 30, 40],
@@ -159,6 +160,7 @@ describe("useEquationFit fitting", () => {
     await act(async () => result.current.fit());
 
     expect(fitEquation).toHaveBeenCalledWith({
+      return_residuals: false,
       equation: "m*x + b",
       x: [0, 2, 3],
       y: [10, 30, 40],
@@ -191,6 +193,7 @@ describe("useEquationFit fitting", () => {
     });
     // plot X = field (channel 0); primary Y after ordering = moment (channel 1).
     expect(fitEquation).toHaveBeenCalledWith({
+      return_residuals: false,
       equation: "m*x + b",
       x: [100, 200, 300, 400],
       y: [10, 20, 30, 40],
@@ -211,6 +214,7 @@ describe("useEquationFit fitting", () => {
       await result.current.fit();
     });
     expect(fitEquation).toHaveBeenCalledWith({
+      return_residuals: false,
       equation: "m*x + b",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],

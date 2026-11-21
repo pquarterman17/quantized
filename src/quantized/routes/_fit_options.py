@@ -43,6 +43,11 @@ class FitOptions(BaseModel):
     # numbers mean; the client asks for 1 only for a spec that predates the
     # version field, until the user updates it.
     stats_version: Literal[1, 2] = 2
+    # Lean response (P4, plans/LARGE_PAYLOAD_PLAN.md): false leaves the
+    # per-point ``residuals`` (exactly y - yFit, rebuilt bit for bit by the
+    # client) off the wire and returns a ``resultId`` that /diagnostics takes
+    # instead of the arrays (routes/_fitresults.py). Default true: unchanged.
+    return_residuals: bool = True
 
 
 def open_bounds(values: list[float | None] | None, fill: float) -> list[float] | None:

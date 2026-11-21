@@ -26,6 +26,7 @@ from quantized.jobs import jobs
 from quantized.plugins import load_plugins
 from quantized.routes import (
     _datasetcache,
+    _fitresults,
     aggregate,
     baseline,
     books,
@@ -169,6 +170,7 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     # RSM_CUTS_PLAN item 18: drop every cached dataset (local-server-
     # hardening -- lifespan hook, never atexit).
     _datasetcache.clear_cache()
+    _fitresults.clear_fit_results()  # P4: the fits' kept per-point arrays
 
 
 def create_app(

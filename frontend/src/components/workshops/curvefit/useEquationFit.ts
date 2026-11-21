@@ -10,6 +10,7 @@ import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fitEquation, validateEquation, type EquationValidateResult } from "../../../lib/api/curvefit";
+import { leanFit } from "../../../lib/fitResiduals";
 import {
   equationFitStep,
   equationRunProblem,
@@ -240,7 +241,7 @@ export function useEquationFit(
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
       }
-      const r = await fitEquation({
+      const r = await leanFit(fitEquation, {
         equation,
         x: pairs.x,
         y: pairs.y,

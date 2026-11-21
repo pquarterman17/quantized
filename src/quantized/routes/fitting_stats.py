@@ -16,8 +16,9 @@ from typing import Any
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from quantized.calc.decimate import decimate_row_indices
 from quantized.calc.fit_equation import equation_model
 from quantized.calc.fit_model_compare import compare_models
 from quantized.calc.fit_models import FIT_MODELS, evaluate
@@ -30,6 +31,7 @@ from quantized.calc.fit_stats import (
     residual_diagnostics,
 )
 from quantized.routes._errors import call_calc
+from quantized.routes._fitresults import resolve_fit_or_409
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
@@ -106,8 +108,16 @@ def bands(req: BandsRequest) -> dict[str, Any]:
 
 
 class DiagnosticsRequest(BaseModel):
-    y: list[float]
-    residuals: list[float]
+    # EITHER the arrays (y + residuals [+ weights]) OR the ``result_id`` of a
+    # lean fit (routes/_fitresults.py), which holds all three server-side --
+    # 39 MB up per call at 1M rows otherwise. Arrays win when both are sent.
+    # An unknown id is a 409; the client then resends the arrays.
+    y: list[float] | None = None
+    residuals: list[float] | None = None
+    result_id: str | None = None
+    # By id only: whether the fit's own weights apply (a by-array caller
+    # decides by sending ``weights`` or not).
+    use_weights: bool = True
     # Free (fitted) parameter count of the model the residuals came from.
     n_params: int
     # The fit's least-squares weights (1/dy^2, or a direct weight column), so
@@ -115,16 +125,39 @@ class DiagnosticsRequest(BaseModel):
     weights: list[float] | None = None
 
 
+    # Display budget for the Q-Q pairs (P4): thinned to the per-bucket
+    # min/max of the sorted residuals (calc.decimate), which keeps both ends
+    # and every bucket's extent. None = every pair, as before. The statistics
+    # are always computed on every point.
+    qq_points: int | None = Field(default=None, ge=1, le=20_000)
+
+    @model_validator(mode="after")
+    def _arrays_or_id(self) -> DiagnosticsRequest:
+        if self.result_id is None and (self.y is None or self.residuals is None):
+            raise ValueError("send y and residuals, or a fit's result_id")
+        return self
+
+
 @router.post("/diagnostics")
 def diagnostics(req: DiagnosticsRequest) -> dict[str, Any]:
     """Goodness-of-fit metrics and residual diagnostics for one fit."""
-    if len(req.y) != len(req.residuals):
+    y: Any = req.y
+    residuals: Any = req.residuals
+    weights: Any = req.weights
+    if y is None or residuals is None:
+        assert req.result_id is not None  # the validator above
+        kept = resolve_fit_or_409(req.result_id)
+        y, residuals = kept.y, kept.residuals
+        weights = kept.weights if req.use_weights else None
+    if len(y) != len(residuals):
         raise HTTPException(status_code=422, detail="y and residuals must have the same length")
+    resid = call_calc(residual_diagnostics, residuals, weights)
+    if req.qq_points is not None and len(resid["qqY"]) > 0:
+        rows = decimate_row_indices([np.asarray(resid["qqY"], dtype=float)], req.qq_points)
+        resid["qqX"], resid["qqY"] = resid["qqX"][rows], resid["qqY"][rows]
     return {
-        "compare": to_jsonable(
-            call_calc(fit_compare, req.y, req.residuals, req.n_params, weights=req.weights)
-        ),
-        "residuals": to_jsonable(call_calc(residual_diagnostics, req.residuals, req.weights)),
+        "compare": to_jsonable(call_calc(fit_compare, y, residuals, req.n_params, weights=weights)),
+        "residuals": to_jsonable(resid),
     }
 
 
