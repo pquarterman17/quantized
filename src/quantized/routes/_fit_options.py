@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc.fitting import weights_from_dy
 
@@ -48,6 +48,13 @@ class FitOptions(BaseModel):
     # client) off the wire and returns a ``resultId`` that /diagnostics takes
     # instead of the arrays (routes/_fitresults.py). Default true: unchanged.
     return_residuals: bool = True
+    # Display curve (P4 phase 2): with ``return_residuals: false``, a point
+    # budget leaves the full ``yFit`` (and a weighted fit's ``obsVar``) off
+    # the wire too and returns ``yFitDisplay`` -- the per-bucket min/max rows
+    # of the curve (calc.decimate.display_row_indices) -- for the overlay. The
+    # full arrays stay under ``resultId`` (``/curve``, ``/bands`` by id).
+    # Ignored without ``return_residuals: false``; None = full ``yFit``.
+    display_points: int | None = Field(default=None, ge=16, le=20_000)
 
 
 def open_bounds(values: list[float | None] | None, fill: float) -> list[float] | None:

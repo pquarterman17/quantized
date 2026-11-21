@@ -6,7 +6,7 @@ not: a large-data audit at 200k rows saw responses up to 82 MB inlined into
 the client. This plan measures them, sets one rule for all of them, and
 records which part has shipped.
 
-**Status:** Active (phase 1 shipped, phases 2-4 open)
+**Status:** Active (phases 1-2 shipped, phases 3-4 open)
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-11-21
 **Updated:** 2026-11-21
@@ -92,15 +92,70 @@ changes; the replicate-vs-delegate choices are unaffected).
   `yFit` full length, 409, the store bound) and the frontend's
   `fitResiduals.test.ts` / `fitDiagnosticsFor.test.ts`.
 
-## Phase 2: the fit curve itself (open)
+## Phase 2: the fit curve itself (shipped)
 
-`yFit` is still full length (~19 MB of JSON at 1M rows): the fit overlay is
-a full-length array in register with the dataset rows, read by ~40 modules
-(plot, Freeze, figure export, recompute, analysis results, workspace). Move
-the overlay to `{resultId, display}` (a decimated curve for the plot, the
-full curve fetched by id for Freeze / write-to-sheet / export) behind one
-accessor, then let Curve Fit ask for `display_points`. Same treatment for
-`obsVar` (`/bands` by id) and batch fit.
+- `display_points` (with `return_residuals: false`) on `/fit` and
+  `/equation/fit`: the body drops `yFit` and a weighted fit's `obsVar` too
+  and returns `yFitDisplay` = `{rows, y}`, the curve's per-bucket min/max
+  rows plus the edges of every non-finite run
+  (`calc.decimate.display_row_indices`). The store keeps the posted `x`, the
+  full `yFit` and `obsVar` under the same `resultId` (residuals are now
+  derived as `y - yFit`, the same doubles). Without `return_residuals: false`
+  the field is ignored: old requests are byte-identical.
+- `/api/fitting/curve` returns the full `yFit` (and `obsVar`) by id;
+  `/bands` takes `result_id` for `x_data` + `obs_var`. A miss is 409, and the
+  client falls back once: the curve is the model evaluated at its own x
+  (`/bands`, covar null -- the same `evaluate` on the same doubles, so
+  bit-identical, tested), the band resends the fit's weights (`obs_dy` /
+  `obs_weights`) and s² (`obs_scale`), from which the route rebuilds obsVar
+  with curve_fit's own `observation_variance`.
+- Cache red-team: an id names one immutable entry, written once by the fit
+  that created it (request arrays + its own outputs); no content key, so two
+  fits can never alias. The client checks the returned length against the
+  rows it mapped the fit onto; a saved figure re-validates its rows key
+  before it uses the id.
+- Client (`lib/fitCurve.ts`, lazy): a Curve Fit of more than 20,000 points
+  asks for 4096 display points. The overlay (`FitOverlay.full`) draws the
+  display rows with `undefined` between them (uPlot draws across; a gap is
+  still NaN/null). Full resolution through one accessor family:
+  `fullFitCurve` / `fullFitResult` (write-to-sheet, fit report, residual
+  plots, diagnostics fallback, the status line's runs test) and
+  `fullFitOverlay`, which `store/fitOverlayUpgrade.ts` swaps into the slot
+  before an export / copy / send (`lib/exportActive`) and Snapshot to New
+  Window. The band covers every fitted row, so an export has it in full.
+  Batch fit asks for a 16-point display (it reads parameters and statistics
+  only). Small fits keep the phase-1 lean response.
+- Workspace: a figure document saves a display curve as what it draws plus
+  `full` (id, model, parameters, run-length fitted rows, real-gap rows);
+  `fitFromDocument` restores the same display curve with x re-read from
+  the rows. A reopened project's id is unknown to the new server, so the
+  first full-resolution use evaluates the model (bit-identical). Sections
+  saved before (full `y`, no `full`) restore exactly as before.
+- Tests: `tests/test_api_fit_display_curve.py` (size bounds, identity, the
+  by-id and fallback curves and bands, 409s, gap edges; 7 of its 9 failed
+  before the change), `fitCurve.test.ts`, `useCurveFit.display.test.ts`,
+  `fitOverlayUpgrade.test.ts`.
+
+Deferred from phase 2:
+
+- **Recompute callers** (`store/recalcFits`, `lib/fitRecompute`,
+  `store/curveFitRefit`, the pipeline and gadget fits) still take the full
+  response: they are eager or write the overlay in place, and moving them
+  needs the eager budget.
+- **Equation fits** accept `display_points` but the client does not opt in:
+  `positive_even_params` flips a sign-ambiguous parameter after the fit,
+  and `f(x, -p)` is equal only to 1e-9, not bit-identical, so the evaluate
+  fallback could differ from the stored curve.
+- **Document-only exports** (a Figure Page panel, batch / Library PDFs) of a
+  saved DISPLAY curve leave the fit out with the existing "saved fit left
+  out" notice instead of shipping the thinned picture; materializing those
+  sections needs an async seam in `lib/figureSpec`.
+- **Zoom detail** of the display curve (it is 4096 buckets over the whole
+  fit; a zoomed view shows the coarser polyline) and a decimated residual
+  display (residual plots fetch the full curve when opened).
+- The Curve Fit header's poor-fit verdict reads `residuals` synchronously,
+  so for a display result in 0.5 <= R² < 0.9 it judges by R² only (the
+  status line fetches and runs the test).
 
 ## Phase 3: inputs by dataset handle (open)
 
@@ -117,6 +172,17 @@ pattern rather than plain decimation; `/peaks/fit` should take the find
 result's id instead of `snip_bg`.
 
 ## Completed
+
+- 2026-11-21: phase 2 (display-curve fits, full curve and obsVar by id, the
+  eviction fallbacks, display sections in figure documents). Measured after,
+  same synthetic data (Gaussian, 4096 display points):
+
+  | Response / request | 200k before -> after | 1M before -> after |
+  |---|---|---|
+  | `/fit` response (lean -> display) | 4.28 -> 0.12 MB | 21.41 -> 0.12 MB |
+  | `/fit` weighted response | 8.04 -> 0.12 MB | 40.20 -> 0.12 MB |
+  | `/bands` weighted request | 7.40 MB -> 5.0 kB | 36.98 MB -> 5.0 kB |
+  | full curve when needed (`/curve`) | -- -> 4.28 MB | -- -> 21.40 MB |
 
 - 2026-11-21: measurement table; phase 1 (lean fit residuals, diagnostics by
   result id, thinned Q-Q). Measured after, same script:

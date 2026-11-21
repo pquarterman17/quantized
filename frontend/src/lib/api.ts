@@ -167,6 +167,9 @@ export interface FitRequest {
   /** false: a lean response without `residuals`, plus a `resultId` for
    *  /diagnostics (lib/fitResiduals.ts restores them). Absent = full. */
   return_residuals?: boolean;
+  /** With `return_residuals: false`: leave the full `yFit`/`obsVar` off the
+   *  wire too and return `yFitDisplay` at this point budget (lib/fitCurve.ts). */
+  display_points?: number;
 }
 
 /** Bounded nonlinear least-squares fit of a named model. */

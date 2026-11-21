@@ -157,6 +157,12 @@ export function bandStyles(prediction: boolean): Record<number, SeriesStyle> {
 /** Rows of `overlay` that carry a fitted value, and their x from `xs`. */
 export function overlayRows(overlay: FitOverlay, xs: readonly number[]): { idx: number[]; x: number[] } {
   const idx: number[] = [];
+  // A display curve (lib/fitCurve) holds values only at its display rows:
+  // the band still covers every fitted row, so the export has it in full.
+  if (overlay.full) {
+    for (const r of overlay.full.rows) if (Number.isFinite(xs[r])) idx.push(r);
+    return { idx, x: idx.map((i) => xs[i]!) };
+  }
   overlay.y.forEach((v, i) => {
     if (v != null && Number.isFinite(xs[i])) idx.push(i);
   });

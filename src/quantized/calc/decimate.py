@@ -40,6 +40,7 @@ __all__ = [
     "decimate_columns",
     "decimate_row_indices",
     "decimate_row_picks",
+    "display_row_indices",
     "gap_plan",
     "is_ascending",
     "window_columns",
@@ -242,6 +243,16 @@ def reduce_plot_rows(
         x = x[picked]
         rows = picked if rows is None else rows[picked]
     return x, cols, rows, kept
+
+
+def display_row_indices(y: NDArray[np.float64], buckets: int) -> NDArray[np.intp]:
+    """The rows that draw ``y`` at ``buckets`` pixels: every bucket's min/max
+    (:func:`decimate_row_indices`) plus the first and last row of every
+    non-finite run, so a genuine gap still breaks the line (the same rule
+    as a gapped plot payload, :func:`reduce_plot_rows`). Ascending, deduped.
+    A fit's display curve (``routes/_fitresults``)."""
+    picked = decimate_row_indices([y], buckets)
+    return np.union1d(picked, _nan_run_edges(y)).astype(np.intp, copy=False)
 
 
 def _nan_run_edges(y: NDArray[np.float64]) -> NDArray[np.intp]:

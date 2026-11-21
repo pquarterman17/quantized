@@ -462,13 +462,25 @@ export function withDerivOverlay(
   overlay: FitOverlay | null,
   activeId: string | null,
 ): PlotPayload {
-  if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
+  return appendOverlay(payload, overlay, activeId, { label: "dy/dx", unit: "", axis: 1, overlay: true });
+}
+
+/** `overlay` appended as ONE series `spec` when it belongs to `activeId` and
+ *  aligns to the plotted x (alignOverlayY); else `payload` unchanged. The
+ *  shared body of the single-column overlays (dy/dx, baseline, peaks). */
+function appendOverlay(
+  payload: PlotPayload,
+  overlay: { datasetId: string; y: (number | null)[] } | null,
+  activeId: string | null,
+  spec: PlotSeriesSpec,
+): PlotPayload {
+  const y = overlay && overlay.datasetId === activeId
+    ? alignOverlayY(overlay.y, payload.data[0].length, payload.decimated) : null;
   if (y === null) return payload;
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1, overlay: true }],
+    series: [...payload.series, spec],
   };
 }
 
@@ -483,14 +495,7 @@ export function withBaselineOverlay(
   overlay: BaselineOverlay | null,
   activeId: string | null,
 ): PlotPayload {
-  if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
-  if (y === null) return payload;
-  return {
-    ...payload,
-    data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "baseline", unit: "", overlay: true }],
-  };
+  return appendOverlay(payload, overlay, activeId, { label: "baseline", unit: "", overlay: true });
 }
 
 /** Append peak markers as a points-only series (same guards as withFitOverlay). */
@@ -500,14 +505,8 @@ export function withPeakOverlay(
   activeId: string | null,
 ): PlotPayload {
   // No peaks yet (empty marker column): no series, so no legend row either.
-  const y = overlay && overlay.datasetId === activeId && !peakOverlayEmpty(overlay)
-    ? alignOverlayY(overlay.y, payload.data[0].length, payload.decimated) : null;
-  if (y === null) return payload;
-  return {
-    ...payload,
-    data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "peaks", unit: "", kind: "points", overlay: true }],
-  };
+  const shown = overlay && !peakOverlayEmpty(overlay) ? overlay : null;
+  return appendOverlay(payload, shown, activeId, { label: "peaks", unit: "", kind: "points", overlay: true });
 }
 
 /** Vertically offset each series for a waterfall view: series s (1-indexed among

@@ -128,7 +128,7 @@ def fit(req: FitRequest) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out = fit_response(result, req.y, weights, req.return_residuals)
+    out = fit_response(result, (req.x, req.y), weights, req.return_residuals, req.display_points)
     out["statsVersion"] = req.stats_version
     return out
 
@@ -290,7 +290,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         positive_even_params(fcn, req.x, result, lower, upper, req.fixed)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out = fit_response(result, req.y, weights, req.return_residuals)
+    out = fit_response(result, (req.x, req.y), weights, req.return_residuals, req.display_points)
     out["paramNames"] = names
     out["p0"] = p0  # the starts actually used (auto-derived where blank)
     out["statsVersion"] = req.stats_version

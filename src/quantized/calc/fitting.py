@@ -28,7 +28,7 @@ from .fit_covariance import (
 from .fit_metrics import fit_metrics
 from .fit_simplex import function_tolerance, initial_simplex, nudge_inside, stalled_parameters
 
-__all__ = ["curve_fit"]
+__all__ = ["curve_fit", "observation_variance"]
 
 _EPS = float(np.finfo(float).eps)
 _HESSIAN_SIDE_MAX = 20
@@ -305,7 +305,7 @@ def curve_fit(
         # fit_bands). Unweighted: SSR/dof. Weighted: s2 * mean(1/w), i.e. the
         # mean per-point sigma^2 (times the reduced chi^2 when scaled).
         "MSE": s2 * float(np.mean(1.0 / w[w > 0])) if weights is not None else chi_sq_red,
-        "obsVar": None if weights is None else _obs_var(w, s2),
+        "obsVar": None if weights is None else observation_variance(w, s2),
         "AIC": metrics["AIC"],
         "AICc": metrics["AICc"],
         "BIC": metrics["BIC"],
@@ -318,8 +318,10 @@ def curve_fit(
     }
 
 
-def _obs_var(w: NDArray[np.float64], s2: float) -> NDArray[np.float64]:
-    """Per-point observation variance ``s2 / w`` (``inf`` at zero weight)."""
+def observation_variance(w: NDArray[np.float64], s2: float) -> NDArray[np.float64]:
+    """Per-point observation variance ``s2 / w`` (``inf`` at zero weight):
+    ``curve_fit``'s ``obsVar``. Public so ``/bands`` can rebuild it from the
+    fit's weights and ``s2`` when a stored fit was evicted (P4 phase 2)."""
     out = np.full(w.size, math.inf)
     out[w > 0] = s2 / w[w > 0]
     return out
