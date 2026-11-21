@@ -136,6 +136,35 @@ def _raise_if_absent(modules: tuple[str, ...]) -> None:
             raise ModuleNotFoundError(f"No module named {top!r}", name=top)
 
 
+@contextmanager
+def _numba_hidden_from_bumps(modules: tuple[str, ...]) -> Iterator[None]:
+    """While a first import of ``bumps`` runs (under the lock), make
+    ``import numba`` fail.
+
+    bumps.dream does ``try: from numba import njit`` and, when it succeeds,
+    JIT-compiles its DE step against numba's own random generator, which no
+    ``RandomState`` seed reaches (see ``calc/dream_seed.py``). quantized
+    depends on numba for the SNIP kernel (``calc/_snip_numba.py``); without
+    this, merely installing that dependency would make every seeded DREAM run
+    irreproducible and change the sampler's stream. Hiding it keeps bumps on
+    its pure-Python path, exactly as before. Safe because every first import of
+    numba in quantized goes through this same lock, so no other thread sees the
+    placeholder."""
+    if not any(name.partition(".")[0] == "bumps" for name in modules):
+        yield
+        return
+    missing = object()
+    saved = sys.modules.get("numba", missing)
+    sys.modules["numba"] = None  # type: ignore[assignment]  # None entry => ImportError
+    try:
+        yield
+    finally:
+        if saved is missing:
+            sys.modules.pop("numba", None)
+        else:
+            sys.modules["numba"] = saved  # type: ignore[assignment]
+
+
 def _acquire(while_waiting: Callable[[], None] | None) -> None:
     if while_waiting is None:
         HEAVY_IMPORT_LOCK.acquire()
@@ -170,7 +199,10 @@ def heavy_imports(
         if _ready(modules):  # another thread finished it while we waited
             HEAVY_IMPORT_LOCK.release()
             held = False
-        yield
+            yield
+        else:
+            with _numba_hidden_from_bumps(modules):
+                yield
     finally:
         if held:
             HEAVY_IMPORT_LOCK.release()
