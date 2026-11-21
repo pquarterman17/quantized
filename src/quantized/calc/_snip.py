@@ -24,10 +24,21 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["snip_clip", "snip_clip_reference"]
+from quantized.calc._snip_numba import get_kernel, peek_kernel
+
+__all__ = ["snip_clip", "snip_clip_numpy", "snip_clip_reference"]
 
 # Elements per temporary: 512 KiB, comfortably inside L2.
 _CHUNK = 65_536
+
+# Dispatch thresholds, in element-steps (``n * w_max``; numpy does ~1e9/s).
+# The compiled kernel costs a one-off ~0.5 s (numba import + cached-code load)
+# and up to ~1.5 s with a cold on-disk cache, so a process that has not loaded
+# it yet only pays that above ``_COMPILED_MIN_WORK`` (numpy >= ~0.2 s); once it
+# is loaded, the much lower ``_WARM_MIN_WORK`` is enough (loading is free and
+# the kernel is ~3x faster). Below both, numba is never touched.
+_COMPILED_MIN_WORK = 200_000_000
+_WARM_MIN_WORK = 20_000_000
 
 
 def snip_clip_reference(v: NDArray[np.float64], w_max: int) -> NDArray[np.float64]:
@@ -43,6 +54,21 @@ def snip_clip_reference(v: NDArray[np.float64], w_max: int) -> NDArray[np.float6
 
 def snip_clip(v: NDArray[np.float64], w_max: int) -> NDArray[np.float64]:
     """Clip ``v`` for ``w = w_max .. 1``; bit-identical to the reference.
+
+    Large problems run the compiled kernel (``_snip_numba``) when numba is
+    available; everything else, and any platform without it, runs
+    :func:`snip_clip_numpy`. ``v`` is not modified."""
+    work = v.size * w_max
+    if w_max >= 1 and work >= _WARM_MIN_WORK:
+        kernel = get_kernel() if work >= _COMPILED_MIN_WORK else peek_kernel()
+        if kernel is not None:
+            a = np.array(v, dtype=np.float64)
+            return kernel(a, np.empty_like(a), w_max)
+    return snip_clip_numpy(v, w_max)
+
+
+def snip_clip_numpy(v: NDArray[np.float64], w_max: int) -> NDArray[np.float64]:
+    """The numpy implementation of :func:`snip_clip` (also its fallback).
 
     ``w_max`` must satisfy ``2 * w_max < v.size`` (the caller clamps it).
     ``v`` is not modified."""

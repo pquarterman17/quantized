@@ -448,7 +448,50 @@ plateau, edge, single-sample and chunk-seam inputs).
 | 1M | 184 s | 73 s | 2.5x |
 
 (Single run each, same machine; 1M "before" is 184 s here vs 206 s measured
-earlier on another box.) The cost is still quadratic: another order of
-magnitude needs a compiled kernel (numba/Cython), not available as a
-permissive pure-numpy dependency today, or a documented, non-identical
+earlier on another box.) The cost is still quadratic.
+
+### Compiled kernel (lane NB, 2026-11-21)
+
+Owner-approved: `numba` (BSD; `llvmlite` BSD-2 + Apache-2.0 with LLVM
+exception, no GPL; `test_no_gpl_in_runtime_deps` passes) is now a dependency.
+`calc/_snip_numba.py` is the same loop compiled: same
+`min(v[i], fl(fl(v[i-w] + v[i+w]) * 0.5))`, same order, double buffer, no
+fastmath. An unsigned loop index over four slice views is what lets LLVM
+vectorise it (a signed index measured 3x slower, scalar adds only). numba is
+imported lazily through `heavy_imports`; if it cannot be imported or compiled
+(no wheel, broken llvmlite, `QZ_NO_NUMBA=1`) `snip_clip` runs the numpy path
+unchanged. Dispatch (`calc/_snip.py`): below `_WARM_MIN_WORK` (n*w_max =
+2e7) numba is never touched; between that and `_COMPILED_MIN_WORK` (2e8) the
+kernel is used only if a bigger call already loaded it; above, it is loaded
+(~0.5 s one-off with the on-disk cache, ~1.5 s cold).
+
+Same machine, default route options, default `find_peaks_robust` on the
+Gaussian-on-slope set, background and peak list byte-identical to numpy in
+all runs (sha1 of the background bytes and of `repr(peaks)`):
+
+| Rows | numpy (#810) | numba (first call, incl. load) | Speed-up |
+|---|---|---|---|
+| 100k | 0.90 s | 0.90 s | 1.0x (SNIP 0.36 -> 0.10 s; load eats the gain) |
+| 200k | 2.87 s | 1.65 s | 1.7x |
+| 1M | 69.8 s | 35.7 s | 2.0x |
+
+Kernel alone, warm: 100k rows x w_max 2500 0.36 -> 0.10 s, 200k x 5000
+1.81 -> 0.57 s. At 1M the arrays (8 MB each, two buffers) leave L2 and the
+kernel turns memory-bound, so the end-to-end gain is ~2x, not ~3.5x. Still
+O(n * w_max). Next steps if needed: thread the inner loop (`prange`; exact,
+elements are independent per window step) or a documented, non-identical
 approximation (SNIP on a decimated copy). Both deferred.
+
+bumps interplay: `bumps.dream` JIT-compiles its DE step whenever `import numba`
+succeeds, onto numba's own generator that no seed reaches, which broke seeded
+DREAM reproducibility (6 tests failed once numba was installed). `heavy_import`
+therefore hides numba from the first import of `bumps` (under the same lock;
+`test_bumps_import_does_not_see_numba`), so DREAM keeps its pure-Python path.
+A bumps imported outside `heavy_import` would still pick numba up.
+
+One caveat to "bit-identical": when two NaNs of opposite sign meet in one add
+(needs +inf and -inf in the same trace, since only inf - inf makes a negative
+NaN), numpy itself returns either operand's NaN depending on SIMD lane, so the
+sign bit of that NaN can differ. Every non-NaN value and every NaN position is
+still identical; with no -inf in the input the output is byte-exact.
+`tests/test_calc_snip.py` pins both statements.

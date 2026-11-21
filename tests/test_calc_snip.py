@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pytest
 
 import quantized.calc._snip as snip_mod
+import quantized.calc._snip_numba as snipnb
 import quantized.calc.baseline as baseline
 from quantized.calc._snip import snip_clip, snip_clip_reference
 from quantized.calc.peaks import find_peaks_robust
@@ -92,3 +95,280 @@ def test_snip_background_and_detector_match_reference(
     assert repr(fast[0]) == repr(ref[0])  # repr: peak dicts carry NaN fields
     _same(fast[1], ref[1])
     _same(fast_bg, ref_bg)
+
+
+# --- compiled (numba) kernel -------------------------------------------------
+# ``snip_clip`` only routes big problems to the kernel, so these tests call it
+# through ``_compiled`` (threshold-free) and also drive ``snip_clip`` itself
+# with the threshold lowered.
+
+
+def _kernel() -> object:
+    k = snipnb.get_kernel()
+    if k is None:  # a platform without numba wheels: the fallback tests cover it
+        pytest.skip("numba kernel unavailable")
+    return k
+
+
+def _compiled(v: np.ndarray, w: int) -> np.ndarray:
+    k = _kernel()
+    a = np.array(v, dtype=np.float64)
+    return k(a, np.empty_like(a), w)  # type: ignore[operator, no-any-return]
+
+
+def _canon_nan(x: np.ndarray) -> np.ndarray:
+    """Collapse every NaN to one bit pattern (sign/payload of a NaN is not a value)."""
+    y = np.array(x)
+    y[np.isnan(y)] = np.nan
+    return y
+
+
+@pytest.mark.parametrize("n", [3, 4, 5, 7, 50, 257, 1000])
+def test_compiled_random_all_window_sizes(n: int) -> None:
+    rng = np.random.default_rng(n)
+    v = np.sqrt(np.maximum(rng.normal(100, 20, n), 0.0))
+    for w in {1, 2, max(1, n // 10), _w_max(n)}:  # includes the w_max edge
+        if 2 * w < n:
+            _same(_compiled(v, w), snip_clip_reference(v, w))
+
+
+def test_compiled_chunk_seams() -> None:
+    # The numpy path chunks at _CHUNK; sizes straddling that seam must agree.
+    rng = np.random.default_rng(11)
+    for n in (snip_mod._CHUNK - 1, snip_mod._CHUNK, snip_mod._CHUNK + 1, 2 * snip_mod._CHUNK + 3):
+        v = np.sqrt(rng.uniform(0, 400, n))
+        _same(_compiled(v, 5), snip_clip_reference(v, 5))
+    small = np.sqrt(rng.uniform(0, 400, 203))
+    for w in (1, 6, 7, 8, 50, 101):
+        _same(_compiled(small, w), snip_clip_reference(small, w))
+
+
+def test_compiled_flat_plateau_zeros_signed_zero() -> None:
+    for v, w in (
+        (np.full(64, 3.5), 20),
+        (np.zeros(64), 20),
+        (np.concatenate([np.ones(20), np.full(20, 9.0), np.ones(24)]), 25),
+        (np.array([0.0, -0.0, 1.0, -0.0, 0.0, 2.0, 0.0]), 3),
+    ):
+        _same(_compiled(v, w), snip_clip_reference(v, w))
+    rng = np.random.default_rng(5)  # +-0 fuzz: np.minimum tie-breaking
+    for n in (5, 9, 64, 301):
+        v = rng.choice([0.0, -0.0, 1.0], size=n)
+        for w in {1, 2, max(1, n // 7), _w_max(n)}:
+            if 2 * w < n:
+                _same(_compiled(v, w), snip_clip_reference(v, w))
+
+
+def test_compiled_nan_and_inf_identical() -> None:
+    rng = np.random.default_rng(3)
+    v = rng.uniform(1, 5, 80)
+    v[[0, 17, 40, 79]] = np.nan
+    _same(_compiled(v, 30), snip_clip_reference(v, 30))
+    w = rng.uniform(1, 5, 80)
+    w[[5, 30]] = np.inf
+    _same(_compiled(w, 30), snip_clip_reference(w, 30))
+    ninf = rng.uniform(1, 5, 80)
+    ninf[[7, 50]] = -np.inf
+    _same(_compiled(ninf, 30), snip_clip_reference(ninf, 30))
+    _same(_compiled(np.full(9, np.nan), 4), snip_clip_reference(np.full(9, np.nan), 4))
+
+
+def test_compiled_mixed_special_values_fuzz() -> None:
+    # Everything at once. Byte-exact except the sign bit of a NaN produced when
+    # two NaNs of opposite sign meet in one add (needs +inf and -inf together):
+    # numpy itself picks either operand there depending on SIMD lane, so no
+    # scalar loop can match it. Every non-NaN value is still byte-exact and
+    # every NaN is still a NaN in the same place.
+    rng = np.random.default_rng(0)
+    pool = [0.0, -0.0, 1.0, 2.5, np.nan, np.inf, -np.inf]
+    with np.errstate(invalid="ignore"):
+        for _ in range(300):
+            n = int(rng.integers(3, 70))
+            v = rng.choice(pool, size=n)
+            w = int(rng.integers(1, _w_max(n) + 1))
+            if 2 * w < n:
+                _same(_canon_nan(_compiled(v, w)), _canon_nan(snip_clip_reference(v, w)))
+        # without -inf there is no negative NaN, so it is fully byte-exact
+        pool = [0.0, -0.0, 1.0, 2.5, np.nan, np.inf]
+        for _ in range(300):
+            n = int(rng.integers(3, 70))
+            v = rng.choice(pool, size=n)
+            w = int(rng.integers(1, _w_max(n) + 1))
+            if 2 * w < n:
+                _same(_compiled(v, w), snip_clip_reference(v, w))
+
+
+def test_compiled_input_not_mutated_and_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    _kernel()
+    v = np.sqrt(np.random.default_rng(0).uniform(0, 100, 400))
+    before = v.copy()
+    monkeypatch.setattr(snip_mod, "_COMPILED_MIN_WORK", 1)
+    monkeypatch.setattr(snip_mod, "_WARM_MIN_WORK", 1)
+    calls: list[int] = []
+    real = snipnb.get_kernel
+
+    def spy() -> object:
+        calls.append(1)
+        return real()
+
+    monkeypatch.setattr(snip_mod, "get_kernel", spy)
+    out = snip_clip(v, 100)
+    assert calls  # the compiled path was taken
+    _same(out, snip_clip_reference(v, 100))
+    _same(v, before)
+
+
+def test_small_problems_never_touch_numba(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom() -> object:
+        raise AssertionError("numba kernel must not load below the work threshold")
+
+    monkeypatch.setattr(snip_mod, "get_kernel", boom)
+    monkeypatch.setattr(snip_mod, "peek_kernel", boom)
+    v = np.sqrt(np.random.default_rng(2).uniform(0, 100, 300))
+    _same(snip_clip(v, 20), snip_clip_reference(v, 20))
+
+
+def test_find_peaks_robust_identical_with_compiled_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _kernel()
+    rng = np.random.default_rng(21)
+    n = 4000
+    x = np.linspace(10, 90, n)
+    y = 100 + 0.5 * x + 300 * np.exp(-0.5 * ((x - 50) / 0.3) ** 2) + rng.normal(0, 1, n)
+    y[100] = np.nan
+    calls: list[int] = []
+    real = snipnb.get_kernel
+    monkeypatch.setattr(snip_mod, "get_kernel", lambda: (calls.append(1), real())[1])
+    monkeypatch.setattr(snip_mod, "_COMPILED_MIN_WORK", 1)  # force the kernel
+    monkeypatch.setattr(snip_mod, "_WARM_MIN_WORK", 1)
+    fast = find_peaks_robust(x, y)
+    fast_bg = baseline.estimate_background(x, y, iterative=True)
+    assert calls
+    monkeypatch.setattr(baseline, "snip_clip", snip_clip_reference)
+    ref = find_peaks_robust(x, y)
+    ref_bg = baseline.estimate_background(x, y, iterative=True)
+    assert repr(fast[0]) == repr(ref[0])
+    _same(fast[1], ref[1])
+    _same(fast_bg, ref_bg)
+
+
+# --- fallback ----------------------------------------------------------------
+
+
+def test_fallback_when_numba_import_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_numba(name: str, *args: object, **kw: object) -> object:
+        if name == "numba" or name.startswith("numba."):
+            raise ModuleNotFoundError("No module named 'numba'", name="numba")
+        return real_import(name, *args, **kw)  # type: ignore[arg-type]
+
+    snipnb.reset_for_tests()
+    try:
+        monkeypatch.setattr(builtins, "__import__", no_numba)
+        monkeypatch.setitem(sys.modules, "numba", None)  # also defeats the fast path
+        assert snipnb.get_kernel() is None
+        monkeypatch.setattr(snip_mod, "_COMPILED_MIN_WORK", 1)
+        monkeypatch.setattr(snip_mod, "_WARM_MIN_WORK", 1)
+        v = np.sqrt(np.random.default_rng(4).uniform(0, 100, 500))
+        _same(snip_clip(v, 40), snip_clip_reference(v, 40))
+        n = 3000
+        x = np.linspace(10, 90, n)
+        y = 100 + 300 * np.exp(-0.5 * ((x - 50) / 0.3) ** 2)
+        fb = find_peaks_robust(x, y)
+        monkeypatch.setattr(baseline, "snip_clip", snip_clip_reference)
+        assert repr(fb[0]) == repr(find_peaks_robust(x, y)[0])
+    finally:
+        monkeypatch.undo()
+        snipnb.reset_for_tests()
+
+
+def test_fallback_env_switch(monkeypatch: pytest.MonkeyPatch) -> None:
+    snipnb.reset_for_tests()
+    try:
+        monkeypatch.setenv("QZ_NO_NUMBA", "1")
+        assert snipnb.get_kernel() is None
+        monkeypatch.setattr(snip_mod, "_COMPILED_MIN_WORK", 1)
+        monkeypatch.setattr(snip_mod, "_WARM_MIN_WORK", 1)
+        v = np.sqrt(np.random.default_rng(6).uniform(0, 100, 300))
+        _same(snip_clip(v, 30), snip_clip_reference(v, 30))
+    finally:
+        monkeypatch.undo()
+        snipnb.reset_for_tests()
+
+
+def test_fallback_when_jit_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A kernel that cannot compile (e.g. no cache dir AND no JIT) degrades to numpy."""
+    numba = pytest.importorskip("numba")
+
+    def broken(*a: object, **k: object) -> object:
+        raise RuntimeError("jit unavailable")
+
+    snipnb.reset_for_tests()
+    try:
+        monkeypatch.setattr(numba, "njit", broken)
+        assert snipnb.get_kernel() is None
+    finally:
+        monkeypatch.undo()
+        snipnb.reset_for_tests()
+
+
+def test_cold_vs_warm_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Between the thresholds the kernel is used only if already loaded."""
+    seen: list[str] = []
+
+    def fake_get() -> object:
+        seen.append("get")
+        return None
+
+    def fake_peek() -> object:
+        seen.append("peek")
+        return None
+
+    monkeypatch.setattr(snip_mod, "get_kernel", fake_get)
+    monkeypatch.setattr(snip_mod, "peek_kernel", fake_peek)
+    monkeypatch.setattr(snip_mod, "_WARM_MIN_WORK", 100)
+    monkeypatch.setattr(snip_mod, "_COMPILED_MIN_WORK", 10_000)
+    v = np.sqrt(np.random.default_rng(8).uniform(0, 100, 400))
+    snip_clip(v, 10)  # 4,000: below warm .. cold -> peek only
+    snip_clip(v, 100)  # 40,000: at/above cold -> get (may load)
+    snip_clip(v[:20], 2)  # 40 < warm -> neither
+    assert seen == ["peek", "get"]
+
+
+def _min_negzero(x: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """``np.minimum`` as AArch64 resolves it: a signed-zero tie gives -0."""
+    r = np.minimum(x, t)
+    tie = (x == t) & (x == 0.0)
+    r[tie] = np.where(np.signbit(x[tie]) | np.signbit(t[tie]), -0.0, 0.0)
+    return r
+
+
+def test_negzero_loop_matches_an_aarch64_style_minimum() -> None:
+    """The AArch64 variant (chosen when ``np.minimum`` returns -0 for a
+    signed-zero tie in either order) gives -0 on every tie, and matches the
+    reference arithmetic everywhere else."""
+    numba = pytest.importorskip("numba")
+    from quantized.calc import _snip_numba
+
+    rng = np.random.default_rng(7)
+    v = rng.choice([0.0, -0.0, 1.0, -1.0, 0.5], size=257)
+    expect = v.copy()
+    n = v.size
+    for w in range(9, 0, -1):
+        nxt = expect.copy()
+        avg = (expect[: n - 2 * w] + expect[2 * w :]) / 2.0
+        nxt[w : n - w] = _min_negzero(expect[w : n - w], avg)
+        expect = nxt
+    jitted = numba.njit(_snip_numba._snip_loop_negzero)
+    got = jitted(v.copy(), np.empty_like(v), 9)
+    assert got.tobytes() == expect.tobytes()
+
+
+def test_zero_tie_probe_names_this_platform() -> None:
+    from quantized.calc import _snip_numba
+
+    assert _snip_numba._zero_tie_mode() in ("second", "negative")
