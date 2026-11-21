@@ -94,6 +94,14 @@ Not changed, with the reason:
 - Remaining gap seen while verifying: the spatial multi-panel and
   same-dataset double-Y apply paths do not yet apply the A2 recorded-X rule
   (no corpus page seen needing it).
+- Sub-ring markers (R-39, 2026-11-21): a decoded `symbolSize` passes through
+  verbatim as `markerSize` (CSS px on canvas, pt in export, as widths do
+  under B-05). When the marker is smaller than twice its ring, the ring is
+  capped at half the size on both sides: screen `markers.markerRingWidth`
+  (uPlot otherwise computes a negative circle radius and throws), export
+  `figure_symbols.marker_size_kwargs` (matplotlib's 1 pt edge otherwise
+  draws a 0.5 pt dot 1.5 pt wide). The B-05 device-px floor stays a LINE
+  rule; it does not apply to the marker ring.
 
 ## Ledger
 

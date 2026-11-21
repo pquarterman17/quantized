@@ -155,16 +155,38 @@ export function seriesPoints(
   style: SeriesStyle | undefined,
   trace: DefaultTrace,
   stroke: string,
+  lineWidth = 0,
 ): uPlot.Series.Points {
   const { show, shape, size } = markerDecision(style, trace);
   if (!show) return { show: false };
   const paths = markerPaths(shape, size);
+  const ring = markerRingWidth(size, lineWidth);
+  const rw = ring == null ? {} : { width: ring };
   // Gap audit 2 #6: an open symbol paints no interior ("transparent": uPlot
   // fills an unset point fill white); a solid one fills the circle too.
   // (Gap audit 4 G10's edge / fill / opacity / skip: `lib/symbolDetails.ts`.)
   const interior = style?.markerFill === "hollow" ? { fill: "transparent" }
     : style?.markerFill === "solid" ? { fill: stroke } : null;
   return paths
-    ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? (interior ?? { fill: stroke }) : {}) }
-    : { show: true, size, ...interior };
+    ? { show: true, size, paths, stroke, ...rw, ...(FILLED_SHAPES.has(shape) ? (interior ?? { fill: stroke }) : {}) }
+    : { show: true, size, ...rw, ...interior };
+}
+
+/**
+ * The marker's ring (stroke) width when uPlot's own default would not fit the
+ * marker, else undefined (leave uPlot's default; every ordinary marker's
+ * config stays exactly as it was).
+ *
+ * uPlot defaults `points.width` to `max(1, (3 + 2*max(1, lineWidth)) * 0.2)`
+ * and draws the circle at radius `(size - width) / 2`, so a marker smaller
+ * than that ring (an Origin 0.5 pt symbol: SOP_meas Graph14 L5, ledger R-39)
+ * gives a negative radius and `Path2D.arc` throws, blanking the whole panel.
+ * The ring is clamped to HALF the size: radius `size / 4 >= 0`, the drawn dot
+ * keeps its full `size` diameter. The export applies the same pair rule to
+ * matplotlib's edge width (`calc/figure._plot_kwargs`).
+ */
+export function markerRingWidth(size: number, lineWidth = 0): number | undefined {
+  const uplotDefault = Math.max(1, (3 + Math.max(1, lineWidth || 0) * 2) * 0.2);
+  const cap = Math.max(0, size) / 2;
+  return uplotDefault > cap ? cap : undefined;
 }

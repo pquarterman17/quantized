@@ -18,9 +18,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.axis_style import apply_axis_style
 from quantized.calc.figure_colorscatter import MARKER_CODES as _MARKER
-from quantized.calc.figure_colorscatter import (
-    draw_color_scatter as _draw_color_scatter,
-)
+from quantized.calc.figure_colorscatter import draw_color_scatter as _draw_color_scatter
 from quantized.calc.figure_fonts import effective_style, style_rc
 from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
@@ -37,6 +35,7 @@ from quantized.calc.figure_overrides import _apply_overrides, _validate_override
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle, figure_style
+from quantized.calc.figure_symbols import marker_size_kwargs
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.heavy_import import heavy_imports
 
@@ -97,7 +96,7 @@ def _plot_kwargs(
     if spec.get("marker"):
         shape = spec.get("marker_shape")
         kw["marker"] = _MARKER.get(shape, "o") if isinstance(shape, str) else "o"
-        kw["markersize"] = spec.get("marker_size") or default_marker_size
+        kw.update(marker_size_kwargs(spec.get("marker_size") or default_marker_size))  # R-39
         if spec.get("marker_fill") == "hollow":  # an open symbol (gap audit 2 #6)
             kw["markerfacecolor"] = "none"
     return kw

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { FILLED_SHAPES, markerDecision, markerPaths, markerSubpaths, seriesTrace } from "./markers";
+import { FILLED_SHAPES, markerDecision, markerPaths, markerRingWidth, markerSubpaths, seriesPoints, seriesTrace } from "./markers";
+import { originCurveSeriesStyle } from "./originCurveText";
 import { MARKER_SHAPES } from "./markerShapes";
 import type { DefaultTrace } from "./types";
 
@@ -113,5 +114,40 @@ describe("markerDecision — the shared marker rule", () => {
       expect(markerDecision(undefined, trace).show).toBe(false);
       expect(markerDecision({ markerShape: "star" }, trace).show).toBe(false);
     }
+  });
+});
+
+// R-39: uPlot draws a circle at radius (size - points.width) / 2 and defaults
+// points.width to max(1, (3 + 2*max(1, lineWidth)) * 0.2). An Origin 0.5 pt
+// symbol (SOP_meas Graph14 L5) gave radius -0.25 and Path2D.arc threw.
+describe("marker ring width never makes uPlot's circle radius negative", () => {
+  /** The radius uPlot's built-in circle will use for these points. */
+  const uplotRadius = (pts: ReturnType<typeof seriesPoints>, lineWidth: number) => {
+    const w = pts.width ?? Math.max(1, (3 + Math.max(1, lineWidth) * 2) * 0.2);
+    return ((pts.size as number) - (w as number)) / 2;
+  };
+
+  it("an Origin 0.5 pt circle scatter builds a non-negative radius", () => {
+    const style = originCurveSeriesStyle({ style: "scatter", symbol: "circle", symbolSize: 0.5, lineWidth: 0.5 })!;
+    expect(style.markerSize).toBe(0.5);
+    const pts = seriesPoints(style, "Line", "#f00", style.width ?? 0);
+    expect(pts.size).toBe(0.5); // the size Origin drew, not enlarged
+    expect(pts.width).toBe(0.25);
+    expect(uplotRadius(pts, 0)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("holds for every small size and line width", () => {
+    for (const size of [0, 0.1, 0.5, 1, 1.5, 2, 2.5, 3, 5]) {
+      for (const lw of [0, 0.5, 1, 1.5, 3, 5, 8]) {
+        const pts = seriesPoints({ marker: true, markerSize: size }, "Line", "#f00", lw);
+        expect(uplotRadius(pts, lw)).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it("leaves an ordinary marker's config untouched (uPlot's default ring)", () => {
+    expect(markerRingWidth(5, 1.5)).toBeUndefined();
+    expect(seriesPoints({ marker: true }, "Line", "#f00", 1.5)).toEqual({ show: true, size: 5 });
+    expect(markerRingWidth(2, 5)).toBe(1); // a thick line's default ring (2.6) would not fit
   });
 });

@@ -95,3 +95,20 @@ def apply_symbol_details(line: Any, spec: Mapping[str, Any] | None) -> None:
             line.set_markerfacecolor(rgba(face, 1.0 if alpha is None else alpha))
     if every is not None:
         line.set_markevery(_skip_indices(line, every))
+
+
+def marker_size_kwargs(size: float) -> dict[str, float]:
+    """``markersize`` plus, for a marker smaller than twice matplotlib's edge
+    width, an edge clamped to HALF the size (ledger R-39). The canvas applies
+    the same pair rule (``markers.markerRingWidth``): uPlot threw on an Origin
+    0.5 pt circle whose 1 px ring left a negative radius, and here the 1 pt
+    default edge drew that 0.5 pt dot 1.5 pt wide. An ordinary marker keeps
+    matplotlib's own edge (no key added)."""
+    with heavy_imports("matplotlib"):
+        import matplotlib as mpl
+    size = float(size)
+    kw: dict[str, float] = {"markersize": size}
+    cap = max(0.0, size) / 2
+    if float(mpl.rcParams["lines.markeredgewidth"]) > cap:
+        kw["markeredgewidth"] = cap
+    return kw
