@@ -57,6 +57,8 @@ import { withFocusedEncoding } from "../../../store/focusedEncoding";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { captureLiveBlocks } from "./captureLiveBlocks";
 import { encodingChip, encodingOptions, encodingRef, isEncodingZone, type EncodingZone } from "./encodingWellModel";
+import { commitErrorRoles } from "./errorRolesCommit";
+import { facetRefusal } from "./facetGuard";
 import { ownXLabel, xWellOptions } from "./xWellModel";
 import type { WellChip, WellOption } from "./ZoneWell";
 
@@ -248,6 +250,8 @@ export function useGraphBuilder(): GraphBuilderState {
     if (!ds) return;
     const ref: ChannelRef | string = isEncodingZone(zone) ? encodingRef(ds, zone, channel, spec) : { datasetId: ds.id, channel };
     if (typeof ref === "string") return toast(ref, "info");
+    const tooMany = zone === "facet" ? facetRefusal(ds, channel) : null;
+    if (tooMany) return toast(tooMany, "info");
     // #51 phase 3: an explicit drop into either error well IS the user
     // touching it — no further auto-prefill on this session's future Y drops.
     if (zone === "yErr" || zone === "xErr") setErrorsTouched(true);
@@ -346,20 +350,12 @@ export function useGraphBuilder(): GraphBuilderState {
         const prev = useApp.getState().seriesStyles[y.channel];
         useApp.getState().setSeriesStyle(y.channel, markSeriesStyle(spec, prev));
       }
-      // Error wells (#51 phase 3): translate to the canonical ErrorBinding[]
-      // and write through the SAME dataset-level action the Inspector's
-      // Error columns card uses (setErrorRoles) — error roles are a
-      // Dataset property, not per-window, so this is what makes the
-      // interactive Stage (usePlotPayload reads Dataset.errorRoles directly)
-      // AND the ordinary "Export figure…" path (buildFigureSpec reads
-      // ds.errorRoles) both pick up the wells with no further wiring.
-      // Deliberately a no-op when the wells are EMPTY: an empty-wells commit
-      // must not clear roles set some other way (Detect from names, the
-      // Inspector card, a prior commit) — same "don't reset unrelated view
-      // state" rule the mark-style patch above follows.
+      // Error wells (#51 phase 3): written as dataset-level roles (the Stage
+      // and export both read them); see ./errorRolesCommit. An empty-wells
+      // commit is a no-op, so it never clears roles set some other way.
       const errorBindings = specErrorBindings(spec);
       if (errorBindings.length > 0) {
-        useApp.getState().setErrorRoles(ds.id, errorBindings);
+        commitErrorRoles(useApp.getState(), ds.id, errorBindings);
       }
       // #12 Slice 5 / "part C": apply the spec's own captured
       // display/axes/decor blocks (if any) onto the now-live dataset —

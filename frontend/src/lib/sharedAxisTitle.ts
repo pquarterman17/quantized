@@ -13,11 +13,12 @@ const MAX_NAMES = 3;
  *  groups are joined with " / " ("Resistance (ohm) / Voltage (V)"). Every
  *  series sharing one quantity and unit keeps the plain "Moment (emu)".
  *  Never reads a legend rename. Undefined for no series. */
-export function sharedAxisTitle(series: readonly { label: string; unit?: string }[]): string | undefined {
+export function sharedAxisTitle(series: readonly { label: string; unit?: string; axisLabel?: string }[]): string | undefined {
   const groups = new Map<string, string[]>();
   for (const s of series) {
     const names = groups.get(s.unit ?? "") ?? [];
-    if (!names.includes(s.label)) names.push(s.label);
+    const name = s.axisLabel ?? s.label;
+    if (!names.includes(name)) names.push(name);
     groups.set(s.unit ?? "", names);
   }
   const parts = [...groups].map(([unit, names]) => {
