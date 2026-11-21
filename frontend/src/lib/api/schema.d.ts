@@ -3607,6 +3607,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/results/array": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Array
+         * @description The kept 1-D array (``baseline`` or ``background``), non-finite as null.
+         */
+        post: operations["array_api_results_array_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/results/dataset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dataset
+         * @description The kept signal-op result dataset, as ``/transform/sigop`` returns it.
+         */
+        post: operations["dataset_api_results_dataset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rsm/analyze": {
         parameters: {
             query?: never;
@@ -6277,6 +6317,16 @@ export interface components {
             /** Groups */
             groups: number[][];
         };
+        /** ArrayRequest */
+        ArrayRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline" | "background";
+            /** Result Id */
+            result_id: string;
+        };
         /** ArrheniusRequest */
         ArrheniusRequest: {
             /** D0 */
@@ -7966,6 +8016,8 @@ export interface components {
         };
         /** EstimateRequest */
         EstimateRequest: {
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Iter Max Passes
              * @default 3
@@ -7996,6 +8048,11 @@ export interface components {
              * @default 4
              */
             poly_degree?: number;
+            /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
             /**
              * Smooth Passes
              * @default 3
@@ -8532,6 +8589,8 @@ export interface components {
              * @default 4
              */
             bg_poly_degree?: number;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Max Peaks
              * @default 50
@@ -8562,6 +8621,11 @@ export interface components {
              * @default 0.01
              */
             min_width_deg?: number;
+            /**
+             * Return Background
+             * @default true
+             */
+            return_background?: boolean;
             /**
              * Sensitivity
              * @default medium
@@ -8665,6 +8729,8 @@ export interface components {
         };
         /** FitPeakRequest */
         FitPeakRequest: {
+            /** Find Result Id */
+            find_result_id?: string | null;
             /**
              * Model
              * @default Lorentzian
@@ -9539,6 +9605,8 @@ export interface components {
         };
         /** ModPolyRequest */
         ModPolyRequest: {
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Max Iter
              * @default 100
@@ -9549,6 +9617,11 @@ export interface components {
              * @default 5
              */
             order?: number;
+            /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
             /**
              * Tol
              * @default 0.000001
@@ -11146,6 +11219,11 @@ export interface components {
             /** T */
             t: number;
         };
+        /** ResultRequest */
+        ResultRequest: {
+            /** Result Id */
+            result_id: string;
+        };
         /**
          * RocRequest
          * @description Request for ROC curve.
@@ -11338,8 +11416,15 @@ export interface components {
             dataset: {
                 [key: string]: unknown;
             };
+            /** Display Points */
+            display_points?: number | null;
             /** Method */
             method: string;
+            /**
+             * Return Dataset
+             * @default true
+             */
+            return_dataset?: boolean;
         };
         /** SigopResponse */
         SigopResponse: {
@@ -11347,10 +11432,16 @@ export interface components {
             dataset: {
                 [key: string]: unknown;
             };
+            /** Datasetdisplay */
+            datasetDisplay?: {
+                [key: string]: unknown;
+            } | null;
             /** Flagged */
             flagged: {
                 [key: string]: number[];
             };
+            /** Resultid */
+            resultId?: string | null;
             /** Rows In */
             rows_in: number;
             /** Rows Out */
@@ -18454,6 +18545,74 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ReportExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    array_api_results_array_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArrayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dataset_api_results_dataset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResultRequest"];
             };
         };
         responses: {

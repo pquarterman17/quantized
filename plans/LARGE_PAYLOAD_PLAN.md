@@ -6,7 +6,7 @@ not: a large-data audit at 200k rows saw responses up to 82 MB inlined into
 the client. This plan measures them, sets one rule for all of them, and
 records which part has shipped.
 
-**Status:** Active (phases 1-2 shipped, phases 3-4 open)
+**Status:** Active (phases 1-2 and the backend of 4 shipped, phase 3 open)
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-11-21
 **Updated:** 2026-11-21
@@ -164,14 +164,78 @@ Send `dataset_handle` + channel keys + a run-length row selection instead of
 and analysis-selection rules mirrored server-side, with a parity test per
 rule.
 
-## Phase 4: baselines, peaks, signal ops (open)
+## Phase 4: baselines, peaks, signal ops (backend shipped, client partly)
 
 SNIP/ModPoly/peak-find backgrounds and sigop results are DATA (subtracted,
-written to a new worksheet), not display, so they need phase 2's by-id
-pattern rather than plain decimation; `/peaks/fit` should take the find
-result's id instead of `snip_bg`.
+written to a new worksheet), so they are never decimated: the response carries
+a preview display plus an id, and the full result is fetched by id once, when
+it is committed (`routes/_arrayresults.py`; its docstring has the cache
+red-team: one immutable entry per call, random id, `kind` checked, and a
+find's background used against posted data is additionally bound to a
+fingerprint of the exact x/y it was computed from).
+
+API (all opt-in; a request without the new fields is byte-identical, tested):
+
+- `/api/baseline/estimate` and `/modpoly`: `return_baseline: false` drops
+  `baseline` (ModPoly keeps `info`) and returns `resultId`; `display_points`
+  adds `baselineDisplay` = `{rows, y}`.
+- `/api/peaks/find`: `return_background: false` (+ `display_points`) the same,
+  as `background` / `backgroundDisplay`. `/api/peaks/fit` takes
+  `find_result_id` instead of the re-posted `snip_bg` (409 when unknown, of
+  another kind, or the posted x/y differ from the find's; `snip_bg` wins when
+  both are sent).
+- `/api/transform/sigop`: `return_dataset: false` returns `dataset` as its
+  header (empty `time`/`values`), `resultId`, and with `display_points`
+  `datasetDisplay` = `{rows, time, values}` (union of every channel's rows).
+- New `/api/results/array` (`kind` baseline | background) and
+  `/api/results/dataset`: the kept result exactly as the full response
+  carried it; 409 `unknown_result` on a miss. Store: 16 entries / 256 MiB LRU.
+
+Client (lazy): `lib/api/resultArrays.ts` (`arrayByIdOr` re-runs the same
+request with the full response on a 409: the calc is deterministic, so
+bit-identical) and the baseline workshop (`baselineCall.ts`): a SNIP/ModPoly
+estimate of more than 20,000 rows asks for the lean response, draws the
+display and fetches the full baseline by id on Subtract. Batch apply keeps the
+full response.
+
+Measured (synthetic Gaussian on a slope + noise, `TestClient`, JSON bytes,
+4096 display points):
+
+| Call | 200k req / resp (before -> after) | 1M req / resp (before -> after) |
+|---|---|---|
+| `/baseline/estimate` SNIP response | 7.7 / 3.68 -> 0.20 MB | 38.5 / 18.41 -> 0.21 MB |
+| `/baseline/modpoly` response | 3.9 / 3.67 -> 0.20 MB | 19.3 / 18.35 -> 0.21 MB |
+| `/peaks/find` response | 7.7 / 3.66 -> 0.20 MB | 38.5 / 18.29 -> 0.21 MB |
+| `/peaks/fit` request (find id vs `snip_bg`) | 11.57 -> 7.71 MB | 57.83 -> 38.54 MB |
+| `/transform/sigop` response (2 channels) | 11.35 -> 0.52 MB | 56.77 -> 0.52 MB |
+| commit: full result by id (once) | 3.68 / 11.35 MB | 18.41 / 56.77 MB |
+
+The `/peaks/fit` request still carries x/y (phase 3 removes those: a dataset
+handle + row selection). The id removes the background, one third of it.
+
+Tests: `tests/test_api_large_results.py` (5 of its 8 failed with the route
+changes reverted: lean SNIP, lean ModPoly, find + fit by id, the 409 cases,
+lean sigop), `baselineCall.test.ts`, `resultArrays.test.ts`.
+
+Deferred from phase 4:
+
+- **Peak find / peak fit clients**: `usePeaks` keeps the full `background`
+  (curation, `detectedPeakCuration`, the saved peak table read it
+  synchronously) and its `fitPeak` calls never sent `snip_bg`, so the
+  `find_result_id` path has no UI consumer yet.
+- **Sigop preview client**: `computeSigop` serves both the live preview and
+  the commit/replay path and the preview consumes the whole dataset; opting
+  the preview in needs the workshop to render `datasetDisplay`.
+- **Other baselines** (ALS, rolling ball, anchor, Shirley, region): same
+  shape, one wrapper each; the lean fields exist only on SNIP and ModPoly.
+- **Recipe / wizard callers** (`peakwizard/recipeSteps`) and batch apply keep
+  the full response.
 
 ## Completed
+
+- 2026-11-21: phase 4 backend + baseline workshop (lean SNIP/ModPoly, lean
+  peak find, lean sigop, `/api/results/*`, `find_result_id` on `/peaks/fit`);
+  measurements in the phase 4 section.
 
 - 2026-11-21: phase 2 (display-curve fits, full curve and obsVar by id, the
   eviction fallbacks, display sections in figure documents). Measured after,
