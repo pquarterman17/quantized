@@ -297,7 +297,7 @@ class TickFormatSpec(BaseModel):
     `"auto"` (the default) leaves matplotlib's own formatter untouched --
     see `calc.figure_ticks.axis_tick_formatter`."""
 
-    mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
+    mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime", "clock"] = "auto"
     digits: float = 2
     # Figures-audit #6: the Axis dialog's optional extras (``calc.axis_extras``).
     divide: float | None = Field(default=None, gt=0)
@@ -359,7 +359,9 @@ class _ResolvedFigure:
 def _x_tick_fmt(spec: TickFormatSpec | None, resolved: _ResolvedFigure) -> dict[str, Any] | None:
     """``_tick_fmt`` for the X axis, date-aware (worksheet audit #7):
     ``auto`` on a timestamp X draws calendar dates on export as on screen."""
-    fmt = date_aware_x_fmt(_tick_fmt(spec), resolved.x_axis.is_datetime)
+    fmt = date_aware_x_fmt(
+        _tick_fmt(spec), resolved.x_axis.is_datetime, resolved.x_axis.is_clock
+    )
     fmt = category_aware_x_fmt(fmt, resolved.x_axis.categories)
     return dict(fmt) if fmt is not None else None
 
