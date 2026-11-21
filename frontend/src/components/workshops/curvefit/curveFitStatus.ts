@@ -16,6 +16,7 @@
 //    AR(0.3) noise read p ~ 1e-19 at R² 0.998.
 
 import { normCdf } from "../../../lib/axisScales";
+import { curveSourceOf, fullFitResult } from "../../../lib/fitCurve";
 import { fmtR2, sigFigs } from "../../../lib/fitValueFormat";
 import type { CalcResult } from "../../../lib/types";
 
@@ -127,6 +128,16 @@ export function poorFit(r: CalcResult, ctx: FitContext = {}): string | null {
   return why;
 }
 const verdicts = new WeakMap<CalcResult, Map<string, string | null>>();
+
+/** The result `fittedStatus` should judge: a display-curve result (P4 phase 2,
+ *  lib/fitCurve) carries no residuals, and only the runs test reads them, so
+ *  it is fetched at full resolution only when that test can decide the
+ *  verdict (POOR_R2 <= R² < RUNS_R2). A failed fetch judges by R² alone. */
+export async function statusResult(r: CalcResult, y: readonly number[]): Promise<CalcResult> {
+  const r2 = typeof r.R2 === "number" ? r.R2 : NaN;
+  if (!curveSourceOf(r) || !(r2 >= POOR_R2 && r2 < RUNS_R2)) return r;
+  return fullFitResult(r, y).catch(() => r);
+}
 
 /** The app status line after a fit lands: warn-tone when the fit is poor. */
 export function fittedStatus(model: string, dataset: string, r: CalcResult, ctx?: FitContext): [string, "ok" | "warn"] {

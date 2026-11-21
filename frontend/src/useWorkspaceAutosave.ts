@@ -252,7 +252,7 @@ function autosavePausedCause(): { key: string; message: string } {
         "autosave is off — this session was opened as a copy and never writes the shared browser slot; export or Save to keep changes",
     };
   }
-  return { key: "other-tab", message: "autosave paused — another tab holds this session" };
+  return { key: "other-tab", message: "autosave paused — open in another tab" };
 }
 
 /** The actual write: serialize + persist + report health. Shared by the
@@ -270,7 +270,7 @@ export async function flushAutosaveNow(): Promise<void> {
     const cause = autosavePausedCause();
     if (autosavePausedReportedCause !== cause.key) {
       autosavePausedReportedCause = cause.key;
-      reportAutosaveHealth({ ...autosaveHealth(), error: cause.message });
+      reportAutosaveHealth({ ...autosaveHealth(), paused: cause.message });
     }
     return;
   }

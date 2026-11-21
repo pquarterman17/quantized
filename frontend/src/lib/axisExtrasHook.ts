@@ -107,7 +107,14 @@ export function needsToolPlugins(tool: string, regionResult = false): boolean {
   return regionResult || PLUGIN_TOOLS.has(tool);
 }
 
-/** Whether any of these formats needs the extras drawn. */
+/** The `clock` X-axis builder (lib/clockTicks.ts, in the axis-extras chunk),
+ *  or undefined before it has loaded: the axis shows plain seconds until then. */
+export function clockAxis(): ExtrasModule["clockXAxis"] | undefined {
+  return extras?.clockXAxis;
+}
+
+/** Whether any of these formats needs the extras drawn. (A time-of-day X,
+ *  whose `auto` draws the clock axis, asks through `LazyDecorNeeds.clock`.) */
 export function needsAxisExtras(...fmts: readonly (AxisFormat | null | undefined)[]): boolean {
   return fmts.some(hasAxisExtras);
 }

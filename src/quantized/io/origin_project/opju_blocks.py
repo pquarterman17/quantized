@@ -52,6 +52,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from quantized.io.origin_project.opju_memo import on_scope_end
+
 __all__ = [
     "HEADER_LEN",
     "DatasetHeader",
@@ -192,7 +194,40 @@ class DatasetHeader:
         return bool(self.flags & 0x08)
 
 
+# The last scan, keyed by the identity of the (immutable) bytes it scanned. The
+# import asks for the same file's headers from several readers (records, sheet
+# signals, curve sheets, curve ranges) and each scan walks every ``80 <clen>``
+# candidate in Python. Holding ``b`` itself keeps its id from being reused.
+# Released when the import ends (``opju_memo.import_scope``): it holds the file.
+_last_scan: tuple[bytes, list[DatasetHeader], list[tuple[str, int]]] | None = None
+
+
+def _reset_scan() -> None:
+    global _last_scan
+    _last_scan = None
+
+
+on_scope_end(_reset_scan)
+
+
 def find_headers(
+    b: bytes, unread: list[tuple[str, int]] | None = None
+) -> list[DatasetHeader]:
+    """:func:`_scan_headers`, memoised for the last ``b`` scanned (the answer
+    depends on ``b`` alone). ``unread`` gets the same entries a fresh scan
+    would append."""
+    global _last_scan
+    cached = _last_scan
+    if cached is None or cached[0] is not b:
+        found_unread: list[tuple[str, int]] = []
+        cached = (b, _scan_headers(b, found_unread), found_unread)
+        _last_scan = cached
+    if unread is not None:
+        unread.extend(cached[2])
+    return list(cached[1])
+
+
+def _scan_headers(
     b: bytes, unread: list[tuple[str, int]] | None = None
 ) -> list[DatasetHeader]:
     """Every dataset header in ``b``, in file order.

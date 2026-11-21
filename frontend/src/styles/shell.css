@@ -254,6 +254,7 @@ body {
 .qzk-empty-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
 .qzk-empty-actions .qz-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .qzk-empty-project kbd { padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-faint); font: var(--type-nano) var(--font-mono); }
+.qzk-empty-project .qz-primary kbd { color: inherit; border-color: currentColor; }
 .qzk-empty-hint { display: flex; align-items: center; justify-content: space-between; margin: 0 !important; color: var(--text-faint); font-size: var(--type-nano); }
 @container (max-width: 520px) {
   .qzk-library-workspace-head { flex-direction: column-reverse; }
@@ -416,6 +417,9 @@ body {
 .qzk-ds:hover .qzk-ds-tags-resting,
 .qzk-ds:focus-within .qzk-ds-tags-resting,
 .qzk-ds-tags-resting:focus-within { opacity: 1; }
+/* The hover "+" overlays the row's right edge: keep a long name's ellipsis clear of it. */
+.qzk-ds:hover:has(.qzk-ds-tags-resting) .qzk-ds-compact-row > .qzk-ds-name,
+.qzk-ds:focus-within:has(.qzk-ds-tags-resting) .qzk-ds-compact-row > .qzk-ds-name { padding-right: 26px; }
 /* The preview toggle is the last item on the name's line, at the row's right
    edge -- the same spot the "+" would take. Park the "+" just LEFT of the toggle
    (26px wide + the row gap + its own 4px margin) so the two never overlap; it
@@ -810,7 +814,7 @@ body {
 .qzk-float-tools { top: 12px; left: 12px; right: 12px; width: fit-content; margin-inline: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 3px; padding: 4px; }
 /* A collapsed group stays mounted so its width can still be measured. */
 .qzk-tool-group[data-overflow] { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; }
-.qzk-tool-btn { width: 32px; height: 32px; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); font-size: 15px; cursor: default; }
+.qzk-tool-btn { min-width: 32px; height: 32px; padding: 0 4px; white-space: nowrap; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); font-size: 15px; cursor: default; }
 .qzk-tool-btn:hover { background: var(--surface-3); color: var(--text); }
 .qzk-tool-btn.active { background: var(--capture-soft); color: var(--capture); }
 .qzk-tool-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -940,6 +944,7 @@ body {
 .qzk-gadget-chip { flex-wrap: wrap; max-width: min(100%, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
 .qzk-gadget-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.qzk-legend-label { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; } /* a 5000-char column name ellipsizes; the full name is the title */
 .qzk-legend-content { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 4px; overflow: auto; }
 /* Pointer-mode legend sizing: broad invisible edge targets are easy to grab;
    the accent line/corner appears only on hover so a finished figure remains

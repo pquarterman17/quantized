@@ -11,13 +11,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { magXAxis } from "../../../lib/magDataKind";
 import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
-import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
+import type { BaselineOverlay, CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
+import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { callBaseline, callBaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
 export type BaselineMethod =
@@ -139,70 +140,6 @@ function batchInput(ds: Dataset, ref: BaselineBinding | null): BaselineInput | s
   return baselineInput(ds, xKey, [yKey], null) ?? `${ds.name}: no usable Y channel`;
 }
 
-/** The full-range polynomial methods reuse the region-fit calc (#8: the
- *  BG-from-region polyfit surfaced as first-class picker choices). */
-function regionOrder(method: BaselineMethod, p: BaselineParams): number {
-  return method === "linear" ? 1 : method === "quadratic" ? 2 : p.order;
-}
-
-/** Dispatch to the right baseline endpoint for the chosen method. */
-function callBaseline(
-  method: BaselineMethod,
-  x: number[],
-  y: number[],
-  p: BaselineParams,
-  anchors: [number, number][],
-): Promise<{ baseline: (number | null)[] }> {
-  switch (method) {
-    case "als":
-      return baselineALS({ y, lam: p.lam, p: p.p });
-    case "rollingball":
-      return baselineRollingBall({ y, radius: p.radius });
-    case "modpoly":
-      return baselineModPoly({ y, order: p.order });
-    case "snip":
-      return baselineEstimate({ x, y, method: "snip" });
-    case "anchor":
-      return baselineAnchor({ x, y, anchors, method: p.anchorMethod });
-    case "shirley":
-      return baselineShirley({ x, y, max_iter: p.maxIter });
-    case "xrdla":
-      return baselineXrdLowAngle({ x, y });
-    case "region":
-    case "linear":
-    case "quadratic":
-    case "poly": {
-      // Default the box to the full x-range; "region" lets the user narrow it
-      // to background-only, the analytic methods (#8) always fit the full range.
-      // Loop, not Math.min(...spread): spreading a 100k+-point x array as
-      // call arguments throws RangeError above the engine's arity cap - and
-      // the analytic methods (#8) take this path on EVERY compute.
-      let lo = Infinity;
-      let hi = -Infinity;
-      for (const v of x) {
-        if (Number.isFinite(v)) {
-          if (v < lo) lo = v;
-          if (v > hi) hi = v;
-        }
-      }
-      const useBox = method === "region";
-      const xMin = useBox && Number.isFinite(p.regionXMin) ? p.regionXMin : lo;
-      const xMax = useBox && Number.isFinite(p.regionXMax) ? p.regionXMax : hi;
-      // Optional 2-D y-box (MATLAB `onBGMouseUp` parity, GAP #96/#20): unlike
-      // x, an unset edge sends `undefined` (dropped by JSON.stringify), NOT
-      // a full-range default — omitting both is exactly today's request body,
-      // byte-identical. Only the box method itself uses it; the always-
-      // full-range analytic methods (#8) never did and still don't.
-      const yMin = useBox && Number.isFinite(p.regionYMin) ? p.regionYMin : undefined;
-      const yMax = useBox && Number.isFinite(p.regionYMax) ? p.regionYMax : undefined;
-      // The region endpoint returns the polynomial as `background`; adapt to `baseline`.
-      return baselineRegion({
-        x, y, x_min: xMin, x_max: xMax, y_min: yMin, y_max: yMax, order: regionOrder(method, p),
-      }).then((r) => ({ baseline: r.background }));
-    }
-  }
-}
-
 export function useBaseline(): BaselineState {
   const active = useActiveDataset();
   const xKey = useApp((s) => s.xKey);
@@ -218,6 +155,12 @@ export function useBaseline(): BaselineState {
   const [method, setMethod] = useState<BaselineMethod>("als");
   const [params, setParamsState] = useState<BaselineParams>(DEFAULTS);
   const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
+  // A lean (large SNIP / ModPoly) preview holds only display rows in `baseline`;
+  // the full array, which Subtract needs, comes from here (by result id).
+  const fullRef = useRef<(() => Promise<(number | null)[]>) | null>(null);
+  useEffect(() => {
+    if (!baseline) fullRef.current = null;
+  }, [baseline]);
   const [estimateBinding, setEstimateBinding] = useState<BaselineBinding | null>(null);
   const [anchors, setAnchors] = useState<[number, number][]>([]);
   const [busy, setBusy] = useState(false);
@@ -290,10 +233,16 @@ export function useBaseline(): BaselineState {
       const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
       const { x, y } = input;
-      const res = await callBaseline(method, x, y, params, anchors);
+      const res = await callBaselinePreview(method, x, y, params, anchors);
+      fullRef.current = res.full ?? null;
       setBaseline(res.baseline);
       setEstimateBinding(input.binding);
-      setBaselineOverlay({ datasetId: ds.id, binding: { yKey: input.binding.yKey, xKey: input.binding.xKey }, y: res.baseline });
+      const overlay: BaselineOverlay = {
+        datasetId: ds.id, binding: { yKey: input.binding.yKey, xKey: input.binding.xKey }, y: res.baseline,
+        ...(res.full ? { lean: true as const } : {}),
+      };
+      if (res.full) rememberBaselineFull(overlay, res.full); // exports fetch it (store/fitOverlayUpgrade)
+      setBaselineOverlay(overlay);
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed");
     } finally {
@@ -353,11 +302,20 @@ export function useBaseline(): BaselineState {
     if (!active || !baseline || !estimateBinding) return false;
     const ds = await resolveActive(active.id);
     if (!ds) return false;
-    if (estimateBinding.datasetId !== ds.id || baseline.length !== ds.data.values.length) {
+    let full = baseline;
+    if (fullRef.current) {
+      try {
+        full = await fullRef.current();
+      } catch (e) {
+        setError(`couldn't fetch the baseline — ${e instanceof Error ? e.message : "error"}`);
+        return false;
+      }
+    }
+    if (estimateBinding.datasetId !== ds.id || full.length !== ds.data.values.length) {
       setError("the baseline no longer matches this dataset; recompute it before subtracting");
       return false;
     }
-    const data = subtractBaselineData(ds.data, baseline, estimateBinding, method);
+    const data = subtractBaselineData(ds.data, full, estimateBinding, method);
     addDataset({ id: nextDatasetId(), name: bgSubName(ds.name), data });
     setStatus(`subtracted ${method} baseline`);
     return true;

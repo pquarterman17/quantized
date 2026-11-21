@@ -71,6 +71,8 @@ class XAxisKind(NamedTuple):
 
     is_datetime: bool = False
     categories: list[str] | None = None
+    #: A time-of-day X (seconds since midnight, ``metadata["time_is_clock"]``).
+    is_clock: bool = False
 
 
 def x_axis_kind(
@@ -81,4 +83,5 @@ def x_axis_kind(
     return XAxisKind(
         x_key is None and metadata.get("time_is_datetime") is True,
         x_category_labels(metadata, x_key, time),
+        x_key is None and metadata.get("time_is_clock") is True,
     )

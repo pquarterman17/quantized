@@ -69,6 +69,12 @@ import numpy as np
 
 from quantized.io.origin_project.opju_curve_sheets import without_captions, without_positions
 from quantized.io.origin_project.opju_figure_curves import opju_pages
+from quantized.io.origin_project.opju_float_vector import (
+    DATA_MARKS,
+    DATA_MARKS_NOT_DECODED,
+    SCRATCH_KEYS,
+    resolve_marks,
+)
 from quantized.io.origin_project.opju_layer_kind import page_layer_kind
 from quantized.io.origin_project.opju_pie import PIE_MARKS_NOT_DECODED, pie_spec
 
@@ -93,8 +99,10 @@ _PIE_TEMPLATES = (  # bar-of-pie first: its name holds "Pie"
     (re.compile(rb"(?i)doughnut"), "doughnut"),
     (re.compile(rb"(?i)pie"), "pie"),
 )
-_PROVISIONAL = frozenset({"stacked_column", "stacked_area", "bar", "not_drawn", "pie"})
-_SCRATCH = ("plotGroup", "pieHole")  # provisional curve keys, read here and dropped
+_PROVISIONAL = frozenset(
+    {"stacked_column", "stacked_area", "bar", "not_drawn", "pie", "floating", "vector"}
+)
+_SCRATCH = ("plotGroup", "pieHole", *SCRATCH_KEYS)  # provisional curve keys, read here and dropped
 
 
 def book_column(books: Sequence[Any], book: str, col: str) -> np.ndarray | None:
@@ -212,6 +220,35 @@ def _turned(curves: list[dict[str, Any]], by_kind: dict[str, list[int]], layers:
     return list(range(len(curves)))
 
 
+def _draw_marks(fig: dict[str, Any], plotted: int, books: Sequence[Any]) -> dict[str, Any]:
+    """Floating-column and vector plots that prove (``opju_float_vector``)
+    become ``data_marks`` and leave ``curves``; the others are re-typed
+    ``"not_drawn"`` so the pass below leaves them out. ``plotted`` = layers
+    of the page that hold curves (an empty colour-field layer is not drawn)."""
+    curves = [dict(c) for c in fig.get("curves") or []]
+    if not any(c.get("plotType") in ("floating", "vector") for c in curves):
+        return fig
+    # only a layer PROVEN upright (``axes_exchanged is False``, the flag of
+    # every proven page) draws marks; an unauthenticated record leaves them out
+    if fig.get("axes_exchanged") is False:
+        marks, drawn, left = resolve_marks(curves, plotted, books)
+    else:
+        marks, drawn = [], []
+        left = [i for i, c in enumerate(curves) if c.get("plotType") in ("floating", "vector")]
+    for i in left:
+        curves[i]["plotType"] = "not_drawn"
+    if not marks:
+        return {**fig, "curves": curves}
+    keep = [i for i in range(len(curves)) if i not in set(drawn)]
+    return {
+        **fig,
+        "curves": [curves[i] for i in keep],
+        "legend_labels": without_captions(fig.get("legend_labels") or [], drawn),
+        DATA_MARKS: marks,
+        DATA_MARKS_NOT_DECODED: True,
+    }
+
+
 def _stack_percent(fig: dict[str, Any], template: str | None) -> bool | None:
     """The layer's 100 % flag (``opju_layer_record.layer_flags``), else the
     page template's (``StackColP`` / ``StackColumn``), else ``None``."""
@@ -222,18 +259,20 @@ def _stack_percent(fig: dict[str, Any], template: str | None) -> bool | None:
 
 
 def _resolve(
-    fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any]
+    fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any], plotted: int
 ) -> dict[str, Any]:
-    out = _resolve_kinds(fig, layers, template, books)
+    out = _resolve_kinds(fig, layers, template, books, plotted)
     curves = [{k: v for k, v in c.items() if k not in _SCRATCH} for c in out.get("curves") or []]
     return {**out, "curves": curves}
 
 
 def _resolve_kinds(
-    fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any]
+    fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any], plotted: int
 ) -> dict[str, Any]:
-    curves: list[dict[str, Any]] = [dict(c) for c in fig.get("curves") or []]
     exchanged = fig.get("axes_exchanged")
+    if exchanged is not True:  # a turned layer leaves them all out below
+        fig = _draw_marks(fig, plotted, books)
+    curves: list[dict[str, Any]] = [dict(c) for c in fig.get("curves") or []]
     if exchanged is False:
         for c in curves:  # an upright layer: a 215 bar plot is Origin's column
             if c.get("plotType") == "bar":
@@ -287,8 +326,11 @@ def apply_bar_kinds(
     """``figs`` with every layer's provisional bar / stack / pie plot types
     resolved (module docstring). Figures with none are returned as they are."""
     layers: dict[str, int] = {}
+    plotted: dict[str, int] = {}
     for f in figs:
         layers[str(f.get("name") or "")] = layers.get(str(f.get("name") or ""), 0) + 1
+        if f.get("curves"):
+            plotted[str(f.get("name") or "")] = plotted.get(str(f.get("name") or ""), 0) + 1
     templates: dict[tuple[str, bool], str | None] = {}
     pages: list[tuple[int, str]] | None = None
     out: list[dict[str, Any]] = []
@@ -309,7 +351,8 @@ def apply_bar_kinds(
                 pages = opju_pages(b)
             templates[key] = _template_kind(b, pages, name, table)
         count = layers[name] if name else 2  # unnamed: an embedded graph
-        out.append(_resolve(fig, count, templates.get(key), books))
+        shown = plotted.get(name, 1) if name else 2
+        out.append(_resolve(fig, count, templates.get(key), books, shown))
     return out
 
 

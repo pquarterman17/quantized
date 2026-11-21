@@ -23,6 +23,10 @@ dependencies = [
     # least-squares solver (calc/_bounded_lsq.py), whose tall-skinny SVDs run
     # ~100x slower when OpenBLAS threads oversubscribe a loaded machine.
     "threadpoolctl>=3.8",
+    # BSD-2/BSD-3 (llvmlite: BSD-2 + Apache-2.0 w/ LLVM exception). Optional AT
+    # RUNTIME: calc/_snip_numba.py imports it lazily and calc/_snip.py falls
+    # back to numpy when it is missing, so a platform without wheels still works.
+    "numba>=0.60",
 ]
 
 [project.urls]

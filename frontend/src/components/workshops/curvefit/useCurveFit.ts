@@ -4,10 +4,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
-import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
+import { listFitModels } from "../../../lib/api/curvefit";
+import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fitModel } from "../../../lib/api";
-import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
+import { autoGuessFor, displayFit, fitOverlayColumn, fitRowsOf } from "../../../lib/fitCurve";
+import { maxOf, minOf } from "../../../lib/arrayExtent";
+import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMode } from "../../../lib/types";
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -39,7 +41,7 @@ import { exportCornerPlot } from "./curveFitCornerPlot";
 import { parseFitStarts } from "./fitStarts";
 import { weightingNow, weightingOf } from "./fitWeighting";
 import { byColumnOptions } from "./byColumnOptions";
-import { fittedStatus, isLinearFamily } from "./curveFitStatus";
+import { fittedStatus, isLinearFamily, statusResult } from "./curveFitStatus";
 import { followRefits } from "../../../store/curveFitRefit";
 import { removeCurveFit, showRetainedCurve } from "../../../store/curveFitRemove";
 import { fitInputsChanged, fittedWeighting, onRetainedFitChange, restoreFitted, retainFitted, type Fitted, type FittedData } from "../../../store/curveFitSession";
@@ -191,15 +193,13 @@ export function useCurveFit(): CurveFitState {
   // Fit the analysis view (excluded/filtered rows dropped, #50/#53) so the fit
   // ignores them — the same rows the plot hides/greys. The overlay is then
   // expanded back to full length so it overlays the full-length plot x in register.
-  const xy = useMemo(() => {
-    return selectedFitData(active, xKey, yKeys, seriesOrder, selected ?? undefined);
-  }, [active, seriesOrder, xKey, yKeys, selected]);
+  const xy = useMemo(() => selectedFitData(active, xKey, yKeys, seriesOrder, selected ?? undefined), [active, seriesOrder, xKey, yKeys, selected]);
 
   const xRange = useMemo(() => {
     if (!xy) return null;
     const finite = xy.x.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return null;
-    return { min: Math.min(...finite), max: Math.max(...finite) };
+    return { min: minOf(finite), max: maxOf(finite) };
   }, [xy]);
 
   // The "Y error column" mode is only meaningful when the primary fit channel
@@ -308,8 +308,12 @@ export function useCurveFit(): CurveFitState {
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
       }
+      const n = ds.data.time.length;
+      const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds)); // the overlay is laid back onto these
+      const rows = fitRowsOf(pairs.keep, kept, n);
+      const source = { data: ds.data, xKey: fitXKey, yKey: localXy.yKey }; // x/y go by handle (lib/fitSource); a large fit comes back as a display curve
       if (kind === "guess") {
-        const g = await autoGuess(modelName, pairs.x, pairs.y);
+        const g = await autoGuessFor(modelName, pairs.x, pairs.y, source, rows);
         setFitted({
           result: { params: g.p0 },
           fitData: null,
@@ -332,13 +336,13 @@ export function useCurveFit(): CurveFitState {
         // recorded — that keeps the request lean and the recipe honest about
         // what was actually chosen. In an EDITED table the starts the user
         // did not choose come from the data (fitStarts.ts).
-        const parsed = await parseFitStarts(paramRows, model, modelName, pairs.x, pairs.y);
+        const parsed = await parseFitStarts(paramRows, model, modelName, pairs.x, pairs.y, source, rows);
         if (parsed.error) {
           setError(parsed.error);
           return;
         }
         const custom = !rowsAreDefault(paramRows, model);
-        const r = await fitModel({
+        const r = await displayFit(fitModel, {
           model: modelName,
           x: pairs.x,
           y: pairs.y,
@@ -351,7 +355,7 @@ export function useCurveFit(): CurveFitState {
                 ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
               }
             : {}),
-        });
+        }, modelName, rows, source);
         // A fit request can outlive an edit/reimport. Never attach its result
         // or row tokens to the replacement worksheet object it did not fit.
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {
@@ -412,18 +416,14 @@ export function useCurveFit(): CurveFitState {
         publishFitAnalysisResult(ds.id);
         // Say so: the status line otherwise kept its previous message (after
         // a template, "press Fit to run it" — with the fit already done).
-        useApp.getState().setStatus(...fittedStatus(modelName, ds.name, r, { linear: isLinearFamily(model?.category), weights: done.fitData?.weights })); // warn when poor (UX8-D)
+        useApp.getState().setStatus(...fittedStatus(modelName, ds.name, await statusResult(r, pairs.y), { linear: isLinearFamily(model?.category), weights: done.fitData?.weights })); // warn when poor (UX8-D)
         retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null);
-        const yFit = r.yFit as (number | null)[] | undefined;
-        if (Array.isArray(yFit)) {
-          // yFit aligns to the pruned analysis x; expand it back to the full row
-          // count (null at dropped rows) so it stays in register with the
-          // full-length plot x, whether excluded rows are hidden or greyed.
-          const n = ds.data.time.length;
-          const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
-          const aligned = restoreGapRows(yFit, pairs);
-          const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-          const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: localXy.yKey, xKey: fitXKey }, y, curveFit: true };
+        // yFit aligns to the pruned analysis x; expanded back to the full row
+        // count (null at dropped rows) it stays in register with the
+        // full-length plot x, whether excluded rows are hidden or greyed.
+        const column = fitOverlayColumn(r, pairs, kept, n);
+        if (column) {
+          const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: localXy.yKey, xKey: fitXKey }, ...column, curveFit: true };
           rememberCurveFitOverlay(overlay);
           setFitOverlay(overlay);
           retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null, overlay);

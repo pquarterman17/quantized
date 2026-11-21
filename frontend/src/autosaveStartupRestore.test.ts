@@ -15,6 +15,7 @@ import { startAutosaveRestore } from "./autosaveStartupRestore";
 import { applyCancelRecovery, applyKeepLastProject, applyRecoverAutosave } from "./lib/applyRecoveryChoice";
 import { autosaveHealth, autosaveRestorePending, autosaveRestoreSettled, setAutosaveBackend } from "./lib/autosave";
 import { memoryBackend } from "./lib/autosaveBackend";
+import { installSessionMarker, markSessionActive } from "./lib/sessionMarker";
 import type { Dataset } from "./lib/types";
 import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
 import { useRecoveryChoice } from "./store/recoveryChoice";
@@ -42,6 +43,7 @@ async function settle(): Promise<void> {
 let stop: () => void = () => undefined;
 
 beforeEach(() => {
+  localStorage.clear();
   offerLateRestore.mockClear();
   setAutosaveBackend(memoryBackend([{ at: 100, text: saved() }]));
   useApp.setState(useApp.getInitialState(), true);
@@ -105,5 +107,25 @@ describe("only Recover settles the pin in the startup recovery dialog (R5)", () 
     act(() => applyRecoverAutosave(prompt()));
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["saved.dat"]);
     expect(autosaveHealth().restoreError).toBeUndefined();
+  });
+});
+
+describe("a second live tab is not an unexpected close", () => {
+  it("does not claim a crash when another tab's heartbeat is fresh", async () => {
+    const tab1 = installSessionMarker(); // the first tab, alive
+    const setStatus = vi.fn();
+    stop = startAutosaveRestore(setStatus);
+    await settle();
+    tab1();
+    expect(setStatus).toHaveBeenCalledWith("restored 1 dataset from autosave");
+    expect(setStatus).not.toHaveBeenCalledWith(expect.stringContaining("unexpected close"));
+  });
+
+  it("still claims one when the flag is orphaned (no heartbeat)", async () => {
+    markSessionActive();
+    const setStatus = vi.fn();
+    stop = startAutosaveRestore(setStatus);
+    await settle();
+    expect(setStatus).toHaveBeenCalledWith("recovered 1 dataset after an unexpected close");
   });
 });

@@ -195,6 +195,10 @@ def read_hdf5_books(path: str | Path) -> list[DataStruct]:
             books = _own_books(h, p, budget)
         else:
             books = _tree_books(h5py, h, p, budget)
+    except (RuntimeError, OSError, KeyError, IndexError, TypeError) as exc:
+        # h5py reports a damaged file (bad B-tree / heap / checksum, a cut-off
+        # chunk) as RuntimeError / OSError / KeyError, not ValueError.
+        raise ValueError(f"damaged or unreadable HDF5 file ({exc}): {p.name}") from exc
     finally:
         h.close()
     if len(books) > MAX_BOOKS:

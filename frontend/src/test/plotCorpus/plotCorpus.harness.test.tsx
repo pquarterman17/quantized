@@ -16,7 +16,7 @@ import { runSpecimen, type SpecimenIn, type SpecimenOut } from "./recipeHarness"
 vi.mock("../../lib/api/originProject", () => ({
   exportOriginProject: async (body: unknown) => {
     (globalThis as { __qzOpjCapture?: unknown }).__qzOpjCapture = body;
-    return { matrixFallbacks: 0 };
+    return { matrixFallbacks: 0, droppedTextColumns: "" };
   },
 }));
 vi.mock("../../components/overlays/ConfirmDialog", async (orig) => ({

@@ -148,7 +148,7 @@ describe("CurveFitPanel — fit statistics sections", () => {
     for (const k of ["AIC", "BIC", "R²", "Durbin–Watson", "skewness"]) {
       expect(screen.getAllByText(k).length).toBeGreaterThan(0);
     }
-    expect(vi.mocked(fitDiagnostics).mock.calls[0]![0]).toEqual({ y: [3, 5, 7, 9], residuals: [0, 0, 0, 0], n_params: 2 });
+    expect(vi.mocked(fitDiagnostics).mock.calls[0]![0]).toEqual({ y: [3, 5, 7, 9], residuals: [0, 0, 0, 0], n_params: 2, qq_points: 1 });
   });
 
   it("Compare models fits the picked models and shows the table", async () => {

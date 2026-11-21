@@ -142,7 +142,8 @@ function place<T extends Placeable>(o: T, layout: OverlayLayout): T | null {
   const total = blocks.length * n;
   const spread = (y: (number | null)[]): (number | null)[] => {
     const out = new Array<number | null>(total).fill(null);
-    for (let r = 0; r < n; r++) out[block * n + r] = y[r] ?? null;
+    // A display curve's undefined rows stay undefined (drawn across, lib/fitCurve).
+    for (let r = 0; r < n; r++) out[block * n + r] = y[r] as number | null;
     return out;
   };
   // One edge of the wrong length drops the whole band, as withFitOverlay does.

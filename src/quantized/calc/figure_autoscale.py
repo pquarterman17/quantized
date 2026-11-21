@@ -59,6 +59,7 @@ from numpy.typing import NDArray
 from quantized.calc.figure_orient import TransposedAxes
 from quantized.calc.figure_overlay_scale import is_overlay
 from quantized.calc.figure_ticks import _pow10
+from quantized.calc.figure_warnings import note_figure_warning
 
 __all__ = [
     "flat_auto_range",
@@ -232,13 +233,20 @@ def mask_nonpositive(ax: Any, axis: str) -> None:
     """NaN every value <= 0 in the drawn copy of ``ax``'s data lines along
     ``axis`` (see the module doc)."""
     ax, axis, _ = _real(ax, axis)
+    dropped = 0
     for line in ax.lines:
         if line.get_transform() != ax.transData:
             continue
         v = np.asarray(line.get_xdata() if axis == "x" else line.get_ydata(), dtype=float)
         if v.size and np.any(v <= 0):
             masked = np.where(v > 0, v, np.nan)
+            dropped += int(np.count_nonzero(v <= 0))
             line.set_xdata(masked) if axis == "x" else line.set_ydata(masked)
+    if dropped:  # said, not swallowed: a log axis silently thinning a curve
+        note_figure_warning(
+            f"{dropped} point(s) with a value <= 0 are not drawn on the log "
+            f"{axis} axis."
+        )
 
 
 def _values(

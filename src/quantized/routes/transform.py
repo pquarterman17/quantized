@@ -22,6 +22,7 @@ from quantized.calc.curve_average import average_curves
 from quantized.calc.resample_align import align_resample
 from quantized.calc.signal_ops import run_signal_op
 from quantized.datastruct import DataStruct
+from quantized.routes._arrayresults import lean_dataset_fields
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload
@@ -159,10 +160,20 @@ class SigopRequest(BaseModel):
     method: str
     channels: list[int] = Field(default_factory=list)
     args: dict[str, Any] = Field(default_factory=dict)
+    #: Opt-in lean response (P4 phase 4, routes/_arrayresults.py): false
+    #: returns ``dataset`` as its HEADER only (labels, units, metadata; empty
+    #: ``time`` / ``values``) plus ``resultId`` and, with ``display_points``,
+    #: ``datasetDisplay`` (the per-bucket min/max rows of every channel). The
+    #: whole dataset is ``/api/results/dataset`` by id. Default true: unchanged.
+    return_dataset: bool = True
+    display_points: int | None = Field(default=None, ge=16, le=20_000)
 
 
 class SigopResponse(BaseModel):
     dataset: dict[str, Any]
+    #: Lean response only (``return_dataset: false``).
+    resultId: str | None = None
+    datasetDisplay: dict[str, Any] | None = None
     warnings: list[str]
     #: despike: channel index (string key) -> flagged row numbers, for the preview.
     flagged: dict[str, list[int]]
@@ -178,12 +189,15 @@ def sigop(req: SigopRequest) -> Response:
         res = run_signal_op(data, req.method, req.channels, req.args)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return DataStructResponse(
-        {
-            "dataset": datastruct_payload(res.data),
-            "warnings": res.warnings,
-            "flagged": {str(c): rows for c, rows in res.flagged.items()},
-            "rows_in": int(data.time.size),
-            "rows_out": int(res.data.time.size),
-        }
-    )
+    body: dict[str, Any] = {
+        "dataset": datastruct_payload(res.data),
+        "warnings": res.warnings,
+        "flagged": {str(c): rows for c, rows in res.flagged.items()},
+        "rows_in": int(data.time.size),
+        "rows_out": int(res.data.time.size),
+    }
+    if not req.return_dataset:
+        body["dataset"]["time"] = []
+        body["dataset"]["values"] = []
+        body.update(lean_dataset_fields(res.data, req.display_points))
+    return DataStructResponse(body)

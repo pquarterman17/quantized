@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -32,6 +32,7 @@ from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.routes._datasetrows import XYSource, source_xy
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._fit_options import (
     FitOptions,
@@ -39,24 +40,24 @@ from quantized.routes._fit_options import (
     resolve_weights,
     stats_kwargs,
 )
+from quantized.routes._fitresults import fit_response
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
 
-router = APIRouter(prefix="/api/fitting", tags=["fitting"])
+router = APIRouter(prefix="/api/fitting", tags=["fitting"], route_class=OffloopJSONRoute)
 
 
-class GuessRequest(BaseModel):
+class GuessRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (P8, XYSource).
     model: str
-    x: list[float]
-    y: list[float]
 
 
-class FitRequest(FitOptions):
+class FitRequest(FitOptions, XYSource):
     # Weighting (dy / direct weights), covariance and scale_errors: FitOptions.
+    # x/y, or a dataset handle + channels + rows (P4 phase 3): XYSource.
     model: str
-    x: list[float]
-    y: list[float]
     p0: list[float] | None = None
     # null entries = unbounded on that side (JSON cannot carry Infinity).
     lower: list[float | None] | None = None
@@ -89,17 +90,19 @@ def list_models() -> dict[str, Any]:
 
 
 @router.post("/autoguess")
-def autoguess(req: GuessRequest) -> dict[str, Any]:
+def autoguess(req: GuessRequest, response: Response) -> dict[str, Any]:
     """Initial-parameter guess for ``model`` given (x, y)."""
     _require_model(req.model)
-    p0 = call_calc(auto_guess, req.model, req.x, req.y)
+    x, y = source_xy(req, response)
+    p0 = call_calc(auto_guess, req.model, x, y)
     return {"p0": to_jsonable(p0)}
 
 
 @router.post("/fit")
-def fit(req: FitRequest) -> dict[str, Any]:
+def fit(req: FitRequest, response: Response) -> dict[str, Any]:
     """Bounded nonlinear least-squares fit of a named model to (x, y)."""
     _require_model(req.model)
+    x, y = source_xy(req, response)
 
     def model_fcn(
         xx: NDArray[np.float64], pp: NDArray[np.float64]
@@ -107,26 +110,27 @@ def fit(req: FitRequest) -> dict[str, Any]:
         return evaluate(req.model, xx, pp)
 
     try:
-        p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
+        p0 = req.p0 if req.p0 is not None else auto_guess(req.model, x, y)
         lower, upper = open_bounds(req.lower, -math.inf), open_bounds(req.upper, math.inf)
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
         check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
+        weights = resolve_weights(req, len(x))
         result = curve_fit(
-            req.x,
-            req.y,
+            x,
+            y,
             model_fcn,
             p0,
             lower=lower,
             upper=upper,
-            weights=resolve_weights(req, len(req.x)),
+            weights=weights,
             fixed=req.fixed,
             calc_errors=req.calc_errors,
             **stats_kwargs(req),
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out: dict[str, Any] = to_jsonable(result)
+    out = fit_response(result, (x, y), weights, req.return_residuals, req.display_points)
     out["statsVersion"] = req.stats_version
     return out
 
@@ -186,11 +190,10 @@ class EquationValidateRequest(BaseModel):
     equation: str
 
 
-class EquationFitRequest(FitOptions):
+class EquationFitRequest(FitOptions, XYSource):
     # Weighting (dy / direct weights), covariance and scale_errors: FitOptions.
+    # x/y, or a dataset handle + channels + rows (P8): XYSource.
     equation: str
-    x: list[float]
-    y: list[float]
     # Starting values. A null ENTRY is derived from the data
     # (calc.fit_equation_init.auto_start). The list OMITTED keeps its
     # historical meaning, 1.0 per parameter, so an equation-only call
@@ -257,8 +260,9 @@ def equation_validate(req: EquationValidateRequest) -> EquationValidateResponse:
 
 
 @router.post("/equation/fit")
-def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
+def equation_fit(req: EquationFitRequest, response: Response) -> dict[str, Any]:
     """Fit a custom equation model to (x, y); same result shape as /fit."""
+    x, y = source_xy(req, response)
     try:
         fcn, names = equation_model(req.equation)
         if not names:
@@ -269,25 +273,26 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         # HELD blank is held at (auto_start only fills blanks it may fit).
         check_param_vectors(names, [1.0 if g is None else g for g in given], req.fixed,
                             lower, upper)
-        p0 = auto_start(fcn, names, req.x, req.y, given=given, lower=lower, upper=upper,
+        p0 = auto_start(fcn, names, x, y, given=given, lower=lower, upper=upper,
                         fixed=req.fixed)
+        weights = resolve_weights(req, len(x))
         result = curve_fit(
-            req.x,
-            req.y,
+            x,
+            y,
             fcn,
             p0,
             lower=lower,
             upper=upper,
-            weights=resolve_weights(req, len(req.x)),
+            weights=weights,
             fixed=req.fixed,
             calc_errors=req.calc_errors,
             **stats_kwargs(req),
         )
         # A free parameter the model is even in (a width) is reported positive.
-        positive_even_params(fcn, req.x, result, lower, upper, req.fixed)
+        positive_even_params(fcn, x, result, lower, upper, req.fixed)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out: dict[str, Any] = to_jsonable(result)
+    out = fit_response(result, (x, y), weights, req.return_residuals, req.display_points)
     out["paramNames"] = names
     out["p0"] = p0  # the starts actually used (auto-derived where blank)
     out["statsVersion"] = req.stats_version

@@ -124,12 +124,17 @@ def _decode_pairs(data_lines: list[str], xfactor: float, yfactor: float) -> tupl
 ]:
     """Decode ``(XY..XY)`` explicit pairs (XYPOINTS / PEAK TABLE)."""
     nums: list[float] = []
-    for line in data_lines:
+    for n, line in enumerate(data_lines, 1):
         for tok in line.replace(";", " ").replace(",", " ").split():
             try:
                 nums.append(float(tok))
             except ValueError:
-                continue
+                # Dropping the one token re-pairs every value after it (x with
+                # the next x), so a damaged table fails closed instead.
+                raise ValueError(
+                    f"malformed JCAMP (XY..XY) data: '{tok}' is not a number "
+                    f"(data line {n}: '{line[:60]}')"
+                ) from None
     if len(nums) % 2:
         nums = nums[:-1]
     arr = np.asarray(nums, dtype=float).reshape(-1, 2)

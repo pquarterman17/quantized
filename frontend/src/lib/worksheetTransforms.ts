@@ -57,6 +57,7 @@ function provenance(ds: DataStruct, operation: string): Record<string, unknown> 
   for (const k of [
     "time_is_datetime",
     "time_timezone",
+    "time_is_clock", // the HH:MM:SS axis of a time-of-day X
     "x_column_name",
     "x_column_unit",
     "x_category_labels", // an Origin text X's cells name the OLD axis's positions

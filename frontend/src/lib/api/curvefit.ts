@@ -96,6 +96,8 @@ export interface EquationFitRequest {
   covariance?: "jtj" | "hessian";
   /** Origin "Scale Error with sqrt(Reduced Chi-Sqr)"; default true. */
   scale_errors?: boolean;
+  /** false: lean response (no `residuals`; see lib/fitResiduals.ts). */
+  return_residuals?: boolean;
 }
 
 /** Fit a custom equation model — the SAME result shape as `fitModel`

@@ -468,3 +468,33 @@ def test_reentrant_releases_on_error_and_rejects_no_names(modules: Callable[...,
         with hi.heavy_imports():
             pass
     assert hi.heavy_import(modules("VALUE = 7\n")).VALUE == 7
+
+
+def test_bumps_import_does_not_see_numba() -> None:
+    """quantized depends on numba (SNIP kernel); bumps must still take its
+    pure-Python DREAM path, or seeded runs stop reproducing. Fresh interpreter:
+    the import-time ``try: from numba import njit`` is what is being pinned."""
+    import subprocess
+    import sys
+    import textwrap
+
+    pytest.importorskip("bumps")
+    pytest.importorskip("numba")
+    code = textwrap.dedent(
+        """
+        import sys
+        from quantized.calc._snip_numba import get_kernel
+        from quantized.heavy_import import heavy_import
+        assert get_kernel() is not None          # numba is loaded first
+        real = sys.modules["numba"]
+        diffev = heavy_import("bumps.dream.diffev")
+        assert getattr(diffev, "prange", range) is range, "bumps picked up numba"
+        assert sys.modules["numba"] is real       # restored for everyone else
+        print("ok")
+        """
+    )
+    out = subprocess.run(
+        [sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=300
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "ok"

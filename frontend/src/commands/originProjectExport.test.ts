@@ -33,7 +33,7 @@ const lastBody = (): Body => exportMock.mock.calls.at(-1)![0];
 
 beforeEach(() => {
   exportMock.mockReset();
-  exportMock.mockResolvedValue({ matrixFallbacks: 0 });
+  exportMock.mockResolvedValue({ matrixFallbacks: 0, droppedTextColumns: "" });
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
   useApp.setState({
@@ -77,7 +77,7 @@ describe("runExportOriginProject", () => {
       ],
       selectedIds: ["s1"],
     });
-    exportMock.mockResolvedValue({ matrixFallbacks: 1 }); // what the writer reports
+    exportMock.mockResolvedValue({ matrixFallbacks: 1, droppedTextColumns: "" }); // what the writer reports
     await runExportOriginProject(useApp.getState);
     expect(lastBody().matrices_as_matrix).toBeUndefined(); // default: X/Y/Z columns
     const sent = lastBody().datasets;
@@ -99,7 +99,7 @@ describe("runExportOriginProject", () => {
       selectedIds: [],
       opjWriteMatrices: true,
     });
-    exportMock.mockResolvedValue({ matrixFallbacks: 1 });
+    exportMock.mockResolvedValue({ matrixFallbacks: 1, droppedTextColumns: "" });
     await runExportOriginProject(useApp.getState);
     expect(lastBody().matrices_as_matrix).toBe(true);
     expect(useToasts.getState().toasts.map((t) => t.msg)).toContain(
@@ -210,5 +210,12 @@ describe("File ▸ Export Origin project (.opj)…", () => {
     expect(src).toContain('import("./originProjectExport")');
     expect(src).not.toMatch(/^import(?!\s+type)[^;]*from\s+"\.\/originProjectExport"/m);
     expect(src).not.toMatch(/^import(?!\s+type)[^;]*from\s+"\.\.\/lib\/api\/originProject"/m);
+  });
+
+  it("names the text columns the .opj dropped in the status and a toast", async () => {
+    exportMock.mockResolvedValue({ matrixFallbacks: 0, droppedTextColumns: "loopA: Sample, Lot" });
+    await runExportOriginProject(useApp.getState);
+    expect(useApp.getState().status).toContain("text columns not exported: loopA: Sample, Lot");
+    expect(useToasts.getState().toasts.map((t) => t.msg).join("\n")).toContain("Sample, Lot");
   });
 });

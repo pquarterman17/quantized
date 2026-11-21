@@ -158,6 +158,10 @@ def _bin_edges(v: NDArray[np.float64], bins: str | int) -> NDArray[np.float64]:
     """Bin edges from a count or a numpy binning rule, clipped to a readable
     panel range (too few bins looks sparse, too many looks noisy at panel
     size)."""
+    # The count is clamped to 60 below anyway: clamp BEFORE numpy allocates the
+    # edges (bins=10**9 was an 8 GB allocation that killed the server).
+    if isinstance(bins, int) and bins > 60:
+        bins = 60
     edges = np.asarray(np.histogram_bin_edges(v, bins=bins), dtype=float)
     n_bins = edges.size - 1
     if n_bins < 4:

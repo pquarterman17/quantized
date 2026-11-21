@@ -19,7 +19,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { fitBands, type BandsResult } from "../../../lib/api/fitStats";
+import type { BandsResult } from "../../../lib/api/fitStats";
+import { fitBandsFor } from "../../../lib/fitCurve";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { ownCurveFitOverlay, setCurveFitOverlayBand } from "../../../store/curveFitOverlay";
@@ -102,7 +103,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
     const params = (result.params as number[] | undefined) ?? [];
     const ctrl = new AbortController();
     setBusy(true);
-    fitBands(
+    fitBandsFor(
       {
         model,
         params,
@@ -111,6 +112,8 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
         ...bandFitStats(result, fitData.x),
         level,
       },
+      result,
+      fitData,
       ctrl.signal,
     )
       .then((b) => {
@@ -125,7 +128,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
         if (!ctrl.signal.aborted) setBusy(false);
       });
     return () => ctrl.abort();
-  }, [on, level, prediction, model, result, rows, fitData.x, fitData.xKey, target.dataset]);
+  }, [on, level, prediction, model, result, rows, fitData, target.dataset]);
 
   const empty = band != null && bandIsEmpty(band);
   const halfWidth = useMemo(() => {

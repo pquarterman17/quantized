@@ -17,6 +17,8 @@ import {
   type Encoding,
 } from "./plotEncoding";
 import { buildXY, specToRender, type ChannelRef, type PlotSpec } from "./plotspec";
+import type { PlotPayload } from "./plotdata";
+import { sharedAxisTitle } from "./sharedAxisTitle";
 import { AUTO_MARKER_CYCLE, SERIES_VARS } from "./seriesStyleCycle";
 import type { DataStruct, Dataset } from "./types";
 
@@ -77,6 +79,14 @@ describe("gating through the modeling chokepoint", () => {
 });
 
 describe("buildEncodedXY — the split", () => {
+  it("an encoded plot's auto Y title names the column, not every colour/symbol series", () => {
+    const { payload } = buildEncodedXY(DATA, null, [0], enc({ color: 1, symbol: 2 }));
+    expect(payload.series).toHaveLength(4);
+    expect(sharedAxisTitle(payload.series)).toBe("y (V)");
+    const two = buildEncodedXY(DATA, null, [0, 4], enc({ color: 1 })).payload;
+    expect(sharedAxisTitle(two.series)).toBe("y (V) / y2 (A)");
+  });
+
   it("colour and symbol on DIFFERENT factors split by every present combination, nested outer-first", () => {
     const { payload, series } = buildEncodedXY(DATA, null, [0], enc({ color: 1, symbol: 2 }));
     expect(payload.series.map((s) => s.label)).toEqual([
@@ -118,9 +128,11 @@ describe("buildEncodedXY — the split", () => {
   // runtime assertion rather than a claim.
   it("with a group factor alone it builds exactly buildXY's payload (the Group split)", () => {
     const ordered: DataStruct = { ...DATA, level_order: { 1: [1, 0] } };
+    // Only the encoded split adds `axisLabel` (the auto Y title's column name).
+    const plain = (p: PlotPayload): PlotPayload => ({ ...p, series: p.series.map(({ axisLabel: _a, ...rest }) => rest) });
     for (const data of [DATA, ordered]) {
-      expect(buildEncodedXY(data, 0, [3, 4], enc({ group: 1 })).payload).toEqual(buildXY(data, 0, [3, 4], 1));
-      expect(buildEncodedXY(data, null, [0], enc({ group: 2 })).payload).toEqual(buildXY(data, null, [0], 2));
+      expect(plain(buildEncodedXY(data, 0, [3, 4], enc({ group: 1 })).payload)).toEqual(buildXY(data, 0, [3, 4], 1));
+      expect(plain(buildEncodedXY(data, null, [0], enc({ group: 2 })).payload)).toEqual(buildXY(data, null, [0], 2));
     }
   });
 

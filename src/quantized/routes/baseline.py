@@ -26,13 +26,36 @@ from quantized.calc.baseline import (
     estimate_background,
     fit_region_background,
 )
+from quantized.routes._arrayresults import lean_array_fields
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import jsonify, to_jsonable
 
 router = APIRouter(prefix="/api/baseline", tags=["baseline"])
 
 
-class EstimateRequest(BaseModel):
+class LeanBaseline(BaseModel):
+    """Opt-in lean response (P4 phase 4, routes/_arrayresults.py): false
+    leaves the full ``baseline`` off the wire and returns a ``resultId``
+    (fetch it whole from ``/api/results/array`` when the user subtracts it),
+    plus ``baselineDisplay`` when ``display_points`` is set. Default true:
+    the response is unchanged."""
+
+    return_baseline: bool = True
+    display_points: int | None = Field(default=None, ge=16, le=20_000)
+
+
+def _baseline_body(
+    bg: Any, req: LeanBaseline, extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    if req.return_baseline:
+        return {"baseline": jsonify(bg), **(extra or {})}
+    return {
+        **(extra or {}),
+        **lean_array_fields("baseline", "baseline", bg, req.display_points),
+    }
+
+
+class EstimateRequest(LeanBaseline):
     x: list[float]
     y: list[float]
     method: str = "snip"
@@ -67,7 +90,7 @@ class RollingBallRequest(BaseModel):
     smooth: int = -1
 
 
-class ModPolyRequest(BaseModel):
+class ModPolyRequest(LeanBaseline):
     y: list[float]
     order: int = 5
     max_iter: int = 100
@@ -121,7 +144,7 @@ def estimate(req: EstimateRequest) -> dict[str, Any]:
         iter_max_passes=req.iter_max_passes,
         iter_sigma=req.iter_sigma,
     )
-    return {"baseline": jsonify(bg)}
+    return _baseline_body(bg, req)
 
 
 @router.post("/als")
@@ -153,7 +176,7 @@ def modpoly(req: ModPolyRequest) -> dict[str, Any]:
     bg, info = call_calc(baseline_modpoly,
         req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
     )
-    return {"baseline": jsonify(bg), "info": to_jsonable(info)}
+    return _baseline_body(bg, req, {"info": to_jsonable(info)})
 
 
 @router.post("/anchor")

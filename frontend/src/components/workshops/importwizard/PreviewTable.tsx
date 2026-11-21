@@ -1,11 +1,15 @@
 // Import wizard preview — pure renderer. A numbered raw-lines strip (RawLines:
 // header / units / first-data-row rows highlighted) above the resolved-columns grid:
 // per-column name + unit text fields and a role select (x/y/error/label/
-// ignore, matching `ImportSettings.roles` exactly), then the first N parsed
-// data rows. All editing calls back into useImportWizard — this component
-// holds no state of its own.
+// ignore, matching `ImportSettings.roles` exactly) -- and, on a time-only
+// column, its format select (Excel's per-column data format,
+// lib/importTimeFormats.ts) -- then the first N parsed data rows. All
+// editing calls back into useImportWizard — this component holds no state of
+// its own.
 
 import { fmtNum } from "../../../lib/format";
+import { clockCell, timeFormatOptions } from "../../../lib/importTimeFormats";
+import type { ImportTimeFormat } from "../../../lib/importTypes";
 import { ROLE_OPTIONS, xRoleColumns } from "../../../lib/importwizard";
 import type { ImportColumnRole, ImportPreviewResponse } from "../../../lib/types";
 import { highlightDelimiter } from "../../../lib/importRawLines";
@@ -17,11 +21,13 @@ export default function PreviewTable({
   onRoleChange,
   onNameChange,
   onUnitChange,
+  onTimeFormatChange,
 }: {
   preview: ImportPreviewResponse;
   onRoleChange: (index: number, role: ImportColumnRole) => void;
   onNameChange: (index: number, name: string) => void;
   onUnitChange: (index: number, unit: string) => void;
+  onTimeFormatChange?: (index: number, format: ImportTimeFormat) => void;
 }) {
   // P1-5 DEFECT 1: every column currently marked x, when there's more than
   // one -- parse_import only ever keeps the first as the axis and silently
@@ -82,6 +88,16 @@ export default function PreviewTable({
                       aria-invalid={xConflict ? "true" : undefined}
                       style={xConflict ? { borderColor: "var(--danger)" } : undefined}
                     />
+                    {c.time_kind && (
+                      <Select
+                        options={timeFormatOptions(c.time_kind)}
+                        value={c.time_format ?? "text"}
+                        onChange={(e) => onTimeFormatChange?.(c.index, e.target.value as ImportTimeFormat)}
+                        aria-label={`column ${c.index + 1} time format`}
+                        title="How this time column reads: a time-of-day axis, seconds, elapsed seconds, or text"
+                        style={{ marginTop: 3 }}
+                      />
+                    )}
                     {xConflict && (
                       <div
                         className="qzk-ds-meta"
@@ -99,7 +115,8 @@ export default function PreviewTable({
             {preview.rows.map((row, i) => (
               <tr key={i}>
                 {row.map((v, j) => (
-                  <td key={j}>{fmtNum(v)}</td>
+                  // A time-of-day column previews as the clock it will plot as.
+                  <td key={j}>{preview.columns[j]?.time_format === "clock" ? clockCell(v) : fmtNum(v)}</td>
                 ))}
               </tr>
             ))}

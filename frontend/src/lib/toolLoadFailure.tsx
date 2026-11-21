@@ -17,22 +17,18 @@ import { everConnected } from "./connectionSeen";
 import { useConnection } from "./lifecycle";
 
 /** "This tool" for a panel / view, "This dialog" for a dialog, by its label. */
-function noun(label: string): string {
-  if (/Dialog$/.test(label)) return "This dialog";
-  return /(Panels?|View)$/.test(label) ? "This tool" : "This window";
-}
+const noun = (label: string): string =>
+  /Dialog$/.test(label) ? "This dialog" : /(Panels?|View)$/.test(label) ? "This tool" : "This window";
 
 /** The one fixed column every failed card is portalled into. */
 function stack(): HTMLElement {
-  const found = document.querySelector<HTMLElement>(".qzk-lazy-fail-stack");
-  if (found) return found;
-  const el = document.createElement("div");
-  el.className = "qzk-lazy-fail-stack";
-  document.body.appendChild(el);
-  return el;
+  return (
+    document.querySelector<HTMLElement>(".qzk-lazy-fail-stack") ??
+    document.body.appendChild(Object.assign(document.createElement("div"), { className: "qzk-lazy-fail-stack" }))
+  );
 }
 
-export default function ToolLoadFailure({ label, onRetry }: { label: string; onRetry: () => void }) {
+export default function ToolLoadFailure({ label, onRetry, error }: { label: string; onRetry: () => void; error?: Error }) {
   const connected = useConnection((s) => s.connected);
   const [closed, setClosed] = useState(false);
   if (closed) return null;
@@ -40,7 +36,7 @@ export default function ToolLoadFailure({ label, onRetry }: { label: string; onR
   return createPortal(
     <div className="qzk-lazy-fail tool" role="alert" title={label}>
       {/* `data-live-region` (R12, lib/modalInert.ts): announced even under an open dialog. */}
-      <span data-live-region="">⚠ {noun(label)} couldn't load{why}.</span>
+      <span data-live-region="">⚠ {error ? "This panel hit an error: " + error.message : `${noun(label)} couldn't load${why}.`}</span>
       <button type="button" onClick={onRetry}>
         ↻ Retry
       </button>

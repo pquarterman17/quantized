@@ -13,11 +13,12 @@ const MAX_NAMES = 3;
  *  groups are joined with " / " ("Resistance (ohm) / Voltage (V)"). Every
  *  series sharing one quantity and unit keeps the plain "Moment (emu)".
  *  Never reads a legend rename. Undefined for no series. */
-export function sharedAxisTitle(series: readonly { label: string; unit?: string }[]): string | undefined {
+export function sharedAxisTitle(series: readonly { label: string; unit?: string; axisLabel?: string }[]): string | undefined {
   const groups = new Map<string, string[]>();
   for (const s of series) {
     const names = groups.get(s.unit ?? "") ?? [];
-    if (!names.includes(s.label)) names.push(s.label);
+    const name = s.axisLabel ?? s.label;
+    if (!names.includes(name)) names.push(name);
     groups.set(s.unit ?? "", names);
   }
   const parts = [...groups].map(([unit, names]) => {
@@ -44,4 +45,14 @@ export function drawnOnAxis(series: readonly AxisSeries[], hidden: readonly bool
   const onAxis = series.map((_, i) => i).filter((i) => (series[i].axis ?? 0) === which && !isCompanion(series[i]));
   const drawn = onAxis.filter((i) => !hidden?.[i]);
   return drawn.length ? drawn : onAxis;
+}
+
+/** Longest plain axis title (characters) the canvas draws. uPlot draws a title
+ *  unclipped, so a 5000-character column name ran off the canvas; past this it
+ *  ends in "…" (the legend and Library keep the full name). */
+export const AXIS_TITLE_MAX = 60;
+
+/** `label` cut to `AXIS_TITLE_MAX` characters with a trailing "…". */
+export function clipAxisTitle(label: string | undefined): string | undefined {
+  return label?.replace(/^([^]{59})[^]{2,}$/, "$1…");
 }

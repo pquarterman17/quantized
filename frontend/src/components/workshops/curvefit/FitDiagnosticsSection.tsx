@@ -1,5 +1,6 @@
 // Curve Fit — Diagnostics panel (lazy chunk). Collapsed by default; opening
-// it posts the current fit's y and residuals to /api/fitting/diagnostics
+// it asks /api/fitting/diagnostics about the current fit -- by its resultId,
+// or by posting its y and residuals (lib/api/fitStats' fitDiagnosticsFor)
 // (calc.fit_stats.fit_compare + residual_diagnostics) and lists the goodness-
 // of-fit and residual statistics. Reduced χ², RMSE and AIC/AICc/BIC are the
 // fit's OWN numbers (curve_fit, calc.fit_metrics) whenever the result carries
@@ -14,7 +15,9 @@
 import { useEffect, useState } from "react";
 
 import { DataTable } from "../../primitives/DataTable";
-import { fitDiagnostics, type DiagnosticsResult } from "../../../lib/api/fitStats";
+import type { DiagnosticsResult } from "../../../lib/api/fitStats";
+import { fitDiagnosticsFor } from "../../../lib/api/fitDiagnosticsFor";
+import { curveSourceOf, fullFitResult } from "../../../lib/fitCurve";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CalcResult } from "../../../lib/types";
 
@@ -66,23 +69,27 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
   useEffect(() => {
     setDiag(null);
     setError(null);
-    const residuals = result.residuals as (number | null)[] | undefined;
-    if (!open || !Array.isArray(residuals)) return;
+    // A display-curve result (lib/fitCurve) has no residuals in memory: by
+    // id they are not needed, and the fallback fetches them.
+    const display = curveSourceOf(result) != null;
+    if (!open || (!display && !Array.isArray(result.residuals))) return;
     const ctrl = new AbortController();
     const nParams = Number(result.nFree ?? (result.params as number[] | undefined)?.length ?? 0);
     // The fit's own weights (a direct column as given, or 1/dy²), so n, AIC
     // and the residual statistics cover the points the fit used — a
     // zero-weight outlier was being counted (integration review item 2).
-    const weights = fitData.weights ?? (fitData.dy ? fitData.dy.map((d) => 1 / (d * d)) : null);
-    fitDiagnostics(
-      {
+    // By id the server applies the weights it fitted with (the same vector).
+    // The Q-Q pairs are not shown here, so they come back thinned to 2.
+    const arrays = async () => {
+      const residuals = ((await fullFitResult(result, fitData.y)).residuals as (number | null)[] | undefined) ?? [];
+      const weights = fitData.weights ?? (fitData.dy ? fitData.dy.map((d) => 1 / (d * d)) : null);
+      return {
         y: fitData.y,
         residuals: residuals.map((v) => v ?? Number.NaN),
-        n_params: nParams,
         ...(weights && weights.length === fitData.y.length ? { weights } : {}),
-      },
-      ctrl.signal,
-    )
+      };
+    };
+    fitDiagnosticsFor(result.resultId, nParams, arrays, { useWeights: true, qqPoints: 1 }, ctrl.signal)
       .then(setDiag)
       .catch((e: unknown) => {
         if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : "diagnostics failed");

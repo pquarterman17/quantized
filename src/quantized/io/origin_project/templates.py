@@ -93,6 +93,7 @@ from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.io.origin_project.opj_curves import _CURVE_PREFIX, _DATAPLOT_MAGIC
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.opju_figure_curves import _CURVE_TOKEN
+from quantized.io.origin_project.opju_memo import import_scoped
 
 __all__ = ["read_origin_template"]
 
@@ -248,6 +249,7 @@ def _template_overrides(fig: dict[str, Any]) -> dict[str, Any] | None:
 _DECODE_ERRORS = (IndexError, ValueError, KeyError, struct.error)
 
 
+@import_scoped
 def read_origin_template(path: Path) -> dict[str, Any]:
     """Decode an Origin GRAPH template (``.otp``/``.otpu``) into a
     ``GraphTemplate``-shaped dict (``frontend/src/lib/figuredoc.ts``):

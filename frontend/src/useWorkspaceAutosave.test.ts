@@ -880,7 +880,7 @@ describe("browser autosave lock — paused/resumed reporting (N6)", () => {
       await vi.advanceTimersByTimeAsync(900);
     });
 
-    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].error?.includes("paused"));
+    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].paused?.includes("paused"));
     expect(pausedCalls).toHaveLength(1); // once per TRANSITION, never once per tick
     expect(autosaveHealth().savedAt).toBeNull();
 
@@ -908,7 +908,7 @@ describe("browser autosave lock — paused/resumed reporting (N6)", () => {
     const setHealthSpy = vi.spyOn(useAutosaveStatus.getState(), "setHealth").mockClear();
     useProjectLock.setState({ path: null, status: "unlocked", record: null, openedAsCopy: true });
     await flushAutosaveNow();
-    const reported = setHealthSpy.mock.calls.map((c) => c[0].error).filter(Boolean);
+    const reported = setHealthSpy.mock.calls.map((c) => c[0].paused).filter(Boolean);
     expect(reported).toHaveLength(1);
     expect(reported[0]).toContain("opened as a copy");
     expect(reported[0]).not.toContain("another tab");
@@ -1021,7 +1021,7 @@ describe("browser autosave lock — round-4 trigger guards", () => {
     useProjectLock.setState({ status: "held-by-other-live" }); // pause 2
     await flushAutosaveNow(); // must report AGAIN
 
-    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].error?.includes("paused"));
+    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].paused?.includes("paused"));
     expect(pausedCalls).toHaveLength(2); // one per TRANSITION, including the second
   });
 });

@@ -86,7 +86,7 @@ export default function BackgroundLegend({
             >
               <span className="qzk-legend-toggle">
                 <LegendSample color={swatch} style={sample} defaultTrace={defaultTrace} filled={s.selected} />
-                <RichText text={text} />
+                <span className="qzk-legend-label" title={text}><RichText text={text} /></span>
               </span>
             </div>
           );

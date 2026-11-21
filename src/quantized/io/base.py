@@ -15,6 +15,7 @@ __all__ = [
     "CORRUPT_ARCHIVE_ERRORS",
     "NO_COLUMN",
     "decode_text",
+    "looks_utf16_without_bom",
     "parse_col_header",
     "read_head",
     "read_text",
@@ -60,10 +61,33 @@ def decode_text(raw: bytes) -> str:
         return raw[len(_UTF8_BOM) :].decode("utf-8", errors="replace")
     if raw.startswith(_UTF16_BOMS):
         return raw.decode("utf-16", errors="replace")
+    if looks_utf16_without_bom(raw):
+        return decode_utf16_without_bom(raw)
     try:
-        return raw.decode("utf-8")
+        text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        return raw.decode("latin-1")
+        text = raw.decode("latin-1")
+    # A DOS end-of-file marker (Ctrl-Z) some old acquisition programs append
+    # would otherwise import as a final all-NaN row.
+    return text.rstrip("\x1a") if text.endswith("\x1a") else text
+
+
+def decode_utf16_without_bom(raw: bytes) -> str:
+    """Decode text `looks_utf16_without_bom` accepted (LE unless byte 0 is NUL)."""
+    return raw.decode("utf-16-le" if raw[0:1] != b"\x00" else "utf-16-be", errors="replace")
+
+
+def looks_utf16_without_bom(raw: bytes) -> bool:
+    """BOM-less UTF-16 text (some Windows tools): mostly-ASCII code units leave
+    every other byte NUL. Read as latin-1 it was a NUL-studded single column."""
+    head = raw[:4096]
+    if len(head) < 4 or len(head) % 2:
+        head = head[: len(head) - len(head) % 2]
+    if len(head) < 4:
+        return False
+    even_nul = head[0::2].count(0) / (len(head) // 2)
+    odd_nul = head[1::2].count(0) / (len(head) // 2)
+    return (odd_nul > 0.4 and even_nul == 0.0) or (even_nul > 0.4 and odd_nul == 0.0)
 
 
 def read_text(path: str | Path) -> str:
@@ -100,6 +124,8 @@ def read_head(path: str | Path, nbytes: int = 65536, *, encoding: str = "latin-1
         raw = raw[len(_UTF8_BOM) :]
     elif raw.startswith(_UTF16_BOMS):
         return raw[: len(raw) // 2 * 2].decode("utf-16", errors="replace")
+    elif encoding == "latin-1" and looks_utf16_without_bom(raw):
+        return decode_utf16_without_bom(raw[: len(raw) // 2 * 2])
     return raw.decode(encoding, errors="replace")
 
 

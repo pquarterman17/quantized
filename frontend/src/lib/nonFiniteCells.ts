@@ -58,6 +58,14 @@ type DataStructCells<T extends WireCell> = Omit<DataStruct, "time" | "values"> &
 };
 export type WireDataStruct = DataStructCells<WireCell>;
 
+/** The sentinel for an `undefined` payload cell: the FILLER of a gapped or
+ *  thinned plot column (lib/plotUngap), which uPlot draws across, unlike the
+ *  `null` of a real gap. Plot payloads only (`key === "data"` below); it is
+ *  not a `WireCell`, so a DataStruct never reads it. Written by every build
+ *  since the gapped payload (as `String(undefined)`), so saved workspaces
+ *  already carry it. `lib/plotsnapshot.ts` reads it back as `undefined`. */
+export const FILLER_CELL = "undefined";
+
 /** Does this cell survive `JSON.stringify` unchanged? `-0` does not (it
  *  writes as `0`), which is why it is checked separately from finiteness. */
 function needsSentinel(v: number): boolean {
@@ -81,7 +89,8 @@ export function encodeDataCell(v: number | null): WireCell {
 export function encodePersistedCells(this: unknown, key: string, value: unknown): unknown {
   if (!Array.isArray(value)) return value;
   const owner = this as Record<string, unknown>;
-  const row = (cells: (number | null)[]) => cells.map((cell) => cell === null ? null : encodeCell(cell));
+  const row = (cells: (number | null | undefined)[]) =>
+    cells.map((cell) => (cell === null ? null : cell === undefined ? FILLER_CELL : encodeCell(cell)));
   // A DataStruct cell that is `null` came off the import wire, which sends
   // every non-finite value as null; in memory it means "missing", so it is
   // written as the NaN sentinel (a null is only ever read back as legacy).

@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Peak find is ~2x faster on large traces** (1M rows: 70 s to 36 s): the SNIP clip runs as a compiled `numba` kernel with the same results, and falls back to the previous numpy code where numba is unavailable.
+
 ## [0.39.0] - 2026-11-21
 
 ### Added

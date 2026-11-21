@@ -106,6 +106,14 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("autosave failing");
   });
 
+  it("a deliberate pause (another tab holds the slot) is not 'autosave failing'", () => {
+    useAutosaveStatus.setState({ health: { savedAt: null, error: null, count: 0, paused: "autosave paused — open in another tab" } });
+    render(<StatusBar />);
+    expect(screen.getByText("autosave paused — open in another tab")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("⚠ autosave failing")).toBeNull();
+  });
+
   it("a pending restore reads as itself, never as 'autosave failing' while saves succeed (review R8)", () => {
     useAutosaveStatus.setState({ health: { savedAt: Date.now(), error: null, count: 2, restoreError: "Couldn't restore (x) — retrying" } });
     render(<StatusBar />);
