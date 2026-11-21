@@ -139,6 +139,7 @@ from quantized.io.origin_project.opju_curves_allcols import in_style_holder
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
 from quantized.io.origin_project.opju_float_vector import apply_mark_modifiers
+from quantized.io.origin_project.opju_memo import last_call
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
 from quantized.io.origin_project.opju_plot_kinds import (
     apply_marker_modifiers,
@@ -152,14 +153,12 @@ from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
 
-
 # The unified curve token: <flag> 01 01 01 80 <width> <id…> (module docstring).
 _CURVE_TOKEN = re.compile(rb"\x01\x01\x01\x80([\x01\x03])", re.DOTALL)
 
 # Per-column plot-designation markers (same bytes windows_opju.py validates).
 _MARKS = {b"\x21\x51": "X", b"\x21\x61": "Y", b"\x30\x61": "Y-error"}
-# `30 61` marks any error column; record code 6 makes it X-error (Origin
-# 2026b COM `wks.col.type`, decode-plan item 72).
+# `30 61` marks any error column; code 6 makes it X-error (2026b COM, item 72).
 _X_ERROR_CODE = 6
 
 _MAX_FIELDS = 10  # field-walk runaway backstop; real records resolve in <= 6
@@ -252,6 +251,7 @@ def _parse_column_record(b: bytes, after_id: int) -> tuple[str, str | None, int 
         return None  # name shape found but no designation marker: not a column record
     return None
 
+@last_call
 def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
     """Scan every page span for column records and build the global id table.
 

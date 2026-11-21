@@ -45,6 +45,10 @@ __all__ = ["opju_folder_paths", "window_name_at"]
 # The subfolder separator precedes every child folder record: 4.3811 uses the
 # short form, 4.3380 the long one. Either shape also marks "leaf" when it lands
 # immediately after a folder's window entries (see _opju_peek_nsub).
+# Positions where a name block can start: ``<u32 size 1..64> 0A`` (the cheap
+# part of the framing check; the rest is verified per candidate). Lookahead so
+# overlapping candidates are all reported, as the old byte-by-byte walk saw them.
+_NAME_BLOCK_CANDIDATE = re.compile(rb"(?=[\x01-\x40]\x00\x00\x00\x0a)")
 _OPJU_SEPS = (b"\x80\x12\x8d\x10", b"\x80\x16\x03\x00\x00\x01\x8a\x10")
 # Window/page header: 0A [00] 80 <type> <namelen+2> 00 00 <name> <hi-bit byte>.
 # The leading 0A is the record framing that tells a true page header apart from
@@ -220,8 +224,13 @@ def _parse_opju_folder_seq(b: bytes) -> list[tuple[str, list[int], int]]:
     """
     blocks: list[tuple[int, int, str]] = []
     n = len(b)
-    i = 0
-    while i < n - 8:
+    cursor = 0  # a matched block consumes its own name span (no overlap)
+    for cand in _NAME_BLOCK_CANDIDATE.finditer(b):
+        i = cand.start()
+        if i >= n - 8:
+            break
+        if i < cursor:
+            continue
         size = int.from_bytes(b[i : i + 4], "little")
         if (
             1 <= size <= 64
@@ -230,16 +239,17 @@ def _parse_opju_folder_seq(b: bytes) -> list[tuple[str, list[int], int]]:
             and b[i + 5 + size] == 0x0A
         ):
             blocks.append((i, i + 5 + size + 1, b[i + 5 : i + 4 + size].decode("latin1")))
-            i = i + 5 + size
-            continue
-        i += 1
+            cursor = i + 5 + size
     seq: list[tuple[str, list[int], int]] = []
     for bi, (start, name_end, name) in enumerate(blocks):
         hi = blocks[bi + 1][0] if bi + 1 < len(blocks) else n
         found: tuple[str, list[int], int] | None = None
         p = name_end
-        while p < hi - 1:
-            if b[p] == 0x0A and b[p + 1] % 2 == 0:
+        while True:
+            p = b.find(b"\x0a", p, hi - 1)  # only 0A bytes can start a count
+            if p < 0:
+                break
+            if b[p + 1] % 2 == 0:
                 nwin = b[p + 1] // 2
                 q = p + 2
                 if q < n and b[q] == 0x00:  # optional separator before entries
