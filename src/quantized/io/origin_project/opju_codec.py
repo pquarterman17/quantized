@@ -116,36 +116,47 @@ def _width(nibble: int) -> int:
     return c if c < 4 else c + 1
 
 
+_WIDTHS = tuple(_width(c) for c in range(16))
+
+
 def _decode(stream: bytes, nrows: int) -> tuple[NDArray[np.float64], int]:
     """Decode ``nrows`` float64s; return ``(values, bytes_consumed)``."""
     fcm: dict[int, int] = {}
     dfcm: dict[int, int] = {}
+    fcm_get, dfcm_get = fcm.get, dfcm.get
+    widths, from_bytes, mask, tmask = _WIDTHS, int.from_bytes, _MASK, _TABLE_MASK
+    fcm_shift, fcm_drop = _FCM_SHIFT, _FCM_DROP
+    dfcm_shift, dfcm_drop = _DFCM_SHIFT, _DFCM_DROP
     fh = dh = 0
     last = 0
     out: list[int] = []
+    append = out.append
+    count = 0
     pos = 0
     n = len(stream)
-    while len(out) < nrows:
+    while count < nrows:
         if pos >= n:
-            raise CodecError(f"stream exhausted at {len(out)}/{nrows} values")
+            raise CodecError(f"stream exhausted at {count}/{nrows} values")
         ctrl = stream[pos]
         pos += 1
         for nibble in (ctrl & 0xF, ctrl >> 4):
-            width = _width(nibble)
+            width = widths[nibble]
             if pos + width > n:
                 raise CodecError("residual overruns the buffer")
-            resid = int.from_bytes(stream[pos : pos + width] + b"\x00" * (8 - width), "little")
+            # little-endian: the zero padding to 8 bytes never changed the value
+            resid = from_bytes(stream[pos : pos + width], "little")
             pos += width
-            pred = (last + dfcm.get(dh, 0)) & _MASK if nibble & 8 else fcm.get(fh, 0)
+            pred = (last + dfcm_get(dh, 0)) & mask if nibble & 8 else fcm_get(fh, 0)
             val = pred ^ resid
-            out.append(val)
-            stride = (val - last) & _MASK
+            append(val)
+            count += 1
+            stride = (val - last) & mask
             fcm[fh] = val
             dfcm[dh] = stride
-            fh = ((fh << _FCM_SHIFT) ^ (val >> _FCM_DROP)) & _TABLE_MASK
-            dh = ((dh << _DFCM_SHIFT) ^ (stride >> _DFCM_DROP)) & _TABLE_MASK
+            fh = ((fh << fcm_shift) ^ (val >> fcm_drop)) & tmask
+            dh = ((dh << dfcm_shift) ^ (stride >> dfcm_drop)) & tmask
             last = val
-            if len(out) >= nrows:
+            if count >= nrows:
                 break
     vals = np.frombuffer(np.asarray(out, dtype="<u8").tobytes(), dtype="<f8").copy()
     vals[vals == ORIGIN_MISSING] = np.nan  # empty cells → NaN

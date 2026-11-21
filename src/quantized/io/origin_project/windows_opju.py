@@ -64,6 +64,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 
+from quantized.io.origin_project.opju_anchor_index import AnchorSearcher
 from quantized.io.origin_project.opju_codec import tail_start
 from quantized.io.origin_project.opju_marker_designations import marker_designations
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta
@@ -186,6 +187,12 @@ def _filename_anchors(b: bytes, start: int) -> list[tuple[int, bytes, bytes]]:
     return out
 
 
+class _FilenameHits(list[tuple[int, bytes, bytes]]):
+    """The filename anchors, carrying the shared name-anchor searcher."""
+
+    searcher: AnchorSearcher | None = None
+
+
 def _book_anchor(
     b: bytes, short: str, search_from: int, filename_hits: list[tuple[int, bytes, bytes]]
 ) -> tuple[int, bytes | None] | None:
@@ -194,15 +201,16 @@ def _book_anchor(
     for pos, stripped, raw in filename_hits:
         if pos >= search_from and stripped == short_b:
             return pos, raw
+    searcher = getattr(filename_hits, "searcher", None) or AnchorSearcher(b, search_from)
     header_len = len(short_b) + 2
     if header_len < 256:
-        idx = b.find(bytes([header_len]) + b"\x00\x00" + short_b, search_from)
+        idx = searcher.find_form1(short_b, search_from)
         if idx >= 0:
             return idx, None
     if len(short) >= 4:  # storage-tail reference; too ambiguous for short names alone
         storage_len = len(short_b) + 1
         if storage_len < 256:
-            idx = b.find(bytes([storage_len]) + short_b + b"\x00", search_from)
+            idx = searcher.find_form2(short_b, search_from)
             if idx >= 0:
                 return idx, None
     return None
@@ -324,7 +332,8 @@ def opju_window_metadata(
         for m in re.finditer(re.escape(mark), b)
         if m.start() >= start
     )
-    filename_hits = _filename_anchors(b, start)
+    filename_hits = _FilenameHits(_filename_anchors(b, start))
+    filename_hits.searcher = AnchorSearcher(b, start)
     books: dict[str, BookMeta] = {}
     # Anchor each book INDEPENDENTLY from the tail start (not a forward-only
     # cursor): a project's book windows are not laid out in decoded-book order
