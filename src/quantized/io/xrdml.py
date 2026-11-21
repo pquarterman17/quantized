@@ -81,7 +81,21 @@ def _find_first(elem: ET.Element, name: str) -> ET.Element | None:
 def _text_float(elem: ET.Element | None) -> float:
     if elem is None or elem.text is None:
         return float("nan")
-    return float(elem.text.strip())
+    try:
+        return float(elem.text.strip())
+    except ValueError:
+        raise ValueError(
+            f"XRDML <{_local(elem.tag)}> is not a number: '{elem.text.strip()[:40]}'"
+        ) from None
+
+
+def _float_list(elem: ET.Element, text: str) -> list[float]:
+    """The whitespace-separated numbers of ``elem``; a bad one names the element."""
+    try:
+        return [float(v) for v in text.split()]
+    except ValueError as exc:
+        bad = str(exc).rpartition(": ")[2]
+        raise ValueError(f"XRDML <{_local(elem.tag)}> holds a non-numeric value {bad}") from None
 
 
 def _wavelength(root: ET.Element) -> float:
@@ -104,7 +118,7 @@ def _axis_positions(
             continue
         lp = _find_first(pos, "listPositions")
         if lp is not None and lp.text:
-            arr = np.asarray([float(v) for v in lp.text.split()], dtype=float)
+            arr = np.asarray(_float_list(lp, lp.text), dtype=float)
             return (float(arr[0]), float(arr[-1])), arr
         sp = _find_first(pos, "startPosition")
         ep = _find_first(pos, "endPosition")
@@ -122,7 +136,7 @@ def _attenuation_factors(dp: ET.Element) -> NDArray[np.float64] | None:
     el = _find_first(dp, "beamAttenuationFactors")
     if el is None or el.text is None:
         return None
-    return np.asarray([float(v) for v in el.text.split()], dtype=float)
+    return np.asarray(_float_list(el, el.text), dtype=float)
 
 
 def _attenuator_meta(root: ET.Element) -> tuple[float, str, float]:
@@ -209,7 +223,7 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
                 intensity_tag = "intensities"
         if counts_elem is None or counts_elem.text is None:
             continue
-        counts = np.asarray([float(x) for x in counts_elem.text.split()], dtype=float)
+        counts = np.asarray(_float_list(counts_elem, counts_elem.text), dtype=float)
         if counts.size < 1:
             continue
 
