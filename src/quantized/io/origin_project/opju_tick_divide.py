@@ -141,18 +141,23 @@ def _body_text(b: bytes, p: int, end: int) -> str | None:
     return None
 
 
+_NO_FACTOR = {"", "0", "1", "x", "X"}  # an object that sets no transform at all
+
+
 def opju_tick_divide(b: bytes, start: int, end: int) -> dict[str, float]:
     """Axis side -> tick-label factor for the layer window ``b[start:end]``.
-    A side named twice with different factors is dropped (never guessed)."""
+    A side named twice with different factors is dropped (never guessed), as
+    is a side whose other object is undecoded or a transform that is not a
+    factor (``10^x`` beside ``OL = 100``: the labels are not value / 100)."""
     out: dict[str, float] = {}
     conflict: set[str] = set()
     for m in _HEAD.finditer(b, start, end):
         text = _body_text(b, m.end(), end)
-        if text is None:
-            continue
-        factor = tick_label_factor(m.group(1).decode(), text)
         side = _SIDE[m.group(2).decode()]
+        factor = None if text is None else tick_label_factor(m.group(1).decode(), text)
         if factor is None:
+            if text is None or text.strip() not in _NO_FACTOR:
+                conflict.add(side)
             continue
         if side in out and out[side] != factor:
             conflict.add(side)

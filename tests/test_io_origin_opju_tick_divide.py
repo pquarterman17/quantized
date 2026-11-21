@@ -87,6 +87,16 @@ def test_two_different_factors_on_one_side_are_dropped() -> None:
     assert opju_tick_divide(b, 0, len(b)) == {}
 
 
+def test_a_factor_beside_a_non_factor_transform_is_dropped() -> None:
+    # Fail closed: labels under 10^x are not value / 100, so no factor is drawn.
+    b = _obj(b"OL", b"100") + _obj(b"FL", b"10^x") + _obj(b"OB", b"10") + _obj(b"FB", b"x")
+    assert opju_tick_divide(b, 0, len(b)) == {"bottom": 10.0}
+    b = _obj(b"OL", b"100") + _HEAD + b"OL" + b"\xa6\x01\x28\xaa\x00\x80\x05\x09100\x8e"  # undecoded twin
+    assert opju_tick_divide(b, 0, len(b)) == {}
+    b = _obj(b"OL", b"100") + _obj(b"OL", b"0")  # a "0" object sets nothing: no conflict
+    assert opju_tick_divide(b, 0, len(b)) == {"left": 100.0}
+
+
 # ── realdata ─────────────────────────────────────────────────────────────────
 
 _PUBLIC = origin_corpus_dir() / "public"
