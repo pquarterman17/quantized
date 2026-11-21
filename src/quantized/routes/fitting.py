@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -32,6 +32,7 @@ from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.routes._datasetrows import XYSource, source_xy
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._fit_options import (
     FitOptions,
@@ -40,11 +41,12 @@ from quantized.routes._fit_options import (
     stats_kwargs,
 )
 from quantized.routes._fitresults import fit_response
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
 
-router = APIRouter(prefix="/api/fitting", tags=["fitting"])
+router = APIRouter(prefix="/api/fitting", tags=["fitting"], route_class=OffloopJSONRoute)
 
 
 class GuessRequest(BaseModel):
@@ -53,11 +55,10 @@ class GuessRequest(BaseModel):
     y: list[float]
 
 
-class FitRequest(FitOptions):
+class FitRequest(FitOptions, XYSource):
     # Weighting (dy / direct weights), covariance and scale_errors: FitOptions.
+    # x/y, or a dataset handle + channels + rows (P4 phase 3): XYSource.
     model: str
-    x: list[float]
-    y: list[float]
     p0: list[float] | None = None
     # null entries = unbounded on that side (JSON cannot carry Infinity).
     lower: list[float | None] | None = None
@@ -98,9 +99,10 @@ def autoguess(req: GuessRequest) -> dict[str, Any]:
 
 
 @router.post("/fit")
-def fit(req: FitRequest) -> dict[str, Any]:
+def fit(req: FitRequest, response: Response) -> dict[str, Any]:
     """Bounded nonlinear least-squares fit of a named model to (x, y)."""
     _require_model(req.model)
+    x, y = source_xy(req, response)
 
     def model_fcn(
         xx: NDArray[np.float64], pp: NDArray[np.float64]
@@ -108,15 +110,15 @@ def fit(req: FitRequest) -> dict[str, Any]:
         return evaluate(req.model, xx, pp)
 
     try:
-        p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
+        p0 = req.p0 if req.p0 is not None else auto_guess(req.model, x, y)
         lower, upper = open_bounds(req.lower, -math.inf), open_bounds(req.upper, math.inf)
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
         check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
-        weights = resolve_weights(req, len(req.x))
+        weights = resolve_weights(req, len(x))
         result = curve_fit(
-            req.x,
-            req.y,
+            x,
+            y,
             model_fcn,
             p0,
             lower=lower,
@@ -128,7 +130,7 @@ def fit(req: FitRequest) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out = fit_response(result, (req.x, req.y), weights, req.return_residuals, req.display_points)
+    out = fit_response(result, (x, y), weights, req.return_residuals, req.display_points)
     out["statsVersion"] = req.stats_version
     return out
 

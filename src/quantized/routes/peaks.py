@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field, model_validator
 
@@ -30,14 +30,16 @@ from quantized.routes._arrayresults import (
     require_fingerprint,
     resolve_result_or_409,
 )
+from quantized.routes._datasetrows import XYSource, source_xy
 from quantized.routes._errors import CALC_ERRORS, call_calc
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import jsonify, to_jsonable
 
 # Models accepted by the simultaneous fit (compositeEval branches).
 MULTI_MODELS = ("Lorentzian", "Gaussian", "Pseudo-Voigt", "Split Pearson VII", "TCH-pV")
 LINK_MODES = ("None", "Shared FWHM", "Shared FWHM + eta")
 
-router = APIRouter(prefix="/api/peaks", tags=["peaks"])
+router = APIRouter(prefix="/api/peaks", tags=["peaks"], route_class=OffloopJSONRoute)
 
 
 class FindPeaksRequest(BaseModel):
@@ -96,9 +98,8 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
     }
 
 
-class FitPeakRequest(BaseModel):
-    x: list[float]
-    y: list[float]
+class FitPeakRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (P4 phase 3): XYSource.
     x_lo: float
     x_hi: float
     seed_center: float
@@ -113,18 +114,22 @@ class FitPeakRequest(BaseModel):
 
 
 @router.post("/fit")
-def fit(req: FitPeakRequest) -> dict[str, Any]:
+def fit(req: FitPeakRequest, response: Response) -> dict[str, Any]:
     """Fit one peak in [x_lo, x_hi] to ``model``; returns the fit result dict."""
     if req.model not in MODELS:
         raise HTTPException(status_code=422, detail=f"unknown model: {req.model}")
+    if req.find_result_id is not None and req.x is None:
+        # Two 409s (unknown handle / unknown find id) would be indistinguishable.
+        raise HTTPException(status_code=422, detail="find_result_id needs posted x/y")
+    x, y = source_xy(req, response)
     snip_bg: Any = req.snip_bg
     if snip_bg is None and req.find_result_id is not None:
         kept = resolve_result_or_409(req.find_result_id, "background")
-        require_fingerprint(kept, req.x, req.y)
+        require_fingerprint(kept, x, y)
         (snip_bg,) = kept.arrays.values()
     try:
         result = fit_single_peak(
-            req.x, req.y, req.x_lo, req.x_hi,
+            x, y, req.x_lo, req.x_hi,
             seed_center=req.seed_center,
             seed_fwhm=float("nan") if req.seed_fwhm is None else req.seed_fwhm,
             model=req.model,

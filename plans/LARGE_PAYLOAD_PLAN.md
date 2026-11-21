@@ -6,7 +6,7 @@ not: a large-data audit at 200k rows saw responses up to 82 MB inlined into
 the client. This plan measures them, sets one rule for all of them, and
 records which part has shipped.
 
-**Status:** Active (phases 1-2 and the backend of 4 shipped, phase 3 open)
+**Status:** Active (phases 1-2, the backend of 4 and the phase 3 slice shipped)
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-11-21
 **Updated:** 2026-11-21
@@ -157,12 +157,99 @@ Deferred from phase 2:
   so for a display result in 0.5 <= R² < 0.9 it judges by R² only (the
   status line fetches and runs the test).
 
-## Phase 3: inputs by dataset handle (open)
+## Phase 3: inputs by dataset handle (slice shipped)
 
 Send `dataset_handle` + channel keys + a run-length row selection instead of
-`x`/`y` (38.6 MB per 1M-row fit request). Needs the per-series-X, gap-drop
-and analysis-selection rules mirrored server-side, with a parity test per
-rule.
+`x`/`y` (38.6 MB per 1M-row fit request).
+
+Design (lane P7):
+
+- **The server already holds the data.** `routes/_datasetcache.py` keeps the
+  decoded DataStruct under its content hash; the import routes cache what
+  they parse and send `X-Dataset-Handle`, every plot fetch names the dataset
+  by that handle, and the client remembers handle per DataStruct object
+  (`lib/api/datasetCache.ts`, a WeakMap). No new upload step is needed: the
+  existing upload-once/409-resend path is reused as is.
+- **Wire shape** (`routes/_datasetrows.XYSource`, opt-in on `/api/fitting/fit`
+  and `/api/peaks/fit`): `dataset_handle` (or, after a 409, the full
+  `dataset` once), `x_channel` / `y_channel` (-1 = time) and `rows` as
+  ascending, disjoint `[start, count]` runs. Send these OR `x`/`y`; mixing is
+  422. Without them the request and response are exactly as before.
+- **The rules stay on the client; the selection is their output.** The plan
+  first said to mirror the per-series-X, gap-drop and analysis-selection rules
+  server-side. That was rejected: the inputs of those rules are client state
+  (manual exclusions, the Data Filter predicate evaluated in JS, a selection's
+  row ids and X range, column designations), which would have to be sent
+  anyway, and two implementations of a rule drift. The client resolves them
+  exactly as before (`selectedFitData` + `dropGapRows` + `fitRowsOf`) into the
+  X channel and the fitted rows; the server only gathers. What the server
+  mirrors is the ARRAY ENCODING, so it gathers the doubles the array path
+  would have parsed: a non-finite gathered value is 422 (JSON cannot carry
+  one, so no array request could hold it), and `-0` is written `+0`
+  (`JSON.stringify(-0)` is `"0"`). Parity is tested per rule on both sides.
+- **Cache red-team.** The gathered arrays depend on: the dataset content (the
+  handle IS its content hash: time, values, labels, units, metadata), the two
+  channels and the rows (all in the request), and the rules (their output is
+  the rows/channel). Nothing is stored under a key of this module's own. The
+  one trust edge is the client's WeakMap (object -> handle): a DataStruct is
+  immutable per load (a cell edit or reimport makes a new object), the same
+  invariant every plot fetch already relies on.
+- **Fallback.** Only a dataset with a remembered handle goes by handle (an
+  upload merely in flight may end without one); otherwise the arrays are
+  posted (a first upload of every channel costs more than x/y). An
+  unknown/evicted handle is 409 and `postJSONDatasetAware` resends the
+  dataset once in the same request; the route caches it and a successful
+  response carries the new `X-Dataset-Handle`. If the resend is refused too
+  (413: a dataset wider than the body cap; or a second 409) the client posts
+  the arrays, so the worst case is the request as it always was.
+- **Client** (lazy `lib/fitSource.ts`): Curve Fit's single-dataset fit
+  (`displayFit` with a `FitSource`) and the Peaks workshop's "Fit each"
+  (`peakInputs` now returns the dataset `rows` of its pairs). Weighted fits
+  still post `dy`/`weights` over the fitted rows.
+
+Measured (synthetic Gaussian on a slope + noise, JSON bytes as sent, lean
+fit with 4096 display points; parameters identical on every row):
+
+| Request | 200k before -> after | 1M before -> after |
+|---|---|---|
+| `/fitting/fit`, no gaps | 7.31 MB -> 168 B | 36.54 MB -> 169 B |
+| `/fitting/fit`, 1% random gap rows | 7.24 MB -> 23.0 kB | 36.17 MB -> 121.9 kB |
+| `/peaks/fit` (per peak), no gaps | 7.31 MB -> 174 B | 36.54 MB -> 175 B |
+| `/peaks/fit` (per peak), 1% gaps | 7.24 MB -> 23.0 kB | 36.17 MB -> 121.9 kB |
+
+Server time for the same fit is unchanged or lower (1M: 5.5 s -> 4.5 s,
+`json` decode of the arrays saved). A random-gap worst case (every other row
+a gap) is 5.4 MB of runs at 1M, against ~18 MB of x/y for the 500k pairs left.
+
+Tests: `tests/test_api_fit_by_handle.py` (per rule, full and display
+responses byte-identical to the array fit; weighted; `/peaks/fit`; -0; size;
+409 + resend; the 422 guards) -- 26 of its 29 failed with the route changes
+reverted (the 3 that passed: the size arithmetic, missing-x/y 422, the run
+expander); `test_routes_malformed_dataset.py` sweeps both routes. Frontend: `useCurveFit.bySource.test.ts` (per rule, the rows sent
+gather to the posted x/y as JSON; the X channel; arrays without a handle;
+409 then one resend, then the earned handle; a refused resend posts the
+arrays), `peakInputs.rows.test.ts` (per rule incl. the fallback channel),
+`usePeaks.bySource.test.ts`; the 8 call-site tests failed with `fitCurve.ts` /
+`usePeaks.ts` reverted. `/fitting` and `/peaks` now decode bodies off the
+event loop (`OffloopJSONRoute`, required for a dataset-bearing route).
+
+Deferred from phase 3:
+
+- **Other inputs**: `/autoguess` (Guess, and the data-derived starts of an
+  edited table) still posts x/y; so do `/equation/fit`, `/peaks/find`,
+  `/peaks/fit-multi`, the baselines, sigop and the stats routes. Each is the
+  same `XYSource` mixin plus one call-site change.
+- **Weights by channel**: `dy`/`weights` (8 MB at 1M) still ride as arrays;
+  a `dy_channel` needs `dyForFit`'s rules (error column, manual sigma,
+  validation) mirrored or resolved into a channel.
+- **Recompute callers** (`recalcFits`, batch fit, pipeline/gadget fits) keep
+  posting arrays (eager modules; the eager budget has ~0.5 kB).
+- **A subset fit's own row-identity write** gives the worksheet a new data
+  object (`bindFitRowIdentity` writes metadata), so the NEXT fit of it posts
+  arrays until a plot fetch earns the new object a handle.
+- `/peaks/fit` refuses `find_result_id` with a row selection (422): its 409
+  would be indistinguishable from a handle miss. A by-handle find id needs a
+  distinct miss detail first.
 
 ## Phase 4: baselines, peaks, signal ops (backend shipped, client partly)
 
@@ -232,6 +319,11 @@ Deferred from phase 4:
   the full response.
 
 ## Completed
+
+- 2026-11-21: phase 3 slice (lane P7): `/fitting/fit` and `/peaks/fit` take a
+  dataset handle + channels + run-length rows (`routes/_datasetrows.py`);
+  Curve Fit and "Fit each" use it when the server holds the dataset. 1M-row
+  fit request 36.5 MB -> 169 B; table and tests in the phase 3 section.
 
 - 2026-11-21: phase 4 backend + baseline workshop (lean SNIP/ModPoly, lean
   peak find, lean sigop, `/api/results/*`, `find_result_id` on `/peaks/fit`);

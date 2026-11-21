@@ -6860,6 +6860,29 @@
       },
       "FitPeakRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "find_result_id": {
             "anyOf": [
               {
@@ -6875,6 +6898,30 @@
             "default": "Lorentzian",
             "title": "Model",
             "type": "string"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
           },
           "seed_center": {
             "title": "Seed Center",
@@ -6906,11 +6953,30 @@
             "title": "Snip Bg"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "x_hi": {
             "title": "X Hi",
@@ -6921,16 +6987,33 @@
             "type": "number"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
         "required": [
-          "x",
-          "y",
           "x_lo",
           "x_hi",
           "seed_center"
@@ -7059,6 +7142,29 @@
             "title": "Covariance",
             "type": "string"
           },
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "display_points": {
             "anyOf": [
               {
@@ -7144,6 +7250,30 @@
             "title": "Return Residuals",
             "type": "boolean"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "scale_errors": {
             "default": true,
             "title": "Scale Errors",
@@ -7194,24 +7324,60 @@
             "title": "Weights"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
         "required": [
-          "model",
-          "x",
-          "y"
+          "model"
         ],
         "title": "FitRequest",
         "type": "object"
