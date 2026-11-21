@@ -6,7 +6,8 @@ like CI: the `gate` skill ([SKILL.md](../.claude/skills/gate/SKILL.md)).
 ## Structure and ratchets
 
 - **400 lines per `.tsx` component**, zero grandfathered pins
-  (`src/architecture.test.ts`, "component-ceiling ratchet"). Heavy features
+  (`src/architecture.test.ts`, "component-ceiling ratchet",
+  PROJECT_ORGANIZATION_PLAN #7). Heavy features
   become a `workshops/` subtree (state hook + view + sub-components), the
   React analogue of the MATLAB "workshop pattern". (`App.tsx` and
   `ThinFilmTab.tsx` were the last holdouts; `thin_film_toolkit`'s

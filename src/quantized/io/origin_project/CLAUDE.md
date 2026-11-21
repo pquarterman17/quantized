@@ -51,8 +51,8 @@ point: [docs/origin_re/README.md](../../../../docs/origin_re/README.md).
   `opju_figure_curves.py`; the `.opj` anchor offsets 35-38,
   `opj_curves._record_x`) and that X decoded, draw against it even where
   `lib/perSeriesX.ts`'s nearest-preceding rule picks another
-  (`lib/originRecordedX.ts`, per-curve-X overlay). Evidence: Etna Graph16,
-  Catchment Graph6 vs saved previews; hc2convert 89/89 equal the COM-verified
+  (`lib/originRecordedX.ts`, per-curve-X overlay). Evidence: Etna `origin.opju`
+  Graph16, Catchment A-E Graph6 vs Origin's saved previews; hc2convert 89/89 equal the COM-verified
   `.opju` save.
 - **An inferred X never wins** (B-02). A `.opj` X the reader only infers
   carries no `xRecorded` (Moke Graph8/9: inferred x=E mirrors the loop; the
@@ -100,10 +100,12 @@ Sibling of the checkout root: `<root>/test-data/origin/`.
 - `Origin.ApplicationSI` is single-instance: even via `DispatchEx` it attaches
   to the owner's open Origin (measured 2026-11-15), loads a corpus project
   into their window, and its `Exit()` closes it, unsaved work included
-  (ledger R-18).
+  (ledger R-18). PID-tracking kill logic cannot prevent this: no kill is
+  involved.
 - Oracle/specimen tools (`tools/origin_compare/`, `tools/origin_trial/`,
   `tools/plot_corpus/`) dispatch `Origin.Application` (own process). Run one
-  instance at a time; kill only the exact PID the tool recorded, never by
+  instance at a time; kill only the exact PID the tool recorded (e.g.
+  `run_axis_oracle.py` kills only the PID its own export recorded), never by
   image name (R-17). Guarded by `tests/test_plot_corpus_tools.py`.
 - The live "Send to Origin" path (`io/origin_com.py`) keeps `ApplicationSI` on
   purpose (sending into the open session IS the feature), asks first, and
