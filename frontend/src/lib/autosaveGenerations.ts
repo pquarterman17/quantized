@@ -135,6 +135,10 @@ export interface AutosaveHealth {
   /** With `restoreError`: the previous session was appended and its full
    *  copy is kept for a Replace or Discard (the label says "kept"). */
   restoreKept?: boolean;
+  /** Saves are deliberately paused, not failing (another tab holds the
+   *  browser autosave slot, or this session was opened as a copy): the
+   *  message to show. Cleared by the next real save outcome. */
+  paused?: string | null;
 }
 
 export const HEALTHY: AutosaveHealth = { savedAt: null, error: null, count: 0 };

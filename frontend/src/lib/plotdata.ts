@@ -16,10 +16,10 @@ import { waterfallApplies, waterfallStep } from "./waterfallOffset";
 export interface PlotSeriesSpec {
   label: string;
   unit: string;
+  axisLabel?: string; // the name an auto axis title uses when `label` adds a split suffix (encoded series)
   /** "points" renders markers only (peak overlay); default is a line. */
   kind?: "line" | "points";
-  /** 0 = primary (left) Y axis, 1 = secondary (right) — the dual-Y feature. */
-  axis?: number;
+  axis?: number; // 0 = primary (left) Y axis, 1 = secondary (right) — the dual-Y feature
   /** De-emphasized rendering (faint stroke, hollow markers) — the "grey" mode
    *  companion series showing excluded/filtered points (#50/#53). */
   muted?: boolean;
