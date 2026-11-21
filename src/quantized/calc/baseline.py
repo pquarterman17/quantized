@@ -15,6 +15,7 @@ from scipy.interpolate import interp1d
 from scipy.sparse.linalg import spsolve
 
 from quantized.calc._clipfit import _iterative_clip_fit
+from quantized.calc._snip import snip_clip
 
 __all__ = [
     "baseline_als",
@@ -146,11 +147,7 @@ def _snip_background(
         return y.copy()
     w_max = max(1, min(_matlab_round(max_window_deg / dx), (n - 1) // 2))
     v = np.sqrt(np.maximum(y, 0.0))
-    for w in range(w_max, 0, -1):
-        v_new = v.copy()
-        avg = (v[: n - 2 * w] + v[2 * w :]) / 2.0
-        v_new[w : n - w] = np.minimum(v[w : n - w], avg)
-        v = v_new
+    v = snip_clip(np.asarray(v, dtype=float), w_max)  # bit-identical; calc/_snip.py
     bg = np.asarray(v**2, dtype=float)
     kernel = np.ones(5) / 5.0
     for _ in range(passes):

@@ -419,3 +419,36 @@ Deferred from P8:
   | `/equation/fit` | 7.53 -> 3.71 MB | 37.64 -> 18.54 MB |
   | `/diagnostics` request | 7.79 MB -> 0.1 kB | 38.95 MB -> 0.1 kB |
   | `/diagnostics` response, panel / Q-Q plot | 7.63 MB -> 0.5 / 40 kB | 38.13 MB -> 0.5 / 40 kB |
+
+## Peak-find detector time (lane PK, 2026-11-21)
+
+`/api/peaks/find` on the 1M-row Gaussian-on-slope set (default options) was
+~184-206 s, all in the detector (`calc.peaks.find_peaks_robust`), not
+transport. Profile: 90%+ in `calc.baseline._snip_background`. The detector
+widens the SNIP window to 5 % of the x span, so `w_max` is ~5 % of n and the
+clip loop (`for w in w_max..1`, each a full-array pass) is O(n * w_max) = O(n^2).
+On noisy data ~50-90 % of samples change on every step (measured), so there is
+no sparse or early-exit shortcut that stays exact. The remaining stages are
+linear (prominence stack ~0.3 s per 100k rows; FWHM and the matched filter run
+per surviving peak).
+
+Fix: `calc/_snip.py` runs the *same* arithmetic per element
+(`min(v[i], fl(fl(v[i-w] + v[i+w]) / 2))`) without the per-step full-array
+copy and temporaries: double buffer, cache-sized chunk temporary, `* 0.5` for
+`/ 2.0` (identical correctly-rounded value). No summation order changed, so
+output is bit-identical (peaks, heights, widths, prominence, background
+compared by `repr` / raw bytes at 100k, 200k, 1M; `tests/test_calc_snip.py`
+pins the kernel to the retained original loop on random, NaN/inf, flat,
+plateau, edge, single-sample and chunk-seam inputs).
+
+| Rows | Before | After | Speed-up |
+|---|---|---|---|
+| 100k | 1.89 s | 0.81 s | 2.3x |
+| 200k | 8.04 s | 3.60 s | 2.2x |
+| 1M | 184 s | 73 s | 2.5x |
+
+(Single run each, same machine; 1M "before" is 184 s here vs 206 s measured
+earlier on another box.) The cost is still quadratic: another order of
+magnitude needs a compiled kernel (numba/Cython), not available as a
+permissive pure-numpy dependency today, or a documented, non-identical
+approximation (SNIP on a decimated copy). Both deferred.
