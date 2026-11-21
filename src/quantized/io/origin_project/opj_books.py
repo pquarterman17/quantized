@@ -322,6 +322,10 @@ def _build_book(
         # Origin short names of the value columns, in channel order — lets a
         # figure's curve->column binding (opju_curves) map onto `.values`.
         "origin_column_names": value_cols,
+        # The labels as Origin names them, BEFORE `DataStruct` appends its own
+        # " (2)" to a repeated one: the legend strips only what that dedupe
+        # added, never a name that genuinely contains "(2)" (ledger R-37).
+        "origin_column_labels": [_label_for(c, col_meta.get(c)) for c in value_cols],
         # an unproven designation (`.opju` `30 61` / `20 61` with no record:
         # windows_opju) is "" and left out, never guessed
         "column_designations": {c: m.designation for c, m in col_meta.items() if m.designation},

@@ -49,6 +49,10 @@
    "B",
    "C"
   ],
+  "origin_column_labels": [
+   "Moment",
+   "Error"
+  ],
   "column_designations": {
    "A": "X",
    "B": "Y",
@@ -86,6 +90,10 @@
     "origin_column_names": [
      "B",
      "C"
+    ],
+    "origin_column_labels": [
+     "Moment",
+     "Error"
     ],
     "column_designations": {
      "A": "X",
@@ -155,6 +163,10 @@
      "B",
      "C"
     ],
+    "origin_column_labels": [
+     "Moment",
+     "Error"
+    ],
     "column_designations": {
      "A": "X",
      "B": "Y",
@@ -214,6 +226,10 @@
     "origin_column_names": [
      "B",
      "C"
+    ],
+    "origin_column_labels": [
+     "Moment",
+     "Error"
     ],
     "column_designations": {
      "A": "X",

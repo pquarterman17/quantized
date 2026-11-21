@@ -313,7 +313,11 @@ def apply_tick_steps(
     def apply_one(
         axis: Any, limits: tuple[float, float], step: float | None, scale: str, label: str
     ) -> None:
-        if step is None or not math.isfinite(step) or step <= 0:
+        if step is None or not math.isfinite(step):
+            return
+        if not isinstance(step, TickHint):
+            step = abs(step)  # a reversed Origin axis (from > to) stores a negative step
+        if step <= 0:
             return
         if isinstance(step, TickHint):  # the screen's increment, only if it fits
             if scale == "linear":

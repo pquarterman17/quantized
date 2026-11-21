@@ -63,10 +63,35 @@ def test_apply_tick_steps_fails_closed_for_non_linear_or_invalid_steps() -> None
         ax.set_xscale("log")
         log_locator = ax.xaxis.get_major_locator()
         y_locator = ax.yaxis.get_major_locator()
-        apply_tick_steps(ax, 2.0, -1.0, "log", "linear")
+        apply_tick_steps(ax, 2.0, 0.0, "log", "linear")
         assert ax.xaxis.get_major_locator() is log_locator
         assert isinstance(log_locator, LogLocator)
         assert ax.yaxis.get_major_locator() is y_locator
+    finally:
+        plt.close(fig)
+
+
+def test_apply_tick_steps_honours_a_reversed_axis_negative_step() -> None:
+    """Origin stores a reversed axis as from > to with a NEGATIVE step (EIS
+    Nyquist left axis): the increment still applies, labels drawn top-down in
+    reversed order (R-38)."""
+    fig, ax = plt.subplots()
+    try:
+        ax.plot([0.0, 1.0], [0.0, 0.3])
+        ax.set_ylim(0.3, -0.01)
+        apply_tick_steps(ax, None, -0.05, "linear", "linear")
+        assert isinstance(ax.yaxis.get_major_locator(), MultipleLocator)
+        fig.canvas.draw()
+        assert ax.yaxis_inverted()
+        shown = [
+            t.get_text() for t, v in zip(ax.get_yticklabels(), ax.get_yticks(), strict=True)
+            if -0.01 <= v <= 0.3 + 1e-9
+        ]
+        assert shown == ["0.00", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30"]
+        # the same limits on the x axis of a reversed X
+        ax.set_xlim(10.0, -1.0)
+        apply_tick_steps(ax, -5.0, None, "linear", "linear")
+        assert [v for v in ax.xaxis.get_majorticklocs() if -1.0 <= v <= 10.0] == [0.0, 5.0, 10.0]
     finally:
         plt.close(fig)
 
