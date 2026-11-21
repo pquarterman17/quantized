@@ -184,8 +184,7 @@ function figureBarState(
   const value = letters.indexOf(curves[0].y);
   if (value < 0 || curves.some((c) => c.x !== x || c.book !== curves[0].book)) return {};
   const cols: StatCols = { group: -1, group2: null, value, facet: null, color: null };
-  const layout = figure.bar_layout;
-  const { y_from: lo, y_to: hi } = figure;
+  const { bar_layout: layout, y_from: lo, y_to: hi } = figure;
   const valueRange: [number, number] | undefined = !figure.y_log && lo < hi ? [lo, hi] : undefined;
   const shape = { barStack: layout !== "grouped", barPercent: layout === "percent", valueRange };
   return { statMode: true, statPicks: { mode: "bar", ...shape, cols: statColRefs(ds, cols) } };
