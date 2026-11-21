@@ -5,6 +5,10 @@ mypy tips: [../src/quantized/CLAUDE.md](../src/quantized/CLAUDE.md).
 
 ## Golden parity (verification model)
 
+Goldens are regression tests, not a MATLAB gate (owner decision 2026-11-21):
+a deliberate behaviour change may update a golden, with a test pinning the
+new behaviour and the reason in the commit message.
+
 - `tests/golden/`: frozen `quantized_matlab` outputs plus a `manifest.json`
   recording the source commit. Regenerate with
   `tools/matlab/freeze_reference_values.m` / `freeze_calc_values.m` (needs

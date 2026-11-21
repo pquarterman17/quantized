@@ -33,9 +33,24 @@ permissions:
   contents: read
 
 jobs:
-  e2e:
+  # The chromium journey suite runs on one Playwright worker (the config pins
+  # `workers: 1` on CI because every spec shares one backend) and took 9m12s
+  # of an ~11m run on 2026-11-21 -- the longest job in either workflow and the
+  # critical path of a PR's push-to-green time. Playwright's native
+  # `--shard=i/N` splits the tests (all projects) across N runners; each runner
+  # keeps its own backend and its one worker, so the isolation assumptions are
+  # unchanged, and every test belongs to exactly one shard.
+  #
+  # The `e2e` aggregate below keeps the literal `e2e` context name (same
+  # pattern as `frontend` in ci.yml), so anything pinned to `e2e` is stable.
+  e2e-shard:
+    name: e2e shard ${{ matrix.shard }}/3
     needs: playwright-version
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     # The same Playwright image, user and fallback as e2e-xbrowser (see the
     # notes there). The bare-runner `install --with-deps chromium` this
     # replaces spent 11 minutes on the apt mirror on 2026-11-06.
@@ -79,16 +94,35 @@ jobs:
           fi
       - name: Build the SPA (what the backend serves)
         run: npm run build
-      - name: Run the interaction-journey suite
-        run: npm run e2e
+      - name: Run the interaction-journey suite (shard ${{ matrix.shard }}/3)
+        run: npm run e2e -- --shard=${{ matrix.shard }}/3
         continue-on-error: false
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: frontend/test-results
           retention-days: 7
+
+  # Stable `e2e` context: fail-closed aggregate of the shards (always() so it
+  # reports even when a shard fails; skipped only on draft PRs, like before).
+  e2e:
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: e2e-shard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every e2e shard
+        env:
+          SHARD_RESULT: ${{ needs.e2e-shard.result }}
+        run: |
+          echo "e2e-shard: $SHARD_RESULT"
+          if [[ "$SHARD_RESULT" != "success" ]]; then
+            echo "e2e gate failed because at least one shard did not succeed."
+            exit 1
+          fi
 
   # Picks the cross-browser job's container image from the Playwright version
   # pinned in package-lock.json, so a Playwright bump (Dependabot or manual)

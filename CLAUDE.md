@@ -1,16 +1,16 @@
 # CLAUDE.md — quantized
 
 Python/FastAPI backend + React/TypeScript frontend port of
-`quantized_matlab` (magnetometry / XRD / lab-data analysis toolbox). Backend
-targets **feature parity** with the MATLAB toolbox; the GUI is a **ground-up
-revamp**. EM tooling (Fermi viewer / EELS / EDS / imaging) is **out of
+`quantized_matlab` (magnetometry / XRD / lab-data analysis toolbox). The
+port has **surpassed** the MATLAB toolbox (owner decision, 2026-11-21): MATLAB
+is a historical reference, not a gate. The GUI is a **ground-up revamp**. EM tooling (Fermi viewer / EELS / EDS / imaging) is **out of
 scope**: it lives in `fermi-viewer` (MATLAB) and `fermiviewer` (Python).
 
 ## Reference repos (siblings in the same checkout root)
 
 | Repo | Role |
 |------|------|
-| `quantized_matlab` | **Behavioural reference**: authoritative for every formula, parser and feature; goldens are frozen from it. |
+| `quantized_matlab` | **Historical reference** (optional, often not checked out): consult it when useful; it does not gate new behaviour. The goldens frozen from it stay as regression tests. |
 | `fermiviewer` | **Structural reference**: the clean Python+React+Tauri port to mirror (layering, CLI, theme, enforcement tests). |
 | `thin_film_toolkit` | **Salvage only**: lift *pure domain logic*, re-verify against MATLAB, re-home into the clean layers. Never copy its architecture. |
 
@@ -100,6 +100,21 @@ Delegate each task to the cheapest model that fits it — never overkill:
   simple lookups.
 - The orchestrator keeps long test/build runs off its own model (delegate
   them) and does all pushes; worker agents commit locally and never push.
+
+## Owner standing decisions (2026-11-21)
+
+- **MATLAB is not a gate.** New behaviour need not match MATLAB, and a
+  missing `quantized_matlab` checkout never blocks work. Goldens stay as
+  regression tests: change one only deliberately, with a test for the new
+  behaviour and the reason in the commit message, never by loosening a
+  tolerance to get green.
+- **Permissive-licence dependencies are pre-approved** (BSD/MIT/Apache/PSF);
+  still no GPL runtime deps (enforced).
+- **When intent is unclear, fail closed** with a clear error rather than
+  guess; **add new behaviour as a UI option** rather than silently changing
+  an existing default.
+- **Parallel lanes:** lanes may push to their own `claude/<lane>` branch and
+  open their own PR (auto-merge on green); one PR per small batch of fixes.
 
 ## Planning docs
 
