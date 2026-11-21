@@ -105,6 +105,10 @@ def resolve_font(
     return FontResolution(name, fallback, "fallback")
 
 
+# FreeType fails ("invalid pixel size") somewhere above this; no figure wants it.
+_MAX_FONT_PT = 1000.0
+
+
 def validate_typography(ov: Mapping[str, Any]) -> None:
     """Raise ``ValueError`` on a non-positive / non-finite size override."""
     for key in SIZE_KEYS:
@@ -113,6 +117,8 @@ def validate_typography(ov: Mapping[str, Any]) -> None:
             continue
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0:
             raise ValueError(f"{key} must be a positive number of points")
+        if v > _MAX_FONT_PT:  # FreeType rejects the size: it used to 500 the export
+            raise ValueError(f"{key} must be at most {_MAX_FONT_PT:g} points")
 
 
 def effective_style(st: FigureStyle, ov: Mapping[str, Any]) -> FigureStyle:

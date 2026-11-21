@@ -58,11 +58,18 @@ _CONTOUR_SOURCES = ("grid", "points", "curves")
 _POINTS_KINDS = ("contour", "contourf", "scatter3d")
 
 
+# A contour level count/list above this is a typo or an attack: `np.linspace`
+# of 1e9 levels is an 8 GB allocation that kills the server process.
+_MAX_LEVELS = 1000
+
+
 def _contour_levels(
     z_min: float, z_max: float, levels: int | list[float], scale: str
 ) -> NDArray[np.float64]:
     """Explicit contour levels: ``levels`` count (or a list), lin or log spaced."""
     if isinstance(levels, (list, tuple)):
+        if len(levels) > _MAX_LEVELS:
+            raise ValueError(f"levels list has {len(levels)} entries; at most {_MAX_LEVELS}")
         arr = np.asarray(sorted(float(x) for x in levels), dtype=float)
         if arr.size < 2:  # matplotlib's contourf needs >= 2 levels
             raise ValueError("levels list needs at least 2 entries")
@@ -70,6 +77,8 @@ def _contour_levels(
     n = int(levels)
     if n < 2:
         raise ValueError("levels count must be >= 2")
+    if n > _MAX_LEVELS:
+        raise ValueError(f"levels count {n} is too large; at most {_MAX_LEVELS}")
     if not (np.isfinite(z_min) and np.isfinite(z_max) and z_max > z_min):
         raise ValueError("map has no finite z-range to contour")
     if scale == "log":

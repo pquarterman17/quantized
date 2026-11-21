@@ -41,6 +41,20 @@ COLUMN_KINDS = ("number", "text", "datetime")
 #: Excel's sheet-name rules: at most 31 characters, none of ``[]:*?/\``.
 _SHEET_NAME_MAX = 31
 _SHEET_BAD = str.maketrans({c: "_" for c in "[]:*?/\\"})
+#: Excel's hard limits: rows per sheet, characters per cell.
+_XLSX_MAX_ROWS = 1_048_576
+_XLSX_MAX_CELL = 32_767
+#: XML 1.0 forbids these control characters; openpyxl refuses to write them.
+_XLSX_ILLEGAL = str.maketrans(
+    {c: "\ufffd" for c in (*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20))}
+)
+
+
+def _xlsx_text(text: str) -> str:
+    """``text`` as an Excel cell: XML-illegal control characters (a NUL or
+    form feed from a binary-ish import) become U+FFFD instead of 500ing the
+    export, and a cell is cut at Excel's 32 767-character limit."""
+    return text.translate(_XLSX_ILLEGAL)[:_XLSX_MAX_CELL]
 
 
 @dataclass(frozen=True)
@@ -170,12 +184,17 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
     taken: set[str] = set()
     for sheet in sheets:
         n_rows = _check(sheet)
+        if n_rows + 2 + len(sheet.preamble) > _XLSX_MAX_ROWS:
+            raise ValueError(
+                f"sheet {sheet.name!r} has {n_rows} rows; an Excel sheet holds at most "
+                f"{_XLSX_MAX_ROWS - 2} data rows -- export CSV instead"
+            )
         ws = wb.create_sheet(_sheet_title(sheet.name, taken))
         for line in sheet.preamble if header else ():
-            ws.append([line])
+            ws.append([_xlsx_text(line)])
         if header:
             for row in _header_rows(sheet):
-                ws.append(row)
+                ws.append([_xlsx_text(cell) for cell in row])
         first = ws.max_row + 1 if header else 1
         for r in range(n_rows):
             ws.append([_xlsx_cell(c, c.cells[r]) for c in sheet.columns])
@@ -190,7 +209,7 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
 
 def _xlsx_cell(column: ExportColumn, value: float | str | None) -> float | str | datetime | None:
     if column.kind == "text":  # openpyxl writes a leading "=" as a formula
-        return None if value is None or value == "" else neutralize_formula(str(value))
+        return None if value is None or value == "" else _xlsx_text(neutralize_formula(str(value)))
     if column.kind == "datetime":
         stamp = _stamp(value)
         return None if stamp is None else stamp.replace(tzinfo=None)  # Excel has no zones
