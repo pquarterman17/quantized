@@ -6,6 +6,46 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-21
+
+### Added
+
+- **Origin plot kinds** (#787, #791, #794): stacked area, horizontal bars, grouped and stacked columns, 100 % stacks, histogram + cumulative pages, and pie / doughnut layers draw as Origin draws them. Kinds not yet supported (floating columns, vectors, bar-of-pie, ...) are left out with a note rather than drawn wrong.
+- **Origin category axes** (#784, #792): text labels on screen and in export; Divide-by and Formula tick labels from `.opju` and `.opj`.
+- **Origin error bars** (#778, #788): asymmetric and X errors, band style, double plots; your own error bindings survive an Origin re-apply.
+- **Keyboard access to the 2-D plot** (#761): data cursor, zoom, pan, reset.
+- **Analyze menu as navigator** (#764): disabled items say why, plus recent analyses and existing results.
+- **Signal Processing on several sheets** (#760) groups its outputs and offers "Overlay these N".
+- **Result workspace** (#765): choose which outputs to Freeze when a result has several.
+- **Resizable Inspector** (#762); the Library header stays put when scrolled.
+
+### Changed
+
+- **Origin import opens the project's first graph** (#771) instead of the raw book; unresolved figures group under one collapsed Library node (#772).
+- **Origin figures look like Origin** (#779, #781, #786):
+  - no phantom curves, and the recorded X wins;
+  - every panel of a multi-layer page is kept; top-axis layers draw as one plot;
+  - cross-book double-Y; thin lines at a 1-pixel minimum; pale colours are darkened but keep their hue;
+  - page text is placed correctly, and script buttons are hidden.
+- **Tool windows dock** (#766): Baseline, Peaks, Signal Processing and Waterfall no longer cover the plot's Y axis.
+- **Workspace files** holding fields older versions would drop are written as v7 (#792), so an older quantized refuses them rather than losing data.
+
+### Fixed
+
+- **Origin `.opju`** (#769, #770, #775, #777): hidden plots stay hidden; restyled scatter plots keep their colours; 199 more graph pages decode; every graph page Origin lists is accounted for.
+- **Origin `.opj`** (#780): each curve reads its own X and full column names; hidden plots are left out; symbols take automatic colours.
+- **Origin import edge cases** (#773, #774, #792): graph-only and unsaved Data Connector projects open; a book renamed only by case binds; fidelity codes are accurate.
+- **Origin legends** (#793) keep a genuine "(2)" in a column name; reversed axes keep their tick labels on screen and in export.
+- **Tiny Origin symbols** (#794): sizes below 2 now draw (they drew nothing before).
+- **Import polish** (#768): the loading status clears; notes stay inside the frame; fit-sheet legend labels are readable.
+- **Plot legend** (#763): no empty "peaks" row before peaks exist.
+
+### Internal
+
+- **Origin corpus regression check** (#785): `gate.py --origin` compares every project before and after a change and fails on unexplained differences.
+- **Decode ledger** (#783) and a split of project docs into per-area files and skills (#789).
+- **Robustness** (#767, #776, #782): the figure gallery harness is repaired; a corpus-wide visual check runs against Origin's own images; five load-sensitive timing tests are robust.
+
 ## [0.38.0] - 2026-11-17
 
 ### Added
