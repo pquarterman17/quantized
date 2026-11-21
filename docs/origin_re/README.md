@@ -34,9 +34,11 @@ changes: [src/quantized/io/origin_project/CLAUDE.md](../../src/quantized/io/orig
 
 ## What does not work yet
 
-- **Plot kinds left out** (`plot_type_not_drawn`): pie/doughnut, 100 %
-  stacked column, stacks on user templates, grouped horizontal bars, floating
-  column, vector. See [plot_kinds.md](plot_kinds.md) "Left out".
+- **Plot kinds left out** (`plot_type_not_drawn`): stacks on user templates,
+  grouped horizontal bars, bar-of-pie, the three-plot floating column
+  (pie / doughnut, two-plot floating columns and vectors draw since #794 / #798).
+  Grouped columns over a text X on a later sheet stay `x_not_imported`
+  (F-117). See [plot_kinds.md](plot_kinds.md) "Left out".
 - **Error bars left out** (39 public plots): see [error_bars.md](error_bars.md)
   "Still left out".
 - **Not decoded:** `.opju` tick "Divide by", bar widths, the cumulative line's
