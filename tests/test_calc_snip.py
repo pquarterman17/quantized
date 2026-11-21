@@ -337,3 +337,38 @@ def test_cold_vs_warm_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     snip_clip(v, 100)  # 40,000: at/above cold -> get (may load)
     snip_clip(v[:20], 2)  # 40 < warm -> neither
     assert seen == ["peek", "get"]
+
+
+def _min_negzero(x: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """``np.minimum`` as AArch64 resolves it: a signed-zero tie gives -0."""
+    r = np.minimum(x, t)
+    tie = (x == t) & (x == 0.0)
+    r[tie] = np.where(np.signbit(x[tie]) | np.signbit(t[tie]), -0.0, 0.0)
+    return r
+
+
+def test_negzero_loop_matches_an_aarch64_style_minimum() -> None:
+    """The AArch64 variant (chosen when ``np.minimum`` returns -0 for a
+    signed-zero tie in either order) gives -0 on every tie, and matches the
+    reference arithmetic everywhere else."""
+    numba = pytest.importorskip("numba")
+    from quantized.calc import _snip_numba
+
+    rng = np.random.default_rng(7)
+    v = rng.choice([0.0, -0.0, 1.0, -1.0, 0.5], size=257)
+    expect = v.copy()
+    n = v.size
+    for w in range(9, 0, -1):
+        nxt = expect.copy()
+        avg = (expect[: n - 2 * w] + expect[2 * w :]) / 2.0
+        nxt[w : n - w] = _min_negzero(expect[w : n - w], avg)
+        expect = nxt
+    jitted = numba.njit(_snip_numba._snip_loop_negzero)
+    got = jitted(v.copy(), np.empty_like(v), 9)
+    assert got.tobytes() == expect.tobytes()
+
+
+def test_zero_tie_probe_names_this_platform() -> None:
+    from quantized.calc import _snip_numba
+
+    assert _snip_numba._zero_tie_mode() in ("second", "negative")
