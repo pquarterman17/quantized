@@ -84,6 +84,9 @@ export interface StatStageState {
    *  stacked (true, one bar per category). */
   barStack: boolean;
   setBarStack: (s: boolean) => void;
+  /** A stacked bar normalised to 100 % per category (Origin's 100 % stack). */
+  barPercent: boolean;
+  setBarLayout: (l: "grouped" | "stacked" | "percent") => void;
   /** P2.6 box 1: the resolved marks this stage draws with (and exports),
    *  and the patch writer (persisted + undoable when the caller wired
    *  `onMarksChange`). Review finding 9: the four legacy boolean shorthands

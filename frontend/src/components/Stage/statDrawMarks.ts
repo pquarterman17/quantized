@@ -17,7 +17,7 @@
 import type { BarSeriesStat } from "../../lib/barlayout";
 import { stackedTotal } from "../../lib/barMatrix";
 import { resolveStatMarks, errorBounds, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
-import { finiteDomain, type BoxStat } from "../../lib/statstage";
+import { barValueDomain, finiteDomain, type BoxStat } from "../../lib/statstage";
 import { barMarkExtents } from "./statBarMarks";
 import type { StatDrawData } from "./statRender";
 import type { CategoryAxisStyle } from "./statRenderAxes";
@@ -140,4 +140,11 @@ export function barDomainCandidates(
     }
   }
   return out;
+}
+
+/** The bar chart's value domain: the draw's fixed `valueRange` (an Origin
+ *  layer's Y range) when it has one, else every drawn extent, padded
+ *  (`barValueDomain`). Shared by the painter and the click hit-test. */
+export function barDomain(d: Extract<StatDrawData, { mode: "bar" }>, m: DrawMarks = drawMarks(d)): [number, number] {
+  return d.valueRange ? [d.valueRange[0], d.valueRange[1]] : barValueDomain(barDomainCandidates(d, m));
 }

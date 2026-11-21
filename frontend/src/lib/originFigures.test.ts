@@ -1527,18 +1527,25 @@ describe("Origin column / bar / histogram graphs (re-audit #2: a bar graph resto
     expect(figureStatState(mixed, book)).toEqual({});
   });
 
-  it("a grouped / stacked column layer opens the Stat Stage bar chart grouped by its X", () => {
+  it("a grouped / stacked / 100 % stacked column layer opens the Stat Stage bar chart grouped by its X", () => {
     const two: Dataset = {
       ...book,
       data: { ...book.data, values: [[5, 1], [6, 2], [7, 3]], labels: ["Height", "Width"], metadata: { ...book.data.metadata, origin_column_names: ["B", "C"] } },
     };
     const cols = (x: string) => [curve("column"), { ...curve("column"), y: "C" }].map((c) => ({ ...c, x }));
-    const picks = (barStack: boolean, group: [number, string]) => ({
+    const picks = (barStack: boolean, group: [number, string], barPercent = false, valueRange?: [number, number]) => ({
       statMode: true,
-      statPicks: { mode: "bar", barStack, cols: { group, group2: null, value: [0, "Height"], facet: null, color: null } },
+      statPicks: { mode: "bar", barStack, barPercent, valueRange, cols: { group, group2: null, value: [0, "Height"], facet: null, color: null } },
     });
     expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("A") }), two)).toEqual(picks(false, [-1, ""]));
     expect(figureStatState(figure({ bar_layout: "stacked", curves: cols("A") }), two)).toEqual(picks(true, [-1, ""]));
+    // Origin's 100 % stack, and the layer's linear Y range as the value axis
+    const pct = figure({ bar_layout: "percent", curves: cols("A"), y_log: false, y_from: 0, y_to: 100 });
+    expect(figureStatState(pct, two)).toEqual(picks(true, [-1, ""], true, [0, 100]));
+    const zoom = figure({ bar_layout: "grouped", curves: cols("A"), y_log: false, y_from: 65, y_to: 75 });
+    expect(figureStatState(zoom, two)).toEqual(picks(false, [-1, ""], false, [65, 75]));
+    // a log or reversed Y is not a bar value axis: autoscale
+    expect(figureStatState({ ...zoom, y_from: 75, y_to: 65 }, two)).toEqual(picks(false, [-1, ""]));
     // another column as X: not the stage (it offers no numeric column as a group)
     expect(figureStatState(figure({ bar_layout: "grouped", curves: cols("C") }), two)).toEqual({});
     // a text X that never became numeric (no x_column_name) is the row index

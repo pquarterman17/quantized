@@ -44,9 +44,12 @@ def _book(name: str, x: list[float], cols: dict[str, list[float]], x_name: str =
 _BOOK = _book("Bk", [1, 2, 3], {"B": [1, 2, 3], "C": [4, 5, 6], "D": [7, 8, 9]})
 
 
-def _fig(kinds: list[str], name: str = "Graph1", layer: int = 1, x: str = "A") -> dict[str, Any]:
+def _fig(
+    kinds: list[str], name: str = "Graph1", layer: int = 1, x: str = "A", **flags: bool
+) -> dict[str, Any]:
+    """``flags``: the layer record's ``axes_exchanged`` / ``stack_percent``."""
     curves = [{"book": "Bk", "x": x, "y": "BCD"[i], "plotType": k} for i, k in enumerate(kinds)]
-    return {"name": name, "layer": layer, "curves": curves, "legend_labels": []}
+    return {"name": name, "layer": layer, "curves": curves, "legend_labels": [], **flags}
 
 
 def _apply(figs: list[dict[str, Any]], books: Any = (_BOOK,)) -> list[dict[str, Any]]:
@@ -96,35 +99,58 @@ def test_other_plot_types_get_no_layer_kind(code: int) -> None:
 def test_single_stacked_area_is_an_area_and_single_stack_a_column() -> None:
     (a,) = _apply([_fig(["stacked_area"])])
     assert a["curves"][0]["plotType"] == "area" and not _reasons(a)
-    (c,) = _apply([_fig(["stacked_column"])])
+    (c,) = _apply([_fig(["stacked_column"], stack_percent=False)])
     assert c["curves"][0]["plotType"] == "column" and BAR_LAYOUT not in c
+    (unknown,) = _apply([_fig(["stacked_column"])])  # no flag, no template: fail closed
+    assert unknown["curves"] == [] and _reasons(unknown) == [PLOT_TYPE_NOT_DRAWN]
 
 
 def test_single_series_on_a_100_percent_stack_page_is_left_out(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Origin's StackColP draws one series as a flat 100 %, never its raw values
+    # Origin's 100 % stack draws one series as a flat 100 %, never its raw values
+    (flag,) = _apply([_fig(["stacked_column"], stack_percent=True)])
+    assert flag["curves"] == [] and _reasons(flag) == [PLOT_TYPE_NOT_DRAWN]
     monkeypatch.setattr(opju_bar_kinds, "opju_pages", lambda b: [])
     monkeypatch.setattr(opju_bar_kinds, "_template_kind", lambda b, p, n: "percent")
-    (f,) = _apply([_fig(["stacked_column"])])
+    (f,) = _apply([_fig(["stacked_column"])])  # no flag: the StackColP template
     assert f["curves"] == [] and _reasons(f) == [PLOT_TYPE_NOT_DRAWN]
 
 
-def test_single_horizontal_bar_kept_only_alone_on_a_one_layer_bar_page(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(opju_bar_kinds, "opju_pages", lambda b: [])
-    monkeypatch.setattr(opju_bar_kinds, "_template_kind", lambda b, p, n: None)
-    (other,) = _apply([_fig(["bar"])])  # not Origin's Bar template: unproven
-    assert other["curves"] == [] and _reasons(other) == [PLOT_TYPE_NOT_DRAWN]
-    monkeypatch.setattr(opju_bar_kinds, "_template_kind", lambda b, p, n: "bar")
-    (one,) = _apply([_fig(["bar"])])
-    assert one["curves"][0]["plotType"] == "bar"
-    # a column beside it is turned too (grouped horizontal): both left out
-    (mixed,) = _apply([_fig(["bar", "column"])])
+def test_the_layer_not_the_plot_type_turns_the_bars() -> None:
+    """An exchanged-axes layer draws its one bar or column plot sideways; an
+    upright layer's 215 plot is Origin's column (SOP_meas Graph67)."""
+    for kind in ("bar", "column"):
+        (one,) = _apply([_fig([kind], axes_exchanged=True)])
+        assert one["curves"][0]["plotType"] == "bar" and not _reasons(one)
+    (upright,) = _apply([_fig(["bar"], axes_exchanged=False)])
+    assert upright["curves"][0]["plotType"] == "column" and not _reasons(upright)
+    # several upright 215 plots on one X: Origin's grouped columns
+    (grouped,) = _apply([_fig(["bar", "bar"], axes_exchanged=False)])
+    assert grouped[BAR_LAYOUT] == "grouped"
+
+
+def test_a_turned_layer_draws_nothing_else_and_unknown_orientation_fails_closed() -> None:
+    # grouped sideways bars (LSA_fig6 Graph6), a turned panel of a multi-layer
+    # page (SOP_meas Graph65 L5): not drawn, never upright
+    (mixed,) = _apply([_fig(["bar", "column"], axes_exchanged=True)])
     assert mixed["curves"] == [] and _reasons(mixed) == [PLOT_TYPE_NOT_DRAWN] * 2
-    panels = _apply([_fig(["bar"]), _fig(["bar"], layer=2)])
-    assert all(f["curves"] == [] for f in panels)
+    panels = _apply([_fig(["column"], axes_exchanged=True), _fig(["line"], layer=2)])
+    assert panels[0]["curves"] == [] and panels[1]["curves"]
+    # a line in a turned layer would put its points where Origin does not
+    (line,) = _apply([_fig(["column", "line"], axes_exchanged=True)])
+    assert line["curves"] == []
+    # ...with no bar in the layer too; an upright line layer is untouched
+    (lines,) = _apply([_fig(["line", "line"], axes_exchanged=True)])
+    assert lines["curves"] == [] and _reasons(lines) == [PLOT_TYPE_NOT_DRAWN] * 2
+    (upright,) = _apply([_fig(["line"], axes_exchanged=False)])
+    assert upright["curves"][0]["plotType"] == "line" and not _reasons(upright)
+    # no layer flag: a bar's orientation is unknown, so it and its columns go
+    (unknown,) = _apply([_fig(["bar", "column"])])
+    assert unknown["curves"] == [] and _reasons(unknown) == [PLOT_TYPE_NOT_DRAWN] * 2
+    # a column alone without a flag keeps main's upright reading
+    (col,) = _apply([_fig(["column"])])
+    assert col["curves"][0]["plotType"] == "column"
 
 
 def test_kinds_without_a_renderer_are_left_out_not_drawn_as_lines() -> None:
@@ -152,14 +178,29 @@ def test_several_columns_on_one_x_are_a_grouped_bar_chart() -> None:
     assert [c["plotType"] for c in g["curves"]] == ["column"] * 3
 
 
-def test_stacked_columns_need_the_stackcolumn_template(monkeypatch: pytest.MonkeyPatch) -> None:
-    for template, layout in (("stacked", "stacked"), ("percent", None), (None, None)):
+def test_stacked_columns_follow_the_layers_100_percent_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(opju_bar_kinds, "opju_pages", lambda b: [])
+    # the flag wins over any template (Fig_3 Graph2 is a 100 % stack on MergeGrap)
+    for flag, layout in ((True, "percent"), (False, "stacked")):
+        for template in ("stacked", "percent", None):
+            monkeypatch.setattr(opju_bar_kinds, "_template_kind", lambda b, p, n, t=template: t)
+            (f,) = _apply([_fig(["stacked_column", "stacked_column"], stack_percent=flag)])
+            assert (
+                f.get(BAR_LAYOUT) == layout
+                and [c["plotType"] for c in f["curves"]] == ["column"] * 2
+            )
+    # no flag: the template (StackColP 100 %, StackColumn plain), else left out
+    for template, layout in (("stacked", "stacked"), ("percent", "percent"), (None, None)):
         monkeypatch.setattr(opju_bar_kinds, "_template_kind", lambda b, p, n, t=template: t)
-        monkeypatch.setattr(opju_bar_kinds, "opju_pages", lambda b: [])
         (f,) = _apply([_fig(["stacked_column", "stacked_column"])])
         assert f.get(BAR_LAYOUT) == layout
-        if layout is None:  # 100 % stack or a user template: unproven
+        if layout is None:
             assert f["curves"] == [] and _reasons(f) == [PLOT_TYPE_NOT_DRAWN] * 2
+    # a stack on a multi-layer page (Graph_Template 32New L4): left out
+    panels = _apply([_fig(["stacked_column"] * 2, stack_percent=False), _fig(["line"], layer=2)])
+    assert panels[0]["curves"] == [] and BAR_LAYOUT not in panels[0]
 
 
 @pytest.mark.parametrize(
@@ -324,23 +365,47 @@ def test_realdata_stacked_area_and_horizontal_bar_pages(corpus_dir: Path) -> Non
     for name in ("Graph6", "Graph8"):
         assert lsa[name]["curves"] == []
         assert PLOT_TYPE_NOT_DRAWN in _reasons(lsa[name])
+    assert all(f["axes_exchanged"] is True for f in lsa.values() if f["name"])
+
+
+@pytest.mark.realdata
+def test_realdata_bar_orientation_is_the_layers(corpus_dir: Path) -> None:
+    """``SOP_meas`` Graph67 is a lone 215 plot on Origin's ``Bar`` template,
+    yet its saved preview is upright: its layer's exchanged-axes flag is clear,
+    so it is drawn as a column. Graph65 layer 5 (a sideways panel in its
+    preview) has the flag set and, on a multi-layer page, is left out. Every
+    curve kept as a horizontal bar sits in an exchanged layer."""
+    figs = _figures(_one(_public(corpus_dir), "SOP_meas.opju"))
+    by = {(f["name"], f["layer"]): f for f in figs}
+    g67 = by[("Graph67", 1)]
+    assert g67["axes_exchanged"] is False and [c["plotType"] for c in g67["curves"]] == ["column"]
+    g65 = by[("Graph65", 5)]
+    assert g65["axes_exchanged"] is True and g65["curves"] == []
+    turned = [f for f in figs if any(c.get("plotType") == "bar" for c in f["curves"])]
+    assert all(f["axes_exchanged"] is True for f in turned)
 
 
 @pytest.mark.realdata
 def test_realdata_grouped_stacked_and_pie(corpus_dir: Path) -> None:
     """``fig_6_a`` Graph1 (template ``Column``): three column series per X ->
-    grouped; Graph2 / Graph3 (``StackColP``, Origin's 100 % stack, preview
-    0..100 % from raw counts) -> left out; the Etna ``origin.opju`` Graph17
-    (``StackColumn``) -> stacked; ``soil deep`` Graph3 (``Pie2D``) -> left out."""
+    grouped on its own Y range; Graph2 / Graph3 (``StackColP``, Origin's 100 %
+    stack, preview 0..100 % from raw counts) -> the layer's 100 % flag agrees
+    with that independent template field -> ``percent``; the Etna
+    ``origin.opju`` Graph17 / 19 (``StackColumn``) -> flag clear -> stacked;
+    ``soil deep`` Graph3 (``Pie2D``) -> left out."""
     root = _public(corpus_dir)
     fig6 = {f["name"]: f for f in _figures(_one(root, "fig_6_a.opju"))}
     assert fig6["Graph1"][BAR_LAYOUT] == "grouped" and len(fig6["Graph1"]["curves"]) == 3
     for name in ("Graph2", "Graph3"):
-        assert fig6[name]["curves"] == [] and set(_reasons(fig6[name])) == {PLOT_TYPE_NOT_DRAWN}
+        assert fig6[name]["stack_percent"] is True and fig6[name][BAR_LAYOUT] == "percent"
+        assert len(fig6[name]["curves"]) == 3 and not _reasons(fig6[name])
     etna = [p for p in root.rglob("origin.opju") if "Etna" in str(p)]
     if etna:
-        g17 = next(f for f in _figures(etna[0]) if f["name"] == "Graph17")
-        assert g17[BAR_LAYOUT] == "stacked" and len(g17["curves"]) == 11
+        figs = {f["name"]: f for f in _figures(etna[0])}
+        assert figs["Graph17"][BAR_LAYOUT] == "stacked" and len(figs["Graph17"]["curves"]) == 11
+        assert (
+            figs["Graph19"]["stack_percent"] is False and figs["Graph19"][BAR_LAYOUT] == "stacked"
+        )
     soil = {f["name"]: f for f in _figures(_one(root, "soil deep.opju"))}
     assert soil["Graph3"]["curves"] == [] and _reasons(soil["Graph3"]) == [PLOT_TYPE_NOT_DRAWN]
 

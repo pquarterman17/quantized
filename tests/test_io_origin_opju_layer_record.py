@@ -9,7 +9,7 @@ import struct
 import pytest
 
 from quantized.io.origin_project.figures_opju import extract_figures_opju
-from quantized.io.origin_project.opju_layer_record import expand_sparse, layer_record
+from quantized.io.origin_project.opju_layer_record import expand_sparse, layer_flags, layer_record
 from test_io_origin_figures_opju import _column_id_record
 from test_io_origin_opju_page_attribution import _ONE, _header
 
@@ -135,3 +135,39 @@ def test_record_on_a_workbook_page_is_not_read() -> None:
     assert [(f["name"], f["layer"], f["x_to"], f["y_to"]) for f in figs] == [
         ("Graph1", 1, 10.0, 1.0)
     ]
+
+
+def _flagged(b104: int, b187: int | None, context: bytes = b"\x00\x10") -> bytes:
+    """A layer record continuing past the Y scale field with ``context`` at
+    100-101, byte 104 and (when given) byte 187 set."""
+    buf = bytearray(_layer()) + bytearray(100)
+    buf[100:110] = bytes(10)
+    buf[100:102] = context
+    buf[104] = b104
+    if b187 is None:
+        return _encode(bytes(buf[:150]))
+    buf[187] = b187
+    return _encode(bytes(buf))
+
+
+@pytest.mark.parametrize(
+    ("b104", "b187", "want"),
+    [
+        (0x48, 0x00, {"axes_exchanged": True, "stack_percent": False}),  # LSA_fig6 form
+        (0x68, 0x00, {"axes_exchanged": True, "stack_percent": False}),  # TEA Graph9 form
+        (0x08, 0x02, {"axes_exchanged": False, "stack_percent": True}),  # fig_6_a Graph2 form
+        (0x88, 0x01, {"axes_exchanged": False, "stack_percent": False}),  # stacked area: 01
+        (0x80, 0x10, {"axes_exchanged": False, "stack_percent": False}),  # pie / line: 10
+        (0x48, None, {"axes_exchanged": True}),  # record ends before 187
+    ],
+)
+def test_layer_flags(b104: int, b187: int | None, want: dict[str, bool]) -> None:
+    assert layer_flags(_flagged(b104, b187), 0) == want
+
+
+def test_layer_flags_fail_closed() -> None:
+    # another continuation at 100-101, or a record that does not authenticate
+    assert layer_flags(_flagged(0x48, 0x02, context=b"\x00\x12"), 0) == {}
+    bad = bytearray(_layer(xs=b"\x80\xe9")) + bytearray(100)
+    bad[100:102], bad[104] = b"\x00\x10", 0x48
+    assert layer_flags(_encode(bytes(bad)), 0) == {}

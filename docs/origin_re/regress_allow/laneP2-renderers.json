@@ -1,0 +1,124 @@
+{
+  "public:Bariumoxid_MIMOTechniques/Report/Graph_Template.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "Graph1/L1:",
+      "reason": "an upright 215 layer (layer record byte 104 bit 0x40 clear) is Origin's column: Graph_Template / Graphs Graph1 L1 previews show two upright column series; Lane P left these 215 plots out (orientation from the Bar template); drawn again, as columns by line style on this 2-layer page"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "Graph1/L1:",
+      "reason": "an upright 215 layer (layer record byte 104 bit 0x40 clear) is Origin's column: Graph_Template / Graphs Graph1 L1 previews show two upright column series; Lane P left these 215 plots out (orientation from the Bar template); drawn again, as columns by line style on this 2-layer page"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph1/L1:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    }
+  ],
+  "public:Bariumoxid_MIMOTechniques/Report/Graphs.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "Graph1/L1:",
+      "reason": "an upright 215 layer (layer record byte 104 bit 0x40 clear) is Origin's column: Graph_Template / Graphs Graph1 L1 previews show two upright column series; Lane P left these 215 plots out (orientation from the Bar template); drawn again, as columns by line style on this 2-layer page"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "Graph1/L1:",
+      "reason": "an upright 215 layer (layer record byte 104 bit 0x40 clear) is Origin's column: Graph_Template / Graphs Graph1 L1 previews show two upright column series; Lane P left these 215 plots out (orientation from the Bar template); drawn again, as columns by line style on this 2-layer page"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph1/L1:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    }
+  ],
+  "public:Techboyjohnny-98_SOP_measurement_SHAP/OriginPro file/SOP_meas.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Graph40/L5:",
+      "reason": "203 column plots in a turned panel (layer record byte 104 bit 0x40 set; the panels are sideways in SOP_meas's saved previews) of a multi-layer page: main drew them upright, Origin sideways; grouped sideways bars are not drawn, so they are left out (plot_type_not_drawn)"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph40/L5:",
+      "reason": "203 column plots in a turned panel (layer record byte 104 bit 0x40 set; the panels are sideways in SOP_meas's saved previews) of a multi-layer page: main drew them upright, Origin sideways; grouped sideways bars are not drawn, so they are left out (plot_type_not_drawn)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph40/L5:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph40/L9:",
+      "reason": "203 column plots in a turned panel (layer record byte 104 bit 0x40 set; the panels are sideways in SOP_meas's saved previews) of a multi-layer page: main drew them upright, Origin sideways; grouped sideways bars are not drawn, so they are left out (plot_type_not_drawn)"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph40/L9:",
+      "reason": "203 column plots in a turned panel (layer record byte 104 bit 0x40 set; the panels are sideways in SOP_meas's saved previews) of a multi-layer page: main drew them upright, Origin sideways; grouped sideways bars are not drawn, so they are left out (plot_type_not_drawn)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph40/L9:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Graph55/L5:",
+      "reason": "203 column plots in a turned panel (layer record byte 104 bit 0x40 set; the panels are sideways in SOP_meas's saved previews) of a multi-layer page: main drew them upright, Origin sideways; grouped sideways bars are not drawn, so they are left out (plot_type_not_drawn)"
+    },
+    {
+      "kind": "omission_added",
+      "contains": "Graph55/L5:",
+      "reason": "203 column plots in a turned panel (layer record byte 104 bit 0x40 set; the panels are sideways in SOP_meas's saved previews) of a multi-layer page: main drew them upright, Origin sideways; grouped sideways bars are not drawn, so they are left out (plot_type_not_drawn)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph55/L5:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    },
+    {
+      "kind": "plot_type_changed",
+      "contains": "Graph67/L1:",
+      "reason": "Graph67's layer has the exchanged-axes bit clear and its saved preview shows five UPRIGHT bars: the lone 215 plot is Origin's column (Lane P drew it sideways from the Bar template)"
+    }
+  ],
+  "public:envdes_code_CMAQ_FLAML_Germany_2030/4_result_analysis/fig_6_a.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "Graph2/L1:",
+      "reason": "100 % stacked columns (layer record byte 187 bit 0x02 set; StackColP template; previews run 0..100 % from raw monthly counts): drawn as the Stat Stage 100 % stacked bar chart (bar_layout percent) instead of left out"
+    },
+    {
+      "kind": "curve_gained",
+      "contains": "Graph3/L1:",
+      "reason": "100 % stacked columns (layer record byte 187 bit 0x02 set; StackColP template; previews run 0..100 % from raw monthly counts): drawn as the Stat Stage 100 % stacked bar chart (bar_layout percent) instead of left out"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "Graph2/L1:",
+      "reason": "100 % stacked columns (layer record byte 187 bit 0x02 set; StackColP template; previews run 0..100 % from raw monthly counts): drawn as the Stat Stage 100 % stacked bar chart (bar_layout percent) instead of left out"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "Graph3/L1:",
+      "reason": "100 % stacked columns (layer record byte 187 bit 0x02 set; StackColP template; previews run 0..100 % from raw monthly counts): drawn as the Stat Stage 100 % stacked bar chart (bar_layout percent) instead of left out"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph2/L1:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph3/L1:",
+      "reason": "fidelity notes follow the curves: a layer that gains / loses curves to plot_type_not_drawn gains / drops curves_left_out / exact_curve_bindings and the style notes of curves it (no longer) draws; a 100 % layer gains bar_marks_not_decoded"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "reason": "the union of the layers' fidelity notes above"
+    }
+  ]
+}

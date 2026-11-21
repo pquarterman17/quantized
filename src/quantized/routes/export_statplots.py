@@ -328,6 +328,9 @@ class CategoricalFigureRequest(BaseModel):
     caveat: str | None = None
     error_note: str | None = Field(default=None, max_length=200)  # see StatplotFigureRequest
     stacked: bool = False
+    # The screen's fixed value-axis range (an Origin layer's decoded Y range,
+    # `statPicks.valueRange`), applied with `ax.set_ylim`; None = autoscale.
+    y_domain: tuple[float, float] | None = None
     fmt: str = "pdf"
     style: str = "default"
     title: str = ""
@@ -416,7 +419,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 caveat=footnote_text(req.error_note, req.caveat),
                 axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
                 colors=level_colors(req.color_levels, req.palette), palette=req.palette,
-                svg_text_as_paths=req.svg_text_as_paths,
+                svg_text_as_paths=req.svg_text_as_paths, y_domain=req.y_domain,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

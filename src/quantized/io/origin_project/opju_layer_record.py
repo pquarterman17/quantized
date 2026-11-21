@@ -83,6 +83,34 @@ Y ``02 00`` of one record (``Sample_OriginPro_ResonatorData``); the
 sit at these offsets, or the field means something else); the embedded
 (workbook-page) layer records of ``electric_field_proj_median.opju``, whose
 Y block does not align.
+
+**Exchanged X/Y axes: byte 104, bit ``0x40``** (2026-11-20, ``layer_flags``).
+Origin's horizontal bar chart is a layer whose X and Y axes are exchanged
+(X runs up the left side). In the record that continues past the Y scale
+field as ``00 10 ...`` (byte 100-101; 3,595 of the 3,795 expandable records
+of both corpora), bit ``0x40`` of byte 104 is set on exactly 21 layers and
+every one is drawn sideways in Origin's saved preview: ``LSA_fig6`` Graph1-9,
+``TEA_ExcelGraphs`` Graph9/13/15/16/19, ``SOP_meas`` panels Graph14 L6,
+Graph40 L5/L9, Graph55 L5, Graph65 L5, ``Degree of impact`` Graph278 L1/L2
+(a population pyramid), whatever their plot type (215 bar, 203 column, or
+none). Every other 215 layer has it clear and is drawn UPRIGHT in its
+preview (``SOP_meas`` Graph67, ``Graph_Template`` / ``Graphs`` Graph1): the
+plot type does not set the orientation, the layer does. Byte 104 otherwise
+reads ``00 08 28 80 88 a8`` (bits ``0x08 0x20 0x80``, not decoded). Read
+only on an authenticated record (``layer_record``) with that ``00 10``
+continuation; otherwise the flag is absent (unknown: fail closed).
+
+**Stack normalised to 100 %: byte 187, bit ``0x02``** (2026-11-20). Set on
+exactly 3 graph layers of both corpora, every one a stacked column (213)
+layer whose saved preview runs 0..100 %: ``fig_6_a`` Graph2 / Graph3
+(``StackColP`` template, raw monthly counts drawn as shares) and ``Fig_3``
+Graph2 layer 2 (a ``MergeGrap`` page: the template alone would miss it).
+Clear on every plain stacked-column layer: Etna ``origin.opju`` Graph17 / 19
+and ``SOP_meas`` Graph20 (``StackColu``; previews are raw sums, below 100)
+and the user-template stacks of ``Graph_Template`` / ``Graphs`` (32New,
+32New_wMean, CQITCRLayerMod layer 4: fractions summing to 1, axis 0..1, not
+0..100). Elsewhere byte 187 reads ``00``, ``01`` (stacked-area layers) or
+``10`` (pie and some line layers). Read under the same authentication.
 """
 
 from __future__ import annotations
@@ -92,7 +120,7 @@ import struct
 
 from quantized.io.origin_project.figure_layers import _log_heuristic
 
-__all__ = ["expand_sparse", "layer_record"]
+__all__ = ["expand_sparse", "layer_flags", "layer_record"]
 
 _LENGTH = 100  # through the Y scale field
 _X_FIELDS = (15, 23, 31)
@@ -103,6 +131,9 @@ _Y_SCALES = frozenset({b"\x01\x00", b"\x00\x00", b"\x04\x00", b"\x08\x01", b"\x0
 _LIN = b"\x01\x00"
 _LOGS = frozenset({b"\x08\x01", b"\x04\x01"})  # log10 (module docstring)
 _HEADS = frozenset({b"\x00\x00\x1f\x00", b"\x00\x00\x5f\x00"})
+_EXCHANGE_OFF, _EXCHANGE_BIT = 104, 0x40  # module docstring
+_EXCHANGE_CONTEXT = b"\x00\x10"  # record bytes 100-101
+_PERCENT_OFF, _PERCENT_BIT = 187, 0x02  # module docstring
 
 LayerRecord = tuple[float, float, float, float, bool, bool, float, float]
 
@@ -178,3 +209,20 @@ def layer_record(b: bytes, anchor: int) -> LayerRecord | None:
         x[2],
         y[2],
     )
+
+
+def layer_flags(b: bytes, anchor: int) -> dict[str, bool]:
+    """``axes_exchanged`` (X/Y exchanged: Origin's horizontal bar layout) and
+    ``stack_percent`` (a stack normalised to 100 %) of the layer record at
+    ``anchor``; a flag the record does not authenticate for is absent
+    (module docstring)."""
+    if layer_record(b, anchor) is None:
+        return {}
+    buf = expand_sparse(b, anchor, _EXCHANGE_OFF + 1)
+    if buf is None or buf[_LENGTH : _LENGTH + 2] != _EXCHANGE_CONTEXT:
+        return {}
+    out = {"axes_exchanged": bool(buf[_EXCHANGE_OFF] & _EXCHANGE_BIT)}
+    wide = expand_sparse(b, anchor, _PERCENT_OFF + 1)
+    if wide is not None:
+        out["stack_percent"] = bool(wide[_PERCENT_OFF] & _PERCENT_BIT)
+    return out

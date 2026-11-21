@@ -211,7 +211,7 @@ export interface OriginFigure {
   y_log: boolean;
   source_hint?: string;
   n_curves: number;
-  coordinates?: "polar"; map?: import("./originMapSpec").OriginMapSpec; ternary?: import("./originMapSpec").OriginTernarySpec; bar_layout?: "grouped" | "stacked"; // bar_layout: Origin's several column series side by side / stacked per X, the Stat Stage bar chart (opju_bar_kinds.py)
+  coordinates?: "polar"; map?: import("./originMapSpec").OriginMapSpec; ternary?: import("./originMapSpec").OriginTernarySpec; bar_layout?: "grouped" | "stacked" | "percent"; // bar_layout: Origin's several column series side by side / stacked (to 100 %) per X, the Stat Stage bar chart (opju_bar_kinds.py)
   annotations: string[];
   /** Positioned floating text (Origin Text objects) at DATA coordinates —
    *  the text box's top-left corner, multi-line text "\n"-joined. Only

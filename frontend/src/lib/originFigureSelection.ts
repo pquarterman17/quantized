@@ -154,7 +154,7 @@ export function figureStatState(
   if (!ds || curves.length === 0 || curves.some((c) => c.plotType !== mode)) return {};
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
-  if (figure.bar_layout && mode === "column") return figureBarState(figure.bar_layout, curves, meta, letters, ds);
+  if (figure.bar_layout && mode === "column") return figureBarState(figure, curves, meta, letters, ds);
   if (mode !== "histogram" && mode !== "box" && mode !== "violin" && mode !== "strip") return {};
   const y = curves[0].y;
   const value = y === String(meta.x_column_name ?? "") ? -1 : letters.indexOf(y);
@@ -163,13 +163,14 @@ export function figureStatState(
   return { statMode: true, statPicks: { mode, cols: statColRefs(ds, cols) } };
 }
 
-/** Origin's grouped / stacked column chart (`OriginFigure.bar_layout`,
- *  io/origin_project/opju_bar_kinds.py): the Stat Stage bar chart grouped by
- *  the curves' one X column, one category per row (the importer proved the X
- *  unique and evenly spaced), one series per plotted Y. A text X that never
- *  became numeric is the row index (`.time`), as `isDefaultX` reads it. */
+/** Origin's grouped / stacked / 100 % stacked column chart
+ *  (`OriginFigure.bar_layout`, io/origin_project/opju_bar_kinds.py): the Stat
+ *  Stage bar chart grouped by the curves' one X column, one category per row
+ *  (the importer proved the X unique and evenly spaced), one series per
+ *  plotted Y, on the layer's own linear Y range (`valueRange`). A text X that
+ *  never became numeric is the row index (`.time`), as `isDefaultX` reads it. */
 function figureBarState(
-  layout: "grouped" | "stacked",
+  figure: OriginFigure,
   curves: OriginCurve[],
   meta: Record<string, unknown>,
   letters: string[],
@@ -183,7 +184,10 @@ function figureBarState(
   const value = letters.indexOf(curves[0].y);
   if (value < 0 || curves.some((c) => c.x !== x || c.book !== curves[0].book)) return {};
   const cols: StatCols = { group: -1, group2: null, value, facet: null, color: null };
-  return { statMode: true, statPicks: { mode: "bar", barStack: layout === "stacked", cols: statColRefs(ds, cols) } };
+  const { bar_layout: layout, y_from: lo, y_to: hi } = figure;
+  const valueRange: [number, number] | undefined = !figure.y_log && lo < hi ? [lo, hi] : undefined;
+  const shape = { barStack: layout !== "grouped", barPercent: layout === "percent", valueRange };
+  return { statMode: true, statPicks: { mode: "bar", ...shape, cols: statColRefs(ds, cols) } };
 }
 
 /** An Origin Polar layer (`OriginFigure.coordinates`, theta = X in degrees,

@@ -53,7 +53,7 @@ import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize"
 import type { StatMarks } from "../../lib/statMarks";
 import { statColorOf } from "../../lib/statColor";
 import { withPickedXGroup } from "../../lib/statPicks";
-import { withColumnErrors } from "../../lib/barMatrix";
+import { percentBars, withColumnErrors } from "../../lib/barMatrix";
 import { needsBarRaw } from "./statBarMarks";
 import { useStatBarSeries } from "./useStatBarSeries";
 import { figureErrorNote } from "./statErrorNote";
@@ -123,7 +123,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     valueCol, setValueCol,
     setFacetCol, colorCol, setColorCol,
     effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
-    dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack,
+    dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack, barPercent, setBarLayout, valueRange,
   } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed, picks: params.picks, onPicksChange: params.onPicksChange });
   // P2.6 box 1: the categorical marks (points / jitter / summary / error bars
   // / connect-means / labels) are the window's persisted `PlotView.statMarks`
@@ -216,8 +216,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     if (!data || mode !== "bar") return null;
     const raw = barRaw ? { rowIds } : null;
     const bd = computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, raw);
-    return withColumnErrors(bd, data, effectiveGroupCol, barValueChannels, barErrorChannels);
-  }, [data, rowIds, barRaw, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, barErrorChannels]);
+    const withErr = withColumnErrors(bd, data, effectiveGroupCol, barValueChannels, barErrorChannels);
+    return barPercent ? percentBars(withErr) : withErr; // Origin's 100 % stack
+  }, [data, rowIds, barRaw, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, barErrorChannels, barPercent]);
   const errorColumn = barData?.errorColumn ?? null;
   const rm = useMemo(() => withErrorColumn(rmBase, mode, marks, errorColumn != null), [rmBase, mode, marks, errorColumn]);
 
@@ -356,7 +357,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         setError("no finite values to group");
         return;
       }
-      setDrawData({ mode: "bar", data: barData, valueLabel: barValueLabel, groupLabel, stacked: barStack });
+      setDrawData({ mode: "bar", data: barData, valueLabel: barValueLabel, groupLabel, stacked: barStack, valueRange });
     } else if (mode === "qq") {
       const finite = finiteOf(data, valueCol);
       if (finite.length < 3) {
@@ -412,6 +413,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     barData,
     barValueLabel,
     barStack,
+    valueRange,
     effectiveFacetCol,
     effectiveGroupCol,
     nestCol,
@@ -433,8 +435,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     facetCol: marksMode ? effectiveFacetCol : null,
   }), [active, data, mode, marksMode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, slices]);
   const levels = useMemo(
-    () => applyLevels(axes, { hideEmpty, showN, color }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
-    [axes, hideEmpty, showN, color, drawData, drawFacets, freshDraw, freshFacets],
+    // grouped by X (an Origin column chart's rows): a row with no Y is no category
+    () => applyLevels(axes, { hideEmpty: hideEmpty || effectiveGroupCol === -1, showN, color }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
+    [axes, hideEmpty, showN, color, drawData, drawFacets, freshDraw, freshFacets, effectiveGroupCol],
   );
   const shown = useMemo(() => withMarks(levels.draw, levels.drawFacets, rm), [levels, rm]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
@@ -473,6 +476,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFit,
     barStack,
     setBarStack,
+    barPercent,
+    setBarLayout,
     marks: rm,
     errorColumn,
     setMarks: patchMarks,
