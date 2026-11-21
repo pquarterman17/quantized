@@ -160,9 +160,9 @@ from quantized.io.origin_project.opju_figure_curves import (
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
 from quantized.io.origin_project.opju_layer_pages import LayerPages
 from quantized.io.origin_project.opju_layer_record import layer_flags, layer_record
-from quantized.io.origin_project.opju_tick_divide import opju_tick_divide
 from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
+from quantized.io.origin_project.opju_tick_divide import opju_tick_divide
 
 __all__ = ["extract_figures_opju"]
 

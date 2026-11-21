@@ -50,6 +50,14 @@ from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_su
 __all__ = ["origin_figures_and_fidelity"]
 
 
+def _connector_books(primary: DataStruct | None) -> list[str]:
+    """Books the worksheet decode found saved without their data
+    (``origin_worksheet_fidelity["unsaved_books"]``, F-010)."""
+    wf = primary.metadata.get("origin_worksheet_fidelity") if primary is not None else None
+    rows = wf.get("unsaved_books") if isinstance(wf, Mapping) else None
+    return [str(r["book"]) for r in rows or [] if isinstance(r, Mapping) and r.get("book")]
+
+
 def origin_figures_and_fidelity(
     raw: bytes, suffix: str, books: list[DataStruct], primary: DataStruct | None = None
 ) -> tuple[list[dict[str, Any]], OriginFidelityManifest]:
@@ -72,7 +80,9 @@ def origin_figures_and_fidelity(
         else:
             # curves of a book whose data the file does not hold: omitted with
             # that reason first (opju_no_data), before the sheet check below
-            raw_figs = omit_unsaved_curves(extract_figures_opju(raw), books)
+            raw_figs = omit_unsaved_curves(
+                extract_figures_opju(raw), books, _connector_books(primary)
+            )
             # curves re-bound to a sheet the import did not produce are
             # omitted + diagnosed, not left for the frontend to skip silently
             raw_figs = unbound_rebinds(raw_figs, books)

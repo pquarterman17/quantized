@@ -79,6 +79,31 @@ def test_curves_of_an_unsaved_book_are_omitted_with_reason_and_caption() -> None
     ]
 
 
+def test_curves_of_an_unsaved_connector_book_beside_imported_books_are_omitted() -> None:
+    """A connector book saved without data in a project that imported other
+    books has no DataStruct at all: its curves (any sheet) are omitted as
+    ``data_not_saved`` -- an imported sheet of the same base name is not."""
+    figs = [
+        {
+            "name": "Graph10",
+            "curves": [
+                {"book": "Book3", "x": "A", "y": "B"},
+                {"book": "Book3@2", "x": "A", "y": "D"},
+                {"book": "Book4", "x": "A", "y": "B"},
+                {"book": "Book4@2", "x": "A", "y": "C"},
+            ],
+        }
+    ]
+    books = [_book("Book4", unavailable=False), _book("Book4@2", unavailable=False)]
+    out = omit_unsaved_curves(figs, books, ["Book3", "Book4"])  # Book4@2 imported: kept
+    assert out[0]["curves"] == [
+        {"book": "Book4", "x": "A", "y": "B"},
+        {"book": "Book4@2", "x": "A", "y": "C"},
+    ]
+    assert [o["recorded"] for o in out[0]["curve_sheet_omitted"]] == ["Book3", "Book3@2"]
+    assert {o["reason"] for o in out[0]["curve_sheet_omitted"]} == {DATA_NOT_SAVED}
+
+
 def test_no_unsaved_books_is_a_no_op() -> None:
     figs = [{"name": "G", "curves": [{"book": "Book1", "x": "A", "y": "B"}]}]
     assert omit_unsaved_curves(figs, [_book("Book1", unavailable=False)]) is figs
@@ -199,6 +224,14 @@ def test_corpus_connector_books_are_unsaved_exactly_when_their_cells_are_absent(
             else:
                 negatives += 1
                 assert book not in reported, (path.name, book)
+        imported = {str(x.metadata.get("origin_book", "")) for x in books}
+        if reported - imported and not all(UNAVAILABLE_KEY in x.metadata for x in books):
+            # beside imported books: no curve may point at a book that has no cells
+            figs, _ = origin_figures_and_fidelity(b, ".opju", books, primary=ds)
+            for f in figs:
+                for c in f["curves"]:
+                    base = str(c["book"]).partition("@")[0]
+                    assert not (base in reported and c["book"] not in imported), (path.name, c)
         if all(UNAVAILABLE_KEY in x.metadata for x in books):
             whole += 1
             figs, _ = origin_figures_and_fidelity(b, ".opju", books, primary=ds)

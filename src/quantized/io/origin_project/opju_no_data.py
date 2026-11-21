@@ -160,24 +160,37 @@ def unavailable_reason(book: str, connectors: Mapping[str, Mapping[str, str]]) -
 
 
 def omit_unsaved_curves(
-    figs: list[dict[str, Any]], books: Iterable[DataStruct]
+    figs: list[dict[str, Any]], books: Iterable[DataStruct], connectors: Iterable[str] = ()
 ) -> list[dict[str, Any]]:
     """``figs`` with every curve of a book whose data is not in the file (a
     placeholder book, ``origin_worksheet_unavailable``) moved to
     ``curve_sheet_omitted`` (reason ``data_not_saved``) and its legend
-    caption dropped — a curve is never drawn from a book with no cells."""
+    caption dropped — a curve is never drawn from a book with no cells.
+
+    ``connectors``: the Data Connector books saved without their data in a
+    project that DID import other books (worksheet fidelity
+    ``unsaved_books``, the same F-010 rule). They import no book at all, so
+    their curves (any sheet) were left for the frontend to drop silently,
+    which left a page with no book to open (``稳定性`` Graph9-12)."""
+    books = list(books)
     unsaved = {
         str(ds.metadata.get("origin_book", ""))
         for ds in books
         if isinstance(ds.metadata.get(UNAVAILABLE_KEY), Mapping)
     }
     unsaved.discard("")
-    if not unsaved:
+    imported = {str(ds.metadata.get("origin_book", "")) for ds in books}
+    gone = set(connectors)
+
+    def is_unsaved(book: str) -> bool:
+        return book in unsaved or (book.partition("@")[0] in gone and book not in imported)
+
+    if not unsaved and not gone:
         return figs
     out: list[dict[str, Any]] = []
     for fig in figs:
         curves = fig.get("curves") or []
-        drop = {i for i, c in enumerate(curves) if str(c.get("book", "")) in unsaved}
+        drop = {i for i, c in enumerate(curves) if is_unsaved(str(c.get("book", "")))}
         if not drop:
             out.append(fig)
             continue
