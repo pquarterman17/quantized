@@ -87,7 +87,18 @@ export function curveDisplayName(ds: Dataset, yLetter: string, yIdx: number): st
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const comments = meta.column_comments as Record<string, unknown> | undefined;
   const comment = comments && typeof comments === "object" ? String(comments[yLetter] ?? "") : "";
-  return comment || ds.data.labels[yIdx] || yLetter;
+  return comment || undedupedLabel(ds.data.labels, yIdx) || yLetter;
+}
+
+/** Channel `idx`'s label without the `DataStruct` dedupe suffix: two Origin
+ *  columns both long-named "Co" import as "Co" and "Co (2)", but Origin's
+ *  legend shows the column's own name, "Co", for both (XMCD.opj Signaltonois
+ *  book). Stripped only when it IS a dedupe (an earlier label is the bare
+ *  name), so a column genuinely named "Run (2)" keeps its name. */
+export function undedupedLabel(labels: readonly string[], idx: number): string {
+  const label = labels[idx] ?? "";
+  const m = /^(.*) \((\d+)\)$/.exec(label);
+  return m && labels.slice(0, idx).includes(m[1]) ? m[1] : label;
 }
 
 /** Resolve an Origin legend template string (one `legend_labels` entry) to
@@ -120,6 +131,21 @@ export function legendCaption(
 ): string | undefined {
   const caption = resolveLegendTemplate(template, curveNames);
   return /[%$]\(/.test(caption) ? undefined : caption;
+}
+
+/** The legend label a bound curve gets, or `undefined` to keep its default:
+ *  its caption (`legendCaption` of its `legend_labels` entry), else its label
+ *  without a dedupe suffix when that differs ("Co (2)" -> "Co", B-30). */
+export function curveLegendLabel(
+  template: string | undefined,
+  curveNames: readonly (string | undefined)[],
+  labels: readonly string[],
+  idx: number,
+): string | undefined {
+  const caption = template ? legendCaption(template, curveNames) : undefined;
+  if (caption !== undefined) return caption;
+  const plain = undedupedLabel(labels, idx);
+  return plain !== (labels[idx] ?? "") ? plain : undefined;
 }
 
 /** A readable legend label for a curve that has NO decoded legend entry and

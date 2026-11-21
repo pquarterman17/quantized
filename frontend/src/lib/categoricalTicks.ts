@@ -36,11 +36,16 @@ export function categoricalXAxis(
   tickPx: number,
 ): { values: ValuesFn; splits: uPlot.Axis.Splits; space: number } {
   const longest = categories.reduce((m, s) => Math.max(m, s.length), 1);
+  const space = longest * tickPx * 0.6 + 8;
   return {
     values: categoricalTickFormatter(categories, base),
-    space: longest * tickPx * 0.6 + 8,
-    splits: (_u, _axisIdx, scaleMin, scaleMax, foundIncr) => {
-      const step = Math.max(1, Math.ceil(foundIncr - 1e-9));
+    space,
+    // The step is the export's `category_step` (slot / pitch, rounded up),
+    // NOT uPlot's 1-2-5 increment rounded up (every 5th where the export drew
+    // every 4th). uPlot's found space / increment IS its px per unit.
+    splits: (_u, _axisIdx, scaleMin, scaleMax, foundIncr, foundSpace) => {
+      const perUnit = foundIncr > 0 && foundSpace > 0 ? foundSpace / foundIncr : 0;
+      const step = Math.max(1, Math.ceil((perUnit > 0 ? space / perUnit : foundIncr) - 1e-9));
       const first = base + Math.ceil((scaleMin - base - 1e-9) / step) * step;
       const out: number[] = [];
       for (let v = first; v <= scaleMax + 1e-9 && out.length < 10_000; v += step) out.push(v);
@@ -49,16 +54,27 @@ export function categoricalXAxis(
   };
 }
 
+/** The labels name THIS X only while every X value is a category position
+ *  1..n: a derived dataset (FFT, resample, binning, transpose) that copied the
+ *  source metadata has a different X, and its values would be mislabelled.
+ *  Fails closed to a plain number axis. Twin: `calc/axis_categories.py`. */
+export function isCategoryAxis(time: readonly (number | null)[], n: number): boolean {
+  return n > 0 && time.every((t) => t == null || !Number.isFinite(t) || (Number.isInteger(t) && t >= 1 && t <= n));
+}
+
 /** An Origin text X (`metadata.x_category_labels`, written by the .opj/.opju
  *  book builder) on the dataset's own axis (`xKey` null): `.time` is the
  *  1-based category position, so the payload gains the labels with base 1.
+ *  A book whose X column name was not recovered titles its axis "" rather
+ *  than the "Row" placeholder (twin: `calc/plotting.py _default_x_label`).
  *  Anything else is returned untouched. */
-export function originCategoryX<P extends { xCategories?: string[]; xCategoryBase?: number }>(
+export function originCategoryX<P extends { xCategories?: string[]; xCategoryBase?: number; xLabel: string }>(
   payload: P,
   data: DataStruct,
   xKey: number | null,
 ): P {
-  const labels = (data.metadata as Record<string, unknown> | undefined)?.x_category_labels;
-  if (xKey != null || !Array.isArray(labels) || labels.length === 0) return payload;
-  return { ...payload, xCategories: labels.map(String), xCategoryBase: 1 };
+  const md = data.metadata as Record<string, unknown> | undefined;
+  const labels = md?.x_category_labels;
+  if (xKey != null || !Array.isArray(labels) || !isCategoryAxis(data.time, labels.length)) return payload;
+  return { ...payload, xCategories: labels.map(String), xCategoryBase: 1, ...(md?.x_column_name ? {} : { xLabel: "" }) };
 }

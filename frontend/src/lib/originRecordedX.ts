@@ -17,6 +17,7 @@
 // LAZY: only the Origin apply body (`store/originApplyRun.ts`) imports this.
 
 import { isDefaultX } from "./originFigureSelection";
+import { textColumnLabels } from "./originOverlay";
 import { curveX } from "./perSeriesX";
 import type { Dataset, OriginFigure } from "./types";
 
@@ -74,15 +75,30 @@ export function recordedXConflicts(
   });
 }
 
-/** One line per curve of `figure` on `ds` whose RECORDED X column did not
- *  import (no channel, not the book's X): such a curve is left out, never
- *  redrawn against a nearby X. */
-export function recordedXOmissions(figure: OriginFigure, ds: Dataset): string[] {
-  const { meta, letters, xLetter } = columns(ds);
-  const book = String(meta.origin_book ?? "");
-  const category = textXLetter(figure, ds);
-  return (figure.curves ?? [])
-    .filter((c) => c.book === book && !!c.x && !!c.xRecorded && letters.includes(c.y)
-      && !isDefaultX(meta, c.x, xLetter) && !letters.includes(c.x) && c.x !== category)
-    .map((c) => `${c.book} column ${c.y} (X ${c.x})`);
+/** One line per curve of `figure` whose RECORDED X has no value channel and
+ *  is not drawn: an X column that did not import, or a TEXT X the layer cannot
+ *  draw as one category axis (it mixes text and numeric X, or two books'
+ *  differing text columns -- the rule `textXLetter` and the cross-book overlay
+ *  apply). Such a curve is left out, never redrawn against a nearby X.
+ *  `books`: every book of the project (a cross-book layer's other books
+ *  leave curves out too). */
+export function recordedXOmissions(figure: OriginFigure, books: Dataset | readonly Dataset[]): string[] {
+  const all = Array.isArray(books) ? (books as readonly Dataset[]) : [books as Dataset];
+  const bookOf = (b: string) => all.find((d) => String((d.data.metadata ?? {}).origin_book ?? "") === b);
+  const curves = (figure.curves ?? []).filter((c) => bookOf(c.book));
+  const textCells = (c: { book: string; x?: string }): string | null => {
+    const d = bookOf(c.book) as Dataset; // the overlay's own key (originOverlayFigure boundCurves)
+    return c.x && textXLetter(figure, d) === c.x ? JSON.stringify(textColumnLabels(d.data, c.x)) : null;
+  };
+  const keys = curves.map(textCells);
+  const categoryOk = keys.length > 0 && keys.every((k) => k !== null && k === keys[0]);
+  const out: string[] = [];
+  for (const c of curves) {
+    const { meta, letters, xLetter } = columns(bookOf(c.book) as Dataset);
+    if (!c.x || !c.xRecorded || !letters.includes(c.y) || isDefaultX(meta, c.x, xLetter) || letters.includes(c.x)) continue;
+    const text = Object.prototype.hasOwnProperty.call(meta.origin_text_columns ?? {}, c.x);
+    if (text && categoryOk) continue; // drawn over its categories
+    out.push(`${c.book} column ${c.y} (${text ? `text X ${c.x}: the layer's X is not one category axis` : `X ${c.x} did not import`})`);
+  }
+  return out;
 }

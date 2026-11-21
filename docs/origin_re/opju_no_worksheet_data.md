@@ -50,7 +50,16 @@ Evidence:
   project with other data, as before.
 
 Reading: Origin's connector option to leave imported data out of the saved
-project (data re-imported from the source on open). **Owner-COM check**:
+project (data re-imported from the source on open).
+
+`稳定性.opju` (lane S, 2026-11-21): its Book1 / Book3 are such books in a
+project that imports others, so they produce no DataStruct at all. Their
+curves (Graph9-12: Book3 B/D plus error plots) used to stay in the figure
+for the frontend to drop silently, and the pages opened no book.
+`import_manifest` now passes the worksheet fidelity's `unsaved_books` to
+`omit_unsaved_curves`: those curves are omitted as `data_not_saved` like a
+placeholder book's (an imported sheet of the same base name is kept).
+Origin's previews show the data; we cannot (it is not in the file). **Owner-COM check**:
 open `61 PDOS.opju` in Origin with the CSV missing and confirm the book is
 empty / the connector reports the missing source.
 

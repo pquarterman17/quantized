@@ -27,10 +27,13 @@ import {
   serializeWorkspace,
   WORKSPACE_VERSION,
   WORKSPACE_VERSION_NEW_FEATURES,
+  WORKSPACE_VERSION_POST_038,
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type LoadedWorkspace,
 } from "./workspace";
-import { CLASSIFICATIONS, GATED_VALUES, REPORT_FIGURE_SPEC, SERIES_STYLE, type OvList } from "./workspaceForwardCompat";
+import {
+  CLASSIFICATIONS, featuresV038WouldDrop, GATED_VALUES, NEW_SINCE_V038, REPORT_FIGURE_SPEC, SERIES_STYLE, type OvList,
+} from "./workspaceForwardCompat";
 
 const VIEWPORT = { width: 1600, height: 900 };
 const load = (): LoadedWorkspace => parseWorkspace(JSON.stringify(dwk034), VIEWPORT);
@@ -139,6 +142,21 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
  *  which the export rebuilds from the view's `rampRank` on every export. */
 const NOT_KEPT_BY_HEAD_ON_RELOAD = new Set(["ExportSeriesStyle.ramp_rank"]);
 
+// Pinned: the gated entries of v0.38.0 (they read these fields, so v6 suffices).
+const READ_BY_V038 = [
+  "Annotation.dot", "AxisFormat.base=2", "AxisFormat.cross", "AxisFormat.custom", "AxisFormat.grid",
+  "AxisFormat.offset", "AxisFormat.prefix", "AxisFormat.prob", "AxisFormat.reverse", "AxisFormat.rotate",
+  "AxisFormat.suffix", "AxisFormat.top", "Dataset.columnProps", "Dataset.frozenCols", "Dataset.hiddenCols",
+  "Dataset.linkedCurves", "DisplayBlock.ramp", "ExportSeriesStyle.connect", "ExportSeriesStyle.drop_lines",
+  "ExportSeriesStyle.error_band", "ExportSeriesStyle.error_cap", "ExportSeriesStyle.error_color",
+  "ExportSeriesStyle.error_width", "ExportSeriesStyle.marker_alpha", "ExportSeriesStyle.marker_edge",
+  "ExportSeriesStyle.marker_every", "ExportSeriesStyle.marker_face", "ExportSeriesStyle.marker_fill",
+  "ExportSeriesStyle.ramp_rank", "ExportSeriesStyle.size_by", "ExportSeriesStyle.size_range", "MapViewState.view3d",
+  "PlotView.exchangeXY", "PlotView.layers", "PlotView.seriesRamp", "PlotView.yAxes", "PlotView.yAxisOf",
+  "PlotWindow.linkYGroup", "RecipeMapView.view3d", "RecipeVisual.yAxes", "RecipeVisual.yAxisOf",
+  "Workspace.savedRecodeMappings",
+];
+
 const gatedEntries = (): string[] =>
   [
     ...Object.entries(CLASSIFICATIONS).flatMap(([t, m]) => Object.keys(m).filter((k) => m[k] === "gated").map((k) => `${t}.${k}`)),
@@ -150,6 +168,15 @@ describe("forward compatibility with v0.34.0", () => {
     expect(WORKSPACE_VERSION).toBe(4);
     expect(WORKSPACE_VERSION_TRANSFORM_STEPS).toBe(5);
     expect(WORKSPACE_VERSION_NEW_FEATURES).toBe(6);
+    expect(WORKSPACE_VERSION_POST_038).toBe(7); // v0.35-v0.38 accept 1-6
+  });
+
+  it("ratchet: every gated field is either one v0.38.0 already read or listed as new since", () => {
+    // The gated fields v0.38.0's own map listed (`git show v0.38.0:frontend/src/lib/workspaceForwardCompat.ts`).
+    // A field gated after this pin must go into NEW_SINCE_V038 (or this list, if a later release reads it).
+    const readBy038 = gatedEntries().filter((g) => !NEW_SINCE_V038.has(g));
+    expect(readBy038).toEqual(READ_BY_V038);
+    for (const f of NEW_SINCE_V038) expect(gatedEntries()).toContain(f);
   });
 
   it("a workspace with none of the gated fields stays v4, so v0.34.0 still opens it", () => {
@@ -163,18 +190,21 @@ describe("forward compatibility with v0.34.0", () => {
   });
 
   for (const [name, edit] of Object.entries(FEATURES)) {
-    it(`${name}: saved as v6 (v0.34.0 refuses it rather than dropping it), and this build keeps it`, () => {
+    // v7 for a field v0.35-v0.38 drop too (they accept v6); v6 otherwise.
+    const want = NEW_SINCE_V038.has(name) ? 7 : 6;
+    it(`${name}: saved as v${want} (older releases refuse it rather than dropping it), and this build keeps it`, () => {
       const ws = load();
       edit(ws);
       const text = serializeWorkspace(ws);
       expect(featuresV034WouldDrop(JSON.parse(text))).toContain(name);
-      expect(version(text)).toBe(6);
+      expect(featuresV038WouldDrop(JSON.parse(text)).includes(name)).toBe(want === 7);
+      expect(version(text)).toBe(want);
       const back = parseWorkspace(text, VIEWPORT);
       expect(back.migrationWarnings).toEqual([]);
       if (NOT_KEPT_BY_HEAD_ON_RELOAD.has(name)) return;
       const again = serializeWorkspace(back);
       expect(featuresV034WouldDrop(JSON.parse(again))).toContain(name);
-      expect(version(again)).toBe(6);
+      expect(version(again)).toBe(want);
     });
   }
 

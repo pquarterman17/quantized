@@ -15,7 +15,8 @@ with a message that names both versions: it was written by a newer Quantized,
 and reading only the fields this build knows could silently miss data the
 newer one stored. Version 6 (``WORKSPACE_VERSION_NEW_FEATURES``, see
 ``lib/workspaceForwardCompat.ts``) only marks GUI features an older APP would
-drop; the dataset records this reader returns are the same in every version.
+drop (version 7, ``WORKSPACE_VERSION_POST_038``, those v0.35-v0.38 would);
+the dataset records this reader returns are the same in every version.
 Unknown top-level and per-dataset fields are ignored, as the app ignores them.
 
 CELLS. The BUG-017 wire form: a number, or ``"NaN"``, ``"Infinity"``,

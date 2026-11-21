@@ -13,6 +13,7 @@ import {
   WORKBOOK_TRANSFER_FORMAT,
   WORKBOOK_TRANSFER_VERSION,
   WORKBOOK_TRANSFER_VERSION_NEW_FEATURES,
+  WORKBOOK_TRANSFER_VERSION_POST_038,
   type TransferExistingIds,
   type TransferIdGenerators,
   type TransferSourceState,
@@ -121,8 +122,21 @@ describe("forward compatibility with v0.34.0 (its reader accepts only version 1)
     expect(versionOf(result.text)).toBe(WORKBOOK_TRANSFER_VERSION_NEW_FEATURES);
     const parsed = parseTransferPackage(result.text);
     expect(parsed.ok && parsed.pkg.datasets[0].columnProps).toEqual({ 0: { comment: "note" } });
-    const future = JSON.stringify({ ...JSON.parse(result.text), version: 3 });
-    expect(parseTransferPackage(future)).toMatchObject({ ok: false, reason: "unsupported workbook transfer version: 3" });
+    // v3: a package holding a field v0.35-v0.38 drop too (they accept 1-2); this build reads it.
+    const post038 = JSON.stringify({ ...JSON.parse(result.text), version: 3 });
+    expect(parseTransferPackage(post038).ok).toBe(true);
+    const future = JSON.stringify({ ...JSON.parse(result.text), version: 4 });
+    expect(parseTransferPackage(future)).toMatchObject({ ok: false, reason: "unsupported workbook transfer version: 4" });
+  });
+
+  it("a workbook whose figure holds a field v0.35-v0.38 drop (an Origin error-bar marker) is version 3, and this build reads it", () => {
+    const fig = figure("fig-1", "ds-1");
+    fig.bindings.errors = [{ channel: 0, target: 0, axis: "y", side: "both", origin: true }];
+    const result = buildTransferPackage("wb-1", makeState({ editableFigures: [fig] }));
+    if (!result.ok) throw new Error(result.reason);
+    expect(versionOf(result.text)).toBe(WORKBOOK_TRANSFER_VERSION_POST_038);
+    expect((JSON.parse(result.text) as WorkbookTransferPackage).editableFigures[0].bindings.errors[0].origin).toBe(true);
+    expect(parseTransferPackage(result.text).ok).toBe(true);
   });
 });
 
