@@ -6,7 +6,7 @@ not: a large-data audit at 200k rows saw responses up to 82 MB inlined into
 the client. This plan measures them, sets one rule for all of them, and
 records which part has shipped.
 
-**Status:** Active (phases 1-2, the backend of 4 and the phase 3 slice shipped)
+**Status:** Active (phases 1-2, the backend of 4, the phase 3 slice and the P8 input consumers shipped)
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-11-21
 **Updated:** 2026-11-21
@@ -235,10 +235,10 @@ event loop (`OffloopJSONRoute`, required for a dataset-bearing route).
 
 Deferred from phase 3:
 
-- **Other inputs**: `/autoguess` (Guess, and the data-derived starts of an
-  edited table) still posts x/y; so do `/equation/fit`, `/peaks/find`,
-  `/peaks/fit-multi`, the baselines, sigop and the stats routes. Each is the
-  same `XYSource` mixin plus one call-site change.
+- **Other inputs**: `/autoguess`, `/equation/fit` and `/peaks/find` went by
+  handle in P8 (below). `/peaks/fit-multi`, the baselines, sigop and the stats
+  routes still post x/y. Each is the same `XYSource` mixin plus one call-site
+  change.
 - **Weights by channel**: `dy`/`weights` (8 MB at 1M) still ride as arrays;
   a `dy_channel` needs `dyForFit`'s rules (error column, manual sigma,
   validation) mirrored or resolved into a channel.
@@ -309,7 +309,8 @@ Deferred from phase 4:
 - **Peak find / peak fit clients**: `usePeaks` keeps the full `background`
   (curation, `detectedPeakCuration`, the saved peak table read it
   synchronously) and its `fitPeak` calls never sent `snip_bg`, so the
-  `find_result_id` path has no UI consumer yet.
+  `find_result_id` path has no UI consumer yet. P8 checked this and left the
+  lean response off (see the P8 section).
 - **Sigop preview client**: `computeSigop` serves both the live preview and
   the commit/replay path and the preview consumes the whole dataset; opting
   the preview in needs the workshop to render `datasetDisplay`.
@@ -318,7 +319,76 @@ Deferred from phase 4:
 - **Recipe / wizard callers** (`peakwizard/recipeSteps`) and batch apply keep
   the full response.
 
+## P8: the cheap input consumers (shipped)
+
+`routes/_datasetrows.XYSource` is now also the request base of
+`/api/fitting/autoguess`, `/api/fitting/equation/fit` and `/api/peaks/find`
+(`routes/fitting.py`, `routes/peaks.py`; each route calls `source_xy` and
+returns the same body). Opt-in: a request with `x`/`y` is byte-identical and
+sends no `X-Dataset-Handle` (tested), mixing is 422, a miss is 409.
+
+- **Guess and the data-derived starts** (`lib/fitCurve.autoGuessFor`): Curve
+  Fit's Guess button and `parseFitStarts` (an edited table's blank starts) send
+  the handle + channels + the fit's own rows. The batch keeps arrays (it fits
+  by arrays, a deferred recompute caller).
+- **Equation fit** (`lib/fitSource.leanEquationFit`): input by handle only. The
+  display-curve opt-in stays off: it is blocked by `positive_even_params`
+  (phase 2 deferral), which does not touch the input side.
+- **Peaks find**: `usePeaks` finds by handle. The lean background
+  (`return_background: false`) stays OFF: `detectedPeakCuration.manualPeakAt`
+  reads `data.background` synchronously (it snaps a manual peak against
+  `y - background`), and the saved peak table and its overlays read it too, so
+  the full array is needed the moment the find returns. `/peaks/fit`'s
+  `find_result_id` still has no consumer: "Fit each" never posted `snip_bg`
+  (the fit computes its own SNIP), so passing the find's background would
+  change the fit, not just the transport. Left as is on purpose.
+- **Sigop preview: skipped.** `useSigopRun` feeds one `SigopComputed` (the full
+  dataset) to `SigopBody`, `ReduceXYSection` and `SignalPreview`, and the commit
+  runs `runTransform`, which calls `computeSigop` again (one undo entry, one
+  pipeline step). Rendering `datasetDisplay` and committing from the preview's
+  id means a lean `SigopComputed`, a new commit seam through `transformRun` and
+  its replay path, and a changed readout contract in two workshops: a workshop
+  redesign, not a contained change.
+
+Measured (synthetic Gaussian on a slope + noise, 1M rows, `TestClient`, JSON
+bytes as sent; responses unchanged and identical, `resultId` aside):
+
+| Request | 1M before -> after | Response |
+|---|---|---|
+| `/fitting/autoguess` | 36.67 MB -> 122 B | 0.1 kB |
+| `/fitting/equation/fit` (lean) | 36.67 MB -> 192 B | 18.49 MB (display curve not opted in) |
+| `/peaks/find` (lean) | 36.67 MB -> 151 B | 0.21 MB |
+
+Server time: guess 1.5 s -> 0.1 s (the JSON decode was most of it), equation
+fit 11.7 s -> 9.6 s, peak find 206 s both ways (the detector's own cost at 1M
+rows, unrelated to transport).
+
+Tests: `tests/test_api_handle_inputs.py` (per client rule x route, byte
+identical to the array request; weighted and blank-start equation fits; lean
+find id bound to the gathered x/y; 409 + resend; the 422 guards; size) and the
+three routes in the malformed-dataset sweep. 59 of the 66 failed with the route
+changes reverted (the 7 that passed: missing-x/y 422s and the size arithmetic).
+Frontend: `useCurveFit.guessBySource.test.ts`, `fitStarts.bySource.test.ts`,
+`usePeaks.bySource.test.ts` (find case): 8 of 11 failed with the call sites
+reverted (the 3 that passed: the 409 fallback, the arrays without a handle and
+the existing "Fit each" case).
+
+Deferred from P8:
+
+- **Equation fit display curve** (see phase 2) and the peak-find lean
+  background / `find_result_id` consumer (above): both need a design change,
+  not a transport one.
+- **Sigop preview** by `datasetDisplay` (above), and sigop / baseline / stats
+  inputs by handle.
+- **Batch Curve Fit** guesses and fits still post arrays (recompute caller).
+
 ## Completed
+
+- 2026-11-21: P8 (lane P8): `/autoguess`, `/equation/fit` and `/peaks/find`
+  take a dataset handle + channels + rows; Guess, the edited-table starts, the
+  equation fit and the peak find use it when the server holds the dataset.
+  1M-row requests 36.67 MB -> 122-192 B; table and the skipped / left-off items
+  in the P8 section.
 
 - 2026-11-21: phase 3 slice (lane P7): `/fitting/fit` and `/peaks/fit` take a
   dataset handle + channels + run-length rows (`routes/_datasetrows.py`);

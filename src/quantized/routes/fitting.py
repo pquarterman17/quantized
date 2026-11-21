@@ -49,10 +49,9 @@ ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float6
 router = APIRouter(prefix="/api/fitting", tags=["fitting"], route_class=OffloopJSONRoute)
 
 
-class GuessRequest(BaseModel):
+class GuessRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (P8, XYSource).
     model: str
-    x: list[float]
-    y: list[float]
 
 
 class FitRequest(FitOptions, XYSource):
@@ -91,10 +90,11 @@ def list_models() -> dict[str, Any]:
 
 
 @router.post("/autoguess")
-def autoguess(req: GuessRequest) -> dict[str, Any]:
+def autoguess(req: GuessRequest, response: Response) -> dict[str, Any]:
     """Initial-parameter guess for ``model`` given (x, y)."""
     _require_model(req.model)
-    p0 = call_calc(auto_guess, req.model, req.x, req.y)
+    x, y = source_xy(req, response)
+    p0 = call_calc(auto_guess, req.model, x, y)
     return {"p0": to_jsonable(p0)}
 
 
@@ -190,11 +190,10 @@ class EquationValidateRequest(BaseModel):
     equation: str
 
 
-class EquationFitRequest(FitOptions):
+class EquationFitRequest(FitOptions, XYSource):
     # Weighting (dy / direct weights), covariance and scale_errors: FitOptions.
+    # x/y, or a dataset handle + channels + rows (P8): XYSource.
     equation: str
-    x: list[float]
-    y: list[float]
     # Starting values. A null ENTRY is derived from the data
     # (calc.fit_equation_init.auto_start). The list OMITTED keeps its
     # historical meaning, 1.0 per parameter, so an equation-only call
@@ -261,8 +260,9 @@ def equation_validate(req: EquationValidateRequest) -> EquationValidateResponse:
 
 
 @router.post("/equation/fit")
-def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
+def equation_fit(req: EquationFitRequest, response: Response) -> dict[str, Any]:
     """Fit a custom equation model to (x, y); same result shape as /fit."""
+    x, y = source_xy(req, response)
     try:
         fcn, names = equation_model(req.equation)
         if not names:
@@ -273,12 +273,12 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         # HELD blank is held at (auto_start only fills blanks it may fit).
         check_param_vectors(names, [1.0 if g is None else g for g in given], req.fixed,
                             lower, upper)
-        p0 = auto_start(fcn, names, req.x, req.y, given=given, lower=lower, upper=upper,
+        p0 = auto_start(fcn, names, x, y, given=given, lower=lower, upper=upper,
                         fixed=req.fixed)
-        weights = resolve_weights(req, len(req.x))
+        weights = resolve_weights(req, len(x))
         result = curve_fit(
-            req.x,
-            req.y,
+            x,
+            y,
             fcn,
             p0,
             lower=lower,
@@ -289,10 +289,10 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             **stats_kwargs(req),
         )
         # A free parameter the model is even in (a width) is reported positive.
-        positive_even_params(fcn, req.x, result, lower, upper, req.fixed)
+        positive_even_params(fcn, x, result, lower, upper, req.fixed)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    out = fit_response(result, (req.x, req.y), weights, req.return_residuals, req.display_points)
+    out = fit_response(result, (x, y), weights, req.return_residuals, req.display_points)
     out["paramNames"] = names
     out["p0"] = p0  # the starts actually used (auto-derived where blank)
     out["statsVersion"] = req.stats_version

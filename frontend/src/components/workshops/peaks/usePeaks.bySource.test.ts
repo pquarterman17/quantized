@@ -36,7 +36,10 @@ beforeEach(() => {
     xKey: null, yKeys: null, seriesOrder: null, peakOverlay: null, annotations: [],
   });
   vi.mocked(findPeaks).mockResolvedValue({ peaks: [pk(1), pk(3)], background: [] });
-  fetchMock = vi.fn(async () => new Response(JSON.stringify(FIT), { status: 200, headers: { "Content-Type": "application/json" } }));
+  // The find now goes by handle as well (P8), so the fetch answers both routes.
+  fetchMock = vi.fn(async (path: string) => new Response(
+    JSON.stringify(path === "/api/peaks/find" ? { peaks: [pk(1), pk(3)], background: [0, 0, 0, 0, 0] } : FIT),
+    { status: 200, headers: { "Content-Type": "application/json" } }));
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -51,7 +54,7 @@ describe("usePeaks fitEach by dataset handle", () => {
     await waitFor(() => expect(result.current.peaks).toHaveLength(2));
     await act(async () => result.current.fitEach({ model: "Lorentzian", bgDegree: 1, linkMode: "None", constrain: false }));
     expect(fitPeak).not.toHaveBeenCalled();
-    const bodies = fetchMock.mock.calls.map(([path, init]) => [path, JSON.parse(String(init.body))]);
+    const bodies = fetchMock.mock.calls.filter(([path]) => path === "/api/peaks/fit").map(([path, init]) => [path, JSON.parse(String(init.body))]);
     expect(bodies).toHaveLength(2);
     for (const [path, body] of bodies) {
       expect(path).toBe("/api/peaks/fit");
@@ -59,5 +62,18 @@ describe("usePeaks fitEach by dataset handle", () => {
       expect(body).not.toHaveProperty("x");
     }
     expect(result.current.fitResult?.peaks).toHaveLength(2);
+  });
+
+  it("finds peaks by handle too, with the lean background left off", async () => {
+    rememberHandle(DATA, "h-find");
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    expect(findPeaks).not.toHaveBeenCalled();
+    const [path, init] = fetchMock.mock.calls[0]!;
+    expect(path).toBe("/api/peaks/find");
+    const body = JSON.parse(String(init.body));
+    expect(body).toMatchObject({ dataset_handle: "h-find", x_channel: -1, y_channel: 0, rows: [[0, 4], [5, 1]] });
+    expect(body).not.toHaveProperty("x");
+    expect(body).not.toHaveProperty("return_background"); // curation reads the background synchronously
   });
 });
