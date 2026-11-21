@@ -19,6 +19,13 @@ const thinned = (): { fit: boolean; baseline: boolean } => {
   return { fit: Boolean(s.fitOverlay?.full), baseline: Boolean(s.baselineOverlay?.lean) };
 };
 
+/** Does the column hold the `undefined` filler of a display curve? (A real
+ *  gap is null / NaN, never undefined.) */
+const hasFiller = (col: ArrayLike<number | null | undefined>): boolean => {
+  for (let i = 0; i < col.length; i++) if (col[i] === undefined) return true;
+  return false;
+};
+
 /** The TSV of `initial` (`latest()` reads the payload on screen now), plus the
  *  labels of the columns left out because only their display form was
  *  available. */
@@ -29,19 +36,27 @@ export async function plotDataTSV(
   let payload = initial;
   const before = thinned();
   if (before.fit || before.baseline) {
+    const st = useApp.getState();
+    const [fit0, baseline0] = [st.fitOverlay, st.baselineOverlay];
     let blocked = false;
     try {
       blocked = (await upgradeOverlaysForExport()) !== null;
     } catch {
       blocked = true;
     }
-    // The upgrade rewrites the slot; the canvas republishes the payload (bounded wait).
-    for (let i = 0; i < 60 && !blocked && latest() === initial; i++) await frame();
+    // A swapped slot makes the canvas republish the payload (bounded wait);
+    // nothing swapped means nothing to wait for.
+    const now = useApp.getState();
+    const swapped = now.fitOverlay !== fit0 || now.baselineOverlay !== baseline0;
+    for (let i = 0; i < 60 && swapped && !blocked && latest() === initial; i++) await frame();
     payload = latest() ?? initial;
   }
-  const now = thinned();
+  // Decided from the columns about to be copied, not from the store or from
+  // whether the canvas republished in time: a display column still holds its filler.
   const drop = payload.series.flatMap((s, k) =>
-    (now.fit && s.fit) || (now.baseline && s.overlay && s.label === "baseline") ? [k] : []);
+    ((before.fit && s.fit) || (before.baseline && s.overlay && s.label === "baseline")) && hasFiller(payload.data[k + 1] as ArrayLike<number | null | undefined>)
+      ? [k]
+      : []);
   if (!drop.length) return { tsv: payloadToTSV(payload), omitted: [] };
   const keep = (_: unknown, i: number) => i === 0 || !drop.includes(i - 1);
   const narrowed = {

@@ -151,11 +151,15 @@ export function usePlotStageActions(
       return;
     }
     void runLazy("Preparing the plot data…", () => import("../../lib/copyPlotData")).then(async (m) => {
-      const { tsv, omitted } = await m.plotDataTSV(displayPayload, () => latestPayload.current);
-      const ok = await copyText(tsv);
-      const cols = nCols - omitted.length;
-      const note = omitted.length ? `; left out ${omitted.join(", ")} (only its display curve was available)` : "";
-      useApp.getState().setStatus(ok ? `copied ${nRows}×${cols} to clipboard${note}` : "clipboard unavailable");
+      try {
+        const { tsv, omitted } = await m.plotDataTSV(displayPayload, () => latestPayload.current);
+        const ok = await copyText(tsv);
+        const cols = nCols - omitted.length;
+        const note = omitted.length ? `; left out ${omitted.join(", ")} (only its display curve was available)` : "";
+        useApp.getState().setStatus(ok ? `copied ${nRows}×${cols} to clipboard${note}` : "clipboard unavailable");
+      } catch (e) {
+        useApp.getState().setStatus(`copy data failed: ${e instanceof Error ? e.message : "error"}`, "danger");
+      }
     }, onLoadFailure);
   }
 

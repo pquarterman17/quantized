@@ -11,9 +11,11 @@ Holding the bytes is what makes the key safe, and what would pin a whole
 project file (tens of MB) in a long-running server after its import: so every
 memo registers a reset (:func:`on_scope_end`), and an import entry point runs
 inside :func:`import_scope` / :func:`import_scoped`, which calls them when the
-OUTERMOST scope of its thread ends (an import is several readers in a row; a
-nested scope must not drop the memo for the rest of it). A memo is only a
-cache: clearing one never changes an answer, only whether it is recomputed.
+LAST open scope in the process ends. An import is several readers in a row, so
+a nested scope must not drop the memo for the rest of it, and the memos are
+process-wide one-entry caches, so one thread finishing must not drop the entry
+of an import still running in another. A memo is only a cache: clearing one
+never changes an answer, only whether it is recomputed.
 """
 
 from __future__ import annotations
@@ -30,7 +32,8 @@ _R = TypeVar("_R")
 _P = ParamSpec("_P")
 
 _resets: list[Callable[[], None]] = []
-_local = threading.local()
+_lock = threading.Lock()
+_active = 0  # open import scopes, all threads
 
 
 def on_scope_end(reset: Callable[[], None]) -> None:
@@ -46,16 +49,18 @@ def clear_memos() -> None:
 
 @contextmanager
 def import_scope() -> Iterator[None]:
-    """Run an import; when the outermost scope in this thread exits, even by
+    """Run an import; when the last open scope in the process exits, even by
     an exception, release the memos."""
-    depth: int = getattr(_local, "depth", 0)
-    _local.depth = depth + 1
+    global _active
+    with _lock:
+        _active += 1
     try:
         yield
     finally:
-        _local.depth = depth
-        if depth == 0:
-            clear_memos()
+        with _lock:
+            _active -= 1
+            if _active == 0:
+                clear_memos()
 
 
 def import_scoped(fn: Callable[_P, _R]) -> Callable[_P, _R]:

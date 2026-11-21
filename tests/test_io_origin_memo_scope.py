@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from opju_fixture import CELLS_END, cell_num, dataset, project
-from quantized.io.origin_project import opju_blocks
+from quantized.io.origin_project import opju_blocks, opju_memo
 from quantized.io.origin_project.opju import read_opju_books
 from quantized.io.origin_project.opju_figure_curves import column_id_table
 from quantized.io.origin_project.opju_memo import import_scope, last_call
@@ -24,7 +24,8 @@ def _col(name: str, *vals: float) -> bytes:
 
 
 def _project_file(tmp_path: Path) -> Path:
-    blob = project(_col("Data_A", 1.0, 2.0), _col("Data_B", 3.0, 4.0), tail=_opju_page_header("Data"))
+    cols = (_col("Data_A", 1.0, 2.0), _col("Data_B", 3.0, 4.0))
+    blob = project(*cols, tail=_opju_page_header("Data"))
     p = tmp_path / "p.opju"
     p.write_bytes(blob)
     return p
@@ -70,3 +71,61 @@ def test_a_nested_scope_keeps_the_memo_for_the_rest_of_the_import() -> None:
         assert calls == [1]
     table(b, 1)  # outermost ended: recomputed, same answer
     assert calls == [1, 1]
+
+
+def test_one_thread_finishing_does_not_drop_the_memo_of_an_import_still_running() -> None:
+    import threading
+
+    calls: list[int] = []
+
+    @last_call
+    def table(b: bytes, k: int) -> int:
+        calls.append(k)
+        return k
+
+    b = b"y" * 8
+    entered, finish = threading.Event(), threading.Event()
+
+    def other_import() -> None:
+        with import_scope():
+            entered.set()
+            finish.wait(5)
+
+    th = threading.Thread(target=other_import)
+    th.start()
+    assert entered.wait(5)
+    with import_scope():
+        table(b, 1)
+    # this thread's import ended, the other's is still open: the memo stays
+    table(b, 1)
+    assert calls == [1]
+    finish.set()
+    th.join(5)
+    table(b, 1)  # the last scope ended: released
+    assert calls == [1, 1]
+
+
+def test_the_template_reader_runs_inside_an_import_scope(tmp_path: Path) -> None:
+    """``.otpu`` import reaches the memoised figure scans, so it must release
+    them like a project import does."""
+    from quantized.io.origin_project import templates
+
+    seen: list[bool] = []
+    original = templates.extract_figures_opju
+
+    def spy(b: bytes) -> list[dict[str, object]]:
+        seen.append(opju_memo._active > 0)
+        return original(b)
+
+    p = tmp_path / "t.otpu"
+    p.write_bytes(project(_col("Data_A", 1.0, 2.0), tail=_opju_page_header("Data")))
+    templates.extract_figures_opju = spy  # type: ignore[assignment]
+    try:
+        try:
+            templates.read_origin_template(p)
+        except Exception:  # noqa: BLE001 - a synthetic body need not be a real template
+            pass
+    finally:
+        templates.extract_figures_opju = original  # type: ignore[assignment]
+    assert seen in ([], [True]) and opju_blocks._last_scan is None
+    assert getattr(templates.read_origin_template, "__wrapped__", None) is not None

@@ -55,6 +55,22 @@ describe("plotDataTSV", () => {
     expect(omitted).toEqual(["fit"]);
   });
 
+  it("omits the column when the upgrade worked but the canvas never republished in time", async () => {
+    const o = lean();
+    rememberBaselineFull(o, () => Promise.resolve([1, 2, 3, 4]));
+    useApp.setState({ baselineOverlay: o });
+    const { tsv, omitted } = await plotDataTSV(THIN, () => THIN); // the stale payload stays
+    expect(omitted).toEqual(["baseline"]);
+    expect(tsv.split("\n")[0]).toBe("x\ty");
+  });
+
+  it("does not wait for a republish when the upgrade swapped nothing", async () => {
+    useApp.setState({ baselineOverlay: lean() }); // no fetcher: a no-op upgrade
+    const t0 = performance.now();
+    await plotDataTSV(THIN, () => THIN);
+    expect(performance.now() - t0).toBeLessThan(500);
+  });
+
   it("copies an ordinary payload untouched", async () => {
     const { tsv, omitted } = await plotDataTSV(THIN, () => THIN);
     expect(omitted).toEqual([]);

@@ -74,12 +74,17 @@ const frame = (): Promise<void> => new Promise((done) => setTimeout(done, 16));
 export async function snapshotAfterUpgrade(snapshot: () => void): Promise<void> {
   const before = readLivePlotSnapshot();
   try {
-    if (!(await upgradeFitOverlay())) throw new Error("the fit curve changed");
+    const changed = await upgradeOverlaysForExport();
+    if (changed) throw new Error(`the ${changed} changed`);
   } catch (e) {
     useApp.getState().setStatus(`snapshot not taken: the full-resolution fit could not be loaded (${e instanceof Error ? e.message : "error"})`, "danger");
     return;
   }
   for (let i = 0; i < 60 && readLivePlotSnapshot() === before; i++) await frame();
   if (useApp.getState().fitOverlay?.full) return; // a new display fit landed meanwhile
+  if (useApp.getState().baselineOverlay?.lean) {
+    useApp.getState().setStatus("snapshot not taken: the full-resolution baseline could not be loaded", "danger");
+    return;
+  }
   snapshot();
 }
