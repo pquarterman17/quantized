@@ -112,7 +112,7 @@ def test_column_record_marks_the_column_plot_type() -> None:
         apply_plot_kind(other, _rec(code))
         assert "plotType" not in other
     # 213 / 215 / 207 get a provisional kind ``opju_bar_kinds`` resolves per layer
-    for code, kind in ((213, "stacked_column"), (215, "bar"), (207, "not_drawn")):
+    for code, kind in ((213, "stacked_column"), (215, "bar"), (207, "floating")):
         provisional: dict[str, str | float] = {"y": "C"}
         apply_plot_kind(provisional, _rec(code))
         assert provisional["plotType"] == kind
