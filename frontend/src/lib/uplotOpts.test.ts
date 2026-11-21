@@ -1505,6 +1505,27 @@ describe("buildOpts fixed linear-range ticks", () => {
     expect(ySplits(null as unknown as uPlot, 1, -1, 1)).toEqual([-1, -0.5, 0, 0.5, 1]);
   });
 
+  it("keeps the ticks of a reversed Y axis (from > to, negative step): ascending range, dir -1, |step| splits", () => {
+    // EIS Nyquist: Origin stores the left axis as from 0.3 -> to -0.01, step -0.05.
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yLim: [0.3, -0.01], yStep: -0.05 });
+    const y = opts.scales?.y;
+    expect(y?.dir).toBe(-1);
+    expect(y?.range).toEqual([-0.01, 0.3]); // a min above max draws no ticks in uPlot
+    const ySplits = opts.axes?.[1].splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(ySplits(null as unknown as uPlot, 1, -0.01, 0.3)).toEqual([0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]);
+    // An ascending axis is untouched.
+    const asc = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yLim: [-0.01, 0.3], yStep: 0.05 });
+    expect(asc.scales?.y?.dir).toBeUndefined();
+    expect(asc.scales?.y?.range).toEqual([-0.01, 0.3]);
+  });
+
+  it("reverses a fixed Y2 axis the same way", () => {
+    const y2Payload: PlotPayload = { ...payload, data: [[0, 1, 2], [10, 20, 30], [1, 2, 3]], series: [...payload.series, { label: "T", unit: "K", axis: 1 }] };
+    const opts = buildOpts(y2Payload, { ...base, yScale: "linear", tool: "zoom", y2Lim: [10, 0], y2Step: -2 });
+    expect(opts.scales?.y2?.dir).toBe(-1);
+    expect(opts.scales?.y2?.range).toEqual([0, 10]);
+  });
+
   it("does not override an autoscaled axis or one without a decoded step", () => {
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yStep: 5 }).axes?.[1].splits).toBeUndefined();
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yLim: [0, 100] }).axes?.[1].splits).toBeUndefined();

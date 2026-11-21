@@ -30,7 +30,7 @@ export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { marks } from "./marksLoader";
-import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
+import { fixedXRange, fixedYScale, fullXExtents, scannedXRange } from "./uplotXRange";
 import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
   annotationPlugin,
@@ -1006,7 +1006,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     },
     y: {
       ...scaleDistrProps(yScale),
-      ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : errorRange(reach, 0, isPositiveOnlyScale(yScale))),
+      ...(yLim ? fixedYScale(yLim) : loopY ? { range: () => loopY } : errorRange(reach, 0, isPositiveOnlyScale(yScale))),
     },
   };
   // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
@@ -1035,8 +1035,9 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   const splitsFor = (
     scale: AxisScale,
     lim: [number, number] | null | undefined,
-    step: number | null | undefined,
+    signedStep: number | null | undefined,
   ): uPlot.Axis.Splits | undefined => {
+    const step = signedStep == null ? signedStep : Math.abs(signedStep); // a reversed Origin axis stores a negative step
     if (scale === "reciprocal") {
       return (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
         reciprocalAxisSplits(scaleMin, scaleMax);
@@ -1092,7 +1093,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     const y2Lim = args.y2Lim ?? null;
     scales.y2 = {
       ...scaleDistrProps(y2ScaleEff),
-      ...(y2Lim ? { range: y2Lim } : loopY2 ? { range: () => loopY2 } : errorRange(reach, 1, isPositiveOnlyScale(y2ScaleEff))),
+      ...(y2Lim ? fixedYScale(y2Lim) : loopY2 ? { range: () => loopY2 } : errorRange(reach, 1, isPositiveOnlyScale(y2ScaleEff))),
     };
     const y2Splits = splitsFor(y2ScaleEff, y2Lim, args.y2Step);
     // Secondary axis on the right; hide its grid so the two grids don't overlap.
