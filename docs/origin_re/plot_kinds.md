@@ -456,3 +456,18 @@ figures, 9,113 curves either way; 13 changes in 3 public projects, all in
 [`regress_allow/laneV-float-vector.json`](regress_allow/laneV-float-vector.json):
 the 6 plots drawn as marks leave the left-out list and the fidelity notes gain
 `data_marks_not_decoded`. Owner corpus: no change.
+
+## Text X on a later sheet (Lane OD, F-117)
+
+A curve on a `Book@N` sheet whose X is that sheet's Text column (designated X,
+`x_column_name` empty) was omitted `x_not_imported` (81 public curves). The
+text column IS imported (`origin_text_columns`), so the omission was the
+backend's own check, not a missing decode. Opening it for every kind was tried
+on 2026-11-21 and measured against Origin's saved previews: 51 curves gained,
+of which only the 5 `soil deep` pies were right (wedge shares equal the
+preview's to the printed digit). The other 46 drew grouped columns (`Figure4`
+Graph3 / 6 / 7 / 8 / 9 / 10) as lines, and `RSOS_SC_BAR` as a grouped-bar Stat
+Stage with a pie window over it. `opju_curve_sheets._unbound_reason` therefore
+admits a text X only for `plotType` `pie`; the rest stay `x_not_imported` until
+grouped columns over text categories draw as columns. Guards:
+`tests/test_io_origin_text_x_pie.py`.
