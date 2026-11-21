@@ -133,6 +133,21 @@ export function legendCaption(
   return /[%$]\(/.test(caption) ? undefined : caption;
 }
 
+/** The legend label a bound curve gets, or `undefined` to keep its default:
+ *  its caption (`legendCaption` of its `legend_labels` entry), else its label
+ *  without a dedupe suffix when that differs ("Co (2)" -> "Co", B-30). */
+export function curveLegendLabel(
+  template: string | undefined,
+  curveNames: readonly (string | undefined)[],
+  labels: readonly string[],
+  idx: number,
+): string | undefined {
+  const caption = template ? legendCaption(template, curveNames) : undefined;
+  if (caption !== undefined) return caption;
+  const plain = undedupedLabel(labels, idx);
+  return plain !== (labels[idx] ?? "") ? plain : undefined;
+}
+
 /** A readable legend label for a curve that has NO decoded legend entry and
  *  whose Y column carries no long name/comment (so its label would be the raw
  *  `Book2@19: B` sheet reference). Uses only what the payload already has:

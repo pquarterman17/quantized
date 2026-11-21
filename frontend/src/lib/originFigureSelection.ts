@@ -15,7 +15,7 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { figureCurveErrorBindings } from "./originCurveErrorRoles";
 import type { ErrorBinding } from "./errorRoles";
-import { curveDisplayName, legendCaption, originCurveSeriesStyle, undedupedLabel } from "./originCurveText";
+import { curveDisplayName, curveLegendLabel, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 export { figureMapState, queueFigureTernary } from "./originFigureMap";
 import type { StatPicks } from "./plotviewSanitize";
@@ -354,11 +354,8 @@ export function figureChannelSelection(
     const st = withMarkerColumns(originCurveSeriesStyle(curve), curve, letters);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (!defaultX && requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
-    const caption = curveIdx < legend.length && legend[curveIdx]
-      ? legendCaption(legend[curveIdx], curveNames)
-      : undefined;
-    const shown = caption ?? undedupedLabel(ds.data.labels, yIdx); // "Co (2)" is a dedupe, not a name
-    if (caption !== undefined || shown !== (ds.data.labels[yIdx] ?? "")) labels[yIdx] = shown;
+    const shown = curveLegendLabel(legend[curveIdx], curveNames, ds.data.labels, yIdx);
+    if (shown !== undefined) labels[yIdx] = shown;
     curveIdx++;
   }
   if (yKeys.length === 0) return null;

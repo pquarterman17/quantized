@@ -113,8 +113,7 @@ export const WORKBOOK_TRANSFER_FORMAT = "quantized-workbook-transfer";
 export const WORKBOOK_TRANSFER_VERSION = 1;
 /** A package holding a field v0.34.0 drops (lib/workspaceForwardCompat.ts): v0.34.0 accepts only 1, so it refuses. */
 export const WORKBOOK_TRANSFER_VERSION_NEW_FEATURES = 2;
-/** A package holding a field v0.35-v0.38 drop (NEW_SINCE_V038): they accept only 1-2, so they refuse. */
-export const WORKBOOK_TRANSFER_VERSION_POST_038 = 3;
+export const WORKBOOK_TRANSFER_VERSION_POST_038 = 3; // a field v0.35-v0.38 (they accept 1-2) drop: NEW_SINCE_V038
 
 /** SIZE BOUND (frozen-scope item 1), checked AFTER serializing (the true
  *  cost — an estimate over nested arrays could under/over-count). 8,000,000
@@ -236,8 +235,7 @@ export function buildTransferPackage(
     reports,
     quickPlotTemplates,
   };
-  if (featuresV034WouldDrop(pkg).length) pkg.version = WORKBOOK_TRANSFER_VERSION_NEW_FEATURES;
-  if (featuresV038WouldDrop(pkg).length) pkg.version = WORKBOOK_TRANSFER_VERSION_POST_038;
+  if (featuresV034WouldDrop(pkg).length) pkg.version = featuresV038WouldDrop(pkg).length ? WORKBOOK_TRANSFER_VERSION_POST_038 : WORKBOOK_TRANSFER_VERSION_NEW_FEATURES;
   // BUG-017/BUG-023: clipboard text applies the same sentinel encoding as a
   // full workspace to both dataset cells and frozen FigureDocument snapshots.
   // `pkg` itself stays live/in-memory, and ordinary finite JSON is unchanged.

@@ -83,14 +83,9 @@ export const WORKSPACE_VERSION_TRANSFORM_STEPS = 5;
 // axes, live multi-dataset graphs, column comments/formats, the new axis-format options and the new
 // publication (export) series styles -- the "gated" entries of lib/workspaceForwardCompat.ts).
 // v0.34.0 accepts only v1-v5, so it refuses such a file instead of losing those features; a file
-// without them stays v4/v5 and still opens in 0.34. Fields 0.34 carries through untouched (the new
-// per-series SeriesStyle keys) do not bump. Content is otherwise identical to v4/v5.
+// without them stays v4/v5 and still opens in 0.34. Fields 0.34 carries through untouched do not bump.
 export const WORKSPACE_VERSION_NEW_FEATURES = 6;
-// v7 (release prep for 0.39.0): v0.35-v0.38 accept v6, and silently drop the fields gated since
-// (lib/workspaceForwardCompat.ts NEW_SINCE_V038: Origin's unmarked Divide by, an Origin error-bar
-// marker, a 100 % / ranged Stat Stage bar chart). A file holding one is written as v7, which every
-// release up to 0.38 refuses. Content is otherwise identical to v4-v6.
-export const WORKSPACE_VERSION_POST_038 = 7;
+export const WORKSPACE_VERSION_POST_038 = 7; // v7: a field v0.35-v0.38 (they accept v6) drop, lib/workspaceForwardCompat.ts NEW_SINCE_V038
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where

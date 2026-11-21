@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { curveDisplayName, undedupedLabel } from "./originCurveText";
+import { curveDisplayName, curveLegendLabel, undedupedLabel } from "./originCurveText";
 import type { Dataset } from "./types";
 
 describe("undedupedLabel", () => {
@@ -13,6 +13,12 @@ describe("undedupedLabel", () => {
     expect(undedupedLabel(labels, 6)).toBe("Run (2)");
     expect(undedupedLabel(["Co (2)", "Co"], 0)).toBe("Co (2)"); // no EARLIER bare name
     expect(undedupedLabel(labels, 1)).toBe("Co");
+  });
+  it("gives a bound curve its caption, else its undeduped name, else nothing", () => {
+    expect(curveLegendLabel("\\l(1) %(1)", ["Mn"], labels, 4)).toBe("Mn");
+    expect(curveLegendLabel(undefined, [], labels, 4)).toBe("Co");
+    expect(curveLegendLabel(undefined, [], labels, 1)).toBeUndefined(); // already its own name
+    expect(curveLegendLabel("%(7,@LG)", [], labels, 4)).toBe("Co"); // unresolvable code: no caption
   });
   it("feeds the %(n) display name, a Comment still winning", () => {
     const ds = { data: { labels, metadata: { column_comments: { F: "Fe comment" } } } } as unknown as Dataset;
