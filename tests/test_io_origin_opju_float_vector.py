@@ -58,7 +58,14 @@ def _float_curves(n: int = 2, width: str | None = "E") -> list[dict[str, Any]]:
 
 
 def _fig(curves: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
-    return {"name": "Graph1", "layer": 1, "curves": curves, "legend_labels": [], **extra}
+    return {
+        "name": "Graph1",
+        "layer": 1,
+        "curves": curves,
+        "legend_labels": [],
+        "axes_exchanged": False,
+        **extra,
+    }
 
 
 def test_modifiers_are_read_only_in_the_proven_shapes() -> None:
@@ -150,6 +157,10 @@ def test_the_layer_pass_draws_marks_and_leaves_the_rest_out() -> None:
     (gone,) = apply_bar_kinds([_fig(_float_curves(2, width=None))], b"", [_BOOK])
     assert gone["curves"] == [] and DATA_MARKS not in gone
     assert [o["reason"] for o in gone["curve_sheet_omitted"]] == [PLOT_TYPE_NOT_DRAWN] * 2
+    # an unauthenticated layer record (orientation unknown) leaves them out too
+    (unknown,) = apply_bar_kinds([_fig(_float_curves(), axes_exchanged=None)], b"", [_BOOK])
+    assert unknown["curves"] == [] and DATA_MARKS not in unknown
+    assert [o["reason"] for o in unknown["curve_sheet_omitted"]] == [PLOT_TYPE_NOT_DRAWN] * 2
     # an exchanged-axes layer leaves them out whatever they prove
     (turned,) = apply_bar_kinds([_fig(_float_curves(), axes_exchanged=True)], b"", [_BOOK])
     assert turned["curves"] == [] and DATA_MARKS not in turned

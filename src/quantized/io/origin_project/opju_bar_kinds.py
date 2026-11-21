@@ -228,7 +228,13 @@ def _draw_marks(fig: dict[str, Any], plotted: int, books: Sequence[Any]) -> dict
     curves = [dict(c) for c in fig.get("curves") or []]
     if not any(c.get("plotType") in ("floating", "vector") for c in curves):
         return fig
-    marks, drawn, left = resolve_marks(curves, plotted, books)
+    # only a layer PROVEN upright (``axes_exchanged is False``, the flag of
+    # every proven page) draws marks; an unauthenticated record leaves them out
+    if fig.get("axes_exchanged") is False:
+        marks, drawn, left = resolve_marks(curves, plotted, books)
+    else:
+        marks, drawn = [], []
+        left = [i for i, c in enumerate(curves) if c.get("plotType") in ("floating", "vector")]
     for i in left:
         curves[i]["plotType"] = "not_drawn"
     if not marks:

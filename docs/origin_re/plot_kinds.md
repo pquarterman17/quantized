@@ -424,7 +424,9 @@ at X = 1 / 2 / 3, rows 3 and 4 overlap as in the preview), Graph512 25 / 25 /
 40 px for 0.5 / 0.5 / 0.8 and 11 / 14 px tall for 0.4 / 0.5. Not proven and
 left out: Graph26 (three floating plots, no width modifier; its preview has
 gaps between region groups that its X 1..12 does not carry), a floating plot
-with no width column, an exchanged-axes layer, a multi-panel page. The fill
+with no width column, an exchanged-axes layer or one whose layer record
+does not authenticate (orientation unknown; all 4 proven pages read
+`axes_exchanged` = False), a multi-panel page. The fill
 colour (green in the preview; the record's colour is the black outline) is not
 decoded: the shapes use the plot's default ink at 35 % opacity.
 
