@@ -23,9 +23,14 @@ def x_is_datetime(metadata: Mapping[str, Any], x_key: object) -> bool:
     return x_key is None and metadata.get("time_is_datetime") is True
 
 
-def date_aware_x_fmt(fmt: Mapping[str, Any] | None, is_datetime: bool) -> Mapping[str, Any] | None:
+
+def date_aware_x_fmt(
+    fmt: Mapping[str, Any] | None, is_datetime: bool, is_clock: bool = False
+) -> Mapping[str, Any] | None:
     """The X format to draw with: ``auto`` (``None`` or mode ``"auto"``) on a
-    timestamp X becomes ``"datetime"``; anything explicit is kept."""
-    if not is_datetime or (fmt is not None and fmt.get("mode", "auto") != "auto"):
+    timestamp X becomes ``"datetime"``, on a time-of-day X (seconds since
+    midnight, ``metadata["time_is_clock"]``) ``"clock"`` (`clock_ticks`);
+    anything explicit is kept."""
+    if not (is_datetime or is_clock) or (fmt is not None and fmt.get("mode", "auto") != "auto"):
         return fmt
-    return {**(fmt or {"digits": 2}), "mode": "datetime"}
+    return {**(fmt or {"digits": 2}), "mode": "datetime" if is_datetime else "clock"}

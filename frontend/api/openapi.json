@@ -17156,7 +17156,8 @@
               "eng",
               "date",
               "time",
-              "datetime"
+              "datetime",
+              "clock"
             ],
             "title": "Mode",
             "type": "string"

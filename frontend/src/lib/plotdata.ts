@@ -72,10 +72,9 @@ export interface PlotPayload {
    *  `usePlotPayload.ts`'s windowed re-fetch effect is the single producer of
    *  a request that sets this. */
   window?: [number, number] | null;
-  /** The x column is timestamps (epoch seconds; the dataset's own `time`
-   *  with `metadata.time_is_datetime`): an `auto` X format draws dates
-   *  (`axisFormat.dateAwareXFmt`, worksheet audit #7). */
-  xIsDate?: boolean;
+  /** The x column is timestamps (epoch seconds, `metadata.time_is_datetime`) / `"clock"` a time of day (seconds since
+   *  midnight, `metadata.time_is_clock`): an `auto` X format draws dates / a clock (`axisFormat.dateAwareXFmt`, audit #7). */
+  xIsDate?: boolean | "clock";
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
   rowIds?: number[]; // a reduced (decimated/windowed) payload: row i is dataset row rowIds[i] (lib/plotRowMap.ts)
@@ -110,13 +109,15 @@ export function buildColumns(
         ? String(ds.metadata?.["x_column_long"] || ds.metadata?.["x_column_name"] || "x")
         : (ds.labels[xKey] ?? "x"),
     xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
-    ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}), // only when set: payloads compare deep-equal
+    ...xTimeFlags(ds, xKey),
   };
 }
 
-/** Whether the plotted x (`xKey`, null = `ds.time`) is a timestamp column. */
-export function xIsDate(ds: DataStruct, xKey: number | null): boolean {
-  return xKey == null && ds.metadata?.["time_is_datetime"] === true;
+/** The payload's `xIsDate`, only when set (payloads compare deep-equal): the plotted x (`xKey`, null = `ds.time`)
+ *  is a timestamp column, or `"clock"` a time-of-day one. */
+export function xTimeFlags(ds: DataStruct, xKey: number | null): Pick<PlotPayload, "xIsDate"> {
+  const m = xKey == null ? ds.metadata : undefined, d = m?.["time_is_datetime"] === true || (m?.["time_is_clock"] === true && "clock");
+  return d ? { xIsDate: d } : {};
 }
 
 /** The xCategories PRODUCER (gap #20 residual): the field and its consumer
@@ -634,7 +635,7 @@ export async function fetchPlot(
       signal,
     );
     const data = r.kept ? (await import("./plotUngap")).ungap(r.data, r.kept) as typeof r.data : r.data;
-    return dropTrailingEmptyRows({ ...fromResponse({ ...r, data }), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
+    return dropTrailingEmptyRows({ ...fromResponse({ ...r, data }), ...xTimeFlags(ds, xKey) });
   } catch (err) {
     // An intentional cancellation (a newer commit superseded this fetch)
     // must never be treated as "we're offline" -- the offline fallback below
