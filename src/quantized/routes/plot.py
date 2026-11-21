@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field, model_validator
 
-from quantized.calc.decimate import gap_plan, is_ascending, reduce_plot_rows, window_row_indices
+from quantized.calc.decimate import is_ascending, reduce_plot_rows, window_row_indices
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.routes._columns import COLUMNS_MEDIA_TYPE, encode_columns, wants_columns
@@ -116,7 +116,9 @@ def plot_series(
         and not req.full_resolution
         and is_ascending(x if in_window is None else x[in_window])
     )
-    x, values, rows = reduce_plot_rows(x, values, in_window, decimate_width if decimated else None)
+    x, values, rows, kept = reduce_plot_rows(
+        x, values, in_window, decimate_width if decimated else None
+    )
 
     if handle is not None:
         response.headers["X-Dataset-Handle"] = handle
@@ -125,10 +127,10 @@ def plot_series(
         "x": {"label": plot.x_label, "unit": plot.x_unit, "log": plot.x_log},
         "y": {"log": plot.y_log},
         "decimated": decimated,
-        # Wide plot: each series carries values only at its own picked rows
-        # (NaN/null elsewhere; calc/decimate.py's gap_plan), so the client
-        # must draw across the gaps.
-        "gapped": decimated and gap_plan(decimate_width or 1, len(values))[1],
+        # Wide plot (calc/decimate.py reduce_plot_rows): per series, the
+        # positions holding a REAL entry; every other row is filler the client
+        # draws across, while a real NaN stays a gap. None when not gapped.
+        "kept": [k.tolist() for k in kept] if kept is not None else None,
         "window": window,
         "rows": rows.tolist() if rows is not None else None,
     }

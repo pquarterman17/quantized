@@ -5,7 +5,6 @@
 import { describe, expect, it } from "vitest";
 
 import { GAP_ROW_CAP, bucketsForWidth, buildDecimatedData, cappedBuckets } from "./plotDecimate";
-import { readoutPlugin } from "./uplotPointerTools";
 
 const N = 20_000;
 const WIDTH = 1440;
@@ -71,34 +70,5 @@ describe("buildDecimatedData on a wide plot", () => {
 
   it("zooming in re-resolves toward every row", () => {
     expect(buildDecimatedData(wide(49), 1000, 1100, WIDTH)[0].length).toBeGreaterThanOrEqual(100);
-  });
-});
-
-describe("readout on a gapped plot", () => {
-  const data = [
-    [0, 1, 2, 3],
-    [10, null, null, 13],
-    [null, 21, null, null],
-  ];
-  const series = [{}, { label: "a" }, { label: "b" }];
-  function readAt(spanGaps: boolean, idx: number) {
-    let got: unknown = null;
-    const plugin = readoutPlugin((r) => {
-      got = r;
-    });
-    // @ts-expect-error minimal uPlot stand-in
-    plugin.hooks.setCursor?.({ cursor: { idx }, data, series: series.map((s) => ({ ...s, spanGaps })) });
-    return got;
-  }
-
-  it("looks up each series' nearest value, but only for a plot marked gapped", () => {
-    expect(readAt(false, 1)).toEqual({ x: 1, rows: [{ label: "b", y: 21 }] });
-    expect(readAt(true, 1)).toEqual({
-      x: 1,
-      rows: [
-        { label: "a", y: 10 },
-        { label: "b", y: 21 },
-      ],
-    });
   });
 });

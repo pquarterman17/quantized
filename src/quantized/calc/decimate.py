@@ -50,7 +50,7 @@ __all__ = [
 # every row and the browser rasterised ~5M points per frame (multi-second
 # zoom steps, 40 MB responses). Past this many UNION rows the bucket count is
 # scaled down so the union fits, and each series keeps only ITS OWN picks
-# (NaN elsewhere; the client draws gap-spanning lines), so a series is still
+# (filler elsewhere; see reduce_plot_rows), so a series is still
 # drawn with its true per-bucket min/max, just over fewer, wider buckets.
 # Twin of ``GAP_ROW_CAP`` / ``gapPlan`` in frontend/src/lib/plotDecimate.ts.
 GAP_ROW_CAP = 16_000
@@ -205,37 +205,75 @@ def reduce_plot_rows(
     series: Sequence[NDArray[np.float64]],
     window_rows: NDArray[np.intp] | None,
     buckets: int | None,
-) -> tuple[NDArray[np.float64], list[NDArray[np.float64]], NDArray[np.intp] | None]:
+) -> tuple[
+    NDArray[np.float64],
+    list[NDArray[np.float64]],
+    NDArray[np.intp] | None,
+    list[NDArray[np.intp]] | None,
+]:
     """Apply a view window (``window_rows``, from :func:`window_row_indices`)
     and then min/max decimation (``buckets``) to the plot columns, returning
     them with ``rows``: the ORIGINAL row index of every returned row, or None
     when the rows are the dataset's own one-to-one (gap audit 3 N2 review --
     a client masking a drawn point maps it back through this, never by
-    position). ``series`` empty is never decimated (see decimate_columns)."""
+    position). ``series`` empty is never decimated (see decimate_columns).
+
+    The fourth element, ``kept``, is None unless the payload is GAPPED (a wide
+    plot with rows actually dropped): then ``kept[j]`` lists the positions in
+    the returned rows at which series ``j`` has a REAL entry (its own picks,
+    plus every row where it is genuinely non-finite), and every other position
+    is filler (NaN). The client turns filler into ``undefined`` (uPlot draws
+    across it) and real NaN into ``null`` (uPlot breaks the line), so a
+    genuine missing run is never bridged."""
     rows: NDArray[np.intp] | None = window_rows
     cols = list(series)
+    kept: list[NDArray[np.intp]] | None = None
     if rows is not None:
         x, cols = x[rows], [s[rows] for s in cols]
     if buckets is not None and cols:
         eff, gapped = gap_plan(buckets, len(cols))
         picked, own = decimate_row_picks(cols, eff)
         if gapped and own is not None:
-            cols = [_keep_only(c, picked, mine) for c, mine in zip(cols, own, strict=True)]
+            own = [np.union1d(m, _nan_run_edges(c)) for c, m in zip(cols, own, strict=True)]
+            picked = np.unique(np.concatenate(own)).astype(np.intp, copy=False)
+            cols, kept = _mask_to_kept(cols, picked, own)
         else:
             cols = [c[picked] for c in cols]
         x = x[picked]
         rows = picked if rows is None else rows[picked]
-    return x, cols, rows
+    return x, cols, rows, kept
 
 
-def _keep_only(
-    y: NDArray[np.float64], rows: NDArray[np.intp], mine: NDArray[np.intp]
-) -> NDArray[np.float64]:
-    """``y`` gathered at ``rows`` but NaN except at ``mine`` (a subset of
-    ``rows``): the series keeps only its own picks."""
-    out = np.full(rows.shape, np.nan)
-    out[np.searchsorted(rows, mine)] = y[mine]
-    return out
+def _nan_run_edges(y: NDArray[np.float64]) -> NDArray[np.intp]:
+    """First and last row of every run of non-finite values in ``y``: kept
+    in the row set so a genuine gap has rows to break the line at (a run with
+    no row inside it would otherwise be drawn across). The row count therefore
+    grows with the NUMBER of runs, never beyond the dataset's own rows."""
+    bad = ~np.isfinite(y)
+    if not bad.any():
+        return np.array([], dtype=np.intp)
+    edge = np.diff(bad.astype(np.int8), prepend=0, append=0)
+    return np.concatenate([np.flatnonzero(edge == 1), np.flatnonzero(edge == -1) - 1]).astype(
+        np.intp
+    )
+
+
+def _mask_to_kept(
+    cols: list[NDArray[np.float64]], rows: NDArray[np.intp], own: list[NDArray[np.intp]]
+) -> tuple[list[NDArray[np.float64]], list[NDArray[np.intp]]]:
+    """Gather ``cols`` at ``rows`` with NaN filler everywhere except each
+    series' own picks, and return those positions plus the genuinely
+    non-finite ones (see :func:`reduce_plot_rows`)."""
+    out: list[NDArray[np.float64]] = []
+    kept: list[NDArray[np.intp]] = []
+    for y, mine in zip(cols, own, strict=True):
+        col = np.full(rows.shape, np.nan)
+        pos = np.searchsorted(rows, mine)
+        col[pos] = y[mine]
+        out.append(col)
+        real_nan = np.flatnonzero(~np.isfinite(y[rows]))
+        kept.append(np.union1d(pos, real_nan).astype(np.intp, copy=False))
+    return out, kept
 
 
 def window_row_indices(x: NDArray[np.float64], x_min: float, x_max: float) -> NDArray[np.intp]:
