@@ -84,3 +84,12 @@ export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined
   });
   return min > max ? null : padXDomain([min, max], positiveOnly);
 }
+
+/** A FIXED Y/Y2 limit as the scale options. uPlot draws a scale whose min is
+ *  above its max with no ticks at all, so a descending pair (an Origin axis
+ *  decoded from > to: EIS Nyquist plots -Im(Z) down the page) is handed over
+ *  ascending with `dir: -1`, which flips the axis on screen and keeps the tick
+ *  labels, now in reversed order. */
+export function fixedYScale(lim: [number, number]): Pick<uPlot.Scale, "range" | "dir"> {
+  return lim[0] > lim[1] ? { range: [lim[1], lim[0]], dir: -1 } : { range: lim };
+}

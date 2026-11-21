@@ -354,7 +354,7 @@ export function figureChannelSelection(
     const st = withMarkerColumns(originCurveSeriesStyle(curve), curve, letters);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (!defaultX && requestedX >= 0) xKey = requestedX; // plot against a non-default x channel
-    const shown = curveLegendLabel(legend[curveIdx], curveNames, ds.data.labels, yIdx);
+    const shown = curveLegendLabel(legend[curveIdx], curveNames, ds.data.labels, yIdx, (ds.data.metadata ?? {}).origin_column_labels as unknown[] | undefined);
     if (shown !== undefined) labels[yIdx] = shown;
     curveIdx++;
   }

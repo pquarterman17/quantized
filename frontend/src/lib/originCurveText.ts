@@ -87,18 +87,27 @@ export function curveDisplayName(ds: Dataset, yLetter: string, yIdx: number): st
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const comments = meta.column_comments as Record<string, unknown> | undefined;
   const comment = comments && typeof comments === "object" ? String(comments[yLetter] ?? "") : "";
-  return comment || undedupedLabel(ds.data.labels, yIdx) || yLetter;
+  return comment || undedupedLabel(ds.data.labels, yIdx, meta.origin_column_labels as unknown[] | undefined) || yLetter;
 }
 
 /** Channel `idx`'s label without the `DataStruct` dedupe suffix: two Origin
  *  columns both long-named "Co" import as "Co" and "Co (2)", but Origin's
  *  legend shows the column's own name, "Co", for both (XMCD.opj Signaltonois
- *  book). Stripped only when it IS a dedupe (an earlier label is the bare
- *  name), so a column genuinely named "Run (2)" keeps its name. */
-export function undedupedLabel(labels: readonly string[], idx: number): string {
+ *  book). `rawLabels` is `metadata.origin_column_labels`, the names before
+ *  quantized deduped them: the label is replaced by its raw name only when it
+ *  is exactly that name plus the " (n)" quantized added. A genuine Origin name
+ *  "Run (2)" is its own raw name and survives; with no record, nothing is
+ *  stripped (never guess). */
+export function undedupedLabel(
+  labels: readonly string[],
+  idx: number,
+  rawLabels?: readonly unknown[],
+): string {
   const label = labels[idx] ?? "";
-  const m = /^(.*) \((\d+)\)$/.exec(label);
-  return m && labels.slice(0, idx).includes(m[1]) ? m[1] : label;
+  const raw = Array.isArray(rawLabels) && idx < rawLabels.length ? String(rawLabels[idx]) : undefined;
+  return raw !== undefined && raw !== label && label.startsWith(`${raw} (`) && /^ \(\d+\)$/.test(label.slice(raw.length))
+    ? raw
+    : label;
 }
 
 /** Resolve an Origin legend template string (one `legend_labels` entry) to
@@ -141,10 +150,11 @@ export function curveLegendLabel(
   curveNames: readonly (string | undefined)[],
   labels: readonly string[],
   idx: number,
+  rawLabels?: readonly unknown[],
 ): string | undefined {
   const caption = template ? legendCaption(template, curveNames) : undefined;
   if (caption !== undefined) return caption;
-  const plain = undedupedLabel(labels, idx);
+  const plain = undedupedLabel(labels, idx, rawLabels);
   return plain !== (labels[idx] ?? "") ? plain : undefined;
 }
 

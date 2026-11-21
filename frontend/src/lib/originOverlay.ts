@@ -17,6 +17,7 @@
 // re-exported from here: an `export *` kept it in this module's eager chunk.
 
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
+import { undedupedLabel } from "./originCurveText";
 
 /** Derived-overlay schema. Increment when construction or binding semantics
  * change so persisted workspaces cannot silently reuse older geometry. */
@@ -53,12 +54,10 @@ export interface OverlayBound {
  *  overlay — the plain channel-selection path handles those). `ownX`: the
  *  Origin apply's recorded-X rule (A2) -- even ONE curve on one block is
  *  built, because the plain path would redraw it against another X. */
-/** Channel `c`'s label without a DataStruct dedupe suffix: "H (2)" -> "H" when
- *  "H" is another channel's label or the book's X name (a real dedupe). */
+/** Channel `c`'s label without the DataStruct dedupe suffix ("H (2)" -> "H"),
+ *  via the pre-dedupe `origin_column_labels`; a genuine "H (2)" survives. */
 function undedupe(d: DataStruct, c: number): string {
-  const label = d.labels[c] ?? "";
-  const base = label.replace(/ \(\d+\)$/, "");
-  return base !== label && (d.labels.includes(base) || d.metadata?.x_column_long === base) ? base : label;
+  return undedupedLabel(d.labels, c, d.metadata?.origin_column_labels as unknown[] | undefined);
 }
 
 /** The cells of Origin text column `letter` (`origin_text_columns`), trailing

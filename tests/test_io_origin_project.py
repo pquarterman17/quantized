@@ -2664,3 +2664,24 @@ def test_realdata_opj_legend_title_suppressed_no_scan_noise() -> None:
         assert figs[graph]["legend_title"] == ""
         # The real per-curve legend is untouched (labels still recovered).
         assert figs[graph]["legend_labels"]
+
+
+def test_build_book_records_origin_labels_before_the_dedupe_suffix() -> None:
+    """``origin_column_labels`` is Origin's own names, so a legend strips only
+    the " (2)" DataStruct added to a repeat, never a genuine "Run (2)" (R-37)."""
+    from quantized.io.origin_project.opj import _build_book
+    from quantized.io.origin_project.windows import BookMeta, ColumnMeta
+
+    longs = {"A": "T", "B": "Co", "C": "Co", "D": "Run", "E": "Run (2)"}
+    meta = BookMeta(
+        short="Book1",
+        long_name="Book1",
+        columns={
+            c: ColumnMeta(c, "X" if c == "A" else "Y", n, "", "") for c, n in longs.items()
+        },
+    )
+    cols = [(c, np.array([1.0, 2.0])) for c in "BCDE"]
+    ds = _build_book("Book1", cols, {"Book1": meta}, [], "origin_opj")
+
+    assert ds.labels == ("Co", "Co (2)", "Run", "Run (2)")  # DataStruct's own dedupe
+    assert ds.metadata["origin_column_labels"] == ["Co", "Co", "Run", "Run (2)"]
