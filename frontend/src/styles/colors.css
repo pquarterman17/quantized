@@ -110,8 +110,8 @@
   --accent-soft: oklch(0.55 0.18 295 / 0.14);
   --accent-text: oklch(0.45 0.16 295);
 
-  --capture: oklch(0.66 0.15 75);
-  --capture-soft: oklch(0.66 0.15 75 / 0.16);
+  --capture: var(--warn); /* amber at L .66 was 2.45:1; reuse the AA warn amber (>=4.5:1 on surfaces 0-3) */
+  --capture-soft: oklch(0.44 0.12 75 / 0.16);
 
   /* status colours double as TEXT (warnings, one-word states): AA on surfaces 0-3 */
   --ok: oklch(0.415 0.14 150);

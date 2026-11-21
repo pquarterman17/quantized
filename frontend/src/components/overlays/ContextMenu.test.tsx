@@ -325,9 +325,10 @@ describe("ContextMenu", () => {
   });
 });
 
-// GUI_INTERACTION #8: keyboard-complete navigation. The menu container grabs
-// DOM focus on mount (see ContextMenu's own useLayoutEffect), so the first
-// key fired at `document.activeElement` always lands on the menu itself.
+// GUI_INTERACTION #8: keyboard-complete navigation. The first menuitem grabs
+// DOM focus on mount (the `role=menu` container is `display: contents`, which
+// a real browser cannot focus), so keys fired at `document.activeElement`
+// always land on a menuitem.
 describe("ContextMenu — keyboard navigation (GUI_INTERACTION #8)", () => {
   const nav: ContextMenuItem[] = [
     { label: "Alpha", run: vi.fn() },
@@ -336,9 +337,28 @@ describe("ContextMenu — keyboard navigation (GUI_INTERACTION #8)", () => {
     { label: "Gamma", run: vi.fn() },
   ];
 
-  it("ArrowDown from nothing focused lands on the first focusable item, skipping disabled", () => {
+  it("opening focuses the first menuitem, and focus is on a real box (not display: contents)", () => {
     render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    const active = document.activeElement as HTMLElement;
+    expect(active).toHaveAttribute("role", "menuitem");
+    expect(active).toBe(screen.getByText("Alpha").closest("button"));
+    // jsdom ignores `display: contents`; Chrome cannot focus such an element.
+    expect(active.style.display).not.toBe("contents");
+    // The role=menu container itself is never the keyboard target.
+    expect(screen.getByRole("menu")).not.toBe(active);
+  });
+
+  it("Enter on the focused first item runs it; Escape closes", async () => {
+    const run = vi.fn();
+    const onClose = vi.fn();
+    render(<ContextMenu x={0} y={0} items={[{ label: "Only", run }]} onClose={onClose} />);
+    await userEvent.keyboard("{Enter}");
+    expect(run).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("ArrowDown from the first item skips disabled to the next focusable one", () => {
+    render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
     expect(document.activeElement).toBe(screen.getByText("Alpha").closest("button"));
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button")); // Beta is disabled
@@ -346,7 +366,7 @@ describe("ContextMenu — keyboard navigation (GUI_INTERACTION #8)", () => {
 
   it("ArrowUp wraps from the first item to the last", () => {
     render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" }); // -> Alpha
+    expect(document.activeElement).toBe(screen.getByText("Alpha").closest("button"));
     fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" }); // wraps -> Gamma
     expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button"));
   });
