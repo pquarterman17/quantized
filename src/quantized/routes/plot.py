@@ -116,7 +116,9 @@ def plot_series(
         and not req.full_resolution
         and is_ascending(x if in_window is None else x[in_window])
     )
-    x, values, rows = reduce_plot_rows(x, values, in_window, decimate_width if decimated else None)
+    x, values, rows, kept = reduce_plot_rows(
+        x, values, in_window, decimate_width if decimated else None
+    )
 
     if handle is not None:
         response.headers["X-Dataset-Handle"] = handle
@@ -125,6 +127,10 @@ def plot_series(
         "x": {"label": plot.x_label, "unit": plot.x_unit, "log": plot.x_log},
         "y": {"log": plot.y_log},
         "decimated": decimated,
+        # Wide plot (calc/decimate.py reduce_plot_rows): per series, the
+        # positions holding a REAL entry; every other row is filler the client
+        # draws across, while a real NaN stays a gap. None when not gapped.
+        "kept": [k.tolist() for k in kept] if kept is not None else None,
         "window": window,
         "rows": rows.tolist() if rows is not None else None,
     }

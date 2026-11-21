@@ -14,8 +14,6 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 import {
-  buildDecimatedData,
-  decimatePlugin,
   decimationEligible,
   hasErrorMapEntries,
   shouldDecimate,
@@ -72,6 +70,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     y2: args.y2Lim ?? null,
   });
   const [rebuildEpoch, setRebuildEpoch] = useState(0);
+  const decimateRowsRef = useRef<typeof import("../../lib/plotDecimateRows") | null>(null);
   // Y3+ axes (gap audit 4 G11) rebuild on any change, their committed zoom
   // too: unlike x / y / y2 there is no live nudge (eager bundle budget), so a
   // plot WITH extra axes rebuilds once per committed zoom / Back.
@@ -232,7 +231,16 @@ export default function PlotViewport(props: PlotViewportProps) {
         hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0) || blocksDecimation(args.seriesStyles ?? [], fullX.length),
       });
     let plotData = displayPayload.data;
-    if (decimate) {
+    // The client decimator is a lazy chunk (lib/plotDecimateRows.ts): the first
+    // dense offline plot draws raw rows, then rebuilds once it lands.
+    const rows = decimateRowsRef.current;
+    if (decimate && !rows) {
+      void import("../../lib/plotDecimateRows").then((m) => {
+        decimateRowsRef.current = m;
+        setRebuildEpoch((e) => e + 1);
+      }).catch(() => undefined); // a failed load just leaves the raw plot
+    }
+    if (decimate && rows) {
       // uPlot.AlignedData's y-column element type is `number | null | undefined`
       // (TypedArray-friendly); this codebase's own columns only ever use `null`
       // for a missing value (never `undefined` — see plotdata.ts), so the same
@@ -240,8 +248,8 @@ export default function PlotViewport(props: PlotViewportProps) {
       // (e.g. maskExcludedPayload) applies here too.
       const fullData = displayPayload.data as (number | null)[][];
       const [x0, x1] = curLims.x ?? xExtent(fullX) ?? [0, 1];
-      plotData = buildDecimatedData(fullData, x0, x1, w) as uPlot.AlignedData;
-      opts.plugins = [...(opts.plugins ?? []), decimatePlugin(() => fullData)];
+      plotData = rows.buildDecimatedData(fullData, x0, x1, w) as uPlot.AlignedData;
+      opts.plugins = [...(opts.plugins ?? []), rows.decimatePlugin(() => fullData)];
     }
     // The focused stage (the one recording view history) publishes the tick
     // increments it draws, offered to an export as a hint (lib/liveTickSteps.ts).
