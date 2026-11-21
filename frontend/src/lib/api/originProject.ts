@@ -21,6 +21,9 @@ export interface OriginProjectSpec {
  *  complex, edited, or sharing a workbook — io/origin_project/writer_matrix). */
 export interface OriginProjectResult {
   matrixFallbacks: number;
+  /** `X-Opj-Dropped-Text-Columns`: "Book: col, col; …" the .opj format cannot
+   *  carry (empty when none). */
+  droppedTextColumns: string;
 }
 
 /** Write the datasets into one .opj project and download it. */
@@ -30,5 +33,11 @@ export async function exportOriginProject(
 ): Promise<OriginProjectResult> {
   const h = await postDownloadHeaders("/api/export/opj", body, `${body.filename ?? "project"}.opj`, signal);
   const n = Number(h.get("X-Opj-Matrix-Fallback") ?? "0");
-  return { matrixFallbacks: Number.isFinite(n) && n > 0 ? Math.floor(n) : 0 };
+  let dropped = h.get("X-Opj-Dropped-Text-Columns") ?? "";
+  try {
+    dropped = decodeURIComponent(dropped);
+  } catch {
+    /* keep the raw text */
+  }
+  return { matrixFallbacks: Number.isFinite(n) && n > 0 ? Math.floor(n) : 0, droppedTextColumns: dropped };
 }

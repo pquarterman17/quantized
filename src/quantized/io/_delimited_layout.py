@@ -231,10 +231,16 @@ _UNIT_WORDS = frozenset(
 )
 
 
-def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
+def _looks_like_units_row(
+    row: Sequence[str], n_data_cols: int, *, allow_blank: bool = False
+) -> bool:
+    """``allow_blank``: an all-empty row counts (a text header sits directly
+    above): the Origin-ASCII export's ``,,,`` units row of a unitless dataset."""
     n = len(row)
     if n < max(n_data_cols * 0.5, 2):
         return False
+    if allow_blank and not any(c.strip() for c in row):
+        return True
     n_unit_like = 0
     n_non_empty = 0
     for cell in row:
@@ -264,18 +270,11 @@ def _numeric_like_mask_column(cells: Sequence[str]) -> np.ndarray | None:
     genuinely malformed number, an empty cell, ...) raise and trigger the
     fallback.
 
-    D5 (2026-08-27 bug hunt): unlike the old ``_numeric_mask_column``, does
-    NOT exclude a NaN-parsed cell (``~np.isnan(parsed)``) -- D5 counts a
-    NaN/Inf spelling as numeric, so every cell that parses at all is
-    numeric-like here. Where it succeeds, every cell WAS numpy-float-
-    parseable; the only way it can disagree with ``_is_numeric_like`` is if
-    numpy's parser and Python's ``float()`` produced different values for
-    the same string, or disagreed on whether it parses at all -- verified
-    empirically for this project's numpy floor (>=1.26; tested against
-    2.4.2) across >20,000 randomized numeric strings plus every case/sign
-    spelling of nan/inf, underscore-grouped literals ("1_000"), and
-    whitespace padding: zero disagreements -- the same bet already shipped
-    in ``_convert_column``.
+    D5 (2026-08-27): unlike the old ``_numeric_mask_column`` this does NOT
+    exclude a NaN-parsed cell -- D5 counts NaN/Inf spellings as numeric. Where
+    it succeeds every cell WAS numpy-parseable; numpy and ``float()`` were
+    checked for zero disagreement (numpy >=1.26 floor, >20,000 randomized
+    strings, nan/inf spellings, underscore-grouped literals, padding).
     """
     try:
         parsed = np.asarray([c.strip() for c in cells], dtype=np.float64)
@@ -490,7 +489,8 @@ def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
         and scores[first_data - 1] < 0.5
         and scores[first_data - 2] < 0.5
         and len(tokens[first_data - 2]) >= len(tokens[first_data - 1])
-        and _looks_like_units_row(tokens[first_data - 1], len(tokens[first_data]))
+        and any(c.strip() for c in tokens[first_data - 2])
+        and _looks_like_units_row(tokens[first_data - 1], len(tokens[first_data]), allow_blank=True)
     ):
         units_row = first_data - 1
         header_row = first_data - 2

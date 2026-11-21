@@ -79,10 +79,16 @@ export async function runExportOriginProject(s: StoreGet): Promise<void> {
         signal,
       );
     });
-    s().setStatus(done ? `exported Origin project (${books})` : "export cancelled");
+    const droppedText = done?.value.droppedTextColumns ?? "";
+    s().setStatus(
+      done
+        ? `exported Origin project (${books})${droppedText ? `; text columns not exported: ${droppedText}` : ""}`
+        : "export cancelled",
+    );
     // Same visible confirmation the .ogs export gives (live check 2026-11:
     // the download was the only sign anything had happened).
     if (done) toast(`exported Origin project (${books})`, "ok");
+    if (droppedText) toast(`The .opj format cannot hold text columns, not exported: ${droppedText}. The Origin script (.ogs) export keeps them.`, "info");
     const matrices = done?.value.matrixFallbacks ?? 0;
     if (matrices) {
       const why = asMatrix
