@@ -159,15 +159,16 @@ flow — the project doesn't exist until the first publish):
    Also update `CHANGELOG.md`: move the `[Unreleased]` items under a new
    `## [X.Y.Z] - YYYY-MM-DD` heading.
 
-2. **Commit + tag + push:**
+2. **Release PR, then tag via `cut-tag.yml`:** merge the bump in a
+   `Release vX.Y.Z` PR, then cut the tag ONLY through the `cut-tag` workflow
+   (`gh workflow run cut-tag.yml -f tag=vX.Y.Z -f sha=<merge SHA>`). The agent
+   git proxy silently drops tag pushes, and a `GITHUB_TOKEN` tag emits no
+   push event, so dispatch both workflows with the tag as the ref:
+   `gh workflow run release.yml --ref vX.Y.Z` and
+   `gh workflow run pypi.yml --ref vX.Y.Z -f target=pypi` (non-rc tags only).
+   Step-by-step with verification: `.claude/skills/release/SKILL.md`.
 
-   ```bash
-   git commit -am "chore(release): v0.2.0"
-   git tag v0.2.0
-   git push origin main --tags
-   ```
-
-3. The tag push fans out to **two** workflows:
+3. The two workflows:
    - `release.yml` — builds Windows/macOS/Linux, smoke-tests the sidecar,
      signs, and attaches `Quantized_x64-setup.exe` (+ `.sig`), the `.dmg`,
      the `.deb`, and `qz-server-*.{zip,tar.gz}` to the GitHub Release, then
