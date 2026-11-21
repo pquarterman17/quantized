@@ -74,10 +74,10 @@ def _reasons(fig: dict[str, Any]) -> list[str]:
         (213, "stacked_column"),
         (214, "stacked_area"),
         (215, "bar"),
-        (207, "not_drawn"),
+        (207, "floating"),
         (216, "not_drawn"),
         (225, "not_drawn"),
-        (218, "not_drawn"),
+        (218, "vector"),
         (203, "column"),
     ],
 )

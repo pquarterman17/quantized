@@ -96,8 +96,7 @@ Each was drawn as lines before. Each preview shows a different figure:
 | pie / doughnut (225) on a multi-layer page, or a bar-of-pie | `soil deep` SOILDEEP1 (pie + two violin panels); `TEA_ExcelGraphs` Graph1 / 12 (`BarofPie`). Lane P3 draws the one-layer pies and doughnuts (`soil deep` Graph3, `RSOS_*` *_CIR) | the Pie window draws one-layer pages; a bar-of-pie's bar is not decoded |
 | stack on a multi-layer page (213; Lane P2 decoded the 100 % flag: plain on `Graph_Template` / `Graphs` L4, 100 % on `Fig_3`) | `Graph_Template` / `Graphs` 32New, 32New_wMean, CQITCRLayerMod (layer 4); `Fig_3` Graph2 layer 2 | the Stat Stage draws one-layer pages only |
 | a plot GROUP in an exchanged-axes layer, or a turned panel of a multi-layer page (Lane P3 draws `LSA_fig6` Graph6 / 8: standalone plots, overlapping) | `TEA_ExcelGraphs` Graph9 / 13, `SOP_meas` Graph14 L6, Graph65 L5, Graph40 L5 / L9, Graph55 L5 (Lane P2) | grouped sideways bars and turned panels are not drawn (gap / overlap not decoded) |
-| floating column (207) | `Degree of impact` Graph26, 511, 512 | binding decoded (Lane P3); no bar-with-a-base renderer, and Graph26's group gaps / Graph511-512's width column are not drawable |
-| vector XYXY (218) | `30流场` Graph6 / `50流场` Graph10 layer 2 | end points decoded (Lane P3: modifiers 13 / 14 = C / D); no arrow renderer |
+| floating column (207), three or more plots | `Degree of impact` Graph26 | Lane V draws the two-plot pairs (below); Graph26's preview has group gaps its X does not carry and no width column: left out |
 
 Kinds still left as before: several 203 series on several X columns (one
 `(book, X)` per curve: `optimal_MOI` x6, `sm_X5` x3, `fig03_bar_sem_tips`),
@@ -402,3 +401,56 @@ list). Owner corpus: no change.
 ## Ledger
 
 Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-100 to F-107, B-24, R-28; Lane P2: F-108, F-109, B-26 to B-28, R-29, R-30; Lane P3: F-110 to F-114, B-31, B-32, R-33.
+
+## Lane V (2026-11-21): floating columns and vectors drawn as shapes
+
+Both kinds are rectangles / arrows at data coordinates, so the importer
+delivers `figure.data_marks` (`opju_float_vector`) and the lazy apply turns
+them into plot shapes (`lib/originDataMarks`): the screen shape draw and the
+matplotlib export (`figure_shapes`) already exist, nothing ships eagerly.
+The plots leave `curves`; a mark never takes a series slot.
+
+### Floating column (207): Graph511 / Graph512 drawn
+
+Record byte 6 `& 0x30` reads `0x20` (value 41) on the first plot and `0x10`
+(17) on the next: a plot group, head then member. Both name the same width
+column as modifier 39. One rectangle per finite row, centred on X, FULL
+width = the width column, from the head's Y to the member's Y. Graph511
+(`Book511`: x error * 2 is the width, min y / max y the bottom / top) and
+Graph512 (X = G, width H, bottom I, top J: four different columns of a
+permuted sheet) were measured on Origin's saved previews: Graph511 blocks are
+20 / 30 / 41 px wide for widths 0.4 / 0.6 / 0.8 (50.7 px per X unit, centres
+at X = 1 / 2 / 3, rows 3 and 4 overlap as in the preview), Graph512 25 / 25 /
+40 px for 0.5 / 0.5 / 0.8 and 11 / 14 px tall for 0.4 / 0.5. Not proven and
+left out: Graph26 (three floating plots, no width modifier; its preview has
+gaps between region groups that its X 1..12 does not carry), a floating plot
+with no width column, an exchanged-axes layer, a multi-panel page. The fill
+colour (green in the preview; the record's colour is the black outline) is not
+decoded: the shapes use the plot's default ink at 35 % opacity.
+
+### Vector XYXY (218): 30流场 Graph6, 50流场 Graph10 drawn
+
+Modifiers 13 / 14 on columns of the plot's own sheet; arrow from (X, Y) to
+(X end, Y end). On both projects every arrow is horizontal (end Y = start Y)
+and ends on the profile the layer's other plot draws, as the preview shows.
+The colour-field layer 1 of those pages holds no curves and is not imported,
+so the page counts as one plotted layer; any other layer with curves makes it
+a panel page, which stays left out (shapes belong to the page). Arrowheads
+use the shape's own head size (Origin's is not decoded); colour and line
+width come from the record (width floor 0.5).
+
+### Evidence and what is still open
+
+Previews only: no controlled specimen or COM read of these four plots exists
+in the local corpora, so the rules are deliberately narrow (the exact
+modifier shapes, exactly two floating plots, exactly one vector plot) and
+everything else is left out. Owner COM checks: `DataPlot::GetModifiers` and
+the plot group of `Degree of impact` Graph511 / 512 / 26 (expect 39 = width,
+a head and a member) and of `30流场` Graph6 L2 (expect 13 / 14 = C / D); the
+floating column's fill colour and the arrowhead size for the Details dialog.
+
+Regress (`origin_regress.py check --base origin/main`, public + owner): 3,782
+figures, 9,113 curves either way; 13 changes in 3 public projects, all in
+[`regress_allow/laneV-float-vector.json`](regress_allow/laneV-float-vector.json):
+the 6 plots drawn as marks leave the left-out list and the fidelity notes gain
+`data_marks_not_decoded`. Owner corpus: no change.

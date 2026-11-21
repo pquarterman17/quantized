@@ -138,6 +138,7 @@ from quantized.io.origin_project.opju_curve_token_x import (
 from quantized.io.origin_project.opju_curves_allcols import in_style_holder
 from quantized.io.origin_project.opju_embedded_pages import span_pages
 from quantized.io.origin_project.opju_error_bars import error_link, link_error_plots
+from quantized.io.origin_project.opju_float_vector import apply_mark_modifiers
 from quantized.io.origin_project.opju_plot_gates import error_bar_reason
 from quantized.io.origin_project.opju_plot_kinds import (
     apply_marker_modifiers,
@@ -475,7 +476,9 @@ def extract_curves_by_id(
             token_starts = [t.start() for t in tokens] + [end]
         nxt = token_starts[bisect_right(token_starts, m.start())]
         # a bubble / colour-mapped scatter's size / colour column (modifier block)
-        apply_marker_modifiers(curve, token_modifiers(b, m.end(), nxt), record)
+        mods = token_modifiers(b, m.end(), nxt)
+        apply_marker_modifiers(curve, mods, record)
+        apply_mark_modifiers(curve, mods, record)  # floating column width, vector ends
         out.append(curve)
         prev = (sheet or book, x_col)
         records.append(record)
