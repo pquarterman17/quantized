@@ -1,0 +1,105 @@
+{
+  "public:2021555811-hub_UAV-Soil-Moisture-Systematic-Review/origin/soil deep.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "Graph3/L1:",
+      "reason": "a pie / doughnut layer (plot 225) is drawn by the Pie window (opju_pie): Y = wedge values, X = labels, one ring per plot with the first innermost, doughnut flag record byte 206 = 01 and hole byte 165 = 40 %; Origin's saved preview prints the shares of Y (soil deep Graph3 52.3/34.1/13.6 %) and the RSOS rings' wedge borders equal B..K's cumulative shares within 2 deg"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "Graph3/L1:",
+      "reason": "a pie / doughnut layer (plot 225) is drawn by the Pie window (opju_pie): Y = wedge values, X = labels, one ring per plot with the first innermost, doughnut flag record byte 206 = 01 and hole byte 165 = 40 %; Origin's saved preview prints the shares of Y (soil deep Graph3 52.3/34.1/13.6 %) and the RSOS rings' wedge borders equal B..K's cumulative shares within 2 deg"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph3/L1:",
+      "reason": "fidelity notes follow the curves: the pie layer no longer leaves curves out (curves_left_out / exact_curve_bindings go) and gains pie_marks_not_decoded and the style note of curves it now draws"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "omissions",
+      "reason": "fidelity notes follow the curves: the pie layer no longer leaves curves out (curves_left_out / exact_curve_bindings go) and gains pie_marks_not_decoded and the style note of curves it now draws"
+    }
+  ],
+  "public:Surfacegrowthgroup_Long-range-correlations-in-discrete-kinetic-roughening/figure_data_origin/RSOS_SC_micstruc.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "RSOS_SC_CIR/L1:",
+      "reason": "a pie / doughnut layer (plot 225) is drawn by the Pie window (opju_pie): Y = wedge values, X = labels, one ring per plot with the first innermost, doughnut flag record byte 206 = 01 and hole byte 165 = 40 %; Origin's saved preview prints the shares of Y (soil deep Graph3 52.3/34.1/13.6 %) and the RSOS rings' wedge borders equal B..K's cumulative shares within 2 deg"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "RSOS_SC_CIR/L1:",
+      "reason": "a pie / doughnut layer (plot 225) is drawn by the Pie window (opju_pie): Y = wedge values, X = labels, one ring per plot with the first innermost, doughnut flag record byte 206 = 01 and hole byte 165 = 40 %; Origin's saved preview prints the shares of Y (soil deep Graph3 52.3/34.1/13.6 %) and the RSOS rings' wedge borders equal B..K's cumulative shares within 2 deg"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "RSOS_SC_CIR/L1:",
+      "reason": "fidelity notes follow the curves: the pie layer no longer leaves curves out (curves_left_out / exact_curve_bindings go) and gains pie_marks_not_decoded and the style note of curves it now draws"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "omissions",
+      "reason": "fidelity notes follow the curves: the pie layer no longer leaves curves out (curves_left_out / exact_curve_bindings go) and gains pie_marks_not_decoded and the style note of curves it now draws"
+    }
+  ],
+  "public:Surfacegrowthgroup_Long-range-correlations-in-discrete-kinetic-roughening/figure_data_origin/RSOS_TC_micstruc.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "RSOS_TC_CIR/L1:",
+      "reason": "a pie / doughnut layer (plot 225) is drawn by the Pie window (opju_pie): Y = wedge values, X = labels, one ring per plot with the first innermost, doughnut flag record byte 206 = 01 and hole byte 165 = 40 %; Origin's saved preview prints the shares of Y (soil deep Graph3 52.3/34.1/13.6 %) and the RSOS rings' wedge borders equal B..K's cumulative shares within 2 deg"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "RSOS_TC_CIR/L1:",
+      "reason": "a pie / doughnut layer (plot 225) is drawn by the Pie window (opju_pie): Y = wedge values, X = labels, one ring per plot with the first innermost, doughnut flag record byte 206 = 01 and hole byte 165 = 40 %; Origin's saved preview prints the shares of Y (soil deep Graph3 52.3/34.1/13.6 %) and the RSOS rings' wedge borders equal B..K's cumulative shares within 2 deg"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "RSOS_TC_CIR/L1:",
+      "reason": "fidelity notes follow the curves: the pie layer no longer leaves curves out (curves_left_out / exact_curve_bindings go) and gains pie_marks_not_decoded and the style note of curves it now draws"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "omissions",
+      "reason": "fidelity notes follow the curves: the pie layer no longer leaves curves out (curves_left_out / exact_curve_bindings go) and gains pie_marks_not_decoded and the style note of curves it now draws"
+    }
+  ],
+  "public:pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/LSA_fig6.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "Graph6/L1:",
+      "reason": "two STANDALONE bar plots (record byte 6 & 0x30 = 0) on one sheet X in an exchanged-axes layer: Origin draws ungrouped bars at the same positions, overlapping (LSA_fig6 Graph6 / 8 previews: translucent cyan over yellow reads green where both bars run, row 37 C 0.512 / E 0.499); drawn sideways and overlapping as the one-plot pages Graph1-5/7/9 already are"
+    },
+    {
+      "kind": "curve_gained",
+      "contains": "Graph8/L1:",
+      "reason": "two STANDALONE bar plots (record byte 6 & 0x30 = 0) on one sheet X in an exchanged-axes layer: Origin draws ungrouped bars at the same positions, overlapping (LSA_fig6 Graph6 / 8 previews: translucent cyan over yellow reads green where both bars run, row 37 C 0.512 / E 0.499); drawn sideways and overlapping as the one-plot pages Graph1-5/7/9 already are"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "plot_type_not_drawn",
+      "reason": "two STANDALONE bar plots (record byte 6 & 0x30 = 0) on one sheet X in an exchanged-axes layer: Origin draws ungrouped bars at the same positions, overlapping (LSA_fig6 Graph6 / 8 previews: translucent cyan over yellow reads green where both bars run, row 37 C 0.512 / E 0.499); drawn sideways and overlapping as the one-plot pages Graph1-5/7/9 already are"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "error_bar_plot",
+      "reason": "the error-bar plots of the now-drawn LSA_fig6 Graph6 / 8 bars attach to them (opju_error_bars, as on the one-plot sideways pages Graph1-5/7/9 since Lane P2), so they are no longer listed as left-out error_bar_plot curves"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph6/L1:",
+      "reason": "fidelity notes follow the curves: Graph6 / 8 no longer leave curves out and carry the style / colour notes of the bars they draw"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph8/L1:",
+      "reason": "fidelity notes follow the curves: Graph6 / 8 no longer leave curves out and carry the style / colour notes of the bars they draw"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "omissions",
+      "reason": "fidelity notes follow the curves: Graph6 / 8 no longer leave curves out and carry the style / colour notes of the bars they draw"
+    }
+  ]
+}

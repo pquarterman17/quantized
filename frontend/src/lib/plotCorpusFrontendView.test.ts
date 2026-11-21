@@ -17,7 +17,12 @@ import { effectiveDesignations } from "./columnmeta";
 import { bookDefaultHiddenChannels } from "./errorbars";
 import { originCurveSeriesStyle } from "./originCurveText";
 import { resolveFigureDataset } from "./originFigureEntries";
-import { figureChannelSelection, figurePolarState, figureStatState } from "./originFigureSelection";
+import {
+  figureChannelSelection,
+  figurePolarState,
+  figureSelectionState,
+  figureStatState,
+} from "./originFigureSelection";
 import { buildOverlayDataset } from "./originOverlayFigure";
 import { ownXSeries } from "./ownXSeries";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
@@ -30,7 +35,7 @@ interface RawDataset {
 interface Case {
   name: string;
   dataset: string;
-  figure: { source_hint: string; curves: OriginCurve[] };
+  figure: { source_hint: string; curves: OriginCurve[]; bar_layout?: string; curve_sheet_omitted?: unknown[] };
   selection: { xKey: number | null; yKeys: number[] } | null;
   stat: boolean;
   hidden?: number[];
@@ -128,11 +133,18 @@ describe("plot-corpus frontend mirror (shared cases)", () => {
       kind = kindOf(fig.curves ?? []);
     } else if (stat.statMode) {
       via = "stat";
-      kind = stat.statPicks?.mode ?? "";
-      // a histogram of the first curve; else one box / violin / strip per plotted channel
-      drawn = kind === "histogram"
+      const picks = stat.statPicks;
+      const mode = picks?.mode ?? "";
+      // The Stat Stage bar chart draws UPRIGHT columns: named in drawn_kind's
+      // vocabulary, where "bar" is Origin's sideways bar (frontend_view.bar_chart_kind).
+      kind = mode !== "bar" ? mode
+        : picks?.barPercent && picks.barStack ? "stacked_column_percent"
+          : picks?.barStack ? "stacked_column" : "column";
+      // a histogram of the first curve; else one box / violin / strip (or bar series) per plotted channel
+      const barX = mode === "bar" ? String(fig.curves?.[0]?.x ?? "") : null;
+      drawn = mode === "histogram"
         ? [{ x: null, y: fig.curves?.[0]?.y ?? "" }]
-        : (sel?.yKeys ?? []).map((k) => ({ x: null, y: letters[k] }));
+        : (sel?.yKeys ?? []).map((k) => ({ x: barX, y: letters[k] }));
     } else if (sel) {
       via = "selection";
       const x = sel.xKey === null ? xName : letters[sel.xKey];
@@ -144,6 +156,11 @@ describe("plot-corpus frontend mirror (shared cases)", () => {
       if (figurePolarState(fig).polarMode) kind = "polar";
       else if (styles.length > 0 && styles.every((st) => typeof st?.sizeBy === "number")) kind = "bubble";
       else if (styles.length > 0 && styles.every((st) => typeof st?.colorBy === "number")) kind = "color_mapped";
+    } else if (figureSelectionState(sel, fig).yKeys !== null) {
+      // the apply fails closed: curves recorded, none mapped -> an empty plot
+      via = "empty";
+      kind = "none";
+      drawn = [];
     } else {
       via = "default";
       kind = "default";

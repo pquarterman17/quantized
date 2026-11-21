@@ -93,11 +93,11 @@ Each was drawn as lines before. Each preview shows a different figure:
 
 | kind | pages | why |
 |---|---|---|
-| pie / doughnut (225) | `soil deep` Graph3, SOILDEEP1; `RSOS_SC_micstruc` / `RSOS_TC_micstruc` *_CIR | no pie renderer |
+| pie / doughnut (225) on a multi-layer page, or a bar-of-pie | `soil deep` SOILDEEP1 (pie + two violin panels); `TEA_ExcelGraphs` Graph1 / 12 (`BarofPie`). Lane P3 draws the one-layer pies and doughnuts (`soil deep` Graph3, `RSOS_*` *_CIR) | the Pie window draws one-layer pages; a bar-of-pie's bar is not decoded |
 | stack on a multi-layer page (213; Lane P2 decoded the 100 % flag: plain on `Graph_Template` / `Graphs` L4, 100 % on `Fig_3`) | `Graph_Template` / `Graphs` 32New, 32New_wMean, CQITCRLayerMod (layer 4); `Fig_3` Graph2 layer 2 | the Stat Stage draws one-layer pages only |
-| several plots in an exchanged-axes layer, or a turned panel of a multi-layer page | `LSA_fig6` Graph6 / 8, `TEA_ExcelGraphs` Graph9, `SOP_meas` Graph14 L6, Graph65 L5, Graph40 L5 / L9, Graph55 L5 (Lane P2) | grouped sideways bars and turned panels are not drawn (gap / overlap not decoded) |
-| floating column (207) | `Degree of impact` Graph26, 511, 512 | no floating-column renderer |
-| vector XYXY (218) | `30流场` Graph6 / `50流场` Graph10 layer 2 | no vector renderer |
+| a plot GROUP in an exchanged-axes layer, or a turned panel of a multi-layer page (Lane P3 draws `LSA_fig6` Graph6 / 8: standalone plots, overlapping) | `TEA_ExcelGraphs` Graph9 / 13, `SOP_meas` Graph14 L6, Graph65 L5, Graph40 L5 / L9, Graph55 L5 (Lane P2) | grouped sideways bars and turned panels are not drawn (gap / overlap not decoded) |
+| floating column (207) | `Degree of impact` Graph26, 511, 512 | binding decoded (Lane P3); no bar-with-a-base renderer, and Graph26's group gaps / Graph511-512's width column are not drawable |
+| vector XYXY (218) | `30流场` Graph6 / `50流场` Graph10 layer 2 | end points decoded (Lane P3: modifiers 13 / 14 = C / D); no arrow renderer |
 
 Kinds still left as before: several 203 series on several X columns (one
 `(book, X)` per curve: `optimal_MOI` x6, `sm_X5` x3, `fig03_bar_sem_tips`),
@@ -246,6 +246,159 @@ and #788; public + owner corpus): 3,782 figures either way; curves 9,110 ->
 Graph1 L1 (upright 215, back as before Lane P), -12 `SOP_meas` 203 curves in
 turned panels; Graph67 re-kinded `bar` -> `column`. Owner corpus: no change.
 
+## Lane P3 (2026-11-21): pies and doughnuts, overlapping sideways bars, the rest decoded
+
+Both corpora scanned (public 351 + owner 104; `generated/` and the synthetic
+sets excluded). Every fact below is checked against Origin's saved previews
+(`tools/visual`, private port 8937, stage + whole-window shots).
+
+### Pie and doughnut (225): DRAWN (`opju_pie`, the Pie window)
+
+**Binding.** The curve record's `(X, Y)`: Y holds the wedge values, X the
+labels. `soil deep` Graph3 (`soildeep`, X = A text, Y = B = 69 / 45 / 18):
+the preview prints 52.3 / 34.1 / 13.6 % on the wedges (B over its sum) and
+its legend reads A's three labels. A layer of several 225 plots is a
+multi-ring doughnut: `RSOS_SC_micstruc` RSOS_SC_CIR (`Matlab` A vs B..K, 10
+rings) and `RSOS_TC_micstruc` RSOS_TC_CIR (9). The wedge borders measured on
+the RSOS_SC_CIR preview, ring by ring every 0.5 degrees, equal the
+cumulative shares of B..K within 1-2 degrees with B innermost and K
+outermost, clockwise from 12 o'clock (ring 1: borders at 74 / 100 / 191 /
+227 / 287 degrees; data 73.8 / 99.9 / 191.0 / 225.7 / 285.8).
+
+**Record** (34 plot-225 records: 13 `soil deep` pies on `Pie2D` /
+`MergeGrap` pages, 19 RSOS rings on `Doughnut` pages, 2 `TEA_ExcelGraphs`
+bar-of-pie plots on `BarofPie` pages):
+
+| byte | pies | rings | bar-of-pie | read as |
+|---|---|---|---|---|
+| 206 | `00` | `01` | `00` | doughnut flag |
+| 165 | `32` (50) | `28` (40) | `00` | hole % (read only with the flag): preview hole 25 / 64 px = 0.39 on both axes |
+| 27, 114 | `00` | `00` | `04` | non-zero: bar-of-pie, left out |
+| 150 | `5a` (90) | `5a` | `5a` | first wedge at 12 o'clock (every preview); another value is left out |
+
+The page template is a second, independent field: a `Doughnut` page whose
+record says pie, a `Pie*` page whose record says doughnut, or a `BarofPie`
+page, is left out; a `MergeGrap` page leaves it to the record. Every corpus
+record agrees with its template (negative controls: 13 pies with the flag
+clear, 2 bar-of-pie with 27 / 114 set).
+
+**Drawn** when the page has one layer, every curve is a read pie on one
+sheet against its own X, all with one hole, and several plots only as
+rings: the figure gets `pie: {book, x, y: [...], hole}` and
+`pie_marks_not_decoded`. The apply opens the **Pie chart** workshop
+(`components/workshops/pie/`, lazy, inside the aux-figure chunk); the XY
+stage draws none of the curves. Its preview is the server's matplotlib
+render (`calc/figure_pie.py`, `POST /api/export/pie-figure`) of exactly the
+request Export sends, so screen and file agree. Wedge colours are the
+theme's `--series-N` tokens resolved to hex; labels go to the legend and a
+one-ring pie prints each share in percent. Origin's colours, label
+placement, radius and explosion are not decoded.
+
+Drawn: `soil deep` Graph3, RSOS_SC_CIR, RSOS_TC_CIR (+20 curves). Checked
+against the previews: Graph3's 52.3 / 34.1 / 13.6 % wedges in Origin's order
+and direction; RSOS rings in plot order on a 40 % hole. Left out:
+SOILDEEP1 (pie panel of a 3-layer page; its violin panels are left out too),
+`TEA_ExcelGraphs` Graph1 / 12 (bar-of-pie). The other 10 `soil deep` pie
+pages stay `curve_sheet_unresolved` (their `@2` sheets do not resolve; not
+this lane).
+
+### Horizontal bars: standalone plots overlap (DRAWN), a group does not decide
+
+Record byte 6's `0x30` bits are the plot-group role `curve_style_color`
+reads on lines (`0x2_` head, `0x1_` member, `0x0_` standalone). On bar
+plots the low bits differ (`0x20 0x21 0x10 0x11 0x00 0x01 0x09`), the
+`0x30` bits do not. Corpus (all 203 / 213 / 214 / 215 records): every layer
+Origin draws side by side (the grouped pages of Lane P) is a head plus
+members; the standalone multi-203 layers (`optimal_MOI` x6, `sm_X5` x3,
+`fig03_bar_sem_tips`) are the several-X layers that never reached the
+grouped chart. The grouped chart now also REQUIRES one plot group (no
+corpus change: the rule held already).
+
+`LSA_fig6` Graph6 / 8 are two STANDALONE plots (a 203 and a 215) on one
+sheet X in an exchanged-axes layer. Their previews draw both bars at the
+same position with the same thickness: translucent cyan over yellow reads
+green where both run (row 37: C = 0.512, E = 0.499 is green to 0.499 with a
+yellow tip; row 2: C = -0.146, E = -0.045 is green to -0.045, yellow to
+-0.146). Both are now drawn sideways (`bar`), overlapping, with their error-bar
+plots attached as on the one-plot pages Graph1-5/7/9 (whose bars were
+already drawn this way).
+Gap / overlap of a GROUP is not decoded: `TEA_ExcelGraphs` Graph9 is a head
+plus a member yet overlaps in its preview (tornado), Graph13 is a group of
+three: both stay left out, as do the grouped turned panels of `SOP_meas`
+(Graph14 L6 215 x9, Graph40 L5 / L9 and Graph55 L5 203 x4, all head +
+members on multi-layer pages). No record byte separated the overlapping
+group from the side-by-side ones (byte 122: `16` / `10` / `2c` / `24`,
+not a percentage).
+
+### Floating column (207): binding decoded, LEFT OUT
+
+The token's modifier block (`SYSTEM ... 06 <n>`, the bubble block of
+`opju_plot_kinds`) carries extra datasets: `Degree of impact` Graph511 /
+512 name designation 39 = the sheet's width column (Book511 E = 0.4: the
+preview's block 1 spans x 0.8..1.2), Graph26's first two plots name 32 = its
+first Y (F). The bars span CONSECUTIVE Y columns in plot order: Graph26
+(F, G, H) draws F..G and G..H (preview labels 9.3 / 3.6 at the ends of row
+1, the colour change at G = 5.7; row 3 runs from H = -0.1 to F = 6.9);
+Graph511 (F, G) one bar F..G per row (0.9..1.1 at x = 1). Not drawn: the
+XY bar renderer draws bars from zero only (no per-point base, and it is
+eager code with 0.3 kB of bundle headroom), Graph26's preview leaves a slot
+between its three region groups that its X (row index 1..12) does not
+carry, and Graph511 / 512's per-row widths have no renderer. Kept as
+`plot_type_not_drawn`.
+
+### Vector XYXY (218): end points decoded, LEFT OUT
+
+The token's modifiers name the end points: 13 = `Book1_C` (X end), 14 =
+`Book1_D` (Y end) on both vector plots (`30流场` Graph6 L2, `50流场` Graph10
+L2), and no other plot of either corpus carries 13 or 14 (negative control
+over every modifier block: 9 / 12 bubbles, 18 / 19 colour maps, 32 / 37 /
+38 / 39 / 40 / 62 on other kinds). So an arrow runs from (A, B) to (C, D):
+in `Book1`, D equals B on every row and A is the section position (-40, 0,
+20, ... 190), so every arrow is horizontal and ends on the profile line
+(C vs D) the same layer draws, which is what the preview shows. Not drawn:
+quantized has no XYXY arrow renderer (the vector-field workshop grids X, Y,
+U, V and cannot take segments), and the page's layer 1 (the colour field
+under the arrows) is not imported. Kept as `plot_type_not_drawn`.
+
+### Stacks on multi-layer pages: LEFT OUT (why)
+
+`Graph_Template` / `Graphs` 32New, 32New_wMean, CQITCRLayerMod layer 4
+(plain 213 stacks of 3-4 series, fractions summing to 1; the 32New preview
+shows the dense stack that reads as a stacked area) and `Fig_3` Graph2
+layer 2 (16 series, 100 %). A multi-layer page applies through the
+spatial multi-panel path, which builds one uPlot XY panel per layer; only
+the Stat Stage stacks, and it draws one canvas per page. In an XY panel a
+stack needs bars with a base (series k from the sum of the series before
+it): the same missing machinery as the floating column. Drawing the
+cumulative tops from zero instead would overlay translucent bars whose
+colours mix, which is not Origin's stack. They stay left out.
+
+### Owner checks (COM) left open (Lane P3)
+
+Pie: `layer.plot1` pie properties on RSOS_SC_CIR (doughnut on, hole 40 %)
+and on `soil deep` Graph3 (doughnut off), and the start angle / direction.
+Group overlap: `layer.plotN` group gap / overlap on `TEA_ExcelGraphs`
+Graph9 (expect overlap 100) and Graph13. Vector: `DataPlot::GetModifiers`
+on `30流场` Graph6 L2 (expect C as X end, D as Y end). Floating column:
+the same on `Degree of impact` Graph511 (expect E as the width) and Graph26.
+
+### Visual check and corpus delta (Lane P3)
+
+Shots (`origin_preview_shots.mjs --full`) of `soil deep`, both RSOS
+projects and `LSA_fig6`: Graph3 opens the Pie chart window with Origin's
+three wedges; RSOS_SC_CIR / RSOS_TC_CIR show 10 / 9 rings on a 40 % hole,
+first plot innermost; `LSA_fig6` Graph6 / 8 draw two overlapping sideways
+series, the long row-37 bar reaching 0.51. Moke, PNR and RockingCurve are
+unchanged (no owner-corpus change in the regress check).
+
+`tools/origin_regress.py check --base origin/main --jobs 4` (bb0de532, after
+#791; public + owner corpus): 3,782 figures either way; curves 9,108 ->
+9,132 (+20 pie / doughnut curves, +4 `LSA_fig6` Graph6 / 8); 61 changes in 4
+public projects, all explained by
+[`regress_allow/laneP3-plot-kinds.json`](regress_allow/laneP3-plot-kinds.json)
+(the LSA error-bar plots that now attach to their bars leave the omission
+list). Owner corpus: no change.
+
 ## Ledger
 
-Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-100 to F-107, B-24, R-28; Lane P2: F-108, F-109, B-26 to B-28, R-29, R-30.
+Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-100 to F-107, B-24, R-28; Lane P2: F-108, F-109, B-26 to B-28, R-29, R-30; Lane P3: F-110 to F-114, B-31, B-32, R-33.

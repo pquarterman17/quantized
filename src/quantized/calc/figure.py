@@ -65,6 +65,7 @@ _DRAWSTYLE = {"pre": "steps-pre", "post": "steps-post", "mid": "steps-mid"}
 # the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
 # reads the same as its on-screen counterpart.
 _FILL_ALPHA = 0.25
+_MIN_MARKER_PT = 2.0  # mirrors the canvas' MIN_MARKER_PX (lib/markers.ts)
 
 
 def _plot_kwargs(
@@ -82,22 +83,20 @@ def _plot_kwargs(
     kw: dict[str, Any] = {"linewidth": default_lw}
     if not spec:
         return kw
-    color = spec.get("color")
-    if color:
-        kw["color"] = color
+    if spec.get("color"):
+        kw["color"] = spec["color"]
     width = spec.get("width")
     if width is not None:
         kw["linewidth"] = width
-    line = spec.get("line")
-    if line in _LINESTYLE:
-        kw["linestyle"] = _LINESTYLE[line]
-    step = spec.get("step")
-    if step in _DRAWSTYLE:
-        kw["drawstyle"] = _DRAWSTYLE[step]
+    if spec.get("line") in _LINESTYLE:
+        kw["linestyle"] = _LINESTYLE[spec["line"]]
+    if spec.get("step") in _DRAWSTYLE:
+        kw["drawstyle"] = _DRAWSTYLE[spec["step"]]
     if spec.get("marker"):
         shape = spec.get("marker_shape")
         kw["marker"] = _MARKER.get(shape, "o") if isinstance(shape, str) else "o"
-        kw["markersize"] = spec.get("marker_size") or default_marker_size
+        ms = spec.get("marker_size")
+        kw["markersize"] = default_marker_size if ms is None else max(float(ms), _MIN_MARKER_PT)
         if spec.get("marker_fill") == "hollow":  # an open symbol (gap audit 2 #6)
             kw["markerfacecolor"] = "none"
     return kw

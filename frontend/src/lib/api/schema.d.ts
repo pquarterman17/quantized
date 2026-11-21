@@ -1438,6 +1438,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/pie-figure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Pie Figure
+         * @description Render a pie / (multi-ring) doughnut chart (PDF/SVG/PNG/TIFF): the pie
+         *     workshop's preview and export, and an Origin pie / doughnut layer's
+         *     publication path (``calc.figure_pie``).
+         */
+        post: operations["export_pie_figure_api_export_pie_figure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/splom-figure": {
         parameters: {
             query?: never;
@@ -10279,6 +10301,42 @@ export interface components {
             /** Values */
             values: number[];
         };
+        /** PieFigureRequest */
+        PieFigureRequest: {
+            /** Colors */
+            colors?: string[] | null;
+            /** Dpi */
+            dpi?: number | null;
+            /**
+             * Filename
+             * @default pie
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default pdf
+             */
+            fmt?: string;
+            /**
+             * Hole
+             * @default 0
+             */
+            hole?: number;
+            /** Labels */
+            labels: string[];
+            /** Rings */
+            rings: number[][];
+            /**
+             * Style
+             * @default default
+             */
+            style?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+        };
         /** PlaneRequest */
         PlaneRequest: {
             /** A */
@@ -14938,6 +14996,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PcaScreeFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_pie_figure_api_export_pie_figure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PieFigureRequest"];
             };
         };
         responses: {

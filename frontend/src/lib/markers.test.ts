@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FILLED_SHAPES, markerDecision, markerPaths, markerSubpaths, seriesTrace } from "./markers";
+import { FILLED_SHAPES, MIN_MARKER_PX, markerDecision, seriesPoints, markerPaths, markerSubpaths, seriesTrace } from "./markers";
 import { MARKER_SHAPES } from "./markerShapes";
 import type { DefaultTrace } from "./types";
 
@@ -113,5 +113,23 @@ describe("markerDecision — the shared marker rule", () => {
       expect(markerDecision(undefined, trace).show).toBe(false);
       expect(markerDecision({ markerShape: "star" }, trace).show).toBe(false);
     }
+  });
+});
+
+describe("tiny marker sizes never give a negative radius", () => {
+  // uPlot draws a circle at radius (size - points.width) / 2, width defaulting
+  // to 1: a size of 0.5 (Origin SOP_meas Graph14 L5 / Graph65 L6) threw.
+  for (const size of [0, 0.5, 1]) {
+    it(`size ${size} is raised to the minimum and leaves a positive radius`, () => {
+      const d = markerDecision({ marker: true, markerSize: size }, "Line");
+      expect(d.size).toBe(MIN_MARKER_PX);
+      const pts = seriesPoints({ marker: true, markerSize: size }, "Line", "#000");
+      expect(pts.show).toBe(true);
+      expect((pts.size as number) - 1).toBeGreaterThan(0); // uPlot's default points.width
+    });
+  }
+
+  it("leaves a size above the minimum alone", () => {
+    expect(markerDecision({ marker: true, markerSize: 7 }, "Line").size).toBe(7);
   });
 });

@@ -182,8 +182,26 @@ def test_drawn_kind_and_plot_type() -> None:
     assert ic.score_plot_type("box", [206], "default")["status"] == "omitted"
     assert ic.score_plot_type("bar", [215], "column")["status"] == "wrong"
     assert ic.score_plot_type("histogram", [219], "histogram")["status"] == "match"
+    # A stack of ONE series is that series (F-101 / F-102): match only then.
+    one = ic.score_plot_type("stacked_column", [213], "column", n_series=1)
+    assert one["status"] == "match" and one["stack_of_one"] is True
+    assert ic.score_plot_type("stacked_area", [214], "area", n_series=1)["status"] == "match"
+    assert ic.score_plot_type("stacked_column", [213], "column", n_series=3)["status"] == "wrong"
+    assert ic.score_plot_type("stacked_column", [213], "column")["status"] == "wrong"
+    assert ic.score_plot_type("column", [203], "area", n_series=1)["status"] == "wrong"
     assert ic.score_plot_type("line", [200], "none")["status"] == "omitted"
     assert set(ic.EXPECTED_KIND) >= {"line", "box", "ternary", "heatmap_matrix"}
+
+
+def test_stat_stage_bar_chart_is_named_as_upright_columns() -> None:
+    # #787 named it "bar" (Origin's SIDEWAYS bar in drawn_kind's vocabulary),
+    # scoring 18 grouped / stacked column specimens wrong (ledger R-34).
+    assert frontend_view.bar_chart_kind("grouped") == "column"
+    assert frontend_view.bar_chart_kind("stacked") == "stacked_column"
+    assert frontend_view.bar_chart_kind("percent") == "stacked_column_percent"
+    assert frontend_view.bar_chart_kind(None) == "stat_bar"
+    grouped = frontend_view.bar_chart_kind("grouped")
+    assert ic.score_plot_type("bar", [215], grouped)["status"] == "wrong"
 
 
 # -- values ----------------------------------------------------------------

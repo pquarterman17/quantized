@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SpatialPanel } from "../../lib/multipanel";
 import type { Dataset } from "../../lib/types";
-import { fetchSpatialPanel } from "./spatialPanelFetch";
+import { fetchSpatialPanel, spatialEmptyNote } from "./spatialPanelFetch";
 
 const { fetchPlot } = vi.hoisted(() => ({ fetchPlot: vi.fn() }));
 vi.mock("../../lib/plotdata", async (importOriginal) => ({
@@ -96,5 +96,17 @@ describe("fetchSpatialPanel: Origin's asymmetric / X error bars (lane E2)", () =
     const { errorSpans } = await fetchSpatialPanel(p, ds, "Line", "grey");
     // half a Y pair draws nothing (never invents the other side); the X bars draw
     expect(errorSpans.get(1)).toEqual([{ axis: "x", plus: [0.3, 0.4, 0.5], minus: [0.3, 0.4, 0.5] }]);
+  });
+});
+
+// Ledger R-36: a layer whose curves are all left out keeps its cell and says
+// why, worded like the single plot's empty notice, over the plot (no clicks).
+describe("spatialEmptyNote", () => {
+  it("is a centred, click-through status note with the panel's text", () => {
+    const note = spatialEmptyNote("No curves: left out");
+    expect(note.getAttribute("role")).toBe("status");
+    expect(note.textContent).toBe("No curves: left out");
+    expect(note.style.pointerEvents).toBe("none");
+    expect(note.style.position).toBe("absolute");
   });
 });

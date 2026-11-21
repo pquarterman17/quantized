@@ -32,6 +32,8 @@ import {
   resolveSpatialPanels,
   spatialApplyNotices,
 } from "./originSpatialPanels";
+import { NO_RESOLVED_CURVES_REASON } from "./linkedCurvesLite";
+import { spatialPlottedChannels } from "./multipanel";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
 const figure = (overrides: Partial<OriginFigure> = {}): OriginFigure => ({
@@ -818,16 +820,50 @@ describe("resolveFigurePanels", () => {
     expect(panels?.[0].legendFrameXY?.[1]).toBeCloseTo(0.2);
   });
 
-  it("returns null (all-or-nothing) when ANY family member has no resolved dataset", () => {
+  // Ledger R-36 (#787 / #791): a layer whose recorded curves are all left out
+  // (or none resolves) used to return null for the WHOLE page, which then
+  // collapsed to one panel. It keeps its cell, plots nothing, and says why
+  // (the single-layer fail-closed rule, B-04) -- never a phantom curve.
+  it("keeps a layer whose curves were all LEFT OUT as an empty panel with its note", () => {
     const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
-    const l2 = entry("f2", 2, null, { curves: [{ book: "Book2", x: "A", y: "B" }] });
-    expect(resolveFigurePanels([l1, l2], [ds1, ds2])).toBeNull();
+    const l2 = entry("f2", 2, "d2", {
+      x_from: 0, x_to: 5, y_from: 0, y_to: 9,
+      curves: [],
+      curve_sheet_omitted: [{ book: "Book2", x: "A", y: "B", recorded: "Book2", reason: "plot_type_not_drawn" }],
+    });
+    const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
+    expect(panels?.map((p) => [p.datasetId, p.yKeys, p.emptyNote])).toEqual([
+      ["d1", [0], undefined],
+      ["d2", [], NO_RESOLVED_CURVES_REASON],
+    ]);
+    expect(panels?.[1].xLim).toEqual([0, 5]); // its own axes: the cell keeps Origin's frame
+    expect(panels?.[1].yLim).toEqual([0, 9]);
+    expect(spatialPlottedChannels(panels![1])).toEqual([]); // nothing reaches the plot
   });
 
-  it("returns null (all-or-nothing) when ANY family member's channel selection is empty", () => {
+  it("keeps a layer with no dataset of its own as an empty panel on a page book", () => {
+    const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const l2 = entry("f2", 2, null, { curves: [{ book: "Book2", x: "A", y: "B" }] });
+    const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
+    expect(panels?.map((p) => [p.datasetId, p.yKeys, p.emptyNote])).toEqual([
+      ["d1", [0], undefined],
+      ["d1", [], NO_RESOLVED_CURVES_REASON],
+    ]);
+  });
+
+  it("keeps a layer whose recorded curves map to nothing as an empty panel, never every channel", () => {
     const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
     const l2 = entry("f2", 2, "d2", { curves: [{ book: "Elsewhere", x: "A", y: "B" }] }); // wrong book -> no selection
-    expect(resolveFigurePanels([l1, l2], [ds1, ds2])).toBeNull();
+    const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
+    expect(panels?.[1].yKeys).toEqual([]);
+    expect(panels?.[1].emptyNote).toBe(NO_RESOLVED_CURVES_REASON);
+  });
+
+  it("returns null (all-or-nothing) for a layer with NO curve evidence that does not resolve, or a page that draws nothing", () => {
+    const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
+    expect(resolveFigurePanels([l1, entry("f2", 2, null, { curves: [] })], [ds1, ds2])).toBeNull();
+    const gone = { curves: [], curve_sheet_omitted: [{ book: "Book1", x: "A", y: "B", recorded: "Book1", reason: "plot_type_not_drawn" }] };
+    expect(resolveFigurePanels([entry("f1", 1, "d1", gone), entry("f2", 2, "d2", gone)], [ds1, ds2])).toBeNull();
   });
 
   // Item A (PNR.opj Book14 Graph11 repro): each panel carries its OWN book's
@@ -1152,9 +1188,36 @@ describe("coincidentOverlayGroups / resolveSpatialPanels (decode-plan #36/#54 re
       expect(result!.panels[1].pageRect).toEqual(result!.panels[2].pageRect);
     });
 
-    it("returns null (all-or-nothing, unchanged) when any layer fails to resolve a dataset", () => {
+    // Ledger R-36: a layer that records curves but draws none no longer sinks
+    // the page (it used to return null, collapsing the page to one panel).
+    it("folds an EMPTY layer drawn in another layer's frame into that panel (an overlay, not a cell)", () => {
       const unresolved = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5 }, null);
-      expect(resolveSpatialPanels([reflectivity, nuclearSld, unresolved], [ds])).toBeNull();
+      const result = resolveSpatialPanels([reflectivity, nuclearSld, unresolved], [ds]);
+      expect(result?.layout).toBe("tiled");
+      expect(result?.panels.map((p) => [p.sourceFigureIds, p.yKeys, p.emptyNote])).toEqual([
+        [["f1"], [0], undefined],
+        [["f2", "f3"], [1], undefined], // the host draws; the empty overlay is provenance only
+      ]);
+    });
+
+    it("keeps an EMPTY layer with its own frame as an empty cell with its note, on the decoded layout", () => {
+      const gone = entry("f2", 2, {
+        frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -1, y_to: 10,
+        curves: [],
+        curve_sheet_omitted: [{ book: "Book33", x: "A", y: "C", recorded: "Book33", reason: "plot_type_not_drawn" }],
+      });
+      const result = resolveSpatialPanels([reflectivity, gone], [ds]);
+      expect(result?.layout).toBe("tiled");
+      expect(result?.panels.map((p) => [p.row, p.col, p.yKeys, p.emptyNote ?? null])).toEqual([
+        [0, 0, [0], null],
+        [1, 0, [], NO_RESOLVED_CURVES_REASON],
+      ]);
+      expect(result?.panels[1].yLim).toEqual([-1, 10]); // the cell keeps its own Origin axes
+    });
+
+    it("returns null when an empty cell would land in the ORDINAL fallback (no decoded layout to keep)", () => {
+      const gone = entry("f2", 2, { frame: null, curves: [], curve_sheet_omitted: [{ book: "Book33", x: "A", y: "C", recorded: "Book33", reason: "plot_type_not_drawn" }] });
+      expect(resolveSpatialPanels([{ ...reflectivity, figure: { ...reflectivity.figure, frame: null } }, gone], [ds])).toBeNull();
     });
   });
 

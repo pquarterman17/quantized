@@ -1,4 +1,4 @@
-"""Specialized figure export routes: map/corner/ternary/field.
+"""Specialized figure export routes: map/corner/ternary/field/pie.
 
 Split into its own router file (rather than joining
 ``routes/export_figures.py``) purely to keep that file under the 500-line
@@ -20,6 +20,8 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 """
 
 from __future__ import annotations
+
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -282,6 +284,50 @@ def export_field_figure(req: FieldFigureRequest) -> Response:
         req.x_axis, req.y_axis, req.u_grid, req.v_grid,
         kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi,
         title=req.title, x_label=req.x_label, y_label=req.y_label,
+    )
+    return Response(
+        content=img,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
+_PIE_MAX_RINGS = 64
+_PIE_MAX_WEDGES = 2000  # = calc.figure_pie.MAX_PIE_WEDGES (calc checks the product)
+
+
+class PieFigureRequest(BaseModel):
+    # (n_rings, n_categories) wedge values, first ring innermost
+    rings: list[Annotated[list[float], Field(max_length=_PIE_MAX_WEDGES)]] = Field(
+        max_length=_PIE_MAX_RINGS
+    )
+    labels: list[str] = Field(max_length=_PIE_MAX_WEDGES)  # one per category (legend)
+    hole: float = Field(0.0, ge=0.0, lt=1.0)  # hole radius / outer radius
+    # per-category colours (the client's theme series tokens)
+    colors: list[str] | None = Field(default=None, max_length=_PIE_MAX_WEDGES)
+    fmt: str = "pdf"
+    style: str = "default"
+    dpi: int | None = None
+    title: str = ""
+    filename: str = "pie"
+
+
+@router.post("/pie-figure")
+def export_pie_figure(req: PieFigureRequest) -> Response:
+    """Render a pie / (multi-ring) doughnut chart (PDF/SVG/PNG/TIFF): the pie
+    workshop's preview and export, and an Origin pie / doughnut layer's
+    publication path (``calc.figure_pie``)."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
+    with heavy_imports("quantized.calc.figure_pie"):
+        from quantized.calc.figure_pie import render_pie_figure  # lazy: matplotlib
+
+    img = call_calc(render_pie_figure,
+        req.rings, req.labels, hole=req.hole, colors=req.colors,
+        fmt=req.fmt, style=req.style, dpi=dpi, title=req.title,
     )
     return Response(
         content=img,

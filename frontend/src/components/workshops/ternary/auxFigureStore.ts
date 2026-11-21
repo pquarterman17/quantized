@@ -1,5 +1,5 @@
-// Open flags for the two aux-figure workshops (ternary diagram, vector
-// field). A standalone store — the store/variability.ts precedent — rather
+// Open flags for the aux-figure workshops (ternary diagram, vector field,
+// pie / doughnut chart). A standalone store — the store/variability.ts precedent — rather
 // than two flags on useApp.ts, which sits at its size-ratchet pin. One tiny
 // file for both so the eager bundle pays one zustand `create`, not two: it
 // is the ONLY module from these workshop directories that eager code
@@ -13,6 +13,9 @@ import { setTernaryOpener } from "../../../lib/ternaryPending";
 interface AuxFigureStoreState {
   ternaryOpen: boolean;
   fieldOpen: boolean;
+  /** The pie / doughnut workshop (opened by an Origin pie apply; it closes
+   *  itself with `setState`, so no setter rides the eager bundle). */
+  pieOpen: boolean;
   setTernaryOpen: (open: boolean) => void;
   setFieldOpen: (open: boolean) => void;
 }
@@ -20,9 +23,10 @@ interface AuxFigureStoreState {
 export const useAuxFigureStore = create<AuxFigureStoreState>((set) => ({
   ternaryOpen: false,
   fieldOpen: false,
+  pieOpen: false,
   setTernaryOpen: (ternaryOpen) => set({ ternaryOpen }),
   setFieldOpen: (fieldOpen) => set({ fieldOpen }),
 }));
 
-// An applied Origin ternary figure opens the workshop (lib/ternaryPending).
-setTernaryOpener(() => useAuxFigureStore.getState().setTernaryOpen(true));
+// An applied Origin ternary / pie figure opens its workshop (lib/ternaryPending).
+setTernaryOpener((flag) => useAuxFigureStore.setState({ [flag]: true }));

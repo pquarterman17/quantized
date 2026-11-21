@@ -27,7 +27,7 @@ quantized cannot draw them yet, so they stay the default line view.
   (``opju_stat_plots``) or draws several as a grouped bar chart
   (``opju_bar_kinds``).
 * **Stacked column / stacked area / horizontal bar / kinds with no renderer**
-  -- 213, 214, 215 and 205 / 207 / 208 / 216 / 218 / 225 get a provisional
+  -- 213, 214, 215, 205 / 207 / 208 / 216 / 218 and 225 (``opju_pie``) get a provisional
   ``plotType`` (``LAYER_BAR_KINDS``) that ``opju_bar_kinds`` resolves per
   layer: drawn, or left out (``plot_type_not_drawn``).
 * **Box / histogram with no X column** -- byte 76 206 (box, violin, strip)
@@ -76,6 +76,7 @@ from __future__ import annotations
 import re
 from collections.abc import MutableMapping
 
+from quantized.io.origin_project.opju_pie import PIE_PLOT, mark_pie, plot_group
 from quantized.io.origin_project.opju_plot_gates import (
     CONNECT_OFF,
     PLOT_TYPE_OFF,
@@ -106,14 +107,16 @@ _MAP_TYPES = frozenset({105, 220, 226, 243})  # heatmap, image, contour, XYZ con
 # Plot types whose look depends on the layer (``opju_bar_kinds`` resolves each
 # per layer, else leaves the curve out): 213 stacked column, 214 stacked area,
 # 215 horizontal bar; ``"not_drawn"`` = a kind quantized has no renderer for
-# (205 high-low-close, 207 floating column, 208 / 218 vector, 216 stacked bar,
-# 225 pie family). Codes: ORIGIN_PLOT_TYPE_PARITY_PLAN "Plot-type codes".
+# (205 high-low-close, 207 floating column, 208 / 218 vector, 216 stacked bar).
+# The pie family 225 is ``"pie"`` when its record reads (``opju_pie``).
+# Codes: ORIGIN_PLOT_TYPE_PARITY_PLAN "Plot-type codes".
 LAYER_BAR_KINDS = {
     213: "stacked_column",
     214: "stacked_area",
     215: "bar",
-    **dict.fromkeys((205, 207, 208, 216, 218, 225), "not_drawn"),
+    **dict.fromkeys((205, 207, 208, 216, 218), "not_drawn"),
 }
+_GROUPED_KINDS = frozenset({COLUMN_PLOT, 213, 215})  # their group role is read
 
 
 def apply_plot_kind(
@@ -130,7 +133,11 @@ def apply_plot_kind(
     if record is None or len(record) <= PLOT_TYPE_OFF:
         return
     kind = record[PLOT_TYPE_OFF]
-    if kind == COLUMN_PLOT:
+    if kind in _GROUPED_KINDS and (role := plot_group(record)):
+        curve["plotGroup"] = role  # provisional: read and dropped by opju_bar_kinds
+    if kind == PIE_PLOT:
+        mark_pie(curve, record)
+    elif kind == COLUMN_PLOT:
         curve["plotType"] = "column"
     elif kind in LAYER_BAR_KINDS:
         # resolved per layer (``opju_bar_kinds``): drawn, or left out

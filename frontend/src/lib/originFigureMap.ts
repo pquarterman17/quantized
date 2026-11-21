@@ -13,6 +13,7 @@
 // workshop with Origin's A, B, C columns in that order (`lib/ternaryPending`).
 
 import { defaultMapKeys } from "./mapdataFetch";
+import { requestPie } from "./piePending";
 import { requestTernaryPicks } from "./ternaryPending";
 import type { Dataset, OriginFigure } from "./types";
 
@@ -58,5 +59,22 @@ export function queueFigureTernary(figure: OriginFigure, ds: Dataset | undefined
   const [a, b, c] = [t.a, t.b, t.c].map((l) => columnIndex(ds, l));
   if (a === null || b === null || c === null || new Set([a, b, c]).size !== 3) return false;
   requestTernaryPicks({ datasetId: ds.id, a, b, c });
+  return true;
+}
+
+/** Queue `figure`'s pie / doughnut (`OriginFigure.pie`, opju_pie.py) for the
+ *  pie workshop and open it: labels from the X column, one ring per Y column
+ *  (the first innermost), Origin's hole. True when queued; the XY stage then
+ *  draws none of its curves (a pie's values are no X/Y line). */
+export function queueFigurePie(figure: OriginFigure, ds: Dataset | undefined): boolean {
+  const p = figure.pie;
+  if (!p || !ds || bookOf(ds) !== p.book) return false;
+  // The importer requires the sheet's own X (opju_bar_kinds._is_book_x): its X
+  // column, or a text X that never became numeric (no x_column_name).
+  const textX = !String(ds.data.metadata?.x_column_name ?? "") && columnIndex(ds, p.x) === null;
+  const labels = textX ? -1 : columnIndex(ds, p.x);
+  const values = p.y.map((l) => columnIndex(ds, l));
+  if (labels === null || values.some((v) => v === null || v < 0)) return false;
+  requestPie({ datasetId: ds.id, labels, values: values as number[], hole: p.hole });
   return true;
 }

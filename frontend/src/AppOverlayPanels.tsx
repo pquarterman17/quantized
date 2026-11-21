@@ -317,7 +317,7 @@ function MainPanels() {
   const figureDialogOpen = useFigureDialog((s) => s.open !== null);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
-  const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen);
+  const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen || s.pieOpen);
 
   const sqliteQueryMounted = useKeepMountedAfterOpen(sqliteQueryOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);

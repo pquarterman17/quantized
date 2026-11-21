@@ -14,7 +14,7 @@
 // no public signature changes.
 //
 // What stays eager, and why:
-// - the error-role EDIT actions (`./importErrorRoles`) — synchronous edits the
+// - the error-role EDIT actions (`./importErrorRoleActions`) — synchronous edits the
 //   worksheet and inspector call directly;
 // - the double-import guard (`./importBatch`) — read synchronously by the
 //   command layer's pre-flight check;
@@ -67,7 +67,7 @@
 import { onDemand } from "../lib/onDemand";
 import { plural } from "../lib/plural";
 import type { ImportFilesOptions, ImportSlice } from "./importDatasets";
-import { createErrorRolesActions } from "./importErrorRoles";
+import { createErrorRolesActions } from "./importErrorRoleActions";
 import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { beginOp, endOp } from "./pendingOps";
 import { toast } from "./toasts";

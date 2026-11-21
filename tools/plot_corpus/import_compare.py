@@ -327,12 +327,26 @@ def drawn_kind(curves: Sequence[Mapping[str, Any]]) -> str:
     return kinds.pop() if len(kinds) == 1 else "mixed"
 
 
-def score_plot_type(corpus_type: str, origin_codes: Sequence[int], kind: str) -> dict[str, Any]:
+# A stack of ONE series is the series itself (Origin stacks each plot on the
+# ones before it): its picture is the unstacked kind (DECODE_LEDGER F-101 area,
+# F-102 column, both PREV). Only for a layer with exactly one non-error plot.
+_STACK_OF_ONE = {"stacked_column": "column", "stacked_area": "area"}
+
+
+def score_plot_type(
+    corpus_type: str, origin_codes: Sequence[int], kind: str, n_series: int | None = None
+) -> dict[str, Any]:
     """Plot-type verdict: the kind quantized draws vs the corpus type's expected
     kind. ``default`` drawn for a line plot coincides with Origin (``match``,
-    ``by_default``); for anything else it is ``omitted`` (no type decoded)."""
+    ``by_default``); for anything else it is ``omitted`` (no type decoded).
+    ``n_series`` is the layer's count of non-error plots: a stacked type with
+    ``n_series == 1`` drawn as its unstacked kind matches (``stack_of_one``)."""
     want = EXPECTED_KIND.get(corpus_type, corpus_type)
     codes = sorted({c for c in origin_codes if c not in ERROR_BAR_CODES})
+    if n_series == 1 and _STACK_OF_ONE.get(want) == kind:
+        return verdict(
+            "match", origin=want, origin_codes=codes, quantized=kind, stack_of_one=True
+        )
     if kind == "none":
         return verdict("omitted", origin=want, origin_codes=codes, quantized=kind,
                        reason="figure_not_drawn")

@@ -67,7 +67,7 @@ import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { Readout } from "../../lib/uplotTools";
 import type { Accent, ExcludedDisplay, PlotTool, Theme } from "../../store/useApp";
 import { renderBreakPanels, resizeBreakPanels } from "./breakPanelRender";
-import { fetchSpatialPanel, type SpatialFetch } from "./spatialPanelFetch";
+import { fetchSpatialPanel, spatialEmptyNote, type SpatialFetch } from "./spatialPanelFetch";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
 import type { FacetEncodingRender } from "./useFacetEncoding";
 import { renderStackPanels, resizeStackPanels } from "./stackPanelRender";
@@ -406,8 +406,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         div.style.top = `${rect.top}px`;
         div.style.width = `${rect.width}px`;
         div.style.height = `${rect.height}px`;
-        host.appendChild(div);
-        divs.push(div);
+        divs.push(host.appendChild(div));
         // Item A: styles/labels line up with the SAME hidden-filtered channel
         // order the payload was fetched in (`spatialPlottedChannels`), not
         // the raw `p.yKeys` (which still includes a dropped error column).
@@ -482,6 +481,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           opts.axes[0] = { ...opts.axes[0], label: undefined, values: (_u, splits) => splits.map(() => "") };
         }
         plotsRef.current.push(new uPlot(opts, pp.data, div));
+        if (p.emptyNote) div.appendChild(spatialEmptyNote(p.emptyNote));
         if (legendEntries.length > 0 || p.legendTitle) {
           const target = document.createElement("div");
           target.className = "qzk-spatial-legend-layer";
