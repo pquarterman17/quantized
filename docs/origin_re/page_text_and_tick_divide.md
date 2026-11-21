@@ -147,22 +147,6 @@ Their first field is shaped like a curve token
   "%(i,@D) %(i,@X)";}`, expected `BqqbarFit_B`/`_A` and `BqqbarFit_D`/`_C`.
 - UnpolPlots (`.opju`): `win -a Graph1; type $(layer.x.label.divideby)`.
 
-## Ledger entries (to merge)
+## Ledger
 
-For `docs/origin_re/DECODE_LEDGER.md`. Form: field/behaviour → evidence →
-guarding test.
-
-- `.opj` button object = header byte 57 = 1 + non-empty 4th (script) block; not drawn → 1,337/1,337 vs 0/2,032 corpus split; XMCD GraphT* exports draw no buttons → `tests/test_io_origin_opj_page_text.py::test_script_object_needs_both_the_flag_and_a_script_block`, `::test_button_caption_and_script_are_not_drawn_and_are_counted`, `::test_realdata_no_labtalk_script_is_drawn`
-- `script_objects_not_drawn` fidelity omission → per-layer count → `tests/test_io_origin_opj_page_text.py::test_button_caption_and_script_are_not_drawn_and_are_counted`
-- `.opj` text/legend header byte 40 bit 0 = page-attached (fractions × page size) → page box 252/254 vs 0 layer-bit-clear page-only; COM `attach = 1` (Moke annotations/graph_extras) → `tests/test_io_origin_opj_page_text.py::test_attach_bit_reads_the_pair_as_page_fractions`, `tests/test_io_origin_annotation_marks.py::test_realdata_legend_positions_match_com_oracle`, `::test_realdata_annotation_positions_expanded_oracle_sweep`
-- `.opj` text rotation = 103-byte format block u16 @2, tenths of a degree → YL/YR 900 (243), XB/XT 0 (334), wide Text 0 (204) → `tests/test_io_origin_opj_page_text.py::test_text_rotation_reads_tenths_of_a_degree`
-- Multi-layer page: mark re-homed to the vertically nearest panel frame → Moke Graph10 "(b)" vs export → `tests/test_io_origin_opj_page_text.py::test_page_attached_label_lands_on_the_panel_it_sits_beside`, `::test_single_layer_marks_are_left_in_place`
-- Upward (900) text wholly left of a panel fills its blank Y title → XMCD GraphT* vs export → `tests/test_io_origin_opj_page_text.py::test_rotated_text_left_of_a_panel_is_that_panels_y_title`, `::test_unrotated_text_left_of_a_panel_stays_a_mark`
-- Unrotated text wholly below a panel fills its blank X title → XMCD GraphT* "photon energy (eV)" vs export → `tests/test_io_origin_opj_page_text.py::test_unrotated_text_below_a_panel_is_that_panels_x_title`
-- `.opj` `OB`/`OT`/`OL`/`OR` (type 0x06) = tick-label "Divide by" per axis side; 0 = none → Moke Graph10, SuperlatticeFits Graph10/14, MnN Graph6 exports; XMCD negative control → `tests/test_io_origin_opj_page_text.py::test_tick_divide_object`, `::test_tick_divide_needs_the_factor_object_type`, `::test_tick_divide_reaches_the_figure` (corpus values vs exports: UNGUARDED, no machine-readable oracle)
-- Origin "Divide by" drawn without the "×factor" text (`divideMark: false`), screen and export, all apply paths → Origin exports show none → `frontend/src/lib/originTickDivide.test.ts`, `frontend/src/lib/axisDivideLabel.test.ts::an imported Origin axis' Divide by draws no factor text`, `tests/test_axis_extras.py::test_origin_divide_scales_labels_without_the_factor_text`, `frontend/src/lib/workspaceForwardCompat.test.ts::AxisFormat.divideMark`
-- `.opju` "Divide by" (UnpolPlots Graph1, Hc2) → no `O*` objects in `.opju` → UNGUARDED (undecoded)
-- `.opju` style-holder (`Style\d*` + `a2|a3 01 28 aa 00 80`) curve tokens are not plots → 6 corpus hits in 3 files, tail 0x84/0x80 vs 0x83 on 897 plot tokens; Bqqbar Graph2, Minis Graph67 and Etna Graph2 previews; `docs/origin_re/regress_allow/lane-m-page-text-tick-divide.json` → `tests/test_io_origin_opju_style_holder.py::test_a_token_opening_a_style_holder_is_detected`, `::test_other_objects_are_not_style_holders`, `::test_style_holder_tokens_add_no_curve`, `::test_realdata_bqqbar_curves_come_from_plot_records`
-- Regression fixed: style-holder tokens won the `(book, y)` dedup and dropped the real tokens' recorded X/style (Bqqbar D vs A) → preview → `tests/test_io_origin_opju_style_holder.py::test_realdata_bqqbar_curves_come_from_plot_records`
-- XMCD Graph25 has no curve anchor; Origin's own export is empty → file scan, export → UNGUARDED (count covered indirectly by `tests/test_io_origin_figures_opj_curves.py::test_realdata_curve_bindings_precision_and_recall_floor`)
-- Origin realdata tests resolve the corpus via `conftest.TEST_DATA_CORPUS` (`tests/origin_corpus.py`); LFS pointer = absent → 68 previously silent skips now run under the owner plugin → UNGUARDED (test infrastructure)
+Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-090 to F-096, B-22, B-23, R-26, R-27.

@@ -19,12 +19,16 @@ construction:
    demo dataset); this is the matching Python-side pin so a new data file
    with no working loader fails a test instead of shipping broken.
 
-See .claude/rules/architecture-guards.md for the full rationale.
+5. AGENT-DOC GUARD  -- CLAUDE.md files stay small, the Origin ledger has no
+   unmerged "to merge" sections, and their links resolve.
+
+See CLAUDE.md "Architecture & hard rules" for the full rationale.
 """
 
 from __future__ import annotations
 
 import ast
+import os
 import re
 import tomllib
 from pathlib import Path
@@ -208,6 +212,8 @@ def test_every_data_file_has_a_pinned_loader() -> None:
         if path.is_dir() or path.suffix == ".py":
             continue
         if "__pycache__" in path.parts or "web" in path.parts:
+            continue
+        if path.name == "CLAUDE.md":  # agent docs; excluded from wheel/sdist/sidecar
             continue
         found.add(path)
 
@@ -626,3 +632,108 @@ def test_bug_tracker_headings_are_well_formed() -> None:
         "Either the entry is absent, or its heading was demoted to prose by a "
         "mis-anchored insert."
     )
+
+
+# -- Agent-instruction docs stay small, folded and linked -------------------
+# CLAUDE.md files load into agent context (the root one every session, a
+# nested one whenever work touches its directory), so size is a cost paid on
+# every turn. Narratives belong behind a link (CONTRIBUTING.md, docs/, the
+# Origin ledger); the root keeps hard rules plus one-line pointers.
+
+ROOT_CLAUDE_MAX_LINES = 160
+NESTED_CLAUDE_MAX_LINES = 150
+LEDGER = ROOT / "docs" / "origin_re" / "DECODE_LEDGER.md"
+LEDGER_MAX_LINES = 450  # past ~400, split into docs/origin_re/ledger/<area>.md
+_PRUNE_DIRS = {"node_modules", "worktrees", "__pycache__", "web", "dist", "target"}
+_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+
+
+def _walk_md(start: Path, name: str | None = None) -> list[Path]:
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(start):
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d not in _PRUNE_DIRS and (not d.startswith(".") or d in {".claude", ".github"})
+        ]
+        for fn in filenames:
+            if (name is None and fn.endswith(".md")) or fn == name:
+                found.append(Path(dirpath) / fn)
+    return sorted(found)
+
+
+def _nested_claude_files() -> list[Path]:
+    return [p for p in _walk_md(ROOT, "CLAUDE.md") if p != ROOT / "CLAUDE.md"]
+
+
+def _slug(heading: str) -> str:
+    text = heading.strip().lower().replace("`", "")
+    return re.sub(r"[^\w\- ]", "", text).replace(" ", "-")
+
+
+def test_claude_md_files_stay_small() -> None:
+    root_lines = len((ROOT / "CLAUDE.md").read_text(encoding="utf-8").splitlines())
+    assert root_lines <= ROOT_CLAUDE_MAX_LINES, (
+        f"CLAUDE.md is {root_lines} lines (max {ROOT_CLAUDE_MAX_LINES}). It loads into "
+        "every session: turn the new narrative into a one-line rule plus a link and "
+        "move the story to a nested CLAUDE.md, CONTRIBUTING.md or docs/."
+    )
+    nested = _nested_claude_files()
+    assert nested, "expected nested CLAUDE.md files (src/quantized, tests, frontend, ...)"
+    over = [
+        f"{p.relative_to(ROOT).as_posix()}: {n}"
+        for p in nested
+        if (n := len(p.read_text(encoding="utf-8").splitlines())) > NESTED_CLAUDE_MAX_LINES
+    ]
+    assert not over, f"nested CLAUDE.md over {NESTED_CLAUDE_MAX_LINES} lines: {over}"
+
+
+def test_no_unmerged_ledger_sections_in_docs() -> None:
+    offenders = [
+        p.relative_to(ROOT).as_posix()
+        for p in _walk_md(ROOT / "docs")
+        if "Ledger entries (to merge)" in p.read_text(encoding="utf-8")
+    ]
+    assert not offenders, (
+        "fold these 'Ledger entries (to merge)' sections into "
+        f"docs/origin_re/DECODE_LEDGER.md and delete them: {offenders}"
+    )
+    n = len(LEDGER.read_text(encoding="utf-8").splitlines())
+    assert n <= LEDGER_MAX_LINES, (
+        f"DECODE_LEDGER.md is {n} lines: split it into docs/origin_re/ledger/<area>.md "
+        "and keep DECODE_LEDGER.md as the index"
+    )
+
+
+def test_skills_have_front_matter() -> None:
+    skills = sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
+    assert skills, "expected shared skills under .claude/skills/"
+    for path in skills:
+        parts = path.read_text(encoding="utf-8").split("---")
+        assert len(parts) >= 3 and parts[0] == "", f"{path}: missing YAML front-matter"
+        assert re.search(rf"^name: {path.parent.name}$", parts[1], re.MULTILINE), path
+        assert re.search(r"^description: \S", parts[1], re.MULTILINE), path
+
+
+def test_agent_doc_links_resolve() -> None:
+    """Every relative link (and #anchor into a markdown file) in the CLAUDE.md
+    files, the skills, and the Origin ledger + README points at something real."""
+    docs = [ROOT / "CLAUDE.md", *_nested_claude_files(), LEDGER]
+    docs.append(ROOT / "docs" / "origin_re" / "README.md")
+    docs.extend(sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md")))
+    broken: list[str] = []
+    for doc in docs:
+        for target in _MD_LINK.findall(doc.read_text(encoding="utf-8")):
+            if re.match(r"[a-z]+:", target):
+                continue  # http(s)/mailto
+            rel, _, anchor = target.partition("#")
+            path = (doc.parent / rel).resolve() if rel else doc
+            where = f"{doc.relative_to(ROOT).as_posix()} -> {target}"
+            if not path.exists():
+                broken.append(where)
+            elif anchor and path.suffix == ".md":
+                text = path.read_text(encoding="utf-8")
+                headings = re.findall(r"^#+ (.+)$", text, re.MULTILINE)
+                if anchor not in {_slug(h) for h in headings}:
+                    broken.append(where + " (no such heading)")
+    assert not broken, "broken links:\n" + "\n".join(broken)

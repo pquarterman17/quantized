@@ -22,8 +22,8 @@ safeguard below targets that failure:
   kills the instance when one build hangs. The blocked COM call then raises,
   the caller records the timeout and starts a fresh session.
 
-Only ``Origin.Application`` is ever dispatched (see CLAUDE.md "Origin COM
-oracle runs").
+Only ``Origin.Application`` is ever dispatched (see
+``src/quantized/io/origin_project/CLAUDE.md`` "Origin COM oracle runs").
 """
 
 from __future__ import annotations
