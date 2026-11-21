@@ -24,7 +24,6 @@ from __future__ import annotations
 import csv
 import io
 import math
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,14 +45,16 @@ _SHEET_BAD = str.maketrans({c: "_" for c in "[]:*?/\\"})
 _XLSX_MAX_ROWS = 1_048_576
 _XLSX_MAX_CELL = 32_767
 #: XML 1.0 forbids these control characters; openpyxl refuses to write them.
-_XLSX_ILLEGAL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+_XLSX_ILLEGAL = str.maketrans(
+    {c: "\ufffd" for c in (*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20))}
+)
 
 
 def _xlsx_text(text: str) -> str:
     """``text`` as an Excel cell: XML-illegal control characters (a NUL or
     form feed from a binary-ish import) become U+FFFD instead of 500ing the
     export, and a cell is cut at Excel's 32 767-character limit."""
-    return _XLSX_ILLEGAL.sub("\ufffd", text)[:_XLSX_MAX_CELL]
+    return text.translate(_XLSX_ILLEGAL)[:_XLSX_MAX_CELL]
 
 
 @dataclass(frozen=True)
