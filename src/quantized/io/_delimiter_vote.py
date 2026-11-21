@@ -15,6 +15,13 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from quantized.io._text_lines import (
+    is_markdown_rule,
+    logical_lines,
+    normalize_pipe_line,
+    strip_inline_comment,
+)
+
 #: Lines starting with one of these are preamble comments, never data. The
 #: one definition :mod:`quantized.io.delimited` and the vote sample share.
 COMMENT_CHARS = "#%"
@@ -45,7 +52,7 @@ def vote_lines(text: str) -> list[str]:
     Below a data-section heading (``[DATA]``, `data_section_start`) only the
     table is sampled: the preamble above it is ``key<TAB>value`` lines.
     """
-    lines = text.removeprefix("﻿").splitlines()
+    lines = logical_lines(text.removeprefix("﻿"))
     out: list[str] = []
     for raw in lines[data_section_start(lines) :]:
         stripped = raw.strip()
@@ -55,7 +62,7 @@ def vote_lines(text: str) -> list[str]:
         # running it on every row of a million-row file cost ~15% of the import.
         if stripped[0] == "[" and is_section_marker(stripped):
             continue
-        out.append(raw)
+        out.append(strip_inline_comment(raw))
     return out
 
 
@@ -178,11 +185,24 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
             break
     else:
         test = raw_lines[:10]
+    if (best_score == 0 or best_delim == " ") and _pipe_table(test):
+        return "|"
     if best_delim == "," and _semicolon_over_comma(test):
         return ";"
     if best_delim == " " and _tab_over_space(test):
         return "\t"
     return best_delim
+
+
+def _pipe_table(lines: Sequence[str]) -> bool:
+    """Whether the sample is a pipe-delimited table (``a | b | c``, or a
+    Markdown ``| a | b |`` over a ``|---|---|`` rule). Unambiguous only: at
+    least two rows (rule rows aside) that all split into the same number
+    (>= 2) of pipe cells. Asked only when no stronger delimiter won the vote
+    (a whitespace win is just the spaces around the pipes)."""
+    rows = [ln for ln in lines if not is_markdown_rule(ln)]
+    counts = {len(normalize_pipe_line(ln).split("|")) for ln in rows}
+    return len(rows) >= 2 and len(counts) == 1 and min(counts) >= 2
 
 
 def _semicolon_over_comma(lines: Sequence[str]) -> bool:

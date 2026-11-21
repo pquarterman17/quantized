@@ -38,6 +38,7 @@ from quantized.io._delimiter_vote import (
     vote_lines,
 )
 from quantized.io._origin_ascii_header import origin_ascii_rows
+from quantized.io._text_lines import normalize_pipe_line
 from quantized.io.delimited import _extract_units, _split_lines
 
 if TYPE_CHECKING:  # ImportSettings lives in import_preview, which imports THIS
@@ -87,6 +88,8 @@ def _split(line: str, delim: str) -> list[str]:
     a quoted cell is one cell with its quotes removed, so the wizard and the
     direct import agree on quoted files. A whitespace delimiter splits on
     runs; other delimiters keep a line's leading empty cells (no strip)."""
+    if delim == "|":  # outer pipes of a Markdown/ASCII table are not cells
+        line = normalize_pipe_line(line)
     if delim in (" ", "whitespace"):
         return layout.split_row(line.strip(), " ") or [""]
     return layout.split_row(line, delim)

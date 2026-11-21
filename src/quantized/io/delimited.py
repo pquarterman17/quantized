@@ -39,6 +39,7 @@ from quantized.io._origin_ascii_header import (
     origin_ascii_rows,
 )
 from quantized.io._space_header import regroup_space_header
+from quantized.io._text_lines import is_markdown_rule, normalize_pipe_line
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
@@ -142,6 +143,8 @@ def import_csv(
     delim = layout._detect_delimiter(voted)
     if delim == "\t":  # keep a tab row's empty edge cells (`tab_cell_lines`)
         raw_lines = tab_cell_lines(voted)
+    elif delim == "|":  # a pipe table: outer pipes off, a Markdown `---|---` rule row out
+        raw_lines = [normalize_pipe_line(ln) for ln in raw_lines if not is_markdown_rule(ln)]
     comma_path = dc.uses_decimal_path(dc.check_decimal(decimal, delim), delim, "," in text)
 
     # P0.4-perf4: layout detection scores rows in fixed-size chunks

@@ -15,6 +15,7 @@ __all__ = [
     "CORRUPT_ARCHIVE_ERRORS",
     "NO_COLUMN",
     "decode_text",
+    "looks_utf16_without_bom",
     "parse_col_header",
     "read_head",
     "read_text",
@@ -60,8 +61,8 @@ def decode_text(raw: bytes) -> str:
         return raw[len(_UTF8_BOM) :].decode("utf-8", errors="replace")
     if raw.startswith(_UTF16_BOMS):
         return raw.decode("utf-16", errors="replace")
-    if _looks_utf16_without_bom(raw):
-        return raw.decode("utf-16-le" if raw[0:1] != b"\x00" else "utf-16-be", errors="replace")
+    if looks_utf16_without_bom(raw):
+        return decode_utf16_without_bom(raw)
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -71,7 +72,12 @@ def decode_text(raw: bytes) -> str:
     return text.rstrip("\x1a") if text.endswith("\x1a") else text
 
 
-def _looks_utf16_without_bom(raw: bytes) -> bool:
+def decode_utf16_without_bom(raw: bytes) -> str:
+    """Decode text `looks_utf16_without_bom` accepted (LE unless byte 0 is NUL)."""
+    return raw.decode("utf-16-le" if raw[0:1] != b"\x00" else "utf-16-be", errors="replace")
+
+
+def looks_utf16_without_bom(raw: bytes) -> bool:
     """BOM-less UTF-16 text (some Windows tools): mostly-ASCII code units leave
     every other byte NUL. Read as latin-1 it was a NUL-studded single column."""
     head = raw[:4096]
@@ -118,6 +124,8 @@ def read_head(path: str | Path, nbytes: int = 65536, *, encoding: str = "latin-1
         raw = raw[len(_UTF8_BOM) :]
     elif raw.startswith(_UTF16_BOMS):
         return raw[: len(raw) // 2 * 2].decode("utf-16", errors="replace")
+    elif encoding == "latin-1" and looks_utf16_without_bom(raw):
+        return decode_utf16_without_bom(raw[: len(raw) // 2 * 2])
     return raw.decode(encoding, errors="replace")
 
 

@@ -17,7 +17,7 @@ from typing import Any
 
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
-from quantized.io.base import read_text
+from quantized.io.base import looks_utf16_without_bom, read_text
 from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.cif import import_cif
@@ -164,7 +164,8 @@ def _is_text_table(path: Path) -> bool:
     error instead of importing as a table of garbage text cells."""
     with path.open("rb") as fh:
         head = fh.read(4096)
-    return head.startswith((b"\xff\xfe", b"\xfe\xff")) or b"\x00" not in head
+    bom = head.startswith((b"\xff\xfe", b"\xfe\xff"))
+    return bom or looks_utf16_without_bom(head) or b"\x00" not in head
 
 
 def _import_excel_lazy(path: Path) -> DataStruct:
