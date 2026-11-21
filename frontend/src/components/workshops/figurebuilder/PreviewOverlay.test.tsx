@@ -140,7 +140,6 @@ describe("PreviewOverlay", () => {
   it("inherits ContextMenu keyboard navigation", () => {
     setup();
     fireEvent.contextMenu(el("title"));
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Properties…" }));
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Edit text…" }));

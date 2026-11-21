@@ -8,7 +8,7 @@ let _ctx: CanvasRenderingContext2D | null | undefined;
 
 function ctx2d(): CanvasRenderingContext2D | null {
   if (_ctx === undefined) {
-    _ctx = document.createElement("canvas").getContext("2d");
+    _ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   }
   return _ctx ?? null;
 }
