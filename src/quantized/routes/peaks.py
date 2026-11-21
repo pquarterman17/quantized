@@ -24,6 +24,12 @@ from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_model_fit import fit_peak_model
 from quantized.calc.peak_multifit import fit_multi_peak
 from quantized.calc.peaks import find_peaks_robust
+from quantized.routes._arrayresults import (
+    fingerprint,
+    lean_array_fields,
+    require_fingerprint,
+    resolve_result_or_409,
+)
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import jsonify, to_jsonable
 
@@ -53,6 +59,11 @@ class FindPeaksRequest(BaseModel):
     # Opt in for XRD searches: generic spectra can contain scientifically
     # meaningful weak local peaks, so the transport default stays compatible.
     strict_prominence: bool = False
+    # Opt-in lean response (P4 phase 4, routes/_arrayresults.py): false leaves
+    # ``background`` off the wire and returns ``resultId`` (+ ``backgroundDisplay``
+    # with ``display_points``); /fit takes the id as ``find_result_id``.
+    return_background: bool = True
+    display_points: int | None = Field(default=None, ge=16, le=20_000)
 
 
 @router.post("/find")
@@ -74,7 +85,15 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
         bg_iterative=req.bg_iterative,
         strict_prominence=req.strict_prominence,
     )
-    return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
+    if req.return_background:
+        return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
+    return {
+        "peaks": to_jsonable(peaks),
+        **lean_array_fields(
+            "background", "background", background, req.display_points,
+            digest=fingerprint(req.x, req.y),
+        ),
+    }
 
 
 class FitPeakRequest(BaseModel):
@@ -86,6 +105,11 @@ class FitPeakRequest(BaseModel):
     seed_fwhm: float | None = None
     model: str = "Lorentzian"
     snip_bg: list[float] | None = None
+    # The ``resultId`` of a lean /find (``return_background: false``) run on
+    # THESE x and y: its background is used as ``snip_bg`` without the 8 MB
+    # per 1M rows re-post. 409 when unknown or computed from other x / y;
+    # the client then resends ``snip_bg``. ``snip_bg`` wins when both are sent.
+    find_result_id: str | None = None
 
 
 @router.post("/fit")
@@ -93,13 +117,18 @@ def fit(req: FitPeakRequest) -> dict[str, Any]:
     """Fit one peak in [x_lo, x_hi] to ``model``; returns the fit result dict."""
     if req.model not in MODELS:
         raise HTTPException(status_code=422, detail=f"unknown model: {req.model}")
+    snip_bg: Any = req.snip_bg
+    if snip_bg is None and req.find_result_id is not None:
+        kept = resolve_result_or_409(req.find_result_id, "background")
+        require_fingerprint(kept, req.x, req.y)
+        (snip_bg,) = kept.arrays.values()
     try:
         result = fit_single_peak(
             req.x, req.y, req.x_lo, req.x_hi,
             seed_center=req.seed_center,
             seed_fwhm=float("nan") if req.seed_fwhm is None else req.seed_fwhm,
             model=req.model,
-            snip_bg=req.snip_bg,
+            snip_bg=snip_bg,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -315,6 +315,28 @@
         "title": "AnovaRequest",
         "type": "object"
       },
+      "ArrayRequest": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "baseline",
+              "background"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "result_id": {
+            "title": "Result Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id",
+          "kind"
+        ],
+        "title": "ArrayRequest",
+        "type": "object"
+      },
       "ArrheniusRequest": {
         "properties": {
           "d0": {
@@ -5107,6 +5129,19 @@
       },
       "EstimateRequest": {
         "properties": {
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "iter_max_passes": {
             "default": 3,
             "maximum": 1000.0,
@@ -5138,6 +5173,11 @@
             "default": 4,
             "title": "Poly Degree",
             "type": "integer"
+          },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
           },
           "smooth_passes": {
             "default": 3,
@@ -6542,6 +6582,19 @@
             "title": "Bg Poly Degree",
             "type": "integer"
           },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "max_peaks": {
             "default": 50,
             "title": "Max Peaks",
@@ -6571,6 +6624,11 @@
             "default": 0.01,
             "title": "Min Width Deg",
             "type": "number"
+          },
+          "return_background": {
+            "default": true,
+            "title": "Return Background",
+            "type": "boolean"
           },
           "sensitivity": {
             "default": "medium",
@@ -6802,6 +6860,17 @@
       },
       "FitPeakRequest": {
         "properties": {
+          "find_result_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Find Result Id"
+          },
           "model": {
             "default": "Lorentzian",
             "title": "Model",
@@ -9005,6 +9074,19 @@
       },
       "ModPolyRequest": {
         "properties": {
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "max_iter": {
             "default": 100,
             "title": "Max Iter",
@@ -9014,6 +9096,11 @@
             "default": 5,
             "title": "Order",
             "type": "integer"
+          },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
           },
           "tol": {
             "default": 1e-06,
@@ -13137,6 +13224,19 @@
         "title": "ResistivityRequest",
         "type": "object"
       },
+      "ResultRequest": {
+        "properties": {
+          "result_id": {
+            "title": "Result Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id"
+        ],
+        "title": "ResultRequest",
+        "type": "object"
+      },
       "RocRequest": {
         "description": "Request for ROC curve.",
         "properties": {
@@ -13688,9 +13788,27 @@
             "title": "Dataset",
             "type": "object"
           },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "method": {
             "title": "Method",
             "type": "string"
+          },
+          "return_dataset": {
+            "default": true,
+            "title": "Return Dataset",
+            "type": "boolean"
           }
         },
         "required": [
@@ -13707,6 +13825,18 @@
             "title": "Dataset",
             "type": "object"
           },
+          "datasetDisplay": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasetdisplay"
+          },
           "flagged": {
             "additionalProperties": {
               "items": {
@@ -13716,6 +13846,17 @@
             },
             "title": "Flagged",
             "type": "object"
+          },
+          "resultId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultid"
           },
           "rows_in": {
             "title": "Rows In",
@@ -24687,6 +24828,90 @@
         "summary": "Export Report",
         "tags": [
           "report"
+        ]
+      }
+    },
+    "/api/results/array": {
+      "post": {
+        "description": "The kept 1-D array (``baseline`` or ``background``), non-finite as null.",
+        "operationId": "array_api_results_array_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Array Api Results Array Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Array",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/api/results/dataset": {
+      "post": {
+        "description": "The kept signal-op result dataset, as ``/transform/sigop`` returns it.",
+        "operationId": "dataset_api_results_dataset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dataset",
+        "tags": [
+          "results"
         ]
       }
     },
