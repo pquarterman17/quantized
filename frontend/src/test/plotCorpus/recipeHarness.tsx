@@ -197,9 +197,9 @@ export async function runSpecimen(input: SpecimenIn, index: number): Promise<Spe
     if (flags.ternary) {
       // Loaded on demand, as the app loads the workshop (ternary/lazyMount.test.ts).
       const { buildTernaryRequest } = await import("../../components/workshops/ternary/ternaryRequest");
-      const { defaultPicks } = await import("../../components/workshops/ternary/auxColumns");
+      const { compositionPicks } = await import("../../components/workshops/ternary/auxColumns");
       const data = analysisData(ds) as DataStruct;
-      const [a, b, c] = defaultPicks(data, 3);
+      const [a, b, c] = compositionPicks(data, 3);
       const built = buildTernaryRequest(data, { a, b, c, colorBy: null }, { title: "", filename: "ternary" });
       return { key: input.key, route: "ternary", spec: built.spec, state, origin };
     }

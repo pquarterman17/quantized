@@ -145,9 +145,9 @@ describe("a polar view exports as a polar figure, screen == export", () => {
     expect([nx, ny].map((v) => Math.round(v * 1e9) / 1e9)).toEqual([0, -1]);
   });
 
-  it("carries colour, legend renames and the canvas' fixed width — the canvas draws plain solid lines", () => {
+  it("carries colour, legend renames and the Series-card width (default 1.5 px) — dash and marker are not drawn", () => {
     const spec = request({ ...CASES[0], seriesStyles: { 1: { color: "#d62728", width: 4, line: "dashed", marker: true } } });
-    expect(spec.series_styles?.[1]).toEqual({ color: "#d62728", width: POLAR_LINE_PX });
+    expect(spec.series_styles?.[1]).toEqual({ color: "#d62728", width: 4 });
     expect(spec.series_styles?.[0]).toMatchObject({ legend: "Loop A", width: POLAR_LINE_PX });
   });
 

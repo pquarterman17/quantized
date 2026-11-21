@@ -29,24 +29,29 @@ describe("plot-type gallery: the types behind separate commands", () => {
     for (const id of ["doubleY", "polar", "violin", "waterfall", "stacked", "ternary"]) expect(ids).toContain(id);
   });
 
-  it("patches: polar and violin switch modes; double-Y puts the last plotted column on the right", () => {
+  it("patches: polar and violin switch modes; double-Y puts the SECOND plotted column on the right", () => {
     const view = { seriesStyles: {}, statPicks: {} };
     expect(plotTypePatch("polar", view, [0, 1])).toEqual({ statMode: false, polarMode: true });
     expect(plotTypePatch("violin", view, [0])).toMatchObject({ statMode: true, polarMode: false, statPicks: { mode: "violin" } });
-    expect(plotTypePatch("doubleY", view, [0, 2, 1]).y2Keys).toEqual([1]);
+    expect(plotTypePatch("doubleY", view, [0, 2, 1]).y2Keys).toEqual([2]); // the 2nd plotted; the rest stay left
+    expect(plotTypePatch("doubleY", view, [0, 1]).y2Keys).toEqual([1]);
+    expect(plotTypePatch("doubleY", view, [0]).y2Keys).toBeNull();
     expect(plotTypePatch("line", view, [0]).polarMode).toBe(false); // leaving polar
   });
 
   it("is unavailable when the data cannot draw it", () => {
     const one = ds(["A"]);
     expect(plotTypeUnavailable("doubleY", one)).toMatch(/two Y/);
-    expect(plotTypeUnavailable("ternary", ds(["A", "B"]))).toMatch(/three/);
+    expect(plotTypeUnavailable("ternary", one)).toMatch(/three/);
+    // An A,B,C sheet imports A as X: two channels + X is enough.
+    expect(plotTypeUnavailable("ternary", ds(["B", "C"]))).toBeNull();
+    expect(plotTypeUnavailable("pie", one)).toBeNull();
     expect(plotTypeUnavailable("polar", one)).toBeNull();
   });
 
   it("each tile reaches the existing machinery", async () => {
     applyPlotType("doubleY");
-    expect(s().y2Keys).toEqual([2]);
+    expect(s().y2Keys).toEqual([1]);
     applyPlotType("polar");
     expect(s().polarMode).toBe(true);
     applyPlotType("waterfall");
@@ -57,5 +62,8 @@ describe("plot-type gallery: the types behind separate commands", () => {
     expect(s().stackMode).toBe(true);
     applyPlotType("ternary", () => useAuxFigureStore.getState().setTernaryOpen(true));
     expect(useAuxFigureStore.getState().ternaryOpen).toBe(true);
+    useAuxFigureStore.setState({ pieOpen: false });
+    applyPlotType("pie");
+    expect(useAuxFigureStore.getState().pieOpen).toBe(true);
   });
 });

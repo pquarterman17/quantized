@@ -100,3 +100,4 @@ export const plotDoubleY = "⇵";
 export const plotPolar = "◴";
 export const plotWaterfall = "≋";
 export const plotTernary = "△";
+export const plotPie = "◕";

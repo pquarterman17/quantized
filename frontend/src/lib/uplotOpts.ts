@@ -1009,6 +1009,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       ...(yLim ? fixedYScale(yLim) : loopY ? { range: () => loopY } : errorRange(reach, 0, isPositiveOnlyScale(yScale))),
     },
   };
+  marks()?.padBubbleScales(scales, args.colorByColumns, !xLim, !yLim); // bubbles: room for the biggest one (lib/bubblePad.ts)
   // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
   // x values are ordinal positions, not physical quantities, so a fixed/sci
   // number format would show "1.0"/"2.0" instead of the real category names.

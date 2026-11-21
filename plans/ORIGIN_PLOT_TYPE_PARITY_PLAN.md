@@ -432,7 +432,7 @@ None open.
          columns, uneven X or multi-layer pages still draw by line style;
          100 % stacked column (needs the layer's 100 % flag + a percent stack
          in the Stat Stage), grouped / stacked horizontal bars, floating
-         column, pie and stacked bar have no renderer (#10-#12 creation gaps).
+         column, pie and stacked bar have no renderer (#10-#12 creation gaps; the pie / doughnut workshop and export route exist (#794) and the Plot type gallery now has a "Pie / Doughnut" tile, 2026-11-21).
          Owner COM checks open: `SOP_meas` Graph67 orientation, `Graph_Template`
          Graph1's upright 215 plot (`plot_kinds.md`). The `.opj` reader's own
          `column` / `bar` mapping still overlaps multi-series bars.
@@ -578,21 +578,21 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     Histogram bins only the first plotted column; Origin bins every
     selected Y column in one graph. `single_point` (1 row) exports nothing
     (the stage needs >= 2 values); Origin draws a one-bin histogram.
-16. **Double-Y axis assignment** — 6/8 `double_y` put the wrong curve on the
+16. [x] ~~**Double-Y axis assignment**~~ FIXED 2026-11-21 (`plotTypePatch("doubleY")` now moves the SECOND plotted column, tests `plotTypesGallery.test.ts`) — 6/8 `double_y` put the wrong curve on the
     right axis: `plotTypePatch("doubleY")` moves the LAST plotted column to
     Y2, Origin's `DOUBLEY` template puts the SECOND Y column on the right
     and keeps the rest on the left (measured: layer 2 holds only `y2` of
     `y1,y2,y3`). Both agree only with exactly two Y columns.
-17. **Ternary from an A,B,C sheet** — 1/1 `ternary` wrong axis order: the
+17. [x] ~~**Ternary from an A,B,C sheet**~~ FIXED 2026-11-21 (`compositionPicks` leads with the X column; the gallery tile counts X toward the three columns; tests `compositionPicks.test.ts`, `plotTypesGallery.test.ts`) — 1/1 `ternary` wrong axis order: the
     gallery Ternary tile refuses the sheet ("Needs three composition
     columns") because the first CSV column imports as the X axis, leaving
     two channels; Plot > Ternary diagram... builds it, but its default picks
     (`auxColumns.defaultPicks`) take channels first and the X column last,
     so the axes come out B, C, A instead of A, B, C.
-18. **Bubble axis padding** — 5/7 `bubble`: X runs exactly to the data
+18. [x] ~~**Bubble axis padding**~~ FIXED 2026-11-21 on screen (`lib/bubblePad.ts`: an autoscaled, non-log axis is widened by the biggest bubble's radius; fixed limits and zooms untouched; test `bubblePad.test.ts`). The matplotlib export still autoscales to the data (not padded) — 5/7 `bubble`: X runs exactly to the data
     ([0, 10]) so edge bubbles are cut in half; Origin pads the axis to the
     largest bubble ([-0.68, 10.46]).
-19. **Polar line width** — the polar export always draws
+19. [x] ~~**Polar line width**~~ FIXED 2026-11-21 (`polarLineWidth`: the Series-card width, else 1.5 px, on the canvas and in the polar export request; `tests/fixtures/wire/line_width_paths.json` regenerated deliberately) — the polar export always draws
     `POLAR_LINE_PX` (`lib/polarFigureSpec.ts`), so a Series card width
     (2 pt in the corpus) never reaches a polar figure.
 

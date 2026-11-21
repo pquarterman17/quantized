@@ -83,7 +83,7 @@ export function provideUplotRanges(u: Pick<typeof uPlot, "rangeNum" | "rangeLog"
 }
 
 /** uPlot's own default range for an auto scale (`initScale`'s snapNum/snapLog). */
-function uplotDefault(u: uPlot, min: number, max: number, key: string, isX: boolean): uPlot.Range.MinMax {
+export function uplotDefault(u: uPlot, min: number, max: number, key: string, isX: boolean): uPlot.Range.MinMax {
   const sc = u.scales[key];
   if (!statics) return [min, max];
   if ((sc.distr as number) === 3) return statics.rangeLog(min, max, sc.log ?? 10, false);

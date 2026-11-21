@@ -12,7 +12,7 @@ import { stemFromName } from "../../../lib/exportActive";
 import { analysisData } from "../../../lib/rowstate";
 import { takeTernaryPicks } from "../../../lib/ternaryPending";
 import { useActiveDataset } from "../../../store/useApp";
-import { columnOptions, defaultPicks, type AuxColumn } from "./auxColumns";
+import { columnOptions, compositionPicks, type AuxColumn } from "./auxColumns";
 import { exportAuxFigure } from "./auxFigureExport";
 import { useFigurePreview, type FigurePreview } from "./auxFigurePreview";
 import type { AuxFigureFormat } from "./AuxFigureFrame";
@@ -54,7 +54,7 @@ export function useTernary(): TernaryState {
     if (!data) return;
     // An applied Origin ternary figure names its A, B, C columns (lib/ternaryPending).
     const req = takeTernaryPicks(activeId);
-    const [a, b, c] = req ? [req.a, req.b, req.c] : defaultPicks(data, 3);
+    const [a, b, c] = req ? [req.a, req.b, req.c] : compositionPicks(data, 3);
     setPicks({ a, b, c, colorBy: null });
     setTitle(activeName);
     // The dataset's identity and name are the reset triggers; `data` is

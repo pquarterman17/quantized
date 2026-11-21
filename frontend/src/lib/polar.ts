@@ -33,9 +33,16 @@ export function radiusNorm(v: number, vmin: number, vmax: number): number {
  *  renderer never assumes it. */
 export const POLAR_CANVAS = { theta_unit: "deg", theta_direction: "ccw", theta_zero: "E" } as const;
 
-/** The stroke width (CSS px) the polar canvas draws EVERY series at: a series'
- *  own width and the plot template are ignored. The export sends it as points. */
+/** The stroke width (CSS px) the polar canvas draws a series at when its
+ *  Series card sets none (the plot template is ignored). */
 export const POLAR_LINE_PX = 1.5;
+
+/** A series' polar stroke width: its Series-card width when set and positive,
+ *  else `POLAR_LINE_PX`. ONE rule for the canvas and the export (sent as pt). */
+export function polarLineWidth(style: { width?: number } | undefined): number {
+  const w = style?.width;
+  return typeof w === "number" && Number.isFinite(w) && w > 0 ? w : POLAR_LINE_PX;
+}
 
 /** The channels the polar view draws: `yKeys`, or every channel. No hidden or
  *  X-channel filtering — the canvas has none. */
