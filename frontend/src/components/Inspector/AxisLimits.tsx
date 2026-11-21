@@ -3,7 +3,9 @@
 // side (a half-open limit — `lib/axisLim.ts`, P2.8 residual (b)): the other
 // side is honoured and the canvas fills the blank one from its autoscale
 // extent. Clearing both restores full autoscale; a non-numeric entry, or two
-// typed sides with min >= max, leaves the committed range untouched. Commits
+// typed sides with min >= max, leaves the committed range untouched AND puts
+// the fields back to it (with an inline note), so the panel always shows what
+// the plot applies. Commits
 // on blur / Enter so typing isn't reformatted mid-edit. Lives in the Axes
 // card; the range is resolved and applied by PlotViewport (useResolvedLims).
 
@@ -38,10 +40,32 @@ export default function AxisLimits() {
     setYMax(limFieldText(yLim, 1));
   }, [yLim]);
 
-  const commit = (minStr: string, maxStr: string, set: (v: Lim) => void): void => {
-    // both blank → autoscale; one blank → auto for that side; invalid → no-op
+  const [err, setErr] = useState<Record<string, string>>({});
+
+  const commit = (
+    axis: string,
+    minStr: string,
+    maxStr: string,
+    set: (v: Lim) => void,
+    applied: Lim,
+    setMin: (s: string) => void,
+    setMax: (s: string) => void,
+  ): void => {
+    // both blank → autoscale; one blank → auto for that side; invalid → revert
     const next = parseLimFields(minStr, maxStr);
-    if (next !== undefined) set(next);
+    if (next !== undefined) {
+      set(next); // (the message stays until the next edit: the blur after Enter re-commits the reverted text)
+      return;
+    }
+    const lo = minStr.trim();
+    const hi = maxStr.trim();
+    const numeric = (t: string) => t === "" || Number.isFinite(Number(t));
+    setErr((e) => ({
+      ...e,
+      [axis]: numeric(lo) && numeric(hi) ? "Minimum must be below maximum" : "Enter a number",
+    }));
+    setMin(limFieldText(applied, 0));
+    setMax(limFieldText(applied, 1));
   };
 
   const row = (
@@ -52,7 +76,8 @@ export default function AxisLimits() {
     setMax: (s: string) => void,
     onCommit: () => void,
   ) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+    <div style={{ marginTop: 6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <span className="qzk-field-lbl" style={{ margin: 0, width: 14 }}>
         {label}
       </span>
@@ -61,7 +86,10 @@ export default function AxisLimits() {
         width={64}
         placeholder="auto"
         aria-label={`${label} axis minimum`}
-        onChange={setMin}
+        onChange={(v) => {
+          setMin(v);
+          setErr((e) => (e[label] ? { ...e, [label]: "" } : e));
+        }}
         onBlur={onCommit}
         onKeyDown={(e) => e.key === "Enter" && onCommit()}
       />
@@ -71,18 +99,27 @@ export default function AxisLimits() {
         width={64}
         placeholder="auto"
         aria-label={`${label} axis maximum`}
-        onChange={setMax}
+        onChange={(v) => {
+          setMax(v);
+          setErr((e) => (e[label] ? { ...e, [label]: "" } : e));
+        }}
         onBlur={onCommit}
         onKeyDown={(e) => e.key === "Enter" && onCommit()}
       />
+    </div>
+    {err[label] ? (
+      <div role="alert" style={{ color: "var(--danger)", fontSize: 11, marginTop: 2 }}>
+        {err[label]}
+      </div>
+    ) : null}
     </div>
   );
 
   return (
     <div style={{ marginTop: 8 }}>
       <span className="qzk-field-lbl">Limits</span>
-      {row("X", xMin, xMax, setXMin, setXMax, () => commit(xMin, xMax, setXLim))}
-      {row("Y", yMin, yMax, setYMin, setYMax, () => commit(yMin, yMax, setYLim))}
+      {row("X", xMin, xMax, setXMin, setXMax, () => commit("X", xMin, xMax, setXLim, xLim, setXMin, setXMax))}
+      {row("Y", yMin, yMax, setYMin, setYMax, () => commit("Y", yMin, yMax, setYLim, yLim, setYMin, setYMax))}
     </div>
   );
 }

@@ -62,6 +62,40 @@ describe("AxisLimits: a blank side is auto for that side", () => {
     expect(useApp.getState().xLim).toEqual([1, 4]);
   });
 
+  it("a rejected entry puts the fields back to what the plot applies, with a message", () => {
+    render(<AxisLimits />);
+    commit(field("X", "minimum"), "2000");
+    expect(useApp.getState().xLim).toEqual([2000, null]);
+    commit(field("X", "maximum"), "-2000");
+    expect(useApp.getState().xLim).toEqual([2000, null]);
+    expect(field("X", "minimum")).toHaveValue("2000");
+    expect(field("X", "maximum")).toHaveValue("");
+    expect(screen.getByRole("alert")).toHaveTextContent("Minimum must be below maximum");
+    commit(field("X", "maximum"), "abc");
+    expect(field("X", "maximum")).toHaveValue("");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a number");
+    commit(field("X", "maximum"), "3000");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(useApp.getState().xLim).toEqual([2000, 3000]);
+  });
+
+  it("a rejected entry puts the fields back to what the plot applies, with a message", () => {
+    render(<AxisLimits />);
+    commit(field("X", "minimum"), "2000");
+    expect(useApp.getState().xLim).toEqual([2000, null]);
+    commit(field("X", "maximum"), "-2000");
+    expect(useApp.getState().xLim).toEqual([2000, null]);
+    expect(field("X", "minimum")).toHaveValue("2000");
+    expect(field("X", "maximum")).toHaveValue("");
+    expect(screen.getByRole("alert")).toHaveTextContent("Minimum must be below maximum");
+    commit(field("X", "maximum"), "abc");
+    expect(field("X", "maximum")).toHaveValue("");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a number");
+    commit(field("X", "maximum"), "3000");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(useApp.getState().xLim).toEqual([2000, 3000]);
+  });
+
   it("a half-open value set elsewhere (undo, reopen) shows its blank side blank", () => {
     render(<AxisLimits />);
     act(() => useApp.setState({ xLim: [3, null] }));
