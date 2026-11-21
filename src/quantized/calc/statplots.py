@@ -266,6 +266,10 @@ def qq_plot(
     }
 
 
+# An explicit histogram bin count above this is a typo (or a 8 GB allocation).
+_MAX_BINS = 100_000
+
+
 def histogram(
     data: NDArray[np.float64] | list[float],
     *,
@@ -284,6 +288,8 @@ def histogram(
     v = _finite(data)
     if v.size < 2:
         raise ValueError("histogram needs at least 2 finite values")
+    if isinstance(bins, int) and bins > _MAX_BINS:
+        raise ValueError(f"bins {bins} is too large; at most {_MAX_BINS}")
     counts, edges = np.histogram(v, bins=bins, density=density)
     centers = 0.5 * (edges[:-1] + edges[1:])
     out: dict[str, Any] = {

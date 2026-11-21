@@ -81,6 +81,7 @@ from quantized.calc.render_lock import (
 
 __all__ = [
     "BASE_RC",
+    "MAX_RASTER_PIXELS",
     "RENDER_LOCK",
     "RENDER_LOCK_TIMEOUT_S",
     "RenderLockTimeout",
@@ -95,6 +96,11 @@ __all__ = [
 # PDF ``savefig_bytes`` adds the figure as the next page instead of returning
 # bytes, so every renderer becomes a page source without knowing it.
 pdf_page_sink: ContextVar[Any] = ContextVar("pdf_page_sink", default=None)
+
+# A raster export above this many pixels would allocate gigabytes (4 bytes a
+# pixel, plus the PNG/TIFF encoder's copy) and get the whole server OOM-killed.
+MAX_RASTER_PIXELS = 400_000_000
+_RASTER_FORMATS = ("png", "tiff", "tif", "jpg", "jpeg", "webp")
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -207,6 +213,16 @@ def savefig_bytes(
     if pages is not None and fmt == "pdf":
         pages.savefig(fig, **kwargs)
         return b""
+    if fmt in _RASTER_FORMATS:
+        w_in, h_in = fig.get_size_inches()
+        dpi = float(kwargs.get("dpi") or fig.dpi)
+        if w_in * h_in * dpi * dpi > MAX_RASTER_PIXELS:
+            raise ValueError(
+                f"a {w_in:g} x {h_in:g} in figure at {dpi:g} dpi is "
+                f"{w_in * h_in * dpi * dpi / 1e6:,.0f} megapixels; the limit is "
+                f"{MAX_RASTER_PIXELS / 1e6:,.0f}. Lower the dpi or the page size, "
+                "or export PDF/SVG."
+            )
     buf = BytesIO()
     if svg_text_as_paths and fmt == "svg":
         # Nested inside the caller's render_scope (RENDER_LOCK held), so this

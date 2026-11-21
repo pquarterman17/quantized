@@ -25,6 +25,7 @@ deterministic (the route passes the wall-clock time; tests pass a fixed value).
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 import numpy as np
@@ -89,6 +90,30 @@ def _num_cell(v: float) -> str:
     which Origin's impASC, Excel and quantized's importer all read as missing
     (``"nan"`` is text to the first two -- Excel charts even plot it as 0)."""
     return f"{v:.10g}" if math.isfinite(v) else ""
+
+
+def _header_cell(text: str) -> str:
+    """A name/unit header cell: line breaks become spaces (as in the script's
+    ``escape_lt``), so a multi-line label cannot split the 2-row header that
+    Origin's impASC detects."""
+    return csv_text_cell(re.sub(r"[\r\n]+", " ", text))
+
+
+def _num_column(col: np.ndarray) -> list[str]:
+    """One column of data cells: ``%.10g`` each (the MATLAB golden's format),
+    EXCEPT a column that precision would collapse -- consecutive rows that
+    differ but print identically (epoch-second timestamps with sub-second
+    spacing, ``1+1e-11`` steps) -- which is written at the shortest
+    round-trip form instead, so the exported X / Y values stay distinct."""
+    cells = [_num_cell(float(v)) for v in col]
+    if col.size < 2:
+        return cells
+    back = np.array([float(c) if c else np.nan for c in cells])
+    with np.errstate(invalid="ignore"):
+        collapsed = (np.diff(col) != 0) & (np.diff(back) == 0)
+    if bool(collapsed.any()):
+        return [repr(float(v)) if math.isfinite(v) else "" for v in col]
+    return cells
 
 
 def text_column_sidecar(meta: dict[str, Any]) -> dict[str, list[str]]:
@@ -168,16 +193,20 @@ def format_origin_script(
     # Text columns (sample ids, lots) follow the numeric channels as text.
     texts = text_column_sidecar(meta)
     csv_lines = [
-        ",".join(csv_text_cell(c) for c in [x_name, *labels, *texts]),
-        ",".join(csv_text_cell(c) for c in [x_unit, *units, *([""] * len(texts))]),
+        ",".join(_header_cell(c) for c in [x_name, *labels, *texts]),
+        ",".join(_header_cell(c) for c in [x_unit, *units, *([""] * len(texts))]),
     ]
     # A categorical channel stores level CODES: write the level text instead.
     categorical = [is_categorical(data, c) for c in keep]
+    time_cells = _num_column(time)
+    num_cells = [
+        [] if categorical[c] else _num_column(values[:, c]) for c in range(values.shape[1])
+    ]
     for r in range(values.shape[0]):
-        cells = [_num_cell(time[r])]
+        cells = [time_cells[r]]
         cells.extend(
             csv_text_cell(level_of(data, keep[c], values[r, c]) or "") if categorical[c]
-            else _num_cell(values[r, c])
+            else num_cells[c][r]
             for c in range(values.shape[1])
         )
         cells.extend(csv_text_cell(t[r]) if r < len(t) else "" for t in texts.values())
