@@ -17,6 +17,10 @@ import { bookErrorLayer } from "./windowDefaults";
 
 /** Most series an Origin worksheet's first plot draws. */
 export const MAX_BOOK_SERIES = 8;
+/** Most series any other import's first plot draws (a 49-channel file drew
+ *  ~5M points per frame): the rest stay in Channels, and the import toast
+ *  says "N more not plotted" with a "Plot all" button. */
+export const MAX_AUTO_SERIES = 12;
 
 /** What `datasetViewDefaults` reads: the column labels the pick was made for
  *  (`of`: a dataset whose labels differ ignores it), the Y set when columns
@@ -40,7 +44,7 @@ export function withFirstPlot(ds: Dataset): Dataset {
   if (md.is2D === true || ds.data.labels.length === 0) return plain;
   const xKey = textAxisFallbackChannel(ds);
   const hidden = bookErrorLayer(ds).hiddenChannels;
-  const fp = firstPlot(ds.data, xKey, hidden, md.origin_book != null ? MAX_BOOK_SERIES : undefined);
+  const fp = firstPlot(ds.data, xKey, hidden, md.origin_book != null ? MAX_BOOK_SERIES : MAX_AUTO_SERIES);
   if (!fp.yKeys && !fp.y2Keys && !fp.logDecades) return plain;
   const hint: FirstPlotHint = {
     of: ds.data.labels,

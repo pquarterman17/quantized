@@ -10,7 +10,8 @@
 import { useMemo } from "react";
 
 import { logOffsetSuffix } from "../../../lib/logOffset";
-import { decimateRowIndices, xExtent } from "../../../lib/plotDecimate";
+import { xExtent } from "../../../lib/plotDecimate";
+import { decimateRowIndices } from "../../../lib/plotDecimateRows";
 import type { DataStruct } from "../../../lib/types";
 
 const W = 300;
