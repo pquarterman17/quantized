@@ -187,10 +187,8 @@ export function runOriginFigureApply(
   const bookSel = bookDs ? libs.figureChannelSelection(fig, bookDs) : null;
   const ownX = (layerFamily.length < 2 || !!y2Pair || !!topPair)
     && !!bookDs && recordedXConflicts(fig, bookDs, bookSel);
-  const leftOut = bookDs ? recordedXOmissions(fig, bookDs) : [];
-  if (leftOut.length) {
-    toast(`${fig.name}: left out, its recorded X column did not import — ${leftOut.join("; ")}`, "info");
-  }
+  const leftOut = recordedXOmissions(fig, bookDs ? [bookDs, ...siblings] : siblings); // every book of the layer
+  if (leftOut.length) toast(`${fig.name}: left out — ${leftOut.join("; ")}`, "info");
   const overlay = buildOverlayDataset(main, siblings, right ?? top, ownX, top && topXMap(main, top));
   if (overlay) {
     const targetId = existing?.id ?? nextDatasetId();

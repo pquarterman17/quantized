@@ -290,6 +290,23 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   ErrorBinding: ERROR_BINDING,
 };
 
+/** Gated fields added AFTER v0.38.0. v0.35-v0.38 accept a version-6 file, so
+ *  v6 alone does not protect these: each one's 0.38 sanitizer drops it on
+ *  open + save (`git show v0.38.0:` axisFormat.sanitizeAxisExtras has no
+ *  `divideMark`, plotviewSanitize.sanitizeStatPicks no `barPercent` /
+ *  `valueRange`, errorRoles' binding no `origin`). A file holding one is
+ *  written as v7 (`WORKSPACE_VERSION_POST_038`), which 0.34-0.38 all refuse.
+ *  EXTENDING: a field gated after this release goes here too (the test pins
+ *  every other gated field as one v0.38.0 already read). */
+export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
+  "AxisFormat.divideMark", "ErrorBinding.origin", "StatPicks.barPercent", "StatPicks.valueRange",
+]);
+
+/** The gated features in `doc` that v0.35-v0.38 would lose (see NEW_SINCE_V038). */
+export function featuresV038WouldDrop(doc: unknown): string[] {
+  return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V038.has(f));
+}
+
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
 export const GATED_VALUES = ["AxisFormat.base=2"] as const;
 

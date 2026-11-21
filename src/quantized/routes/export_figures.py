@@ -306,7 +306,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     if ds is None:
         ds = _request_dataset(req)
 
-    x_dt = x_axis_kind(ds.metadata, req.x_key)  # a date X draws dates, a text X its labels
+    x_dt = x_axis_kind(ds.metadata, req.x_key, ds.time)  # a date X draws dates, a text X its labels
     if req.encoding is not None and req.encoding.active():  # P1.4, before group_col
         return replace(resolve_encoded_figure(
             ds, req.encoding, x_key=req.x_key, y_keys=req.y_keys, group_col=req.group_col,

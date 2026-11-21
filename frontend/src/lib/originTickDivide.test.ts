@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 
+import { axisDraft, axisPatch, type AxisView } from "./axisDialogModel";
 import type { AxisFormat } from "./axisFormat";
+import { defaultPlotView } from "./plotview";
 import { figureDivides, originDivideFmt, originDividePatch, originPanelFmt, type TickLabelDivide, withY2PanelFmt } from "./originTickDivide";
 import type { OriginFigure } from "./types";
 
 const AUTO: AxisFormat = { mode: "auto", digits: 2 };
 const fig = (divide: TickLabelDivide | undefined): OriginFigure =>
   ({ name: "Graph1", x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: false, n_curves: 0, annotations: [], tick_label_divide: divide }) as OriginFigure;
+
+describe("Axis dialog edits of an Origin Divide by", () => {
+  const view = { ...defaultPlotView(), yFmt: { ...AUTO, divide: 100, divideMark: false } } as AxisView;
+  it("keeps Origin's unmarked factor when another field is edited", () => {
+    const next = axisPatch(view, "y", { ...axisDraft(view, "y"), size: "14" });
+    expect(next.yFmt).toMatchObject({ divide: 100, divideMark: false });
+  });
+  it("makes a NEW factor the user's own, drawn with its mark", () => {
+    const next = axisPatch(view, "y", { ...axisDraft(view, "y"), divide: "1000" });
+    expect(next.yFmt?.divide).toBe(1000);
+    expect(next.yFmt?.divideMark).toBeUndefined();
+    const cleared = axisPatch(view, "y", { ...axisDraft(view, "y"), divide: "" });
+    expect(cleared.yFmt?.divide).toBeUndefined();
+    expect(cleared.yFmt?.divideMark).toBeUndefined();
+  });
+});
 
 describe("Origin tick-label Divide by", () => {
   it("divides without the ×factor mark Origin never draws", () => {

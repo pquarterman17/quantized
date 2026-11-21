@@ -90,10 +90,42 @@ NUL-terminated decimal string. `0` = none. These were mislabelled
   `AxisFormat.divide` with `divideMark: false`. On the single-plot,
   double-Y (right axis = the upper layer's), overlay and spatial-panel paths
   (`SpatialPanel.fmt`, per panel). A workspace carrying it is gated for v0.34.
-- `.opju` carries no such objects. UnpolPlots Graph1's X factor (10) and the
-  Hc2 Y factor (1e-9, `hc2_open_gaps.md`) stay undecoded. COM:
-  `type $(layer.x.label.divideby)`. A specimen saved with and without the
-  factor would locate the field.
+- `.opju` (2026-11-21, lane S, `io/origin_project/opju_tick_divide.py`):
+  the same per-side objects ARE there, in CPYUA's sparse grammar (the earlier
+  "no such objects" searched for the `.opj` framing). Each is the name
+  header `3e 00 3e 00 c2 ff c2 ff 91 02 <O|F><B|T|L|R>` followed within a few
+  tokens by an ordinary `00 80 <clen>` block whose expansion is the text,
+  NUL-terminated (stale bytes after the NUL are ignored). `O*` is "Divide
+  by" (a number, or Origin's `*`, `/`, `^` arithmetic of numbers: `10^3`,
+  `1/(16*96)*1000`); `F*` is the tick-label "Formula", read only as
+  `k*x` / `x*k` (factor 1/k) or `x/k` (factor k). Anything else (`10^x`,
+  `x-1920`, a negative factor) stays undecoded. Both feed the same
+  `tick_label_divide` (graph pages only, layer window only; two different
+  factors on one side drop the side).
+  - Positive controls (Origin's saved previews / owner exports): `成功率`
+    Graph1/2 `OL = 100` (data 43.8..96.8 %, ticks 0..1); `Fig3_e` Graph2
+    `FB = 5*x` (X 1..100, ticks 0..500 ns; the "X range 0..100 vs 0..500"
+    of the round-2 list: the decoded RANGE was right all along); UnpolPlots
+    Graph1 `OB = 10` (export ticks 0..25 over Z 0..250); `稳定性` Graph4
+    `OL = 10^-6`, Graph10 `OB = 5`, `OL = 100`; `figures.opju` "load"
+    `FL = 15*x`; EIS Graph1 `OB = 1000` (kΩ); Discretewithsum Graph7
+    `OB = .001`; `cleaned_data` Graph1 `OL = 1e-3` (mS); `Fig2.a&b` Graph3
+    `FB = 5*x`; `5_sidechain` Graph1 `FL = 100 * x` (%); rmsd Graph1
+    `FB = x/100`; `figure3-and-4` Graph1; `2019-06-27_pp_rh_EIS` Nyquist
+    `OB = 1e6` (MΩ); Mott_Schottky Graph1 `OL = 1E8`. Every one checked by
+    eye against the preview's tick labels.
+  - Negative controls: the `0` objects (hundreds of `OR`/`OT` on Catchment,
+    Figure_*, FedPB, LSA_fig6 ...) draw undivided labels; `成功率` Graph3
+    has no object and draws its 0..1 data as is.
+  - Distribution (both corpora, deduplicated): every `91 02 [OF][BTLR]`
+    sits in this framing (0 unframed); 671 of 679 bodies expand (8 SOP_meas
+    `OR` objects use another, unread framing); 142 layers in 21 projects
+    decode a factor (bottom 85, 0.001..1e6; left 74, 1e-9..1e8; right 4). Guard: `tests/test_io_origin_opju_tick_divide.py`.
+  - Not decoded: Hc2 Graph34 `OL = 1E-9` decodes, but that layer's own
+    axis record is an open gap (`hc2_open_gaps.md`); SOP_meas' expression
+    factors (`1/(16*96)*1000`) are decoded and not individually checked
+    (thumbnails too small). COM: `type $(layer.x.label.divideby)` /
+    `$(layer.x.label.formula)` on any of the controls above.
 
 ## Style holders are not plots (`.opju`)
 
@@ -145,8 +177,9 @@ Their first field is shaped like a curve token
   as "has a script").
 - Bqqbar is public: `win -a Graph2; layer -s 1; loop(i,1,count){type
   "%(i,@D) %(i,@X)";}`, expected `BqqbarFit_B`/`_A` and `BqqbarFit_D`/`_C`.
-- UnpolPlots (`.opju`): `win -a Graph1; type $(layer.x.label.divideby)`.
+- UnpolPlots (`.opju`): `win -a Graph1; type $(layer.x.label.divideby)`
+  (expected 10, now decoded; the check would confirm the `.opju` read).
 
 ## Ledger
 
-Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-090 to F-096, B-22, B-23, R-26, R-27.
+Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-090 to F-096, B-22, B-23, R-26, R-27, R-31.

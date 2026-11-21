@@ -1,0 +1,24 @@
+{
+  "public:stunnerx_CTDHNN-data-code/code/fig5/plot/稳定性.opju": [
+    {
+      "kind": "curve_lost",
+      "contains": "Book3 X=A",
+      "reason": "Lane S (F-010): Book3 is a CSV Data Connector book saved without its data (every dataset record 1 allocated / 0 used rows; worksheet fidelity unsaved_books). It imports no book, so these curves were never drawable: the frontend dropped them silently and Graph10-12 opened no book. Now omitted as data_not_saved (see omission_added)."
+    },
+    {
+      "kind": "curve_lost",
+      "contains": "Book1 X=A",
+      "reason": "Lane S (F-010): Book1 is the project's other CSV Data Connector book saved without data (unsaved_books); Graph9's curves on it are omitted as data_not_saved instead of left for the frontend to drop silently."
+    },
+    {
+      "kind": "omission_added",
+      "contains": "data_not_saved",
+      "reason": "The same curves, now diagnosed: Origin's saved previews of Graph9-12 show data read from the external CSV, which the file does not hold."
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "'curves_left_out'",
+      "reason": "Roll-up of the data_not_saved omissions on Graph9-12 (curves_left_out / exact_curve_bindings)."
+    }
+  ]
+}

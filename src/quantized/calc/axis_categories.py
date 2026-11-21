@@ -12,19 +12,43 @@ before the heavy renderer loads (as ``calc.axis_dates`` does for dates).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import math
+from collections.abc import Iterable, Mapping
 from typing import Any, NamedTuple
 
-__all__ = ["CATEGORY_MODE", "XAxisKind", "category_aware_x_fmt", "x_axis_kind", "x_category_labels"]
+__all__ = [
+    "CATEGORY_MODE",
+    "XAxisKind",
+    "category_aware_x_fmt",
+    "is_category_axis",
+    "x_axis_kind",
+    "x_category_labels",
+]
 
 CATEGORY_MODE = "category"
 
 
-def x_category_labels(metadata: Mapping[str, Any], x_key: object) -> list[str] | None:
+def is_category_axis(time: Iterable[float], n: int) -> bool:
+    """True while every finite X value is a category position 1..``n``: a
+    derived dataset (FFT, resample, binning, transpose) that copied the
+    source metadata has a different X, which the labels would mislabel.
+    Twin: ``lib/categoricalTicks.ts isCategoryAxis``."""
+    return n > 0 and all(
+        not math.isfinite(t) or (float(t).is_integer() and 1 <= t <= n) for t in map(float, time)
+    )
+
+
+def x_category_labels(
+    metadata: Mapping[str, Any], x_key: object, time: Iterable[float] | None = None
+) -> list[str] | None:
     """The plotted X's category labels: the dataset's own axis (``x_key``
-    None) of a book whose designated X is a text column, else ``None``."""
+    None) of a book whose designated X is a text column, else ``None``.
+    With ``time``, also ``None`` unless it is still the category axis
+    (``is_category_axis``) -- fail closed to a number axis."""
     labels = metadata.get("x_category_labels")
     if x_key is not None or not isinstance(labels, list) or not labels:
+        return None
+    if time is not None and not is_category_axis(time, len(labels)):
         return None
     return [str(s) for s in labels]
 
@@ -49,10 +73,12 @@ class XAxisKind(NamedTuple):
     categories: list[str] | None = None
 
 
-def x_axis_kind(metadata: Mapping[str, Any], x_key: object) -> XAxisKind:
+def x_axis_kind(
+    metadata: Mapping[str, Any], x_key: object, time: Iterable[float] | None = None
+) -> XAxisKind:
     """The X axis kind of ``metadata``'s dataset: timestamps (``calc.axis_dates``)
-    or Origin text categories."""
+    or Origin text categories (only while ``time`` is still their axis)."""
     return XAxisKind(
         x_key is None and metadata.get("time_is_datetime") is True,
-        x_category_labels(metadata, x_key),
+        x_category_labels(metadata, x_key, time),
     )

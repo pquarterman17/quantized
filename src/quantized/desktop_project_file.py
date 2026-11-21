@@ -52,7 +52,8 @@ WORKSPACE_FORMAT = "quantized-workspace"
 # 5 = a v4 doc whose pipeline holds a P2.5 `transform` step (see workspace.ts).
 # 6 = a doc using a feature v0.34.0 would drop on open + save
 # (WORKSPACE_VERSION_NEW_FEATURES in workspace.ts).
-WORKSPACE_VERSIONS = (1, 2, 3, 4, 5, 6)
+# 7 = a doc using a feature v0.35-v0.38 would drop (WORKSPACE_VERSION_POST_038).
+WORKSPACE_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
 
 
 def extract_declared_source_paths(content: str, base_dir: str | None = None) -> list[str]:

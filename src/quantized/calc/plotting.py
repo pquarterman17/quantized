@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.axis_categories import x_category_labels
 from quantized.calc.figure_greyscale import GREY_SLOT_KEY
 from quantized.calc.figure_labels import series_display_name
 from quantized.datastruct import DataStruct, is_categorical, level_of
@@ -107,7 +108,15 @@ def _default_x_label(ds: DataStruct) -> str:
     the codebase (verified by grep), so unlike some other metadata readers
     (the ``_meta_get``-style helpers), there is no second key spelling to
     also check here.
+
+    An Origin text-X book whose X column name was not recovered
+    (``x_column_name == ""`` with ``x_category_labels``) plots its cells as
+    categories; its ``"Row"`` placeholder names no column, so the title is
+    blank (Origin's exports of Moke Graph6 / XMCD Graph17 show none). Twin:
+    ``lib/categoricalTicks.ts originCategoryX``.
     """
+    if not ds.metadata.get("x_column_name") and x_category_labels(ds.metadata, None, ds.time):
+        return ""
     return str(ds.metadata.get("x_column_long") or ds.metadata.get("x_column_name") or "x")
 
 
