@@ -23,6 +23,7 @@ from quantized.io import _quoted_numbers as qn
 from quantized.io._column_marker import MARKER, apply_marker, find_marker
 from quantized.io._comment_header import comment_header
 from quantized.io._data_section import _split_lines as _split_lines  # re-export
+from quantized.io._data_section import strip_sep_hint
 from quantized.io._delimited_fast import (
     LazyTokenRows,
     _DeferredDataTokens,
@@ -37,6 +38,7 @@ from quantized.io._origin_ascii_header import (
     origin_ascii_ambiguous,
     origin_ascii_rows,
 )
+from quantized.io._space_header import regroup_space_header
 from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
@@ -131,7 +133,7 @@ def import_csv(
     there is no environment-variable equivalent.
     """
     path = Path(filepath)
-    text = read_text(path)
+    text = strip_sep_hint(read_text(path))
     raw_lines, comment_lines = _split_lines(text)
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
@@ -175,6 +177,8 @@ def import_csv(
         col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
         col_headers = promoted.names if promoted else [f"Col{k + 1}" for k in range(n_data_cols)]
+    if delim == " " and header_row >= 0 and len(col_headers) > n_data_cols:
+        col_headers = regroup_space_header(raw_lines[header_row], n_data_cols) or col_headers
     if len(col_headers) < n_data_cols:
         col_headers += [f"Col{k + 1}" for k in range(len(col_headers), n_data_cols)]
     elif len(col_headers) > n_data_cols:

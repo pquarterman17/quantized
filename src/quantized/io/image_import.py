@@ -183,6 +183,11 @@ def read_image_books(path: str | Path, *, channel: str = "luminance") -> list[Da
             budget -= w * h
             books.append(_frame_book(im, p, channel, k if n_frames > 1 else None))
         skipped = n_frames - len(books)
+    except (OSError, TypeError, SyntaxError) as exc:
+        # Pillow decodes lazily: a cut-off file passes open() and fails here, as
+        # OSError ("image file is truncated"), or TypeError / SyntaxError from a
+        # damaged TIFF directory.
+        raise ValueError(f"damaged or truncated image ({exc}): {p.name}") from exc
     finally:
         im.close()
     if skipped:

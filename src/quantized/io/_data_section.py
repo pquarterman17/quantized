@@ -36,3 +36,13 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
         else:
             data.append(stripped)
     return data, comments
+
+
+def strip_sep_hint(text: str) -> str:
+    """Drop Excel's leading ``sep=;`` line (it names the delimiter; it is not a
+    header row, and left in it became the column names and the x label)."""
+    head, _, rest = text.partition("\n")
+    first = head.strip()
+    if len(first) == 5 and first[:4].lower() == "sep=" and not first[4].isalnum():
+        return rest
+    return text
