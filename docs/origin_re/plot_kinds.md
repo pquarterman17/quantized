@@ -217,7 +217,7 @@ Graph19's rows 4-8 (X, no Y) no longer appear as five empty `n=0` slots.
 | plain stacks on user templates | `Graph_Template` / `Graphs` 32New, 32New_wMean, CQITCRLayerMod L4 | flag decoded (plain); left out: all are panel 4 of 4-layer pages |
 | upright 215 | `SOP_meas` Graph67; `Graph_Template` / `Graphs` Graph1 L1 | DRAWN upright (Graph67 one column; Graph1 L1 two series on a 2-layer page, by line style like every multi-layer 203 pair) |
 | grouped horizontal bars, bar beside column | `LSA_fig6` Graph6 / 8, `TEA_ExcelGraphs` Graph9, `SOP_meas` Graph14 L6 | orientation proven; NOT drawn: the cluster gap / overlap is not decoded (TEA Graph9's two series share one position in its preview), so a grouped layout would guess |
-| 203 in a turned panel | `SOP_meas` Graph40 L5 / L9, Graph55 L5, `Degree of impact` Graph278 L2 | newly LEFT OUT: drawn upright (by line style) on `main`, sideways in Origin |
+| 203 in a turned panel | `SOP_meas` Graph40 L5 / L9, Graph55 L5 (`Degree of impact` Graph278 L2 is turned too, but its sheet is not imported: `x_not_imported`, unchanged) | newly LEFT OUT: drawn upright (by line style) on `main`, sideways in Origin |
 | pie / doughnut (225) | `soil deep` (12 pie layers: `Pie2D` / `MergeGrap` pages incl. Graph3, SOILDEEP1); `RSOS_*_micstruc` *_CIR; `TEA_ExcelGraphs` Graph1 / 12 (`BarofPie`) | NOT drawn: no renderer exists (Graph Builder and the Stat Stage have no pie; `plotTypes` lists none). A pie needs a new lazy Stat Stage mode plus a matplotlib route; not done in this lane |
 | floating column (207) | `Degree of impact` Graph26, 511, 512 | NOT drawn: no renderer; Graph511 / 512 are "error block" columns whose low / high binding is not decoded |
 | vector XYXY (218) | `30流场` Graph6 L2, `50流场` Graph10 L2 | data EXISTS (`Book1`, columns A-D, 227 rows; the projects are not graph-only), but the curve record decodes only (A, B); the end-point columns (C, D by Origin's XYXY convention) are not decoded, so the arrows cannot be bound without a guess. The profile line (C vs D) in the same layer is drawn |
@@ -238,13 +238,13 @@ shares 25 / 33 / 42 % as labelled in the preview), `fig_7_a` Graph1 (zoomed Y
 (still sideways). Colours, bar widths and labels remain quantized's
 (`bar_marks_not_decoded`).
 
-`tools/origin_regress.py check --base origin/main` (a96fa0f8, public + owner
-corpus): 3,782 figures either way; curves 9,198 -> 9,108; 333 changes, all
-explained by `regress_allow/laneP2-renderers.json` (which covers Lane P's
-changes too). Against Lane P alone: +6 curves `fig_6_a` Graph2 / 3 (100 %
-stacks drawn), +4 `Graph_Template` / `Graphs` Graph1 L1 (upright 215, back as
-on `main`), -12 `SOP_meas` 203 curves in turned panels; Graph67 re-kinded
-`bar` -> `column`. Owner corpus: no change.
+`tools/origin_regress.py check --base origin/main` (22c75b71, after #787 Lane P
+and #788; public + owner corpus): 3,782 figures either way; curves 9,110 ->
+9,108; 53 changes in 4 projects, all explained by
+`regress_allow/laneP2-renderers.json` (Lane P2's changes only): +6 curves
+`fig_6_a` Graph2 / 3 (100 % stacks drawn), +4 `Graph_Template` / `Graphs`
+Graph1 L1 (upright 215, back as before Lane P), -12 `SOP_meas` 203 curves in
+turned panels; Graph67 re-kinded `bar` -> `column`. Owner corpus: no change.
 
 ## Ledger entries (to merge)
 
