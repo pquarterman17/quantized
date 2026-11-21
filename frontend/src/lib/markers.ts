@@ -103,11 +103,6 @@ export const DEFAULT_MARKER_PX = 5;
  *  `calc/figure.py` `_MIN_MARKER_PT` so screen and export agree. */
 export const MIN_MARKER_PX = 2;
 
-/** `size` raised to the minimum visible marker; a non-finite one is the default. */
-export function clampMarkerSize(size: number): number {
-  return Number.isFinite(size) ? Math.max(size, MIN_MARKER_PX) : DEFAULT_MARKER_PX;
-}
-
 /**
  * Whether a series draws markers, and WHICH GLYPH — the one rule the canvas
  * (`seriesPoints` below) and the legend swatch (`Stage/LegendSample.tsx`) both
@@ -141,7 +136,7 @@ export function markerDecision(
   trace: DefaultTrace,
 ): { show: boolean; shape: MarkerShape; size: number } {
   if (style?.marker) {
-    return { show: true, shape: style.markerShape ?? "circle", size: clampMarkerSize(style.markerSize ?? DEFAULT_MARKER_PX) };
+    return { show: true, shape: style.markerShape ?? "circle", size: Math.max(style.markerSize ?? DEFAULT_MARKER_PX, MIN_MARKER_PX) };
   }
   const t = seriesTrace(style, trace);
   return { show: t === "Scatter" || t === "Line + markers", shape: "circle", size: DEFAULT_MARKER_PX };
