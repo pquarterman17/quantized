@@ -114,6 +114,8 @@ def _convert(value: Any) -> Any:
 def _load_v5(path: Path, budget: Budget) -> tuple[_Tree, list[str]]:
     with heavy_imports("scipy.io"):
         from scipy.io import loadmat, whosmat  # noqa: PLC0415
+    with heavy_imports("scipy.io.matlab"):
+        from scipy.io.matlab import MatReadError  # noqa: PLC0415
 
     with path.open("rb") as fh:
         head = fh.read(16)
@@ -143,7 +145,12 @@ def _load_v5(path: Path, budget: Budget) -> tuple[_Tree, list[str]]:
             if wanted
             else {}
         )
-    except (ValueError, NotImplementedError, OSError, TypeError, KeyError, struct.error) as exc:
+    # MatReadError (empty / truncated / zeroed header) and IndexError (a cut-off
+    # element tag) are neither ValueError nor OSError.
+    except (
+        ValueError, NotImplementedError, OSError, TypeError, KeyError, IndexError,
+        struct.error, MatReadError,
+    ) as exc:
         raise ValueError(f"not a readable MATLAB MAT-file ({exc}): {path.name}") from exc
     tree: _Tree = {n: _convert(raw[n]) for n in wanted if n in raw}
     return tree, notes
@@ -313,7 +320,11 @@ def read_mat_books(filepath: str | Path) -> list[DataStruct]:
     """Every importable book of the ``.mat`` file (see module doc)."""
     path = Path(filepath)
     budget = Budget()
-    tree, notes = _load_v73(path, budget) if is_hdf5(path) else _load_v5(path, budget)
+    try:
+        tree, notes = _load_v73(path, budget) if is_hdf5(path) else _load_v5(path, budget)
+    except (RuntimeError, OSError, KeyError, IndexError, TypeError) as exc:
+        # a damaged v7.3 (HDF5) file: h5py's RuntimeError / OSError, not ValueError
+        raise ValueError(f"damaged or unreadable MATLAB MAT-file ({exc}): {path.name}") from exc
     return _books(tree, path, notes)
 
 

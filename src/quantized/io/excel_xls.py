@@ -7,6 +7,7 @@ column handling is identical. xlrd 2.x reads ``.xls`` only (never ``.xlsx``).
 
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +21,7 @@ __all__ = ["import_xls", "xls_sheet_titles"]
 
 _UNREADABLE = (
     xlrd.XLRDError, xlrd.compdoc.CompDocError, OSError, EOFError, ValueError, IndexError,
-    KeyError, AssertionError,
+    KeyError, AssertionError, struct.error,  # a cut-off record: struct.unpack
 )
 
 

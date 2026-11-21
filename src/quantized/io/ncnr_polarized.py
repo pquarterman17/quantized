@@ -48,6 +48,8 @@ def import_ncnr_pnr(filepath: str | Path) -> DataStruct:
     col_names = lines[0].strip().split("\t")
     units = lines[1].strip().split("\t")
     n_cols = len(col_names)
+    if n_cols < 2:  # a .pnr is TAB-delimited: no tab in the header is another format
+        raise ValueError(f"{path.name}: not a tab-delimited .pnr (header has one column)")
 
     rows: list[list[float]] = []
     for raw in lines[2:]:

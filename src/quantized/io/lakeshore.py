@@ -86,7 +86,10 @@ def import_lake_shore(
         raise ValueError(f"no data rows in {path.name}")
     matrix = np.asarray(rows, dtype=float)
 
-    x_idx = resolve_column(x_axis, col_names, _LS_SHORTHAND, "x-axis")
+    try:
+        x_idx = resolve_column(x_axis, col_names, _LS_SHORTHAND, "x-axis")
+    except KeyError as exc:  # e.g. a hysteresis loop has no Temperature column
+        raise ValueError(f"{exc.args[0]} (in {path.name})") from exc
     if x_idx == NO_COLUMN:
         raise ValueError("x-axis column could not be resolved")
     if isinstance(y_axis, str) and y_axis.lower() == "all":
