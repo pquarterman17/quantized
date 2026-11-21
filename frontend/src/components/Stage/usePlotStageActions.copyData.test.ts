@@ -1,5 +1,4 @@
-// "Copy data" with a display fit / lean baseline loads lib/copyPlotData; a
-// failure inside it reports a danger status instead of an unhandled rejection.
+// "Copy data" loads lib/copyPlotData; a failure inside it reports a danger status instead of an unhandled rejection.
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,7 +8,10 @@ import { useApp } from "../../store/useApp";
 import { SINGLE_X } from "../../test/overlayBinding";
 import { usePlotStageActions } from "./usePlotStageActions";
 
-vi.mock("../../lib/copyPlotData", () => ({ plotDataTSV: () => Promise.reject(new Error("fetch failed")) }));
+vi.mock("../../lib/clipboard", async (orig) => ({
+  ...(await orig<typeof import("../../lib/clipboard")>()),
+  copyText: () => Promise.reject(new Error("fetch failed")),
+}));
 
 const PAYLOAD = { data: [[0, 1], [1, 2]], series: [{ label: "y", unit: "" }], xLabel: "x", xUnit: "" } as unknown as PlotPayload;
 

@@ -11,7 +11,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
-import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
+import { copyImage } from "../../lib/clipboard";
 import { xExtent } from "../../lib/plotDecimate";
 import { clampPlottedRange, rowsInXRange, type PlotPayload, type PlotSeriesSpec } from "../../lib/plotdata";
 import { clipboardSvgSupported } from "../../lib/clipboard";
@@ -35,13 +35,6 @@ import { useApp } from "../../store/useApp";
 // below) since both callers build the bag as an object LITERAL, and
 // PlotStageActions is their prop's structural type. copyFigure joined for
 // MAIN #35 (publication copy); snapshot stays as the screen grab.
-/** Is a display fit or a lean baseline preview in its slot (`copyData` must
- *  fetch the full curve before it copies)? Plain data: no lazy import. */
-function thinnedOverlayShown(): boolean {
-  const st = useApp.getState();
-  return Boolean(st.fitOverlay?.full || st.baselineOverlay?.lean);
-}
-
 /** The cursors the on-plot object plugins set while hovering an annotation /
  *  shape (move, resize handle) or a reference line (resize). */
 const OBJECT_CURSORS: ReadonlySet<string> = new Set(["move", "nwse-resize", "ew-resize", "ns-resize"]);
@@ -141,26 +134,12 @@ export function usePlotStageActions(
   // overlays) as TSV — paste straight into Origin / Excel / a notebook.
   function copyData() {
     if (!displayPayload) return;
-    const nRows = displayPayload.data[0]?.length ?? 0;
-    const nCols = displayPayload.series.length + 1; // + the x column
-    // A display fit / lean baseline is fetched in full first (lib/copyPlotData).
-    if (!thinnedOverlayShown()) {
-      void copyText(payloadToTSV(displayPayload)).then((ok) =>
-        useApp.getState().setStatus(ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable"),
-      );
-      return;
-    }
-    void runLazy("Preparing the plot data…", () => import("../../lib/copyPlotData")).then(async (m) => {
-      try {
-        const { tsv, omitted } = await m.plotDataTSV(displayPayload, () => latestPayload.current);
-        const ok = await copyText(tsv);
-        const cols = nCols - omitted.length;
-        const note = omitted.length ? `; left out ${omitted.join(", ")} (only its display curve was available)` : "";
-        useApp.getState().setStatus(ok ? `copied ${nRows}×${cols} to clipboard${note}` : "clipboard unavailable");
-      } catch (e) {
-        useApp.getState().setStatus(`copy data failed: ${e instanceof Error ? e.message : "error"}`, "danger");
-      }
-    }, onLoadFailure);
+    // The whole copy is click-only code (lib/copyPlotData): it fetches a display
+    // fit / lean baseline in full first, and reports its own status.
+    void runLazy("Preparing the plot data…", () => import("../../lib/copyPlotData")).then(
+      (m) => m.copyPlotData(displayPayload, () => latestPayload.current),
+      onLoadFailure,
+    );
   }
 
   // MAIN #35: the publication copy — renders through the SAME server-side

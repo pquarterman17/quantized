@@ -10,7 +10,7 @@
 
 import { upgradeOverlaysForExport } from "../store/fitOverlayUpgrade";
 import { useApp } from "../store/useApp";
-import { payloadToTSV } from "./clipboard";
+import { copyText, payloadToTSV } from "./clipboard";
 import type { PlotPayload } from "./plotdata";
 
 const frame = (): Promise<void> => new Promise((done) => setTimeout(done, 16));
@@ -65,4 +65,19 @@ export async function plotDataTSV(
     series: payload.series.filter((_, k) => !drop.includes(k)),
   };
   return { tsv: payloadToTSV(narrowed), omitted: drop.map((k) => payload.series[k].label) };
+}
+
+/** Copy the plot's data as TSV and say what happened in the status line. */
+export async function copyPlotData(payload: PlotPayload, latest: () => PlotPayload | null): Promise<void> {
+  const setStatus = useApp.getState().setStatus;
+  try {
+    const { tsv, omitted } = await plotDataTSV(payload, latest);
+    const ok = await copyText(tsv);
+    const nRows = payload.data[0]?.length ?? 0;
+    const cols = payload.series.length + 1 - omitted.length; // + the x column
+    const note = omitted.length ? `; left out ${omitted.join(", ")} (only its display curve was available)` : "";
+    setStatus(ok ? `copied ${nRows}×${cols} to clipboard${note}` : "clipboard unavailable");
+  } catch (e) {
+    setStatus(`copy data failed: ${e instanceof Error ? e.message : "error"}`, "danger");
+  }
 }
