@@ -30,9 +30,9 @@
 // Space are mostly FREE (real `<button>`s already fire `onClick`) — the
 // index math for the rest lives in lib/menuKeyboardNav.ts (pure, unit-
 // tested). Esc still closes the WHOLE menu (unchanged) and now ALSO returns
-// focus to whatever was focused when the menu opened. The menu container
-// grabs focus on open (no pre-highlighted item, matching native OS menus)
-// so the FIRST arrow key already navigates. Swatch grids stay mouse-first
+// focus to whatever was focused when the menu opened. The FIRST menuitem
+// takes focus on open (the container is `display: contents`, which cannot be
+// focused in a real browser, so jsdom tests must assert on activeElement). Swatch grids stay mouse-first
 // (like a native colour picker); a hover-opened submenu doesn't steal focus.
 //
 // Loading (bundle diet slice 26): the startup hosts (menu bar, plot window
@@ -61,24 +61,27 @@ interface Props {
   returnFocus?: HTMLElement | null;
 }
 
+type MenuReturnItem = HTMLElement & { qzMenuReturn?: HTMLElement };
+
 interface MenuListProps {
   items: ContextMenuItem[];
   onClose: () => void;
-  /** A NEWLY MOUNTED submenu focuses its own first item when true (an
-   *  explicit open — ArrowRight/click/Enter), not for a hover-preview open.
-   *  Unused at the root — <ContextMenu> focuses the root container itself. */
+  /** A NEWLY MOUNTED list focuses its own first item when true: the root
+   *  always (a `display: contents` container cannot take focus, so the first
+   *  menuitem does), a submenu on an explicit open (ArrowRight/click/Enter),
+   *  never for a hover-preview open. */
   autoFocusFirst?: boolean;
   /** Submenu-only: ArrowLeft calls this to close the flyout and refocus the
    *  item that opened it. Absent at the root (nothing further out). */
   onCollapse?: () => void;
-  /** Root-only: lets <ContextMenu> focus this level's container on mount. */
-  menuRef?: React.Ref<HTMLDivElement>;
   onNavigateRoot?: (direction: -1 | 1) => void;
+  /** Where focus goes back to if a dialog launched by an item closes. */
+  returnTo?: HTMLElement | null;
 }
 
 /** Renders one item list (root or a submenu). Owns which submenu is currently
  *  hovered/opened. `onClose` closes the WHOLE menu after any leaf action runs. */
-function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef, onNavigateRoot }: MenuListProps) {
+function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNavigateRoot, returnTo }: MenuListProps) {
   const [openSub, setOpenSub] = useState<{ i: number; via: "mouse" | "key" } | null>(null);
   const itemRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -152,11 +155,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef,
 
   return (
     <div
-      ref={(node) => {
-        containerRef.current = node;
-        if (typeof menuRef === "function") menuRef(node);
-        else if (menuRef) (menuRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      }}
+      ref={containerRef}
       role="menu"
       tabIndex={-1}
       style={{ display: "contents" }}
@@ -230,6 +229,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef,
                   <MenuList
                     items={it.submenu}
                     onClose={onClose}
+                    returnTo={returnTo}
                     autoFocusFirst={openSub.via === "key"}
                     onCollapse={() => {
                       setOpenSub(null);
@@ -253,7 +253,12 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef,
             aria-checked={it.checked === undefined ? undefined : it.checked}
             aria-disabled={it.disabled || undefined}
             onMouseEnter={() => setOpenSub(null)}
-            onClick={() => {
+            onClick={(e) => {
+              // The item unmounts with the menu; leave a forwarding address for
+              // useDialogFocus (see restoreFocusTo). A property, not a shared
+              // module: a leaf imported by two lazy chunks is hoisted into the
+              // eager entry.
+              (e.currentTarget as MenuReturnItem).qzMenuReturn = returnTo ?? undefined;
               onClose();
               it.run();
             }}
@@ -280,20 +285,12 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef,
 
 export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot, returnFocus }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   // Captured once, synchronously, before the menu steals focus — GUI_INTERACTION
   // #8's "Esc returns focus to the invoking element" (a keyboard-opened row,
   // the "⋯" resting-cue button, or nothing for a plain mouse right-click).
   const [prevFocus] = useState<HTMLElement | null>(
     () => returnFocus ?? (document.activeElement as HTMLElement | null),
   );
-
-  useLayoutEffect(() => {
-    // Grab focus onto the menu itself (not any one item) as soon as it opens
-    // — mirrors native OS context menus, where the very first arrow key
-    // already navigates without a preceding "wake up" keypress.
-    menuRef.current?.focus({ preventScroll: true });
-  }, []);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -330,7 +327,13 @@ export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot
   const visibleItems = appendContextHelp(items, help, prevFocus);
   return createPortal(
     <PopupBox x={x} y={y} boxRef={rootRef}>
-      <MenuList items={visibleItems} onClose={onClose} menuRef={menuRef} onNavigateRoot={onNavigateRoot} />
+      <MenuList
+        items={visibleItems}
+        onClose={onClose}
+        onNavigateRoot={onNavigateRoot}
+        returnTo={prevFocus}
+        autoFocusFirst
+      />
     </PopupBox>,
     document.body,
   );

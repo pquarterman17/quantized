@@ -31,6 +31,7 @@
 // the repo's export convention; Copy is always a raster (Office pastes
 // vector figures poorly), same tradeoff the single-figure copy makes.
 
+import { useId } from "react";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
@@ -138,6 +139,8 @@ function DatasetSourceList({ sources, onPick }: { sources: { id: string; name: s
 export default function FigurePageView() {
   const setOpen = useApp((s) => s.setFigurePageOpen);
   const p = useFigurePage();
+  const uid = useId();
+  const fid = (k: string) => `${uid}-${k}`;
   const selIdx = p.selected;
   const sel = selIdx !== null ? p.slots[selIdx] : null;
 
@@ -157,8 +160,8 @@ export default function FigurePageView() {
       <div style={{ display: "flex", gap: 12 }}>
         {/* Page options */}
         <div style={{ width: 170, display: "flex", flexDirection: "column", gap: 6 }}>
-          <label className="qzk-field-lbl">Page name</label>
-          <NumberField numeric={false} value={p.name} onChange={p.setName} />
+          <label className="qzk-field-lbl" htmlFor={fid("name")}>Page name</label>
+          <NumberField id={fid("name")} numeric={false} value={p.name} onChange={p.setName} />
           <div style={{ display: "flex", gap: 6 }}>
             <Button onClick={p.save} title="Save (updates this page if already saved)">
               Save
@@ -184,20 +187,22 @@ export default function FigurePageView() {
               </div>
             )
           )}
-          <label className="qzk-field-lbl">Grid (rows × cols)</label>
+          <label className="qzk-field-lbl" htmlFor={fid("rows")}>Grid (rows × cols)</label>
           <div style={{ display: "flex", gap: 6 }}>
-            <NumberField value={p.rows} onChange={(v) => p.setGrid(Number(v) || 1, p.cols)} width={60} />
-            <NumberField value={p.cols} onChange={(v) => p.setGrid(p.rows, Number(v) || 1)} width={60} />
+            <NumberField id={fid("rows")} value={p.rows} onChange={(v) => p.setGrid(Number(v) || 1, p.cols)} width={60} />
+            <NumberField aria-label="Grid columns" value={p.cols} onChange={(v) => p.setGrid(p.rows, Number(v) || 1)} width={60} />
           </div>
-          <label className="qzk-field-lbl">Row / col gap</label>
+          <label className="qzk-field-lbl" htmlFor={fid("rgap")}>Row / col gap</label>
           <div style={{ display: "flex", gap: 6 }}>
             <NumberField
+              id={fid("rgap")}
               value={gapFieldValue(p.layout.rowGap)}
               placeholder="auto"
               onChange={(v) => p.setLayout({ rowGap: parseGapField(v) })}
               width={60}
             />
             <NumberField
+              aria-label="Column gap"
               value={gapFieldValue(p.layout.colGap)}
               placeholder="auto"
               onChange={(v) => p.setLayout({ colGap: parseGapField(v) })}
@@ -215,39 +220,44 @@ export default function FigurePageView() {
           <Checkbox checked={p.layout.alignLabels} onChange={(v) => p.setLayout({ alignLabels: v })}>
             Align labels
           </Checkbox>
-          <label className="qzk-field-lbl">Resize mode</label>
+          <label className="qzk-field-lbl" htmlFor={fid("resize")}>Resize mode</label>
           <Select
+            id={fid("resize")}
             options={PAGE_RESIZE_MODES.map((v) => ({ value: v, label: v }))}
             value={p.layout.resizeMode}
             onChange={(e) => p.setLayout({ resizeMode: e.target.value as typeof p.layout.resizeMode })}
           />
-          <label className="qzk-field-lbl">Panel labels</label>
+          <label className="qzk-field-lbl" htmlFor={fid("lblfmt")}>Panel labels</label>
           <div style={{ display: "flex", gap: 6 }}>
             <Select
+              id={fid("lblfmt")}
               options={PAGE_LABEL_FORMATS.map((v) => ({ value: v, label: v }))}
               value={p.labelFormat}
               onChange={(e) => p.setLabelFormat(e.target.value as typeof p.labelFormat)}
             />
             <Select
+              aria-label="Panel label position"
               options={PAGE_LABEL_POSITIONS.map((v) => ({ value: v, label: v }))}
               value={p.labelPos}
               onChange={(e) => p.setLabelPos(e.target.value as typeof p.labelPos)}
             />
           </div>
-          <label className="qzk-field-lbl">Style</label>
+          <label className="qzk-field-lbl" htmlFor={fid("style")}>Style</label>
           <Select
+            id={fid("style")}
             options={presetOptions(p.style)}
             value={p.style}
             onChange={(e) => p.setStyle(e.target.value)}
           />
-          <label className="qzk-field-lbl">Format</label>
+          <label className="qzk-field-lbl" htmlFor={fid("fmt")}>Format</label>
           <Select
+            id={fid("fmt")}
             options={FIGURE_FORMATS.map((v) => ({ value: v, label: v.toUpperCase() }))}
             value={p.fmt}
             onChange={(e) => p.setFmt(e.target.value)}
           />
-          <label className="qzk-field-lbl">DPI (raster)</label>
-          <NumberField value={p.dpi} onChange={(v) => p.setDpi(Number(v) || 300)} width={90} />
+          <label className="qzk-field-lbl" htmlFor={fid("dpi")}>DPI (raster)</label>
+          <NumberField id={fid("dpi")} value={p.dpi} onChange={(v) => p.setDpi(Number(v) || 300)} width={90} />
           {/* P3.3: page-wide print-safe output — one page setting applied to
               every panel, and to the PREVIEW as well as the export/copy, so
               what is on screen is what is exported (usePagePreviewExport).
@@ -268,10 +278,11 @@ export default function FigurePageView() {
           {/* Per-panel overrides for the selected slot */}
           {sel?.source && selIdx !== null && (
             <>
-              <label className="qzk-field-lbl" style={{ marginTop: 6 }}>
+              <label className="qzk-field-lbl" style={{ marginTop: 6 }} htmlFor={fid("panel")}>
                 Panel {p.labels[selIdx] || "(selected)"}
               </label>
               <NumberField
+                id={fid("panel")}
                 numeric={false}
                 width={120}
                 value={sel.label ?? ""}
