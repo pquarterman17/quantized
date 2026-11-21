@@ -26,11 +26,15 @@ from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
-__all__ = ["pie_rings", "render_pie_figure"]
+__all__ = ["MAX_PIE_WEDGES", "pie_rings", "render_pie_figure"]
 
 _FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 _FIGURE_SIZE_IN = (7, 5.5)
 _MIN_LABEL_SHARE = 0.03  # a wedge narrower than this prints no percent label
+# Render cost is linear in wedges (~5 ms each at screen dpi; 5,000 took 23 s),
+# and the workshop previews on every pick change while holding the render
+# lock: a 10k-row value column must be refused, not rendered for a minute.
+MAX_PIE_WEDGES = 2000
 
 
 def pie_rings(hole: float, count: int) -> list[tuple[float, float]]:
@@ -71,6 +75,10 @@ def render_pie_figure(
     vals = np.asarray(rings, dtype=float)
     if vals.ndim != 2 or vals.shape[1] == 0:
         raise ValueError("rings must be a 2-D (rings x categories) array")
+    if vals.size > MAX_PIE_WEDGES:
+        raise ValueError(
+            f"a pie draws at most {MAX_PIE_WEDGES} wedges (rings x categories); got {vals.size}"
+        )
     if len(labels) != vals.shape[1]:
         raise ValueError("one label per category is required")
     if not np.all(np.isfinite(vals)) or np.any(vals < 0) or np.any(vals.sum(axis=1) <= 0):

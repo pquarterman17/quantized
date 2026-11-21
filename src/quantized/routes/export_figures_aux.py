@@ -21,6 +21,8 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
@@ -290,11 +292,19 @@ def export_field_figure(req: FieldFigureRequest) -> Response:
     )
 
 
+_PIE_MAX_RINGS = 64
+_PIE_MAX_WEDGES = 2000  # = calc.figure_pie.MAX_PIE_WEDGES (calc checks the product)
+
+
 class PieFigureRequest(BaseModel):
-    rings: list[list[float]]  # (n_rings, n_categories) wedge values, first ring innermost
-    labels: list[str]  # one per category (legend)
+    # (n_rings, n_categories) wedge values, first ring innermost
+    rings: list[Annotated[list[float], Field(max_length=_PIE_MAX_WEDGES)]] = Field(
+        max_length=_PIE_MAX_RINGS
+    )
+    labels: list[str] = Field(max_length=_PIE_MAX_WEDGES)  # one per category (legend)
     hole: float = Field(0.0, ge=0.0, lt=1.0)  # hole radius / outer radius
-    colors: list[str] | None = None  # per-category colours (the client's theme series tokens)
+    # per-category colours (the client's theme series tokens)
+    colors: list[str] | None = Field(default=None, max_length=_PIE_MAX_WEDGES)
     fmt: str = "pdf"
     style: str = "default"
     dpi: int | None = None

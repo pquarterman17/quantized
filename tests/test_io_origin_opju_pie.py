@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quantized.calc.figure_pie import pie_rings, render_pie_figure
+from quantized.calc.figure_pie import MAX_PIE_WEDGES, pie_rings, render_pie_figure
 from quantized.io.origin_project import opju_bar_kinds
 from quantized.io.origin_project.fidelity import assess_origin_figures
 from quantized.io.origin_project.opju_bar_kinds import (
@@ -233,6 +233,9 @@ def test_render_pie_formats_and_errors() -> None:
         render_pie_figure([[1, 2], [3, 4]], ["a", "b"], hole=0.0)  # rings need a hole
     with pytest.raises(ValueError):
         render_pie_figure([[1, 2]], ["a"])
+    many = MAX_PIE_WEDGES // 2 + 1  # two rings: one wedge over the bound
+    with pytest.raises(ValueError, match="at most"):  # refused before matplotlib runs
+        render_pie_figure([[1.0] * many] * 2, ["x"] * many, hole=0.4, fmt="png")
 
 
 def test_pie_route() -> None:
@@ -249,6 +252,11 @@ def test_pie_route() -> None:
         == 422
     )
     assert client.post("/api/export/pie-figure", json={**body, "fmt": "bmp"}).status_code == 422
+    # body bounds: a request the renderer would spend minutes on is a 422
+    huge = {**body, "rings": [[1.0] * (MAX_PIE_WEDGES + 1)], "labels": ["x"] * (MAX_PIE_WEDGES + 1)}
+    assert client.post("/api/export/pie-figure", json=huge).status_code == 422
+    rings = {**body, "rings": [[1.0, 2.0, 3.0]] * 65, "hole": 0.4}
+    assert client.post("/api/export/pie-figure", json=rings).status_code == 422
 
 
 # ── realdata ─────────────────────────────────────────────────────────────────

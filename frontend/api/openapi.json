@@ -11104,6 +11104,7 @@
                 "items": {
                   "type": "string"
                 },
+                "maxItems": 2000,
                 "type": "array"
               },
               {
@@ -11144,6 +11145,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 2000,
             "title": "Labels",
             "type": "array"
           },
@@ -11152,8 +11154,10 @@
               "items": {
                 "type": "number"
               },
+              "maxItems": 2000,
               "type": "array"
             },
+            "maxItems": 64,
             "title": "Rings",
             "type": "array"
           },
