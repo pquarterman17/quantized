@@ -270,10 +270,10 @@ export interface OriginFigure {
    *  decoded/implausible — never guessed. Shared by every layer of one page. */
   page?: { width: number; height: number } | null;
   /** Filled region-shape objects (`Rect*` bands, decode-plan #41) at DATA
-   *  coordinates, `.opj` only (`io/origin_project/opj_shapes.py`). `fill`
-   *  is "#RRGGBB" or null (colour undecoded — such shades are skipped by
-   *  `originRegionShades`, never guessed). */
+   *  coordinates, `.opj` only (`opj_shapes.py`). `fill` is "#RRGGBB" or null
+   *  (undecoded: skipped by `originRegionShades`, never guessed). */
   region_shades?: { x1: number; x2: number; y1: number; y2: number; fill?: string | null }[];
+  data_marks?: { kind: "rect" | "arrow"; x1: number; y1: number; x2: number; y2: number; stroke?: string; width?: number }[];
   /** Conservative decoder coverage assessment. `exact` is reserved for a
    *  future saved-preview/oracle comparison gate; current imports normally
    *  report `best_effort` with explicit omissions. */

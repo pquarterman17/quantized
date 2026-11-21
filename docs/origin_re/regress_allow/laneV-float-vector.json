@@ -1,0 +1,53 @@
+{
+  "public:shawxgf_APFD-in-RAS-affect-tilapia-s-growth/30流场.opju": [
+    {
+      "kind": "omission_removed",
+      "contains": "plot_type_not_drawn",
+      "reason": "the XYXY vector plot (218) is drawn as arrows (opju_float_vector): modifiers 13 / 14 name the end columns C / D of its own sheet, the arrow runs (A, B) -> (C, D); the saved preview shows horizontal arrows from the station lines to the profile the layer's other plot draws, and every row of the sheet has D = B"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "data_marks_not_decoded",
+      "reason": "fidelity notes follow the plots: the layer no longer leaves the vector curve out (curves_left_out goes) and gains data_marks_not_decoded (arrowhead size is not decoded)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "data_marks_not_decoded",
+      "reason": "fidelity notes follow the plots: the layer no longer leaves the vector curve out (curves_left_out goes) and gains data_marks_not_decoded (arrowhead size is not decoded)"
+    }
+  ],
+  "public:shawxgf_APFD-in-RAS-affect-tilapia-s-growth/50流场.opju": [
+    {
+      "kind": "omission_removed",
+      "contains": "plot_type_not_drawn",
+      "reason": "the XYXY vector plot (218) is drawn as arrows (opju_float_vector): modifiers 13 / 14 name the end columns C / D of its own sheet (Book1@3), the arrow runs (A, B) -> (C, D); same layer layout as 30流场 Graph6 and the same preview reading"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "data_marks_not_decoded",
+      "reason": "fidelity notes follow the plots: the layer no longer leaves the vector curve out (curves_left_out goes) and gains data_marks_not_decoded (arrowhead size is not decoded)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "data_marks_not_decoded",
+      "reason": "fidelity notes follow the plots: the layer no longer leaves the vector curve out (curves_left_out goes) and gains data_marks_not_decoded (arrowhead size is not decoded)"
+    }
+  ],
+  "public:zihaonian_MCM/paper_chart/Degree of impact of single stock commission changes on final returns.opju": [
+    {
+      "kind": "omission_removed",
+      "contains": "plot_type_not_drawn",
+      "reason": "the floating-column error blocks (plot 207, a head + member pair with width modifier 39) are drawn as rectangles (opju_float_vector): width = the modifier-39 column (full width, centred on X), spanning the head's Y to the member's Y; measured on the saved preview: block widths 20/30/41 px for widths 0.4/0.6/0.8 (Graph511, 50.7 px per unit) and 25/25/40 px for 0.5/0.5/0.8 (Graph512), heights 11/14 px for 0.4/0.5 tall blocks. Graph26 (three floating plots) is NOT in this list: it stays left out"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "data_marks_not_decoded",
+      "reason": "fidelity notes follow the plots: Graph511 / 512 no longer leave curves out (curves_left_out goes) and gain data_marks_not_decoded (the block fill colour is not decoded)"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "data_marks_not_decoded",
+      "reason": "fidelity notes follow the plots: Graph511 / 512 no longer leave curves out (curves_left_out goes; Graph26 still does) and gain data_marks_not_decoded"
+    }
+  ]
+}

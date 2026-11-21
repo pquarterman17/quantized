@@ -107,16 +107,19 @@ _MAP_TYPES = frozenset({105, 220, 226, 243})  # heatmap, image, contour, XYZ con
 # Plot types whose look depends on the layer (``opju_bar_kinds`` resolves each
 # per layer, else leaves the curve out): 213 stacked column, 214 stacked area,
 # 215 horizontal bar; ``"not_drawn"`` = a kind quantized has no renderer for
-# (205 high-low-close, 207 floating column, 208 / 218 vector, 216 stacked bar).
+# (205 high-low-close, 208 vector, 216 stacked bar); 207 floating column and
+# 218 vector are drawn as data marks when they prove (``opju_float_vector``).
 # The pie family 225 is ``"pie"`` when its record reads (``opju_pie``).
 # Codes: ORIGIN_PLOT_TYPE_PARITY_PLAN "Plot-type codes".
 LAYER_BAR_KINDS = {
     213: "stacked_column",
     214: "stacked_area",
     215: "bar",
-    **dict.fromkeys((205, 207, 208, 216, 218), "not_drawn"),
+    **dict.fromkeys((205, 208, 216), "not_drawn"),
+    207: "floating",  # marks when proven (``opju_float_vector``), else left out
+    218: "vector",
 }
-_GROUPED_KINDS = frozenset({COLUMN_PLOT, 213, 215})  # their group role is read
+_GROUPED_KINDS = frozenset({COLUMN_PLOT, 213, 215, 207})  # their group role is read
 
 
 def apply_plot_kind(

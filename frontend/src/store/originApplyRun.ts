@@ -16,6 +16,7 @@
 
 import { originHiddenChannels } from "../lib/errorbars";
 import { lit } from "../lib/macro";
+import { originDataMarkPatch } from "../lib/originDataMarks";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import {
   buildOverlayDataset,
@@ -387,6 +388,7 @@ export function runOriginFigureApply(
     // Pin the figure's decoded floating text; REPLACE, never stack.
     annotations: libs.originFigureAnnotations([fig], entry.id),
     regionShades: libs.originRegionShades([fig], entry.id),
+    ...originDataMarkPatch(get().shapes, fig, entry.id), // floating columns / vectors
     ...libs.originLegendState(fig),
     ...libs.figureSelectionState(selection, failClosed || pie ? fig : undefined),
     // An all-histogram figure opens on the Stat Stage's histogram.
