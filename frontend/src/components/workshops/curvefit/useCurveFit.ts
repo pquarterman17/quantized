@@ -4,10 +4,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
+import { listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fitModel } from "../../../lib/api";
-import { displayFit, fitOverlayColumn, fitRowsOf } from "../../../lib/fitCurve";
+import { autoGuessFor, displayFit, fitOverlayColumn, fitRowsOf } from "../../../lib/fitCurve";
 import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMode } from "../../../lib/types";
@@ -308,8 +308,12 @@ export function useCurveFit(): CurveFitState {
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
       }
+      const n = ds.data.time.length;
+      const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds)); // the overlay is laid back onto these
+      const rows = fitRowsOf(pairs.keep, kept, n);
+      const source = { data: ds.data, xKey: fitXKey, yKey: localXy.yKey }; // x/y go by handle (lib/fitSource); a large fit comes back as a display curve
       if (kind === "guess") {
-        const g = await autoGuess(modelName, pairs.x, pairs.y);
+        const g = await autoGuessFor(modelName, pairs.x, pairs.y, source, rows);
         setFitted({
           result: { params: g.p0 },
           fitData: null,
@@ -332,16 +336,12 @@ export function useCurveFit(): CurveFitState {
         // recorded — that keeps the request lean and the recipe honest about
         // what was actually chosen. In an EDITED table the starts the user
         // did not choose come from the data (fitStarts.ts).
-        const parsed = await parseFitStarts(paramRows, model, modelName, pairs.x, pairs.y);
+        const parsed = await parseFitStarts(paramRows, model, modelName, pairs.x, pairs.y, source, rows);
         if (parsed.error) {
           setError(parsed.error);
           return;
         }
         const custom = !rowsAreDefault(paramRows, model);
-        // The analysis rows the pairs came from: the overlay is laid back onto them.
-        const n = ds.data.time.length;
-        const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
-        // A large fit comes back as a display curve; x/y go by handle (lib/fitCurve.ts).
         const r = await displayFit(fitModel, {
           model: modelName,
           x: pairs.x,
@@ -355,7 +355,7 @@ export function useCurveFit(): CurveFitState {
                 ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
               }
             : {}),
-        }, modelName, fitRowsOf(pairs.keep, kept, n), { data: ds.data, xKey: fitXKey, yKey: localXy.yKey });
+        }, modelName, rows, source);
         // A fit request can outlive an edit/reimport. Never attach its result
         // or row tokens to the replacement worksheet object it did not fit.
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {

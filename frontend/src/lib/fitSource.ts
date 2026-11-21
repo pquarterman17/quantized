@@ -25,8 +25,10 @@
 // posted, so the worst case is the request as it always was.
 
 import { hasDatasetHandle, postJSONDatasetAware } from "./api/datasetCache";
+import { fitEquation, type EquationFitRequest } from "./api/curvefit";
+import { withResiduals } from "./fitResiduals";
 import { fetchJSON, type HttpError } from "./api/http";
-import type { DataStruct } from "./types";
+import type { CalcResult, DataStruct } from "./types";
 
 /** Where a fit's x/y came from: `data`'s column `xKey` (null = time) and
  *  column `yKey`, at the rows the fit reads. */
@@ -61,9 +63,9 @@ export function sourceFields(src: FitSource, rows: readonly number[]): Record<st
 
 /** POST `body` to `path` with its x/y replaced by `src` at `rows` when the
  *  server holds the dataset, else run `arrays` (the request as it was). */
-export async function postBySource<T>(
+export async function postBySource<T, B extends { x: readonly number[]; y: readonly number[] } = { x: readonly number[]; y: readonly number[] }>(
   path: string,
-  body: { x: readonly number[]; y: readonly number[] },
+  body: B,
   src: FitSource | undefined,
   rows: readonly number[],
   arrays: () => Promise<T>,
@@ -78,4 +80,19 @@ export async function postBySource<T>(
     if (status === 409 || status === 413) return arrays();
     throw err;
   }
+}
+
+/** A lean (`return_residuals: false`) custom-equation fit of `req.x`/`req.y`,
+ *  sent by dataset handle + `rows` when the server holds `src` (P8; the
+ *  display-curve opt-in stays off for equations: `positive_even_params` flips
+ *  a sign after the fit, so `f(x, -p)` is not bit-identical). Residuals are
+ *  restored from the posted y exactly as `leanFit` does. */
+export async function leanEquationFit(
+  req: EquationFitRequest,
+  src: FitSource | undefined,
+  rows: readonly number[],
+): Promise<CalcResult> {
+  const body = { ...req, return_residuals: false };
+  const raw = await postBySource<CalcResult>("/api/fitting/equation/fit", body, src, rows, () => fitEquation(body));
+  return withResiduals(raw, req.y);
 }

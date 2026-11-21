@@ -7944,6 +7944,12 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Display Points */
             display_points?: number | null;
             /** Dy */
@@ -7961,6 +7967,11 @@ export interface components {
              * @default true
              */
             return_residuals?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Scale Errors
              * @default true
@@ -7977,9 +7988,13 @@ export interface components {
             /** Weights */
             weights?: number[] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** EquationValidateRequest */
         EquationValidateRequest: {
@@ -8589,6 +8604,12 @@ export interface components {
              * @default 4
              */
             bg_poly_degree?: number;
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Display Points */
             display_points?: number | null;
             /**
@@ -8626,6 +8647,11 @@ export interface components {
              * @default true
              */
             return_background?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Sensitivity
              * @default medium
@@ -8642,9 +8668,13 @@ export interface components {
              */
             strict_prominence?: boolean;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FindXYRequest */
         FindXYRequest: {
@@ -12843,12 +12873,27 @@ export interface components {
         };
         /** GuessRequest */
         quantized__routes__fitting__GuessRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Model */
             model: string;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** GuessRequest */
         quantized__routes__import_wizard__GuessRequest: {

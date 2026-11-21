@@ -20,6 +20,7 @@
 // A small fit (<= FIT_DISPLAY_MIN_POINTS) keeps the phase-1 lean response: it
 // has nothing to gain, and keeps its full `yFit` in memory as before.
 
+import { autoGuess } from "./api/curvefit";
 import { fitBands, type BandsRequest, type BandsResult } from "./api/fitStats";
 import { restoreGapRows } from "./api/finitePairs";
 import { postJSON, type HttpError } from "./api/http";
@@ -111,6 +112,18 @@ export async function displayFit<R extends { y: number[]; x: number[] }>(
   const body = { ...req, ...fitTransport(req.x.length) };
   const raw = await postBySource("/api/fitting/fit", body, source, rows, () => fit(body));
   return withCurveSource(withResiduals(raw, req.y), model, req.x, rows);
+}
+
+/** /api/fitting/autoguess on `x`/`y`: by dataset handle + `rows` when the
+ *  server holds `source` (lib/fitSource, P8), else the arrays as before. */
+export function autoGuessFor(
+  model: string,
+  x: number[],
+  y: number[],
+  source: FitSource | undefined,
+  rows: readonly number[],
+): Promise<{ p0: number[] }> {
+  return postBySource("/api/fitting/autoguess", { model, x, y }, source, rows, () => autoGuess(model, x, y));
 }
 
 /** The overlay column for `r` over `n` dataset rows: the display curve, or

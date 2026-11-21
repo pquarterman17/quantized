@@ -4845,6 +4845,29 @@
             "title": "Covariance",
             "type": "string"
           },
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "display_points": {
             "anyOf": [
               {
@@ -4937,6 +4960,30 @@
             "title": "Return Residuals",
             "type": "boolean"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "scale_errors": {
             "default": true,
             "title": "Scale Errors",
@@ -4987,24 +5034,60 @@
             "title": "Weights"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
         "required": [
-          "equation",
-          "x",
-          "y"
+          "equation"
         ],
         "title": "EquationFitRequest",
         "type": "object"
@@ -6582,6 +6665,29 @@
             "title": "Bg Poly Degree",
             "type": "integer"
           },
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "display_points": {
             "anyOf": [
               {
@@ -6630,6 +6736,30 @@
             "title": "Return Background",
             "type": "boolean"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "sensitivity": {
             "default": "medium",
             "title": "Sensitivity",
@@ -6646,24 +6776,58 @@
             "type": "boolean"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "x",
-          "y"
-        ],
         "title": "FindPeaksRequest",
         "type": "object"
       },
@@ -17734,29 +17898,112 @@
       },
       "quantized__routes__fitting__GuessRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "model": {
             "title": "Model",
             "type": "string"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
         "required": [
-          "model",
-          "x",
-          "y"
+          "model"
         ],
         "title": "GuessRequest",
         "type": "object"

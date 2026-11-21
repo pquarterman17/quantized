@@ -9,8 +9,9 @@
 import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { fitEquation, validateEquation, type EquationValidateResult } from "../../../lib/api/curvefit";
-import { leanFit } from "../../../lib/fitResiduals";
+import { validateEquation, type EquationValidateResult } from "../../../lib/api/curvefit";
+import { leanEquationFit } from "../../../lib/fitSource";
+import { fitRowsOf } from "../../../lib/fitCurve";
 import {
   equationFitStep,
   equationRunProblem,
@@ -241,7 +242,10 @@ export function useEquationFit(
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
       }
-      const r = await leanFit(fitEquation, {
+      const n = ds.data.time.length;
+      const kept = activeRowIndices(n, droppedRows(ds));
+      // x/y by dataset handle when the server holds the dataset (lib/fitSource).
+      const r = await leanEquationFit({
         equation,
         x: pairs.x,
         y: pairs.y,
@@ -249,7 +253,7 @@ export function useEquationFit(
         ...(lower.some((v) => v !== null) ? { lower } : {}),
         ...(upper.some((v) => v !== null) ? { upper } : {}),
         ...(fixed.some(Boolean) ? { fixed } : {}),
-      });
+      }, { data: ds.data, xKey: d.xKey, yKey: d.yKey }, fitRowsOf(pairs.keep, kept, n));
       setResult(r);
       setFitHeld(fixed);
       setFitUnits(units);
@@ -272,8 +276,6 @@ export function useEquationFit(
         .recordMacro(`Fit equation ${modelName || equation}`, step.code, { kind: "ui", params: step.params });
       const yFit = r.yFit as (number | null)[] | undefined;
       if (Array.isArray(yFit)) {
-        const n = ds.data.time.length;
-        const kept = activeRowIndices(n, droppedRows(ds));
         const aligned = restoreGapRows(yFit, pairs);
         const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
         setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true });
