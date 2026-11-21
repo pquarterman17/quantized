@@ -308,7 +308,7 @@ export default function PlotLegend({
               <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} filled={s.selected} />
             </span>
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
-            <span className="qzk-legend-label" id={labelId}>
+            <span className="qzk-legend-label" id={labelId} title={text}>
               <RichText text={text} />
             </span>
             {interactive && plotted.length > 1 && (

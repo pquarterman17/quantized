@@ -52,7 +52,6 @@ import { flushSync } from "react-dom";
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 
 import ToolLoadFailure from "./toolLoadFailure";
-
 /** Marks "the loader's own promise rejected" without touching the rejected
  *  value itself — mutating a caught error (a `Symbol` property write) would
  *  throw on a frozen/non-extensible one (e.g. `Object.freeze(new Error())`),
@@ -75,19 +74,11 @@ class LoadFailure extends Error {
 function taggedLoader<P>(
   load: () => Promise<{ default: ComponentType<P> }>,
 ): () => Promise<{ default: ComponentType<P> }> {
-  return () => {
-    try {
-      return load().catch((err: unknown) => {
-        throw new LoadFailure(err);
-      });
-    } catch (err) {
-      return Promise.reject(new LoadFailure(err));
-    }
-  };
-}
-
-function isLoadFailure(error: unknown): error is LoadFailure {
-  return error instanceof LoadFailure;
+  // `new Promise` also turns a synchronous throw from `load` into a rejection.
+  return () =>
+    new Promise<{ default: ComponentType<P> }>((resolve) => resolve(load())).catch((err: unknown) => {
+      throw new LoadFailure(err);
+    });
 }
 
 interface CatchProps {
@@ -98,45 +89,44 @@ interface CatchProps {
   children: ReactNode;
 }
 interface CatchState {
-  failed: boolean;
+  /** What the subtree threw: a `LoadFailure` (chunk fetch) or its own render error. */
+  error?: Error;
 }
 
 class Catch extends Component<CatchProps, CatchState> {
-  state: CatchState = { failed: false };
-  static getDerivedStateFromError(error: unknown): CatchState {
-    // Not a load failure — a real bug elsewhere in this subtree. Don't
-    // mislabel it: re-throwing from here hands it to the next boundary up
-    // (or crashes), exactly as if lazyRegion had never wrapped this seam.
-    if (!isLoadFailure(error)) throw error;
-    return { failed: true };
+  state: CatchState = {};
+  static getDerivedStateFromError(error: Error): CatchState {
+    return { error };
   }
   componentDidCatch(error: unknown): void {
-    // The one diagnostic this boundary owes: which region failed, and why.
-    // `error` is always a LoadFailure here (getDerivedStateFromError
-    // re-throws anything else before this runs) — log its `.cause`, the
-    // original rejection, not the wrapper's own generic message.
-    const cause = error instanceof Error ? (error.cause ?? error) : error;
-    console.error(`[lazyRegion] "${this.props.label}" chunk failed to load`, cause);
+    // The one diagnostic this boundary owes for a LOAD failure: which region
+    // failed, and why (its `.cause`, the original rejection, not the wrapper's
+    // generic message). A render error is logged by React itself.
+    if (error instanceof LoadFailure) console.error(`[lazyRegion] "${this.props.label}" chunk failed to load`, error.cause);
   }
   render(): ReactNode {
-    if (this.state.failed && this.props.tool) {
-      return <ToolLoadFailure label={this.props.label} onRetry={this.props.onRetry} />;
-    }
-    if (this.state.failed) {
-      return (
-        <div className="qzk-lazy-fail" role="alert">
-          {/* `data-live-region` (R12, lib/modalInert.ts): a load failure
-              raised while a dialog is open — the dialog it would have opened
-              over another one, say — is still announced; the Retry beside it
-              stays inert with the rest of the background until that closes. */}
-          <span data-live-region="">⚠ {this.props.label} failed to load.</span>
-          <button type="button" onClick={this.props.onRetry}>
-            ↻ Retry
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
+    const { error } = this.state;
+    const { label, tool, onRetry, children } = this.props;
+    if (!error) return children;
+    const load = error instanceof LoadFailure;
+    // Not a load failure: a real bug in this subtree. A TOOL panel shows its
+    // own error card (one panel's bug must not blank the whole app); any other
+    // region re-throws it to the next boundary up, exactly as if lazyRegion
+    // had never wrapped this seam. It is never mislabelled "failed to load".
+    if (tool) return <ToolLoadFailure label={label} onRetry={onRetry} error={load ? undefined : error} />;
+    if (!load) throw error;
+    return (
+      <div className="qzk-lazy-fail" role="alert">
+        {/* `data-live-region` (R12, lib/modalInert.ts): a load failure
+            raised while a dialog is open — the dialog it would have opened
+            over another one, say — is still announced; the Retry beside it
+            stays inert with the rest of the background until that closes. */}
+        <span data-live-region="">⚠ {label} failed to load.</span>
+        <button type="button" onClick={onRetry}>
+          ↻ Retry
+        </button>
+      </div>
+    );
   }
 }
 

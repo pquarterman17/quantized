@@ -6,6 +6,7 @@
 // columns, order) is passed in explicitly, so a caller can run it on any
 // DataStruct (the analysis view, or one By level's sliced subset).
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey, type RegressionBand } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
 import type { Recommendation } from "../../../lib/statschooser";
@@ -87,8 +88,8 @@ export const colValues = (data: DataStruct, index: number): number[] =>
  *  that one value repeated -- `polynomial_confidence_band` handles a
  *  repeated grid point fine (it's independent of the fitted x). */
 export function bandGrid(xs: number[], n = 40): number[] {
-  const lo = Math.min(...xs);
-  const hi = Math.max(...xs);
+  const lo = minOf(xs);
+  const hi = maxOf(xs);
   if (!(hi > lo)) return xs.length ? [lo] : [];
   return Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1));
 }

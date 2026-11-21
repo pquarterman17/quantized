@@ -10,6 +10,7 @@
 // (not re-derived client-side) — that payload is the acceptance contract
 // JMP_GAP_PLAN #8 names, so the chart proves the wiring, not just the math.
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { deterministicJitter } from "../../../lib/jitter";
 import type { VariabilityFactorLevel } from "../../../lib/variability";
 import type { VariabilitySummaryResponse } from "./useVariability";
@@ -73,8 +74,8 @@ export default function VariabilityChart({
 
   const allValues = placedCells.flatMap((c) => c.values);
   const yCandidates = [...allValues, summary.grand_mean].filter(Number.isFinite);
-  const yLo = Math.min(...yCandidates);
-  const yHi = Math.max(...yCandidates);
+  const yLo = minOf(yCandidates);
+  const yHi = maxOf(yCandidates);
   const span = yHi - yLo || 1;
   const sy = (v: number) => H - PAD_BOTTOM - ((v - yLo) / span) * (H - PAD_TOP - PAD_BOTTOM);
 

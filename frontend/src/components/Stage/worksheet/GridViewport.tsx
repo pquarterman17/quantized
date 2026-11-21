@@ -27,7 +27,7 @@ import {
   computeAxisWindow,
   DEFAULT_COL_WIDTH,
   DEFAULT_FALLBACK_ROWS,
-  DEFAULT_GUTTER_WIDTH,
+  gutterWidthFor,
   DEFAULT_ROW_HEIGHT,
   DEFAULT_ROW_OVERSCAN,
   revealScrollOffset,
@@ -223,7 +223,7 @@ export default function GridViewport({
   };
 
   const colWidth = DEFAULT_COL_WIDTH;
-  const gutterWidth = DEFAULT_GUTTER_WIDTH;
+  const gutterWidth = gutterWidthFor(order.length + 1);
   const colCount = data.labels.length;
   // Per-column width resolution (MAIN_PLAN #3): resized columns override the
   // uniform default; -1 (the pinned x column) is resizable too.

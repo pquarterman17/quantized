@@ -5,6 +5,7 @@
 // /api/stats/regression's opt-in `band_x`/`band_interval`, and the
 // coefficient/R2/F table.
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
@@ -41,15 +42,15 @@ export default function BivariateView({
 
   const drawBand = showBand && !!band && band.x.length > 0;
 
-  const xLo = Math.min(...x);
-  const xHi = Math.max(...x);
+  const xLo = minOf(x);
+  const xHi = maxOf(x);
   const yAll = [
     ...y,
     ...yFit,
     ...(drawBand && band ? [...band.ciLo, ...band.ciHi] : []),
   ].filter(Number.isFinite);
-  const yLo = Math.min(...yAll);
-  const yHi = Math.max(...yAll);
+  const yLo = minOf(yAll);
+  const yHi = maxOf(yAll);
   const sx = (v: number) => (xHi > xLo ? PAD + ((v - xLo) / (xHi - xLo)) * (W - 2 * PAD) : W / 2);
   const sy = (v: number) => (yHi > yLo ? H - PAD - ((v - yLo) / (yHi - yLo)) * (H - 2 * PAD) : H / 2);
 

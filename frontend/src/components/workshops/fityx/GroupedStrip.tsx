@@ -4,6 +4,7 @@
 // visible. Deliberately modest (DOM, not canvas) — a quick "does this group
 // separate?" look, not a publication plot (that's Graph Builder's job).
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { pctPosition } from "../../../lib/distribution";
 import type { OnewayGroup } from "./useFitYByX";
 
@@ -17,8 +18,8 @@ function jitter(i: number): number {
 export default function GroupedStrip({ groups }: { groups: OnewayGroup[] }) {
   const all = groups.flatMap((g) => g.values).filter(Number.isFinite);
   if (all.length === 0) return null;
-  const lo = Math.min(...all);
-  const hi = Math.max(...all);
+  const lo = minOf(all);
+  const hi = maxOf(all);
 
   return (
     <div aria-label="grouped points" style={{ marginTop: 8 }}>

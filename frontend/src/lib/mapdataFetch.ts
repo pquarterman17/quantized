@@ -18,6 +18,7 @@
 // `canRenderMap` calls anything below internally, and every real (non-test)
 // importer of what moved is lazy.
 
+import { maxOf, minOf } from "./arrayExtent";
 import { mapSeries } from "./api";
 import { repeats } from "./mapGate";
 import type { DataStruct, MapResponse } from "./types";
@@ -107,8 +108,8 @@ export function regridNearest(
   if (xs.length === 0) {
     return { xAxis: [0], yAxis: [0], zGrid: [[null]] };
   }
-  const xAxis = linspace(Math.min(...xs), Math.max(...xs), nx);
-  const yAxis = linspace(Math.min(...ys), Math.max(...ys), ny);
+  const xAxis = linspace(minOf(xs), maxOf(xs), nx);
+  const yAxis = linspace(minOf(ys), maxOf(ys), ny);
   const zGrid: (number | null)[][] = Array.from({ length: ny }, () =>
     new Array<number | null>(nx).fill(null),
   );
