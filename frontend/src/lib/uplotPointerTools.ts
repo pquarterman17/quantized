@@ -247,6 +247,20 @@ export function statsPlugin(
   };
 }
 
+/** A gapped (wide, decimated) plot (`spanGaps`, set by PlotViewport) is null
+ *  between each series' own picks: the value
+ *  at `idx`, else the nearest non-null one within `reach` rows either side. */
+function nearestValue(col: ArrayLike<number | null | undefined> | undefined, idx: number, reach = 600): number | null {
+  if (!col) return null;
+  for (let d = 0; d <= reach; d++) {
+    const a = col[idx - d];
+    if (a != null) return a;
+    const b = col[idx + d];
+    if (b != null) return b;
+  }
+  return null;
+}
+
 /** Report every visible series' value at the nearest-x cursor index (or null when
  *  off-plot / no visible series have a value there). The cursor index is shared
  *  across the aligned data, so one lookup per column gives a full readout.
@@ -275,7 +289,7 @@ export function readoutPlugin(
         const rows: ReadoutRow[] = [];
         for (let s = 1; s < u.data.length; s++) {
           if (u.series[s]?.show === false) continue; // skip hidden (legend) series
-          const y = u.data[s]?.[idx];
+          const y = u.series[1]?.spanGaps ? nearestValue(u.data[s], idx) : u.data[s]?.[idx];
           if (y == null) continue;
           const lbl = u.series[s]?.label;
           rows.push({ label: typeof lbl === "string" ? lbl : "", y: y - (shift?.[s] ?? 0) });

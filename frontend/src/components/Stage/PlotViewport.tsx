@@ -243,6 +243,10 @@ export default function PlotViewport(props: PlotViewportProps) {
       plotData = buildDecimatedData(fullData, x0, x1, w) as uPlot.AlignedData;
       opts.plugins = [...(opts.plugins ?? []), decimatePlugin(() => fullData)];
     }
+    // Wide server-decimated plot (calc/decimate.py gap_plan): a series has
+    // values only at its own picked rows, so draw across the nulls (the
+    // cursor readout then looks up the nearest value per series).
+    if (displayPayload.gapped) opts.series.forEach((s, i) => i && (s.spanGaps = true));
     // The focused stage (the one recording view history) publishes the tick
     // increments it draws, offered to an export as a hint (lib/liveTickSteps.ts).
     if (args.onViewChange) opts.plugins = [...(opts.plugins ?? []), liveTicksPlugin()];

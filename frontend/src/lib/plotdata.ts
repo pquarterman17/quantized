@@ -66,6 +66,7 @@ export interface PlotPayload {
    *  overlay column onto a decimated base rather than silently mis-slicing
    *  it as if it were a simple prefix trim. */
   decimated?: boolean;
+  gapped?: boolean; // wide decimated plot: nulls between a series' own picks; draw across them
   /** P3.4 zoom-refetch residual: the X window this payload was filtered to
    *  (echoed back from routes/plot.py), or null/absent when it covers the
    *  whole dataset. Set by `fromResponse` when the backend echoes one back;
@@ -270,9 +271,9 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
-    decimated: r.decimated ?? false, ...(r.rows ? { rowIds: r.rows } : {}),
+    decimated: r.decimated ?? false, gapped: r.gapped, ...(r.rows ? { rowIds: r.rows } : {}),
     window:
-      r.window && r.window.x_min != null && r.window.x_max != null
+      r.window?.x_min != null && r.window.x_max != null
         ? [r.window.x_min, r.window.x_max]
         : null,
   };

@@ -298,7 +298,7 @@ export interface PlotSeriesResponse {
   /** P3.4: true when the server applied min/max-bucket decimation (the request
    *  carried `decimate_width` and the route honored it — ascending x, no
    *  `full_resolution` override). Absent/false means every row came back. */
-  decimated?: boolean;
+  decimated?: boolean; gapped?: boolean; // gapped: wide plot, each series has values only at its own picked rows
   /** A reduced (decimated/windowed) response: the dataset row of each row (gap audit 3 N2). */
   rows?: number[] | null;
   /** P3.4 zoom-refetch residual: the X window the server actually filtered to

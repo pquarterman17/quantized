@@ -80,6 +80,19 @@ function seriesBucketIndices(
   return out;
 }
 
+/** Wide-plot bound (live audit: 200k rows x 49 channels). The shared-x union
+ *  below is ~min(n, 2 * buckets * nSeries) rows, so a wide plot kept nearly
+ *  every row. The bucket count is scaled down so the union stays under this
+ *  many rows whatever the series count; each series still keeps its own
+ *  per-bucket min/max, over fewer, wider buckets. The server twin
+ *  (`gap_plan` in calc/decimate.py) goes further and nulls each series
+ *  outside its own picks (`gapped` payloads, drawn with `spanGaps`). */
+export const GAP_ROW_CAP = 16_000;
+
+export function cappedBuckets(buckets: number, nSeries: number): number {
+  return Math.min(buckets, Math.max(16, (GAP_ROW_CAP / (2 * nSeries)) | 0));
+}
+
 /** The union, ascending and deduped, of every series' own min/max bucket
  *  picks over `[lo, hi)`. Union (not one shared pick) so each series keeps
  *  ITS OWN peaks — a channel whose extrema fall in different rows than its
@@ -112,9 +125,8 @@ export function visibleRowRange(
   let lo = -1;
   let hi = -1;
   for (let i = 0; i < xs.length; i++) {
-    const v = xs[i];
-    if (v == null || !Number.isFinite(v)) continue;
-    if (v >= xMin && v <= xMax) {
+    const v = xs[i]; // NaN and null fail both comparisons, so need no finite check
+    if (v != null && v >= xMin && v <= xMax) {
       if (lo === -1) lo = i;
       hi = i;
     }
@@ -276,9 +288,10 @@ export function decimationEligible(args: {
 
 /** Re-bucket `data` (x + N series, index-aligned) to the visible window
  *  `[xMin, xMax]` padded by ~1 bucket-width of ROWS on each side, at up to
- *  `bucketsForWidth(widthPx)` buckets. Every series contributes its own
- *  min/max rows (see `decimateRowIndices`); the union is gathered from x and
- *  every series so all columns stay the same length and index-aligned. When
+ *  `bucketsForWidth(widthPx)` buckets (fewer for a wide plot: see
+ *  `cappedBuckets`). Every series contributes its own min/max rows (see
+ *  `decimateRowIndices`); the union is gathered from x and every series so
+ *  all columns stay the same length and index-aligned. When
  *  the padded row span already has fewer rows than buckets, every row in it
  *  is kept (the bucketing math's own identity passthrough) — so zooming in
  *  always re-resolves toward full detail, never a fixed low-res copy. */
@@ -290,7 +303,7 @@ export function buildDecimatedData(
 ): (number | null)[][] {
   const [xs, ...series] = data;
   const n = xs.length;
-  const buckets = bucketsForWidth(widthPx);
+  const buckets = cappedBuckets(bucketsForWidth(widthPx), series.length);
   const [lo0, hi0] = visibleRowRange(xs, xMin, xMax);
   const padRows = Math.max(1, Math.ceil((hi0 - lo0) / buckets));
   const lo = Math.max(0, lo0 - padRows);
