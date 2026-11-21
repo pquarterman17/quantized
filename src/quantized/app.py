@@ -25,7 +25,9 @@ from quantized.io.workbook_transfer_store import cleanup_transfer_dir
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
 from quantized.routes import (
+    _arrayresults,
     _datasetcache,
+    _fitresults,
     aggregate,
     baseline,
     books,
@@ -70,6 +72,7 @@ from quantized.routes import (
     reflectivity,
     reflectivity_graded,
     report_export,
+    results,
     rsm,
     samples,
     semiconductor,
@@ -169,6 +172,8 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     # RSM_CUTS_PLAN item 18: drop every cached dataset (local-server-
     # hardening -- lifespan hook, never atexit).
     _datasetcache.clear_cache()
+    _fitresults.clear_fit_results()  # P4: the fits' kept per-point arrays
+    _arrayresults.clear_results()  # P4 phase 4: baseline / background / sigop results
 
 
 def create_app(
@@ -230,6 +235,7 @@ def create_app(
     application.include_router(fitting_report.router)
     application.include_router(jobs_api.router)
     application.include_router(baseline.router)
+    application.include_router(results.router)
     application.include_router(stats.router)
     application.include_router(stats_design.router)
     application.include_router(stats_outliers.router)

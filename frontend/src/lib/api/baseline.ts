@@ -6,6 +6,7 @@
 
 import { postJSON } from "./http";
 import type { CalcResult } from "../types";
+import type { ResultDisplay } from "./resultArrays";
 
 type BaselineResult = { baseline: (number | null)[] };
 type BaselineWithInfo = BaselineResult & { info: CalcResult };
@@ -94,4 +95,26 @@ export function baselineRegion(body: {
   order: number;
 }> {
   return postJSON("/api/baseline/region", body);
+}
+
+// ── lean responses (P4 phase 4, lib/api/resultArrays.ts) ─────────────────────
+
+/** `return_baseline: false`: the full baseline stays server-side under
+ *  `resultId` (null when too large to keep); `baselineDisplay` is the
+ *  per-bucket min/max preview when `display_points` was sent. */
+export interface LeanBaselineResult {
+  resultId: string | null;
+  baselineDisplay?: ResultDisplay;
+  baseline?: (number | null)[];
+}
+type LeanOpts = { return_baseline?: boolean; display_points?: number };
+
+export function baselineEstimateLean(
+  body: { x: number[]; y: number[]; method?: string } & LeanOpts,
+): Promise<LeanBaselineResult> {
+  return postJSON("/api/baseline/estimate", body);
+}
+
+export function baselineModPolyLean(body: { y: number[]; order?: number } & LeanOpts): Promise<LeanBaselineResult> {
+  return postJSON("/api/baseline/modpoly", body);
 }

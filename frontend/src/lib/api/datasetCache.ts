@@ -76,6 +76,13 @@ export function rememberHandle(dataset: object, handle: string | null): void {
   if (handle) handles.set(dataset, handle);
 }
 
+/** Whether a handle is remembered for `dataset` (not merely an upload in
+ *  flight, which may end without one): a fit then names it by handle instead
+ *  of posting its x/y (lib/fitSource.ts). */
+export function hasDatasetHandle(dataset: object): boolean {
+  return handles.has(dataset);
+}
+
 /** Paths that opt into the handle cache -- a narrow allowlist, not "any
  *  body with a `dataset` field": /api/corrections/apply, most /api/export/* and
  *  others also carry a `dataset` field for unrelated reasons (one-shot

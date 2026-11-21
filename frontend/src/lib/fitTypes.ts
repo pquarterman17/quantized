@@ -134,6 +134,23 @@ export interface FitOverlay {
    *  and unstyled Line data gains markers (lib/fitOverlayStyle.ts). Quick Fit,
    *  the peak envelope, reflectivity, ... leave it unset and keep the plain look. */
   curveFit?: true;
+  /** A DISPLAY curve (P4 phase 2, lib/fitCurve.ts): `y` holds the fit only
+   *  at its display rows (undefined = drawn across, null = a gap) and the
+   *  full-resolution curve is fetched from here (`fullFitOverlay`). */
+  full?: FitCurveSource;
+}
+
+/** Where a display curve's full resolution comes from (lib/fitCurve.ts):
+ *  the server's stored fit by `resultId`, else `model` evaluated at
+ *  `params` on the fit's own x -- bit-identical to the fit's `yFit`. */
+export interface FitCurveSource {
+  resultId: string | null;
+  model: string;
+  params: number[];
+  /** The dataset row of each fitted point, in fit order. */
+  rows: number[];
+  /** Each fitted point's x, as posted to the fit. */
+  x: number[];
 }
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the
@@ -152,6 +169,12 @@ export interface BaselineOverlay {
   /** The curve the baseline was estimated for (OverlayBinding). */
   binding: OverlayBinding;
   y: (number | null)[];
+  /** `y` is a lean preview's DISPLAY column (a large SNIP / ModPoly estimate,
+   *  lib/api/resultArrays): real values at ~8k rows, `undefined` between, which
+   *  the canvas draws across. Never export it as is: `upgradeBaselineOverlay`
+   *  (store/fitOverlayUpgrade) swaps in the full baseline, and a figure that
+   *  still meets this flag drops the overlay and says so (figureSpecOverlays). */
+  lean?: true;
   /** A Peak Analyzer model fit's FITTED background (not an estimate): the fit
    *  it belongs to. In memory only -- it makes the background figure content
    *  saved with that fit (lib/figureOverlays), unlike a baseline preview. */

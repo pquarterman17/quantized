@@ -180,8 +180,19 @@ def _clean_vendor_element(raw: str) -> str:
     return name
 
 
+_MAX_UNION_POINTS = 20_000_000
+
+
 def _matlab_colon(a: float, d: float, b: float) -> np.ndarray:
-    n = int(math.floor((b - a) / d + 1e-10))
+    span = (b - a) / d
+    if not math.isfinite(span) or span > _MAX_UNION_POINTS:
+        # One element's tiny (or corrupt) depth step against a huge depth range
+        # would allocate an astronomically large union grid (MemoryError).
+        raise ValueError(
+            f"depth axes cannot share one grid: a step of {d:g} across {a:g}..{b:g} "
+            f"needs more than {_MAX_UNION_POINTS:,} points; the depth column looks corrupt"
+        )
+    n = int(math.floor(span + 1e-10))
     grid = a + np.arange(n + 1) * d
     if grid[-1] < b:
         grid = np.append(grid, b)

@@ -164,6 +164,12 @@ export default function StatusBar() {
         >
           ⚠ autosave failing
         </span>
+      ) : health.paused ? (
+        // Paused on purpose (another tab holds the slot / opened as a copy):
+        // not a failure, so no alert role and no danger colour.
+        <span style={{ color: "var(--text-dim)" }} title={health.paused}>
+          {health.paused.startsWith("autosave is off") ? "autosave off — opened as copy" : "autosave paused — open in another tab"}
+        </span>
       ) : health.restoreError ? (
         // Review R8: a restore still pending is not an autosave failure —
         // saves may be succeeding. Its own label; a click retries a restore

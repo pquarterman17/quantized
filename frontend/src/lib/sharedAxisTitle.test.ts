@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import type { PlotPayload } from "./plotdata";
-import { sharedAxisTitle } from "./sharedAxisTitle";
+import { AXIS_TITLE_MAX, clipAxisTitle, sharedAxisTitle } from "./sharedAxisTitle";
 import { buildOpts } from "./uplotOpts";
 
 const FIXTURE = join(
@@ -86,5 +86,15 @@ describe("buildOpts — multi-series y-axis title", () => {
     ]);
     expect(buildOpts(p, { ...base, hidden: [false, true, false, false, false] }).axes?.[1]?.label).toBe("R1 (ohm)");
     expect(buildOpts(p, base).axes?.[1]?.label).toBe("R1 (ohm) / V (V)");
+  });
+});
+
+describe("clipAxisTitle", () => {
+  it("cuts a 5000-character title to AXIS_TITLE_MAX with an ellipsis and keeps short ones", () => {
+    const out = clipAxisTitle("Y".repeat(5000)) ?? "";
+    expect(out).toHaveLength(AXIS_TITLE_MAX);
+    expect(out.endsWith("\u2026")).toBe(true);
+    expect(clipAxisTitle("Moment (emu)")).toBe("Moment (emu)");
+    expect(clipAxisTitle(undefined)).toBeUndefined();
   });
 });

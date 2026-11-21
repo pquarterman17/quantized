@@ -37,7 +37,7 @@ describe("useCurveFit on a secondary-X Y", () => {
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: T2, y: R2 });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: T2, y: R2 });
     expect(useApp.getState().datasets[0].fitSpec).toMatchObject({ xKey: 1, yKey: 2 });
     // The shown result still matches the live plot (R2 against its own X).
     expect(result.current.fitData).toMatchObject({ xKey: 1, yKey: 2, x: T2 });
@@ -59,7 +59,7 @@ describe("useCurveFit on a secondary-X Y", () => {
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: T2, y: R2 });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: T2, y: R2 });
     const o = useApp.getState().fitOverlay!;
     expect(o.binding).toEqual({ yKey: 2, xKey: 1 });
     // On the live view (R1 on T1, R2 on T2) the curve lands on T2's rows only.

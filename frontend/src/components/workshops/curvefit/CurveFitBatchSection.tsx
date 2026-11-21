@@ -14,7 +14,7 @@ import { nextDatasetId } from "../../../store/idSeq";
 import AnalysisBatchControls, { type AnalysisBatchOutcome, type AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
 import { inOrder, summaryX, summaryXNote, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { ownXKey } from "../../../lib/perSeriesX";
-import { batchColumns, batchSummaryData, batchTableInputs, fitSummaryValues, libraryOrder } from "./curveFitBatchSummary";
+import { BATCH_FIT_TRANSPORT, batchColumns, batchSummaryData, batchTableInputs, fitSummaryValues, libraryOrder } from "./curveFitBatchSummary";
 import { batchFitTable } from "../../../lib/fitTableLayer";
 import FitTableControls from "./FitTableControls";
 import { parseFitStarts } from "./fitStarts";
@@ -90,7 +90,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         const pairs = dropGapRows(x, y);
         try {
           if (pairs.x.length === 0) throw new Error("no finite pairs");
-          results.push(await fitModel({ model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)) }));
+          results.push(await fitModel({ model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)), ...BATCH_FIT_TRANSPORT }));
         } catch (error) {
           warnings.push(`${level.label}: ${error instanceof Error ? error.message : "fit failed"}`);
         }
@@ -110,7 +110,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     const pairs = dropGapRows(selected.x, selected.y);
     if (pairs.x.length === 0) throw new Error("No finite X/Y pairs are available to fit.");
     const request: Parameters<typeof fitModel>[0] = {
-      model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)),
+      model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)), ...BATCH_FIT_TRANSPORT,
     };
     if (weightMode === "yerr" || weightMode === "poisson") {
       const keep = pairs.keep.map((index) => selected.analysisRows?.[index] ?? index);

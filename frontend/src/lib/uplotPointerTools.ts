@@ -247,6 +247,21 @@ export function statsPlugin(
   };
 }
 
+/** A gapped (wide, decimated) series holds `undefined` filler between its real
+ *  entries: the value at `idx`, else the nearest real entry (ties go left).
+ *  A real `null` (a genuine missing value) is returned as is, so the readout
+ *  shows nothing there and never reaches across a gap. */
+function nearestValue(col: ArrayLike<number | null | undefined> | undefined, idx: number): number | null {
+  const v = col?.[idx];
+  if (!col || v !== undefined) return v ?? null;
+  for (let d = 1; d < col.length; d++) {
+    for (const i of [idx - d, idx + d]) {
+      if (i >= 0 && i < col.length && col[i] !== undefined) return col[i] ?? null;
+    }
+  }
+  return null;
+}
+
 /** Report every visible series' value at the nearest-x cursor index (or null when
  *  off-plot / no visible series have a value there). The cursor index is shared
  *  across the aligned data, so one lookup per column gives a full readout.
@@ -275,7 +290,7 @@ export function readoutPlugin(
         const rows: ReadoutRow[] = [];
         for (let s = 1; s < u.data.length; s++) {
           if (u.series[s]?.show === false) continue; // skip hidden (legend) series
-          const y = u.data[s]?.[idx];
+          const y = nearestValue(u.data[s], idx);
           if (y == null) continue;
           const lbl = u.series[s]?.label;
           rows.push({ label: typeof lbl === "string" ? lbl : "", y: y - (shift?.[s] ?? 0) });

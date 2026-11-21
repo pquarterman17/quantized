@@ -9,6 +9,7 @@ strings out.
 from __future__ import annotations
 
 from quantized.io._delimiter_vote import COMMENT_CHARS, data_section_start
+from quantized.io._text_lines import logical_lines, strip_inline_comment
 
 
 def _split_lines(text: str) -> tuple[list[str], list[str]]:
@@ -23,7 +24,7 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
     Every line above a data-section heading such as ``[DATA]`` (and the
     heading itself) is preamble too (`data_section_start`, worksheet audit #3).
     """
-    lines = text.splitlines()
+    lines = logical_lines(text)
     section = data_section_start(lines)
     data: list[str] = []
     comments: list[str] = []
@@ -34,5 +35,15 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
         if i < section or stripped[0] in COMMENT_CHARS:
             comments.append(stripped)
         else:
-            data.append(stripped)
+            data.append(strip_inline_comment(stripped))
     return data, comments
+
+
+def strip_sep_hint(text: str) -> str:
+    """Drop Excel's leading ``sep=;`` line (it names the delimiter; it is not a
+    header row, and left in it became the column names and the x label)."""
+    head, _, rest = text.partition("\n")
+    first = head.strip()
+    if len(first) == 5 and first[:4].lower() == "sep=" and not first[4].isalnum():
+        return rest
+    return text

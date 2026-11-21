@@ -41,7 +41,7 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <NumberField value={c.value} width={84} onChange={c.setValue} />
+            <NumberField value={c.value} width={84} onChange={c.setValue} aria-label="value to convert" />
             {activeCat ? (
               <Select
                 options={activeCat.units}

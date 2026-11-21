@@ -55,8 +55,11 @@ jobs:
         run: uv run mypy src
       # Golden fixtures + frozen JSON are committed, so the suite runs without MATLAB.
       # -n auto (pytest-xdist): parallelizes across the runner's cores.
+      # --dist worksteal: idle workers steal queued tests from busy ones, so
+      # a few multi-second tests no longer leave cores idle at the tail.
+      # Same tests, same count; only scheduling changes.
       - name: Tests
-        run: uv run pytest -q -n auto
+        run: uv run pytest -q -n auto --dist worksteal
 
   # POST_SPRINT_INDEPENDENT_REVIEW.md R7: bounded performance-regression
   # protection for the large-2-D-map import+regrid path. `tests/test_perf_

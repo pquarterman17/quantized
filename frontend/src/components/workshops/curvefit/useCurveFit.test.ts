@@ -113,7 +113,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [21, 41] });
     const { result } = renderHook(() => useCurveFit());
     await act(async () => result.current.run("fit"));
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [1, 3], y: [20, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [1, 3], y: [20, 40] });
     const saved = useApp.getState().datasets[0];
     expect(saved.fitSpec?.rowIds).toEqual([1, 3]);
     expect(saved.fitSpec?.rowIdentityFingerprint).toMatch(/^r1:2:[0-9a-f]{16}$/);
@@ -147,7 +147,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, 21, 31, 41], curveFit: true });
   });
 
@@ -158,7 +158,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     const { result } = renderHook(() => useCurveFit());
     await act(async () => result.current.run("fit"));
 
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
     expect(useApp.getState().fitOverlay?.y).toEqual([11, Number.NaN, 31, 41]);
     expect(useApp.getState().datasets[0]?.fitSpec?.nPoints).toBe(3);
     expect(useToasts.getState().toasts.at(-1)?.msg).toBe(
@@ -188,6 +188,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("fit");
     });
     expect(fitModel).toHaveBeenCalledWith({
+      return_residuals: false,
       model: "Linear",
       x: [100, 200, 300, 400],
       y: [10, 20, 30, 40],
@@ -207,7 +208,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("fit");
     });
     // excluded row 1 dropped from the fit inputs
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
     // overlay expanded to full length with a null gap at the excluded row
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, null, 31, 41], curveFit: true });
   });
@@ -226,7 +227,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("fit");
     });
     // keep values ≥ 25 → rows 2,3 (x = 2,3; y = 30,40)
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [2, 3], y: [30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [2, 3], y: [30, 40] });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [null, null, 31, 41], curveFit: true });
   });
 
@@ -282,7 +283,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("fit");
     });
 
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: full.time, y: [10, 20, 30, 40, 50] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: full.time, y: [10, 20, 30, 40, 50] });
     expect(useApp.getState().datasets[0].pending).toBeUndefined();
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", binding: { yKey: 0, xKey: null }, y: [11, 21, 31, 41, 51], curveFit: true });
   });
@@ -320,7 +321,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();
   });
 
@@ -349,6 +350,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
       await result.current.run("fit");
     });
     expect(fitModel).toHaveBeenCalledWith({
+      return_residuals: false,
       model: "Linear",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],
@@ -377,7 +379,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40], dy: [2, 3, 5] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 2, 3], y: [10, 30, 40], dy: [2, 3, 5] });
     expect(result.current.weightNote).toBeNull();
   });
 
@@ -389,6 +391,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
       await result.current.run("fit");
     });
     expect(fitModel).toHaveBeenCalledWith({
+      return_residuals: false,
       model: "Linear",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],
@@ -407,6 +410,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
       await result.current.run("fit");
     });
     expect(fitModel).toHaveBeenCalledWith({
+      return_residuals: false,
       model: "Linear",
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],
@@ -436,6 +440,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
       await result.current.run("fit");
     });
     expect(fitModel).toHaveBeenCalledWith({
+      return_residuals: false,
       model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40], weights: [4, 0, 1, 0.25],
     });
     const spec = useApp.getState().datasets[0].fitSpec;
@@ -485,7 +490,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(result.current.weightNote).toMatch(/pick a column of weights/);
   });
 
@@ -496,7 +501,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     await act(async () => {
       await result.current.run("fit");
     });
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();
   });
 
@@ -510,7 +515,7 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
       await result.current.run("fit");
     });
     // no dy key -> unweighted; a note explains why
-    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(fitModel).toHaveBeenCalledWith({ return_residuals: false, model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(result.current.weightNote).toMatch(/no error column/);
     // provenance honestly records that it ran unweighted
     expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();

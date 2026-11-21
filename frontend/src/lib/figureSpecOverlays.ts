@@ -194,7 +194,9 @@ function appendOverlays(
   const n = target.data.time.length;
   const candidates: [string, FitOverlay | null | undefined, boolean][] = [
     [FIT_SERIES_LABEL, placeOverlay(sources.fitOverlay, layout), false],
-    ["baseline", placeOverlay(sources.baselineOverlay, layout), false],
+    // A lean preview (its display column) is never exported: it reports as
+    // dropped (drawnOverlayLabels still lists it) unless upgraded first.
+    ["baseline", sources.baselineOverlay?.lean ? null : placeOverlay(sources.baselineOverlay, layout), false],
     ["peaks", peakOverlayEmpty(sources.peakOverlay) ? null : placeOverlay(sources.peakOverlay, layout), true],
   ];
   // `band` is `PlotSeriesSpec.band`: how many series back the edge's curve is

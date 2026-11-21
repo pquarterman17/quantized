@@ -12,6 +12,7 @@
 // pairs come from POST /api/fitting/diagnostics (calc.fit_stats'
 // residual_diagnostics), which already returns them sorted.
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import type { PlotPayload } from "../../../lib/plotdata";
 
 type Num = number | null;
@@ -44,8 +45,8 @@ export function binCount(n: number): number {
  *  max lands in the last bin. Empty input -> no edges. */
 export function histogram(values: readonly number[], bins = binCount(values.length)): { edges: number[]; counts: number[] } {
   if (values.length === 0) return { edges: [], counts: [] };
-  let lo = Math.min(...values);
-  let hi = Math.max(...values);
+  let lo = minOf(values);
+  let hi = maxOf(values);
   if (hi === lo) {
     lo -= 0.5;
     hi += 0.5;

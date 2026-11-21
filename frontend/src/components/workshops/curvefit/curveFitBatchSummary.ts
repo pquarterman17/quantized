@@ -25,6 +25,11 @@ export function batchColumns(names: readonly string[]): string[] {
 const fin = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** N, R², reduced χ², RMSE, then value/SE per parameter, from one fit result. */
+/** A batch reads only parameters and statistics (`fitSummaryValues`), so its
+ *  fits come back with the smallest display curve instead of two full-length
+ *  arrays per input (P4 phase 2, plans/LARGE_PAYLOAD_PLAN.md). */
+export const BATCH_FIT_TRANSPORT = { return_residuals: false, display_points: 16 } as const;
+
 export function fitSummaryValues(r: CalcResult, nParams: number): (number | null)[] {
   const params = Array.isArray(r.params) ? (r.params as unknown[]) : [];
   const errors = Array.isArray(r.errors) ? (r.errors as unknown[]) : [];

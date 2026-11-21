@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  BEAT_MS,
+  BEAT_STALE_MS,
   installSessionMarker,
   markSessionActive,
   markSessionClean,
@@ -44,7 +46,7 @@ describe("priorSessionEnd", () => {
 describe("installSessionMarker", () => {
   it("marks the session active immediately", () => {
     const teardown = installSessionMarker();
-    expect(priorSessionEnd()).toBe("unclean"); // i.e. "currently running"
+    expect(priorSessionEnd()).toBe("other-tab"); // i.e. "currently running"
     teardown();
   });
 
@@ -70,5 +72,35 @@ describe("installSessionMarker", () => {
     markSessionActive();
     window.dispatchEvent(new Event("pagehide"));
     expect(priorSessionEnd()).toBe("unclean");
+  });
+});
+
+describe("a second tab is not a crash", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("a live first tab (fresh heartbeat) reads as other-tab, never unclean", () => {
+    const tab1 = installSessionMarker();
+    vi.advanceTimersByTime(BEAT_STALE_MS - 1); // beats keep it fresh the whole time
+    expect(priorSessionEnd()).toBe("other-tab");
+    tab1();
+  });
+
+  it("forced race: the same flag reads unclean once the heartbeat has stopped", () => {
+    const tab1 = installSessionMarker();
+    tab1(); // the tab dies without a clean close: no more beats, flag stays set
+    localStorage.setItem("qz.session.active", `1@${Date.now()}`); // its last beat
+    expect(priorSessionEnd()).toBe("other-tab"); // still inside the window
+    vi.setSystemTime(Date.now() + BEAT_STALE_MS + 1);
+    expect(priorSessionEnd()).toBe("unclean"); // window passed: a real crash
+  });
+
+  it("a sibling's clean close does not hide a still-live tab", () => {
+    const tab1 = installSessionMarker();
+    markSessionClean(); // another tab closed cleanly and wrote the shared flag
+    expect(priorSessionEnd()).toBe("clean");
+    vi.advanceTimersByTime(BEAT_MS); // tab 1's next beat re-asserts it
+    expect(priorSessionEnd()).toBe("other-tab");
+    tab1();
   });
 });

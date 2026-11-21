@@ -890,3 +890,13 @@ describe("PlotLegend — a Curve Fit band (fitting review)", () => {
     }
   });
 });
+
+describe("PlotLegend - a very long column name", () => {
+  it("rides in an ellipsizing label span whose title is the full name", () => {
+    const long = "X".repeat(5000);
+    const { container } = render(<PlotLegend series={[{ label: long, unit: "" }]} plotted={[0]} hidden={[false]} />);
+    const label = container.querySelector<HTMLElement>(".qzk-legend-label");
+    expect(label).not.toBeNull();
+    expect(label!.getAttribute("title")).toBe(long);
+  });
+});

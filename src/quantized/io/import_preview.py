@@ -38,6 +38,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._time_of_day import clean_time_formats
 from quantized.io.error_binding_suggestions import suggest_error_bindings
 from quantized.io.import_categorical_guards import (
     categorical_level_problems_only,
@@ -144,6 +145,11 @@ class ImportSettings:
     # it" must not become a permanent headless policy for every future file
     # the filter's glob matches (review finding #2).
     allow_large_categorical: list[int] = field(default_factory=list)
+    # Per raw column, how a time-only column reads (`_time_of_day.
+    # TIME_FORMATS`; `None` entries / no list = text, today's reading), and
+    # whether an ascending clock column unwraps across midnight.
+    time_formats: list[str | None] | None = None
+    unwrap_midnight: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         # `asdict` recurses through nested dataclasses (including ones
@@ -151,8 +157,11 @@ class ImportSettings:
         # no special-casing here -- each becomes a plain dict automatically.
         out = asdict(self)
         out.pop("malformed_error_bindings", None)  # in-memory diagnostic, never persisted
-        if out["decimal"] == "auto":  # the default: keep the pre-option wire shape
-            del out["decimal"]
+        # Defaults keep the pre-option wire shape (saved filters, goldens).
+        for key, default in (("decimal", "auto"), ("time_formats", None),
+                             ("unwrap_midnight", True)):
+            if out[key] == default:
+                del out[key]
         return out
 
     @classmethod
@@ -200,6 +209,8 @@ class ImportSettings:
             if isinstance(raw_allow, list)
             else []
         )
+        kwargs["time_formats"] = clean_time_formats(kwargs.get("time_formats"))
+        kwargs["unwrap_midnight"] = kwargs.get("unwrap_midnight", True) is not False
         settings = cls(**kwargs)
         object.__setattr__(settings, "malformed_error_bindings", malformed)
         return settings
@@ -208,10 +219,10 @@ class ImportSettings:
 def guess_settings(text: str) -> ImportSettings:
     """Best-effort starting settings for ``text`` (the wizard's initial state)."""
     # Text columns start as ``label`` (kept as text), not ``y`` (_guess_roles).
-    header_line, units_line, data_start, names, roles = _guess_layout(text)
+    header_line, units_line, data_start, names, roles, times = _guess_layout(text)
     return ImportSettings(
         delimiter="auto", header_line=header_line, units_line=units_line,
-        data_start_line=data_start, column_names=names, roles=roles,
+        data_start_line=data_start, column_names=names, roles=roles, time_formats=times,
     )
 
 
@@ -256,6 +267,9 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
             "unit": p.units[k],
             "role": p.roles[k],
             "effective_name": effective_names[k],
+            # A time-only column: its kind and the format applied (`_time_of_day`).
+            **({"time_kind": p.time_kinds[k], "time_format": p.time_formats[k]}
+               if p.time_kinds[k] else {}),
         }
         for k in range(n_cols)
     ]
@@ -436,6 +450,11 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     metadata.update(_decimal_fields(p, effective_names))
     if x_dates is not None:  # direct import's keys (`delimited.import_csv`)
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
+    if x_cols and p.time_formats[x_cols[0]] == "clock":  # an HH:MM:SS axis, no date
+        metadata["time_is_clock"] = True
+    time_cols = {p.names[k]: f for k, f in enumerate(p.time_formats) if f != "text"}
+    if time_cols:
+        metadata["time_columns"] = time_cols
     label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
     if label_cols:
         metadata["text_columns"] = {

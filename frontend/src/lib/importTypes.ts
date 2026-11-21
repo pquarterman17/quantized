@@ -33,6 +33,12 @@ export interface ImportErrorBindingWire {
  *  decimal-comma column ("1,5") and refuses an ambiguous one ("1,500"). */
 export type ImportDecimal = "auto" | "." | ",";
 
+/** How a time-only column (`12:30:01`, `1:05 PM`, `[h]:mm:ss`) reads
+ *  (`io/_time_of_day.TIME_FORMATS`): `clock` = seconds since midnight on an
+ *  HH:MM:SS axis; `seconds` = seconds since midnight (a duration: its
+ *  seconds); `elapsed` = seconds from the first row; `text` = kept as text. */
+export type ImportTimeFormat = "clock" | "seconds" | "elapsed" | "text";
+
 export interface ImportSettingsWire {
   delimiter: string;
   /** Absent on settings saved before the option existed (= "auto"). */
@@ -64,6 +70,12 @@ export interface ImportSettingsWire {
    *  field: a one-time acceptance is not a policy for every future file the
    *  glob matches (finding #2). Optional/absent means "none accepted". */
   allow_large_categorical?: number[];
+  /** Per raw column, a time-only column's format (`null` = not chosen / not
+   *  a time column). Absent = none chosen: such columns stay text. */
+  time_formats?: (ImportTimeFormat | null)[] | null;
+  /** An ascending clock column that wraps past midnight adds a day per wrap.
+   *  Absent = on. */
+  unwrap_midnight?: boolean;
 }
 
 /** One resolved column descriptor from `preview_import`. */
@@ -80,6 +92,11 @@ export interface ImportPreviewColumn {
   effective_name?: string;
   unit: string;
   role: ImportColumnRole;
+  /** A time-only column (`io/_time_of_day`): a wall-clock time, or a
+   *  `[h]:mm:ss` duration (hours past 24). Absent on any other column. */
+  time_kind?: "clock" | "duration";
+  /** The format the preview applied to it (absent on any other column). */
+  time_format?: ImportTimeFormat;
 }
 
 /** `/api/import/preview` response — the wizard's live preview payload. */

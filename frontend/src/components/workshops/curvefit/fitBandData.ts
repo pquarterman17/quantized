@@ -13,6 +13,7 @@
 // sorted by x, so the band is smooth even for sparse data. The data column is
 // NaN on the grid rows (drawn as markers only, so the gaps never show).
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import type { BandsResult } from "../../../lib/api/fitStats";
 import type { CalcResult, DataStruct, Dataset, FitOverlay, SeriesStyle } from "../../../lib/types";
 
@@ -59,8 +60,8 @@ export function bandRows(fx: readonly number[], fy: readonly number[], nGrid = B
   const finite = fx.filter((v) => Number.isFinite(v));
   const rows: { x: number; y: number }[] = fx.map((x, i) => ({ x, y: fy[i] ?? Number.NaN }));
   if (finite.length > 0 && nGrid > 1) {
-    const lo = Math.min(...finite);
-    const hi = Math.max(...finite);
+    const lo = minOf(finite);
+    const hi = maxOf(finite);
     if (hi > lo) {
       for (let k = 0; k < nGrid; k++) rows.push({ x: lo + ((hi - lo) * k) / (nGrid - 1), y: Number.NaN });
     }
@@ -156,6 +157,12 @@ export function bandStyles(prediction: boolean): Record<number, SeriesStyle> {
 /** Rows of `overlay` that carry a fitted value, and their x from `xs`. */
 export function overlayRows(overlay: FitOverlay, xs: readonly number[]): { idx: number[]; x: number[] } {
   const idx: number[] = [];
+  // A display curve (lib/fitCurve) holds values only at its display rows:
+  // the band still covers every fitted row, so the export has it in full.
+  if (overlay.full) {
+    for (const r of overlay.full.rows) if (Number.isFinite(xs[r])) idx.push(r);
+    return { idx, x: idx.map((i) => xs[i]!) };
+  }
   overlay.y.forEach((v, i) => {
     if (v != null && Number.isFinite(xs[i])) idx.push(i);
   });

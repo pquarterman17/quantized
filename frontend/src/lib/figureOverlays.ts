@@ -25,12 +25,21 @@
 // left out. Placement on a per-series-X view and the "bound curve not shown"
 // refusal are lib/overlayPlacement's, unchanged.
 //
+// A DISPLAY curve (a large Curve Fit, P4 phase 2, lib/fitCurve) is saved as
+// what it draws -- its display rows, null elsewhere -- plus `full`: where its
+// full resolution comes from (the fit's server id, its model and parameters,
+// its fitted rows run-length encoded, and which of its null rows are real
+// gaps). It restores as the same display curve; a full-resolution consumer
+// fetches by id, and after a restart (an unknown id, 409) evaluates the model
+// at the fitted rows' x, bit-identical to the fit. A section saved before
+// carries no `full` and restores exactly as before.
+//
 // Pure, and LAZY: the store reaches it through store/windowOverlaysLazy.ts,
 // the export path through lib/figureDocumentOverlaySpec.
 
 import { dataFingerprint } from "./dataFingerprint";
 import type { FitBandEdges } from "./fitBandOverlay";
-import type { BaselineOverlay, FitOverlay, OverlayBinding } from "./fitTypes";
+import type { BaselineOverlay, FitCurveSource, FitOverlay, OverlayBinding } from "./fitTypes";
 import { droppedRows } from "./rowstate";
 import type { Dataset } from "./types";
 
@@ -44,6 +53,19 @@ export interface FigureOverlayCurve {
    *  Fit curve stays a dashed line over marked data after a reopen, whatever
    *  panel is open. Fit only; absent (a pre-UX9 file, Quick Fit) = plain. */
   curveFit?: true;
+  /** A display curve's full-resolution source (module header). Fit only. */
+  full?: SavedCurveSource;
+}
+
+/** `FitCurveSource` as saved: `rows` run-length encoded (`[start, length]`
+ *  pairs, fit order), no x (re-read from the rows), and `gaps`: the fitted
+ *  rows whose null is a real gap, not a row between display rows. */
+export interface SavedCurveSource {
+  resultId: string | null;
+  model: string;
+  params: number[];
+  rows: number[];
+  gaps: number[];
 }
 
 export interface FigureOverlays {
@@ -75,6 +97,48 @@ function curveFits(curve: { y: readonly unknown[]; band?: FitBandEdges }, n: num
  *  and the section validator refuses (review N1). */
 const cell = (v: number | null): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
+function encodeRuns(rows: readonly number[]): number[] {
+  const out: number[] = [];
+  for (const r of rows) {
+    const n = out.length;
+    if (n && out[n - 2]! + out[n - 1]! === r) out[n - 1]!++;
+    else out.push(r, 1);
+  }
+  return out;
+}
+
+function decodeRuns(runs: readonly number[], n: number): number[] | null {
+  const rows: number[] = [];
+  for (let i = 0; i + 1 < runs.length; i += 2) {
+    const start = runs[i]!, len = runs[i + 1]!;
+    if (!Number.isInteger(start) || !Number.isInteger(len) || start < 0 || len < 1 || start + len > n) return null;
+    for (let k = 0; k < len; k++) rows.push(start + k);
+  }
+  return runs.length % 2 ? null : rows;
+}
+
+function savedSource(src: FitCurveSource, y: readonly (number | null | undefined)[]): SavedCurveSource {
+  return {
+    resultId: src.resultId, model: src.model, params: [...src.params],
+    rows: encodeRuns(src.rows), gaps: src.rows.filter((r) => y[r] !== undefined && !Number.isFinite(y[r])),
+  };
+}
+
+/** The display curve a saved section stands for, on `ds`'s rows: its
+ *  undefined rows back, and x re-read from the bound X (null if unreadable). */
+function restoredDisplay(curve: FigureOverlayCurve, ds: Dataset): Pick<FitOverlay, "y" | "full"> | null {
+  const saved = curve.full!;
+  const n = ds.data.time.length;
+  const rows = decodeRuns(saved.rows, n);
+  const xKey = curve.binding.xKey;
+  if (!rows) return null;
+  const gaps = new Set(saved.gaps);
+  const y: (number | null | undefined)[] = [...curve.y];
+  for (const r of rows) if (y[r] === null && !gaps.has(r)) y[r] = undefined;
+  const x = rows.map((r) => (xKey === null ? ds.data.time[r] : ds.data.values[r]?.[xKey]) ?? Number.NaN);
+  return { y: y as (number | null)[], full: { resultId: saved.resultId, model: saved.model, params: [...saved.params], rows, x } };
+}
+
 /** `fit` (and its fitted `background`, when it is this fit's) as a document
  *  section for dataset `ds`, keyed `rows` (default: `ds`'s rows now -- pass the
  *  key from when the curve was DRAWN, review N7); undefined when it is not
@@ -85,7 +149,8 @@ export function captureFit(
   if (!fit || !ds || fit.datasetId !== ds.id || !fit.binding || !curveFits(fit, ds.data.time.length)) return undefined;
   const band = fit.band?.length ? { band: fit.band.map((e) => ({ ...e, y: e.y.map(cell) })) } : {};
   const look = fit.curveFit ? { curveFit: true as const } : {};
-  const out: FigureOverlays = { rows: rows ?? overlayRowsKey(ds), fit: structuredClone({ binding: fit.binding, y: fit.y.map(cell), ...band, ...look }) };
+  const full = fit.full ? { full: savedSource(fit.full, fit.y) } : {};
+  const out: FigureOverlays = { rows: rows ?? overlayRowsKey(ds), fit: structuredClone({ binding: fit.binding, y: fit.y.map(cell), ...band, ...look, ...full }) };
   if (background?.fitOf === fit && background.binding && curveFits(background, ds.data.time.length)) {
     out.background = structuredClone({ binding: background.binding, y: background.y.map(cell) });
   }
@@ -107,7 +172,10 @@ export function fitFromDocument(section: unknown, ds: Dataset | undefined): FitO
   const overlays = sanitizeFigureOverlays(section);
   if (!overlays?.fit || !ds || ds.pending || overlays.rows !== overlayRowsKey(ds)) return null;
   if (!curveFits(overlays.fit, ds.data.time.length)) return null;
-  return { datasetId: ds.id, ...structuredClone(overlays.fit) };
+  const { full: _saved, ...curve } = structuredClone(overlays.fit);
+  if (!overlays.fit.full) return { datasetId: ds.id, ...curve };
+  const display = restoredDisplay(overlays.fit, ds);
+  return display ? { datasetId: ds.id, ...curve, ...display } : null;
 }
 
 // ---- untrusted input (.dwk / clipboard / recipe) -----------------------------
@@ -120,6 +188,17 @@ function cells(value: unknown): (number | null)[] | null {
   return Array.isArray(value) && value.every((v) => v === null || (typeof v === "number" && Number.isFinite(v)))
     ? [...value as (number | null)[]]
     : null;
+}
+
+const ints = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => Number.isInteger(n) && n >= 0);
+
+function sanitizeSource(value: unknown): SavedCurveSource | null {
+  if (!isObject(value)) return null;
+  const { resultId, model, params, rows, gaps } = value;
+  if (resultId !== null && typeof resultId !== "string") return null;
+  if (typeof model !== "string" || !Array.isArray(params) || !params.every((p) => typeof p === "number" && Number.isFinite(p))) return null;
+  if (!ints(rows) || !ints(gaps)) return null;
+  return { resultId, model, params: [...params as number[]], rows: [...rows], gaps: [...gaps] };
 }
 
 function sanitizeCurve(value: unknown): FigureOverlayCurve | null {
@@ -149,6 +228,11 @@ export function sanitizeFigureOverlays(value: unknown): FigureOverlays | undefin
   const fit = sanitizeCurve(value.fit);
   if (!fit) return undefined;
   if (isObject(value.fit) && value.fit.curveFit === true) fit.curveFit = true; // the fit's look; never a background's
+  if (isObject(value.fit) && value.fit.full !== undefined) {
+    const full = sanitizeSource(value.fit.full);
+    if (!full) return undefined;
+    fit.full = full;
+  }
   if (value.background === undefined) return { rows: value.rows, fit };
   const background = sanitizeCurve(value.background);
   return background && !background.band && background.y.length === fit.y.length

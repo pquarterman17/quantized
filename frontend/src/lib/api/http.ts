@@ -45,9 +45,10 @@ export async function postJSON<T>(path: string, body: unknown, signal?: AbortSig
 
 /** The raw POST-JSON-and-parse primitive, also exposing whatever
  *  `X-Dataset-Handle` response header came back (null on every path that
- *  doesn't send one) -- `./datasetCache` is the only caller that reads the
- *  handle; every other path via `postJSON` just discards it. */
-async function fetchJSON<T>(
+ *  doesn't send one) -- `./datasetCache` (and lib/fitSource, through it) is
+ *  the only caller that reads the handle; every other path via `postJSON`
+ *  just discards it. */
+export async function fetchJSON<T>(
   path: string,
   body: unknown,
   signal?: AbortSignal,

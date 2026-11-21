@@ -1735,6 +1735,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/curve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Curve
+         * @description The full-resolution curve a display-curve fit left off the wire: its
+         *     ``yFit`` exactly as the full response carries it. 409 when evicted; the
+         *     client then evaluates the model at its own x (``/bands``, covar null).
+         */
+        post: operations["curve_api_fitting_curve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/diagnostics": {
         parameters: {
             query?: never;
@@ -3579,6 +3601,46 @@ export interface paths {
          * @description Report dict + format -> downloadable file (.tex/.html/.docx/.pptx).
          */
         post: operations["export_report_api_report_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/results/array": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Array
+         * @description The kept 1-D array (``baseline`` or ``background``), non-finite as null.
+         */
+        post: operations["array_api_results_array_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/results/dataset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dataset
+         * @description The kept signal-op result dataset, as ``/transform/sigop`` returns it.
+         */
+        post: operations["dataset_api_results_dataset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6255,6 +6317,16 @@ export interface components {
             /** Groups */
             groups: number[][];
         };
+        /** ArrayRequest */
+        ArrayRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline" | "background";
+            /** Result Id */
+            result_id: string;
+        };
         /** ArrheniusRequest */
         ArrheniusRequest: {
             /** D0 */
@@ -6420,10 +6492,18 @@ export interface components {
             n_free: number;
             /** N Points */
             n_points: number;
+            /** Obs Dy */
+            obs_dy?: number[] | null;
+            /** Obs Scale */
+            obs_scale?: number | null;
             /** Obs Var */
             obs_var?: (number | null)[] | null;
+            /** Obs Weights */
+            obs_weights?: number[] | null;
             /** Params */
             params: number[];
+            /** Result Id */
+            result_id?: string | null;
             /** X */
             x: number[];
             /** X Data */
@@ -7510,6 +7590,16 @@ export interface components {
             /** I */
             i: number;
         };
+        /** CurveRequest */
+        CurveRequest: {
+            /**
+             * Obs Var
+             * @default false
+             */
+            obs_var?: boolean;
+            /** Result Id */
+            result_id: string;
+        };
         /**
          * CustomTicksSpec
          * @description Explicit major ticks, optionally labelled (``calc.axis_scales``).
@@ -7735,12 +7825,21 @@ export interface components {
         DiagnosticsRequest: {
             /** N Params */
             n_params: number;
+            /** Qq Points */
+            qq_points?: number | null;
             /** Residuals */
-            residuals: number[];
+            residuals?: number[] | null;
+            /** Result Id */
+            result_id?: string | null;
+            /**
+             * Use Weights
+             * @default true
+             */
+            use_weights?: boolean;
             /** Weights */
             weights?: number[] | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
         };
         /** DielectricToRefractiveRequest */
         DielectricToRefractiveRequest: {
@@ -7845,6 +7944,14 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /** Dy */
             dy?: number[] | null;
             /** Equation */
@@ -7855,6 +7962,16 @@ export interface components {
             guesses?: (number | null)[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
+            /**
+             * Return Residuals
+             * @default true
+             */
+            return_residuals?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Scale Errors
              * @default true
@@ -7871,9 +7988,13 @@ export interface components {
             /** Weights */
             weights?: number[] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** EquationValidateRequest */
         EquationValidateRequest: {
@@ -7910,6 +8031,8 @@ export interface components {
         };
         /** EstimateRequest */
         EstimateRequest: {
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Iter Max Passes
              * @default 3
@@ -7940,6 +8063,11 @@ export interface components {
              * @default 4
              */
             poly_degree?: number;
+            /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
             /**
              * Smooth Passes
              * @default 3
@@ -8476,6 +8604,14 @@ export interface components {
              * @default 4
              */
             bg_poly_degree?: number;
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Max Peaks
              * @default 50
@@ -8507,6 +8643,16 @@ export interface components {
              */
             min_width_deg?: number;
             /**
+             * Return Background
+             * @default true
+             */
+            return_background?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
+            /**
              * Sensitivity
              * @default medium
              */
@@ -8522,9 +8668,13 @@ export interface components {
              */
             strict_prominence?: boolean;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FindXYRequest */
         FindXYRequest: {
@@ -8609,11 +8759,24 @@ export interface components {
         };
         /** FitPeakRequest */
         FitPeakRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Find Result Id */
+            find_result_id?: string | null;
             /**
              * Model
              * @default Lorentzian
              */
             model?: string;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** Seed Center */
             seed_center: number;
             /** Seed Fwhm */
@@ -8621,13 +8784,17 @@ export interface components {
             /** Snip Bg */
             snip_bg?: number[] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** X Hi */
             x_hi: number;
             /** X Lo */
             x_lo: number;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FitReportRequest */
         FitReportRequest: {
@@ -8666,6 +8833,14 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /** Dy */
             dy?: number[] | null;
             /** Fixed */
@@ -8676,6 +8851,16 @@ export interface components {
             model: string;
             /** P0 */
             p0?: number[] | null;
+            /**
+             * Return Residuals
+             * @default true
+             */
+            return_residuals?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Scale Errors
              * @default true
@@ -8692,9 +8877,13 @@ export interface components {
             /** Weights */
             weights?: number[] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FresnelRequest */
         FresnelRequest: {
@@ -9476,6 +9665,8 @@ export interface components {
         };
         /** ModPolyRequest */
         ModPolyRequest: {
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Max Iter
              * @default 100
@@ -9486,6 +9677,11 @@ export interface components {
              * @default 5
              */
             order?: number;
+            /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
             /**
              * Tol
              * @default 0.000001
@@ -11083,6 +11279,11 @@ export interface components {
             /** T */
             t: number;
         };
+        /** ResultRequest */
+        ResultRequest: {
+            /** Result Id */
+            result_id: string;
+        };
         /**
          * RocRequest
          * @description Request for ROC curve.
@@ -11275,8 +11476,15 @@ export interface components {
             dataset: {
                 [key: string]: unknown;
             };
+            /** Display Points */
+            display_points?: number | null;
             /** Method */
             method: string;
+            /**
+             * Return Dataset
+             * @default true
+             */
+            return_dataset?: boolean;
         };
         /** SigopResponse */
         SigopResponse: {
@@ -11284,10 +11492,16 @@ export interface components {
             dataset: {
                 [key: string]: unknown;
             };
+            /** Datasetdisplay */
+            datasetDisplay?: {
+                [key: string]: unknown;
+            } | null;
             /** Flagged */
             flagged: {
                 [key: string]: number[];
             };
+            /** Resultid */
+            resultId?: string | null;
             /** Rows In */
             rows_in: number;
             /** Rows Out */
@@ -12382,7 +12596,7 @@ export interface components {
              * @default auto
              * @enum {string}
              */
-            mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
+            mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime" | "clock";
             /** Offset */
             offset?: number | null;
             /** Prefix */
@@ -12659,12 +12873,27 @@ export interface components {
         };
         /** GuessRequest */
         quantized__routes__fitting__GuessRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Model */
             model: string;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** GuessRequest */
         quantized__routes__import_wizard__GuessRequest: {
@@ -15472,6 +15701,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    curve_api_fitting_curve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurveRequest"];
             };
         };
         responses: {
@@ -18356,6 +18620,74 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ReportExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    array_api_results_array_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArrayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dataset_api_results_dataset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResultRequest"];
             };
         };
         responses: {

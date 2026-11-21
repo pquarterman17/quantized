@@ -165,6 +165,38 @@ describe("lazyRegion", () => {
     expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
   });
 
+  it("a TOOL panel's render error shows an inline error card with the message, retry and dismiss (no blank app)", async () => {
+    let blow = true;
+    const Panel = (): ReactElement => {
+      if (blow) throw new Error("Maximum call stack size exceeded");
+      return <div>panel ok</div>;
+    };
+    const Region = lazyRegion(() => Promise.resolve({ default: Panel as ComponentType }), "CurveFitPanel", null, true);
+    render(
+      <OuterProbe>
+        <Region />
+      </OuterProbe>,
+    );
+    const card = await screen.findByRole("alert");
+    expect(card).toHaveTextContent("This panel hit an error: Maximum call stack size exceeded");
+    expect(screen.queryByText(/OUTER CAUGHT/)).not.toBeInTheDocument();
+    blow = false;
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(await screen.findByText("panel ok")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("dismissing the tool error card removes it", async () => {
+    const Panel = (): ReactElement => {
+      throw new Error("boom");
+    };
+    const Region = lazyRegion(() => Promise.resolve({ default: Panel as ComponentType }), "XPanel", null, true);
+    render(<Region />);
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("a load failure (the loader's own rejection) still shows the retry UI, unlike a render error", async () => {
     const load = (): Promise<{ default: ComponentType }> => Promise.reject(new Error("chunk fetch failed"));
     const Region = lazyRegion(load, "Widget");

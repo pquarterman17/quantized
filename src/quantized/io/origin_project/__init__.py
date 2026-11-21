@@ -31,6 +31,7 @@ from quantized.io.origin_project.opju import (
     read_opju,
     read_opju_books,
 )
+from quantized.io.origin_project.opju_memo import import_scoped
 from quantized.io.origin_project.tree import opj_folder_paths, opj_project_dates
 from quantized.io.origin_project.tree_opju import opju_folder_paths
 
@@ -77,6 +78,7 @@ def _with_provenance(ds: DataStruct, path: Path, *, raw: bytes | None = None) ->
     return dataclasses.replace(ds, metadata={**ds.metadata, **extra})
 
 
+@import_scoped
 def read_origin_project(path: Path) -> DataStruct:
     """Dispatch by extension to the clean-room ``.opj`` / ``.opju`` decoder.
 
@@ -104,6 +106,7 @@ def _with_folder_path(ds: DataStruct, folder_paths: dict[str, list[str]]) -> Dat
     return dataclasses.replace(ds, metadata={**ds.metadata, "origin_folder_path": folder_path})
 
 
+@import_scoped
 def read_origin_books(path: Path) -> list[DataStruct]:
     """Every workbook in an Origin project as its own DataStruct (plan item 3).
 
@@ -125,6 +128,7 @@ def read_origin_books(path: Path) -> list[DataStruct]:
     return [_with_folder_path(b, folder_paths) for b in books]
 
 
+@import_scoped
 def read_origin_project_all(
     path: Path, *, raw: bytes | None = None
 ) -> tuple[DataStruct, list[DataStruct]]:

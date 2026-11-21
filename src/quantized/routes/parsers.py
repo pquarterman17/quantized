@@ -25,6 +25,7 @@ from quantized.io.origin_project import (
     read_origin_project_all,
 )
 from quantized.io.origin_project.fidelity import with_data_diagnostics
+from quantized.io.origin_project.opju_memo import import_scoped
 from quantized.io.origin_project.preview import decimate_with_alignment
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._datasetcache import cache_dataset
@@ -187,6 +188,7 @@ def _book_source_ref(path: Path, upload_token: str | None) -> dict[str, str]:
     return {"kind": "path", "path": str(path)}
 
 
+@import_scoped
 def _import_with_books(
     path: Path,
     *,

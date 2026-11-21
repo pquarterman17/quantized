@@ -235,12 +235,25 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
       data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
     };
     const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
-    const t = target({ id: "w1", name: "W" }, [ds]);
+    const ds2: Dataset = { ...ds, id: "d2", name: "d2.dat" };
+    const t = target({ id: "w1", name: "W" }, [ds, ds2]);
     const spec = deleteAction.confirm!(t);
-    expect(spec.message).toContain("1 worksheet");
+    expect(spec.message).toContain("2 worksheets");
     // P1 fix: the copy must not imply the WORKBOOK itself survives restore —
     // it doesn't (deleteWorkbook removes the WorkbookNode outright).
     expect(spec.message).toContain("grouping itself is removed for good");
+  });
+
+  it("a single-sheet (collapsed) workbook gets plain copy, no workbook-grouping talk", () => {
+    const ds: Dataset = {
+      id: "d1",
+      name: "scan",
+      workbookId: "w1",
+      data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+    };
+    const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
+    const spec = deleteAction.confirm!(target({ id: "w1", name: "scan.csv" }, [ds]));
+    expect(spec.message).toBe('"scan" will move to Trash.');
   });
 
   // PR M (L0.45): the unconditional fail-closed gate is LIFTED — Delete is

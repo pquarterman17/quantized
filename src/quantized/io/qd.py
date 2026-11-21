@@ -143,12 +143,17 @@ def import_qd_vsm(
     if data_start < 0:
         raise ValueError(f"[Data] section not found in {path.name}")
 
+    if data_start >= len(raw_lines):  # "[Data]" was the last line: no column row
+        raise ValueError(f"[Data] section holds no column header or rows in {path.name}")
     col_names, col_units = _parse_column_row(raw_lines[data_start])
     matrix = _parse_data_rows(raw_lines[data_start + 1 :], len(col_names))
     if matrix.shape[0] == 0:
         raise ValueError(f"no valid data rows in {path.name}")
 
-    x_idx = resolve_column(x_axis, col_names, _QD_SHORTHAND, "x-axis")
+    try:
+        x_idx = resolve_column(x_axis, col_names, _QD_SHORTHAND, "x-axis")
+    except KeyError as exc:  # a damaged or unusual column row: a clear parse error
+        raise ValueError(f"{exc.args[0]} (in {path.name})") from exc
     if x_idx == NO_COLUMN:
         raise ValueError("x-axis column could not be resolved")
     x_idx = _auto_x_index(col_names, matrix, x_idx)

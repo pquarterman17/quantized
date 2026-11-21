@@ -2,6 +2,7 @@
 // the Peaks panel's peaks (center ± FWHM) or the plot's ROI band (the quick
 // gadget's Integrate window), editable, removable.
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { Button } from "../../primitives";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import type { IntegrateWindow } from "./batchIntegrate";
@@ -48,7 +49,7 @@ export default function BatchWindowsEditor({ windows, onChange, seed, roi, disab
           From peaks ({seed.length})
         </Button>
         <Button size="sm" disabled={disabled || !roi} title="The band drawn with the plot's ROI tool."
-          onClick={() => roi && onChange([...windows, { lo: Math.min(...roi), hi: Math.max(...roi) }])}>
+          onClick={() => roi && onChange([...windows, { lo: minOf(roi), hi: maxOf(roi) }])}>
           Add plot ROI
         </Button>
       </div>

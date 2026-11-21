@@ -23,6 +23,7 @@ import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { parameterTable, pctLabel, REPORT_LEVELS, reportTables } from "./fitReportTables";
 import { fitIsWeighted, reportPrefs, type FittedData } from "../../../store/curveFitSession";
+import { useFullFitResult } from "./useFullFitResult";
 
 interface Props {
   result: CalcResult;
@@ -50,11 +51,13 @@ export default function FitReportSection({ result, fitData, paramNames, fileStem
   const [rep, setRep] = useState<FitReportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const weighted = fitIsWeighted(fitData);
+  // A display-curve fit's residuals, fetched once the report opens (lib/fitCurve).
+  const full = useFullFitResult(result, fitData.y, open);
 
   useEffect(() => {
     setRep(null);
-    setError(null);
-    const residuals = result.residuals as (number | null)[] | undefined;
+    setError(full.error);
+    const residuals = full.result?.residuals as (number | null)[] | undefined;
     if (!open || !Array.isArray(residuals)) return;
     const params = (result.params as number[] | undefined) ?? [];
     const ctrl = new AbortController();
@@ -77,7 +80,7 @@ export default function FitReportSection({ result, fitData, paramNames, fileStem
         if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : "fit report failed");
       });
     return () => ctrl.abort();
-  }, [open, level, result, fitData]);
+  }, [open, level, result, fitData, full.result, full.error]);
 
   const tables = useMemo(() => (rep ? reportTables(paramNames, rep, weighted) : []), [rep, paramNames, weighted]);
   const status = useApp((s) => s.setStatus);

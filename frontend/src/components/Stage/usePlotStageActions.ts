@@ -7,11 +7,11 @@
 // displayed payload, not state PlotStage itself needs to react to, so they
 // extract cleanly with no behavior change.
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
-import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
+import { copyImage } from "../../lib/clipboard";
 import { xExtent } from "../../lib/plotDecimate";
 import { clampPlottedRange, rowsInXRange, type PlotPayload, type PlotSeriesSpec } from "../../lib/plotdata";
 import { clipboardSvgSupported } from "../../lib/clipboard";
@@ -91,6 +91,13 @@ export function usePlotStageActions(
   onLasso: (u: uPlot, poly: [number, number][], unmask: boolean) => void;
   onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
+  // The canvas' payload as of NOW: the data "Copy data" waits for after it
+  // swaps a display fit / lean baseline for the full curve.
+  const latestPayload = useRef(displayPayload);
+  useEffect(() => {
+    latestPayload.current = displayPayload;
+  });
+
   function resetView() {
     if (plotRef.current && displayPayload) {
       const u = plotRef.current;
@@ -107,7 +114,8 @@ export function usePlotStageActions(
     const cols = displayPayload.data as (number | null)[][];
     const xVals = cols[0] ?? [];
     const yVals: (number | null)[] = [];
-    for (let s = 1; s < cols.length; s++) yVals.push(...cols[s]);
+    // A loop, not push(...cols[s]): a 120k+ row column overflows the argument cap.
+    for (let s = 1; s < cols.length; s++) for (const v of cols[s]) yVals.push(v);
     const st = useApp.getState();
     st.setXScale(suggestLogScale(xVals) ? "log" : "linear");
     st.setYScale(suggestLogScale(yVals) ? "log" : "linear");
@@ -126,10 +134,11 @@ export function usePlotStageActions(
   // overlays) as TSV — paste straight into Origin / Excel / a notebook.
   function copyData() {
     if (!displayPayload) return;
-    const nRows = displayPayload.data[0]?.length ?? 0;
-    const nCols = displayPayload.series.length + 1; // + the x column
-    void copyText(payloadToTSV(displayPayload)).then((ok) =>
-      useApp.getState().setStatus(ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable"),
+    // The whole copy is click-only code (lib/copyPlotData): it fetches a display
+    // fit / lean baseline in full first, and reports its own status.
+    void runLazy("Preparing the plot data…", () => import("../../lib/copyPlotData")).then(
+      (m) => m.copyPlotData(displayPayload, () => latestPayload.current),
+      onLoadFailure,
     );
   }
 

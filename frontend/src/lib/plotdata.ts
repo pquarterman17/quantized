@@ -16,10 +16,10 @@ import { waterfallApplies, waterfallStep } from "./waterfallOffset";
 export interface PlotSeriesSpec {
   label: string;
   unit: string;
+  axisLabel?: string; // the name an auto axis title uses when `label` adds a split suffix (encoded series)
   /** "points" renders markers only (peak overlay); default is a line. */
   kind?: "line" | "points";
-  /** 0 = primary (left) Y axis, 1 = secondary (right) — the dual-Y feature. */
-  axis?: number;
+  axis?: number; // 0 = primary (left) Y axis, 1 = secondary (right) — the dual-Y feature
   /** De-emphasized rendering (faint stroke, hollow markers) — the "grey" mode
    *  companion series showing excluded/filtered points (#50/#53). */
   muted?: boolean;
@@ -72,10 +72,9 @@ export interface PlotPayload {
    *  `usePlotPayload.ts`'s windowed re-fetch effect is the single producer of
    *  a request that sets this. */
   window?: [number, number] | null;
-  /** The x column is timestamps (epoch seconds; the dataset's own `time`
-   *  with `metadata.time_is_datetime`): an `auto` X format draws dates
-   *  (`axisFormat.dateAwareXFmt`, worksheet audit #7). */
-  xIsDate?: boolean;
+  /** The x column is timestamps (epoch seconds, `metadata.time_is_datetime`) / `"clock"` a time of day (seconds since
+   *  midnight, `metadata.time_is_clock`): an `auto` X format draws dates / a clock (`axisFormat.dateAwareXFmt`, audit #7). */
+  xIsDate?: boolean | "clock";
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
   rowIds?: number[]; // a reduced (decimated/windowed) payload: row i is dataset row rowIds[i] (lib/plotRowMap.ts)
@@ -110,13 +109,15 @@ export function buildColumns(
         ? String(ds.metadata?.["x_column_long"] || ds.metadata?.["x_column_name"] || "x")
         : (ds.labels[xKey] ?? "x"),
     xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
-    ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}), // only when set: payloads compare deep-equal
+    ...xTimeFlags(ds, xKey),
   };
 }
 
-/** Whether the plotted x (`xKey`, null = `ds.time`) is a timestamp column. */
-export function xIsDate(ds: DataStruct, xKey: number | null): boolean {
-  return xKey == null && ds.metadata?.["time_is_datetime"] === true;
+/** The payload's `xIsDate`, only when set (payloads compare deep-equal): the plotted x (`xKey`, null = `ds.time`)
+ *  is a timestamp column, or `"clock"` a time-of-day one. */
+export function xTimeFlags(ds: DataStruct, xKey: number | null): Pick<PlotPayload, "xIsDate"> {
+  const m = xKey == null ? ds.metadata : undefined, d = m?.["time_is_datetime"] === true || (m?.["time_is_clock"] === true && "clock");
+  return d ? { xIsDate: d } : {};
 }
 
 /** The xCategories PRODUCER (gap #20 residual): the field and its consumer
@@ -272,7 +273,7 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     xUnit: r.x.unit,
     decimated: r.decimated ?? false, ...(r.rows ? { rowIds: r.rows } : {}),
     window:
-      r.window && r.window.x_min != null && r.window.x_max != null
+      r.window?.x_min != null && r.window.x_max != null
         ? [r.window.x_min, r.window.x_max]
         : null,
   };
@@ -462,13 +463,25 @@ export function withDerivOverlay(
   overlay: FitOverlay | null,
   activeId: string | null,
 ): PlotPayload {
-  if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
+  return appendOverlay(payload, overlay, activeId, { label: "dy/dx", unit: "", axis: 1, overlay: true });
+}
+
+/** `overlay` appended as ONE series `spec` when it belongs to `activeId` and
+ *  aligns to the plotted x (alignOverlayY); else `payload` unchanged. The
+ *  shared body of the single-column overlays (dy/dx, baseline, peaks). */
+function appendOverlay(
+  payload: PlotPayload,
+  overlay: { datasetId: string; y: (number | null)[] } | null,
+  activeId: string | null,
+  spec: PlotSeriesSpec,
+): PlotPayload {
+  const y = overlay && overlay.datasetId === activeId
+    ? alignOverlayY(overlay.y, payload.data[0].length, payload.decimated) : null;
   if (y === null) return payload;
   return {
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1, overlay: true }],
+    series: [...payload.series, spec],
   };
 }
 
@@ -483,14 +496,7 @@ export function withBaselineOverlay(
   overlay: BaselineOverlay | null,
   activeId: string | null,
 ): PlotPayload {
-  if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
-  if (y === null) return payload;
-  return {
-    ...payload,
-    data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "baseline", unit: "", overlay: true }],
-  };
+  return appendOverlay(payload, overlay, activeId, { label: "baseline", unit: "", overlay: true });
 }
 
 /** Append peak markers as a points-only series (same guards as withFitOverlay). */
@@ -500,14 +506,8 @@ export function withPeakOverlay(
   activeId: string | null,
 ): PlotPayload {
   // No peaks yet (empty marker column): no series, so no legend row either.
-  const y = overlay && overlay.datasetId === activeId && !peakOverlayEmpty(overlay)
-    ? alignOverlayY(overlay.y, payload.data[0].length, payload.decimated) : null;
-  if (y === null) return payload;
-  return {
-    ...payload,
-    data: [...payload.data, y] as uPlot.AlignedData,
-    series: [...payload.series, { label: "peaks", unit: "", kind: "points", overlay: true }],
-  };
+  const shown = overlay && !peakOverlayEmpty(overlay) ? overlay : null;
+  return appendOverlay(payload, shown, activeId, { label: "peaks", unit: "", kind: "points", overlay: true });
 }
 
 /** Vertically offset each series for a waterfall view: series s (1-indexed among
@@ -634,7 +634,8 @@ export async function fetchPlot(
       },
       signal,
     );
-    return dropTrailingEmptyRows({ ...fromResponse(r), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
+    const data = r.kept ? (await import("./plotUngap")).ungap(r.data, r.kept) as typeof r.data : r.data;
+    return dropTrailingEmptyRows({ ...fromResponse({ ...r, data }), ...xTimeFlags(ds, xKey) });
   } catch (err) {
     // An intentional cancellation (a newer commit superseded this fetch)
     // must never be treated as "we're offline" -- the offline fallback below

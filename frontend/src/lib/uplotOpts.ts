@@ -4,7 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
-import { axisExtrasApplier, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
+import { axisExtrasApplier, clockAxis, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter, categoricalXAxis } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
 
@@ -23,7 +23,7 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
-import { drawnOnAxis, sharedAxisTitle } from "./sharedAxisTitle";
+import { clipAxisTitle, drawnOnAxis, sharedAxisTitle } from "./sharedAxisTitle";
 import { logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 import { autoFactorTopPad, autoLogTickValues, autoMultiplierAllowed, autoPlainValues, drawAutoFactors, autoTickValues, autoUnpadded, splitsIncrement, stripNegZero, type TickValues } from "./autoTickValues";
 export { logMajorTickFilter };
@@ -1012,7 +1012,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
   // x values are ordinal positions, not physical quantities, so a fixed/sci
   // number format would show "1.0"/"2.0" instead of the real category names.
-  const xCat = payload.xCategories ? categoricalXAxis(payload.xCategories, payload.xCategoryBase ?? 0, tickPx) : null;
+  const xCat = payload.xCategories ? categoricalXAxis(payload.xCategories, payload.xCategoryBase ?? 0, tickPx) : clockAxis()?.(xFmt, xScale, args.xStep, tickPx); // a clock X: lib/clockTicks.ts
   const xValues = xCat ? xCat.values : tickFormatter(xFmt, xScale);
   const yValues = tickFormatter(yFmt, yScale);
   // y2Fmt null/undefined inherits yFmt (compatibility default — see the
@@ -1073,7 +1073,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       size: xAxisSize,
       // Blank uPlot's own draw only when the plugin draws this title (rich or
       // moved); the labelSize band stays reserved either way.
-      label: xDrawn ? "" : xLabel,
+      label: xDrawn ? "" : clipAxisTitle(xLabel),
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
       ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
@@ -1082,7 +1082,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     {
       ...axis,
       size: yAxisSize,
-      label: yDrawn ? "" : yLabelText,
+      label: yDrawn ? "" : clipAxisTitle(yLabelText),
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
       ...(yScale === "log" ? { filter: logMajorTickFilter } : {}),
@@ -1102,7 +1102,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       scale: "y2",
       side: 1,
       size: yAxisSize,
-      label: y2Drawn ? "" : y2LabelText,
+      label: y2Drawn ? "" : clipAxisTitle(y2LabelText),
       grid: { show: false },
       ...(y2Values ? { values: y2Values } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),

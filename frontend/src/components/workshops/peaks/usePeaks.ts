@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
+import { postBySource } from "../../../lib/fitSource";
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
 import { DEFAULT_REFERENCE_TOLERANCE, matchReflection, referenceReflections, usesReferenceTokens } from "../../../lib/peakPhaseMatch";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
@@ -114,7 +115,12 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         const xrdDefaults = ds.data.metadata.technique === "xrd.powder"
           ? { strict_prominence: true }
           : {};
-        const res = await findPeaks({ x, y, ...xrdDefaults, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) });
+        const findBody = { x, y, ...xrdDefaults, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) };
+        // x/y by dataset handle when the server holds it (lib/fitSource, P8). The lean
+        // background stays off: curation and the saved table read it synchronously.
+        const source = inputs.yKeyUsed === null || !inputs.rows ? undefined : { data: ds.data, xKey: inputs.xKeyUsed, yKey: inputs.yKeyUsed };
+        const res = await postBySource<Awaited<ReturnType<typeof findPeaks>>>(
+          "/api/peaks/find", findBody, source, source && inputs.rows ? inputs.rows() : [], () => findPeaks(findBody));
         if (cancelled) return;
         setFoundPeaks(res.peaks, { x, y, fullX, background: res.background, binding: peakBinding(inputs) });
       } catch (e: unknown) {
@@ -209,19 +215,23 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!ds || stale()) return;
         const st = useApp.getState();
         const item = selectionItemForTool("peaks", ds.id);
-        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows } = peakInputs(
+        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows, rows } = peakInputs(
           ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item,
         );
+        // x/y by dataset handle when the server holds it (lib/fitSource, P4 phase 3).
+        const source = yKeyUsed === null || !rows ? undefined : { data: ds.data, xKey: xKeyUsed, yKey: yKeyUsed };
+        const fitRows = source && rows ? rows() : [];
         const fitted: FittedPeak[] = [];
         for (let i = 0; i < peaks.length; i++) {
           if (cancelled || stale()) break;
           updateOp(opId, label(i));
           const p = peaks[i];
           const half = (Number.isFinite(p.fwhm) && p.fwhm > 0 ? p.fwhm : 1) * 3;
-          const r = await fitPeak({
+          const body = {
             x, y, x_lo: p.center - half, x_hi: p.center + half,
             seed_center: p.center, seed_fwhm: p.fwhm, model: opts.model,
-          });
+          };
+          const r = await postBySource("/api/peaks/fit", body, source, fitRows, () => fitPeak(body));
           if (r.success) {
             fitted.push({
               center: r.center, fwhm: r.fwhm, height: r.height, bg: r.bg,

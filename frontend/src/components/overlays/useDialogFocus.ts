@@ -233,7 +233,10 @@ function restoreFocusTo(cameFrom: HTMLElement | null, root: HTMLElement | null):
   // `isConnected` matches ConfirmDialog: a surface whose action removed its
   // own trigger must not reach for a detached node — it lands on the shared
   // safe spot instead of being left on <body>.
-  if (cameFrom?.isConnected) cameFrom.focus();
+  // A menu-launched dialog's opener is the menu item, unmounted with the menu:
+  // fall back to the trigger that menu was opened from (`qzMenuReturn`, set by ContextMenu).
+  const target = cameFrom?.isConnected ? cameFrom : (cameFrom as (HTMLElement & { qzMenuReturn?: HTMLElement }) | null)?.qzMenuReturn;
+  if (target?.isConnected) target.focus();
   else focusSafeLanding();
 }
 

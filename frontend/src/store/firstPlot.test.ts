@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { defaultPlotView } from "../lib/plotview";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import type { Dataset, DataStruct } from "../lib/types";
-import { presentFirstPlot, withFirstPlot } from "./firstPlotNotice";
+import { MAX_AUTO_SERIES, presentFirstPlot, withFirstPlot } from "./firstPlotNotice";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 import { datasetViewDefaults } from "./windowDefaults";
@@ -88,9 +88,12 @@ describe("datasetViewDefaults applies the first plot", () => {
     // ...and monitor columns are left off like any import.
     const vsm = withFirstPlot({ ...VSM, data: { ...VSM.data, metadata: { ...VSM.data.metadata, ...md } } });
     expect(datasetViewDefaults(vsm).yKeys).toEqual([0]);
-    // A non-Origin file of the same width is not capped.
+    // A non-Origin file of the same width is capped higher (MAX_AUTO_SERIES), not unbounded.
     const plain = withFirstPlot({ id: "p", name: "p.csv", data: wide });
-    expect(plain.data.metadata.first_plot).toBeUndefined();
+    expect(plain.data.metadata.first_plot).toEqual({ of: wide.labels, y: Array.from({ length: MAX_AUTO_SERIES }, (_, i) => i) });
+    // ...and a file within the cap plots every channel (nothing stored).
+    const narrow = data(cols.slice(0, MAX_AUTO_SERIES), field, "Field", "Oe");
+    expect(withFirstPlot({ id: "n", name: "n.csv", data: narrow }).data.metadata.first_plot).toBeUndefined();
   });
 
   it("a copy with the same labels whose Y went <= 0 does not inherit log Y", () => {
@@ -132,6 +135,17 @@ describe("presentFirstPlot (the import toast)", () => {
     expect(last().msg).toBe("imported 1 file — Temperature not plotted");
     last().actions!.find((a) => a.label === "Plot all")!.onClick();
     expect(useApp.getState()).toMatchObject({ yKeys: null, y2Keys: [1] });
+  });
+
+  it("a wide import plots the first MAX_AUTO_SERIES channels and says how many were left; Plot all plots them all", async () => {
+    const cols = Array.from({ length: 49 }, (_, c) => ({ name: `C${c}`, unit: "", v: (i: number) => Math.sin(i / 7 + c) }));
+    const wide = withFirstPlot({ id: "w", name: "wide.csv", data: data(cols) });
+    useApp.getState().addDataset(wide);
+    expect(useApp.getState().yKeys).toEqual(Array.from({ length: MAX_AUTO_SERIES }, (_, i) => i));
+    expect(await presentFirstPlot(useApp.getState, "imported 1 file", "w")).toBe(true);
+    expect(last().msg).toBe("imported 1 file — C12, C13, C14 and 34 more not plotted");
+    last().actions!.find((a) => a.label === "Plot all")!.onClick();
+    expect(useApp.getState().yKeys).toBeNull();
   });
 
   it("says log Y and offers Linear Y", async () => {

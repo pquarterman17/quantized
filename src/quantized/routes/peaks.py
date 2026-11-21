@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field, model_validator
 
@@ -24,19 +24,26 @@ from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_model_fit import fit_peak_model
 from quantized.calc.peak_multifit import fit_multi_peak
 from quantized.calc.peaks import find_peaks_robust
+from quantized.routes._arrayresults import (
+    fingerprint,
+    lean_array_fields,
+    require_fingerprint,
+    resolve_result_or_409,
+)
+from quantized.routes._datasetrows import XYSource, source_xy
 from quantized.routes._errors import CALC_ERRORS, call_calc
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import jsonify, to_jsonable
 
 # Models accepted by the simultaneous fit (compositeEval branches).
 MULTI_MODELS = ("Lorentzian", "Gaussian", "Pseudo-Voigt", "Split Pearson VII", "TCH-pV")
 LINK_MODES = ("None", "Shared FWHM", "Shared FWHM + eta")
 
-router = APIRouter(prefix="/api/peaks", tags=["peaks"])
+router = APIRouter(prefix="/api/peaks", tags=["peaks"], route_class=OffloopJSONRoute)
 
 
-class FindPeaksRequest(BaseModel):
-    x: list[float]
-    y: list[float]
+class FindPeaksRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (P8): XYSource.
     snr_threshold: float = 5.0
     min_separation: float = 0.0
     max_peaks: int = 50
@@ -53,14 +60,20 @@ class FindPeaksRequest(BaseModel):
     # Opt in for XRD searches: generic spectra can contain scientifically
     # meaningful weak local peaks, so the transport default stays compatible.
     strict_prominence: bool = False
+    # Opt-in lean response (P4 phase 4, routes/_arrayresults.py): false leaves
+    # ``background`` off the wire and returns ``resultId`` (+ ``backgroundDisplay``
+    # with ``display_points``); /fit takes the id as ``find_result_id``.
+    return_background: bool = True
+    display_points: int | None = Field(default=None, ge=16, le=20_000)
 
 
 @router.post("/find")
-def find(req: FindPeaksRequest) -> dict[str, Any]:
+def find(req: FindPeaksRequest, response: Response) -> dict[str, Any]:
     """Find peaks in (x, y); returns the peak list + the estimated background."""
+    x, y = source_xy(req, response)
     peaks, background = call_calc(find_peaks_robust,
-        req.x,
-        req.y,
+        x,
+        y,
         snr_threshold=req.snr_threshold,
         min_separation=req.min_separation,
         max_peaks=req.max_peaks,
@@ -74,32 +87,53 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
         bg_iterative=req.bg_iterative,
         strict_prominence=req.strict_prominence,
     )
-    return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
+    if req.return_background:
+        return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
+    return {
+        "peaks": to_jsonable(peaks),
+        **lean_array_fields(
+            "background", "background", background, req.display_points,
+            digest=fingerprint(x, y),
+        ),
+    }
 
 
-class FitPeakRequest(BaseModel):
-    x: list[float]
-    y: list[float]
+class FitPeakRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (P4 phase 3): XYSource.
     x_lo: float
     x_hi: float
     seed_center: float
     seed_fwhm: float | None = None
     model: str = "Lorentzian"
     snip_bg: list[float] | None = None
+    # The ``resultId`` of a lean /find (``return_background: false``) run on
+    # THESE x and y: its background is used as ``snip_bg`` without the 8 MB
+    # per 1M rows re-post. 409 when unknown or computed from other x / y;
+    # the client then resends ``snip_bg``. ``snip_bg`` wins when both are sent.
+    find_result_id: str | None = None
 
 
 @router.post("/fit")
-def fit(req: FitPeakRequest) -> dict[str, Any]:
+def fit(req: FitPeakRequest, response: Response) -> dict[str, Any]:
     """Fit one peak in [x_lo, x_hi] to ``model``; returns the fit result dict."""
     if req.model not in MODELS:
         raise HTTPException(status_code=422, detail=f"unknown model: {req.model}")
+    if req.find_result_id is not None and req.x is None:
+        # Two 409s (unknown handle / unknown find id) would be indistinguishable.
+        raise HTTPException(status_code=422, detail="find_result_id needs posted x/y")
+    x, y = source_xy(req, response)
+    snip_bg: Any = req.snip_bg
+    if snip_bg is None and req.find_result_id is not None:
+        kept = resolve_result_or_409(req.find_result_id, "background")
+        require_fingerprint(kept, x, y)
+        (snip_bg,) = kept.arrays.values()
     try:
         result = fit_single_peak(
-            req.x, req.y, req.x_lo, req.x_hi,
+            x, y, req.x_lo, req.x_hi,
             seed_center=req.seed_center,
             seed_fwhm=float("nan") if req.seed_fwhm is None else req.seed_fwhm,
             model=req.model,
-            snip_bg=req.snip_bg,
+            snip_bg=snip_bg,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

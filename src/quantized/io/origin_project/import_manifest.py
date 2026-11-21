@@ -43,6 +43,7 @@ from quantized.io.origin_project.opju_graph_pages import (
 from quantized.io.origin_project.opju_hist_cumulative import pair_histogram_cumulative
 from quantized.io.origin_project.opju_layer_kind import apply_layer_kinds
 from quantized.io.origin_project.opju_map_plots import bind_map_books
+from quantized.io.origin_project.opju_memo import import_scoped
 from quantized.io.origin_project.opju_no_data import omit_unsaved_curves
 from quantized.io.origin_project.opju_stat_plots import apply_stat_kinds
 from quantized.io.origin_project.worksheet_fidelity import worksheet_fidelity_summary
@@ -58,6 +59,7 @@ def _connector_books(primary: DataStruct | None) -> list[str]:
     return [str(r["book"]) for r in rows or [] if isinstance(r, Mapping) and r.get("book")]
 
 
+@import_scoped
 def origin_figures_and_fidelity(
     raw: bytes, suffix: str, books: list[DataStruct], primary: DataStruct | None = None
 ) -> tuple[list[dict[str, Any]], OriginFidelityManifest]:

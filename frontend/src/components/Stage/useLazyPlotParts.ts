@@ -47,6 +47,9 @@ export interface LazyDecorNeeds {
   turned?: boolean;
   /** A series asks for spline / drop lines / size-by (lib/marksLoader.ts): rebuild once that chunk settles. */
   marks?: boolean;
+  /** A time-of-day X (`PlotPayload.xIsDate` "clock"): its `auto` format draws the
+   *  clock axis, which rides the axis-extras chunk (lib/clockTicks.ts). */
+  clock?: boolean;
 }
 
 /** How many things on a plot the region-decor STARTUP chunk draws: reference
@@ -61,7 +64,7 @@ export const startupOverlayCount = (o: Record<string, object | null | undefined>
 /** The `LazyDecorNeeds` of a viewport's labels, payload and overlays. */
 export function plotDecorNeeds(
   labels: readonly (string | null | undefined)[],
-  payload: { xLabel?: string; series: readonly { label: string }[] } | null | undefined,
+  payload: { xLabel?: string; xIsDate?: boolean | "clock"; series: readonly { label: string }[] } | null | undefined,
   annotations: readonly { text?: string }[] | null | undefined,
   overlays: number,
   styles?: readonly (SeriesStyle | undefined)[],
@@ -72,6 +75,7 @@ export function plotDecorNeeds(
     overlays: overlays > 0,
     ...(isTurned(styles, exchange) ? { turned: true } : {}),
     ...(styles?.some(usesMarks) ? { marks: true } : {}),
+    ...(payload?.xIsDate === "clock" ? { clock: true } : {}),
   };
 }
 
@@ -81,7 +85,7 @@ export function useLazyPlotParts(
   onReady: () => void,
   decor: LazyDecorNeeds = { texts: [], overlays: false },
 ): void {
-  const needExtras = needsAxisExtras(...fmts) && axisExtrasApplier() === null;
+  const needExtras = (needsAxisExtras(...fmts) || decor.clock) && axisExtrasApplier() === null;
   const needGadgets = tool === "qfit" && gadgetPlugins() === null;
   const needTools = needsToolPlugins(tool, decor.regionResult) && toolPlugins() === null;
   const needEscapes = decor.texts.some(awaitsOriginEscapes);
