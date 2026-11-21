@@ -113,6 +113,10 @@ Delegate each task to the cheapest model that fits it — never overkill:
 - **When intent is unclear, fail closed** with a clear error rather than
   guess; **add new behaviour as a UI option** rather than silently changing
   an existing default.
+- **General before specialized:** order analysis and plotting work from
+  general to specific: features that work for any plot or dataset first,
+  then domain-family analysis (spectroscopy, XRD, reflectometry), then
+  technique-specific analysis (e.g. magnetometry hysteresis) last.
 - **Parallel lanes:** lanes may push to their own `claude/<lane>` branch and
   open their own PR (auto-merge on green); one PR per small batch of fixes.
 
