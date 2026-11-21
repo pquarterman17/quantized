@@ -11,6 +11,7 @@
 // strip and bar alike. Selected POINTS (box "points" / strip) are ringed by
 // the box renderer itself (`statRenderBox`), which owns their jitter.
 
+import { maxOf, minOf } from "../../lib/arrayExtent";
 import { stackedTotal } from "../../lib/barMatrix";
 import {
   barDomain,
@@ -120,7 +121,7 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const domain = boxValueDomain(data.boxes, m);
       const own = [b.whislo, b.whishi, ...b.fliers, ...summaryExtents(b, m)].filter((v) => Number.isFinite(v));
       if (!own.length) return null;
-      return span(Math.min(...own), Math.max(...own), domain);
+      return span(minOf(own), maxOf(own), domain);
     }
     case "strip": {
       if (!data.points.length) return null;
@@ -132,7 +133,7 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const domain = stripValueDomain(data);
       const b = data.boxes[gi];
       const vals = [...g.points.map((p) => p.value), ...(b ? summaryExtents(b, drawMarks(data)) : [])];
-      return span(Math.min(...vals), Math.max(...vals), domain);
+      return span(minOf(vals), maxOf(vals), domain);
     }
     case "violin": {
       if (!data.violins.length) return null;
@@ -146,7 +147,7 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const m = drawMarks(data);
       const b = data.boxes?.[gi];
       const own = [lo, hi, ...(b ? summaryExtents(b, m) : [])];
-      return span(Math.min(...own), Math.max(...own), violinValueDomain(data, m));
+      return span(minOf(own), maxOf(own), violinValueDomain(data, m));
     }
     case "bar": {
       const groups = data.data.groups;

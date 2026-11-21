@@ -13,6 +13,7 @@
 // sorted by x, so the band is smooth even for sparse data. The data column is
 // NaN on the grid rows (drawn as markers only, so the gaps never show).
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import type { BandsResult } from "../../../lib/api/fitStats";
 import type { CalcResult, DataStruct, Dataset, FitOverlay, SeriesStyle } from "../../../lib/types";
 
@@ -59,8 +60,8 @@ export function bandRows(fx: readonly number[], fy: readonly number[], nGrid = B
   const finite = fx.filter((v) => Number.isFinite(v));
   const rows: { x: number; y: number }[] = fx.map((x, i) => ({ x, y: fy[i] ?? Number.NaN }));
   if (finite.length > 0 && nGrid > 1) {
-    const lo = Math.min(...finite);
-    const hi = Math.max(...finite);
+    const lo = minOf(finite);
+    const hi = maxOf(finite);
     if (hi > lo) {
       for (let k = 0; k < nGrid; k++) rows.push({ x: lo + ((hi - lo) * k) / (nGrid - 1), y: Number.NaN });
     }

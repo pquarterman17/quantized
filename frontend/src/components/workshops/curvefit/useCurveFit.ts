@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { fitModel } from "../../../lib/api";
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMode } from "../../../lib/types";
 import { publishFitAnalysisResult } from "../../../store/publishFitAnalysisResult";
@@ -191,15 +192,13 @@ export function useCurveFit(): CurveFitState {
   // Fit the analysis view (excluded/filtered rows dropped, #50/#53) so the fit
   // ignores them — the same rows the plot hides/greys. The overlay is then
   // expanded back to full length so it overlays the full-length plot x in register.
-  const xy = useMemo(() => {
-    return selectedFitData(active, xKey, yKeys, seriesOrder, selected ?? undefined);
-  }, [active, seriesOrder, xKey, yKeys, selected]);
+  const xy = useMemo(() => selectedFitData(active, xKey, yKeys, seriesOrder, selected ?? undefined), [active, seriesOrder, xKey, yKeys, selected]);
 
   const xRange = useMemo(() => {
     if (!xy) return null;
     const finite = xy.x.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return null;
-    return { min: Math.min(...finite), max: Math.max(...finite) };
+    return { min: minOf(finite), max: maxOf(finite) };
   }, [xy]);
 
   // The "Y error column" mode is only meaningful when the primary fit channel

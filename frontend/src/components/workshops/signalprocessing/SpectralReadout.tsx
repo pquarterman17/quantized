@@ -1,3 +1,4 @@
+import { maxOf } from "../../../lib/arrayExtent";
 import type { DataStruct } from "../../../lib/types";
 
 function finite(value: unknown): value is number {
@@ -23,7 +24,7 @@ function diagnosticPoints(metadata: DataStruct["metadata"]): string {
     rows.push([frequency[last], transfer[last]]);
   }
   if (rows.length < 2) return "";
-  const xmax = Math.max(...rows.map(([x]) => x)) || 1;
+  const xmax = maxOf(rows.map(([x]) => x)) || 1;
   return rows.map(([x, y]) => {
     const px = 8 + (x / xmax) * 444;
     const py = 8 + (1 - Math.max(0, Math.min(1, y))) * 54;

@@ -9,6 +9,7 @@
 // `setTimeout` ticks, a newer query cancels the older one, and `searching`
 // stays true until the answer is COMPLETE — partial counts are never shown.
 
+import { pushAll } from "../../../lib/pushAll";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -113,7 +114,7 @@ export function useCellSearch(
           q ??= startCellQuery(index, needle);
           const matches = q.step(left());
           if (matches) {
-            hits.push(...toHits(src, matches));
+            pushAll(hits, toHits(src, matches));
             i++;
             q = null;
           }
