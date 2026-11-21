@@ -19,6 +19,7 @@ import {
   DELIMITER_OPTIONS,
 } from "../../../lib/importwizard";
 import { highlightDelimiter, inWizard, countLines, rawLines, RAW_LINE_LIMIT } from "../../../lib/importRawLines";
+import { offersUnwrap } from "../../../lib/importTimeFormats";
 import type { ImportDecimal } from "../../../lib/importTypes";
 import type { ImportColumnRole } from "../../../lib/types";
 import { useWizardHandoff } from "../../../lib/importFailureToast";
@@ -27,6 +28,7 @@ import { askParams } from "../../overlays/ParamDialog";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
 import ErrorRolesEditor from "./ErrorRolesEditor";
 import ErrorBindingSuggestions from "./ErrorBindingSuggestions";
 import MetadataPreview from "./MetadataPreview";
@@ -159,7 +161,7 @@ export default function ImportWizardPanel() {
                 // A new delimiter splits the lines into different columns, so the
                 // per-column names and roles guessed under the old one no longer
                 // line up: re-read them (as the Header line field does).
-                onChange={(e) => w.patchSettings({ delimiter: e.target.value, column_names: null, roles: null })}
+                onChange={(e) => w.patchSettings({ delimiter: e.target.value, column_names: null, roles: null, time_formats: null })}
               />
             </label>
             <label className="qzk-field" title="Auto reads 1,5 as 1.5 unless a value like 1,500 is ambiguous.">
@@ -234,7 +236,18 @@ export default function ImportWizardPanel() {
               onRoleChange={(i, role: ImportColumnRole) => w.setColumnRole(i, role)}
               onNameChange={w.setColumnName}
               onUnitChange={w.setColumnUnit}
+              onTimeFormatChange={w.setTimeFormat}
             />
+          )}
+
+          {w.preview && offersUnwrap(w.preview.columns) && (
+            <Checkbox
+              checked={w.settings?.unwrap_midnight !== false}
+              onChange={(on) => w.patchSettings({ unwrap_midnight: on })}
+              title="Add a day each time an ascending time column passes midnight (23:59:59, 00:00:00), so the axis keeps going forward"
+            >
+              Unwrap times across midnight
+            </Checkbox>
           )}
 
           {w.preview && <MetadataPreview preview={w.preview} />}

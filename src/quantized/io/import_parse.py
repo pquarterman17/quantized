@@ -30,6 +30,7 @@ from quantized.io import _column_kind as ck
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
+from quantized.io import _time_of_day as tod
 from quantized.io._comment_header import comment_header
 from quantized.io._delimiter_vote import (
     _COMMA_NUMBER_RE,
@@ -81,6 +82,10 @@ class _Parsed:
     # Ambiguous columns read as decimal comma on the file's evidence; the
     # note is written once the dataset's column names are known.
     decimal_evidence: list[dc.FileEvidence] = field(default_factory=list)
+    # Time-only columns (`_time_of_day`): each raw column's kind ("clock" /
+    # "duration" / None) and the format applied ("text" unless converted).
+    time_kinds: list[str | None] = field(default_factory=list)
+    time_formats: list[str] = field(default_factory=list)
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -156,16 +161,22 @@ def _numberish(cell: str) -> bool:
     )
 
 
-def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
+def _guess_roles(
+    data_rows: list[list[str]], n_cols: int, numeric: frozenset[int] = frozenset()
+) -> list[str]:
     """Default role per column: a TEXT column -- by direct import's own rule,
     shared through `_column_kind.numeric_column` so the two never disagree
     (a "NaN" is number-like, a missing token is not filled) -- is ``label``,
     kept as a text column like direct import keeps it, never a NaN-filled
     ``y``; the first numeric column is ``x``, the rest ``y``. A file with no
-    numeric column keeps the plain ``x, y, …`` start."""
+    numeric column keeps the plain ``x, y, …`` start. A ``numeric`` column
+    (a time-only column read as numbers, `_time_of_day`) counts as numeric."""
     sample = data_rows[:64]
     text: list[bool] = []
     for c in range(n_cols):
+        if c in numeric:
+            text.append(False)
+            continue
         cells = [r[c].strip() for r in sample if c < len(r)]
         # A comma number is a number too: a decimal comma ("2,5", converted by
         # `_decimal_comma`) or a quoted grouped one ("1,234.5", `_quoted_numbers`).
@@ -177,10 +188,13 @@ def _guess_roles(data_rows: list[list[str]], n_cols: int) -> list[str]:
     return ["label" if t else ("x" if c == first_numeric else "y") for c, t in enumerate(text)]
 
 
-def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], list[str]]:
+def _guess_layout(
+    text: str,
+) -> tuple[int | None, int | None, int, list[str], list[str], list[str | None] | None]:
     """``guess_settings``' layout guess: (header_line, units_line,
-    data_start_line, column names, default roles) for ``text`` under an auto
-    delimiter.
+    data_start_line, column names, default roles, time formats) for ``text``
+    under an auto delimiter. A time-only column is proposed as a number
+    (`_time_of_day.DEFAULT_FORMAT`), so it takes a numeric role.
 
     Origin's own ASCII export (Long Name / Units / Comments above the data,
     `_origin_ascii_header`) is recognised first; otherwise a units row just
@@ -240,7 +254,16 @@ def _guess_layout(text: str) -> tuple[int | None, int | None, int, list[str], li
         if all(not ln.strip() or ln.strip()[0] in COMMENT_CHARS for ln in above):
             promoted = comment_header(text, delim, n_cols)
             names = promoted.names_with_units() if promoted else names
-    return header_line, units_line, data_start, names, _guess_roles(data_rows, n_cols)
+    formats = tod.guess_time_formats(tod.time_column_kinds(data_rows, n_cols), data_rows)
+    roles = _guess_roles(data_rows, n_cols, _numeric_time_columns(formats))
+    return header_line, units_line, data_start, names, roles, formats
+
+
+def _numeric_time_columns(formats: list[str | None] | list[str] | None) -> frozenset[int]:
+    """The raw columns a numeric time format reads as numbers."""
+    return frozenset(
+        k for k, f in enumerate(formats or []) if f in tod.NUMERIC_TIME_FORMATS
+    )
 
 
 def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
@@ -269,16 +292,33 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     # No roles given (a fresh file, or the wizard re-splitting under a new
     # delimiter): the same per-column default `guess_settings` offers, so a
     # text column stays a ``label`` instead of an all-NaN ``y``.
+    # Time-only columns: the formats chosen, or -- on a fresh guess (no
+    # roles) -- proposed; recorded roles without formats (a filter saved
+    # before the option) keep today's text reading.
+    time_kinds = tod.time_column_kinds(data_tokens, n_cols)
+    chosen = settings.time_formats
+    if chosen is None and not settings.roles:
+        chosen = tod.guess_time_formats(time_kinds, data_tokens)
+    time_formats = tod.resolve_formats(chosen, time_kinds)
     roles = (
         _resolve_roles(settings.roles, n_cols)
         if settings.roles
-        else _guess_roles(data_tokens, n_cols)
+        else _guess_roles(data_tokens, n_cols, _numeric_time_columns(time_formats))
     )
 
     matrix = np.full((len(data_tokens), n_cols), np.nan, dtype=float)
     for i, row in enumerate(data_tokens):
         for k in range(min(len(row), n_cols)):
             matrix[i, k] = layout._to_float(row[k])
+    time_notes: list[str] = []
+    for k, fmt in enumerate(time_formats):
+        if fmt != "text":
+            kind = time_kinds[k] or "clock"
+            cells = [r[k] if k < len(r) else "" for r in data_tokens]
+            col = tod.convert_time_column(cells, fmt, kind, settings.unwrap_midnight)
+            matrix[:, k] = col.values
+            units[k] = tod.converted_unit(units[k])
+            time_notes += tod.time_notes(names[k], col, settings.unwrap_midnight, kind)
     decimal = dc.check_decimal(settings.decimal, delim)
     comma_cols: list[int] = []
     notes: list[str] = []
@@ -293,10 +333,10 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
         notes += dc.stray_comma_notes(names, matrix, data_tokens, separator_choice=False)
     # Text cells read as NaN in a numeric column are named, as direct import does.
     numeric = [k for k in range(n_cols) if roles[k] in ("x", "y", "error")]
-    notes += ck.dropped_text_notes(names, matrix, data_tokens, numeric)
+    notes += ck.dropped_text_notes(names, matrix, data_tokens, numeric) + time_notes
     return _Parsed(
         lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols, notes,
-        found,
+        found, time_kinds, time_formats,
     )
 
 

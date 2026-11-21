@@ -123,7 +123,7 @@ import { groupLevelLabel } from "./categorical";
 import { groupSplitLevels } from "./plotGroupSplit";
 import { channelModelingType, isCategorical } from "./modeling";
 import { specGroupCol, specXKey } from "./plotspecGroupCol";
-import { buildColumns, xIsDate, type PlotPayload } from "./plotdata";
+import { buildColumns, xTimeFlags, type PlotPayload } from "./plotdata";
 import {
   axesBlockHasContent,
   decorBlockHasContent,
@@ -554,7 +554,7 @@ export function buildXY(
         ? String(data.metadata?.["x_column_long"] || data.metadata?.["x_column_name"] || "x")
         : (data.labels[xKey] ?? "x"),
     xUnit: xKey === null ? String(data.metadata?.["x_column_unit"] ?? "") : (data.units[xKey] ?? ""),
-    ...(xIsDate(data, xKey) ? { xIsDate: true } : {}), // audit #7: a date X draws dates
+    ...xTimeFlags(data, xKey), // audit #7: a date X draws dates (a time-of-day X a clock)
   };
 }
 

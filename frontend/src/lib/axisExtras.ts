@@ -25,6 +25,7 @@ import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 // Gap audit 4 G11: the Y3+ axis builder rides this chunk (lib/axisExtrasHook.ts).
 export { pushExtraYAxes } from "./uplotMultiY";
+export { clockXAxis } from "./clockTicks"; // the `clock` X tick mode rides this chunk
 
 type TickValues = NonNullable<uPlot.Axis["values"]>;
 type ValuesFn = Extract<TickValues, (...args: never[]) => unknown>;

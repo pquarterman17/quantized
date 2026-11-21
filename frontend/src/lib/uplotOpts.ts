@@ -4,7 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
-import { axisExtrasApplier, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
+import { axisExtrasApplier, clockAxis, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter, categoricalXAxis } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
 
@@ -1012,7 +1012,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
   // x values are ordinal positions, not physical quantities, so a fixed/sci
   // number format would show "1.0"/"2.0" instead of the real category names.
-  const xCat = payload.xCategories ? categoricalXAxis(payload.xCategories, payload.xCategoryBase ?? 0, tickPx) : null;
+  const xCat = payload.xCategories ? categoricalXAxis(payload.xCategories, payload.xCategoryBase ?? 0, tickPx) : clockAxis()?.(xFmt, xScale, args.xStep, tickPx); // a clock X: lib/clockTicks.ts
   const xValues = xCat ? xCat.values : tickFormatter(xFmt, xScale);
   const yValues = tickFormatter(yFmt, yScale);
   // y2Fmt null/undefined inherits yFmt (compatibility default — see the
