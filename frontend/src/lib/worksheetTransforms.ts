@@ -59,6 +59,7 @@ function provenance(ds: DataStruct, operation: string): Record<string, unknown> 
     "time_timezone",
     "x_column_name",
     "x_column_unit",
+    "x_category_labels", // an Origin text X's cells name the OLD axis's positions
     PREVIEW_SOURCE_ROWS,
     ...ROW_INDEXED_SIDECARS,
   ]) {

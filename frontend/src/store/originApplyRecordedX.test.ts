@@ -128,7 +128,7 @@ describe("applyOriginFigure: the recorded X wins (A2)", () => {
   it("a recorded X that did not import leaves that curve out, with a diagnosis", () => {
     useApp.getState().applyOriginFigure("lost");
     const msgs = useToasts.getState().toasts.map((t) => t.msg).join("\n");
-    expect(msgs).toContain("Book1 column I (X Q)");
+    expect(msgs).toContain("Book1 column I (X Q did not import)");
     expect(useApp.getState().yKeys).toEqual([3]); // only the G-bound curve
     expect(useApp.getState().xKey).toBe(2);
   });

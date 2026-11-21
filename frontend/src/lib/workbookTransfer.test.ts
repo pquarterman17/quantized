@@ -121,8 +121,11 @@ describe("forward compatibility with v0.34.0 (its reader accepts only version 1)
     expect(versionOf(result.text)).toBe(WORKBOOK_TRANSFER_VERSION_NEW_FEATURES);
     const parsed = parseTransferPackage(result.text);
     expect(parsed.ok && parsed.pkg.datasets[0].columnProps).toEqual({ 0: { comment: "note" } });
-    const future = JSON.stringify({ ...JSON.parse(result.text), version: 3 });
-    expect(parseTransferPackage(future)).toMatchObject({ ok: false, reason: "unsupported workbook transfer version: 3" });
+    // v3: a package holding a field v0.35-v0.38 drop too (they accept 1-2); this build reads it.
+    const post038 = JSON.stringify({ ...JSON.parse(result.text), version: 3 });
+    expect(parseTransferPackage(post038).ok).toBe(true);
+    const future = JSON.stringify({ ...JSON.parse(result.text), version: 4 });
+    expect(parseTransferPackage(future)).toMatchObject({ ok: false, reason: "unsupported workbook transfer version: 4" });
   });
 });
 

@@ -104,7 +104,7 @@ describe("applyOriginFigure: a recorded text X draws over the categories", () =>
     const s = useApp.getState();
     const shown = s.datasets.find((d) => d.id === s.activeId)!;
     expect(shown.data.metadata?.x_category_labels).toBeUndefined();
-    expect(useToasts.getState().toasts.map((t) => t.msg).join("\n")).toMatch(/Book1 column B \(X A\)/);
+    expect(useToasts.getState().toasts.map((t) => t.msg).join("\n")).toMatch(/Book1 column B \(text X A: the layer's X is not one category axis\)/); // imported, so never "did not import"
   });
 
   it("control: an unrecorded (inferred) text X is no evidence -- the figure stays empty", () => {

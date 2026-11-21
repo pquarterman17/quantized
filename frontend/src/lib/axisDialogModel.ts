@@ -298,7 +298,9 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   const fmt: AxisFormat = {
     mode: d.mode,
     digits: num(d.digits) ?? base.digits,
-    ...(div !== null && div !== 1 ? { divide: div } : {}),
+    // An Origin "Divide by" draws no "×factor" mark (divideMark: false); it
+    // stays Origin's while the factor is untouched, a new factor is the user's.
+    ...(div !== null && div !== 1 ? { divide: div, ...(base.divideMark === false && base.divide === div ? { divideMark: false } : {}) } : {}),
     ...(cleanAffix(d.prefix) ? { prefix: cleanAffix(d.prefix) } : {}),
     ...(cleanAffix(d.suffix) ? { suffix: cleanAffix(d.suffix) } : {}),
     ...(minor ? { minor } : {}),

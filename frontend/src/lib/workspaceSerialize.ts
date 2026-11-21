@@ -51,13 +51,14 @@ import {
   WORKSPACE_FORMAT,
   WORKSPACE_VERSION,
   WORKSPACE_VERSION_NEW_FEATURES,
+  WORKSPACE_VERSION_POST_038,
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type WorkspaceState,
 } from "./workspace";
 import type { PlotWindow } from "./plotview";
-import { featuresV034WouldDrop } from "./workspaceForwardCompat";
+import { featuresV034WouldDrop, featuresV038WouldDrop } from "./workspaceForwardCompat";
 
-export { featuresV034WouldDrop };
+export { featuresV034WouldDrop, featuresV038WouldDrop };
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
  *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
@@ -381,6 +382,8 @@ export function serializeWorkspace(
   // v0.34.0 refuses ("unsupported workspace version"). Every other file keeps
   // v4/v5 and still opens there.
   if (featuresV034WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_NEW_FEATURES;
+  // ... and as v7 when v0.35-v0.38 (which accept v6) would drop one too.
+  if (featuresV038WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_POST_038;
   return stringifyWithCells((hole) => ({
     ...doc,
     datasets: doc.datasets.map((e) => ({ ...e, data: hole(e.data), raw: hole(e.raw) })),

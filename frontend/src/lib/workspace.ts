@@ -86,6 +86,11 @@ export const WORKSPACE_VERSION_TRANSFORM_STEPS = 5;
 // without them stays v4/v5 and still opens in 0.34. Fields 0.34 carries through untouched (the new
 // per-series SeriesStyle keys) do not bump. Content is otherwise identical to v4/v5.
 export const WORKSPACE_VERSION_NEW_FEATURES = 6;
+// v7 (release prep for 0.39.0): v0.35-v0.38 accept v6, and silently drop the fields gated since
+// (lib/workspaceForwardCompat.ts NEW_SINCE_V038: Origin's unmarked Divide by, an Origin error-bar
+// marker, a 100 % / ranged Stat Stage bar chart). A file holding one is written as v7, which every
+// release up to 0.38 refuses. Content is otherwise identical to v4-v6.
+export const WORKSPACE_VERSION_POST_038 = 7;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
@@ -328,7 +333,7 @@ export function parseWorkspace(
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5 && o.version !== 6) {
+  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5 && o.version !== 6 && o.version !== 7) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {

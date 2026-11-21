@@ -15,7 +15,7 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { figureCurveErrorBindings } from "./originCurveErrorRoles";
 import type { ErrorBinding } from "./errorRoles";
-import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
+import { curveDisplayName, legendCaption, originCurveSeriesStyle, undedupedLabel } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 export { figureMapState, queueFigureTernary } from "./originFigureMap";
 import type { StatPicks } from "./plotviewSanitize";
@@ -357,7 +357,8 @@ export function figureChannelSelection(
     const caption = curveIdx < legend.length && legend[curveIdx]
       ? legendCaption(legend[curveIdx], curveNames)
       : undefined;
-    if (caption !== undefined) labels[yIdx] = caption;
+    const shown = caption ?? undedupedLabel(ds.data.labels, yIdx); // "Co (2)" is a dedupe, not a name
+    if (caption !== undefined || shown !== (ds.data.labels[yIdx] ?? "")) labels[yIdx] = shown;
     curveIdx++;
   }
   if (yKeys.length === 0) return null;

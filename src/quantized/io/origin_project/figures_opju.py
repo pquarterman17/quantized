@@ -160,6 +160,7 @@ from quantized.io.origin_project.opju_figure_curves import (
 from quantized.io.origin_project.opju_figure_text import routed_figure_text
 from quantized.io.origin_project.opju_layer_pages import LayerPages
 from quantized.io.origin_project.opju_layer_record import layer_flags, layer_record
+from quantized.io.origin_project.opju_tick_divide import opju_tick_divide
 from quantized.io.origin_project.opju_map_plots import layer_map, map_ids
 from quantized.io.origin_project.opju_sheet_segments import sheet_map_with_segments
 
@@ -274,6 +275,12 @@ def _axis_scales(
         return _log_heuristic(x_from, x_to), True
     # unrecognized flag: no isolated evidence, heuristic for both (like .opj)
     return _log_heuristic(x_from, x_to), _log_heuristic(y_from, y_to)
+
+
+def _tick_divide(b: bytes, anchor: int, end: int, graph: bool) -> dict[str, Any]:
+    """``{"tick_label_divide": ...}`` for a graph-page layer that sets one."""
+    d = opju_tick_divide(b, anchor, end) if graph else {}
+    return {"tick_label_divide": d} if d else {}
 
 
 def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
@@ -409,6 +416,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_log": y_log,
                 # axes_exchanged / stack_percent, when the record proves them
                 **(layer_flags(b, anchor) if is_graph_page or legacy else {}),
+                # tick labels drawn as value / factor, per side (opju_tick_divide)
+                **_tick_divide(b, anchor, window_end, is_graph_page or legacy),
                 "source_hint": _source_hint(b, anchor),
                 "n_curves": max(legend_ns) if legend_ns else 0,
                 # Routed per named text object when the window carries CPYUA's
