@@ -115,7 +115,12 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         const xrdDefaults = ds.data.metadata.technique === "xrd.powder"
           ? { strict_prominence: true }
           : {};
-        const res = await findPeaks({ x, y, ...xrdDefaults, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) });
+        const findBody = { x, y, ...xrdDefaults, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) };
+        // x/y by dataset handle when the server holds it (lib/fitSource, P8). The lean
+        // background stays off: curation and the saved table read it synchronously.
+        const source = inputs.yKeyUsed === null || !inputs.rows ? undefined : { data: ds.data, xKey: inputs.xKeyUsed, yKey: inputs.yKeyUsed };
+        const res = await postBySource<Awaited<ReturnType<typeof findPeaks>>>(
+          "/api/peaks/find", findBody, source, source && inputs.rows ? inputs.rows() : [], () => findPeaks(findBody));
         if (cancelled) return;
         setFoundPeaks(res.peaks, { x, y, fullX, background: res.background, binding: peakBinding(inputs) });
       } catch (e: unknown) {

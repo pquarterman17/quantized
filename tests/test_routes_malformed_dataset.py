@@ -140,6 +140,23 @@ CASES = [
                     "x_channel": -1, "y_channel": 0, "rows": [[0, 5]]},
         COMPARE_GOOD,
     ),
+    (
+        "/api/fitting/autoguess",
+        lambda ds: {"model": "Linear", "dataset": ds, "x_channel": -1, "y_channel": 0,
+                    "rows": [[0, 5]]},
+        COMPARE_GOOD,
+    ),
+    (
+        "/api/fitting/equation/fit",
+        lambda ds: {"equation": "a*x+b", "dataset": ds, "x_channel": -1, "y_channel": 0,
+                    "rows": [[0, 5]]},
+        COMPARE_GOOD,
+    ),
+    (
+        "/api/peaks/find",
+        lambda ds: {"dataset": ds, "x_channel": -1, "y_channel": 0, "rows": [[0, 5]]},
+        COMPARE_GOOD,
+    ),
     ("/api/plot/series", lambda ds: {"dataset": ds, "x_key": 0, "y_keys": [1]}, GOOD_DATASET),
     (
         "/api/plot/map",

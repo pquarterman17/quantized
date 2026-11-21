@@ -42,9 +42,8 @@ LINK_MODES = ("None", "Shared FWHM", "Shared FWHM + eta")
 router = APIRouter(prefix="/api/peaks", tags=["peaks"], route_class=OffloopJSONRoute)
 
 
-class FindPeaksRequest(BaseModel):
-    x: list[float]
-    y: list[float]
+class FindPeaksRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (P8): XYSource.
     snr_threshold: float = 5.0
     min_separation: float = 0.0
     max_peaks: int = 50
@@ -69,11 +68,12 @@ class FindPeaksRequest(BaseModel):
 
 
 @router.post("/find")
-def find(req: FindPeaksRequest) -> dict[str, Any]:
+def find(req: FindPeaksRequest, response: Response) -> dict[str, Any]:
     """Find peaks in (x, y); returns the peak list + the estimated background."""
+    x, y = source_xy(req, response)
     peaks, background = call_calc(find_peaks_robust,
-        req.x,
-        req.y,
+        x,
+        y,
         snr_threshold=req.snr_threshold,
         min_separation=req.min_separation,
         max_peaks=req.max_peaks,
@@ -93,7 +93,7 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
         "peaks": to_jsonable(peaks),
         **lean_array_fields(
             "background", "background", background, req.display_points,
-            digest=fingerprint(req.x, req.y),
+            digest=fingerprint(x, y),
         ),
     }
 
