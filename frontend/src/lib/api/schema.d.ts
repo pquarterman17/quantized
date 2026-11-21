@@ -8729,6 +8729,12 @@ export interface components {
         };
         /** FitPeakRequest */
         FitPeakRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Find Result Id */
             find_result_id?: string | null;
             /**
@@ -8736,6 +8742,11 @@ export interface components {
              * @default Lorentzian
              */
             model?: string;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** Seed Center */
             seed_center: number;
             /** Seed Fwhm */
@@ -8743,13 +8754,17 @@ export interface components {
             /** Snip Bg */
             snip_bg?: number[] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** X Hi */
             x_hi: number;
             /** X Lo */
             x_lo: number;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FitReportRequest */
         FitReportRequest: {
@@ -8788,6 +8803,12 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Display Points */
             display_points?: number | null;
             /** Dy */
@@ -8805,6 +8826,11 @@ export interface components {
              * @default true
              */
             return_residuals?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Scale Errors
              * @default true
@@ -8821,9 +8847,13 @@ export interface components {
             /** Weights */
             weights?: number[] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FresnelRequest */
         FresnelRequest: {

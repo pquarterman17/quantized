@@ -8,7 +8,7 @@ import { selectedFitData } from "../../../lib/fitselection";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { curveX } from "../../../lib/perSeriesX";
-import { analysisData } from "../../../lib/rowstate";
+import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { Dataset, OverlayBinding } from "../../../lib/types";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { PeakTable } from "../../../lib/peakTable";
@@ -48,7 +48,18 @@ export interface PeakInputs {
   /** Exact original rows after row/range selection and finite-pair pruning.
    * Absent means the ordinary full analysis view. */
   sourceRows?: number[];
+  /** The dataset row of every (x, y) pair, ascending: with `xKeyUsed` and
+   * `yKeyUsed`, what a fit sends instead of x/y when the server holds the
+   * dataset (lib/fitSource, P4 phase 3). Lazy: only "Fit each" needs it. */
+  rows?: () => number[];
 }
+
+/** `keep` (pair -> analysis position) mapped to dataset rows through the
+ *  given analysis rows, else through the analysis view's rows. */
+const rowsOf = (ds: Dataset, keep: readonly number[], base?: readonly number[]) => (): number[] => {
+  const rows = base ?? activeRowIndices(ds.data.time.length, droppedRows(ds));
+  return keep.map((i) => rows[i]!);
+};
 
 /** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
  *  analysis view (audit P1 #1), so peaks track what the user sees and excluded/
@@ -76,6 +87,7 @@ export function peakInputs(
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
       ...(sel.sourceRows ? { sourceRows: pairs.keep.map((index) => sel.sourceRows![index]) } : {}),
+      rows: rowsOf(ds, pairs.keep, sel.sourceRows),
     };
   }
   // Fallback: the first VALUE channel (a curve by its column ROLE -- curveX's
@@ -102,6 +114,7 @@ export function peakInputs(
     fallback: true,
     gapCount: pairs.n - pairs.keep.length,
     sourceCount: pairs.n,
+    rows: rowsOf(ds, pairs.keep),
   };
 }
 

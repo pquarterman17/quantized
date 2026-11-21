@@ -128,6 +128,18 @@ def _compare_body(ds: dict[str, Any]) -> dict[str, Any]:
 # list, or a nested figure payload); the third element is the dataset the
 # sanity half sends — GOOD_DATASET unless the route demands a richer shape.
 CASES = [
+    (
+        "/api/fitting/fit",
+        lambda ds: {"model": "Linear", "dataset": ds, "x_channel": -1, "y_channel": 0,
+                    "rows": [[0, 5]]},
+        COMPARE_GOOD,
+    ),
+    (
+        "/api/peaks/fit",
+        lambda ds: {"x_lo": 0.0, "x_hi": 4.0, "seed_center": 2.0, "dataset": ds,
+                    "x_channel": -1, "y_channel": 0, "rows": [[0, 5]]},
+        COMPARE_GOOD,
+    ),
     ("/api/plot/series", lambda ds: {"dataset": ds, "x_key": 0, "y_keys": [1]}, GOOD_DATASET),
     (
         "/api/plot/map",

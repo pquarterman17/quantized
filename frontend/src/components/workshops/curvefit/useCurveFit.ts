@@ -341,7 +341,7 @@ export function useCurveFit(): CurveFitState {
         // The analysis rows the pairs came from: the overlay is laid back onto them.
         const n = ds.data.time.length;
         const kept = localXy.sourceRows ?? activeRowIndices(n, droppedRows(ds));
-        // A large fit comes back as a display curve (lib/fitCurve.ts).
+        // A large fit comes back as a display curve; x/y go by handle (lib/fitCurve.ts).
         const r = await displayFit(fitModel, {
           model: modelName,
           x: pairs.x,
@@ -355,7 +355,7 @@ export function useCurveFit(): CurveFitState {
                 ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
               }
             : {}),
-        }, modelName, fitRowsOf(pairs.keep, kept, n));
+        }, modelName, fitRowsOf(pairs.keep, kept, n), { data: ds.data, xKey: fitXKey, yKey: localXy.yKey });
         // A fit request can outlive an edit/reimport. Never attach its result
         // or row tokens to the replacement worksheet object it did not fit.
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {
