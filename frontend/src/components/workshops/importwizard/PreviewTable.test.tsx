@@ -185,3 +185,37 @@ describe("PreviewTable raw lines (UX audit 8 #7)", () => {
     expect(rawLine("# header comment").querySelectorAll("[data-delim]")).toHaveLength(0);
   });
 });
+
+describe("PreviewTable time columns (Excel-style per-column format)", () => {
+  const TIMED: ImportPreviewResponse = {
+    ...PREVIEW,
+    columns: [
+      { index: 0, name: "Time", unit: "s", role: "x", time_kind: "clock", time_format: "clock" },
+      { index: 1, name: "Moment", unit: "emu", role: "y" },
+    ],
+    rows: [[45001.25, 0.0012]],
+  };
+
+  it("offers a format select on the time column only, and reports the choice", () => {
+    const onTime = vi.fn();
+    render(
+      <PreviewTable preview={TIMED} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} onTimeFormatChange={onTime} />,
+    );
+    const select = screen.getByLabelText("column 1 time format") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(["clock", "seconds", "elapsed", "text"]);
+    expect(select.value).toBe("clock");
+    expect(screen.queryByLabelText("column 2 time format")).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: "elapsed" } });
+    expect(onTime).toHaveBeenCalledWith(0, "elapsed");
+  });
+
+  it("previews a time-of-day column as the clock it plots as, seconds as numbers", () => {
+    const { rerender } = render(
+      <PreviewTable preview={TIMED} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    expect(screen.getByText("12:30:01.250")).toBeInTheDocument();
+    const asSeconds = { ...TIMED, columns: [{ ...TIMED.columns[0], time_format: "seconds" as const }, TIMED.columns[1]] };
+    rerender(<PreviewTable preview={asSeconds} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />);
+    expect(screen.queryByText("12:30:01.250")).not.toBeInTheDocument();
+  });
+});

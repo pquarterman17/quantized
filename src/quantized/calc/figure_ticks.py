@@ -37,10 +37,11 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-from matplotlib.ticker import Formatter, MultipleLocator
+from matplotlib.ticker import AutoLocator, Formatter, MultipleLocator
 
 from quantized.calc.axis_categories import CATEGORY_MODE
 from quantized.calc.axis_extras import apply_axis_extras
+from quantized.calc.clock_ticks import CLOCK_MODE, ClockLocator, clock_label
 from quantized.calc.figure_category_ticks import CategoryFormatter, apply_category_axis
 from quantized.calc.figure_tick_hint import HintLocator
 from quantized.calc.tick_hint import TickHint
@@ -49,7 +50,7 @@ from quantized.heavy_import import heavy_imports
 
 __all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
 
-_MODES = ("fixed", "sci", "eng", "date", "time", "datetime")
+_MODES = ("fixed", "sci", "eng", "date", "time", "datetime", CLOCK_MODE)
 
 
 def _pow10(k: int) -> float:
@@ -224,6 +225,8 @@ class _AxisTickFormatter(Formatter):
     def text(self, x: float, incr: float) -> str:
         """The label for ``x`` with ``incr`` as the precision floor (a log
         axis' ``LogTickLabels`` supplies its own, as the screen does)."""
+        if self.mode == CLOCK_MODE:  # a time of day, never a date (`clock_ticks`)
+            return clock_label(x, incr)
         if self.mode in ("date", "time", "datetime"):
             # `datetime.fromtimestamp` raises OSError/OverflowError for an
             # out-of-range epoch and ValueError for NaN. That happens when a
@@ -288,6 +291,11 @@ def apply_tick_formats(
             axis.set_minor_formatter(LogTickLabels(minor=True, inner=axis_tick_formatter(fmt)))
         else:
             axis.set_major_formatter(formatter)
+            # Whole minutes / hours -- unless a typed step or the screen's
+            # hint (`apply_tick_steps`, run first) already placed the ticks.
+            locator = axis.get_major_locator()
+            if (fmt or {}).get("mode") == CLOCK_MODE and type(locator) is AutoLocator:
+                axis.set_major_locator(ClockLocator())
     # Figures-audit #6: the Axis dialog's extras ride the same mapping.
     apply_axis_extras(ax, x_fmt, y_fmt)
 

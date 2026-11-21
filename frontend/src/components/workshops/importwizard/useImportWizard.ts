@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
+import { withTimeFormat } from "../../../lib/importTimeFormats";
+import type { ImportTimeFormat } from "../../../lib/importTypes";
 import { importGuess, importParse, importPreview, listImportFilters, saveImportFilter, deleteImportFilter } from "../../../lib/api/importFilters";
 import {
   confirmedErrorBindings,
@@ -70,6 +72,8 @@ export interface ImportWizardState {
   setColumnRole: (index: number, role: ImportColumnRole) => void;
   setColumnName: (index: number, name: string) => void;
   setColumnUnit: (index: number, unit: string) => void;
+  /** A time-only column's format (Excel's per-column data format), adjusting its role to match. */
+  setTimeFormat: (index: number, format: ImportTimeFormat) => void;
   setErrorTarget: (channel: number, target: number | null) => void;
   setErrorAxis: (channel: number, axis: "x" | "y") => void;
   setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
@@ -203,7 +207,11 @@ export function useImportWizard(): ImportWizardState {
 
   function patchSettings(patch: Partial<ImportSettingsWire>): void {
     setImported(false);
-    setSettings((s) => (s ? { ...s, ...patch } : s));
+    // No formats recorded (a delimiter change re-guessed them server-side):
+    // keep the ones the preview applied, or the first role edit -- which
+    // records roles -- would read a guessed time-of-day X back as text.
+    const shown = columns.some((c) => c.time_format) ? { time_formats: columns.map((c) => c.time_format ?? null) } : {};
+    setSettings((s) => (s ? { ...s, ...(s.time_formats == null ? shown : {}), ...patch } : s));
   }
 
   function setColumnRole(index: number, role: ImportColumnRole): void {
@@ -222,6 +230,13 @@ export function useImportWizard(): ImportWizardState {
     if (!settings || !columns.length) return;
     setColumns((cs) => cs.map((c, i) => (i === index ? { ...c, unit } : c)));
     patchSettings({ column_names: withColumnUnit(columns, index, unit) });
+  }
+
+  function setTimeFormat(index: number, format: ImportTimeFormat): void {
+    if (!settings || !columns.length) return;
+    const patch = withTimeFormat(columns, index, format);
+    setColumns((cs) => cs.map((c, i) => ({ ...c, role: patch.roles[i] ?? c.role, ...(i === index ? { time_format: format } : {}) })));
+    patchSettings(patch);
   }
 
 
@@ -426,6 +441,7 @@ export function useImportWizard(): ImportWizardState {
     setColumnRole,
     setColumnName,
     setColumnUnit,
+    setTimeFormat,
     setErrorTarget,
     setErrorAxis,
     setErrorSide,

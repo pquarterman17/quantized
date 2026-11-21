@@ -12,8 +12,12 @@
  *  fixed/sci/eng — ignored (uPlot-style adaptive) for `auto`. Every
  *  non-auto mode still FLOORS its decimal/mantissa count at whatever the
  *  actual tick increment needs, so `digits` sets a minimum, not an exact
- *  count (`tickFormatter`'s `Math.max(digits, decimalsForIncrement(...))`). */
-export type TickMode = "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
+ *  count (`tickFormatter`'s `Math.max(digits, decimalsForIncrement(...))`).
+ *  `clock` = seconds since midnight as a time of day, never a date
+ *  (`lib/clockTicks.ts`): what `auto` draws on a time-of-day X
+ *  (`dateAwareXFmt`), never picked or stored on its own -- the saved-view
+ *  mode lists leave it out, and on such an X `auto` IS the clock. */
+export type TickMode = "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime" | "clock";
 
 export interface AxisFormat {
   mode: TickMode;
@@ -210,7 +214,8 @@ export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
  *  (worksheet audit #7). Any explicit mode is kept. The export applies the
  *  same rule server-side (`calc/figure_ticks.date_aware_x_fmt`), so the
  *  screen and the PDF agree without either sending the other anything. */
-export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | undefined): AxisFormat | undefined {
+export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | "clock" | undefined): AxisFormat | undefined {
   if (!xIsDate || (fmt && fmt.mode !== "auto")) return fmt;
-  return { ...(fmt ?? { digits: 2 }), mode: "datetime" };
+  // A time-of-day X (`metadata.time_is_clock`) reads as a clock, never a date.
+  return { ...(fmt ?? { digits: 2 }), mode: xIsDate === true ? "datetime" : xIsDate };
 }

@@ -12596,7 +12596,7 @@ export interface components {
              * @default auto
              * @enum {string}
              */
-            mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
+            mode?: "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime" | "clock";
             /** Offset */
             offset?: number | null;
             /** Prefix */
