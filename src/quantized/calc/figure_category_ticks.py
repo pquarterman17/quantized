@@ -59,8 +59,9 @@ class CategoryLocator(Locator):
         self.font_pt = font_pt
 
     def __call__(self) -> list[float]:
-        lo, hi = sorted(self.axis.get_view_interval()) if self.axis else (self.base, self.base)
-        ax = self.axis.axes if self.axis else None
+        axis: Any = self.axis  # a real matplotlib Axis once the locator is set on one
+        lo, hi = sorted(axis.get_view_interval()) if axis else (self.base, self.base)
+        ax: Any = getattr(axis, "axes", None)
         axis_pt = float(ax.get_position().width * ax.figure.get_figwidth() * 72.0) if ax else 0.0
         step = category_step(self.labels, axis_pt, self.font_pt, hi - lo)
         first = self.base + max(0, math.ceil((lo - self.base - 1e-9) / step)) * step
