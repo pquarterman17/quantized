@@ -915,6 +915,8 @@ const TS_MODULE_PINS: Record<string, number> = {
   // OriginFigureFidelity joined lib/originFidelityTypes.ts (re-exported, no
   // importer changed), funding `OriginFigure.curve_sheet_notes`; the pin is
   // unchanged. (The reader branch's own 934 -> 901 move is subsumed.)
+  // Lane P3 (2026-11-21): OriginFigure.pie's spec type lives in
+  // lib/originMapSpec.ts beside the map / ternary specs; the pin is unchanged.
   "/lib/types.ts": 694,
   // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
   // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts

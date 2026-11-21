@@ -45,9 +45,9 @@ paired file.
 
 IDs are stable; never renumber. `R-nn` points to section 4.
 
-**Guard status (2026-11-20, after #788):** 14 rows carry **UNGUARDED**.
+**Guard status (2026-11-21, after Lane P3):** 15 rows carry **UNGUARDED**.
 No guard at all (6): F-009, F-039, F-086, F-094, F-096, R-27. Partly
-guarded (8): F-027, F-087, F-093, F-103, F-107, B-21, R-03c, R-11. Update
+guarded (9): F-027, F-087, F-093, F-103, F-107, F-114, B-21, R-03c, R-11. Update
 these counts whenever a row gains or loses a guard.
 
 ### 2.1 `.opju` page and window records
@@ -156,7 +156,7 @@ readback is Origin C `DataPlot::GetPlotType()` (no LabTalk property exists).
 | `0xc8` (200) | line | line | also polar / offset-stacked: the PAGE TEMPLATE decides (F-056); step = byte 17 = 11 |
 | `0xc9` (201) | scatter | scatter | also bubble / colour-mapped (F-055), ternary (F-058) |
 | `0xca` (202) | line + symbol | line + symbol | double-Y = two layers of 202 |
-| `0xcb` (203) | column | column bars | only for a single column series |
+| `0xcb` (203) | column | column bars | a single series; several: grouped (F-104) only as one plot group (F-112) |
 | `0xcc` (204) | area | `fill: under` | fills to Y=0, not to the axis |
 | `0xce` (206) | box / violin / strip | box kinds | template decides; strip colour mismatch pre-existing (plan item 76) |
 | `0xdb` (219) | histogram | histogram | rowless only |
@@ -164,7 +164,8 @@ readback is Origin C `DataPlot::GetPlotType()` (no LabTalk property exists).
 | `0xf3` (243) | contour (XYZ) | map | F-058 |
 | `0xe7` / `0xe9` (231/233) | Y / X error | never a curve | F-060 |
 | `0xd5`-`0xd7` (213-215) | stacked column / area, bar | column / area / horizontal bar, or left out | layer gates decide (F-100 to F-105) |
-| 205 / 207 / 208 / 216 / 218 / 225 | incl. floating column, vector, pie | left out `plot_type_not_drawn` | F-100, F-107 |
+| `0xe1` (225) | pie / doughnut | `pie` (Pie window) or left out | F-110, F-111 |
+| 205 / 207 / 208 / 216 / 218 | incl. floating column, vector | left out `plot_type_not_drawn` | F-100, F-107; bindings F-113, F-114 |
 
 Guards: F-049, F-100 rows. Other codes (232, 241, 249, ...) are unmapped.
 
@@ -198,11 +199,11 @@ Guards: F-049, F-100 rows. Other codes (232, 241, 249, ...) are unmapped.
 
 ### 2.10 Plot kinds: columns, bars, stacks, histograms (#787)
 
-`T` = `test_io_origin_opju_bar_kinds.py`, `L` = `test_io_origin_opju_layer_record.py`. Detail: [plot_kinds.md](plot_kinds.md).
+`T` = `test_io_origin_opju_bar_kinds.py`, `L` = `test_io_origin_opju_layer_record.py`, `P` = `test_io_origin_opju_pie.py`. Detail: [plot_kinds.md](plot_kinds.md).
 
 | ID | Fact | Evidence | Guard |
 |---|---|---|---|
-| F-100 | byte 76 213 / 214 / 215 give provisional `stacked_column` / `stacked_area` / `bar`; 205/207/208/216/218/225 give `not_drawn` | SPEC 231 + COM `GetPlotType()` | `T::test_plot_type_byte_sets_the_provisional_kind`, `T::test_other_plot_types_get_no_layer_kind` |
+| F-100 | byte 76 213 / 214 / 215 give provisional `stacked_column` / `stacked_area` / `bar`; 205/207/208/216/218 give `not_drawn`; 225 gives `pie` when its record reads (F-111), else `not_drawn` | SPEC 231 + COM `GetPlotType()` | `T::test_plot_type_byte_sets_the_provisional_kind`, `T::test_other_plot_types_get_no_layer_kind` |
 | F-101 | 214, the only stacked-area plot of a layer, draws as `area` | PREV (`StackArea` on 21 public pages) | `T::test_single_stacked_area_is_an_area_and_single_stack_a_column`, `T::test_realdata_stacked_area_and_horizontal_bar_pages` |
 | F-102 | 213, the only stacked column of a layer, not on a `StackColP` page, draws as `column` | PREV (SOP_meas Graph20) | `T::test_single_stacked_area_is_an_area_and_single_stack_a_column`, `T::test_single_series_on_a_100_percent_stack_page_is_left_out` |
 | F-103 | SUPERSEDED by F-108 (Lane P2): the `Bar` template does not set the orientation; SOP_meas Graph67 (a lone 215 on `Bar`, upright preview) now draws as an upright column | PREV (LSA_fig6; Graph67 contradicted it) | `T::test_the_layer_not_the_plot_type_turns_the_bars`, `T::test_realdata_bar_orientation_is_the_layers` |
@@ -212,6 +213,11 @@ Guards: F-049, F-100 rows. Other codes (232, 241, 249, ...) are unmapped.
 | F-107 | left out as `plot_type_not_drawn` (92 public curves formerly drawn as lines): pie 225, 100 % stacked 213, 213 on user templates, several 215 or 215 beside 203, 215 on multi-layer pages, floating 207, vector 218. Most corpus pages **UNGUARDED** by realdata | PREV per page (see doc) | `T::test_kinds_without_a_renderer_are_left_out_not_drawn_as_lines`, `T::test_stacked_columns_need_the_stackcolumn_template` |
 | F-108 | layer record byte 104 bit `0x40` = X/Y axes exchanged (Origin's horizontal bar layout); read only when the record authenticates (F-020) and bytes 100-101 are `00 10`, else absent (fail closed). The LAYER sets bar orientation, not the plot type: set, the one bar / column plot of a one-layer page draws sideways (`bar`) and everything else in the layer is left out; clear, a 215 plot is a `column`; absent, a 215 and any column beside it are left out | DIST 21 layers of both corpora, all sideways in PREV (LSA_fig6 Graph1-9, TEA_ExcelGraphs Graph9/13/15/16/19, SOP_meas Graph14 L6, Graph40 L5/L9, Graph55 L5, Graph65 L5, Degree of impact Graph278 L1/L2); NEG every other 215 layer upright (SOP_meas Graph67, Graph_Template / Graphs Graph1). COM check open | `L::test_layer_flags`, `L::test_layer_flags_fail_closed`, `T::test_the_layer_not_the_plot_type_turns_the_bars`, `T::test_a_turned_layer_draws_nothing_else_and_unknown_orientation_fails_closed`, `T::test_realdata_bar_orientation_is_the_layers` |
 | F-109 | layer record byte 187 bit `0x02` = stack normalised to 100 % (same gate as F-108): several 213 series on one sheet X draw as the Stat Stage `percent` layout (`barMatrix.percentBars`); a lone 213 of a 100 % layer is left out (a flat 100 %) | DIST 3 layers (fig_6_a Graph2/3, Fig_3 Graph2 L2), all 0..100 % in PREV; NEG clear on every plain stack (Etna Graph17/19, SOP_meas Graph20, Graph_Template / Graphs 32New L4). Fig_3 is on a `MergeGrap` page: the template alone misses it. COM check open | `L::test_layer_flags`, `T::test_stacked_columns_follow_the_layers_100_percent_flag`, `T::test_realdata_grouped_stacked_and_pie` |
+| F-110 | pie 225: Y = wedge values, X = labels (text categories); several 225 plots in a layer are doughnut rings, one per plot, the FIRST innermost, each split by its own column, clockwise from 12 o'clock. Drawn (`figure.pie`, the Pie window) for a one-layer page whose every curve is a read pie on one sheet's own X with one hole | PREV (soil deep Graph3 prints B's shares 52.3/34.1/13.6 %; RSOS_SC_CIR ring borders = B..K cumulative shares within 2 deg, B innermost); NEG SOILDEEP1 (multi-layer), bar-of-pie left out | `P::test_a_pie_layer_becomes_the_pie_spec`, `P::test_a_pie_layer_fails_closed`, `P::test_pie_on_a_multi_layer_page_or_mixed_layer_is_left_out`, `P::test_realdata_pies_and_doughnuts`, `frontend/src/lib/originFigurePie.test.ts` |
+| F-111 | 225 record: byte 206 `00` pie / `01` doughnut; byte 165 = hole % (read only with the flag); bytes 27 / 114 non-zero = bar-of-pie (left out); byte 150 must be 90 (start at 12 o'clock). The page template (`Pie*` / `Doughnut` / `BarofPie`) must not contradict it | DIST 34 records (13 pies, 19 rings, 2 bar-of-pie), every one agrees with its template; PREV hole 25/64 px = 0.39 vs byte 40. COM check open | `P::test_pie_record_reads_the_doughnut_flag_and_hole`, `P::test_pie_record_fails_closed`, `P::test_plot_kind_marks_a_read_pie` |
+| F-112 | bar-family record byte 6 `& 0x30` = plot-group role (`0x20` head, `0x10` member, `0x00` standalone; the F-04x line role byte). Several standalone bar plots on one sheet X in an exchanged-axes layer draw sideways at the same positions, overlapping; a grouped turned layer stays left out (overlap not decoded); the grouped Stat Stage chart (F-104/F-105) requires one group | DIST all 203/213/214/215 records: every side-by-side page is head+members; PREV LSA_fig6 Graph6/8 overlap (cyan over yellow reads green, row 37 C 0.512 / E 0.499); NEG TEA_ExcelGraphs Graph9 (a group, yet overlapping) | `P::test_plot_group_role`, `P::test_standalone_sideways_bars_overlap_grouped_ones_are_left_out`, `P::test_grouped_columns_need_one_origin_plot_group`, `T::test_realdata_stacked_area_and_horizontal_bar_pages` |
+| F-113 | vector XYXY 218: the token's modifier block names the end points, designation 13 = X end, 14 = Y end (`Book1_C`, `Book1_D`); the arrow runs (A, B) -> (C, D). Not drawn (no arrow renderer) | PREV (30流场 Graph6: horizontal arrows ending on the C-vs-D profile the layer draws; D = B on every row); DIST 13/14 only on the 2 vector plots of both corpora. COM check open | `P::test_realdata_vector_and_floating_column_modifiers` |
+| F-114 | floating column 207: bars span CONSECUTIVE Y plots in plot order (F..G, G..H); designation 39 in the modifier block = the width column (Degree of impact Graph511/512), 32 = the first Y (Graph26). Not drawn (no bar-with-a-base renderer; Graph26 group gaps). The consecutive-pair rule is **UNGUARDED** (PREV only) | PREV (Graph26 labels 9.3/3.6 at the ends, colour change at G = 5.7; Graph511 block 1 0.9..1.1 x 0.8..1.2) | `P::test_realdata_vector_and_floating_column_modifiers` (modifiers only) |
 
 ## 3. Behaviour rules and owner decisions
 
@@ -245,6 +251,8 @@ Guards: F-049, F-100 rows. Other codes (232, 241, 249, ...) are unmapped.
 | B-26 | An Origin bar layout opens the Stat Stage on the layer's linear Y range (`statPicks.valueRange`): screen domain + clip at the frame and export `y_domain` (`ax.set_ylim`) agree; a log or reversed Y autoscales. A pick that changes the bars (a column, the layout, a send to statistics) drops the range | 2026-11-20 (Lane P2) | Origin zooms Y (fig_6_a Graph1 65..75): autoscale made the bars look equal; a 100 % range must not clip a raw stack | `frontend/src/components/Stage/useStatStage.originBars.test.ts`, `frontend/src/lib/originFigures.test.ts` |
 | B-27 | A Stat Stage bar chart grouped by X (only the Origin pick, B-24) hides categories with no Y in any series | 2026-11-20 (Lane P2) | Etna Graph19 rows 4-8 have X but no Y; Origin draws no slot there | `frontend/src/components/Stage/useStatStage.originBars.test.ts` ("draws one category per row that has a Y") |
 | B-28 | `statPicks.barPercent` and `statPicks.valueRange` are forward-compat gated for v0.34.0 (its `sanitizeStatPicks` drops both: a 100 % chart would reopen as a raw stack) | 2026-11-21 (Lane P2 review) | an old reader would change the chart | `frontend/src/lib/workspaceForwardCompat.test.ts` |
+| B-29 | An Origin pie / doughnut opens the lazy Pie chart workshop on its columns (labels = X, one ring per Y, Origin's hole); the XY stage draws none of its curves; the workshop previews the server's matplotlib render of exactly the request it exports (`/api/export/pie-figure`), wedges in the theme's `--series-N` colours | 2026-11-21 (Lane P3) | a pie has no X/Y line; screen and file must agree | `frontend/src/lib/originFigurePie.test.ts`, `frontend/src/components/workshops/ternary/lazyMount.test.ts`, `P::test_pie_route`, `P::test_render_pie_formats_and_errors` |
+| B-30 | Unread provisional curve keys (`plotGroup`, `pieHole`) never leave the importer (`opju_bar_kinds._resolve`) | 2026-11-21 (Lane P3) | payload stays Origin-shaped | `P::test_a_pie_layer_becomes_the_pie_spec`, `P::test_standalone_sideways_bars_overlap_grouped_ones_are_left_out` |
 
 ## 4. Regression history: "steps backwards"
 
@@ -286,6 +294,7 @@ recurs; **NO GUARD** means add one.
 | R-28 | Unmapped plot types (pie, stacked, floating, horizontal bar, vector) drawn as lines | pre-#787 | visual sweep class D | #787 (F-100 to F-107) | `test_io_origin_opju_bar_kinds.py::test_kinds_without_a_renderer_are_left_out_not_drawn_as_lines` |
 | R-29 | The `Bar`-template rule (F-103) drew SOP_meas Graph67 sideways (its preview is upright) and left Graph_Template / Graphs Graph1 L1's upright 215 columns out | #787 | Lane P open issue, PREV | Lane P2 (F-108) | `test_io_origin_opju_bar_kinds.py::test_realdata_bar_orientation_is_the_layers` |
 | R-30 | By design, not a loss: 12 SOP_meas 203 curves in turned panels (Graph40 L5/L9, Graph55 L5) drawn upright before are now left out (`plot_type_not_drawn`); Origin draws them sideways and grouped sideways bars are not drawn | Lane P2 | regress allow-file | n/a (left out until a sideways panel renderer exists) | `test_io_origin_opju_bar_kinds.py::test_a_turned_layer_draws_nothing_else_and_unknown_orientation_fails_closed` |
+| R-31 | `LSA_fig6` Graph6 / 8 left out as "grouped sideways bars" (#787 Lane P; kept by Lane P2): they are two STANDALONE plots, which Origin draws overlapping at one position (PREV); the guard `T::test_realdata_stacked_area_and_horizontal_bar_pages` asserted the wrong outcome and was changed with this evidence | #787 | Lane P3 (preview + byte-6 group role, F-112) | Lane P3 | `T::test_realdata_stacked_area_and_horizontal_bar_pages`, `P::test_standalone_sideways_bars_overlap_grouped_ones_are_left_out` |
 
 ## 5. Change log (newest first)
 
@@ -293,6 +302,7 @@ Corpus deltas are "drawn curves" unless stated; "0/0" is lost/changed.
 
 | PR | Date | Summary | Corpus delta |
 |---|---|---|---|
+| Lane P3 | 2026-11-21 | Pie / doughnut layers drawn in a lazy Pie chart workshop with a matplotlib export (F-110, F-111, B-29); standalone sideways bars overlap (F-112, R-31); grouped chart needs one plot group; vector end points and floating-column bindings decoded, still left out (F-113, F-114); multi-layer stacks documented | curves 9,108 to 9,132 (+20 pie / doughnut, +4 LSA_fig6 Graph6/8), owner corpus unchanged; allow-file [laneP3-plot-kinds.json](regress_allow/laneP3-plot-kinds.json) |
 | #788 | 2026-11-20 | Error bars: asymmetric and X errors, band style (offset 28), equal double plots; user error bindings survive an apply; page export draws bars (R-09) | allow-file [e2_error_bars.json](regress_allow/e2_error_bars.json) |
 | #787 | 2026-11-20 | Plot kinds: stacked area, horizontal bars, grouped/stacked columns, histogram + cumulative; wrong-kind lines left out | 92 public curves left out; allow-file [laneP-plot-kinds.json](regress_allow/laneP-plot-kinds.json) |
 | #786 | 2026-11-20 | Page text and divide-by: script buttons hidden, rotated / page-attached text placed, `.opj` Divide-by factors, style-holder phantom curves; corpus discovery via `tests/origin_corpus.py` | allow-file [lane-m-page-text-tick-divide.json](regress_allow/lane-m-page-text-tick-divide.json) |
@@ -346,6 +356,7 @@ Each link goes to a doc section holding the exact COM query.
 | Error bars | asymmetric halves specimen (`layer.plotN.errbar.direction`); which of two both-ways plots Origin draws, band vs whisker (PerceivedRisk Graph29); offset 28 band read since #788 (F-066), COM confirmation still open | [error_bars.md](error_bars.md) "COM checks for the owner" |
 | `.opj` bindings | hc2convert Graph13/20-34 X; XMCD Graph25 plot with no anchor; Graph2 (C2) and Graph60 (C3) preview vs data conflicts; UnpolPlots tick `divideby` | [curve_bindings_opj.md](curve_bindings_opj.md) "Not proven here", "Related `.opju` findings" |
 | Embedded graphs | sparkline count rule (528 pages); where `Residual*` layers live; scale `02 00` | [opju_embedded_graphs.md](opju_embedded_graphs.md) "Still open" |
+| Plot kinds (Lane P3) | pie properties on RSOS_SC_CIR (doughnut, hole 40 %) and soil deep Graph3; group gap / overlap on TEA_ExcelGraphs Graph9 / 13; `GetModifiers` on 30流场 Graph6 L2 (C, D) and Degree of impact Graph511 / Graph26 | [plot_kinds.md](plot_kinds.md) "Owner checks (COM) left open (Lane P3)" |
 | Plot kinds (Lane P2) | COM `GraphLayer` exchanged-axes property on LSA_fig6 Graph1 (expect set) and SOP_meas Graph67 (clear); 100 % stack property on fig_6_a Graph2 and Fig_3 Graph2 L2; vector (218) bound datasets on 30流场 Graph6 L2; bar-group gap / overlap on TEA_ExcelGraphs Graph9 and LSA_fig6 Graph6 | [plot_kinds.md](plot_kinds.md) "Item 3: renderers, per kind" |
 | Layer record | `opju_column_fixed.expand_record` misreads a zero run followed by a repeat (`87 c3 66`); not changed, worth aligning | [opju_layer_record.md](opju_layer_record.md) "The record" |
 | Layout | which side the top-X axis is drawn on (`layer2.x2.showAxes`); XMCD GraphT* layer 2/3 Y titles; Bqqbar orange segment | [multi_layer_pages.md](multi_layer_pages.md) B2, "Not fixed here" |

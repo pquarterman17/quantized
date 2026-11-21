@@ -366,11 +366,13 @@ export function runOriginFigureApply(
   // Decoded curve bindings (partial recall, 100% precision) select the
   // actually-plotted channels; without them the default view stands.
   const ds = get().datasets.find((d) => d.id === entry.datasetId);
-  const selection = ds ? libs.figureChannelSelection(fig, ds) : null;
+  // A pie / doughnut opens the Pie window on its columns; the XY stage draws none of it.
+  const pie = libs.queueFigurePie(fig, ds);
+  const selection = ds && !pie ? libs.figureChannelSelection(fig, ds) : null;
   const statState = libs.figureStatState(fig, ds);
   // A3: curves recorded but none resolved -> an empty plot, never every channel
   // (a Stat Stage figure reads its own column, so it is not that case).
-  const failClosed = !selection && !statState.statMode && libs.figureHasCurveEvidence(fig);
+  const failClosed = !pie && !selection && !statState.statMode && libs.figureHasCurveEvidence(fig);
   set({
     ...ORIGIN_FIGURE_MODE_RESET,
     ...ORIGIN_FIGURE_Y2_RESET,
@@ -388,7 +390,7 @@ export function runOriginFigureApply(
     annotations: libs.originFigureAnnotations([fig], entry.id),
     regionShades: libs.originRegionShades([fig], entry.id),
     ...libs.originLegendState(fig),
-    ...libs.figureSelectionState(selection, failClosed ? fig : undefined),
+    ...libs.figureSelectionState(selection, failClosed || pie ? fig : undefined),
     // An all-histogram figure opens on the Stat Stage's histogram.
     ...statState,
     ...libs.figurePolarState(fig),
@@ -403,6 +405,7 @@ export function runOriginFigureApply(
   applyFigureErrors(set, get, ds ? figureCurveErrorBindings(fig, ds.data.metadata ?? {}) : [], ds, prior);
   // A ternary figure opens the ternary workshop on Origin's A, B, C columns.
   libs.queueFigureTernary(fig, ds);
+  if (pie) toast(`${fig.name}: a ${fig.pie?.hole ? "doughnut" : "pie"} chart — drawn in the Pie chart window`, "info");
   if (failClosed) {
     // Fail closed (A3): the stage stays empty and says why; never every channel.
     // A layer whose only curve evidence is curves the importer left out says so (not "none resolved").

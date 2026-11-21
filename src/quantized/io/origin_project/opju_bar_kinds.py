@@ -4,7 +4,9 @@
 to Origin C ``DataPlot::GetPlotType()`` on every plot of the 231 built
 ``tools/plot_corpus`` specimens (Origin 2026b Student, 2026-11-15): 203
 column, 213 stacked column, 214 stacked area, 215 horizontal bar; 205, 207,
-208, 216, 218 and the pie family 225 are kinds quantized has no renderer for.
+208, 216 and 218 are kinds quantized has no renderer for; the pie family 225
+is a pie / doughnut when its record reads (``opju_pie``: a one-layer page
+gets ``figure["pie"]``, drawn by the Pie window).
 ``opju_plot_kinds.apply_plot_kind`` marks each such curve with a provisional
 ``plotType``; this pass resolves it per LAYER, because what Origin draws
 depends on the layer's other plots:
@@ -37,10 +39,10 @@ depends on the layer's other plots:
   only for that pick, ``statPicks.withPickedXGroup``). A category is one
   row, so its bar IS the row's value (n = 1: no error whisker). Otherwise several 203 series draw as
   before (by their line style, ``opju_stat_plots``).
-* **anything else** -- several stacked areas, several sideways bars, a
+* **anything else** -- several stacked areas, a grouped sideways layer, a
   stack whose 100 % flag is unknown, a stacked layer of a multi-layer page,
   a ``"not_drawn"`` kind -- is LEFT OUT (``plot_type_not_drawn``): drawn as
-  lines these show values where Origin shows none (a pie's slices, the
+  lines these show values where Origin shows none (a bar-of-pie, the
   unstacked tops of a stack).
 
 **The template signal** (``opju_layer_kind.page_layer_kind``, the fallback
@@ -68,6 +70,7 @@ import numpy as np
 from quantized.io.origin_project.opju_curve_sheets import without_captions, without_positions
 from quantized.io.origin_project.opju_figure_curves import opju_pages
 from quantized.io.origin_project.opju_layer_kind import page_layer_kind
+from quantized.io.origin_project.opju_pie import PIE_MARKS_NOT_DECODED, pie_spec
 
 __all__ = [
     "BAR_LAYOUT",
@@ -85,7 +88,13 @@ _TEMPLATES = (
     (re.compile(rb"(?i)stackcolp"), "percent"),
     (re.compile(rb"(?i)stackcolu"), "stacked"),
 )
-_PROVISIONAL = frozenset({"stacked_column", "stacked_area", "bar", "not_drawn"})
+_PIE_TEMPLATES = (  # bar-of-pie first: its name holds "Pie"
+    (re.compile(rb"(?i)(bar|pie)ofpie"), "bar_of_pie"),
+    (re.compile(rb"(?i)doughnut"), "doughnut"),
+    (re.compile(rb"(?i)pie"), "pie"),
+)
+_PROVISIONAL = frozenset({"stacked_column", "stacked_area", "bar", "not_drawn", "pie"})
+_SCRATCH = ("plotGroup", "pieHole")  # provisional curve keys, read here and dropped
 
 
 def book_column(books: Sequence[Any], book: str, col: str) -> np.ndarray | None:
@@ -147,7 +156,7 @@ def _bar_layout(curves: list[dict[str, Any]], kind: str, layers: int, books: Seq
         return False
     if len({(str(c.get("book")), str(c.get("x"))) for c in curves}) != 1:
         return False
-    if any(c.get("yErr") for c in curves):
+    if any(c.get("yErr") for c in curves) or not _grouped(curves):
         return False
     book, x = str(curves[0].get("book")), str(curves[0].get("x"))
     return _is_book_x(books, book, x) and _even_unique_x(books, book, x)
@@ -176,14 +185,29 @@ def _left_out(fig: dict[str, Any], positions: list[int]) -> dict[str, Any]:
     }
 
 
+def _grouped(curves: list[dict[str, Any]]) -> bool:
+    """``True`` when the plots are one Origin plot group (a head, then its
+    members): Origin draws such a group side by side (``opju_pie.plot_group``)."""
+    roles = [c.get("plotGroup") for c in curves]
+    return roles[0] == "head" and all(r == "member" for r in roles[1:])
+
+
 def _turned(curves: list[dict[str, Any]], by_kind: dict[str, list[int]], layers: int) -> list[int]:
-    """An exchanged-axes layer (Origin's horizontal bar layout): its one bar
-    or column plot of a one-layer page is drawn sideways (``"bar"``,
-    ``lib/uplotOrient``); every other curve of it is returned, to be left out
-    -- grouped / stacked sideways bars are not drawn, and a line drawn upright
-    in a turned layer would put its points where Origin does not."""
-    if len(curves) == 1 and layers == 1 and set(by_kind) <= {"bar", "column"}:
-        curves[0]["plotType"] = "bar"
+    """An exchanged-axes layer (Origin's horizontal bar layout) of a
+    one-layer page: its one bar or column plot is drawn sideways (``"bar"``,
+    ``lib/uplotOrient``), and so are several when every one is a STANDALONE
+    plot on one sheet X -- Origin draws ungrouped bars at the same positions,
+    overlapping (``LSA_fig6`` Graph6 / 8, ``opju_pie.plot_group``). Every
+    other curve is returned, to be left out: a grouped sideways layer (its
+    gap / overlap is not decoded), stacks, and a line drawn upright in a
+    turned layer would put its points where Origin does not."""
+    if layers != 1 or not curves or not set(by_kind) <= {"bar", "column"}:
+        return list(range(len(curves)))
+    alone = all(c.get("plotGroup") == "standalone" for c in curves)
+    one_x = len({(str(c.get("book")), str(c.get("x"))) for c in curves}) == 1
+    if len(curves) == 1 or (alone and one_x):
+        for c in curves:
+            c["plotType"] = "bar"
         return []
     return list(range(len(curves)))
 
@@ -198,6 +222,14 @@ def _stack_percent(fig: dict[str, Any], template: str | None) -> bool | None:
 
 
 def _resolve(
+    fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any]
+) -> dict[str, Any]:
+    out = _resolve_kinds(fig, layers, template, books)
+    curves = [{k: v for k, v in c.items() if k not in _SCRATCH} for c in out.get("curves") or []]
+    return {**out, "curves": curves}
+
+
+def _resolve_kinds(
     fig: dict[str, Any], layers: int, template: str | None, books: Sequence[Any]
 ) -> dict[str, Any]:
     curves: list[dict[str, Any]] = [dict(c) for c in fig.get("curves") or []]
@@ -215,6 +247,13 @@ def _resolve(
         out["curves"] = curves
         return _left_out(out, turned) if turned else out
     gone: list[int] = list(by_kind.get("not_drawn", []))
+    if "pie" in by_kind:
+        spec = pie_spec(curves, layers, template, lambda bk, x: _is_book_x(books, bk, x))
+        if spec is None:
+            gone += by_kind["pie"]
+        else:  # every curve is a pie plot: the Pie window draws them (``opju_pie``)
+            out["pie"] = spec
+            out[PIE_MARKS_NOT_DECODED] = True
     area = by_kind.get("stacked_area", [])
     if len(area) == 1:
         curves[area[0]]["plotType"] = "area"  # a stack of one
@@ -250,7 +289,7 @@ def apply_bar_kinds(
     layers: dict[str, int] = {}
     for f in figs:
         layers[str(f.get("name") or "")] = layers.get(str(f.get("name") or ""), 0) + 1
-    templates: dict[str, str | None] = {}
+    templates: dict[tuple[str, bool], str | None] = {}
     pages: list[tuple[int, str]] | None = None
     out: list[dict[str, Any]] = []
     for fig in figs:
@@ -261,19 +300,28 @@ def apply_bar_kinds(
             out.append(fig)
             continue
         name = str(fig.get("name") or "")
-        if "stacked_column" in kinds and name and name not in templates:
+        table = (
+            _TEMPLATES if "stacked_column" in kinds else _PIE_TEMPLATES if "pie" in kinds else None
+        )
+        key = (name, table is _PIE_TEMPLATES)  # one page may hold a stack and a pie
+        if table is not None and name and key not in templates:
             if pages is None:
                 pages = opju_pages(b)
-            templates[name] = _template_kind(b, pages, name)
+            templates[key] = _template_kind(b, pages, name, table)
         count = layers[name] if name else 2  # unnamed: an embedded graph
-        out.append(_resolve(fig, count, templates.get(name), books))
+        out.append(_resolve(fig, count, templates.get(key), books))
     return out
 
 
-def _template_kind(b: bytes, pages: list[tuple[int, str]], name: str) -> str | None:
-    """``"stacked"`` / ``"percent"`` from the page's template, else
-    ``None``."""
+def _template_kind(
+    b: bytes,
+    pages: list[tuple[int, str]],
+    name: str,
+    table: Sequence[tuple[re.Pattern[bytes], str]],
+) -> str | None:
+    """The page template's kind from ``table`` (``"stacked"`` / ``"percent"``,
+    or ``"pie"`` / ``"doughnut"`` / ``"bar_of_pie"``), else ``None``."""
     for off, page in pages:
         if page == name:
-            return page_layer_kind(b, off, name, _TEMPLATES)
+            return page_layer_kind(b, off, name, table)
     return None

@@ -3,7 +3,8 @@
 // (`components/workshops/ternary/useTernary.ts`), which takes it when it next
 // (re)derives its picks for that dataset. The workshop's open flag lives in
 // components/ (`auxFigureStore`), which lib/ and store/ may not import: that
-// store registers its opener here instead (`setTernaryOpener`).
+// store registers its opener here instead (`setTernaryOpener`); the pie
+// workshop opens through the same seam (`openAuxFigure`, lib/piePending.ts).
 
 export interface PendingTernaryPicks {
   datasetId: string;
@@ -13,10 +14,12 @@ export interface PendingTernaryPicks {
 }
 
 let pending: PendingTernaryPicks | null = null;
-let opener: (() => void) | null = null;
+/** An aux-figure workshop's open flag (`auxFigureStore`). */
+export type AuxFigureFlag = "ternaryOpen" | "pieOpen";
+let opener: ((flag: AuxFigureFlag) => void) | null = null;
 
-/** Registered by the ternary workshop's open-flag store. */
-export function setTernaryOpener(open: () => void): void {
+/** Registered by the aux-figure workshops' open-flag store. */
+export function setTernaryOpener(open: (flag: AuxFigureFlag) => void): void {
   opener = open;
 }
 
@@ -24,7 +27,12 @@ export function setTernaryOpener(open: () => void): void {
  *  the same dataset keeps its current picks until that dataset is re-entered. */
 export function requestTernaryPicks(picks: PendingTernaryPicks): void {
   pending = picks;
-  opener?.();
+  openAuxFigure("ternaryOpen");
+}
+
+/** Open the aux-figure workshop behind `flag`. */
+export function openAuxFigure(flag: AuxFigureFlag): void {
+  opener?.(flag);
 }
 
 /** The pending picks for `datasetId` (consumed), else null. */

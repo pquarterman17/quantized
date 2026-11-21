@@ -11096,6 +11096,85 @@
         "title": "PercentRequest",
         "type": "object"
       },
+      "PieFigureRequest": {
+        "properties": {
+          "colors": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colors"
+          },
+          "dpi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dpi"
+          },
+          "filename": {
+            "default": "pie",
+            "title": "Filename",
+            "type": "string"
+          },
+          "fmt": {
+            "default": "pdf",
+            "title": "Fmt",
+            "type": "string"
+          },
+          "hole": {
+            "default": 0.0,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Hole",
+            "type": "number"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "rings": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Rings",
+            "type": "array"
+          },
+          "style": {
+            "default": "default",
+            "title": "Style",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rings",
+          "labels"
+        ],
+        "title": "PieFigureRequest",
+        "type": "object"
+      },
       "PlaneRequest": {
         "properties": {
           "a": {
@@ -20195,6 +20274,46 @@
           }
         },
         "summary": "Export Pca Scree Figure",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/pie-figure": {
+      "post": {
+        "description": "Render a pie / (multi-ring) doughnut chart (PDF/SVG/PNG/TIFF): the pie\nworkshop's preview and export, and an Origin pie / doughnut layer's\npublication path (``calc.figure_pie``).",
+        "operationId": "export_pie_figure_api_export_pie_figure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PieFigureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Pie Figure",
         "tags": [
           "export"
         ]

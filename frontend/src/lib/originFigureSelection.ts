@@ -17,7 +17,7 @@ import { figureCurveErrorBindings } from "./originCurveErrorRoles";
 import type { ErrorBinding } from "./errorRoles";
 import { curveDisplayName, legendCaption, originCurveSeriesStyle } from "./originCurveText";
 import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
-export { figureMapState, queueFigureTernary } from "./originFigureMap";
+export { figureMapState, queueFigurePie, queueFigureTernary } from "./originFigureMap";
 import type { StatPicks } from "./plotviewSanitize";
 import { statColRefs, type StatCols } from "./statPicks";
 import type {

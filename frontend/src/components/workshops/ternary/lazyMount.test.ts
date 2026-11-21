@@ -16,28 +16,29 @@ const modules = import.meta.glob("/src/**/*.{ts,tsx}", {
   eager: true,
 }) as Record<string, string>;
 
-const WORKSHOP_DIRS = ["/workshops/ternary/", "/workshops/fieldplot/"];
+const WORKSHOP_DIRS = ["/workshops/ternary/", "/workshops/fieldplot/", "/workshops/pie/"];
 const sources = () =>
   Object.entries(modules).filter(([p]) => !/\.test\.(ts|tsx)$/.test(p));
 const overlays = () => sources().find(([p]) => p.endsWith("/AppOverlayPanels.tsx"))?.[1] ?? "";
 
-describe("ternary + vector-field workshops stay lazily mounted", () => {
+describe("ternary + vector-field + pie workshops stay lazily mounted", () => {
   it("AppOverlayPanels mounts the pair through one lazyPanel, gated on either flag", () => {
     const src = overlays();
     expect(src).toContain('lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels")');
-    expect(src).toContain("useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen)");
+    expect(src).toContain("useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen || s.pieOpen)");
     expect(src).toContain("{auxFigureOpen && <AuxFigurePanels />}");
-    expect(src).not.toMatch(/import\("\.\/components\/workshops\/(ternary\/TernaryPanel|fieldplot\/FieldPlotPanel)"\)/);
+    expect(src).not.toMatch(/import\("\.\/components\/workshops\/(ternary\/TernaryPanel|fieldplot\/FieldPlotPanel|pie\/PiePanel)"\)/);
   });
 
   it("the shared chunk gates each panel on its own flag", () => {
     const src = sources().find(([p]) => p.endsWith("/workshops/ternary/AuxFigurePanels.tsx"))?.[1] ?? "";
     expect(src).toContain("{ternaryOpen && <TernaryPanel />}");
     expect(src).toContain("{fieldOpen && <FieldPlotPanel />}");
+    expect(src).toContain("{pieOpen && <PiePanel />}");
   });
 
   it("outside the two workshop directories, only the open-flag store is imported statically", () => {
-    const pattern = /from\s+["'][^"']*\/workshops\/(ternary|fieldplot)\/([A-Za-z]+)["']/g;
+    const pattern = /from\s+["'][^"']*\/workshops\/(ternary|fieldplot|pie)\/([A-Za-z]+)["']/g;
     const offenders: string[] = [];
     for (const [p, src] of sources()) {
       if (WORKSHOP_DIRS.some((d) => p.includes(d))) continue;
@@ -52,6 +53,16 @@ describe("ternary + vector-field workshops stay lazily mounted", () => {
     const store = sources().find(([p]) => p.endsWith("/workshops/ternary/auxFigureStore.ts"))?.[1] ?? "";
     expect(store).not.toBe("");
     expect(store).not.toMatch(/from\s+["']\.\//);
-    expect(store).not.toMatch(/from\s+["']\.\.\/fieldplot/);
+    expect(store).not.toMatch(/from\s+["']\.\.\/(fieldplot|pie)/);
+  });
+});
+
+describe("the pie hand-off stays out of the eager bundle", () => {
+  it("lib/piePending is imported only by the lazy Origin-apply map and the pie workshop", () => {
+    const importers = sources()
+      .filter(([, src]) => /from\s+["'][^"']*\/piePending["']/.test(src))
+      .map(([p]) => p.replace(/^.*\/src\//, ""))
+      .sort();
+    expect(importers).toEqual(["components/workshops/pie/usePie.ts", "lib/originFigureMap.ts"]);
   });
 });

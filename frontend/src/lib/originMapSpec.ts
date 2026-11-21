@@ -20,3 +20,13 @@ export interface OriginTernarySpec {
   b: string;
   c: string;
 }
+
+/** An Origin pie / doughnut layer (io/origin_project/opju_pie.py): wedge
+ *  values from each Y column (one ring per column, the first innermost),
+ *  labels from the X column, `hole` the doughnut hole / outer radius. */
+export interface OriginPieSpec {
+  book: string;
+  x: string;
+  y: string[];
+  hole: number;
+}
