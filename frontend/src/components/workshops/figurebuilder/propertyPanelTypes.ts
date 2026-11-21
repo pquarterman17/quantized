@@ -69,6 +69,7 @@ export interface TickFormatPanelProps {
   yFmt: AxisFormat;
   y2Fmt: AxisFormat | null;
   xIsDate: boolean;
+  xIsClock?: boolean;
   onXFmt: (next: AxisFormat) => void;
   onYFmt: (next: AxisFormat) => void;
   onY2Fmt: (next: AxisFormat | null) => void;

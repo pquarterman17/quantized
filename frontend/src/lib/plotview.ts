@@ -38,7 +38,7 @@ export { LEGEND_POS, legendXYOrNull, nearestLegendCorner, sanitizeAnnotations, s
 export type { InsetView } from "./plotviewDecor";
 export { cascadeGeometry, cascadeLayout, cycleWindow, dedupeWindowTitle, displayedWindowTitle, dropGeometry, nextLinkGroup, nextPlotBg, tileLayout, zOrderIds } from "./plotWindows";
 
-const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
+const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime", "clock"];
 
 /** Shared untrusted-boundary decoder for project and recipe reference lines. */
 export function sanitizeRefLines(value: unknown): RefLine[] {

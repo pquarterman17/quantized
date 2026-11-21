@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { columnFormatter, fmtCell } from "./cellFormat";
+import { columnFormatter, fmtCell, fmtClockCell, gridFormatters } from "./cellFormat";
 
 describe("fmtCell", () => {
   it("keeps four significant figures for magnitudes in [1e-3, 0.1)", () => {
@@ -92,5 +92,18 @@ describe("columnFormatter", () => {
     expect(fmtCol([0.5, 1e-10])).toEqual(["5.000e-1", "1.000e-10"]);
     // ...and a column whose large values need decimals stays fixed throughout.
     expect(fmtCol([10000.5, 10000.6, 0.00001, 0.5])).toEqual(["10000.5", "10000.6", "0.00001000", "0.5000"]);
+  });
+});
+
+describe("clock X column", () => {
+  it("shows seconds since midnight as HH:MM:SS, display only", () => {
+    expect(fmtClockCell(45296)).toBe("12:34:56");
+    expect(fmtClockCell(45296.5)).toBe("12:34:56.500");
+    expect(fmtClockCell(86400 + 60)).toBe("00:01:00"); // wraps at 24 h
+    expect(fmtClockCell(Number.NaN)).toBe("—");
+    const time = [45296, 45297];
+    expect(gridFormatters(time, [[1], [2]], undefined, "clock")(-1)(time[0])).toBe("12:34:56");
+    expect(time).toEqual([45296, 45297]); // stored value untouched
+    expect(gridFormatters(time, [[1], [2]])(-1)(45296)).not.toBe("12:34:56"); // y columns / non-clock X unchanged
   });
 });

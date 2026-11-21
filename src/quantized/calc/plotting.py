@@ -65,7 +65,20 @@ class PlotData:
 
 
 def _resolve(ds: DataStruct, key: int | str) -> int:
-    return key if isinstance(key, int) else ds.labels.index(key)
+    """A channel key as an index into ``ds.values`` columns. An index outside
+    the dataset, or a label it does not have, is a ``ValueError`` naming the
+    key and what exists (the export route 422s it) -- never a bare
+    "tuple index out of range"."""
+    n = len(ds.labels)
+    if isinstance(key, int):
+        if not 0 <= key < n:
+            plural = "s" if n != 1 else ""
+            have = f"{n} channel{plural} (valid indices 0..{n - 1})" if n else "no channels"
+            raise ValueError(f"channel {key} does not exist: the dataset has {have}")
+        return key
+    if key not in ds.labels:
+        raise ValueError(f"channel {key!r} not found; available channels: {list(ds.labels)!r}")
+    return ds.labels.index(key)
 
 
 def validate_y2_subset(

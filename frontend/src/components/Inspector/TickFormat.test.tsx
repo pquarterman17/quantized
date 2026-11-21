@@ -89,6 +89,25 @@ describe("TickFormat", () => {
     expect(queryByLabelText("X date/time format")).toBeNull();
   });
 
+  it("offers an explicit Clock (HH:MM:SS) X mode on a time-of-day column only", () => {
+    const clockCol = (metadata: Record<string, unknown>) =>
+      useApp.setState({
+        datasets: [{ id: "d1", name: "run", data: { time: [0, 1], values: [[1], [2]], labels: ["y"], units: [""], metadata } }],
+        activeId: "d1",
+      });
+    clockCol({});
+    const plain = render(<TickFormat />);
+    const [plainX] = plain.container.querySelectorAll('[role="radiogroup"]');
+    expect(Array.from(plainX.querySelectorAll('[role="radio"]')).map((b) => b.textContent)).not.toContain("Clock (HH:MM:SS)");
+    plain.unmount();
+    clockCol({ time_is_clock: true });
+    const { container } = render(<TickFormat />);
+    const [xGroup] = container.querySelectorAll('[role="radiogroup"]');
+    fireEvent.click(Array.from(xGroup.querySelectorAll('[role="radio"]')).find((b) => b.textContent === "Clock (HH:MM:SS)")!);
+    expect(useApp.getState().xFmt).toEqual({ mode: "clock", digits: 2 });
+    expect(container.querySelectorAll("input")).toHaveLength(0); // no digits for a clock
+  });
+
   it("editing the digits field in Eng mode updates the mantissa digit count", () => {
     useApp.setState({ yFmt: { mode: "eng", digits: 2 } });
     const { container } = render(<TickFormat />);

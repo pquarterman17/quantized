@@ -91,12 +91,44 @@ def _check(sheet: ExportSheet) -> int:
     for c in sheet.columns:
         if c.kind not in COLUMN_KINDS:
             raise ValueError(f"column {c.name!r}: unknown kind {c.kind!r}")
+        if c.kind == "number":
+            _check_numeric(c)
     return rows.pop()
 
 
-def _number(value: float | str | None) -> float | None:
-    if value is None or isinstance(value, str):
+def _check_numeric(column: ExportColumn) -> None:
+    """A ``number`` column holds numbers or numeric text (``"1.5"``, parsed);
+    any other string is refused, naming the first one, rather than written as
+    a blank cell."""
+    for r, v in enumerate(column.cells):
+        if isinstance(v, str) and v.strip() and _parse(v) is None and not _is_nonfinite_text(v):
+            raise ValueError(
+                f"column {column.name!r}, row {r + 1}: {v!r} is not a number in a number column "
+                "(set the column to text, or fix the cell)"
+            )
+
+
+def _parse(text: str) -> float | None:
+    try:
+        v = float(text)
+    except ValueError:
         return None
+    return v if math.isfinite(v) else None
+
+
+def _is_nonfinite_text(text: str) -> bool:
+    """``nan`` / ``inf`` text parses but is blank in a number column, as NaN is."""
+    try:
+        return not math.isfinite(float(text))
+    except ValueError:
+        return False
+
+
+def _number(value: float | str | None) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return _parse(value) if value.strip() else None
     v = float(value)
     return v if math.isfinite(v) else None
 
@@ -184,10 +216,13 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
     taken: set[str] = set()
     for sheet in sheets:
         n_rows = _check(sheet)
-        if n_rows + 2 + len(sheet.preamble) > _XLSX_MAX_ROWS:
+        # Rows written above the data: none without a header, else the preamble
+        # and the Long Name row (+ the Units row when a column has a unit).
+        above = len(sheet.preamble) + len(_header_rows(sheet)) if header else 0
+        if n_rows + above > _XLSX_MAX_ROWS:
             raise ValueError(
                 f"sheet {sheet.name!r} has {n_rows} rows; an Excel sheet holds at most "
-                f"{_XLSX_MAX_ROWS - 2} data rows -- export CSV instead"
+                f"{_XLSX_MAX_ROWS - above} data rows -- export CSV instead"
             )
         ws = wb.create_sheet(_sheet_title(sheet.name, taken))
         for line in sheet.preamble if header else ():

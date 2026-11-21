@@ -1,6 +1,9 @@
 import { useCallback, useRef } from "react";
 
 import { fitModel } from "../../../lib/api";
+import { fitRowsOf } from "../../../lib/fitCurve";
+import { postBySource, type FitSource } from "../../../lib/fitSource";
+import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { analysisSelectionData, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { partitionByColumn } from "../../../lib/byPartition";
@@ -65,9 +68,9 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     const custom = !rowsAreDefault(paramRows, model);
     // Per input: an edited table's unchosen starts come from THAT input's
     // data (fitStarts.ts), as in the single fit.
-    const customRequest = async (x: number[], y: number[]) => {
+    const customRequest = async (x: number[], y: number[], source?: FitSource, rows: readonly number[] = []) => {
       if (!custom) return {};
-      const p = await parseFitStarts(paramRows, model, modelName, x, y);
+      const p = await parseFitStarts(paramRows, model, modelName, x, y, source, rows);
       if (p.error) throw new Error(p.error);
       return { p0: p.p0, lower: p.lower, upper: p.upper, ...(p.fixed.some(Boolean) ? { fixed: p.fixed } : {}) };
     };
@@ -109,8 +112,15 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     if (!selected) throw new Error(fitSelectionRefusal(dataset, selection.xKey, selection.yKeys, null) ?? "No response column is available to fit.");
     const pairs = dropGapRows(selected.x, selected.y);
     if (pairs.x.length === 0) throw new Error("No finite X/Y pairs are available to fit.");
+    // x/y go by dataset handle when the server holds the worksheet (lib/fitSource,
+    // P4 phase 3): the rows are the ones the arrays above carry, the same
+    // mapping as the single fit. No handle (or a stale one) posts the arrays.
+    const n = dataset.data.time.length;
+    const kept = selected.sourceRows ?? activeRowIndices(n, droppedRows(dataset));
+    const rows = fitRowsOf(pairs.keep, kept, n);
+    const source: FitSource = { data: dataset.data, xKey: selected.xKey, yKey: selected.yKey };
     const request: Parameters<typeof fitModel>[0] = {
-      model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y)), ...BATCH_FIT_TRANSPORT,
+      model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y, source, rows)), ...BATCH_FIT_TRANSPORT,
     };
     if (weightMode === "yerr" || weightMode === "poisson") {
       const keep = pairs.keep.map((index) => selected.analysisRows?.[index] ?? index);
@@ -128,7 +138,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         ? `${what} was not configured; this input ran unweighted.`
         : `${what} columns are worksheet-specific; this batch input ran unweighted.`);
     }
-    const result = await fitModel(request);
+    const result = await postBySource<CalcResult>("/api/fitting/fit", request, source, rows, () => fitModel(request));
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
   }, [manualKey, model, modelName, paramRows, weightMode, scaleErrors, names.length]);
 

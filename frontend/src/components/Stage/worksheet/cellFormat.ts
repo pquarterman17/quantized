@@ -5,6 +5,7 @@
 // display concern of the worksheet subtree.
 
 import { formatNumber } from "../../../lib/columnProps";
+import { clockCell } from "../../../lib/importTimeFormats";
 import type { ColumnProps } from "../../../lib/columnProps";
 
 /** fmtCell's exponential threshold, and the largest magnitude shown in full. */
@@ -104,6 +105,13 @@ export function fmtDateCell(v: number | undefined): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 19)}${ms === ".000" ? "" : ms}`;
 }
 
+/** A time-of-day X cell (`metadata.time_is_clock`): the stored seconds since
+ *  midnight shown as `HH:MM:SS` (milliseconds when present), wrapping every
+ *  24 h. Display only -- the stored value stays seconds. */
+export function fmtClockCell(v: number | undefined): string {
+  return clockCell(v) || "—";
+}
+
 /** Lazily-built, cached formatters for a grid's columns (-1 = the x column):
  *  each column is scanned the first time it is drawn. Rebuild it when the
  *  data changes (the store replaces `time`/`values` on every edit). A column
@@ -114,7 +122,7 @@ export function gridFormatters(
   time: number[],
   values: number[][],
   props?: Record<number, ColumnProps>,
-  xIsDate = false,
+  xIsDate: boolean | "clock" = false,
 ): (col: number) => CellFormatter {
   const cache = new Map<number, CellFormatter>();
   return (col) => {
@@ -122,7 +130,7 @@ export function gridFormatters(
     const user = props?.[col]?.format;
     if (!f && user) f = (v) => formatNumber(v, user);
     if (!f) {
-      f = col < 0 && xIsDate ? fmtDateCell : col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]);
+      f = col < 0 && xIsDate === "clock" ? fmtClockCell : col < 0 && xIsDate ? fmtDateCell : col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]);
       cache.set(col, f);
     }
     return f;
