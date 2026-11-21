@@ -1929,6 +1929,23 @@ import { fileURLToPath } from "node:url";
  *   + the Duplicate body behind import()      815,502   (-1,156)
  * 540 B of headroom remain against the unchanged pin.
  *
+ *
+ * 2026-11-21 (bundle diet slice 31, `plans/BUNDLE_HEADROOM.md`) - pin NOT
+ * moved (816,042): the 17.5 kB freed is headroom for the queued feature
+ * work, not to be locked in yet. Three plot-plugin families left the entry
+ * chunk for startup chunks (the regionDecorLoader shape: the import starts at
+ * app startup, a plot built before it lands rebuilds when it settles):
+ * drawn shapes (`lib/uplotShapes.ts` via `lib/shapesLoader.ts`), text
+ * annotations (`lib/uplotAnnotations.ts`, split out of `uplotOverlays.ts`,
+ * via `lib/annotationsLoader.ts`), and the reference-line plugin plus the
+ * peak-marker / baseline-anchor edit plugins (now in `uplotRegionShades.ts`).
+ * Exact bytes, `npm ci`-fresh:
+ *   `db9987a6` (parent)                          816,029
+ *   + shapes startup chunk                       (about -8.4 kB)
+ *   + annotations startup chunk                  (about -3.8 kB)
+ *   + ref-line plugin, then the workshop edit plugins (about -2.4 and -3.0 kB)
+ *   this slice                                   798,549   (-17,480)
+ * 17,493 B of headroom remain against the unchanged pin.
  */
 const EAGER_JS_BUDGET = 816_042;
 

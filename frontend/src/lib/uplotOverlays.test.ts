@@ -1,6 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { regionDecorSettled } from "./regionDecorLoader";
+import { annotationPlugin } from "./uplotAnnotations";
+import { refLinePlugin } from "./uplotRegionShades";
 
 // The error bars are drawn by the startup chunk (lib/uplotErrorDraw.ts).
 beforeAll(() => regionDecorSettled);
@@ -14,7 +16,6 @@ import {
   annotationBox,
   annotationFont,
   annotationLayout,
-  annotationPlugin,
   canvasPxToPageXY,
   clampAnnotationLabelX,
   clampAnnotationSize,
@@ -26,7 +27,6 @@ import {
   MIN_ANNOTATION_SIZE,
   pageXYToCanvasPx,
   pickRefLine,
-  refLinePlugin,
   REGION_SHADE_ALPHA,
   regionShadePlugin,
 } from "./uplotOverlays";
