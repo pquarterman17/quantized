@@ -4,7 +4,8 @@
 // series count, and every series still keeps its own per-bucket extremes.
 import { describe, expect, it } from "vitest";
 
-import { GAP_ROW_CAP, bucketsForWidth, buildDecimatedData, cappedBuckets } from "./plotDecimate";
+import { bucketsForWidth } from "./plotDecimate";
+import { GAP_ROW_CAP, buildDecimatedData, cappedBuckets } from "./plotDecimateRows";
 
 const N = 20_000;
 const WIDTH = 1440;

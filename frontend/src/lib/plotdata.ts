@@ -10,7 +10,6 @@ import { originCategoryX } from "./categoricalTicks";
 import { isCategorical } from "./modeling";
 import { peakOverlayEmpty } from "./peakOverlayEmpty";
 import { mapColumn } from "./plotColumnOps";
-import { ungap } from "./plotDecimate";
 import type { BaselineOverlay, ChannelRole, DataStruct, FitOverlay, ModelingType, PeakOverlay, PlotSeriesResponse } from "./types";
 import { waterfallApplies, waterfallStep } from "./waterfallOffset";
 
@@ -267,7 +266,7 @@ export function effectiveChannels(
 
 function fromResponse(r: PlotSeriesResponse): PlotPayload {
   return {
-    data: (r.kept ? ungap(r.data, r.kept) : r.data) as uPlot.AlignedData,
+    data: r.data as uPlot.AlignedData,
     series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
@@ -635,7 +634,8 @@ export async function fetchPlot(
       },
       signal,
     );
-    return dropTrailingEmptyRows({ ...fromResponse(r), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
+    const data = r.kept ? (await import("./plotUngap")).ungap(r.data, r.kept) as typeof r.data : r.data;
+    return dropTrailingEmptyRows({ ...fromResponse({ ...r, data }), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
   } catch (err) {
     // An intentional cancellation (a newer commit superseded this fetch)
     // must never be treated as "we're offline" -- the offline fallback below

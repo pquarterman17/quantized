@@ -6,9 +6,6 @@ import type { DefaultTrace } from "./types";
 import {
   DECIMATE_MIN_POINTS,
   bucketsForWidth,
-  buildDecimatedData,
-  decimatePlugin,
-  decimateRowIndices,
   decimationEligible,
   decimationRequestEligible,
   defaultDecimateWidthHint,
@@ -16,9 +13,9 @@ import {
   hasErrorMapEntries,
   shouldDecimate,
   shouldRefetchWindow,
-  visibleRowRange,
   xExtent,
 } from "./plotDecimate";
+import { buildDecimatedData, decimatePlugin, decimateRowIndices, visibleRowRange } from "./plotDecimateRows";
 
 describe("shouldDecimate", () => {
   it("never engages at or below the 10k-row floor, regardless of width", () => {
