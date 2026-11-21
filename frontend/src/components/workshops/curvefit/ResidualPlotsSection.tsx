@@ -7,7 +7,7 @@
 
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
-import { fitDiagnostics } from "../../../lib/api/fitStats";
+import { fitDiagnosticsFor } from "../../../lib/api/fitDiagnosticsFor";
 import type { CalcResult } from "../../../lib/types";
 import { residualPlots } from "./residualPlotData";
 import type { FittedData } from "./useCurveFit";
@@ -25,6 +25,9 @@ const canAutoDraw = (): boolean => typeof window !== "undefined" && typeof windo
 /** Above this many residuals the section waits for a click: four uPlots and
  *  a diagnostics round trip on every re-fit are not free. */
 const RESIDUALS_AUTO_OPEN_MAX = 5000;
+/** Q-Q display budget: min/max buckets across a ~512 px small plot, so the
+ *  thinned pairs draw the same picture as all of them (calc/decimate). */
+const QQ_PLOT_POINTS = 512;
 
 export default function ResidualPlotsSection({
   result,
@@ -61,7 +64,9 @@ export default function ResidualPlotsSection({
     if (!live || !Array.isArray(residuals)) return;
     const ctrl = new AbortController();
     const nParams = Number(result.nFree ?? (result.params as number[] | undefined)?.length ?? 0);
-    fitDiagnostics({ y: fitData.y, residuals: residuals.map((v) => v ?? Number.NaN), n_params: nParams }, ctrl.signal)
+    // Unweighted Q-Q, thinned to the small plot's point budget (P4).
+    const arrays = () => ({ y: fitData.y, residuals: residuals.map((v) => v ?? Number.NaN) });
+    fitDiagnosticsFor(result.resultId, nParams, arrays, { useWeights: false, qqPoints: QQ_PLOT_POINTS }, ctrl.signal)
       .then((d) => setQq({ qqX: d.residuals.qqX, qqY: d.residuals.qqY }))
       .catch((e: unknown) => {
         if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : "Q-Q plot failed");

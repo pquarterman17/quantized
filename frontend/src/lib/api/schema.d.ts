@@ -7735,12 +7735,21 @@ export interface components {
         DiagnosticsRequest: {
             /** N Params */
             n_params: number;
+            /** Qq Points */
+            qq_points?: number | null;
             /** Residuals */
-            residuals: number[];
+            residuals?: number[] | null;
+            /** Result Id */
+            result_id?: string | null;
+            /**
+             * Use Weights
+             * @default true
+             */
+            use_weights?: boolean;
             /** Weights */
             weights?: number[] | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
         };
         /** DielectricToRefractiveRequest */
         DielectricToRefractiveRequest: {
@@ -7855,6 +7864,11 @@ export interface components {
             guesses?: (number | null)[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
+            /**
+             * Return Residuals
+             * @default true
+             */
+            return_residuals?: boolean;
             /**
              * Scale Errors
              * @default true
@@ -8676,6 +8690,11 @@ export interface components {
             model: string;
             /** P0 */
             p0?: number[] | null;
+            /**
+             * Return Residuals
+             * @default true
+             */
+            return_residuals?: boolean;
             /**
              * Scale Errors
              * @default true

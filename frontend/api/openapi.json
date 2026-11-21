@@ -4457,12 +4457,48 @@
             "title": "N Params",
             "type": "integer"
           },
+          "qq_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qq Points"
+          },
           "residuals": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Residuals",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Residuals"
+          },
+          "result_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Id"
+          },
+          "use_weights": {
+            "default": true,
+            "title": "Use Weights",
+            "type": "boolean"
           },
           "weights": {
             "anyOf": [
@@ -4479,16 +4515,21 @@
             "title": "Weights"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
           }
         },
         "required": [
-          "y",
-          "residuals",
           "n_params"
         ],
         "title": "DiagnosticsRequest",
@@ -4786,6 +4827,11 @@
               }
             ],
             "title": "Lower"
+          },
+          "return_residuals": {
+            "default": true,
+            "title": "Return Residuals",
+            "type": "boolean"
           },
           "scale_errors": {
             "default": true,
@@ -6928,6 +6974,11 @@
               }
             ],
             "title": "P0"
+          },
+          "return_residuals": {
+            "default": true,
+            "title": "Return Residuals",
+            "type": "boolean"
           },
           "scale_errors": {
             "default": true,

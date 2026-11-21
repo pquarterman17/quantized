@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { autoGuess, listFitModels } from "../../../lib/api/curvefit";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { fitModel } from "../../../lib/api";
+import { leanFit } from "../../../lib/fitResiduals";
 import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitOverlay, FitWeighting, WeightMode } from "../../../lib/types";
@@ -337,7 +338,7 @@ export function useCurveFit(): CurveFitState {
           return;
         }
         const custom = !rowsAreDefault(paramRows, model);
-        const r = await fitModel({
+        const r = await leanFit(fitModel, {
           model: modelName,
           x: pairs.x,
           y: pairs.y,
