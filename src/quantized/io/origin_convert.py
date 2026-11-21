@@ -56,6 +56,7 @@ from quantized.io.origin_convert_checks import attribute_losses, book_notes, boo
 from quantized.io.origin_project import drop_empty_library_books, read_origin_project_all
 from quantized.io.origin_project.fidelity import with_data_diagnostics
 from quantized.io.origin_project.import_manifest import origin_figures_and_fidelity
+from quantized.io.origin_project.opju_memo import import_scoped
 from quantized.io.workspace_dwk import OriginWorkspace, workspace_json
 from quantized.io.write_guard import WriteRefused, check_target
 
@@ -131,6 +132,7 @@ def _project_checks(
     return figures, fidelity, listed, unowned, notes
 
 
+@import_scoped
 def convert_origin_project(
     path: Path,
     out_dir: Path,

@@ -124,8 +124,22 @@ export async function exportActive(
       return;
     }
     const stem = stemFromName(ds.name);
-    // A large fit's display curve is exported at full resolution (P4 phase 2).
-    if (s().fitOverlay?.full) await (await import("../store/fitOverlayUpgrade")).upgradeFitOverlay();
+    // A large fit's display curve and a large baseline's lean preview are
+    // exported at full resolution (P4 phases 2 and 4). A slot that changed
+    // meanwhile holds another display curve: stop rather than ship it thinned.
+    if (s().fitOverlay?.full || s().baselineOverlay?.lean) {
+      const changed = await (await import("../store/fitOverlayUpgrade")).upgradeOverlaysForExport();
+      if (controller.signal.aborted) {
+        cancelled(s, verb);
+        return;
+      }
+      if (changed) {
+        const msg = `${verb} not completed: the ${changed} changed while exporting — try again`;
+        s().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
+    }
     // `false`: the user dismissed a question `fn` asked (F4.2c's excluded-
     // rows choice) — the same outcome as Cancel, reported the same way.
     // A string is a note appended to the success message (gap-4 G14: which

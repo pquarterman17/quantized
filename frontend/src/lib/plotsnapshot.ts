@@ -21,7 +21,7 @@
 // `components/windows/useWindowCommands.ts` wires the two ends together).
 
 import type { ColorScatterSpec } from "./colorscatter";
-import { decodeCell } from "./nonFiniteCells";
+import { decodeCell, FILLER_CELL } from "./nonFiniteCells";
 import { plainColumn } from "./plotColumnOps";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { SeriesStyle } from "./types";
@@ -126,6 +126,15 @@ function persistedCell(v: unknown): number | null {
   return decodeCell(v) ?? null;
 }
 
+/** A payload column's cell. A gapped or thinned payload (lib/plotUngap, a
+ *  display preview) holds `undefined` between its real values: uPlot draws
+ *  ACROSS it, where a `null` breaks the line. `encodePersistedCells` writes it
+ *  as the string "undefined" (`FILLER_CELL`), so it must read back as
+ *  `undefined`, never as the `null` a real gap decodes to. */
+function persistedColumnCell(v: unknown): number | null {
+  return v === FILLER_CELL ? (undefined as unknown as null) : persistedCell(v);
+}
+
 /** Validate a persisted frozen bundle. Returns null when the core payload is
  *  malformed (a snapshot window IS its at-rest payload — with nothing live to
  *  fall back to, the whole window entry is dropped by the caller); optional
@@ -154,7 +163,7 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
       ...(typeof so.selected === "boolean" ? { selected: so.selected } : {}),
     });
   }
-  const data = (p.data as unknown[][]).map((col) => col.map(persistedCell));
+  const data = (p.data as unknown[][]).map((col) => col.map(persistedColumnCell));
   const xCategories = Array.isArray(p.xCategories)
     ? p.xCategories.filter((s): s is string => typeof s === "string")
     : undefined;
