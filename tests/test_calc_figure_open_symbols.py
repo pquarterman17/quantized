@@ -111,3 +111,12 @@ def test_hollow_colour_mapped_scatter_moves_the_colours_to_the_edges() -> None:
     edges = sc.get_edgecolors()
     assert len(edges) == 3 and not np.allclose(edges[0], edges[2])  # still colour-mapped
     plt.close(fig)
+
+
+@pytest.mark.parametrize("size", [0, 0.5, 1])
+def test_tiny_marker_size_is_raised_to_the_canvas_minimum(size: float) -> None:
+    """Screen (`MIN_MARKER_PX`) and export agree: sizes 0, 0.5, 1 draw at 2 pt."""
+    kw = _plot_kwargs(1.0, 5.0, {"marker": True, "marker_size": size})
+    assert kw["markersize"] == 2.0
+    assert _plot_kwargs(1.0, 5.0, {"marker": True, "marker_size": 7})["markersize"] == 7
+    assert _plot_kwargs(1.0, 5.0, {"marker": True})["markersize"] == 5.0

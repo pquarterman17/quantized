@@ -96,6 +96,18 @@ export function markerPaths(
  *  (`exportStyles.toWireSeriesStyles`), never the style preset's size. */
 export const DEFAULT_MARKER_PX = 5;
 
+/** The smallest marker drawn (CSS px / points). uPlot's circle radius is
+ *  `(size - points.width) / 2` with `points.width` defaulting to 1, so an Origin
+ *  symbol size of 0.5 (or 0) gave a NEGATIVE radius, `arc()` threw, and the
+ *  dots never drew. 2 leaves a 0.5 px radius under that 1 px edge. Mirrored by
+ *  `calc/figure.py` `_MIN_MARKER_PT` so screen and export agree. */
+export const MIN_MARKER_PX = 2;
+
+/** `size` raised to the minimum visible marker; a non-finite one is the default. */
+export function clampMarkerSize(size: number): number {
+  return Number.isFinite(size) ? Math.max(size, MIN_MARKER_PX) : DEFAULT_MARKER_PX;
+}
+
 /**
  * Whether a series draws markers, and WHICH GLYPH — the one rule the canvas
  * (`seriesPoints` below) and the legend swatch (`Stage/LegendSample.tsx`) both
@@ -129,7 +141,7 @@ export function markerDecision(
   trace: DefaultTrace,
 ): { show: boolean; shape: MarkerShape; size: number } {
   if (style?.marker) {
-    return { show: true, shape: style.markerShape ?? "circle", size: style.markerSize ?? DEFAULT_MARKER_PX };
+    return { show: true, shape: style.markerShape ?? "circle", size: clampMarkerSize(style.markerSize ?? DEFAULT_MARKER_PX) };
   }
   const t = seriesTrace(style, trace);
   return { show: t === "Scatter" || t === "Line + markers", shape: "circle", size: DEFAULT_MARKER_PX };

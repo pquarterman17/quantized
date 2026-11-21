@@ -65,6 +65,10 @@ _DRAWSTYLE = {"pre": "steps-pre", "post": "steps-post", "mid": "steps-mid"}
 # the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
 # reads the same as its on-screen counterpart.
 _FILL_ALPHA = 0.25
+# Smallest marker drawn, in points. Mirrors the canvas' `MIN_MARKER_PX`
+# (frontend/src/lib/markers.ts): a size of 0 or 0.5 (Origin symbol size) is
+# raised to it on both sides, where the screen used to throw a negative radius.
+_MIN_MARKER_PT = 2.0
 
 
 def _plot_kwargs(
@@ -97,7 +101,10 @@ def _plot_kwargs(
     if spec.get("marker"):
         shape = spec.get("marker_shape")
         kw["marker"] = _MARKER.get(shape, "o") if isinstance(shape, str) else "o"
-        kw["markersize"] = spec.get("marker_size") or default_marker_size
+        size = spec.get("marker_size")
+        kw["markersize"] = (
+            default_marker_size if size is None else max(float(size), _MIN_MARKER_PT)
+        )
         if spec.get("marker_fill") == "hollow":  # an open symbol (gap audit 2 #6)
             kw["markerfacecolor"] = "none"
     return kw
