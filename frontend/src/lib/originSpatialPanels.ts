@@ -8,8 +8,10 @@
 // import of `./originPanels` in the app, so a static import from an eagerly-
 // reachable file pulls that module back onto first paint too.
 
+import { NO_RESOLVED_CURVES_REASON } from "./linkedCurvesLite";
 import {
   figureChannelSelection,
+  figureHasCurveEvidence,
   originFigureAnnotations,
   originLegendState,
   originRegionShades,
@@ -26,28 +28,36 @@ import type { Dataset, OriginFigure } from "./types";
  *  multi-panel apply (decode-plan #36), WITHOUT grid placement — pair the
  *  result with `originPanels.computePanelLayout` over the same family's
  *  `figure.frame` quads to get each entry's `row`/`col`. One entry per
- *  `family` member, in the SAME order. All-or-nothing: returns `null` when
- *  ANY layer fails to resolve (no dataset, or `figureChannelSelection`
- *  finds nothing to plot) — a partial grid would silently drop a panel, so
- *  the caller falls back to the single-layer apply instead. */
+ *  `family` member, in the SAME order. A layer that records curves
+ *  (`figureHasCurveEvidence`: decoded, or LEFT OUT with a reason) none of
+ *  which resolves keeps its cell and draws EMPTY with `emptyNote` (the
+ *  single-layer fail-closed rule, ledger B-04): dropping it collapsed the
+ *  whole page to one panel (#787 / #791, ledger R-36). Otherwise
+ *  all-or-nothing: returns `null` when a layer with NO curve evidence fails to
+ *  resolve (no dataset, or nothing to plot), or when no layer draws anything,
+ *  so the caller falls back to the single-layer apply. */
 export function resolveFigurePanels(
   family: OriginFigureEntry[],
   datasets: Dataset[],
 ): Omit<SpatialPanel, "row" | "col">[] | null {
   const out: Omit<SpatialPanel, "row" | "col">[] = [];
+  // An empty cell plots no column, so any of the page's own books can carry it.
+  const fallbackId = family.find((e) => e.datasetId && datasets.some((d) => d.id === e.datasetId))?.datasetId;
   for (const entry of family) {
-    if (!entry.datasetId) return null;
     const ds = datasets.find((d) => d.id === entry.datasetId);
-    if (!ds) return null;
     // B1: a layer re-pointed at its own overlay (`store/originApplyPanels`)
     // plots every overlay column; book letters do not apply there.
-    const sel = ds.data.metadata?.origin_overlay ? overlaySelection(ds) : figureChannelSelection(entry.figure, ds);
-    if (!sel) return null;
+    const found = !ds ? null : ds.data.metadata?.origin_overlay ? overlaySelection(ds) : figureChannelSelection(entry.figure, ds);
+    const empty = !found && figureHasCurveEvidence(entry.figure);
+    const datasetId = ds?.id ?? (empty ? fallbackId : undefined);
+    if (!datasetId || (!found && !empty)) return null;
+    const sel = found ?? EMPTY_SELECTION;
     const fig = entry.figure;
     const legend = originLegendState(fig);
     out.push({
       sourceFigureIds: [entry.id],
-      datasetId: entry.datasetId,
+      datasetId,
+      ...(empty ? { emptyNote: NO_RESOLVED_CURVES_REASON } : {}),
       xKey: sel.xKey,
       yKeys: sel.yKeys,
       xLim: [fig.x_from, fig.x_to],
@@ -84,8 +94,13 @@ export function resolveFigurePanels(
       regionShades: originRegionShades([fig], entry.id),
     });
   }
-  return out;
+  return out.every((p) => p.emptyNote) ? null : out;
 }
+
+/** A layer whose recorded curves all stay undrawn: no channel (fail closed). */
+const EMPTY_SELECTION: NonNullable<ReturnType<typeof figureChannelSelection>> = {
+  xKey: null, yKeys: [], styles: {}, labels: {}, errKeys: {}, hiddenChannels: [],
+};
 
 /** An overlay dataset's panel selection: every column, its stamped looks and
  *  captions, error columns as whiskers (`buildOverlayDataset`). */
@@ -286,8 +301,10 @@ export function resolveSpatialPanels(
    *  `sourceFigureIds`. */
   droppedOverlays: number;
 } | null {
-  const resolved = resolveFigurePanels(family, datasets);
-  if (!resolved) return null;
+  const all = resolveFigurePanels(family, datasets);
+  if (!all) return null;
+  const { family: kept, resolved } = foldEmptyOverlays(family, all);
+  family = kept;
   const groups = coincidentOverlayGroups(family);
   let droppedOverlays = 0;
   const reducedIndices: number[] = [];
@@ -340,7 +357,37 @@ export function resolveSpatialPanels(
     : pageAspect != null && pageValidRects(panels) != null
       ? "page"
       : "ordinal";
+  // An empty cell (`emptyNote`) keeps a DECODED page layout (ledger R-36); in
+  // the ordinal fallback there is no layout to keep, so the caller's
+  // single-layer apply stands, as before.
+  if (layoutKind === "ordinal" && panels.some((p) => p.emptyNote)) return null;
   return { panels, spatial: layout.spatial, layout: layoutKind, droppedOverlays };
+}
+
+/** An EMPTY layer (`emptyNote`) drawn in the SAME frame as a layer that
+ *  draws is an overlay of it (SOP_meas Graph14 L6 / Graph40 L5, L9: sideways
+ *  bars over another layer's plot): it is not a cell of its own, so it joins
+ *  that layer's panel as provenance only (`sourceFigureIds`) and never reaches
+ *  the layout. Kept as a cell it overlapped its host and pushed the page into
+ *  the ordinal fallback (ledger R-36). */
+function foldEmptyOverlays(
+  family: OriginFigureEntry[],
+  resolved: Omit<SpatialPanel, "row" | "col">[],
+): { family: OriginFigureEntry[]; resolved: Omit<SpatialPanel, "row" | "col">[] } {
+  const host = (i: number): number => {
+    const f = family[i].figure.frame;
+    if (!resolved[i].emptyNote || !f) return -1;
+    return family.findIndex((e, j) => !resolved[j].emptyNote && !!e.figure.frame && framesCoincide(f, e.figure.frame));
+  };
+  const hosts = family.map((_, i) => host(i));
+  const out = resolved.map((p, i) => {
+    const folded = family.filter((_, j) => hosts[j] === i).map((e) => e.id);
+    return folded.length ? { ...p, sourceFigureIds: [...(p.sourceFigureIds ?? []), ...folded] } : p;
+  });
+  return {
+    family: family.filter((_, i) => hosts[i] < 0),
+    resolved: out.filter((_, i) => hosts[i] < 0),
+  };
 }
 
 /** Info-toast wording for `applyOriginFigure`'s spatial branch (#54

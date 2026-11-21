@@ -34,10 +34,12 @@ from typing import Any
 from import_compare import drawn_kind
 
 __all__ = [
+    "bar_chart_kind",
     "channel_selection",
     "overlay_curves",
     "default_view",
     "drawn_curves",
+    "has_curve_evidence",
     "resolve_dataset",
     "stat_histogram_value",
     "stat_view",
@@ -168,6 +170,25 @@ def channel_selection(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> dict[
 
 _STAT_MODES = ("histogram", "box", "violin", "strip")
 
+# What the Stat Stage bar chart (``figureBarState``) draws, in drawn_kind's
+# vocabulary: UPRIGHT columns, side by side (``barStack`` off), stacked
+# (``barStack``) or stacked to 100 % (``barPercent``). Never ``"bar"``: in that
+# vocabulary ``"bar"`` is Origin's sideways bar (215, ``bars: "horizontal"``),
+# and naming the upright chart ``"bar"`` scored all 18 grouped / stacked column
+# specimens ``wrong`` (#787; DECODE_LEDGER R-34).
+_BAR_CHART_KINDS = {
+    "grouped": "column",
+    "stacked": "stacked_column",
+    "percent": "stacked_column_percent",
+}
+
+
+def bar_chart_kind(layout: Any) -> str:
+    """drawn_kind name of a ``bar_layout`` figure's Stat Stage bar chart
+    (``_BAR_CHART_KINDS``); an unknown layout is ``"stat_bar"``, which no
+    corpus type expects."""
+    return _BAR_CHART_KINDS.get(str(layout), "stat_bar")
+
 
 def stat_view(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> tuple[str, int] | None:
     """``(mode, value channel)`` of the Stat stage ``figureStatState`` opens
@@ -196,6 +217,16 @@ def stat_histogram_value(figure: Mapping[str, Any], ds: Mapping[str, Any]) -> in
     column), or ``None`` when the figure is not an all-histogram figure."""
     got = stat_view(figure, ds)
     return got[1] if got is not None and got[0] == "histogram" else None
+
+
+def has_curve_evidence(figure: Mapping[str, Any]) -> bool:
+    """``figureHasCurveEvidence``: the layer records curves (decoded, or LEFT
+    OUT with a reason in ``curve_sheet_omitted``), so when none maps the apply
+    draws an EMPTY plot, never the dataset default view (DECODE_LEDGER B-04).
+    A map / ternary layer opens its own stage and is never such a case."""
+    if figure.get("map") or figure.get("ternary"):
+        return False
+    return bool(figure.get("curves")) or bool(figure.get("curve_sheet_omitted"))
 
 
 def default_view(ds: Mapping[str, Any]) -> dict[str, Any]:
@@ -242,8 +273,10 @@ def drawn_curves(
 
     ``via``: ``overlay`` (curves on >= 2 (book, X) blocks, each Y against
     its own X), ``selection`` (decoded curves mapped), ``stat`` (Stat stage),
-    ``default`` (no decoded curve mapped: the dataset default view) or
-    ``none`` (no dataset resolved: nothing drawn). ``kind`` is what that view
+    ``default`` (no decoded curve mapped and none recorded: the dataset
+    default view), ``empty`` (curves recorded but none mapped: the apply's
+    fail-closed empty plot, ``has_curve_evidence``) or ``none`` (no dataset
+    resolved: nothing drawn). ``kind`` is what that view
     draws (``import_compare.drawn_kind`` of the curves the selection mapped;
     ``default`` for the default view, ``none`` when nothing is drawn).
     """
@@ -269,7 +302,8 @@ def drawn_curves(
         else:  # one box / violin / strip (or bar series) per plotted channel
             ys = [letters[k] for k in sel["yKeys"]] if sel is not None else []
         x = str((figure.get("curves") or [{}])[0].get("x")) if mode == "bar" else None
-        return {"dataset": book, "via": "stat", "kind": mode,
+        kind = bar_chart_kind(figure.get("bar_layout")) if mode == "bar" else mode
+        return {"dataset": book, "via": "stat", "kind": kind,
                 "curves": [{"book": book, "x": x, "y": y} for y in ys]}
     if sel is not None:
         x = letters[sel["xKey"]] if sel["xKey"] is not None else x_letter
@@ -278,6 +312,8 @@ def drawn_curves(
                   if c.get("book") == book and c.get("y") in [letters[k] for k in sel["yKeys"]]]
         return {"dataset": book, "via": "selection", "kind": _marker_kind(figure, mapped, letters),
                 "curves": curves}
+    if has_curve_evidence(figure):  # figureSelectionState fails closed: an empty plot
+        return {"dataset": book, "via": "empty", "kind": "none", "curves": []}
     view = default_view(ds)
     curves = [
         {"book": book, "x": letters[view["ownX"][c]] if c in view["ownX"] else x_letter, "y": y}

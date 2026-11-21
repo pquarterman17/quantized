@@ -77,6 +77,12 @@ point: [docs/origin_re/README.md](../../../../docs/origin_re/README.md).
    A reason states the evidence, not "expected".
 3. Subcommands `snapshot` / `diff` / `check`: `tools/origin_regress.py --help`.
    Snapshots are refused inside the repo.
+4. `origin/generated/` is read ONLY through the plot-type ratchet
+   (`tests/test_plot_corpus_import_floor.py`, which `gate.py --origin` runs) and
+   `tools/plot_corpus/score_import.py` / `score_report.py`: never edit, copy or
+   move it; commit nothing derived from it but the `import_floor.json` pins
+   (owner rule 2026-11-20; #787 slipped 20 wrong plot types past the regress
+   check, ledger R-34).
 
 ## Corpus layout (local only, never committed)
 

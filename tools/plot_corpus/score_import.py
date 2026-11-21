@@ -247,7 +247,9 @@ def score_specimen(spec_dir: Path, generated: Path | None) -> dict[str, Any]:
         )
         drawn_v, drawn_ph = classify_curves(
             mine, drawn["curves"], sheet_ids,
-            "figure_not_drawn" if drawn["via"] == "none" else "not_in_drawn_view",
+            {"none": "figure_not_drawn", "empty": "curves_left_out_drawn_empty"}.get(
+                str(drawn["via"]), "not_in_drawn_view"
+            ),
         )
         mapped = ptype in XYZ_TYPES and all(v["status"] == "match" for v in curve_v)
         if mapped:  # the apply opens the Map tab / ternary on that binding
@@ -265,7 +267,12 @@ def score_specimen(spec_dir: Path, generated: Path | None) -> dict[str, Any]:
             kind = "ternary" if fig.get("ternary") else str(fig["map"]["kind"])
         pt = (
             verdict("omitted", origin=ptype, reason=why) if fig is None
-            else score_plot_type(ptype, [c["plot_type"] for c in mine], kind)
+            else score_plot_type(
+                ptype,
+                [c["plot_type"] for c in mine],
+                kind,
+                n_series=sum(1 for c in mine if not c.get("error_bar")),
+            )
         )
         layers_out.append(
             {

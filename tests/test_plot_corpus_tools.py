@@ -251,3 +251,29 @@ def test_expected_readback_allows_error_companions_and_aliases() -> None:
 def test_mapped_symbol_types_are_never_restyled() -> None:
     for name in ("bubble", "color_mapped"):
         assert name not in styles.STYLED_TYPES
+
+
+def test_gate_origin_runs_the_plot_type_ratchet_when_specimens_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``tools/gate.py --origin`` runs the import ratchet before the regress
+    check whenever the Origin-built specimens are present (ledger R-34: #787
+    made 20 plot types wrong on them, and the regress check, which skips
+    ``generated/``, could not see it). Without them it skips both quietly."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import gate
+
+    ran: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(gate, "_run", lambda step, argv, cwd=None: ran.append((step, argv)))
+    monkeypatch.setattr(gate, "_origin_corpus_present", lambda: True)
+    monkeypatch.setattr(gate, "_plot_corpus_present", lambda: True)
+    assert gate.main(["--origin"]) == 0
+    steps = [s for s, _ in ran]
+    assert steps == ["plot-type ratchet", "origin regress"]
+    assert gate.PLOT_CORPUS_RATCHET in ran[0][1] and "realdata" in ran[0][1]
+
+    ran.clear()
+    monkeypatch.setattr(gate, "_origin_corpus_present", lambda: False)
+    monkeypatch.setattr(gate, "_plot_corpus_present", lambda: False)
+    assert gate.main(["--origin"]) == 0
+    assert ran == []

@@ -365,7 +365,7 @@ def test_realdata_stacked_area_and_horizontal_bar_pages(corpus_dir: Path) -> Non
     keep one horizontal bar; the two-plot pages Graph6 / 8 are two STANDALONE
     plots (record byte 6), which Origin's previews draw sideways at the same
     positions, overlapping: both are drawn as horizontal bars (Lane P3; Lane P
-    left them out, R-31)."""
+    left them out, R-33)."""
     root = _public(corpus_dir)
     areas = [f for f in _figures(_one(root, "Figure_14.opju")) if f["curves"]]
     assert areas and all([c["plotType"] for c in f["curves"]] == ["area"] for f in areas)

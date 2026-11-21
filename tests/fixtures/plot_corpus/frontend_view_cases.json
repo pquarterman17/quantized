@@ -155,26 +155,66 @@
       "drawn": [{"x": "A", "y": "B"}]
     },
     {
-      "name": "a curve whose Y has no finite data is skipped, falling back to default",
+      "name": "a curve whose Y has no finite data is skipped: the apply fails closed to an empty plot",
       "dataset": "empty_y",
       "figure": {"source_hint": "Clean", "curves": [{"book": "Clean", "x": "A", "y": "C", "style": "line"}]},
       "selection": null,
       "stat": false,
       "hidden": [],
       "ownX": {},
-      "kind": "default",
-      "via": "default",
-      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
+      "kind": "none",
+      "via": "empty",
+      "drawn": []
     },
     {
-      "name": "curves on another book map nothing",
+      "name": "curves on another book map nothing: an empty plot, never every channel",
       "dataset": "clean",
       "figure": {"source_hint": "Clean", "curves": [{"book": "Other", "x": "A", "y": "B", "style": "line"}]},
       "selection": null,
       "stat": false,
-      "kind": "default",
-      "via": "default",
-      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}, {"x": "A", "y": "D"}]
+      "kind": "none",
+      "via": "empty",
+      "drawn": []
+    },
+    {
+      "name": "every curve left out (plot_type_not_drawn): an empty plot, never the default view",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "curves": [], "curve_sheet_omitted": [{"book": "Clean", "x": "A", "y": "B", "recorded": "Clean", "reason": "plot_type_not_drawn"}]},
+      "selection": null,
+      "stat": false,
+      "kind": "none",
+      "via": "empty",
+      "drawn": []
+    },
+    {
+      "name": "a grouped bar_layout opens the Stat Stage bar chart: upright side-by-side columns",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "bar_layout": "grouped", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "column"}, {"book": "Clean", "x": "A", "y": "C", "plotType": "column"}]},
+      "selection": {"xKey": null, "yKeys": [0, 1]},
+      "stat": true,
+      "kind": "column",
+      "via": "stat",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
+    },
+    {
+      "name": "a stacked bar_layout is the stacked column chart",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "bar_layout": "stacked", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "column"}, {"book": "Clean", "x": "A", "y": "C", "plotType": "column"}]},
+      "selection": {"xKey": null, "yKeys": [0, 1]},
+      "stat": true,
+      "kind": "stacked_column",
+      "via": "stat",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
+    },
+    {
+      "name": "a percent bar_layout is the 100 % stacked column chart",
+      "dataset": "clean",
+      "figure": {"source_hint": "Clean", "bar_layout": "percent", "curves": [{"book": "Clean", "x": "A", "y": "B", "plotType": "column"}, {"book": "Clean", "x": "A", "y": "C", "plotType": "column"}]},
+      "selection": {"xKey": null, "yKeys": [0, 1]},
+      "stat": true,
+      "kind": "stacked_column_percent",
+      "via": "stat",
+      "drawn": [{"x": "A", "y": "B"}, {"x": "A", "y": "C"}]
     },
     {
       "name": "all-box figure of row-less curves opens one box per plotted column",

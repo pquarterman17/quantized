@@ -59,6 +59,7 @@ uv run python tools/gate.py --origin --origin-allow docs/origin_re/regress_allow
   The reason names the evidence (preview, export, COM count), not "expected".
 - An unexplained change is a regression until proven otherwise. Do not widen
   `kind: "*"` or a glob to make it pass.
+- `origin/generated/` (Origin-built specimens) is READ-ONLY: read it only through `tests/test_plot_corpus_import_floor.py` (run by `gate.py --origin`) and `tools/plot_corpus/score_import.py` / `score_report.py`; never edit, copy or move it, and commit nothing derived from it but the pins in `tests/fixtures/plot_corpus/import_floor.json` (owner rule 2026-11-20; ledger R-34).
 
 ## 6. Guard it and record it (same PR)
 

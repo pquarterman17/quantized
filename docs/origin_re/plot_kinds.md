@@ -401,4 +401,4 @@ list). Owner corpus: no change.
 
 ## Ledger
 
-Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-100 to F-107, B-24, R-28; Lane P2: F-108, F-109, B-26 to B-28, R-29, R-30; Lane P3: F-110 to F-114, B-29, B-30, R-31.
+Indexed in [DECODE_LEDGER.md](DECODE_LEDGER.md): F-100 to F-107, B-24, R-28; Lane P2: F-108, F-109, B-26 to B-28, R-29, R-30; Lane P3: F-110 to F-114, B-31, B-32, R-33.

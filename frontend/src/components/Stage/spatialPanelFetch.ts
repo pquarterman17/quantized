@@ -88,3 +88,16 @@ export async function fetchSpatialPanel(
     errorSpans: buildErrorSpans(ds.data, plottedChannels, p.errors ?? []),
   };
 }
+
+/** The note an EMPTY spatial cell shows (`SpatialPanel.emptyNote`: a layer
+ *  whose recorded curves are all left out keeps its place on the page and
+ *  draws nothing, ledger R-36), worded and placed like the single plot's
+ *  `EmptyGraphNotice`. */
+export function spatialEmptyNote(text: string): HTMLDivElement {
+  const note = document.createElement("div");
+  note.className = "qzk-ds-meta qzk-spatial-empty-note";
+  note.setAttribute("role", "status");
+  Object.assign(note.style, { position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12%", pointerEvents: "none", textAlign: "center" });
+  note.textContent = text;
+  return note;
+}

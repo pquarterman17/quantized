@@ -23,6 +23,11 @@ Usage:
 (``test-data/origin``, ``QZ_ORIGIN_PUBLIC_CORPUS`` / ``QZ_ORIGIN_OWNER_CORPUS``);
 without one it skips with a message (CI has no corpus). Pass an explained-
 changes file with ``--origin-allow FILE``; every corpus change must be in it.
+It first runs the plot-type ratchet ``tests/test_plot_corpus_import_floor.py``
+when the Origin-built specimens ``test-data/origin/generated/`` are present:
+#787 made 20 plot types wrong on them and only that ratchet saw it
+(``docs/origin_re/DECODE_LEDGER.md`` R-34). The specimens are read ONLY through
+that ratchet and its scoring tools (owner rule 2026-11-20).
 
 Stops at the first failing step and exits with that step's return code.
 """
@@ -84,7 +89,24 @@ def _origin_corpus_present() -> bool:
     return bool(runner.collect_files(runner.discover_corpora([])))
 
 
+PLOT_CORPUS_RATCHET = "tests/test_plot_corpus_import_floor.py"
+
+
+def _plot_corpus_present() -> bool:
+    """``test-data/origin/generated/manifest.json`` next to this checkout or
+    an ancestor of it (the walk ``tests/conftest.py`` makes for worktrees)."""
+    return any(
+        (anc / "test-data" / "origin" / "generated" / "manifest.json").is_file()
+        for anc in [ROOT, *ROOT.parents]
+    )
+
+
 def _origin_step(allow: str | None) -> int:
+    if _plot_corpus_present():
+        ratchet = ["uv", "run", "pytest", "-q", "-p", "no:cacheprovider", "-m", "realdata"]
+        _run("plot-type ratchet", [*ratchet, PLOT_CORPUS_RATCHET], cwd=ROOT)
+    else:
+        print("gate: plot-type ratchet skipped: no test-data/origin/generated specimens")
     if not _origin_corpus_present():
         print(
             "gate: --origin skipped: no local Origin corpus (test-data/origin, "
@@ -120,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--origin",
         action="store_true",
-        help="run only the Origin corpus regression check vs origin/main (skips w/o corpus)",
+        help="run only the Origin checks: the plot-type ratchet and the corpus regression "
+        "check vs origin/main (each skips without its corpus)",
     )
     parser.add_argument("--origin-allow", help="explained-changes JSON for --origin")
     parser.add_argument(

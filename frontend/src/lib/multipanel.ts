@@ -48,6 +48,10 @@ export interface SpatialPanel {
   datasetId: string;
   xKey: number | null;
   yKeys: number[];
+  /** Set when this layer records curves but draws none (all left out, or
+   *  none resolved): the cell keeps its place, plots nothing and shows this
+   *  note (`originSpatialPanels.resolveFigurePanels`, ledger B-04 / R-36). */
+  emptyNote?: string;
   xLim: [number, number];
   yLim: [number, number];
   xLog: boolean;

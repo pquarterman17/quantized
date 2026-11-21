@@ -2,13 +2,13 @@
   "_doc": "Floors for tests/test_plot_corpus_import_floor.py: per-check MATCH counts of score_import.py over test-data/origin/generated (233 specimens, 231 scored). Pins only move UP: when an import improvement raises a count, raise it here in the same commit.",
   "scored_specimens": 231,
   "match": {
-    "curves": 313,
+    "curves": 344,
     "drawn": 343,
     "values": 808,
     "column_meta": 1709,
-    "plot_type": 141,
-    "axes": 1098,
-    "styles": 414,
+    "plot_type": 186,
+    "axes": 1434,
+    "styles": 495,
     "error_bars": 12,
     "sheets": 0,
     "figures": 0
