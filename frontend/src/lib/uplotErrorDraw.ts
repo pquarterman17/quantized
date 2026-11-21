@@ -42,6 +42,13 @@ export function styleErrorDraw(u: uPlot, col: number, color: string, defaultCap:
   return (e.cap ?? -1) >= 0 ? (e.cap! * 4) / 3 : defaultCap;
 }
 
+/** True when `v` cannot be drawn on scale `key`: a log scale (uPlot distr 3)
+ *  drops a value <= 0, so a whisker on that point must not draw either (its
+ *  pixel is +/-Infinity and the bar would dangle to the plot edge). */
+export function offLogScale(u: uPlot, key: string, v: number): boolean {
+  return (u.scales?.[key]?.distr as number | undefined) === 3 && !(v > 0);
+}
+
 /** `errorBarsPlugin`'s draw: symmetric vertical whiskers per column. */
 export function drawErrorBars(u: uPlot, errorsByCol: Map<number, (number | null)[]>, color: string, capHalfWidth: number): void {
   const { ctx } = u;
@@ -57,6 +64,7 @@ export function drawErrorBars(u: uPlot, errorsByCol: Map<number, (number | null)
       const y = ys[i];
       const e = errs[i];
       if (x == null || y == null || e == null) continue;
+      if (offLogScale(u, "x", x) || offLogScale(u, scaleKey, y)) continue;
       const px = u.valToPos(x, "x", true);
       const pHi = u.valToPos(y + e, scaleKey, true);
       const pLo = u.valToPos(y - e, scaleKey, true);
@@ -93,6 +101,7 @@ export function drawErrorSpans(u: uPlot, spansByCol: Map<number, ErrorSpan[]>, c
         const up = span.plus[i];
         const dn = span.minus[i];
         if (x == null || y == null || (up == null && dn == null)) continue;
+        if (offLogScale(u, "x", x) || offLogScale(u, scaleKey, y)) continue;
         ctx.beginPath();
         if (span.axis === "y") {
           const py = u.valToPos(y, scaleKey, true);

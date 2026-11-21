@@ -9378,6 +9378,23 @@ see it half-built.
 - [x] Real-data API tests: box, sector, and chi results advertise Intensity as the only default curve.
 - [x] Playwright `@core`: draw and resize a box via real pointer input, land a visible positive profile, resize a sector handle, and land a radial profile.
 
+## BUG-034 — live-audit sweep on v0.39.0: silent log-axis drops, limits panel/plot disagreement, halo console error, Trash copy, two cosmetics
+
+**Priority:** P2 — wrong-looking or misleading, no data loss
+
+**State:** Fixed in branch; PR/CI pending
+
+**Reported:** 2026-11-21, live audit of v0.39.0
+
+### Items
+
+- [x] **Log axis hides non-positive points silently; error bars dangle.** A log X/Y axis dropped values <= 0 with no word, and their whiskers drew to the plot edge. The Stage now posts "N non-positive points hidden on the log axis" through the status line (lazy `lib/logAxisNotice.ts`, `Stage/useLogAxisNotice.ts`), and `drawErrorBars` / `drawErrorSpans` skip a point that is off a log scale. Tests: `logAxisNotice.test.ts` (counts), `useLogAxisNotice.test.ts` (status posted, quiet on linear), `uplotErrorDraw.log.test.ts` ("skip the point with a non-positive value").
+- [x] **AXES > Limits panel and plot disagreed.** An inverted pair (X min 2000, then X max -2000) or non-numeric text was refused but stayed displayed. The fields now revert to the applied limit and an inline alert says why ("Minimum must be below maximum" / "Enter a number"); inverted manual limits stay rejected (Origin reversed axes are an imported-figure property, not a typed-limit one). Test: `AxisLimits.test.tsx` "a rejected entry puts the fields back to what the plot applies, with a message".
+- [x] **Console error `attribute d: Expected number, "MInfinity,Infinity..."`** from the selection halo during Open/Replace. `haloGeometry` now skips non-finite points (starting a new subpath) so the path never holds Infinity/NaN. Test: `plotPick.test.ts` "never emits a non-finite coordinate when points fall off a log axis".
+- [x] **Deleting a single-file dataset showed workbook-grouping Trash copy.** A collapsed single-sheet workbook (`collapsedSheetOf`) now confirms `"X" will move to Trash.`; real multi-sheet workbooks keep the detailed text. Tests: `workbookContextActions.test.ts` "a single-sheet (collapsed) workbook gets plain copy" and the multi-sheet case.
+- [x] **Cosmetic: 2θ/ω map-toolbar button wrapped; Library row name collided with the hover "+".** CSS only (`.qzk-tool-btn` min-width + nowrap; reserved padding on the compact row's name while the "+" shows). Test: `styles/overflowFixes.test.ts` (rule-level; jsdom has no layout).
+- [x] **Cosmetic: worksheet auto number format flips after a cell edit — by design, left alone.** `columnFormatter` (`worksheet/cellFormat.ts`) picks ONE notation per column from its magnitude range (exponential when the column stays below 1 with values under 1e-3, otherwise fixed); the flip happens exactly when an edit moves the column across that documented class boundary (UX audit 8 #8).
+
 ## Change log
 
 | Date | Author | Change | Evidence/status |

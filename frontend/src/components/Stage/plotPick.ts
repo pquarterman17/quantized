@@ -235,10 +235,18 @@ export function haloGeometry(u: uPlot, stage: Element, sel: PlotSelection, plott
   const f = (n: number) => n.toFixed(1);
   const parts: string[] = [];
   for (const run of visibleRuns(u, i)) {
-    run.forEach(([px, py], k) => {
+    // A point off a log axis (<= 0) has no pixel position: skip it (and start
+    // a new subpath) rather than emit "MInfinity,..." into the path.
+    let pen = false;
+    for (const [px, py] of run) {
+      if (!Number.isFinite(px) || !Number.isFinite(py)) {
+        pen = false;
+        continue;
+      }
       const at = `${f(px + clip.x)},${f(py + clip.y)}`;
-      parts.push(dots ? `M${at}h0` : `${k === 0 ? "M" : "L"}${at}`);
-    });
+      parts.push(dots ? `M${at}h0` : `${pen ? "L" : "M"}${at}`);
+      pen = true;
+    }
   }
   const lineW = typeof ser.width === "number" && ser.width > 0 ? ser.width : 1.5;
   return { d: parts.join(""), width: dots ? 12 : lineW + 6, box: null, clip };

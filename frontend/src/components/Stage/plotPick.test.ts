@@ -155,6 +155,18 @@ describe("haloGeometry", () => {
     expect(runs[0]!.length).toBeGreaterThan(90);
   });
 
+  it("never emits a non-finite coordinate when points fall off a log axis", () => {
+    const { u, stage } = makeFakePlot({ data: [[1, 2, 3, 4], [5, -2, 6, 7], [1, 1, 1, 1]] });
+    const lin = u.valToPos;
+    // A log scale maps a non-positive value to +/-Infinity.
+    (u as { valToPos: unknown }).valToPos = (v: number, k: string) => (k === "y" && v <= 0 ? Infinity : lin(v, k, false));
+    const g = haloGeometry(u, stage, { kind: "series", channel: 0 }, [0, 1]);
+    expect(g.d).not.toMatch(/Infinity|NaN/);
+    expect(g.d.startsWith("M")).toBe(true);
+    // The hidden point splits the line: two subpaths.
+    expect(g.d.match(/M/g)).toHaveLength(2);
+  });
+
   it("is turn-aware on a horizontal-bar plot", () => {
     const { u, stage } = makeFakePlot({ turned: true });
     const g = haloGeometry(u, stage, { kind: "series", channel: 0 }, [0, 1]);

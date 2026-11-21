@@ -39,6 +39,7 @@ import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
 import { useGadgetChip } from "./useGadgetChip";
+import { useLogAxisNotice } from "./useLogAxisNotice";
 import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
 import { usePlotPayload } from "./usePlotPayload";
 import { usePlotStageActions } from "./usePlotStageActions";
@@ -196,6 +197,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
     xLim,
   });
   const { payload: displayPayload, axes: yAxesShown } = useStageMultiY(basePayload, plotted, { yScale, yFmt, groupKey, y2Keys, hiddenChannels, active, multiPanel: multiPanelShowing(composition, stackMode, plotted.length), picks: focusedBindings?.encoding });
+  useLogAxisNotice(displayPayload, plotted, { xScale, yScale, y2Scale, y2Keys });
 
   // Right-click state (menu position + the gesture-cancel-then-open handler)
   // lives in useStageContextMenu — kept PlotStage at its line-ceiling pin

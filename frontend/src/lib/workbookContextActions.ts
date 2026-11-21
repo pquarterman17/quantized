@@ -26,7 +26,7 @@
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "./dependencyImpact";
-import type { LibraryNode } from "./libraryHierarchy";
+import { collapsedSheetOf, type LibraryNode } from "./libraryHierarchy";
 import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlotWorkbook";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
@@ -232,6 +232,7 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
       // reimported — a member's own saved fit goes with it, so it must not
       // be listed as something that will merely go stale.
       const impact = computeDependencyImpact(useApp.getState().datasets, memberIds(t), { removed: true });
+      const sheet = collapsedSheetOf(t.node);
       const impactText = hasDependencyImpact(impact) ? ` ${formatDependencyImpact(impact)}` : "";
       return {
         title: `Delete "${t.node.entity.name}"?`,
@@ -242,7 +243,11 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
         // restoreFromTrash self-heal) gives it a fresh workbook of its own
         // rather than reconstituting this one.
         message: `${
-          n > 0
+          sheet
+            // An implicit single-sheet wrapper (shown as ONE Library row): the
+            // user sees a plain dataset, so say only what they see.
+            ? `"${sheet.entity.name}" will move to Trash.`
+            : n > 0
             ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
             : "This workbook has no worksheets; the grouping is removed for good."
         }${impactText}`,
