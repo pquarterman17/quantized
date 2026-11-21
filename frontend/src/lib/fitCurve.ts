@@ -231,7 +231,11 @@ export async function fitBandsFor(req: BandsRequest, result: CalcResult, fit: Fi
       if (!is409(e)) throw e;
     }
   }
-  const s2 = result.errorsScaled === false ? 1 : Number(result.chiSqRed);
+  // `Number(null)` is 0, which would pass the finiteness check and rebuild
+  // obsVar as 0: a NaN fit's chiSqRed arrives as null, and by id (the stored
+  // obsVar is NaN, skipped) it yields mse-only, so this path must too.
+  const chi = result.chiSqRed;
+  const s2 = result.errorsScaled === false ? 1 : typeof chi === "number" ? chi : Number.NaN;
   if (!Number.isFinite(s2)) return fitBands(req, signal); // no variance to rebuild: mse only
   return fitBands({
     ...req,

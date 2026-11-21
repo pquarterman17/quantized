@@ -52,6 +52,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from quantized.io.origin_project.opju_memo import on_scope_end
+
 __all__ = [
     "HEADER_LEN",
     "DatasetHeader",
@@ -196,7 +198,16 @@ class DatasetHeader:
 # import asks for the same file's headers from several readers (records, sheet
 # signals, curve sheets, curve ranges) and each scan walks every ``80 <clen>``
 # candidate in Python. Holding ``b`` itself keeps its id from being reused.
+# Released when the import ends (``opju_memo.import_scope``): it holds the file.
 _last_scan: tuple[bytes, list[DatasetHeader], list[tuple[str, int]]] | None = None
+
+
+def _reset_scan() -> None:
+    global _last_scan
+    _last_scan = None
+
+
+on_scope_end(_reset_scan)
 
 
 def find_headers(

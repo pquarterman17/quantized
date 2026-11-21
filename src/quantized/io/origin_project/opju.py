@@ -64,6 +64,7 @@ from quantized.io.origin_project.opju_codec import scan_marked_columns, shared_f
 from quantized.io.origin_project.opju_figure_curves import column_id_table, opju_pages
 from quantized.io.origin_project.opju_graph_pages import unrecovered_graph_pages
 from quantized.io.origin_project.opju_loose_books import loose_books
+from quantized.io.origin_project.opju_memo import import_scoped
 from quantized.io.origin_project.opju_no_data import (
     UNAVAILABLE_KEY,
     connector_books,
@@ -409,11 +410,13 @@ def build_opju_books(parsed: _ParseResult) -> list[DataStruct]:
     ]
 
 
+@import_scoped
 def read_opju(path: Path) -> DataStruct:
     """The single-DataStruct contract: the largest workbook (inventory in metadata)."""
     return build_opju_primary(_parse(path))
 
 
+@import_scoped
 def read_opju_books(path: Path) -> list[DataStruct]:
     """Every workbook in the project as its own DataStruct (plan item 3/16).
 

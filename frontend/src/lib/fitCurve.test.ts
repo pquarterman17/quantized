@@ -133,6 +133,22 @@ describe("fitBandsFor (obsVar by id)", () => {
     expect(fitBands).toHaveBeenCalledTimes(2);
   });
 
+  it("on a 409 with a null chiSqRed (a NaN fit) falls back to the mse-only request, never s² = 0", async () => {
+    // Number(null) is 0: it passed the finiteness check and sent obs_scale 0,
+    // which collapsed the prediction band onto the confidence band.
+    const nanFit = withCurveSource({ ...DISPLAY_RESULT, chiSqRed: null as unknown as number }, "Linear", X, ROWS);
+    vi.mocked(fitBands).mockRejectedValueOnce(new HttpError(409, "unknown_fit_result")).mockResolvedValueOnce(bands([1, 2]));
+    await fitBandsFor(req, nanFit, weighted);
+    expect(vi.mocked(fitBands).mock.calls[1]).toEqual([req, undefined]);
+  });
+
+  it("on a 409 keeps s² = 1 for an unscaled fit even when chiSqRed is null", async () => {
+    const unscaled = withCurveSource({ ...DISPLAY_RESULT, errorsScaled: false, chiSqRed: null as unknown as number }, "Linear", X, ROWS);
+    vi.mocked(fitBands).mockRejectedValueOnce(new HttpError(409, "unknown_fit_result")).mockResolvedValueOnce(bands([1, 2]));
+    await fitBandsFor(req, unscaled, weighted);
+    expect(vi.mocked(fitBands).mock.calls[1]).toEqual([{ ...req, x_data: X, obs_dy: weighted.dy, obs_scale: 1 }, undefined]);
+  });
+
   it("posts an unweighted or a full result's request as is", async () => {
     vi.mocked(fitBands).mockResolvedValue(bands([1, 2]));
     await fitBandsFor(req, display(), { x: X });

@@ -7,7 +7,7 @@
 // displayed payload, not state PlotStage itself needs to react to, so they
 // extract cleanly with no behavior change.
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
@@ -35,6 +35,13 @@ import { useApp } from "../../store/useApp";
 // below) since both callers build the bag as an object LITERAL, and
 // PlotStageActions is their prop's structural type. copyFigure joined for
 // MAIN #35 (publication copy); snapshot stays as the screen grab.
+/** Is a display fit or a lean baseline preview in its slot (`copyData` must
+ *  fetch the full curve before it copies)? Plain data: no lazy import. */
+function thinnedOverlayShown(): boolean {
+  const st = useApp.getState();
+  return Boolean(st.fitOverlay?.full || st.baselineOverlay?.lean);
+}
+
 /** The cursors the on-plot object plugins set while hovering an annotation /
  *  shape (move, resize handle) or a reference line (resize). */
 const OBJECT_CURSORS: ReadonlySet<string> = new Set(["move", "nwse-resize", "ew-resize", "ns-resize"]);
@@ -91,6 +98,13 @@ export function usePlotStageActions(
   onLasso: (u: uPlot, poly: [number, number][], unmask: boolean) => void;
   onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
+  // The canvas' payload as of NOW: the data "Copy data" waits for after it
+  // swaps a display fit / lean baseline for the full curve.
+  const latestPayload = useRef(displayPayload);
+  useEffect(() => {
+    latestPayload.current = displayPayload;
+  });
+
   function resetView() {
     if (plotRef.current && displayPayload) {
       const u = plotRef.current;
@@ -129,9 +143,20 @@ export function usePlotStageActions(
     if (!displayPayload) return;
     const nRows = displayPayload.data[0]?.length ?? 0;
     const nCols = displayPayload.series.length + 1; // + the x column
-    void copyText(payloadToTSV(displayPayload)).then((ok) =>
-      useApp.getState().setStatus(ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable"),
-    );
+    // A display fit / lean baseline is fetched in full first (lib/copyPlotData).
+    if (!thinnedOverlayShown()) {
+      void copyText(payloadToTSV(displayPayload)).then((ok) =>
+        useApp.getState().setStatus(ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable"),
+      );
+      return;
+    }
+    void runLazy("Preparing the plot data…", () => import("../../lib/copyPlotData")).then(async (m) => {
+      const { tsv, omitted } = await m.plotDataTSV(displayPayload, () => latestPayload.current);
+      const ok = await copyText(tsv);
+      const cols = nCols - omitted.length;
+      const note = omitted.length ? `; left out ${omitted.join(", ")} (only its display curve was available)` : "";
+      useApp.getState().setStatus(ok ? `copied ${nRows}×${cols} to clipboard${note}` : "clipboard unavailable");
+    }, onLoadFailure);
   }
 
   // MAIN #35: the publication copy — renders through the SAME server-side

@@ -15,7 +15,8 @@ import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { magXAxis } from "../../../lib/magDataKind";
 import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
-import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
+import type { BaselineOverlay, CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
+import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import { callBaseline, callBaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
@@ -236,7 +237,12 @@ export function useBaseline(): BaselineState {
       fullRef.current = res.full ?? null;
       setBaseline(res.baseline);
       setEstimateBinding(input.binding);
-      setBaselineOverlay({ datasetId: ds.id, binding: { yKey: input.binding.yKey, xKey: input.binding.xKey }, y: res.baseline });
+      const overlay: BaselineOverlay = {
+        datasetId: ds.id, binding: { yKey: input.binding.yKey, xKey: input.binding.xKey }, y: res.baseline,
+        ...(res.full ? { lean: true as const } : {}),
+      };
+      if (res.full) rememberBaselineFull(overlay, res.full); // exports fetch it (store/fitOverlayUpgrade)
+      setBaselineOverlay(overlay);
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed");
     } finally {

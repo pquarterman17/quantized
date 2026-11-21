@@ -169,6 +169,12 @@ export interface BaselineOverlay {
   /** The curve the baseline was estimated for (OverlayBinding). */
   binding: OverlayBinding;
   y: (number | null)[];
+  /** `y` is a lean preview's DISPLAY column (a large SNIP / ModPoly estimate,
+   *  lib/api/resultArrays): real values at ~8k rows, `undefined` between, which
+   *  the canvas draws across. Never export it as is: `upgradeBaselineOverlay`
+   *  (store/fitOverlayUpgrade) swaps in the full baseline, and a figure that
+   *  still meets this flag drops the overlay and says so (figureSpecOverlays). */
+  lean?: true;
   /** A Peak Analyzer model fit's FITTED background (not an estimate): the fit
    *  it belongs to. In memory only -- it makes the background figure content
    *  saved with that fit (lib/figureOverlays), unlike a baseline preview. */
