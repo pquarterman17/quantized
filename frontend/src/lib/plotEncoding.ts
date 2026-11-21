@@ -307,7 +307,7 @@ export function encodedNames(
   for (const cell of split.cells) {
     const yc = yChannels[cell.y];
     const yLabel = yLegends?.[cell.y] ?? channelLabel(data, yc);
-    specs.push({ label: cell.parts ? `${yLabel} (${cell.parts})` : yLabel, unit: data.units[yc] ?? "", axis: 0 });
+    specs.push({ label: cell.parts ? `${yLabel} (${cell.parts})` : yLabel, axisLabel: yLabel, unit: data.units[yc] ?? "", axis: 0 });
     series.push({
       channel: yc,
       colorLevel: cell.colorLevel,

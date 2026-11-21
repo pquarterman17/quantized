@@ -983,7 +983,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // Color/Symbol/Label wells' gating, preview and export hand-off.
   // 603 -> 591 (P1.4 residuals 4, 5): the wells' options / chips / refusals
   // moved to graphbuilder/encodingWellModel.ts. A ratchet, not a bump.
-  "/components/workshops/graphbuilder/useGraphBuilder.ts": 591,
+  "/components/workshops/graphbuilder/useGraphBuilder.ts": 587,
   // 658 -> 650 (2026-09-14, BUG-013): `applyWaterfall`'s span/step scan moved
   // to lib/waterfallOffset.ts, where the EXPORT wire's `waterfall_offsets` builder
   // reads it too — so the canvas and the exported figure resolve the same step

@@ -95,7 +95,7 @@ export default function GraphBuilderPanel() {
               />
               <ZoneWell
                 title="Group"
-                hint="colour split by category"
+                hint="colour split by a numeric or categorical column (text columns are not offered yet)"
                 datasetId={g.datasetId}
                 options={g.options}
                 assigned={g.chips("group")}
@@ -109,7 +109,7 @@ export default function GraphBuilderPanel() {
                 assigned={g.chips("facet")}
                 note={
                   <span style={faint}>
-                    any column, categorical factors included: previews as small multiples below; a plot
+                    a numeric or categorical column with at most 24 levels (text columns are not offered yet): previews as small multiples below; a plot
                     action carries it to the main plot&apos;s facet grid (box/violin/bar: the stat stage&apos;s).
                   </span>
                 }
