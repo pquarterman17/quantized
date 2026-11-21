@@ -12,6 +12,11 @@ because MATLAB's dual registration was a footgun.
 
 ## Golden-parity porting
 
+MATLAB is no longer a gate (owner decision 2026-11-21, see the root
+CLAUDE.md). The loop below applies when porting something MATLAB already
+does and its checkout is available; otherwise design and test the behaviour
+directly. Existing goldens remain regression tests.
+
 - **Loop:** read the MATLAB source -> port to `calc/`/`io/` -> add a freeze
   case to `tools/matlab/freeze_calc_values.m` -> run MATLAB to freeze -> gate
   (`ruff check src tests tools && mypy src && pytest -q`) -> commit and tick
