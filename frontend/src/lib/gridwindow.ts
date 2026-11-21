@@ -206,6 +206,13 @@ export function autofitColWidth(samples: readonly string[]): number {
 export const DEFAULT_ROW_HEIGHT = 24;
 export const DEFAULT_COL_WIDTH = 120;
 export const DEFAULT_GUTTER_WIDTH = 44;
+
+/** The row-number (#) column width for `rowCount` rows: the default fits up
+ *  to 4 digits; a 7-digit index (1e6 rows) used to clip to "28…". */
+export function gutterWidthFor(rowCount: number): number {
+  const digits = String(Math.max(1, Math.floor(rowCount))).length;
+  return Math.max(DEFAULT_GUTTER_WIDTH, digits * 8 + 8);
+}
 export const DEFAULT_ROW_OVERSCAN = 6;
 export const DEFAULT_COL_OVERSCAN = 2;
 export const DEFAULT_FALLBACK_ROWS = 300;

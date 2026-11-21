@@ -45,3 +45,13 @@ export function drawnOnAxis(series: readonly AxisSeries[], hidden: readonly bool
   const drawn = onAxis.filter((i) => !hidden?.[i]);
   return drawn.length ? drawn : onAxis;
 }
+
+/** Longest plain axis title (characters) the canvas draws. uPlot draws a title
+ *  unclipped, so a 5000-character column name ran off the canvas; past this it
+ *  ends in "…" (the legend and Library keep the full name). */
+export const AXIS_TITLE_MAX = 60;
+
+/** `label` cut to `AXIS_TITLE_MAX` characters with a trailing "…". */
+export function clipAxisTitle(label: string | undefined): string | undefined {
+  return label?.replace(/^([^]{59})[^]{2,}$/, "$1…");
+}

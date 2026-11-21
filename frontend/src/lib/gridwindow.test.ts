@@ -5,6 +5,8 @@ import {
   buildOffsets,
   clampColWidth,
   computeAxisWindow,
+  DEFAULT_GUTTER_WIDTH,
+  gutterWidthFor,
   computeAxisWindowOffsets,
   DEFAULT_COL_WIDTH,
   MAX_COL_WIDTH,
@@ -208,5 +210,13 @@ describe("clampColWidth / autofitColWidth", () => {
   it("autofit of no content falls back to the default width", () => {
     expect(autofitColWidth([])).toBe(DEFAULT_COL_WIDTH);
     expect(autofitColWidth(["", ""])).toBe(DEFAULT_COL_WIDTH);
+  });
+});
+
+describe("gutterWidthFor", () => {
+  it("keeps the default for small sheets and widens for 7-digit row numbers", () => {
+    expect(gutterWidthFor(300)).toBe(DEFAULT_GUTTER_WIDTH);
+    expect(gutterWidthFor(1_000_000)).toBeGreaterThan(DEFAULT_GUTTER_WIDTH);
+    expect(gutterWidthFor(1_000_000)).toBeGreaterThanOrEqual(7 * 7);
   });
 });

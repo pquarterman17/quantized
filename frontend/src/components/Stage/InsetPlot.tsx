@@ -17,6 +17,7 @@
 // focuses it: the frame leaves a press on the inset alone (`data-inset-box`),
 // because the focus swap would unmount it mid-gesture.
 
+import { maxOf, minOf } from "../../lib/arrayExtent";
 import { useEffect, useId, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import uPlot from "uplot";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
@@ -64,8 +65,8 @@ const finiteXs = (p: PlotPayload) => (p.data[0] as (number | null)[]).filter((v)
 /** The saved source x if it still lands on the data, else the seeded central third. */
 function seedX(saved: InsetView | null, xs: number[]): [number, number] | null {
   if (!xs.length) return null;
-  const lo = Math.min(...xs);
-  const hi = Math.max(...xs);
+  const lo = minOf(xs);
+  const hi = maxOf(xs);
   if (saved && ascending(saved.x) && saved.x[1] > lo && saved.x[0] < hi) return saved.x;
   const r = centralRange(lo, hi, 0.3);
   return r[1] > r[0] ? r : null;

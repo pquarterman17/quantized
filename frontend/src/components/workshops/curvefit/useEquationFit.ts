@@ -6,6 +6,7 @@
 // (lib/fitmodels). Mirrors useCurveFit's row-state discipline: fits the
 // analysis view (#50/#53) and expands the overlay back to full length.
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fitEquation, validateEquation, type EquationValidateResult } from "../../../lib/api/curvefit";
@@ -161,7 +162,7 @@ export function useEquationFit(
     if (!d) return null;
     const finite = d.x.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return null;
-    return { min: Math.min(...finite), max: Math.max(...finite) };
+    return { min: minOf(finite), max: maxOf(finite) };
   }, [active, seriesOrder, xKey, yKeys]);
 
   useEffect(() => {

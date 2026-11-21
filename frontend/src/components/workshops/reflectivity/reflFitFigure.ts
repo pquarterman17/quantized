@@ -12,6 +12,7 @@
 // the page as they do in the workshop; the SLD row keeps its own depth axis.
 // A fit whose residuals are unknown (reflFitResiduals.ts) gets no residual row.
 
+import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import {
   DEFAULT_LAYOUT,
@@ -57,7 +58,7 @@ export function reflFitFigurePage(src: FigureSources, mint: FigureIdSource): { f
   const many = chans.length > 1;
   const suffix = (spin: string | null, i: number) => (many ? ` (${spin ?? `channel ${i + 1}`})` : "");
   const qs = chans.flatMap((c) => c.q);
-  const xLim: [number, number] | null = qs.length ? [Math.min(...qs), Math.max(...qs)] : null;
+  const xLim: [number, number] | null = qs.length ? [minOf(qs), maxOf(qs)] : null;
   const figures: FigureDocument[] = [];
   const make = (datasetId: string, name: string, v: PlotView): string => {
     const doc = createFigureDocument({ id: mint.figure(), name, datasetId, view: v });

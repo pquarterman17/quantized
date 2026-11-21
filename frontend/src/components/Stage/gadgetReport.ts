@@ -1,3 +1,4 @@
+import { maxOf, minOf } from "../../lib/arrayExtent";
 import { reportEmit, type IntegrateResponse } from "../../lib/api";
 import { fmtNum } from "../../lib/format";
 import type { CalcResult, Dataset } from "../../lib/types";
@@ -16,7 +17,7 @@ interface GadgetReportInput {
 
 export async function addGadgetReport(input: GadgetReportInput): Promise<void> {
   const { active, roi, mode, model, fitResult, integrateResult, statsResult } = input;
-  const caption = `region ${fmtNum(Math.min(...roi))}–${fmtNum(Math.max(...roi))}`;
+  const caption = `region ${fmtNum(minOf(roi))}–${fmtNum(maxOf(roi))}`;
   const source_refs = [{ kind: "dataset", id: active.id, name: active.name }];
   if (mode === "fit" && fitResult) {
     const params = (fitResult.params as number[] | undefined) ?? [];

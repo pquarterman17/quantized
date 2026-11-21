@@ -42,7 +42,7 @@ function WorksheetPreview({ node }: { node: Extract<LibraryNode, { kind: "worksh
   return (
     <div className="qzk-tile-table" aria-label={`Data preview for ${node.name}`}>
       <div className="qzk-tile-table-row head">
-        {labels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}
+        {labels.map((label, index) => <span key={`${label}-${index}`} title={label}>{label}</span>)}
       </div>
       {rows.map((row, rowIndex) => (
         <div className="qzk-tile-table-row" key={rowIndex}>

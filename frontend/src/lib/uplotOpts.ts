@@ -23,7 +23,7 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
-import { drawnOnAxis, sharedAxisTitle } from "./sharedAxisTitle";
+import { clipAxisTitle, drawnOnAxis, sharedAxisTitle } from "./sharedAxisTitle";
 import { logGridSplits, logMajorTickFilter, spansDecade } from "./logTicks";
 import { autoFactorTopPad, autoLogTickValues, autoMultiplierAllowed, autoPlainValues, drawAutoFactors, autoTickValues, autoUnpadded, splitsIncrement, stripNegZero, type TickValues } from "./autoTickValues";
 export { logMajorTickFilter };
@@ -1073,7 +1073,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       size: xAxisSize,
       // Blank uPlot's own draw only when the plugin draws this title (rich or
       // moved); the labelSize band stays reserved either way.
-      label: xDrawn ? "" : xLabel,
+      label: xDrawn ? "" : clipAxisTitle(xLabel),
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
       ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
@@ -1082,7 +1082,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     {
       ...axis,
       size: yAxisSize,
-      label: yDrawn ? "" : yLabelText,
+      label: yDrawn ? "" : clipAxisTitle(yLabelText),
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
       ...(yScale === "log" ? { filter: logMajorTickFilter } : {}),
@@ -1102,7 +1102,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       scale: "y2",
       side: 1,
       size: yAxisSize,
-      label: y2Drawn ? "" : y2LabelText,
+      label: y2Drawn ? "" : clipAxisTitle(y2LabelText),
       grid: { show: false },
       ...(y2Values ? { values: y2Values } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),

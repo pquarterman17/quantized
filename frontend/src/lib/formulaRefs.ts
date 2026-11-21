@@ -52,6 +52,7 @@
 //   normal interp        each agrees with numpy/scipy (lib/formulaMath.ts,
 //                        lib/formulaSpecial.ts).
 
+import { maxOf, minOf } from "./arrayExtent";
 import { applyFormulasWithErrors, baseColumns, channelLetter } from "./formula";
 import { AGGREGATE_NAMES, computeAggregate, type AggregateName } from "./formulaAggregates";
 import { registerFormulaExtension } from "./formulaExt";
@@ -394,8 +395,8 @@ export const ROW_FUNCS: Record<string, (...a: number[]) => number> = {
     const m = sumOf(f) / f.length;
     return Math.sqrt(sumOf(f.map((v) => (v - m) ** 2)) / (f.length - 1));
   },
-  rowmin: (...a) => ((f) => (f.length ? Math.min(...f) : NaN))(finiteOf(a)),
-  rowmax: (...a) => ((f) => (f.length ? Math.max(...f) : NaN))(finiteOf(a)),
+  rowmin: (...a) => ((f) => (f.length ? minOf(f) : NaN))(finiteOf(a)),
+  rowmax: (...a) => ((f) => (f.length ? maxOf(f) : NaN))(finiteOf(a)),
   rowsum: (...a) => ((f) => (f.length ? sumOf(f) : NaN))(finiteOf(a)),
   rown: (...a) => finiteOf(a).length,
 };

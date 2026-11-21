@@ -107,7 +107,8 @@ export function usePlotStageActions(
     const cols = displayPayload.data as (number | null)[][];
     const xVals = cols[0] ?? [];
     const yVals: (number | null)[] = [];
-    for (let s = 1; s < cols.length; s++) yVals.push(...cols[s]);
+    // A loop, not push(...cols[s]): a 120k+ row column overflows the argument cap.
+    for (let s = 1; s < cols.length; s++) for (const v of cols[s]) yVals.push(v);
     const st = useApp.getState();
     st.setXScale(suggestLogScale(xVals) ? "log" : "linear");
     st.setYScale(suggestLogScale(yVals) ? "log" : "linear");
