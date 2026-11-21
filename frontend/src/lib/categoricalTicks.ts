@@ -41,8 +41,8 @@ export function categoricalXAxis(
     values: categoricalTickFormatter(categories, base),
     space,
     // The step is the export's `category_step` (slot / pitch, rounded up),
-    // NOT uPlot's 1-2-5 increment rounded up, which jumped 2 -> 5 where the
-    // export drew every 3rd. uPlot's found space / increment IS its px per unit.
+    // NOT uPlot's 1-2-5 increment rounded up (every 5th where the export drew
+    // every 4th). uPlot's found space / increment IS its px per unit.
     splits: (_u, _axisIdx, scaleMin, scaleMax, foundIncr, foundSpace) => {
       const perUnit = foundIncr > 0 && foundSpace > 0 ? foundSpace / foundIncr : 0;
       const step = Math.max(1, Math.ceil((perUnit > 0 ? space / perUnit : foundIncr) - 1e-9));

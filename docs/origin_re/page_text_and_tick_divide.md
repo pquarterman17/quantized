@@ -118,8 +118,9 @@ NUL-terminated decimal string. `0` = none. These were mislabelled
     Figure_*, FedPB, LSA_fig6 ...) draw undivided labels; `成功率` Graph3
     has no object and draws its 0..1 data as is.
   - Distribution (both corpora, deduplicated): every `91 02 [OF][BTLR]`
-    sits in this framing (0 unframed); 142 layers in 21 projects decode a
-    factor (bottom 85, 0.001..1e6; left 74, 1e-9..1e8; right 4). Guard: `tests/test_io_origin_opju_tick_divide.py`.
+    sits in this framing (0 unframed); 671 of 679 bodies expand (8 SOP_meas
+    `OR` objects use another, unread framing); 142 layers in 21 projects
+    decode a factor (bottom 85, 0.001..1e6; left 74, 1e-9..1e8; right 4). Guard: `tests/test_io_origin_opju_tick_divide.py`.
   - Not decoded: Hc2 Graph34 `OL = 1E-9` decodes, but that layer's own
     axis record is an open gap (`hc2_open_gaps.md`); SOP_meas' expression
     factors (`1/(16*96)*1000`) are decoded and not individually checked

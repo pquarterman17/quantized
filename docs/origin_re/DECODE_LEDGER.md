@@ -298,6 +298,7 @@ Corpus deltas are "drawn curves" unless stated; "0/0" is lost/changed.
 
 | PR | Date | Summary | Corpus delta |
 |---|---|---|---|
+| lane S | 2026-11-21 | Final pre-release visual re-sweep: `.opju` tick-label Divide by / Formula (F-094), category axis step / derived-dataset / "Row" title (F-087, F-089), legend dedupe suffix (B-30), omission toast (B-03), Axis-dialog divide mark (R-31), `.dwk` v7 for v0.35-v0.38 (B-29, R-32), unsaved connector books beside imported ones (F-010) | 142 layers gain a tick factor (not fingerprinted); 19 稳定性 curves now `data_not_saved` (never drawable); allow-file [lane-s-final-sweep.json](regress_allow/lane-s-final-sweep.json) |
 | #788 | 2026-11-20 | Error bars: asymmetric and X errors, band style (offset 28), equal double plots; user error bindings survive an apply; page export draws bars (R-09) | allow-file [e2_error_bars.json](regress_allow/e2_error_bars.json) |
 | #787 | 2026-11-20 | Plot kinds: stacked area, horizontal bars, grouped/stacked columns, histogram + cumulative; wrong-kind lines left out | 92 public curves left out; allow-file [laneP-plot-kinds.json](regress_allow/laneP-plot-kinds.json) |
 | #786 | 2026-11-20 | Page text and divide-by: script buttons hidden, rotated / page-attached text placed, `.opj` Divide-by factors, style-holder phantom curves; corpus discovery via `tests/origin_corpus.py` | allow-file [lane-m-page-text-tick-divide.json](regress_allow/lane-m-page-text-tick-divide.json) |

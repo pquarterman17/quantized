@@ -37,7 +37,10 @@ Z 0..250. Negative controls: the ``0`` objects (Catchment, Figure_*, FedPB:
 hundreds of ``OR``/``OT``) draw undivided labels in their previews, and
 ``成功率`` Graph3 (no object) draws its 0..1 data as is. Whole corpus (both
 corpora, deduplicated): every ``91 02 [OF][BTLR]`` occurrence sits in this
-framing (no unframed name), and every body parses.
+framing (no unframed name); 671 of 679 bodies expand (8 ``SOP_meas`` ``OR``
+objects store their text in another, unread framing and stay undecoded):
+471 ``0``, 10 ``1``, 178 factors, 9 formulas that are not a factor
+(``x-1920``, ``1000*2^-X``, ``10^x``) and one negative factor.
 
 Pure library: bytes in, values out.
 """
