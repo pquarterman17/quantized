@@ -56,7 +56,9 @@ Thumbs.db
 .vscode/
 
 # ── Claude private working area (per-machine, not shared) ─────────────
-.claude/
+# Everything under .claude/ stays private EXCEPT the shared project skills.
+.claude/*
+!.claude/skills/
 CLAUDE.local.md
 
 # ── Local agent definitions and skills (per-machine, not shared) ──────

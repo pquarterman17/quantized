@@ -2,7 +2,7 @@
 
 Findings from 2026-11-20 on the two remaining Hc2 gaps after the curve-colour
 change (`curve_colors.md`). Neither cleared the evidence bar in
-`CLAUDE.md` ("Origin graph-recovery safety"), so nothing was implemented.
+[`origin_project/CLAUDE.md`](../../src/quantized/io/origin_project/CLAUDE.md) ("Origin graph-recovery safety"), so nothing was implemented.
 Each section ends with the COM query that would settle it.
 
 ## Graph40: the magenta bars are not error-bar plots

@@ -48,7 +48,8 @@ a = Analysis(  # noqa: F821
     # Path(__file__).parent-based loaders (e.g. calc/element_data.py): the
     # frozen module's __file__ resolves under the same <bundle>/quantized/...
     # tree, so the sibling data file is still right next to it.
-    datas=collect_data_files("quantized"),
+    # Nested CLAUDE.md files are agent instructions, not package data.
+    datas=collect_data_files("quantized", excludes=["**/CLAUDE.md"]),
     hiddenimports=hidden,
     excludes=[
         # dev/test-only heavyweights that must never ride along.

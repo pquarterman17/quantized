@@ -30,7 +30,7 @@ Origin's own answers as `oracle.json` for the import and from-scratch scorers
 
 ```bash
 uv run python tools/plot_corpus/generate.py --out <gen>
-# under the shared COM lock (see CLAUDE.md "Origin COM oracle runs"):
+# under the shared COM lock (see src/quantized/io/origin_project/CLAUDE.md "Origin COM oracle runs"):
 uv run --with pywin32 python tools/plot_corpus/origin_build.py --corpus <gen> --out <corpus>
 # check 1, no Origin needed:
 uv run python tools/plot_corpus/score_import.py --corpus <corpus> --generated <gen> --out <dir>

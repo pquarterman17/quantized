@@ -128,7 +128,7 @@ include = ["src/quantized", "README.md", "LICENSE", "NOTICE"]
 # default (a footgun here: every vendored npm package under
 # frontend/node_modules ships its own LICENSE + README.md) — exclude wins
 # over that default, so this is required even with the include list above.
-exclude = ["frontend/**"]
+exclude = ["frontend/**", "**/CLAUDE.md"]  # CLAUDE.md: agent docs, not package data
 # The Vite SPA output (src/quantized/web/**) is gitignored, so hatchling's
 # VCS-aware sdist drops it even though it's under the `include` path above.
 # `uv build`/`python -m build` build the WHEEL FROM THIS SDIST, so if the SPA
@@ -139,6 +139,7 @@ artifacts = ["src/quantized/web/**"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quantized"]
+exclude = ["**/CLAUDE.md"]
 # `packages` alone only reliably ships src/quantized/web/ when hatchling
 # builds directly against a live git checkout; building the wheel FROM an
 # sdist (what `uv build`/`python -m build` do by default, and what the

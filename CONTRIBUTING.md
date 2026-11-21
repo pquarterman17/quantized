@@ -47,6 +47,98 @@ serial run and single-file/`-k` runs still work unparallelized, just pass
 
 Golden fixtures are committed, so none of this needs MATLAB.
 
+**Gate traps** (each cost a red CI run once; the `gate` skill in
+`.claude/skills/gate/SKILL.md` has the commands):
+
+- `cmd | tail -n; echo "exit=$?"` reports TAIL's status. Measured:
+  `false | tail -1` then `$?` is 0, while `${PIPESTATUS[0]}` is 1; several gate
+  runs logged `BUILD exit=0` that way. Use `${PIPESTATUS[0]}` or redirect to a
+  file and check `$?`.
+- `tsc -b` is incremental and vite's transform cache can be stale (PR #343
+  passed locally and failed CI twice): run `npx tsc -b --force` and `npm ci`
+  first. Details in [`frontend/CLAUDE.md`](frontend/CLAUDE.md).
+- A truncated log download is worse than no log. A `curl` of a failing job
+  through the proxy died with `CONNECT tunnel failed, response 403` but still
+  wrote 40 lines describing a different, stale failure (a module-size ceiling
+  on a file the branch never touched). Use `mcp__github__get_job_logs`, or
+  verify the download completed, and re-read before diagnosing.
+
+## Pre-PR self-review
+
+Adopted 2026-08-16, after PR #149 round 1:
+
+- **Simulate the first real consumer before opening a PR.** Infrastructure
+  contracts get review-tested by writing the next slice's strawman code
+  against them (the E-c1 miss: a page preview renders figures, so figures
+  belong in the cache key, obvious the moment the generator was sketched).
+- **Cache/invalidation red-team question:** list ALL inputs the rendered
+  output depends on (transitively); each one must be in the cache key.
+- **Doc-promise audit:** every behavioural claim in a header or PR body needs
+  a matching test, or the claim is narrowed to what the code does.
+- **Run the code-review skill (high) on your own diff** and fix what it
+  finds. Its first run caught a CI-red weak-wait, a deps-cursor desync, and
+  two O(store)-per-tile inefficiencies before the push.
+
+## Container and environment resets
+
+**A remote container reset can restore STALE installed dependencies. Check
+deterministically, then act only if the check fails.** Do not assume every
+new session is a reset, and read nothing from directory mtimes
+(`.venv/pyvenv.cfg` is written once at creation and never touched by
+`uv sync`; it was cited as a signal on 2026-09-02 and means nothing).
+
+- Python: `uv sync --check --group dev` exits 0 in sync, 1 when not, and
+  prints the package diff (measured 2026-09-02 on a forced one-package
+  downgrade). Restore with `uv sync --group dev`.
+- Frontend: compare a pinned direct dependency in the lock with what is
+  installed:
+  `node -p "require('./frontend/package-lock.json').packages['node_modules/vite'].version"`
+  vs `node -p "require('./frontend/node_modules/vite/package.json').version"`.
+  A mismatch means `cd frontend && npm ci`.
+
+The incident: a gate ran against `node_modules` from 2026-08-22 (vite 8.2.1
+vs a lock at 8.2.2) and a venv from 2026-08-15 (statsmodels 0.14.6 vs
+0.15.0), and a full green suite on that tree was treated as evidence. It was
+caught only because a fresh worktree disagreed by 0.9 kB on the bundle. The
+same reset recurred that day and the vite one-liner caught it in one second.
+Neither check sees a stale vite transform cache: only `npm ci` does.
+
+**The complete raw log is authoritative; extraction is a convenience.** A
+`| tail -5` gate log threw away the name of a one-off failing test (a flake
+that passed on re-run), and without the name it cannot be pursued per
+[`docs/testing.md`](docs/testing.md). Save the whole output, then search the
+saved file: bash `npx vitest run 2>&1 | tee gate.log` then
+`rg 'FAIL|AssertionError' gate.log`; PowerShell `npx vitest run 2>&1 |
+Tee-Object gate.log` then `Select-String 'FAIL|AssertionError' gate.log`.
+Never pipe through a filter alone. (Vitest 4's `FAIL` line is plain text even
+under a real pty, measured with `script`; the search runs on a saved file for
+portability across shells, not because of ANSI.)
+
+**A killed vitest run leaks ~80 MB into `$TMPDIR`.** Each run writes its
+transformed modules to `$TMPDIR/<21-char nanoid>/client/` and removes the
+directory only on a clean close. On 2026-09-28 about 1,100 leaked directories
+(~28 GB) filled the disk and stalled six parallel agents. Let runs finish.
+When disk is low, remove leaked directories older than 30 minutes:
+`find /tmp -maxdepth 1 -type d -regextype posix-extended -regex
+'/tmp/[A-Za-z0-9_-]{21}' -mmin +30 -exec rm -rf {} +`. The class must include
+`_` and `-` (nanoid's alphabet); an alphanumeric-only class skipped about half
+(measured 2026-09-30: 1,828 directories, ~20 GB, found only by the wider
+class). On shared boxes also cap workers: `pytest -n 4`,
+`vitest --maxWorkers=3`.
+
+## CI and security
+
+- Always lint `ruff check src tests tools`, as CI does: a tests-only
+  import-sort slipped past a `src`-only local run and reddened CI.
+- CI is a matrix (ubuntu/windows/macOS x py3.11/3.13) plus frontend and e2e
+  jobs; golden fixtures are committed so it needs no MATLAB. `main` is
+  branch-protected (5 required checks, strict, conversation resolution) with
+  admins exempt, so direct pushes to `main` still work for the owner.
+- The repo is public; secret scanning, push protection, Dependabot and
+  CodeQL are on. The `gh` CLI token cannot enable CodeQL default setup (no
+  `security_events` scope, 404), so CodeQL runs as an advanced-setup
+  workflow (`.github/workflows/codeql.yml`).
+
 ## Flake-fix evidence
 
 **"I ran it N times and it passed" is weak evidence that a flaky test is

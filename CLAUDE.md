@@ -1,110 +1,83 @@
 # CLAUDE.md — quantized
 
 Python/FastAPI backend + React/TypeScript frontend port of
-`quantized_matlab` (magnetometry / XRD / lab-data analysis toolbox).
-Backend targets **feature parity** with the MATLAB toolbox; the GUI is a
-**ground-up revamp**. EM tooling (Fermi viewer / EELS / EDS / imaging) is
-intentionally **out of scope** — it lives in `fermi-viewer` (MATLAB) and
-`fermiviewer` (Python), mirroring the split already made upstream.
-
-This repo deliberately mirrors the **clean architecture of the sibling
-`../fermiviewer`** (the Python EM port) so the two share UI conventions,
-theme, tooling, and the enforcement discipline that the MATLAB monoliths
-lacked. `fermiviewer` is the structural reference; `quantized_matlab` is
-the behavioural reference (parity + golden values).
+`quantized_matlab` (magnetometry / XRD / lab-data analysis toolbox). Backend
+targets **feature parity** with the MATLAB toolbox; the GUI is a **ground-up
+revamp**. EM tooling (Fermi viewer / EELS / EDS / imaging) is **out of
+scope**: it lives in `fermi-viewer` (MATLAB) and `fermiviewer` (Python).
 
 ## Reference repos (siblings in the same checkout root)
 
 | Repo | Role |
 |------|------|
-| `quantized_matlab` | **Behavioural reference** — authoritative source for every formula, parser, and feature. Golden test values are frozen from it. |
-| `fermiviewer` | **Structural reference** — clean Python+React+Tauri port to mirror (layering, CLI, theme, enforcement tests). |
-| `thin_film_toolkit` | **Salvage source only** — a stale, monolithic (5.5k-line `server.py`) prior port. Lift *pure domain logic* from it to save time, but re-verify against MATLAB and re-home into the clean layers. Never copy its architecture. |
+| `quantized_matlab` | **Behavioural reference**: authoritative for every formula, parser and feature; goldens are frozen from it. |
+| `fermiviewer` | **Structural reference**: the clean Python+React+Tauri port to mirror (layering, CLI, theme, enforcement tests). |
+| `thin_film_toolkit` | **Salvage only**: lift *pure domain logic*, re-verify against MATLAB, re-home into the clean layers. Never copy its architecture. |
 
-## Architecture & hard rules
+## Architecture & hard rules (test-enforced)
 
-- **Layering:** `datastruct.py`, `io/`, and `calc/` are **pure libraries**
-  (ndarray / DataStruct in → results out). They NEVER import
-  fastapi / pydantic / starlette / `quantized.routes`. `routes/` are
-  **thin adapters** only — validate, call calc/io, serialize. Enforced by
-  `tests/test_repo_integrity.py`.
-- **God-module ceiling: 500 lines per source module**, enforced by test.
-  Split before merging. Raise ONLY with written justification in the
-  commit message. (The predecessor `BosonPlotter.m` hit ~7k lines; the
-  decomposition is still ongoing. Never again.)
-- **Frontend component ceiling: 400 lines per `.tsx` component**, test-
-  enforced by `architecture.test.ts` (PROJECT_ORGANIZATION_PLAN #7) with
-  zero grandfathered pins — every `.tsx` meets the ceiling. `App.tsx` and
-  `ThinFilmTab.tsx` were the last holdouts and have since been decomposed
-  well under it. Heavy features become a `workshops/` subtree (state hook +
-  view + sub-components), the React analogue of the MATLAB "workshop
-  pattern".
-  (`thin_film_toolkit`'s `FigureBuilder.vue` hit 2,669 lines — the
-  anti-pattern.)
+- **Layering:** `datastruct.py`, `io/`, `calc/` (and `plugins/`, `portable/`)
+  are pure libraries; they NEVER import fastapi / pydantic / starlette /
+  `quantized.routes`. `routes/` are thin adapters: validate, call, serialize.
+  (`tests/test_repo_integrity.py`)
+- **500 lines per source module.** Split before merging; raise ONLY with
+  written justification in the commit message.
+- **400 lines per `.tsx` component**, zero grandfathered pins
+  (`frontend/src/architecture.test.ts`). Heavy features become a
+  `workshops/` subtree. Details: [frontend/CLAUDE.md](frontend/CLAUDE.md).
 - **Data contract:** every parser returns a frozen `DataStruct`
-  (`quantized.datastruct`) with `.time`, `.values`, `.labels`, `.units`,
-  `.metadata`. No ad-hoc dicts. Single source of truth for all downstream
-  code.
-- **Parsers:** single registration in `io/registry.py`; ambiguous
-  extensions (`.dat`) get content-sniffer functions. (The MATLAB dual-
-  registration footgun does not exist here — one registry.)
-- **Physics constants port verbatim** from `quantized_matlab`. Annotate
-  calibrated/intentional values as do-not-"fix".
+  (`.time`, `.values`, `.labels`, `.units`, `.metadata`). No ad-hoc dicts.
+- **Parsers:** one registration in `io/registry.py`; ambiguous extensions
+  (`.dat`) get content sniffers.
+- **Physics constants port verbatim** from `quantized_matlab`; annotate
+  calibrated values as do-not-"fix".
 - **License: Apache-2.0. No GPL runtime dependencies** (enforced). Prefer
-  permissive scientific deps (numpy/scipy = BSD, uPlot = MIT).
-- **Interactive vs publication rendering split:** uPlot (canvas) drives
-  fast interactive plots; **vector publication export** (PDF/SVG) is
-  rendered server-side via matplotlib in `routes/export`. Default export
-  is vector (carry over the MATLAB vector-output preference).
+  permissive deps (numpy/scipy BSD, uPlot MIT).
+- **Rendering split:** uPlot (canvas) for interactive plots; vector
+  publication export (PDF/SVG) server-side via matplotlib in
+  `routes/export`; vector is the default.
 
 ## Stack
 
-- **Backend:** Python ≥3.11, FastAPI, numpy/scipy, matplotlib (export
-  only), `uv` for env/deps. Package `quantized`, CLI `qz` (alias
-  `quantized`). Long-running work is meant to run through a **poll-based
-  job queue** (`routes/jobs_api`, ~1 s GET polling — NOT WebSocket;
-  design mirrors fermiviewer). As of 2026-07-26 only the DREAM/bumps fit
-  actually uses it (wiring import/export through it is plan P3.4); the
-  queue is thin transport — the actual work stays pure in `calc/`.
-- **Optional Origin (COM):** live "Send to Origin" is a **Windows-only,
-  OS-gated optional** extra (pywin32), behind a feature flag and untestable
-  in CI (mock-based tests only). The cross-platform, golden-tested Origin
-  path is Origin-ASCII + `.ogs` export. Everywhere else degrades to that.
-- **Frontend:** React 19 + TypeScript + Vite + Zustand (state) + uPlot
-  (plots) + clsx. Vitest + Testing Library. Reuse `fermiviewer`'s theme
-  tokens, `Shell/` chrome, and component conventions.
-- **Desktop:** one-command launch (`qz`) serves API + SPA and opens the
-  browser; `qz --desktop` for a native window (pywebview); `qz --dev` for
-  Vite HMR + reloading backend. (Mirrors `fermiviewer`'s run model.)
+- **Backend:** Python >=3.11, FastAPI, numpy/scipy, matplotlib (export only),
+  `uv`. Package `quantized`, CLI `qz` (alias `quantized`). Long work runs
+  through the poll-based job queue (`routes/jobs_api`): see
+  [src/quantized/CLAUDE.md](src/quantized/CLAUDE.md).
+- **Optional Origin COM** ("Send to Origin"): Windows-only, pywin32, behind a
+  feature flag, mock-tested only. The cross-platform, golden-tested path is
+  Origin-ASCII + `.ogs` export; everything else degrades to it.
+- **Frontend:** React 19 + TypeScript + Vite + Zustand + uPlot + clsx;
+  Vitest + Testing Library; reuse `fermiviewer`'s theme tokens and `Shell/`.
+- **Desktop:** `qz` serves API + SPA and opens the browser; `--desktop`
+  (pywebview); `--dev` (Vite HMR + reloading backend).
 
-## Commands (target — established as W0 lands)
+## Commands
 
 ```bash
 uv sync --group dev              # backend deps
-uv run python tools/gate.py      # the whole gate, one command (~8 min);
-                                  # --backend-only / --frontend-only / --skip-tests
-
-uv run qz                  # API + SPA on :8000, opens browser
-uv run qz --desktop        # native window (pywebview)
-uv run qz --dev            # Vite HMR + reloading backend
-uv run pytest -n auto      # backend tests (pytest-xdist parallel across cores)
-uv run pytest -m golden    # parity vs frozen MATLAB outputs
-uv run ruff check src tests tools
+uv run python tools/gate.py      # the whole gate (~8 min); --backend-only / --frontend-only / --skip-tests
+uv run python tools/gate.py --origin   # Origin corpus before/after check (Origin changes only)
+uv run qz                        # API + SPA on :8000, opens browser (--desktop, --dev)
+uv run pytest -n 4               # backend tests (-n auto on a big box); -m golden for parity
+uv run ruff check src tests tools  # always all three: CI lints tools/ and tests/ too
 uv run mypy src
-cd frontend && npm test    # frontend unit tests
-cd frontend && npm run build
+cd frontend && npm test && npx tsc -b --force && npm run build
 ```
 
-## Verification model (golden parity)
+## Where the rules live (nested files load when you work there)
 
-- `tests/golden/` — frozen `quantized_matlab` outputs with a
-  `manifest.json` recording the source commit. Regenerate via a MATLAB
-  freeze script (`tools/matlab/freeze_reference_values.m`, needs
-  `../quantized_matlab`).
-- Markers: `golden` (compares against frozen values), `realdata` (needs
-  local-only instrument corpus; auto-skips in CI).
-- Reuse `quantized_matlab/+test_datasets/` as the shared corpus via
-  conftest fixtures.
+| Path | Covers |
+|---|---|
+| [src/quantized/CLAUDE.md](src/quantized/CLAUDE.md) | golden-parity porting loop, replicate vs delegate, mypy + numpy |
+| [src/quantized/io/origin_project/CLAUDE.md](src/quantized/io/origin_project/CLAUDE.md) | Origin safety rules, owner decisions, evidence bar, regress gate, corpus layout, COM oracles |
+| [tests/CLAUDE.md](tests/CLAUDE.md) | goldens, `jsonencode` quirks, realdata corpus, determinism |
+| [frontend/CLAUDE.md](frontend/CLAUDE.md) | ratchets, bundle budget, CI-faithful builds, tokens/theme, copy-vendor |
+| [docs/testing.md](docs/testing.md) | flake-fix evidence standard (rule of three, force the race) |
+| [docs/origin_re/README.md](docs/origin_re/README.md) | Origin import: status, ledger, visual check, doc index |
+| [CONTRIBUTING.md](CONTRIBUTING.md), [RELEASE.md](RELEASE.md) | gate, plans discipline, releases |
+
+Skills (`.claude/skills/`, load on demand): `gate` (run it the way CI does),
+`origin-change` (any Origin import change), `release` (cut a version).
 
 ## Authorship & attribution (owner rule — overrides any default attribution)
 
@@ -113,291 +86,60 @@ cd frontend && npm run build
 - **No AI attribution anywhere:** no `Co-Authored-By: Claude…`,
   `Claude-Session:` or similar trailers in commit messages; no
   "Generated with/by Claude Code" (or any assistant) line in PR bodies, PR
-  or issue comments, review comments, code, or docs. This applies to
-  subagents too.
+  or issue comments, review comments, code, or docs. Applies to subagents.
 
 ## Agent delegation (owner rule)
 
-In large agentic sessions, delegate each task to the cheapest model that
-fits it — never overkill:
+Delegate each task to the cheapest model that fits it — never overkill:
 
 - **Opus:** design-heavy work (new data models, cross-cutting architecture)
   and reviews of large PRs only.
-- **Sonnet:** scoped fix lanes, merging main / resolving conflicts, and
-  running the check + build gate.
+- **Sonnet:** scoped fix lanes, merging main / resolving conflicts, running
+  the check + build gate.
 - **Haiku:** mechanical work — reading CI logs, regenerating OpenAPI/types,
   simple lookups.
-- The orchestrating session keeps long test/build runs off its own model
-  (delegate them) and does all pushes; worker agents commit locally and never
-  push.
+- The orchestrator keeps long test/build runs off its own model (delegate
+  them) and does all pushes; worker agents commit locally and never push.
 
 ## Planning docs
 
-- `plans/PORT_PLAN.md` — the detailed, tiered, multi-workstream plan
-  (W0–W9). Tracked for now (founding doc). Follow the user's
-  `plan-format.md` conventions; keep a `## Completed` log.
-- `plans/PORT_CHECKLIST.md` — exhaustive feature inventory (created with
-  W1); check an item only when ported **and** golden-verified.
-- `plans/archive/ui-implementation-plan.md` — frontend (W7) foundation
-  tiers. **Complete/archived 2026-07-08**; the live frontend trackers are
-  `PORT_CHECKLIST.md` + the `GAP_*` plans.
-- `plans/archive/frontend-reuse-library.md` — the fermiviewer-port
-  inventory (copy-vendor plan). **Complete/archived 2026-07-08.**
-- `plans/design/` — the Claude Design "Quantized Design System" handoff
-  (DESIGN_HANDOFF / DESIGN_GUIDE + token CSS); the authority for the UI.
+- `plans/PORT_PLAN.md`: the tiered plan (W0–W9); follow the user's
+  `plan-format.md`; keep a `## Completed` log.
+- `plans/PORT_CHECKLIST.md`: feature inventory; tick only when ported
+  **and** golden-verified.
+- Live frontend trackers: `PORT_CHECKLIST.md` + the `GAP_*` plans
+  (`plans/archive/` holds the completed UI and fermiviewer-reuse plans).
+- `plans/design/`: the "Quantized Design System" handoff; the UI authority.
 
-## Lessons learned (working notes)
+## Working rules (one line each; the story is behind the link)
 
-Practical conventions discovered while porting — follow them to stay green.
-
-### Golden-parity porting
-- **Loop:** read MATLAB source → port to `calc/`/`io/` → add a freeze case
-  to `tools/matlab/freeze_calc_values.m` → run MATLAB to freeze → gate
-  (`ruff check src tests && mypy src && pytest -q`) → commit + tick
-  `PORT_CHECKLIST`. The freeze script needs `setupToolbox` for `+fitting`.
-- **Replicate vs delegate:** replicate MATLAB's *algorithm* for idiosyncratic
-  code (its local `betainc` CDFs, `tinv` norminv+Newton, window functions, SG
-  edge fits, SNIP) — matching the answer isn't enough, match the method.
-  *Delegate* to scipy for standard published algorithms (pchip/spline/makima,
-  `quad`, Nelder-Mead). When scipy has **no** equivalent (Sibson
-  natural-neighbour), document the gap — don't fake it.
-- **MEASURE before loosening tolerance.** Run the port vs the golden in a
-  quick `uv run python -c` first: scipy `quad`↔MATLAB `integral` matched
-  ~1e-15, Nelder-Mead↔`fminsearch` ~1e-5..1e-16 on clean data. Most fits
-  golden at 1e-9; don't pre-emptively relax.
-- **A golden-freeze ERROR is often a latent MATLAB source bug**, not a harness
-  problem (found 4: Bruker flatten, confidenceBand `NPoints {mustBePositive}=0`,
-  datasetAlgebra positional-vs-named `createDataStruct`, autoGuess toolbox
-  `range()`). Surface it (checklist + `project_matlab_bugs_from_golden`
-  memory), freeze the *intended* behaviour inline, port the intent. Fix the
-  sibling `quantized_matlab` repo only deliberately (a branch + headless
-  verify), never silently.
-
-### `jsonencode` golden quirks (the freeze boundary)
-- Flattens N×1 columns to 1-D → `compare_calc` reshapes to the result shape.
-- **Cannot serialize** complex or a MATLAB `dictionary` → freeze real-valued
-  outputs (e.g. `|r|²`, not complex amplitudes); for dict-typed fields, freeze
-  the structured outputs and test the raw map in Python.
-- Writes `Inf`/`NaN` as `null` → keep freeze inputs finite (the VFT-overflow
-  trap), or rely on `compare_calc`'s NaN-equality.
-- A 1-element struct array encodes as an **object**, not a list → normalize.
-- **Store 2-D arrays as 2-D** in the freeze, never flattened — MATLAB is
-  column-major, numpy row-major, so a flatten+reshape transposes silently.
-
-### mypy `--strict` + numpy
-- Wrap any float64-array reassignment from a numpy op (`x**2`, `np.convolve`,
-  `np.polyval`, `np.minimum`, `np.clip`, `np.linalg.*`, int×float) in
-  `np.asarray(..., dtype=float)` — they infer `floating[Any]`/`Any`.
-- No untyped lambdas in a typed context (e.g. a bridge table) — use `def`s.
-- Hoist `Any | None` to a narrowed typed local before numpy calls.
-- Don't reuse a return-variable's name for a `floating[Any]` loop intermediate.
-
-### Pre-PR self-review discipline (adopted 2026-08-16, after PR #149 round 1)
-- **Simulate the first real consumer before opening a PR** — infrastructure
-  contracts get review-tested by writing the next slice's strawman code
-  against them (the E-c1 miss: a page preview renders figures, so figures
-  belong in the cache key — obvious the moment Sol's generator was sketched).
-- **Cache/invalidation red-team question:** list ALL inputs the rendered
-  output depends on (transitively); each one must be in the cache key.
-- **Doc-promise audit:** every behavioral claim in a header/PR body needs a
-  matching test, or the claim gets narrowed to what the code actually does.
-- **Run the code-review skill (high) on your own diff before opening a PR**
-  and fix what it finds — its first run caught a CI-red weak-wait, a deps-
-  cursor desync, and two O(store)-per-tile inefficiencies pre-push.
-
-### Test determinism
-- **Evidence standard for flake fixes: `docs/testing.md`.** "It passed N times"
-  is weak — 0 failures in n runs bounds the rate at only 3/n, so the 0/90 that
-  "verified" one fix could not be told apart from no fix at all. Force the race
-  instead; the worked example is the test named "forces the item-22 race" in
-  `useFigureBuilder.test.ts`.
-- Wall-clock budgets: assert the load-invariant property (which algorithm ran,
-  DOM node count), keep the clock as a loose backstop, and **never lower an
-  existing bound** — `GridViewport.perf` flaked with ~8x headroom.
-- `architecture.test.ts` carries a **weak-wait ratchet**: new
-  `waitFor(() => expect(mock).toHaveBeenCalled())` sites fail the build. Wait on
-  STATE, not on the call. A bare `expect(mock).toHaveBeenCalled()` is fine.
-
-### Verifying a build the way CI does
-- **`npm run build`'s `tsc -b` is INCREMENTAL — a local pass can be stale and
-  mean nothing.** Measured 2026-09-10 on PR #343: the full local gate reported
-  `BUILD exit=0`, and CI then failed BOTH the `frontend` and `e2e` jobs (e2e's
-  failing step is "Build the SPA", i.e. the same build) on six TypeScript
-  errors in two newly-added TEST files. `tsc -b` reused a `.tsbuildinfo` from
-  before those files existed and never rechecked them; CI builds clean.
-- **`npx tsc --noEmit -p tsconfig.json` is NOT the check CI runs.** It was
-  passing throughout, because the solution-style `tsc -b` covers project
-  references that the single `-p` invocation does not. Two errors it therefore
-  never saw: passing a plain `DataStruct` where a BRANDED `StrippableData` is
-  required (`asAlreadyComputed` is the sanctioned way to assert that), and
-  `as PlotPayload` on an object literal missing `xLabel`/`xUnit` — an unsound
-  cast TS rejects as insufficiently overlapping.
-- So before claiming a green build: **`npx tsc -b --force`** (or delete the
-  buildinfo first). Cheap, and it is the difference between a real check and a
-  cached "yes".
-- **vite's transform cache also lies, and `npm ci` is the only check that
-  catches it.** Same PR, second CI failure: the bundle gate failed at 892.5 kB
-  over a 892.2 kB budget while the identical commit measured 892.1 kB locally.
-  Running `npm ci` first — exactly what the workflow does — made the local
-  build match CI byte for byte. The cache under `node_modules` had served
-  stale output FOR THE VERY FILES BEING EDITED, under-reporting the change by
-  436 bytes. Proof it was the cache and not dependency drift: `main` measures
-  912,758 either way; only the edited branch moved. The existing
-  "compare a pinned dependency's version" check cannot see this — versions
-  matched perfectly. **Before trusting any bundle number that will become a
-  pin, rebuild after `npm ci`.**
-- **`cmd | tail -n; echo "exit=$?"` reports TAIL's status, not the command's.**
-  Measured: `false | tail -1` then `$?` is 0, while `${PIPESTATUS[0]}` is 1.
-  Several gate invocations this session logged `BUILD exit=0` from `tail`
-  succeeding. Use `${PIPESTATUS[0]}`, or redirect to a file and check `$?`
-  directly, whenever the exit code is the thing being trusted.
-- **A truncated log download is worse than no log.** Fetching the failing job
-  with `curl` through the proxy died with `CONNECT tunnel failed, response 403`
-  but still wrote 40 lines — which described a completely different, stale
-  failure (a module-size ceiling on a file the branch never touched). Acting on
-  it would have sent the whole investigation the wrong way. Use
-  `mcp__github__get_job_logs` (or verify the download completed) and re-read
-  before diagnosing.
-
-### Lint / CI
-- Always lint **`ruff check src tests tools`** (CI does) — not just `src`; a
-  tests-only import-sort slipped past a `src`-only local run and reddened CI.
-- CI is a matrix (ubuntu/win/mac × py3.11/3.13) + a frontend job; golden
-  fixtures are committed so it needs no MATLAB. `main` is branch-protected
-  (5 required checks, strict, conversation-resolution) with **admins exempt**,
-  so direct pushes to `main` still work for the owner.
-- Security: repo is public; secret scanning + push protection + Dependabot +
-  CodeQL are on. The `gh` CLI token **cannot** enable CodeQL default setup
-  (no `security_events` scope → 404); CodeQL runs as an advanced-setup
-  workflow (`.github/workflows/codeql.yml`).
-
-### Container / environment resets
-- **A remote container reset can restore STALE installed dependencies — check
-  deterministically, then act only if the check fails.** Do not assume every
-  new session is a reset, and do not read anything from directory mtimes
-  (`.venv/pyvenv.cfg` is written once at creation and never touched by `uv
-  sync`; it was cited as a signal on 2026-09-02 and means nothing). The
-  checks, both cheap:
-  - Python: `uv sync --check --group dev` — exits **0** when in sync, **1**
-    when not, and prints the exact package diff. Measured 2026-09-02 on a
-    forced one-package downgrade; restored with `uv sync --group dev`.
-  - Frontend: compare a pinned direct dependency in the lock against what is
-    installed —
-    `node -p "require('./frontend/package-lock.json').packages['node_modules/vite'].version"`
-    vs `node -p "require('./frontend/node_modules/vite/package.json').version"`.
-    A mismatch means `cd frontend && npm ci`.
-  The incident: a gate ran against `node_modules` from 2026-08-22 (vite 8.2.1
-  vs a lock at 8.2.2) and a venv from 2026-08-15 (statsmodels 0.14.6 vs
-  0.15.0), and a full green suite on that tree was treated as evidence. It was
-  caught only because an agent's fresh worktree disagreed by 0.9 kB on the
-  bundle. The same reset recurred later that day and the vite one-liner caught
-  it in one second.
-- **The complete raw log is authoritative; extraction is a convenience.** A
-  `| tail -5` gate log threw away the name of a one-off failing test (a flake
-  that passed on identical re-run), and without the name it cannot be pursued
-  per `docs/testing.md`. Save the whole output first, then search the saved
-  file: bash `npx vitest run 2>&1 | tee gate.log` then
-  `rg 'FAIL|AssertionError' gate.log`; PowerShell `npx vitest run 2>&1 |
-  Tee-Object gate.log` then `Select-String 'FAIL|AssertionError' gate.log`.
-  Never pipe through a filter alone — that repeats the original mistake.
-  (Vitest 4's `FAIL` line is plain text even under a real pty — measured with
-  `script` — so anchored matches work; portability across shells, not ANSI, is
-  why the search runs on a saved file.)
-- **A killed vitest run leaks ~80 MB into `$TMPDIR`.** Each run writes its
-  transformed modules to `$TMPDIR/<21-char nanoid>/client/` and removes the
-  directory only on a clean close. Timeouts and killed agents skip that step.
-  On 2026-09-28, about 1,100 leaked directories (~28 GB) filled the disk and
-  stalled six parallel agents. Let runs finish. When disk is low, remove the
-  leaked directories older than 30 minutes:
-  `find /tmp -maxdepth 1 -type d -regextype posix-extended -regex
-  '/tmp/[A-Za-z0-9_-]{21}' -mmin +30 -exec rm -rf {} +`.
-  The class must include `_` and `-` because nanoid's alphabet does, so an
-  alphanumeric-only class skips about half of all names (measured 2026-09-30:
-  1,828 leaked directories, ~20 GB, found only by the wider class).
-
-### Origin COM oracle runs: dispatch `Origin.Application`, never `ApplicationSI`
-- `Origin.ApplicationSI` is single-instance. Even through `DispatchEx` it
-  **attaches to an Origin the owner already has open** (measured 2026-11-15:
-  no new process, and it sees that instance's LabTalk variables). The run then
-  loads a corpus project into the owner's window, and its `Exit()` closes it,
-  unsaved work included. PID-tracking kill logic cannot prevent this, because
-  no kill is involved.
-- Oracle and specimen tools (`tools/origin_compare/`, `tools/origin_trial/`)
-  therefore dispatch `Origin.Application`, which always starts its own
-  process. The live "Send to Origin" product path (`io/origin_com.py`) keeps
-  `ApplicationSI` on purpose, because sending into the user's open session is
-  that feature.
-- Run one oracle instance at a time. `run_axis_oracle.py` kills only the exact
-  PID its own export recorded. Oracle data lives in
-  `../test-data/origin/ground_truth_public/` (Origin 2026b Student, which
-  loaded 400+ page `.opju` files fine).
-
-### Origin graph-recovery safety (2026-07-13 incident)
-- Origin import changes must pass `uv run python tools/gate.py --origin` and explain every corpus change.
-- **Read and update `docs/origin_re/DECODE_LEDGER.md`** before and with any
-  Origin decode, binding or apply change: proven facts (each with its guarding
-  test), owner decisions, and the regression history. Every fix or newly
-  proven fact adds an entry in the same PR; never weaken a guard to pass.
-- Treat Origin graph recovery as one scientific pipeline: **file bytes ->
-  per-curve `(book, X, Y)` binding -> dataset construction -> acquisition
-  order -> renderer path -> axis state**. A local field decode is not valid if
-  the final graph is wrong.
-- **Do not reintroduce byte-17 `connect=segment2`.** PRs #30/#31 were reverted
-  by #32 after a corpus-wide false positive broke continuous curves (see
-  `plans/ORIGIN_FILE_DECODE_PLAN.md` item 52 and
-  `docs/origin_re/curve_axis_fidelity.md`). Origin line and line+symbol curves
-  remain continuous unless a controlled specimen, COM/LabTalk oracle,
-  rendered-Origin reference, and plausible corpus distribution independently
-  prove another mode.
-- **Protect multi-X worksheets.** Origin commonly stores `X,Y,X,Y,X,Y`; each Y
-  binds to its nearest-preceding X-designated column (`opj_curves.py`,
-  `opju_curves*.py`). Never collapse them to the book's first X or form a
-  sorted X union.
-- **A curve's recorded X wins** (owner decision 2026-11-20, A2). When the
-  file records a curve's X column and that X decoded, the apply draws the
-  curve against it, even where `lib/perSeriesX.ts`'s nearest-preceding-X rule
-  would pick another X (`lib/originRecordedX.ts` routes such a figure through
-  the per-curve-X overlay). "Recorded" means the curve record itself names
-  the X (`curve.xRecorded`): the `.opju` token (`opju_figure_curves.py`) and,
-  since lane D, the `.opj` curve anchor, which is the same record (offsets
-  35-38, `opj_curves._record_x`; hc2convert 89/89 equal its COM-verified
-  `.opju` save). A `.opj` X the reader only INFERS (no valid record field)
-  never carries `xRecorded` and never wins (Moke.opj Graph8/9: the inferred
-  x=E mirrors the loop; the record names A, which Origin draws). The
-  nearest-preceding rule applies only when the file names no X for the
-  curve. A recorded X that did not import is never replaced: the curve is
-  left out with a diagnosis. Evidence: Etna `origin.opju` Graph16, Catchment
-  A-E Graph6 vs Origin's saved previews.
-- **A graph whose recorded curves all fail to resolve draws EMPTY with a note**
-  (A3), never the book's every channel (the old fallback drew 11-33 phantom
-  series on Moke Graph2 / hc2convert).
-- **Protect non-monotonic X.** Hysteresis loops need full-data X/Y extents,
-  full-range line/marker path builders, and original row order preserved.
-  Any curve-render change must exercise a non-ascending fixture and verify
-  interactive/export agreement.
-- **Fail closed** (the pattern used throughout `io/origin_project/`): an
-  explicitly referenced but undecoded X/Y is omitted and diagnosed; never
-  coerce it to time/default X or another similarly named book/column.
-- A backend visual decode requires: controlled specimen, independent
-  Origin/COM/rendered oracle, plausible whole-corpus distribution, positive
-  and negative controls, and representative gallery review (at minimum Moke,
-  PNR, and RockingCurve). Synthetic tests may lock proven behavior but cannot
-  establish the proof themselves.
-- Default to UI/rendering work here and treat the Origin backend contracts
-  (byte layouts, column bindings, parser rules, axis semantics) as
-  deliberate — don't reinterpret them without an explicit handoff and
-  independent evidence.
-
-### Frontend
-- **Copy-vendor from `../fermiviewer/frontend/src`** with a
-  `// Ported from fermiviewer …` origin header; swap `fvd-*`→`qz-*` classes
-  and the store hook (`useViewer`→`useApp`); keep structure identical so a
-  future diff stays small. Decouple a ported component from the store when it
-  needn't be coupled (e.g. `ToolWindow` owns its position locally).
-- Design tokens are the single styling source — read CSS custom properties
-  (`--accent`, `--series-N`, …); never hardcode colours. Theme/accent/density
-  switch via `data-*` on `<html>`. Unicode-glyph icons, never emoji; cursors
-  `default`; JetBrains Mono for every number.
-- The plot has an **offline client fallback** (`lib/plotdata.ts`): try
-  `/api/plot/series`, fall back to local column packing so the UI + tests run
-  without a backend.
+- **Pre-PR self-review:** simulate the first real consumer of a new contract;
+  red-team caches (every input the output depends on is in the key); every
+  behavioural claim in a header/PR body has a test or is narrowed; run the
+  code-review skill (high) on your own diff and fix what it finds.
+  ([CONTRIBUTING.md](CONTRIBUTING.md#pre-pr-self-review))
+- **A green local build can be stale:** `npx tsc -b --force` and `npm ci`
+  before trusting a build or bundle number. ([frontend/CLAUDE.md](frontend/CLAUDE.md))
+- **Trust exit codes, not pipes:** `${PIPESTATUS[0]}`, never `$?` after
+  `| tail`. ([gate skill](.claude/skills/gate/SKILL.md))
+- **Save the complete raw log, then search it;** never filter the only copy.
+  ([CONTRIBUTING.md](CONTRIBUTING.md#container-and-environment-resets))
+- **A truncated CI log is worse than none:** use `mcp__github__get_job_logs`
+  or verify the download completed. ([gate skill](.claude/skills/gate/SKILL.md))
+- **Container resets restore stale deps:** `uv sync --check --group dev` and
+  the vite lock-vs-installed one-liner; act only if they fail; mtimes mean
+  nothing. ([CONTRIBUTING.md](CONTRIBUTING.md#container-and-environment-resets))
+- **Let vitest runs finish;** a killed run leaks ~80 MB into `$TMPDIR`
+  (cleanup command in the [gate skill](.claude/skills/gate/SKILL.md)).
+- **Flake fixes need forced races, not repetition;** never lower a
+  wall-clock bound; wait on state, not on a mock call.
+  ([docs/testing.md](docs/testing.md))
+- **Origin import changes:** read and update the
+  [ledger](docs/origin_re/DECODE_LEDGER.md), pass `gate.py --origin` with
+  every change explained, never weaken a guard.
+  ([origin_project/CLAUDE.md](src/quantized/io/origin_project/CLAUDE.md))
+- **Origin COM oracle runs dispatch `Origin.Application`, never
+  `ApplicationSI`** (it attaches to and can close the owner's Origin).
+  ([origin_project/CLAUDE.md](src/quantized/io/origin_project/CLAUDE.md))
+- **CI and security facts** (matrix, branch protection, CodeQL advanced
+  setup): [CONTRIBUTING.md](CONTRIBUTING.md#ci-and-security).
