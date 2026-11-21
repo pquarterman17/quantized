@@ -64,9 +64,13 @@ inconsistently exposed, and do not all share the same result lifecycle.
     (`withAnalysisRequirements`), so they cannot disagree. Analyze opens with
     "Recent analyses" (last 5, the Analysis Center's persisted `recent` list,
     now fed by every launch path) and "Open results (N)" for the active
-    worksheet. Not yet done: the Analysis Center still evaluates its own
-    `compatibility()` (same metadata, longer messages, no worksheet-count or 2θ
-    check); converge it onto the predicate table.
+    worksheet. The Analysis Center's own
+    `compatibility()` is converged (lane C, 2026-11-21): the worksheet-count
+    and 2θ checks now live in `lib/analysisExtraRequirements.ts`
+    (`EXTRA_REQUIREMENTS`), read by both the menu/palette predicate and
+    `analysisTools(actions, dataset, datasets)`, so Average curves, Pawley and
+    XRD reference are unavailable in the Center for the same reason as in the
+    menu (`lib/analysisCenterExtra.test.ts`).
   - **Audit (2026-11-19): input needs vs. batch / By support.** "Batch" = run
     over selected worksheets; "By" = per-level of a grouping column.
 
