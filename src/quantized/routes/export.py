@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
@@ -31,6 +32,7 @@ from quantized.io.origin import (
     GraphSpec,
     format_origin_project_script,
     format_origin_script,
+    text_column_sidecar,
 )
 from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
@@ -218,6 +220,18 @@ def export_consolidated(req: ConsolidatedRequest) -> Response:
     )
 
 
+def _dropped_text_columns(books: list[DataStruct], names: list[str]) -> str:
+    """``"Book: col, col; Book2: col"`` for the text columns the ``.opj`` writer
+    cannot carry (empty when none), capped so the header stays small."""
+    parts: list[str] = []
+    for ds, name in zip(books, names, strict=True):
+        cols = list(text_column_sidecar(dict(ds.metadata)))
+        if cols:
+            label = name or str(ds.metadata.get("origin_book", "") or "book")
+            parts.append(f"{label}: {', '.join(cols)}")
+    return "; ".join(parts)[:1500]
+
+
 @router.post("/opj")
 def export_opj(req: OpjRequest) -> Response:
     """DataStructs -> a native Origin ``.opj`` project (readable by ANY Origin
@@ -245,6 +259,7 @@ def export_opj(req: OpjRequest) -> Response:
                 # io/technique.py and io/origin_project/__init__.py already use.
                 ds = replace(ds, metadata=meta)
             books.append(ds)
+        dropped = _dropped_text_columns(books, [it.name for it in req.datasets])
         groups = [item.group for item in req.datasets]
         as_matrix = req.matrices_as_matrix
         payload = opj_bytes(books, groups, matrices=as_matrix)
@@ -256,6 +271,10 @@ def export_opj(req: OpjRequest) -> Response:
     # Matrix books written as X/Y/Z worksheet columns instead of a matrix
     # (complex, edited, or a sheet of a shared workbook): the client says so.
     headers["X-Opj-Matrix-Fallback"] = str(fallbacks)
+    # The .opj writer has no text-column format: name what it left out
+    # (percent-encoded; ASCII passes through unchanged).
+    if dropped:
+        headers["X-Opj-Dropped-Text-Columns"] = quote(dropped, safe=" :,;")
     return Response(content=payload, media_type="application/octet-stream", headers=headers)
 
 

@@ -272,7 +272,7 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     xUnit: r.x.unit,
     decimated: r.decimated ?? false, ...(r.rows ? { rowIds: r.rows } : {}),
     window:
-      r.window && r.window.x_min != null && r.window.x_max != null
+      r.window?.x_min != null && r.window.x_max != null
         ? [r.window.x_min, r.window.x_max]
         : null,
   };
@@ -634,7 +634,8 @@ export async function fetchPlot(
       },
       signal,
     );
-    return dropTrailingEmptyRows({ ...fromResponse(r), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
+    const data = r.kept ? (await import("./plotUngap")).ungap(r.data, r.kept) as typeof r.data : r.data;
+    return dropTrailingEmptyRows({ ...fromResponse({ ...r, data }), ...(xIsDate(ds, xKey) ? { xIsDate: true } : {}) });
   } catch (err) {
     // An intentional cancellation (a newer commit superseded this fetch)
     // must never be treated as "we're offline" -- the offline fallback below

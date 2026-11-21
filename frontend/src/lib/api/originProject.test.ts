@@ -33,9 +33,17 @@ describe("exportOriginProject", () => {
   it("returns how many matrix books went out as worksheet columns", async () => {
     const body = { datasets: [{ dataset: ds }] };
     vi.mocked(postDownloadHeaders).mockResolvedValueOnce(new Headers({ "X-Opj-Matrix-Fallback": "2" }));
-    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 2 });
-    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 0 }); // no header
+    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 2, droppedTextColumns: "" });
+    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 0, droppedTextColumns: "" }); // no header
     vi.mocked(postDownloadHeaders).mockResolvedValueOnce(new Headers({ "X-Opj-Matrix-Fallback": "x" }));
-    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 0 });
+    expect(await exportOriginProject(body)).toEqual({ matrixFallbacks: 0, droppedTextColumns: "" });
+  });
+
+  it("returns the text columns the .opj could not carry, decoded", async () => {
+    vi.mocked(postDownloadHeaders).mockResolvedValueOnce(
+      new Headers({ "X-Opj-Dropped-Text-Columns": "A: Sample, %CE%B8" }),
+    );
+    const r = await exportOriginProject({ datasets: [{ dataset: ds }] });
+    expect(r.droppedTextColumns).toBe("A: Sample, \u03b8");
   });
 });
