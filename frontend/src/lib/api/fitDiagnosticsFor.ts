@@ -15,7 +15,7 @@ import type { HttpError } from "./http";
 export async function fitDiagnosticsFor(
   resultId: unknown,
   nParams: number,
-  arrays: () => Omit<DiagnosticsRequest, "n_params">,
+  arrays: () => Omit<DiagnosticsRequest, "n_params"> | Promise<Omit<DiagnosticsRequest, "n_params">>,
   opts: { useWeights: boolean; qqPoints: number },
   signal?: AbortSignal,
 ): Promise<DiagnosticsResult> {
@@ -27,5 +27,5 @@ export async function fitDiagnosticsFor(
       if ((e as HttpError | null)?.status !== 409) throw e;
     }
   }
-  return fitDiagnostics({ ...common, ...arrays() }, signal);
+  return fitDiagnostics({ ...common, ...(await arrays()) }, signal);
 }

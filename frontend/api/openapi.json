@@ -762,6 +762,32 @@
             "title": "N Points",
             "type": "integer"
           },
+          "obs_dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs Dy"
+          },
+          "obs_scale": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs Scale"
+          },
           "obs_var": {
             "anyOf": [
               {
@@ -783,12 +809,37 @@
             ],
             "title": "Obs Var"
           },
+          "obs_weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs Weights"
+          },
           "params": {
             "items": {
               "type": "number"
             },
             "title": "Params",
             "type": "array"
+          },
+          "result_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Id"
           },
           "x": {
             "items": {
@@ -3900,6 +3951,24 @@
         "title": "CurrentDensityRequest",
         "type": "object"
       },
+      "CurveRequest": {
+        "properties": {
+          "obs_var": {
+            "default": false,
+            "title": "Obs Var",
+            "type": "boolean"
+          },
+          "result_id": {
+            "title": "Result Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id"
+        ],
+        "title": "CurveRequest",
+        "type": "object"
+      },
       "CustomTicksSpec": {
         "description": "Explicit major ticks, optionally labelled (``calc.axis_scales``).",
         "properties": {
@@ -4753,6 +4822,19 @@
             ],
             "title": "Covariance",
             "type": "string"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
           },
           "dy": {
             "anyOf": [
@@ -6907,6 +6989,19 @@
             ],
             "title": "Covariance",
             "type": "string"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
           },
           "dy": {
             "anyOf": [
@@ -20921,6 +21016,50 @@
           }
         },
         "summary": "Compare Datasets Job",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/curve": {
+      "post": {
+        "description": "The full-resolution curve a display-curve fit left off the wire: its\n``yFit`` exactly as the full response carries it. 409 when evicted; the\nclient then evaluates the model at its own x (``/bands``, covar null).",
+        "operationId": "curve_api_fitting_curve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Curve Api Fitting Curve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Curve",
         "tags": [
           "fitting"
         ]

@@ -1735,6 +1735,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/curve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Curve
+         * @description The full-resolution curve a display-curve fit left off the wire: its
+         *     ``yFit`` exactly as the full response carries it. 409 when evicted; the
+         *     client then evaluates the model at its own x (``/bands``, covar null).
+         */
+        post: operations["curve_api_fitting_curve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/diagnostics": {
         parameters: {
             query?: never;
@@ -6420,10 +6442,18 @@ export interface components {
             n_free: number;
             /** N Points */
             n_points: number;
+            /** Obs Dy */
+            obs_dy?: number[] | null;
+            /** Obs Scale */
+            obs_scale?: number | null;
             /** Obs Var */
             obs_var?: (number | null)[] | null;
+            /** Obs Weights */
+            obs_weights?: number[] | null;
             /** Params */
             params: number[];
+            /** Result Id */
+            result_id?: string | null;
             /** X */
             x: number[];
             /** X Data */
@@ -7510,6 +7540,16 @@ export interface components {
             /** I */
             i: number;
         };
+        /** CurveRequest */
+        CurveRequest: {
+            /**
+             * Obs Var
+             * @default false
+             */
+            obs_var?: boolean;
+            /** Result Id */
+            result_id: string;
+        };
         /**
          * CustomTicksSpec
          * @description Explicit major ticks, optionally labelled (``calc.axis_scales``).
@@ -7854,6 +7894,8 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Display Points */
+            display_points?: number | null;
             /** Dy */
             dy?: number[] | null;
             /** Equation */
@@ -8680,6 +8722,8 @@ export interface components {
              * @enum {string}
              */
             covariance?: "jtj" | "hessian";
+            /** Display Points */
+            display_points?: number | null;
             /** Dy */
             dy?: number[] | null;
             /** Fixed */
@@ -15491,6 +15535,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    curve_api_fitting_curve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurveRequest"];
             };
         };
         responses: {

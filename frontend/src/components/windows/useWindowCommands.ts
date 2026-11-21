@@ -100,6 +100,10 @@ const SNAPSHOT_EMPTY_REASON = "Nothing to snapshot: show a plot on the Plot tab 
  *  looked broken. PlotToolbar's ⊞ button (next to the ⎘ raster snapshot) only
  *  renders on the XY stage, where the bundle is always published. */
 export function snapshotToNewWindow(): void {
+  // A large fit's display curve is frozen at full resolution (P4 phase 2).
+  if (useApp.getState().fitOverlay?.full) {
+    return void runLazy("Loading window actions…", () => import("../../store/fitOverlayUpgrade")).then((m) => m.snapshotAfterUpgrade(snapshotToNewWindow), onLoadFailure);
+  }
   const live = readLivePlotSnapshot();
   if (!live) {
     const reason = livePlotSnapshotAltMode() ? SNAPSHOT_ALT_MODE_REASON : SNAPSHOT_EMPTY_REASON;

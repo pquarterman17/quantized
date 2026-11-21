@@ -55,7 +55,11 @@ export function withDocumentOverlays(
   // A fit marked stale (its source changed after it ran) is drawn nowhere --
   // the focused canvas and a background window refuse it the same way.
   const stale = opts.staleFits?.includes(ds.id) ?? false;
-  const fit = stale ? null : fitFromDocument(doc.overlays, ds);
+  // A saved DISPLAY curve (a large fit, lib/fitCurve) is a thinned picture:
+  // a document export leaves it out and says so rather than ship that
+  // picture as the fit (the live canvas export upgrades it, lib/exportActive).
+  const saved = stale ? null : fitFromDocument(doc.overlays, ds);
+  const fit = saved?.full ? null : saved;
   const sources = {
     fitOverlay: fit,
     // A Peak Analyzer fit's fitted background goes with its fit (review N9).

@@ -134,6 +134,23 @@ export interface FitOverlay {
    *  and unstyled Line data gains markers (lib/fitOverlayStyle.ts). Quick Fit,
    *  the peak envelope, reflectivity, ... leave it unset and keep the plain look. */
   curveFit?: true;
+  /** A DISPLAY curve (P4 phase 2, lib/fitCurve.ts): `y` holds the fit only
+   *  at its display rows (undefined = drawn across, null = a gap) and the
+   *  full-resolution curve is fetched from here (`fullFitOverlay`). */
+  full?: FitCurveSource;
+}
+
+/** Where a display curve's full resolution comes from (lib/fitCurve.ts):
+ *  the server's stored fit by `resultId`, else `model` evaluated at
+ *  `params` on the fit's own x -- bit-identical to the fit's `yFit`. */
+export interface FitCurveSource {
+  resultId: string | null;
+  model: string;
+  params: number[];
+  /** The dataset row of each fitted point, in fit order. */
+  rows: number[];
+  /** Each fitted point's x, as posted to the fit. */
+  x: number[];
 }
 
 /** Peak markers to overlay (points only). `y` is sparse — null except at the

@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { DataTable } from "../../primitives/DataTable";
 import type { DiagnosticsResult } from "../../../lib/api/fitStats";
 import { fitDiagnosticsFor } from "../../../lib/api/fitDiagnosticsFor";
+import { curveSourceOf, fullFitResult } from "../../../lib/fitCurve";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CalcResult } from "../../../lib/types";
 
@@ -68,8 +69,10 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
   useEffect(() => {
     setDiag(null);
     setError(null);
-    const residuals = result.residuals as (number | null)[] | undefined;
-    if (!open || !Array.isArray(residuals)) return;
+    // A display-curve result (lib/fitCurve) has no residuals in memory: by
+    // id they are not needed, and the fallback fetches them.
+    const display = curveSourceOf(result) != null;
+    if (!open || (!display && !Array.isArray(result.residuals))) return;
     const ctrl = new AbortController();
     const nParams = Number(result.nFree ?? (result.params as number[] | undefined)?.length ?? 0);
     // The fit's own weights (a direct column as given, or 1/dy²), so n, AIC
@@ -77,7 +80,8 @@ export default function FitDiagnosticsSection({ result, fitData }: Props) {
     // zero-weight outlier was being counted (integration review item 2).
     // By id the server applies the weights it fitted with (the same vector).
     // The Q-Q pairs are not shown here, so they come back thinned to 2.
-    const arrays = () => {
+    const arrays = async () => {
+      const residuals = ((await fullFitResult(result, fitData.y)).residuals as (number | null)[] | undefined) ?? [];
       const weights = fitData.weights ?? (fitData.dy ? fitData.dy.map((d) => 1 / (d * d)) : null);
       return {
         y: fitData.y,

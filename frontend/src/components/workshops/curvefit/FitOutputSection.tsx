@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 
-import { fitBands } from "../../../lib/api/fitStats";
+import { fitBandsFor, fullFitResult } from "../../../lib/fitCurve";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
 import { addDerivedColumn } from "../../../store/derivedColumnRun";
@@ -61,16 +61,19 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
         return;
       }
       const band = ci || pi
-        ? await fitBands({
+        ? await fitBandsFor({
           model,
           params: (result.params as number[] | undefined) ?? [],
           covar: (result.covar as number[][] | null | undefined) ?? null,
           x: fitData.x,
           ...bandFitStats(result, fitData.x),
           level,
-        })
+        }, result, fitData)
         : null;
-      const data = resultSheetData({ source: dataset, model, paramNames, result, fitData, band, want: { fitted, residual, ci, pi } });
+      // Written at full resolution: a display-curve fit's yFit and residuals
+      // are fetched by id first (lib/fitCurve).
+      const full = fitted || residual ? await fullFitResult(result, fitData.y) : result;
+      const data = resultSheetData({ source: dataset, model, paramNames, result: full, fitData, band, want: { fitted, residual, ci, pi } });
       const name = `${dataset.name} — ${model} fit results`;
       // Beside the source, without leaving it: the plot, the curve and this
       // panel stay on the fitted worksheet (store/addWorksheetQuietly.ts).
