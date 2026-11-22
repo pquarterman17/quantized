@@ -38,6 +38,7 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useRoisStore } from "../../../store/hooks/useRoisStore";
 import { useCutLanding } from "../../Stage/useCutLanding";
+import { ROI_BATCH_SUMMARY_PRODUCER, ROI_CUT_PRODUCER } from "./roiCutProducer";
 import { csvBlob, csvTextCell } from "../../../lib/csvCell";
 import { datasetsInputsToken } from "../workbench/inputsKey";
 
@@ -174,7 +175,7 @@ export interface RoiBatchState {
 }
 
 export function useRoiBatch(): RoiBatchState {
-  const { land } = useCutLanding();
+  const { landCommitted } = useCutLanding();
   // A `useState` alone re-entrancy check is stale until the NEXT render —
   // two synchronous `applyToSelected()` calls (e.g. a double-click before
   // React processes the first `setBusy(true)`) would both read the same
@@ -229,6 +230,7 @@ export function useRoiBatch(): RoiBatchState {
       const skipped: BatchNamedReason[] = [];
       const statsErrored: BatchNamedReason[] = [];
       const rows: BatchSummaryRow[] = [];
+      const rowSources: typeof resolved = [];
 
       for (const ds of resolved) {
         const reason = batchEligibility(ds.data, normalized);
@@ -239,10 +241,13 @@ export function useRoiBatch(): RoiBatchState {
 
         try {
           const body = roiBoxBody(ds.data, normalized, opts) as unknown as BoxCutRequest;
+          const { dataset: _rows, ...cutSettings } = body as unknown as { dataset: unknown } & Record<string, unknown>;
           const cut = await rsmBoxCut(body);
-          const id = await land(Promise.resolve(cut), `${ds.name}: `);
-          if (id) newIds.push(id);
-          else errored.push({ name: ds.name, reason: "landing failed" });
+          const landed = await landCommitted(Promise.resolve(cut), { producer: ROI_CUT_PRODUCER, sources: [ds], settings: { kind: "box", ...cutSettings } }, `${ds.name}: `);
+          if (!landed) errored.push({ name: ds.name, reason: "landing failed" });
+          // A repeat of the same cut adds nothing: say so instead of counting it as new.
+          else if (landed.kind === "existing") skipped.push({ name: ds.name, reason: "this cut is already in the Library; nothing was duplicated" });
+          else newIds.push(landed.id);
         } catch (e) {
           errored.push({ name: ds.name, reason: e instanceof Error ? e.message : "cut failed" });
         }
@@ -251,6 +256,7 @@ export function useRoiBatch(): RoiBatchState {
           try {
             const statsBody = roiStatsBody(ds.data, normalized) as unknown as BoxStatsRequest;
             rows.push({ name: ds.name, stats: await rsmBoxStats(statsBody) });
+            rowSources.push(ds);
           } catch (e) {
             statsErrored.push({ name: ds.name, reason: e instanceof Error ? e.message : "stats failed" });
           }
@@ -271,8 +277,12 @@ export function useRoiBatch(): RoiBatchState {
 
       let summaryLanded = false;
       if (summaryTable && rows.length > 0) {
-        const summaryId = await land(Promise.resolve(buildBatchSummaryDataStruct(rows)));
-        summaryLanded = summaryId != null;
+        const summary = await landCommitted(Promise.resolve(buildBatchSummaryDataStruct(rows)), {
+          producer: ROI_BATCH_SUMMARY_PRODUCER,
+          sources: rowSources,
+          settings: { kind: "summary", box: normalized },
+        });
+        summaryLanded = summary != null && summary.kind !== "existing";
       }
 
       setOutcome({ appliedCount: newIds.length, skipped, errored, statsErrored, newIds, plottedTogether, summaryLanded });
