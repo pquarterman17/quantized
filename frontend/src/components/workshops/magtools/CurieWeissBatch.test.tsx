@@ -99,7 +99,7 @@ describe("Curie-Weiss batch", () => {
 
 describe("Curie-Weiss batch on a multi-X sheet", () => {
   it("reads the response's OWN temperature column, as the single run does", async () => {
-    const { curieWeissBatchItem } = await import("./curieWeissBatch");
+    const { curieWeissBatchItem } = await import("./curieWeissBatchItems");
     const data: DataStruct = {
       time: [1, 2, 3, 4],
       values: [[100, 0.04, 110, 0.05], [200, 0.02, 210, 0.03], [300, 0.013, 310, 0.02], [400, 0.01, 410, 0.015]],

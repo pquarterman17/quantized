@@ -5,7 +5,7 @@ import { useCallback } from "react";
 
 import type { Dataset } from "../../../lib/types";
 import StatsBatchSection from "../analysisselection/StatsBatchSection";
-import { CURIE_WEISS_BATCH_HEADERS, curieWeissBatchBlockReason, curieWeissBatchItem } from "./curieWeissBatch";
+import { CURIE_WEISS_BATCH_HEADERS, curieWeissBatchBlockReason, curieWeissBatchItem } from "./curieWeissBatchItems";
 import type { CurieWeissBasisChoice } from "./curieWeissData";
 
 interface Props {
