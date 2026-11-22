@@ -82,15 +82,15 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Ellipse fit | 2 numeric columns | no | no |
     | Hysteresis | numeric Y (magnetometry) | yes | no |
     | Magnetometry tools | numeric Y (magnetometry) | no | no |
-    | Find peaks | numeric Y | yes (integrate windows) | no |
-    | Peak analyzer (wizard) | numeric Y | yes | no |
-    | Baseline | numeric Y | recipe only | no |
+    | Find peaks | numeric Y | yes (integrate windows) | yes |
+    | Peak analyzer (wizard) | numeric Y | yes | yes |
+    | Baseline | numeric Y | recipe only | yes |
     | Reflectivity / Reflectometry view | numeric Y (refl/XRD) | no | no |
     | RSM, ROI cuts | 2-D map | ROI cuts only | no |
     | Williamson-Hall | any (typed peaks ok) | yes | no |
     | Pawley, XRD reference | 2θ X axis | no | no |
     | Film thickness FFT, Reflectivity FFT | numeric Y | no | no |
-    | Signal Processing | numeric Y | recipe only | no |
+    | Signal Processing | numeric Y | recipe only | yes |
     | Average curves | 2+ worksheets | n/a (is the batch) | no |
     | SIMS | numeric Y (SIMS) | yes | no |
     | Distribution | numeric Y | no | yes |
@@ -101,8 +101,19 @@ inconsistently exposed, and do not all share the same result lifecycle.
     Gaps (recorded, not built): Batch is missing for Surface fit, Optical gap,
     Ellipse fit, Magnetometry tools, Pawley, XRD reference, both FFT tools,
     Reflectivity, and every statistics tool; By is missing everywhere except
-    Curve fit, Distribution and Fit Y by X. Baseline and Signal Processing
-    reach batch only through Pipeline Studio recipes.
+    Curve fit, Distribution, Fit Y by X and (lane C, 2026-11-22) Find peaks,
+    Peak analyzer, Baseline and Signal Processing. Signal Processing reaches
+    batch only through Pipeline Studio recipes.
+  - **By slice landed (#22, lane C):** one shared runner
+    (`components/workshops/byrun/`: `useByLevelRun`, `ByLevelRunSection`,
+    `levelPairs`) runs a tool's own computation once per level of a
+    categorical column and shows one summary row per level (display-only; a
+    failing level is an error row). Wired into Find peaks (peaks, strongest
+    centre / SNR), Peak analyzer (recipe baseline + find; step 2), Baseline
+    (baseline range, residual RMS; the hand-placed anchor method is refused
+    with a reason) and Signal Processing (correction and spectral operations;
+    the sigop filters and two-worksheet correlation say they are not
+    available). Tests: `byrun/byLevelTools.test.tsx`.
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.
