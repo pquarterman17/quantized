@@ -187,7 +187,15 @@ describe("the reopen session carries the pre-commit reason", () => {
     useToolReopen.getState().setMode("ellipse-fit", "replace");
     expect(useToolReopen.getState().sessions["ellipse-fit"].mode).toBe("new");
     useToolReopen.getState().setLayoutBlocked("ellipse-fit", null);
-    useToolReopen.getState().setMode("ellipse-fit", "replace");
-    expect(useToolReopen.getState().sessions["ellipse-fit"].mode).toBe("replace");
+    expect(useToolReopen.getState().sessions["ellipse-fit"].mode).toBe("replace"); // the automatic downgrade is undone
+  });
+
+  it("a mode the user picked is never overridden when a block clears", () => {
+    const session = { resultId: "r", resultName: "R", sourceId: "src", outputId: "o", outputName: "O", seed: null, extra: null, notice: null, replaceBlocked: null };
+    useToolReopen.getState().start("ellipse-fit", session);
+    useToolReopen.getState().setMode("ellipse-fit", "new");
+    useToolReopen.getState().setLayoutBlocked("ellipse-fit", "x");
+    useToolReopen.getState().setLayoutBlocked("ellipse-fit", null);
+    expect(useToolReopen.getState().sessions["ellipse-fit"].mode).toBe("new");
   });
 });

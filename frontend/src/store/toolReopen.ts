@@ -26,6 +26,8 @@ export interface ReopenSession {
   /** Why the NEW computation's columns cannot replace the old output's (lane
    *  RPL: a bound column would vanish); set by the commit hook before commit. */
   layoutBlocked: string | null;
+  /** The layout block (not the user) moved the mode to "new": clearing it moves it back. */
+  autoNew?: boolean;
   mode: ReopenMode;
 }
 
@@ -53,12 +55,15 @@ export const useToolReopen = create<State>((set) => ({
   setMode: (tool, mode) => set((s) => {
     const session = s.sessions[tool];
     if (!session || (mode === "replace" && (session.replaceBlocked || session.layoutBlocked))) return s;
-    return { sessions: { ...s.sessions, [tool]: { ...session, mode } } };
+    return { sessions: { ...s.sessions, [tool]: { ...session, mode, autoNew: false } } };
   }),
   setLayoutBlocked: (tool, reason) => set((s) => {
     const session = s.sessions[tool];
     if (!session || session.layoutBlocked === reason) return s;
-    return { sessions: { ...s.sessions, [tool]: { ...session, layoutBlocked: reason, ...(reason && session.mode === "replace" ? { mode: "new" as const } : {}) } } };
+    const downgrade = reason !== null && session.mode === "replace";
+    const restore = reason === null && session.autoNew === true;
+    const mode = downgrade ? ("new" as const) : restore ? ("replace" as const) : session.mode;
+    return { sessions: { ...s.sessions, [tool]: { ...session, layoutBlocked: reason, mode, autoNew: downgrade || (session.autoNew === true && reason !== null) } } };
   }),
 }));
 
