@@ -29,7 +29,7 @@ export function overlaysOn(o: PlotOverlays | null | undefined): o is PlotOverlay
   return !!o && !!(o.line || o.smoother || o.ellipse);
 }
 
-/** A stored value (a `.dwk`, a template, a recipe) -> a valid overlay set, or
+/** A stored value (a `.dwk` plot view) -> a valid overlay set, or
  *  null (off). Unknown or malformed pieces are dropped rather than trusted. */
 export function sanitizePlotOverlays(raw: unknown): PlotOverlays | null {
   if (!isObj(raw)) return null;
@@ -63,9 +63,12 @@ export function overlayViewRefusal(v: {
   exchangeXY: boolean;
   waterfall: number;
   waterfallDx: number;
+  /** Any series drawn as horizontal bars turns the whole layer (`lib/uplotOrient.ts`). */
+  horizontalBars?: boolean;
 }): string | null {
   if (v.xScale !== "linear" || v.yScale !== "linear") return "need linear axes (not log or reciprocal)";
   if (v.exchangeXY) return "are not drawn with exchanged X and Y axes";
+  if (v.horizontalBars) return "are not drawn on a graph turned by horizontal bars";
   if (v.waterfall !== 0 || v.waterfallDx !== 0) return "are not drawn on a waterfall (its offsets are display-only)";
   return null;
 }

@@ -42,6 +42,7 @@ describe("plot overlays model", () => {
     expect(overlayViewRefusal({ ...ok, yScale: "log" })).toMatch(/linear/);
     expect(overlayViewRefusal({ ...ok, exchangeXY: true })).toMatch(/exchanged/);
     expect(overlayViewRefusal({ ...ok, waterfall: 0.2 })).toMatch(/waterfall/);
+    expect(overlayViewRefusal({ ...ok, horizontalBars: true })).toMatch(/horizontal bars/);
   });
 
   it("the export carries them only where the canvas draws them", () => {
@@ -50,5 +51,8 @@ describe("plot overlays model", () => {
     expect(viewOverrides({ ...v, xScale: "log" }, [])?.overlays).toBeUndefined();
     expect(viewOverrides({ ...v, exchangeXY: true }, [])?.overlays).toBeUndefined();
     expect(viewOverrides({ ...v, waterfall: 0.1 }, [])?.overlays).toBeUndefined();
+    // Horizontal bars turn the layer: the canvas refuses, and the backend would 422.
+    expect(viewOverrides({ ...v, seriesStyles: { 0: { bars: "horizontal" } } }, [])?.overlays).toBeUndefined();
+    expect(viewOverrides({ ...v, seriesStyles: { 0: { bars: true } } }, [])?.overlays).toEqual(ALL);
   });
 });

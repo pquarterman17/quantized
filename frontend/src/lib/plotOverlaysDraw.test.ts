@@ -55,7 +55,7 @@ describe("drawOverlays", () => {
     const texts: string[] = [];
     const ctx = new Proxy({ fillText: (t: string) => texts.push(t), measureText: () => ({ width: 50 }) } as Record<string, unknown>, {
       get: (t, k) => (k in t ? t[k as string] : () => undefined),
-      set: () => true,
+      set: (t, k, v) => ((t[k as string] = v), true),
     });
     const u = {
       ctx,
@@ -72,6 +72,7 @@ describe("drawOverlays", () => {
       addPath() {}
       moveTo() {}
       lineTo() {}
+      closePath() {}
     };
   });
 
@@ -83,6 +84,25 @@ describe("drawOverlays", () => {
       ellipse: { x: [1, 2, 1], y: [1, 2, 3], label: "95% density ellipse" },
     }), null);
     expect(texts).toEqual(["95% confidence band", "Line of fit: y = x", "LOWESS smoother", "95% density ellipse"]);
+  });
+
+  it("fills a band as ONE closed polygon: lower edge out, upper edge back", () => {
+    type Op = [string, ...number[]];
+    class RecPath {
+      ops: Op[];
+      constructor(from?: RecPath) { this.ops = from ? [...from.ops] : []; }
+      addPath(p: RecPath) { this.ops.push(...p.ops); }
+      moveTo(x: number, y: number) { this.ops.push(["M", x, y]); }
+      lineTo(x: number, y: number) { this.ops.push(["L", x, y]); }
+      closePath() { this.ops.push(["Z"]); }
+    }
+    (globalThis as unknown as { Path2D: unknown }).Path2D = RecPath;
+    const filled: RecPath[] = [];
+    const { u } = fakePlot();
+    (u as unknown as { ctx: { fill: (p: RecPath) => void } }).ctx.fill = (p) => filled.push(p);
+    drawOverlays(u, res({ line: { x: [1, 2], y: [1, 2], label: "fit", band: { lo: [0, 1], hi: [2, 3], label: "band" } } }), null);
+    expect(filled).toHaveLength(1);
+    expect(filled[0]!.ops).toEqual([["M", 10, 0], ["L", 20, 10], ["L", 20, 30], ["L", 10, 20], ["Z"]]);
   });
 
   it("says why an overlay was refused instead of drawing it", () => {

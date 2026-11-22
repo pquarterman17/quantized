@@ -66,15 +66,17 @@ function ink(u: uPlot, col: number): string {
   return typeof v === "string" ? v : getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#888";
 }
 
-function path(u: uPlot, c: Curve): Path2D | null {
-  const p = new Path2D();
+/** One polyline through the curve's points; `into` continues an open path (a
+ *  band's upper edge joins its lower edge, so the two close as ONE polygon). */
+function path(u: uPlot, c: Curve, into?: Path2D): Path2D | null {
+  const p = into ?? new Path2D();
   let any = false;
   c.x.forEach((xv, i) => {
     const yv = c.y[i];
     if (xv == null || yv == null) return;
     const px = u.valToPos(xv, "x", true), py = u.valToPos(yv, "y", true);
     if (!Number.isFinite(px) || !Number.isFinite(py)) return;
-    if (any) p.lineTo(px, py); else p.moveTo(px, py);
+    if (any || into) p.lineTo(px, py); else p.moveTo(px, py);
     any = true;
   });
   return any ? p : null;
@@ -98,10 +100,11 @@ export function drawOverlays(u: uPlot, results: readonly OverlayResult[], refusa
     const name = (t: string) => (several && res.label ? `${res.label}: ${t}` : t);
     const b = res.line?.band;
     if (res.line && b) {
-      const lo = path(u, { x: res.line.x, y: b.lo }), hi = path(u, { x: [...res.line.x].reverse(), y: [...b.hi].reverse() });
-      if (lo && hi) {
-        const area = new Path2D(lo);
-        area.addPath(hi);
+      // Lower edge left-to-right, then upper edge right-to-left, in ONE subpath.
+      const lo = path(u, { x: res.line.x, y: b.lo });
+      const area = lo && path(u, { x: [...res.line.x].reverse(), y: [...b.hi].reverse() }, lo);
+      if (area) {
+        area.closePath();
         ctx.globalAlpha = 0.15;
         ctx.fillStyle = color;
         ctx.fill(area);

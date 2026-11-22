@@ -17,6 +17,7 @@ import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { useFocusedRampedStyles } from "./useSeriesRamp";
 import { useStageOverlays } from "./useStageOverlays";
 import { resolvePlotBg } from "../../lib/uplotOpts";
+import { useFocusedWindowChrome } from "./useFocusedWindowChrome";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
@@ -95,22 +96,9 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
-  // Item 18 (per-window background override): PlotStage always renders the
-  // FOCUSED window (whether the sole maximized default, or the focused frame
-  // inside an MDI canvas — see WindowCanvas), so its own `bg` is looked up by
-  // the CURRENT focusedWindowId rather than threaded in as a prop. A derived
-  // string selector — re-renders only when the RESULT changes, not a
-  // `plotWindows` array-identity dependency.
-  const winBg = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.bg);
+  // Items 18 / 13: the focused window's background and link groups (useFocusedWindowChrome).
+  const { bg: winBg, linkGroup: winLinkGroup, linkYGroup: winLinkYGroup } = useFocusedWindowChrome();
   const { axesBg, inkColor, isDark: isDarkBg } = resolvePlotBg(winBg);
-  // Item 13 (cross-window link groups): the FOCUSED window's own link group,
-  // looked up the same way as `winBg` above (a derived primitive selector,
-  // never a `plotWindows` array-identity dependency). Resolved to the uPlot
-  // sync key (or undefined = unlinked) for PlotViewport.
-  const winLinkGroup = useApp(
-    (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
-  );
-  const winLinkYGroup = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkYGroup ?? null);
   const focusedBindings = focusedDocument?.bindings;
   const tool = useApp((s) => s.plotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.

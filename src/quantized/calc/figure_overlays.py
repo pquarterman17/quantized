@@ -51,7 +51,8 @@ __all__ = [
 LINE_MIN_POINTS = 3
 SMOOTHER_MIN_POINTS = 8
 ELLIPSE_MIN_POINTS = 5
-#: LOWESS is O(n^2) in Python; past this the smoother is refused, not slow.
+#: LOWESS is O(n^2) in Python (~1 s at 5000 points); past this the smoother is
+#: refused, not slow. The cap is per REQUEST: the curves of one plot share it.
 SMOOTHER_MAX_POINTS = 5000
 #: Points the fitted line and its band are evaluated at, across the data's X range.
 GRID_POINTS = 60
@@ -245,9 +246,16 @@ def _ellipse(
 _DRAW = {"line": _line, "smoother": _smoother, "ellipse": _ellipse}
 
 
-def compute_overlays(x: Any, y: Any, spec: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+def compute_overlays(
+    x: Any,
+    y: Any,
+    spec: Mapping[str, Mapping[str, Any]],
+    smoother_room: int = SMOOTHER_MAX_POINTS,
+) -> dict[str, Any]:
     """Every overlay in the (validated) ``spec`` for one series: ``{kind:
-    result}`` for those drawn and ``refused: {kind: reason}`` for those not."""
+    result}`` for those drawn and ``refused: {kind: reason}`` for those not.
+    ``smoother_room`` is what is left of the smoother's point cap after the
+    plot's earlier curves (``series_overlays``)."""
     result: dict[str, Any] = {"refused": {}}
     if not spec:
         return result
@@ -258,6 +266,16 @@ def compute_overlays(x: Any, y: Any, spec: Mapping[str, Mapping[str, Any]]) -> d
         return result
     for kind in _KINDS:
         if kind not in spec:
+            continue
+        if (
+            kind == "smoother"
+            and SMOOTHER_MIN_POINTS <= xv.size > smoother_room < SMOOTHER_MAX_POINTS
+        ):
+            result["refused"][kind] = (
+                f"the smoothers of one plot are limited to {SMOOTHER_MAX_POINTS} points in "
+                f"total ({max(smoother_room, 0)} left for this curve, which has {xv.size}); "
+                "thin or bin the data first"
+            )
             continue
         try:
             result[kind] = _DRAW[kind](xv, yv, spec[kind])
@@ -275,5 +293,14 @@ def overlay_specs_label(label: str, text: str, several: bool) -> str:
 def series_overlays(
     series: Sequence[tuple[str, Any]], x: Any, spec: Mapping[str, Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
-    """``compute_overlays`` for each ``(label, y)`` against the shared ``x``."""
-    return [{"label": label, **compute_overlays(x, y, spec)} for label, y in series]
+    """``compute_overlays`` for each ``(label, y)`` against the shared ``x``. The
+    smoother's point cap is shared by the curves, so one request (a live redraw
+    or an export) never runs more than one capped LOWESS's worth of work."""
+    out: list[dict[str, Any]] = []
+    room = SMOOTHER_MAX_POINTS
+    for label, y in series:
+        res = compute_overlays(x, y, spec, smoother_room=room)
+        if "smoother" in res:
+            room -= int(res["smoother"]["n"])
+        out.append({"label": label, **res})
+    return out

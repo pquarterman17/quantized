@@ -18,17 +18,22 @@ from typing import Any
 from numpy.typing import ArrayLike
 
 from quantized.calc.figure_excluded import EXCLUDED_SUFFIX
+from quantized.calc.figure_orient import horizontal_bars
 from quantized.calc.figure_overlays import (
     overlay_specs_label,
     series_overlays,
     validate_overlay_spec,
 )
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["apply_overlays", "validate_overlays_override"]
 
 
 def validate_overlays_override(
-    ov: Mapping[str, Any], x_scale: str, y_scale: str
+    ov: Mapping[str, Any],
+    x_scale: str,
+    y_scale: str,
+    series_styles: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> dict[str, dict[str, Any]]:
     spec = validate_overlay_spec(ov.get("overlays"))
     if spec and (x_scale != "linear" or y_scale != "linear"):
@@ -37,6 +42,10 @@ def validate_overlays_override(
         )
     if spec and ov.get("exchange_xy"):
         raise ValueError("overlays are not supported together with exchange_xy")
+    # Horizontal bars turn the whole layer (calc.figure_orient): the screen refuses the
+    # overlays there too (lib/plotOverlays.ts overlayViewRefusal).
+    if spec and horizontal_bars(series_styles):
+        raise ValueError("overlays are not supported on a graph with horizontal bars")
     return spec
 
 
@@ -58,12 +67,18 @@ def apply_overlays(
     x_scale: str,
     y_scale: str,
 ) -> None:
-    spec = validate_overlays_override(ov, x_scale, y_scale)
+    spec = validate_overlays_override(ov, x_scale, y_scale, series_styles)
     if not spec:
         return
-    from matplotlib.legend import Legend
-    from matplotlib.lines import Line2D
-    from matplotlib.patches import Patch
+    with heavy_imports("matplotlib.legend", "matplotlib.lines", "matplotlib.patches"):
+        from matplotlib.legend import Legend
+        from matplotlib.lines import Line2D
+        from matplotlib.patches import Patch
+
+    # The limits are final here (drop lines and the inset were drawn against them)
+    # and the screen keeps its data range: an ellipse or band reaching past the data
+    # must not widen the exported view.
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
 
     picks = []
     for i, (label, y) in enumerate(series):
@@ -108,6 +123,8 @@ def apply_overlays(
         for kind, why in res["refused"].items():
             handles.append(Line2D([], [], linestyle="none"))
             labels.append(overlay_specs_label(name, f"{kind} not drawn: {why}", several))
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     if handles:
         legend = Legend(ax, handles, labels, loc="lower right", fontsize="x-small", frameon=False)
         ax.add_artist(legend)

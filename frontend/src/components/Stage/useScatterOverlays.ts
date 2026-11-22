@@ -7,7 +7,7 @@
 // is re-attached whenever `plotRef.current` is a new instance (checked after
 // every render); it reads the latest results from a ref and a result arriving
 // asks the instance for a redraw. A graph the overlays cannot honour (log axis,
-// exchanged axes, waterfall, a thinned payload) draws only the key naming why.
+// exchanged axes or horizontal bars, waterfall, a thinned payload) draws only the key naming why.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type uPlot from "uplot";
@@ -41,7 +41,7 @@ export function useScatterOverlays(
   const attached = useRef<uPlot | null>(null);
   const [epoch, setEpoch] = useState(0);
   const key = JSON.stringify(overlaysWire(overlays) ?? null);
-  const viewRefusal = overlayViewRefusal({ ...view, exchangeXY: !!view.exchangeXY, waterfall: view.waterfall ?? 0, waterfallDx: view.waterfallDx ?? 0 });
+  const viewRefusal = overlayViewRefusal({ ...view, exchangeXY: !!view.exchangeXY, waterfall: view.waterfall ?? 0, waterfallDx: view.waterfallDx ?? 0, horizontalBars: (styles ?? []).some((s) => s?.bars === "horizontal") });
   const on = overlaysOn(overlays) && payload !== null;
 
   useEffect(() => {
@@ -57,17 +57,19 @@ export function useScatterOverlays(
       mod.current ??= await import("../../lib/plotOverlaysDraw");
       const m = mod.current;
       const inputs = viewRefusal ? { refusal: viewRefusal } : m.overlayInputs(payload, hidden, styles);
+      let next: Shown;
       if ("refusal" in inputs) {
-        shown.current = { results: [], refusal: inputs.refusal };
+        next = { results: [], refusal: inputs.refusal };
       } else {
         try {
-          shown.current = { results: await m.fetchOverlays(inputs, overlays, ctl.signal), refusal: null };
+          next = { results: await m.fetchOverlays(inputs, overlays, ctl.signal), refusal: null };
         } catch (err) {
-          if (ctl.signal.aborted) return;
-          shown.current = { results: [], refusal: `not drawn: ${err instanceof Error ? err.message : "the request failed"}` };
+          next = { results: [], refusal: `not drawn: ${err instanceof Error ? err.message : "the request failed"}` };
         }
       }
+      // A superseded request (its inputs changed while it ran) never replaces what is shown.
       if (ctl.signal.aborted) return;
+      shown.current = next;
       setEpoch((e) => e + 1);
       plotRef.current?.redraw(false);
     })();

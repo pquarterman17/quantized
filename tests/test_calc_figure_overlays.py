@@ -157,3 +157,40 @@ def test_export_refuses_log_axis_and_exchange() -> None:
         _svg({"overlays": ALL}, x_scale="log")
     with pytest.raises(ValueError, match="exchange"):
         _svg({"overlays": ALL, "exchange_xy": True})
+
+
+def test_smoother_cap_is_shared_by_the_curves_of_one_request() -> None:
+    from quantized.calc.figure_overlays import SMOOTHER_MAX_POINTS, series_overlays
+
+    x = np.arange(3000.0)
+    spec = validate_overlay_spec({"smoother": {}})
+    first, second = series_overlays([("A", x % 7), ("B", x % 5)], x, spec)
+    assert first["smoother"]["n"] == 3000
+    assert "smoother" not in second and str(SMOOTHER_MAX_POINTS) in second["refused"]["smoother"]
+    assert "2000 left" in second["refused"]["smoother"]
+
+
+def test_export_overlays_do_not_widen_the_final_limits() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+
+    from quantized.calc.figure_overlays_draw import apply_overlays
+
+    x, y = _data(40)
+    ax = Figure().add_subplot()
+    line = ax.plot(x, y)[0]
+    before = (ax.get_xlim(), ax.get_ylim())
+    ov = {"overlays": {"ellipse": {"level": 0.99}, "line": {"band": "prediction"}}}
+    apply_overlays(ax, x, [("s", y)], None, ov, [line], "linear", "linear")
+    assert (ax.get_xlim(), ax.get_ylim()) == before
+
+
+def test_export_refuses_horizontal_bars_and_x_breaks() -> None:
+    styles = [{"bars": "horizontal"}]
+    with pytest.raises(ValueError, match="horizontal bars"):
+        _svg({"overlays": ALL}, series_styles=styles)
+    assert _svg(None, series_styles=styles)  # the bars alone still export
+    with pytest.raises(ValueError, match="x_breaks"):
+        _svg({"overlays": ALL, "x_breaks": [[4.0, 5.0]]})
