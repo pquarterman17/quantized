@@ -1,0 +1,138 @@
+// The "Review inputs" rows of the own-pick statistics tools: the tool's column
+// picks (by role) and the settings its run reads, built from the SAME state the
+// tool runs on (each panel passes its live picks), so the card cannot say
+// something the run does not do. Pure: no store, no React. A pick that is not
+// made reads "not picked"; a column that no longer exists reads "missing".
+
+import { analysisColumnName, type AnalysisInputs } from "../../../lib/analysisInputs";
+import type { StatsTestId } from "../../../lib/api/statsTests";
+import { testDef, type TestParams, type TestSelection } from "../../../lib/statsTests";
+import type { Dataset } from "../../../lib/types";
+
+export interface ReviewRow {
+  label: string;
+  value: string;
+}
+
+const datasetOf = (inputs: AnalysisInputs | null): Dataset | null => inputs?.dataset ?? null;
+
+function name(dataset: Dataset | null, key: number | null | undefined): string {
+  if (key === null || key === undefined) return "not picked";
+  // No resolved worksheet (loading / failed): the pick exists but cannot be named.
+  if (!dataset) return key < 0 ? "X column" : `column ${key + 1}`;
+  if (key < -1 || key >= dataset.data.labels.length) return "missing";
+  return analysisColumnName(dataset, key);
+}
+
+function names(dataset: Dataset | null, keys: readonly number[]): string {
+  return keys.length === 0 ? "not picked" : keys.map((key) => name(dataset, key)).join(", ");
+}
+
+const ALPHA_TESTS: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["dunnett", "anova-rm", "anova2-unbalanced", "regression-multi"]);
+const on = (value: boolean): string => (value ? "on" : "off");
+const optional = (dataset: Dataset | null, key: number | null): string => (key === null ? "none" : name(dataset, key));
+
+export function distributionRows(inputs: AnalysisInputs, s: { col: number; byCol: number | null; fit: string }): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  return [
+    { label: "Column", value: name(ds, s.col) },
+    { label: "By", value: optional(ds, s.byCol) },
+    { label: "Fitted distribution", value: s.fit },
+  ];
+}
+
+export function outlierRows(
+  inputs: AnalysisInputs,
+  s: { col: number; method: string; alpha: number; k: number; threshold: number },
+): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  const rows: ReviewRow[] = [{ label: "Column", value: name(ds, s.col) }, { label: "Method", value: s.method }];
+  if (s.method === "mad") rows.push({ label: "Threshold", value: String(s.threshold) });
+  else rows.push({ label: "Alpha", value: String(s.alpha) });
+  if (s.method === "rosner") rows.push({ label: "Max outliers (k)", value: String(s.k) });
+  return rows;
+}
+
+export function fitYByXRows(
+  inputs: AnalysisInputs,
+  s: { xCol: number; yCol: number; kind: string; order: number; band: string; byCol: number | null },
+): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  return [
+    { label: "X (factor)", value: name(ds, s.xCol) },
+    { label: "Y (response)", value: name(ds, s.yCol) },
+    // Order and band are read by the bivariate leg only.
+    ...(s.kind === "bivariate" ? [{ label: "Polynomial order", value: String(s.order) }, { label: "Band", value: s.band }] : []),
+    { label: "By", value: optional(ds, s.byCol) },
+  ];
+}
+
+export function multivarRows(inputs: AnalysisInputs, s: { selected: readonly number[]; method: string; standardize: boolean }): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  return [
+    { label: "Columns", value: names(ds, s.selected) },
+    { label: "Correlation", value: s.method },
+    { label: "PCA standardize", value: on(s.standardize) },
+  ];
+}
+
+export function variabilityRows(inputs: AnalysisInputs, s: { response: number; a: number; b: number }): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  return [
+    { label: "Response (Y)", value: name(ds, s.response) },
+    { label: "Factor A (outer)", value: name(ds, s.a) },
+    { label: "Factor B (nested in A)", value: name(ds, s.b) },
+  ];
+}
+
+export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: StatsTestId; sel: TestSelection; params: TestParams }): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  const { sel, params } = s;
+  const rows: ReviewRow[] = [{ label: "Test", value: testDef(s.testId).label }];
+  switch (testDef(s.testId).input) {
+    case "one": rows.push({ label: "Column", value: name(ds, sel.x) }); break;
+    case "two":
+    case "paired":
+      rows.push({ label: "First column", value: name(ds, sel.x) }, { label: "Second column", value: name(ds, sel.y) });
+      break;
+    case "groups":
+      if (sel.groupMode === "category") rows.push({ label: "Value", value: name(ds, sel.x) }, { label: "Groups by", value: name(ds, sel.byCol) });
+      else rows.push({ label: "Group columns (first is control)", value: names(ds, sel.cols) });
+      break;
+    case "blocks":
+    case "columns": rows.push({ label: "Columns", value: names(ds, sel.cols) }); break;
+    case "factorial":
+      rows.push({ label: "Response", value: name(ds, sel.x) }, { label: "Factor A", value: name(ds, sel.byCol) }, { label: "Factor B", value: name(ds, sel.byCol2) });
+      break;
+    case "regression":
+      rows.push({ label: "Response", value: name(ds, sel.x) }, { label: "Predictors", value: names(ds, sel.cols.filter((c) => c !== sel.x)) });
+      break;
+    case "none":
+      rows.push(
+        { label: "Mode", value: params.kind }, { label: "Effect size d", value: String(params.effectSize) },
+        { label: "n", value: params.n === null ? "solve" : String(params.n) }, { label: "Target power", value: String(params.power) },
+        { label: "Alpha", value: String(params.alpha) }, { label: "Tails", value: String(params.tails) },
+      );
+      return rows;
+  }
+  // Only what buildTestRequest sends: the panel also shows alpha for tests that ignore it.
+  if (ALPHA_TESTS.has(s.testId)) rows.push({ label: "Alpha", value: String(params.alpha) });
+  if (s.testId === "sign-test" || s.testId === "dunnett") rows.push({ label: "Alternative", value: params.alternative });
+  if (s.testId === "anova2-unbalanced") rows.push({ label: "Sum of squares type", value: String(params.ssType) });
+  if (s.testId === "stepwise") rows.push({ label: "Criterion", value: params.criterion.toUpperCase() }, { label: "Direction", value: params.direction });
+  return rows;
+}
+
+/** `paired` must already be the effective flag (`paired && pairable`). */
+export function chooserRows(
+  inputs: AnalysisInputs,
+  s: { mode: "columns" | "groupby"; cols: readonly number[]; valueCol: number; byCol: number; paired: boolean },
+): ReviewRow[] {
+  const ds = datasetOf(inputs);
+  return [
+    ...(s.mode === "columns"
+      ? [{ label: "Group columns", value: names(ds, s.cols) }]
+      : [{ label: "Value", value: name(ds, s.valueCol) }, { label: "Groups by", value: name(ds, s.byCol) }]),
+    { label: "Paired", value: on(s.paired) },
+  ];
+}
