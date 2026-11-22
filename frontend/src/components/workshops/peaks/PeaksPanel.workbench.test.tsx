@@ -46,6 +46,9 @@ async function findAgain(width: string) {
   fireEvent.click(screen.getByRole("button", { name: "Find again" }));
 }
 
+/** The find a settings change started has settled (the panel says "Finding peaks…" while it runs). */
+const refound = () => waitFor(() => expect(screen.queryByText("Finding peaks…")).toBeNull());
+
 beforeEach(() => {
   vi.clearAllMocks();
   usePendingOps.setState({ ops: [] });
@@ -91,7 +94,8 @@ describe("Peaks panel fits: out of date after the find settings change", () => {
     await fitTogether();
     expect(screen.queryByText(OUT_OF_DATE)).toBeNull();
     await findAgain("0.5");
-    await waitFor(() => expect(findPeaks).toHaveBeenCalledTimes(2));
+    await refound();
+    expect(findPeaks).toHaveBeenCalledTimes(2);
     expect(await screen.findByText(OUT_OF_DATE)).toBeInTheDocument();
   });
 
@@ -99,7 +103,8 @@ describe("Peaks panel fits: out of date after the find settings change", () => {
     render(<PeaksPanel />);
     await fitTogether();
     fireEvent.click(await screen.findByRole("button", { name: "Find again" }));
-    await waitFor(() => expect(findPeaks).toHaveBeenCalledTimes(2));
+    await refound();
+    expect(findPeaks).toHaveBeenCalledTimes(2);
     await screen.findByRole("table", { name: "fitted peaks" });
     expect(screen.queryByText(OUT_OF_DATE)).toBeNull();
   });
@@ -122,8 +127,8 @@ describe("Peaks panel fits: out of date after the find settings change", () => {
     await findAgain("0.5");
     await screen.findByText(OUT_OF_DATE);
     fireEvent.click(screen.getByRole("button", { name: "Fit all together" }));
-    await waitFor(() => expect(fitMultiPeak).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByText(OUT_OF_DATE)).toBeNull());
+    expect(fitMultiPeak).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("button", { name: "→ Report" })).toBeEnabled();
   });
 

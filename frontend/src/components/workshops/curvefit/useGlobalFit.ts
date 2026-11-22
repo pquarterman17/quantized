@@ -167,9 +167,8 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const pickedKeys = picked ?? defaultPick;
 
   // A verdict describes the picks, ticks and start/bound table it was run with:
-  // changing any of them (or the source) drops it rather than leaving it up.
-  const inputsKey = `${source}|${pickedKeys.join(",")}|${shared.map(Number).join("")}|${JSON.stringify(rows)}`;
-  // What a result depends on beyond the form: the model, the X channel and the
+  // changing any of them (or the source) drops it rather than leaving it up; a
+  // fit result is marked out of date by the same key. Beyond the form it depends on the model, the X channel and the
   // picked datasets' row / data identity (an edit to a member's rows or data).
   const pickedIds = [...new Set(pickedKeys.map((k) => k.split(":")[0]!))];
   const dataKey = pickedIds.map((id) => datasetInputsToken(datasets.find((d) => d.id === id))).join("|");
