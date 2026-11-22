@@ -48,6 +48,15 @@ const ERRORS = [
 ];
 /** Bar mode with a bound error column: its values as the whiskers. */
 const FROM_COLUMN = { value: "column", label: "from column" };
+const COMPARE = [
+  { value: "off", label: "off" },
+  { value: "brackets", label: "brackets" },
+  { value: "letters", label: "letters" },
+];
+const METHODS = [
+  { value: "tukey", label: "Tukey HSD" },
+  { value: "dunnett", label: "Dunnett" },
+];
 const ROTATIONS = [
   { value: "0", label: "0°" },
   { value: "45", label: "45°" },
@@ -77,11 +86,14 @@ export interface StatMarksControlsProps {
   /** Bar mode: the bound error column(s) a whisker can come from, or null --
    *  the error-bar picker then also offers "from column". */
   errorColumn?: string | null;
+  /** Significance marks: why none are drawn (null: fine), and the compared
+   *  groups' labels (the Dunnett control picker). Absent: no such controls. */
+  comparisons?: { error: string | null; labels: string[] };
 }
 
 const STACKED_HINT = "Stacked bars carry no raw points or summary marker — switch the layout to grouped";
 
-export default function StatMarksControls({ mode, marks, setMarks, grouped, stacked = false, errorColumn = null }: StatMarksControlsProps) {
+export default function StatMarksControls({ mode, marks, setMarks, grouped, stacked = false, errorColumn = null, comparisons }: StatMarksControlsProps) {
   const boxFamily = mode === "box" || mode === "strip";
   const categorical = boxFamily || mode === "violin" || mode === "bar";
   const off = mode === "bar" && stacked;
@@ -158,6 +170,50 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped, stac
         <Checkbox checked={marks.connectMeans} onChange={(on) => setMarks({ connectMeans: on }, "toggle connect means")}>
           connect means
         </Checkbox>
+      )}
+      {categorical && comparisons && (
+        <>
+          <Picker label="compare">
+            <Select
+              aria-label="significance marks"
+              title="Significance brackets or compact letters from the post-hoc test (opt-in; the test and correction are named under the plot)"
+              options={COMPARE}
+              value={marks.comparisons}
+              onChange={(e) => setMarks({ comparisons: e.target.value as StatMarks["comparisons"] }, "set significance marks")}
+            />
+          </Picker>
+          {marks.comparisons !== "off" && (
+            <Picker label="test">
+              <Select
+                aria-label="comparison test"
+                title="Tukey HSD tests every pair; Dunnett tests every group against one control"
+                options={METHODS}
+                value={marks.compareMethod}
+                onChange={(e) => setMarks({ compareMethod: e.target.value as StatMarks["compareMethod"] }, "set comparison test")}
+              />
+            </Picker>
+          )}
+          {marks.comparisons !== "off" && marks.compareMethod === "dunnett" && comparisons.labels.length > 0 && (
+            <Picker label="control">
+              <Select
+                aria-label="Dunnett control group"
+                options={comparisons.labels.map((l) => ({ value: l, label: l }))}
+                value={marks.compareControl ?? comparisons.labels[0]}
+                onChange={(e) => setMarks({ compareControl: e.target.value }, "set comparison control")}
+              />
+            </Picker>
+          )}
+          {marks.comparisons === "brackets" && (
+            <Checkbox checked={marks.compareExact} onChange={(on) => setMarks({ compareExact: on }, "toggle exact p")}>
+              exact p
+            </Checkbox>
+          )}
+          {marks.comparisons !== "off" && comparisons.error && (
+            <span data-testid="stat-compare-error" role="status" style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              {comparisons.error}
+            </span>
+          )}
+        </>
       )}
       <Picker label="labels">
         <Select

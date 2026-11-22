@@ -133,6 +133,10 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatPicks.barPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", barStack: true, barPercent: true }; }),
   "StatPicks.valueRange": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", valueRange: [65, 75] }; }),
   "StatPicks.histCols": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histCols: [2] }; }),
+  "StatMarks.comparisons": (ws) => editView(ws, (v) => { v.statMarks = { box: { comparisons: "brackets" } }; }),
+  "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
+  "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
+  "StatMarks.compareExact": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareExact: true } }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -398,7 +402,7 @@ function populate(ws: LoadedWorkspace): void {
   };
   const shade: Required<RegionShade> = { id: "pg", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, fullHeight: true };
   const inset: Required<InsetView> = { x: [0, 1], y: [0, 1], y2: [0, 1], yZoom: true, at: [0.1, 0.1, 0.3, 0.3], lines: true };
-  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true };
+  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true, comparisons: "letters", compareMethod: "tukey", compareControl: "c", compareExact: true };
   editView(ws, (v) => {
     v.annotations = [...v.annotations, annotation];
     v.shapes = [...v.shapes, shape];

@@ -144,6 +144,8 @@ describe("resolveStatMarks — per-mode defaults", () => {
     expect(resolveStatMarks("box", {})).toEqual({
       points: "outliers", jitterWidth: 0.7, summary: "none", errorBars: "ci95", connectMeans: false,
       labelRotation: 0, labelWrap: false,
+      // significance marks are opt-in: off unless the user turns them on
+      comparisons: "off", compareMethod: "tukey", compareControl: null, compareExact: false,
     });
     expect(resolveStatMarks("strip", null).points).toBe("all");
     expect(resolveStatMarks("strip", null).jitterWidth).toBe(0.85);

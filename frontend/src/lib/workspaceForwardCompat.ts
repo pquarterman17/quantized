@@ -172,6 +172,9 @@ export const REGION_SHADE: Classify<RegionShade> = { id: V, x1: V, x2: V, y1: V,
 export const INSET_VIEW: Classify<InsetView> = { x: V, y: V, y2: V, yZoom: V, at: V, lines: V };
 export const STAT_MARKS: Classify<StatMarks> = {
   points: V, jitter: V, jitterWidth: V, summary: V, errorBars: V, connectMeans: V, labelRotation: V, labelWrap: V,
+  // Significance brackets / letters (gap audit 8 lane SIG): 0.34 and 0.38's
+  // sanitizeStatMarks keep only the keys they list, so a saved choice would be dropped.
+  comparisons: G, compareMethod: G, compareControl: G, compareExact: G,
 };
 // The Stat Stage picks (`PlotView.statPicks`): 0.34's sanitizeStatPicks keeps
 // only the keys it lists, so an Origin 100 % stack would reopen as a plain
@@ -303,6 +306,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
 export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
   "AxisFormat.divideMark", "ErrorBinding.origin", "StatPicks.barPercent", "StatPicks.valueRange",
   "StatPicks.histCols", "ExportSeriesStyle.stack", "ExportSeriesStyle.float", "Dataset.cellRules",
+  "StatMarks.comparisons", "StatMarks.compareMethod", "StatMarks.compareControl", "StatMarks.compareExact",
 ]);
 
 /** The gated features in `doc` that v0.35-v0.38 would lose (see NEW_SINCE_V038). */
@@ -370,6 +374,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
     if ("seriesStyles" in v && "yFmt" in v) checkType(v, "mark" in v && "axisBreaks" in v ? "RecipeVisual" : "PlotView", found);
     if (key === "xFmt" || key === "yFmt" || key === "y2Fmt") checkType(v, "AxisFormat", found);
     if (key === "statPicks") checkType(v, "StatPicks", found);
+    if (key === "statMarks") for (const m of Object.values(v)) checkType(m, "StatMarks", found); // one per mode
     for (const [k, x] of Object.entries(v)) visit(x, k);
   };
   for (const [k, x] of Object.entries(doc)) {

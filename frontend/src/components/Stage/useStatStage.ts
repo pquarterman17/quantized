@@ -49,8 +49,6 @@ import {
   resolveGroupsIndexed,
   type IndexedGroupSpec,
 } from "../../lib/statstage";
-import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
-import type { StatMarks } from "../../lib/statMarks";
 import { statColorOf } from "../../lib/statColor";
 import { withPickedXGroup } from "../../lib/statPicks";
 import { percentBars, withColumnErrors } from "../../lib/barMatrix";
@@ -70,6 +68,8 @@ import {
   type FacetDraw,
 } from "./useStatStageCompute";
 import { computeHistogramDraw, histogramColumns } from "./statHistMulti";
+import { useStatComparisons } from "./useStatComparisons";
+import { useStatMarksState } from "./useStatMarksState";
 import { useStatStageDraws } from "./useStatStageDraws";
 import { useStatStageExport } from "./useStatStageExport";
 import { useStatStagePicks } from "./useStatStagePicks";
@@ -126,29 +126,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack, barPercent, setBarLayout, valueRange,
     histCols, setHistCols,
   } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed, picks: params.picks, onPicksChange: params.onPicksChange });
-  // P2.6 box 1: the categorical marks (points / jitter / summary / error bars
-  // / connect-means / labels) are the window's persisted `PlotView.statMarks`
-  // when the caller passes them (focused stage + background windows), else
-  // hook-local (a bare hook in a test). Display-only: they re-fetch nothing;
-  // the only compute they reach is WHICH raw points to resolve (`needsPoints`).
-  //
-  // Review finding 6: stored and patched PER MODE (`StatMarksByMode`), never
-  // as one flat object every mode read from alike — a choice made in one
-  // mode (strip's `points: "none"`, say) must never read as another mode's
-  // DEFAULT (box's fliers going dark too) purely because the two shared the
-  // same stored fields. `marksMode` is null outside the four modes marks
-  // apply to at all (qq/histogram); the hook still holds a slot for them in
-  // `localMarks` so a mode switch never drops what was already set for one.
-  const marksMode: StatMarksMode | null =
-    mode === "box" || mode === "violin" || mode === "strip" || mode === "bar" ? mode : null;
-  const [localMarks, setLocalMarks] = useState<StatMarksByMode>({});
-  const marksByMode = params.marks ?? localMarks;
-  const marks = marksMode ? marksByMode[marksMode] ?? null : null;
-  const patchMarks = (patch: StatMarks, label?: string) => {
-    if (!marksMode) return;
-    if (params.onMarksChange) params.onMarksChange(marksMode, patch, label);
-    else setLocalMarks((m) => ({ ...m, [marksMode]: { ...m[marksMode], ...patch } }));
-  };
+  // P2.6 box 1: the categorical marks (state: useStatMarksState.ts).
+  const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
   const grouped = effectiveGroupCol != null;
   // The marks before the bar data is known: points / summary (all that
   // `wantPoints` / `barRaw` read). The error-bar kind settles below (`rm`).
@@ -436,7 +415,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     () => applyLevels(axes, { hideEmpty: hideEmpty || effectiveGroupCol === -1, showN, color }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
     [axes, hideEmpty, showN, color, drawData, drawFacets, freshDraw, freshFacets, effectiveGroupCol],
   );
-  const shown = useMemo(() => withMarks(levels.draw, levels.drawFacets, rm), [levels, rm]);
+  const marked = useMemo(() => withMarks(levels.draw, levels.drawFacets, rm), [levels, rm]);
+  // Gap audit 8 lane SIG: significance brackets / letters (opt-in; useStatComparisons.ts).
+  const cmp = useStatComparisons({
+    mode, marks: rm, draw: marked.draw, faceted: effectiveFacetCol != null && !!marksMode, groups, data,
+    groupCol: effectiveGroupCol, valueCol, plotted, barSeries: barValueChannels.length, barStack,
+  });
+  const shown = useMemo(() => ({ draw: cmp.draw, drawFacets: marked.drawFacets }), [cmp.draw, marked.drawFacets]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
@@ -488,7 +473,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     error,
     note,
     groupNotice: levels.notice,
-    errorNote,
+    errorNote: [errorNote, cmp.note].filter(Boolean).join("\n") || null,
+    comparisons: { error: cmp.error, labels: cmp.labels },
     draw: shown.draw,
     drawFacets: shown.drawFacets,
     exportFigure,

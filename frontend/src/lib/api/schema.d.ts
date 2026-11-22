@@ -7095,6 +7095,7 @@ export interface components {
             caveat?: string | null;
             /** Color Levels */
             color_levels?: (number | null)[] | null;
+            comparisons?: components["schemas"]["ComparisonMarks"] | null;
             /** Counts */
             counts?: number[][] | null;
             /**
@@ -7377,6 +7378,54 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** ComparisonBracket */
+        ComparisonBracket: {
+            /** A */
+            a: number;
+            /** B */
+            b: number;
+            /** Label */
+            label: string;
+            /** Y */
+            y: number;
+        };
+        /** ComparisonLetter */
+        ComparisonLetter: {
+            /** Slot */
+            slot: number;
+            /** Text */
+            text: string;
+            /** Y */
+            y: number;
+        };
+        /**
+         * ComparisonMarks
+         * @description Significance brackets / compact letters, ALREADY laid out by the client
+         *     (``lib/statComparisons.ComparisonMarks``): the figure draws them and names
+         *     the test in ``note`` (``calc.figure_stat_comparisons``). Slots are axis
+         *     category slots; ``y`` / ``tick`` / ``top`` are value-axis units.
+         */
+        ComparisonMarks: {
+            /**
+             * Brackets
+             * @default []
+             */
+            brackets?: components["schemas"]["ComparisonBracket"][];
+            /**
+             * Letters
+             * @default []
+             */
+            letters?: components["schemas"]["ComparisonLetter"][];
+            /** Note */
+            note: string;
+            /**
+             * Tick
+             * @default 0
+             */
+            tick?: number;
+            /** Top */
+            top?: number | null;
         };
         /** ConductivityRequest */
         ConductivityRequest: {
@@ -12622,6 +12671,7 @@ export interface components {
             caveat?: string | null;
             /** Color Levels */
             color_levels?: (number | null)[] | null;
+            comparisons?: components["schemas"]["ComparisonMarks"] | null;
             /** Connect Breaks */
             connect_breaks?: boolean[] | null;
             /** Data */

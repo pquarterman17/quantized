@@ -75,12 +75,14 @@ TIER_BAND = 0.05
 FOOTNOTE_LINE_PT = 12.0
 
 
-def footnote_text(error_note: str | None, caveat: str | None) -> str | None:
-    """The figure footnote for a request's ``error_note`` and ``caveat``:
-    the error-bar note on the first line, the caveat under it, ``None`` when
-    neither is set -- so a request without an error note keeps exactly the
-    footnote (and layout) it always had."""
-    lines = [s for s in (error_note, caveat) if s]
+def footnote_text(
+    error_note: str | None, caveat: str | None, comparison_note: str | None = None,
+) -> str | None:
+    """The figure footnote for a request's ``error_note``, ``comparison_note``
+    (the significance marks' test-and-correction sentence) and ``caveat``, in
+    that order, one line each; ``None`` when none is set -- so a request
+    without them keeps exactly the footnote (and layout) it always had."""
+    lines = [s for s in (error_note, comparison_note, caveat) if s]
     return "\n".join(lines) if lines else None
 
 

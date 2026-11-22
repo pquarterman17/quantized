@@ -22,9 +22,8 @@
 // Pure React: no store or API imports. Commit lives in useWorkbenchCommit /
 // useAnalysisCommit; display in WorkbenchPreviewFrame / WorkbenchMessage.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { useLatestRef } from "../../../lib/previewKey";
 import { Refusal } from "./refusal";
 
 export interface WorkbenchPreviewOptions<T> {
@@ -81,7 +80,15 @@ export function useWorkbenchPreview<T>({
   const live = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const latestInputs = useLatestRef({ key, run, fallbackError });
+  // The key of the run in flight, so the key effect aborts only a run for an OLDER key.
+  const liveKey = useRef<string | null>(null);
+  // Updated in the commit (layout), not in a passive effect: a refresh() that lands
+  // between a commit and its passive effects (a click on a just-rendered button)
+  // must read the committed key and run closure, not the previous render's.
+  const latestInputs = useRef({ key, run, fallbackError });
+  useLayoutEffect(() => {
+    latestInputs.current = { key, run, fallbackError };
+  });
 
   // Start a run for `forKey`, superseding (aborting) any run in flight.
   const start = useCallback((forKey: string): Promise<void> => {
@@ -89,6 +96,7 @@ export function useWorkbenchPreview<T>({
     live.current?.abort();
     const c = new AbortController();
     live.current = c;
+    liveKey.current = forKey;
     const owns = () => mounted.current && seq.current === id && !c.signal.aborted;
     // A rerun for a key that earlier failed starts clean: the old failure is
     // not the answer for this run.
@@ -117,7 +125,6 @@ export function useWorkbenchPreview<T>({
     // cannot be aborted and answers later (the answer is then ignored).
     return Promise.race([settled, new Promise<void>((resolve) => c.signal.addEventListener("abort", () => resolve(), { once: true }))]);
     // Refs and setState only: stable for the hook's lifetime.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const refresh = useCallback(
     () => (latestInputs.current.key === "" ? Promise.resolve() : start(latestInputs.current.key)),
@@ -130,7 +137,6 @@ export function useWorkbenchPreview<T>({
     live.current = null;
     setState({ latest: null, error: null, pendingKey: null, discardedKey: latestInputs.current.key });
     // Refs and setState only: stable for the hook's lifetime.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -144,15 +150,24 @@ export function useWorkbenchPreview<T>({
   // Every key change aborts the run in flight (its inputs are gone); in auto
   // mode it also schedules a debounced run for the new key.
   useEffect(() => {
-    timer.current = key !== "" && auto ? setTimeout(() => void start(key), delayMs) : undefined;
-    return () => {
-      clearTimeout(timer.current);
+    // A run already started for THIS key (a refresh that beat this effect) is the
+    // answer for these inputs: only a run for an older key is aborted.
+    if (liveKey.current !== null && liveKey.current !== key) {
       seq.current += 1;
       live.current?.abort();
       live.current = null;
+      liveKey.current = null;
+    }
+    timer.current = key !== "" && auto ? setTimeout(() => void start(key), delayMs) : undefined;
+    return () => {
+      clearTimeout(timer.current);
       // A failure belongs to its key: leaving the key forgets it, so coming
       // back to that key does not show it again while the rerun is scheduled.
-      setState((s) => (s.pendingKey === null && s.error === null ? s : { ...s, pendingKey: null, error: null }));
+      // A run still in flight for the next key keeps its pending mark.
+      setState((s) => {
+        const keep = s.pendingKey !== null && s.pendingKey === liveKey.current;
+        return !keep && s.pendingKey === null && s.error === null ? s : { ...s, pendingKey: keep ? s.pendingKey : null, error: null };
+      });
     };
   }, [key, auto, delayMs, start]);
 

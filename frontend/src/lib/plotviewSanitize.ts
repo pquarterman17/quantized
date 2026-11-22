@@ -44,12 +44,21 @@ export interface StatMarks {
   connectMeans?: boolean;
   labelRotation?: 0 | 45 | 90;
   labelWrap?: boolean;
+  /** Significance brackets / compact letters over the groups (opt-in; absent =
+   *  "off"). See `lib/statComparisons`. */
+  comparisons?: "off" | "brackets" | "letters";
+  compareMethod?: "tukey" | "dunnett";
+  /** Dunnett's control group, by LABEL (absent = the first group). */
+  compareControl?: string;
+  /** Show the exact adjusted p beside the stars. */
+  compareExact?: boolean;
 }
 
 const STAT_MARK_VALUES: Record<string, readonly unknown[]> = {
   points: ["all", "outliers", "none"], jitter: [true, false], summary: ["none", "mean", "median"],
   errorBars: ["none", "sd", "se", "ci95", "column"], connectMeans: [true, false], labelRotation: [0, 45, 90],
-  labelWrap: [true, false],
+  labelWrap: [true, false], comparisons: ["off", "brackets", "letters"], compareMethod: ["tukey", "dunnett"],
+  compareExact: [true, false],
 };
 
 /** A persisted `statMarks`, keeping only well-formed fields (an unknown or
@@ -61,6 +70,7 @@ export function sanitizeStatMarks(v: unknown): StatMarks {
     const o = v as Record<string, unknown>;
     for (const k in STAT_MARK_VALUES) if (STAT_MARK_VALUES[k].includes(o[k])) out[k] = o[k];
     if (typeof o.jitterWidth === "number" && o.jitterWidth > 0 && o.jitterWidth <= 1) out.jitterWidth = o.jitterWidth;
+    if (typeof o.compareControl === "string" && o.compareControl) out.compareControl = o.compareControl;
   }
   return out as StatMarks;
 }
