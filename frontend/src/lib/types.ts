@@ -493,16 +493,16 @@ export interface Dataset {
    *  with excludedRows). Serializable; round-trips .dwk. */
   filter?: DataFilter;
   /** Lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38): set for a non-primary
-   *  Origin book whose full data hasn't been fetched yet — `data` above is
-   *  the small downsampled preview (a real, if truncated, DataStruct: every
-   *  consumer that only reads `.time`/`.values`/`.labels`/`.units`/`.metadata`
-   *  keeps working, just on fewer rows, until the fetch lands). Cleared (and
-   *  `data` replaced with the full DataStruct) by `useApp.ensureBookData`.
-   *  Round-trips through autosave (so a reload restores the same not-yet-
-   *  loaded state) but NEVER through an explicit "Save workspace (.dwk)…" —
-   *  that command resolves every pending dataset first
-   *  (`useApp.resolvePendingDatasets`) so an exported .dwk is self-contained. */
+   *  Origin book whose full data hasn't been fetched yet; `data` is then the
+   *  small downsampled preview (a real, if truncated, DataStruct, so readers of
+   *  `.time`/`.values`/`.labels`/`.units`/`.metadata` keep working on fewer
+   *  rows). Cleared, and `data` replaced, by `useApp.ensureBookData`. Round-trips
+   *  through autosave (a reload restores the not-yet-loaded state) but NEVER
+   *  through an explicit "Save workspace (.dwk)…", which first resolves every
+   *  pending dataset (`useApp.resolvePendingDatasets`) so a .dwk is self-contained. */
   pending?: BookSource;
+  /** Session-only (never serialized): installs of the lazy book so far (lib/bookData.ts), so an install is told from an edit. */
+  installEpoch?: number;
   /** Where this dataset's data can be re-read from on demand (MAIN_PLAN #10,
    *  "re-import from source" — Origin's "Re-import Directly"): a real path the
    *  path-based `/api/parsers/import` route already validated. Set ONLY where
