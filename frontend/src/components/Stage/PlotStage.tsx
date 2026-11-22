@@ -3,9 +3,8 @@
 // runs the fetch/compose pipeline (usePlotPayload), and renders the toolbar /
 // legend / readouts / context menu chrome around the uPlot instance.
 // Re-styles on theme/accent change; resizes to its container.
-// (MULTI_PLOT_PLAN item 1 / PROJECT_ORGANIZATION_PLAN #10: the uPlot lifecycle
-// and the fetch+compose pipeline now live in PlotViewport.tsx / usePlotPayload.ts
-// — this file is the thin store-reading wrapper around them.)
+// (MULTI_PLOT_PLAN #1 / ORGANIZATION #10: the uPlot lifecycle and fetch+compose
+// pipeline live in PlotViewport.tsx / usePlotPayload.ts; this is the thin wrapper.)
 
 import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
@@ -80,6 +79,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const annotations = useApp((s) => s.annotations);
   const shapes = useApp((s) => s.shapes);
   const regionShades = useApp((s) => s.regionShades);
+  const overlays = useApp((s) => s.overlays);
   const seriesStyles = useFocusedRampedStyles(active, focusedDocument); // + the graph's colour gradient (gap audit 4 G1)
   const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
@@ -320,6 +320,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         shapeEdit={shapeEdit}
         shapeDraw={shapeDraw}
         regionShades={regionShades}
+        overlays={overlays}
         seriesStyles={styleList}
         seriesCycle={seriesCycle}
         plotted={plotted}

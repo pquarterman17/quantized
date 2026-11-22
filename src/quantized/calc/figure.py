@@ -33,6 +33,7 @@ from quantized.calc.figure_legend_order import (
     preset_legend_kwargs,
     tag_series_slots,
 )
+from quantized.calc.figure_overlays_draw import apply_overlays
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -151,9 +152,7 @@ def draw_series_axes(
     y_label: str = "",
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
     # MAIN_PLAN #36: per-series {x?: {plus, minus}, y?: {plus, minus}} error
-    # spans. Without these an exported figure silently omits the bars the
-    # screen drew, understating the uncertainty in the artefact that gets
-    # published.
+    # spans: without them the export omits the bars the screen drew.
     error_spans: Sequence[Mapping[str, Any] | None] | None = None,
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
@@ -247,6 +246,7 @@ def draw_series_axes(
         warn_marks_not_drawn(series_styles, "the inset", ("size_by", "drop_lines"))
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     apply_layers(ax, ov)  # inset graphs of other data, images, tables (calc.figure_layers)
+    apply_overlays(ax, xv, series, series_styles, ov, artists, resolved_x_scale, resolved_y_scale)
     return artists
 
 

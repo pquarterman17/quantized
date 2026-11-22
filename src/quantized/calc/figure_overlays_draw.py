@@ -1,0 +1,113 @@
+"""Draw the scatter overlays (``calc.figure_overlays``) into an export Axes.
+
+Called by ``calc.figure.draw_series_axes`` with the request's ``overrides``;
+``ov["overlays"]`` is the same spec the live plot posts to ``/api/plot/overlays``
+and the same computation answers it, so the exported curves and legend words
+match the screen. Overlays are drawn in the series' own colour in data space, so
+they refuse (raise ``ValueError``, a 422) on a log or reciprocal axis (a straight
+line there would mislead) and with exchanged axes. A refused overlay is named in
+a "not drawn" legend line instead of being drawn. Rows excluded from a fit arrive
+blank in the series, so they never enter it. Pure layer: no fastapi/pydantic.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from numpy.typing import ArrayLike
+
+from quantized.calc.figure_excluded import EXCLUDED_SUFFIX
+from quantized.calc.figure_overlays import (
+    overlay_specs_label,
+    series_overlays,
+    validate_overlay_spec,
+)
+
+__all__ = ["apply_overlays", "validate_overlays_override"]
+
+
+def validate_overlays_override(
+    ov: Mapping[str, Any], x_scale: str, y_scale: str
+) -> dict[str, dict[str, Any]]:
+    spec = validate_overlay_spec(ov.get("overlays"))
+    if spec and (x_scale != "linear" or y_scale != "linear"):
+        raise ValueError(
+            "overlays are fitted in data space and need linear axes (not log or reciprocal)"
+        )
+    if spec and ov.get("exchange_xy"):
+        raise ValueError("overlays are not supported together with exchange_xy")
+    return spec
+
+
+def _color(artist: Any, i: int) -> str:
+    getter = getattr(artist, "get_color", None)
+    c = getter() if callable(getter) else None
+    if isinstance(c, str):
+        return c
+    return f"C{i % 10}"
+
+
+def apply_overlays(
+    ax: Any,
+    xv: ArrayLike,
+    series: Sequence[tuple[str, ArrayLike]],
+    series_styles: Sequence[Mapping[str, Any] | None] | None,
+    ov: Mapping[str, Any],
+    artists: Sequence[Any],
+    x_scale: str,
+    y_scale: str,
+) -> None:
+    spec = validate_overlays_override(ov, x_scale, y_scale)
+    if not spec:
+        return
+    from matplotlib.legend import Legend
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    picks = []
+    for i, (label, y) in enumerate(series):
+        style = series_styles[i] if series_styles and i < len(series_styles) else None
+        if label.endswith(EXCLUDED_SUFFIX) or (style and (style.get("bars") or style.get("stack"))):
+            continue
+        picks.append((i, label, y))
+    results = series_overlays([(lb, y) for _, lb, y in picks], xv, spec)
+    several = len(picks) > 1
+    handles: list[Any] = []
+    labels: list[str] = []
+    for (i, _, _), res in zip(picks, results, strict=True):
+        color = _color(artists[i] if i < len(artists) else None, i)
+        name = res["label"]
+        if (line := res.get("line")) is not None:
+            band = line["band"]
+            if band is not None:
+                ax.fill_between(
+                    line["x"], band["lo"], band["hi"], color=color, alpha=0.15, linewidth=0
+                )
+                handles.append(Patch(facecolor=color, alpha=0.15))
+                labels.append(overlay_specs_label(name, band["label"], several))
+            ax.plot(line["x"], line["y"], color=color, linewidth=1.5, linestyle="-")
+            handles.append(Line2D([], [], color=color, linewidth=1.5, linestyle="-"))
+            labels.append(overlay_specs_label(name, line["label"], several))
+        if (sm := res.get("smoother")) is not None:
+            ax.plot(sm["x"], sm["y"], color=color, linewidth=1.5, linestyle="--")
+            handles.append(Line2D([], [], color=color, linewidth=1.5, linestyle="--"))
+            labels.append(overlay_specs_label(name, sm["label"], several))
+        if (el := res.get("ellipse")) is not None:
+            ax.fill(
+                el["x"],
+                el["y"],
+                facecolor=color,
+                alpha=0.08,
+                edgecolor=color,
+                linewidth=1.0,
+                linestyle=":",
+            )
+            handles.append(Patch(facecolor=color, alpha=0.2, edgecolor=color, linestyle=":"))
+            labels.append(overlay_specs_label(name, el["label"], several))
+        for kind, why in res["refused"].items():
+            handles.append(Line2D([], [], linestyle="none"))
+            labels.append(overlay_specs_label(name, f"{kind} not drawn: {why}", several))
+    if handles:
+        legend = Legend(ax, handles, labels, loc="lower right", fontsize="x-small", frameon=False)
+        ax.add_artist(legend)
