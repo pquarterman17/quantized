@@ -13,6 +13,7 @@ import { PREVIEW_CAP } from "../../../lib/transformPreviewCompute";
 import { useTransformPreviewDialog, type PreviewOp } from "../../../store/transformPreviewDialog";
 import ReshapeFields from "./ReshapeFields";
 import { OP_OPTIONS } from "./transformForm";
+import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import { useReshapePreview, type ReshapeState } from "./useReshapePreview";
 
 const gap = { marginTop: 8 };
@@ -21,7 +22,7 @@ const size = (rows: number, cols: number) => `${rows} row${rows === 1 ? "" : "s"
 
 function Preview({ r }: { r: ReshapeState }) {
   if (r.formError) return <div className="qzk-ds-meta" style={{ ...gap, color: "var(--text-faint)" }}>{r.formError}</div>;
-  if (r.loading) return <div className="qzk-ds-meta" style={gap} aria-live="polite">Previewing…</div>;
+  if (r.loading) return <div style={gap}><WorkbenchPreviewFrame loading /></div>;
   if (r.error) {
     const byName = r.form.op === "merge" && r.form.match === "position" && r.error.includes("column-count");
     return (
@@ -34,7 +35,7 @@ function Preview({ r }: { r: ReshapeState }) {
   const c = r.computed;
   if (!c) return null;
   return (
-    <div style={gap} role="group" aria-label="Transform preview">
+    <div style={gap}><WorkbenchPreviewFrame><div role="group" aria-label="Transform preview">
       <ul className="qzk-ds-meta" aria-label="Preview size" style={{ margin: 0, paddingLeft: 16 }}>
         {c.preview.inputs.map((i, k) => (
           <li key={k}>{`${i.name}: ${size(i.rows, i.cols)}`}</li>
@@ -53,7 +54,7 @@ function Preview({ r }: { r: ReshapeState }) {
       )}
       <TransformPreviewTable data={c.data} />
       <TransformWarningList warnings={c.preview.warnings} />
-    </div>
+    </div></WorkbenchPreviewFrame></div>
   );
 }
 

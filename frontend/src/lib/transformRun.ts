@@ -436,6 +436,8 @@ export async function runTransform(
     }
   };
   const c = await computeTransform(p, primary, others, signal, options);
+  // A transport that cannot abort may still answer after Cancel: add nothing.
+  signal?.throwIfAborted();
   assertSignalSourceUnchanged();
   if (review && !(await review(c.preview))) {
     s().setStatus(`${c.preview.title} cancelled — nothing was created`);

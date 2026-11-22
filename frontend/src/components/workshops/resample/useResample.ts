@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { useAckForKey, tokenOf } from "../../../lib/previewKey";
 import { BatchSkip, runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
 import {
   computeResample,
@@ -31,6 +31,7 @@ import type { Dataset } from "../../../lib/types";
 import { useResampleDialog } from "../../../store/resampleDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { defaultForm, formToParams, withRangeDefaults, type ResampleForm } from "./resampleForm";
 
 /** Debounce between an edit and the preview request. */
@@ -41,11 +42,6 @@ export interface PreviewEntry {
   name: string;
   result?: ResampleComputed;
   error?: string;
-}
-
-interface Previews {
-  key: string;
-  entries: PreviewEntry[];
 }
 
 export interface ResampleState {
@@ -94,7 +90,6 @@ export function useResample(): ResampleState {
   );
   const [focus, setFocusId] = useState("");
   const [channel, setChannel] = useState(0);
-  const [previews, setPreviews] = useState<Previews>({ key: "", entries: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<BatchProgress | null>(null);
@@ -120,35 +115,29 @@ export function useResample(): ResampleState {
 
   // The preview re-runs when the KEY changes, not whenever an unrelated store
   // change hands `targets` / `matchDs` a new identity (adding or renaming
-  // another dataset, or each addDataset during create()). The inputs are read
-  // from a ref (lib/previewKey.ts — shared with the reshape workshop's own
-  // preview).
-  const inputs = useLatestRef({ parsed, targets, matchDs });
-  useDebouncedPreview(key, PREVIEW_DELAY_MS, () => {
-    const { parsed, targets, matchDs } = inputs.current;
-    if (typeof parsed === "string" || !targets.length) return undefined;
-    const ctrl = new AbortController();
-    const match = matchDs ? { name: matchDs.name, data: matchDs.data } : null;
-    void Promise.all(
-      targets.map(async (ds): Promise<PreviewEntry> => {
-        try {
-          const result = await computeResample(parsed, { name: ds.name, data: resampleSource(ds) }, match, {
-            preview: true,
-            signal: ctrl.signal,
-          });
-          return { id: ds.id, name: ds.name, result };
-        } catch (e) {
-          return { id: ds.id, name: ds.name, error: message(e, "resample failed") };
-        }
-      }),
-    ).then((entries) => {
-      if (!ctrl.signal.aborted) setPreviews({ key, entries });
-    });
-    return () => { ctrl.abort(); };
+  // another dataset, or each addDataset during create()). The shared workbench
+  // shell (../workbench) debounces it, aborts it on an edit or unmount, and
+  // never lets an older answer become the current preview.
+  const preview = useWorkbenchPreview<PreviewEntry[]>({
+    key: typeof parsed === "string" || !targets.length ? "" : key,
+    delayMs: PREVIEW_DELAY_MS,
+    run: (signal) => {
+      if (typeof parsed === "string") return Promise.resolve([]);
+      const match = matchDs ? { name: matchDs.name, data: matchDs.data } : null;
+      return Promise.all(
+        targets.map(async (ds): Promise<PreviewEntry> => {
+          try {
+            const result = await computeResample(parsed, { name: ds.name, data: resampleSource(ds) }, match, { preview: true, signal });
+            return { id: ds.id, name: ds.name, result };
+          } catch (e) {
+            return { id: ds.id, name: ds.name, error: message(e, "resample failed") };
+          }
+        }),
+      );
+    },
   });
 
-  const fresh = previews.key === key && key !== "";
-  const entries = fresh ? previews.entries : [];
+  const entries = preview.current ?? [];
   // Several targets can echo the identical sentence (e.g. every pick hits
   // the same "X units differ" or "N rows lie outside the range"); prefix by
   // source name so they read distinctly AND so the code+text pair
@@ -243,7 +232,7 @@ export function useResample(): ResampleState {
     formError: typeof parsed === "string" ? parsed : null,
     targets,
     entries,
-    loading: key !== "" && targets.length > 0 && !fresh,
+    loading: preview.loading,
     focusId,
     setFocusId,
     channel,

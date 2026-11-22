@@ -668,6 +668,14 @@
 .qz-signal-preview-key strong { color: var(--accent); font-weight: 500; }
 .qz-signal-preview-name { margin-right: auto; color: var(--text-dim); }
 
+/* Shared workbench shell (lane WB): a preview is provisional until committed. */
+.qz-wb-preview { border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 4px; }
+.qz-wb-preview[data-stale="true"] { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.qz-wb-preview-badge { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 2px 4px; color: var(--text-faint); font-size: var(--font-size-xs); }
+.qz-wb-preview-tag { color: var(--text-dim); font-style: italic; }
+.qz-wb-preview-stale { color: var(--warn); }
+.qz-wb-message { margin: 6px 0 0; color: var(--danger); font-size: 12px; }
+
 .qz-analysis-result { container-type: inline-size; display: flex; flex-direction: column; min-height: 430px; max-height: min(72vh, 720px); }
 .qz-analysis-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; border-bottom: 1px solid var(--border); }
 .qz-analysis-status { margin-right: auto; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }

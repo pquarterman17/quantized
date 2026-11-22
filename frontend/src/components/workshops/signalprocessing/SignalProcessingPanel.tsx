@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
+import { tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
 import { buildSignalRecipeTemplate, saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
 import BatchApplyLauncher from "../pipeline/BatchApplyLauncher";
-import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { toast } from "../../../store/toasts";
 import ToolWindow from "../../overlays/ToolWindow";
 import { askParams } from "../../overlays/ParamDialog";
 import { Button, Select } from "../../primitives";
+import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
+import { WorkbenchActions, WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import SignalPreview from "./SignalPreview";
@@ -64,20 +67,10 @@ export default function SignalProcessingPanel() {
   const [correlationMode, setCorrelationMode] = useState<CorrelationSourceMode>("same");
   const [secondaryId, setSecondaryId] = useState("");
   const [secondaryChannel, setSecondaryChannel] = useState<number | null>(null);
-  const [preview, setPreview] = useState<DataStruct | null>(null);
-  const [previewFor, setPreviewFor] = useState<{
-    datasetId: string;
-    data: DataStruct;
-    secondaryData?: DataStruct;
-    request: object;
-  } | null>(null);
-  const [previewError, setPreviewError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const previewSequence = useRef(0);
-  const commitInFlight = useRef(false);
-  const commitController = useRef<AbortController | null>(null);
+  const committing = useWorkbenchCommit(); // in-flight guard; Cancel aborts a pending Create
+  const busy = committing.busy;
   const close = () => {
-    commitController.current?.abort();
+    committing.abort();
     setSignalProcessingOpen(false);
   };
   const pick = (op: string) => {
@@ -140,29 +133,10 @@ export default function SignalProcessingPanel() {
         : buildCorrectionRecipe(settings, channels, active), settings.useAllRows),
     [active, channels, crossWorksheet, secondary, secondaryChannel, settings, spectralOperation, spectralSettings],
   );
-  const requestSpec = recipe;
-  const previewCurrent = Boolean(
-    preview
-    && active
-    && requestSpec
-    && previewFor?.datasetId === active.id
-    && previewFor.data === inputData
-    && previewFor.secondaryData === secondaryInput
-    && previewFor.request === requestSpec,
-  );
-  const displayedPreview = previewCurrent ? preview : null;
   const boundTargets = active ? selectedBoundErrorTargets(active, channels) : [];
   const secondaryBoundTargets = secondary && secondaryChannel !== null
     ? selectedBoundErrorTargets(secondary, [secondaryChannel])
     : [];
-  const emptyOutputs = displayedPreview
-    ? spectral
-      ? displayedPreview.labels.flatMap((_, channel) => displayedPreview.values.some((row) => Number.isFinite(row[channel])) ? [] : [channel])
-      : channelsWithoutFiniteValues(displayedPreview, channels)
-    : [];
-  const outputError = displayedPreview && emptyOutputs.length
-    ? `No finite output was produced for ${emptyOutputs.map((channel) => spectral ? displayedPreview.labels[channel] : active?.data.labels[channel]).join(", ")}.`
-    : "";
   const correctionOp = isSpectralOperation(settings.operation) ? null : settings.operation;
   const errorBlock = correctionOp && active ? boundErrorBlock(correctionOp, boundTargets.length, settings.dropUncertainty, correlatedBoundErrors(active, channels)) : "";
   const operationValidation = spectralOperation
@@ -193,61 +167,42 @@ export default function SignalProcessingPanel() {
         : crossWorksheet && (!secondary || secondary.pending || secondaryChannel === null)
           ? "Choose a loaded second worksheet and signal column."
         : operationValidation;
-
-  useEffect(() => {
-    const sequence = ++previewSequence.current;
-    let cancelled = false;
-    const controller = new AbortController();
-    setPreview(null);
-    setPreviewFor(null);
-    setPreviewError("");
-    if (sigop || !active || validation || !recipe || (!spectral && !params)) return;
-    const timer = window.setTimeout(() => {
-      const request = spectral
-        ? secondary
-          ? runSpectralWorkbench(inputData!, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true, secondaryInput!)
-          : runSpectralWorkbench(inputData!, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true)
-        : applyCorrections({
-            dataset: inputData!,
-            params: params!,
-            ...(active.errorRoles ? { error_bindings: active.errorRoles } : {}),
-          }, controller.signal);
-      void request.then((result) => {
-        if (!cancelled && previewSequence.current === sequence) {
-          setPreview(result);
-          setPreviewFor({ datasetId: active.id, data: inputData!, secondaryData: secondaryInput, request: recipe });
-        }
-      }).catch((error: unknown) => {
-        const aborted = typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
-        if (!cancelled && previewSequence.current === sequence && !aborted) {
-          setPreviewError(error instanceof Error ? error.message : "Preview failed");
-        }
-      });
-    }, 180);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [active, inputData, params, recipe, secondary, secondaryInput, sigop, spectral, validation]);
+  // Shared workbench shell: debounced, stale-rejecting, aborted on change/unmount.
+  // `current` is only ever the preview of exactly these inputs (by identity).
+  const preview = useWorkbenchPreview({
+    key: sigop || !active || !inputData || validation || !recipe || (!spectral && !params) ? ""
+      : JSON.stringify([active.id, tokenOf(active), tokenOf(inputData), secondaryInput ? tokenOf(secondaryInput) : null, tokenOf(recipe), params ? tokenOf(params) : null]),
+    delayMs: 180,
+    run: (signal) => spectral
+      ? secondary
+        ? runSpectralWorkbench(inputData!, recipe as ReturnType<typeof buildSpectralRecipe>, signal, true, secondaryInput!)
+        : runSpectralWorkbench(inputData!, recipe as ReturnType<typeof buildSpectralRecipe>, signal, true)
+      : applyCorrections({
+          dataset: inputData!,
+          params: params!,
+          ...(active!.errorRoles ? { error_bindings: active!.errorRoles } : {}),
+        }, signal),
+  });
+  const displayedPreview = preview.current;
+  const previewError = preview.error;
+  const emptyOutputs = displayedPreview
+    ? spectral
+      ? displayedPreview.labels.flatMap((_, channel) => displayedPreview.values.some((row) => Number.isFinite(row[channel])) ? [] : [channel])
+      : channelsWithoutFiniteValues(displayedPreview, channels)
+    : [];
+  const outputError = displayedPreview && emptyOutputs.length
+    ? `No finite output was produced for ${emptyOutputs.map((channel) => spectral ? displayedPreview.labels[channel] : active?.data.labels[channel]).join(", ")}.`
+    : "";
 
   const commit = async () => {
-    if (!active || !displayedPreview || validation || outputError || commitInFlight.current) return;
-    commitInFlight.current = true;
-    const controller = new AbortController();
-    commitController.current = controller;
-    setBusy(true);
-    try {
-      const id = recipe ? await createSignalWorksheetFromApp(active.id, recipe, controller.signal) : null;
+    if (!active || !displayedPreview || validation || outputError) return;
+    await committing.run(async (signal) => {
+      const id = recipe ? await createSignalWorksheetFromApp(active.id, recipe, signal) : null;
       if (id) {
         setActive(id);
         close();
       }
-    } finally {
-      if (commitController.current === controller) commitController.current = null;
-      commitInFlight.current = false;
-      setBusy(false);
-    }
+    });
   };
 
   const saveRecipe = async () => {
@@ -375,22 +330,20 @@ export default function SignalProcessingPanel() {
               </div>
             )}
             {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
-            <SignalPreview source={inputData ?? active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
-            {spectral && <SpectralReadout result={displayedPreview} />}
+            <WorkbenchPreviewFrame loading={preview.loading}>
+              <SignalPreview source={inputData ?? active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
+              {spectral && <SpectralReadout result={displayedPreview} />}
+            </WorkbenchPreviewFrame>
             {correctionOp && <SignalUncertaintyControls operation={correctionOp} boundLabels={boundTargets.map((c) => active.data.labels[c])} blocked={Boolean(errorBlock)} drop={settings.dropUncertainty} setDrop={(dropUncertainty) => setSettings((current) => ({ ...current, dropUncertainty }))} />}
             <SignalScopeAndBy source={active} secondary={secondary} settings={settings} spectral={spectralSettings} channels={channels} sigopFilter={sigop !== null} crossWorksheet={crossWorksheet} validation={validation} />
             {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
-            {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
+            <WorkbenchMessage refusal={validation || outputError} error={previewError} />
             {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
             <BatchApplyLauncher groupName={operationLabel(settings.operation)} setup={recipe} build={() => buildSignalRecipeTemplate(`${operationLabel(settings.operation)} (Signal Processing)`, active, recipe!)} disabledReason={crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || (recipe ? "" : "Set up the operation first.")} />
-            <div className="qz-dialog-actions">
-              <Button onClick={close}>Cancel</Button>
+            {/* A disabled control always says why (worksheet audit #9). */}
+            <WorkbenchActions onCancel={close} commitLabel="Create new worksheet" busyLabel="Creating…" busy={busy} disabledReason={validation || outputError || previewError || (!displayedPreview ? "Waiting for the live preview…" : null)} onCommit={() => void commit()}>
               <Button disabled={Boolean(validation) || !recipe || crossWorksheet} title={crossWorksheet ? "Cross-worksheet recipes retain project-specific source links and cannot yet be saved as reusable templates." : validation || undefined} onClick={() => void saveRecipe()}>Save recipe…</Button>
-              {/* A disabled control always says why (worksheet audit #9). */}
-              <Button variant="primary" disabled={Boolean(validation || outputError) || !displayedPreview || busy} title={validation || outputError || previewError || (!displayedPreview ? "Waiting for the live preview…" : undefined)} onClick={() => void commit()}>
-                {busy ? "Creating…" : "Create new worksheet"}
-              </Button>
-            </div>
+            </WorkbenchActions>
           </>
         )}
       </div>

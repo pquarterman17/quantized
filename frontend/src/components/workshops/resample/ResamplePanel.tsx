@@ -12,6 +12,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { RESAMPLE_METHODS, resampleSource, type OutOfRange, type ResampleMethod, type ResampleMode } from "../../../lib/transformResample";
 import { useResampleDialog } from "../../../store/resampleDialog";
+import { WorkbenchMessage, WorkbenchPreviewFrame, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import ReduceXYSection from "./ReduceXYSection";
 import ResamplePreviewPlot from "./ResamplePreviewPlot";
 import { MODE_OPTIONS, OUT_OF_RANGE_OPTIONS } from "./resampleForm";
@@ -49,12 +50,12 @@ function GridFields({ r }: { r: ResampleState }) {
 
 function Preview({ r }: { r: ResampleState }) {
   if (r.formError) return <div className="qzk-ds-meta" style={{ ...gap, color: "var(--text-faint)" }}>{r.formError}</div>;
-  if (r.loading) return <div className="qzk-ds-meta" style={gap} aria-live="polite">Previewing…</div>;
+  if (r.loading) return <div style={gap}><WorkbenchPreviewFrame loading /></div>;
   const focus = r.targets.find((d) => d.id === r.focusId);
   const entry = r.entries.find((e) => e.id === r.focusId);
   const labels = focus?.data.labels ?? [];
   return (
-    <div style={gap} aria-label="Resample preview" role="group">
+    <div style={gap}><WorkbenchPreviewFrame><div aria-label="Resample preview" role="group">
       {r.targets.length > 1 && (
         <Select
           aria-label="Preview dataset"
@@ -94,7 +95,7 @@ function Preview({ r }: { r: ResampleState }) {
         </div>
       )}
       <TransformWarningList warnings={r.warnings} />
-    </div>
+    </div></WorkbenchPreviewFrame></div>
   );
 }
 
@@ -184,13 +185,7 @@ function ResampleWorkshop() {
             </div>
           )}
 
-          {r.progress && (
-            <div className="qzk-ds-meta" aria-live="polite" style={{ marginTop: 8 }}>
-              {r.progress.done}/{r.progress.total}{r.progress.current ? ` — ${r.progress.current}` : ""}
-              <progress aria-label="Resample batch progress" value={r.progress.done} max={r.progress.total} style={{ width: "100%" }} />
-              <Button size="sm" onClick={r.stop} style={{ marginTop: 4 }}>Stop after current</Button>
-            </div>
-          )}
+          <WorkbenchProgress progress={r.progress} label="Resample batch progress" onStop={r.stop} />
 
           <Button
             variant="primary"
@@ -201,11 +196,7 @@ function ResampleWorkshop() {
           >
             {r.busy ? "Creating…" : `Create ${n > 1 ? `${n} resampled datasets` : "resampled dataset"}`}
           </Button>
-          {r.error && (
-            <div className="qzk-ds-meta" role="alert" style={{ marginTop: 8, color: "var(--danger)" }}>
-              {r.error}
-            </div>
-          )}
+          <WorkbenchMessage error={r.error} />
         </>
       )}
     </ToolWindow>

@@ -65,7 +65,12 @@ describe("Baseline subtract commits through the shared contract", () => {
     const { result } = await estimated();
     await act(async () => { await result.current.subtract(); });
     vi.mocked(callBaselinePreview).mockResolvedValue({ baseline: [2, 2, 2, 2] });
-    await act(async () => { result.current.setParams({ lam: 1e5 }); await result.current.compute(); });
+    // Two steps (lane WB): an Estimate fired in the SAME tick as the edit ran
+    // on the pre-edit settings, and the old hook then committed that baseline
+    // under the new settings. The shell aborts such a run, so re-estimate
+    // after the edit has rendered, as a click does.
+    act(() => result.current.setParams({ lam: 1e5 }));
+    await act(async () => { await result.current.compute(); });
     await act(async () => { await result.current.subtract(); });
     expect(outputs()).toHaveLength(2);
   });
