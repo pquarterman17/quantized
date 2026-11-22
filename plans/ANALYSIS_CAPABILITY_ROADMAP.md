@@ -750,14 +750,48 @@ dataset precedence, roles, selected rows and X range (fail-before tests in
   resolver and summary; lazy Origin previews refuse; failed lazy loads refuse
   distinctly.
 - [x] Curve fit custom-equation mode reads the handoff like the other modes.
-- [ ] Remaining: a UI option for Signal Processing to honour exclusions (today
-  only its batch path does); the Analysis Center "Review inputs" for the
-  own-pick statistics tools; the summary prints "X:" even for tools with no
-  meaningful X (Multivariate, Stats tests); Hysteresis, magtools, Baseline,
-  Optical gap and the other tools that read `analysisData` directly are not on
-  the resolver yet (not audited in D1); the Fit Y by X/Stats chooser queue
-  paths still use `resolveDataset` beside the hook's `ensureBookData` (same
-  single flight, but two code paths).
+**Slice 3 (lane SEL3).**
+- The summary line omits "X:" for a tool that declares it has none
+  (`noX` on the request / `useAnalysisInputs`): Multivariate, Variability,
+  Statistical tests, the Test chooser, Distribution and Outlier screening.
+  Fit Y by X, Optical gap, Baseline and the rest keep it.
+- Signal Processing has a "Use excluded/filtered rows" option. Default ON is
+  the old full-worksheet single run (unchanged); OFF runs the single run on
+  `ROW_POLICY.analysisView`, and the summary line and policy note follow. The
+  choice is recorded in the signal recipe (`inputRows: "analysis-view"`,
+  absent = every row), which is also its persistence: it is part of the preview
+  key (a preview of the other choice cannot be committed), the commit, a saved
+  Recipe Library recipe, Pipeline/macro replay (`computeSignalTransform`) and
+  recompute of linked worksheets (correction and spectral), so old recipes and
+  projects replay unchanged. Cross-worksheet correlation applies the choice to
+  both inputs. The batch and By paths keep their own policy (exclusions left
+  out) and do not record the option.
+- Baseline and Optical gap show the shared summary. Baseline states its
+  existing full-worksheet policy (its data path already resolved the full data
+  first, so it never ran on a preview). Optical gap, Surface fit and Ellipse fit
+  load their columns through the resolver (`useLoadColumns`, analysis view as
+  before); a refusal (no rows left, deleted column) now rejects with its
+  reason. Surface fit and Ellipse fit do not show the summary line yet.
+- Hysteresis's single run already reads the analysis view narrowed by the
+  reviewed selection (`selectedFitData`), and its Review inputs header is the
+  resolver's summary. The magnetometry tools (Background, Units, Internal
+  field, Curie-Weiss) show the summary over their unchanged data paths:
+  Background/Units/Internal field convert every worksheet row (outputs are
+  row-aligned with the source) and say so; Curie-Weiss fits the analysis view.
+  Characterization first: `inputContract.general.characterization.test.tsx`.
+
+- [x] Summary omits X for tools with no X; Signal Processing "Use
+  excluded/filtered rows"; Baseline, Optical gap, magtools summary; Optical gap
+  / Surface fit / Ellipse fit loads on the resolver.
+- [ ] Remaining: the Analysis Center "Review inputs" for the own-pick
+  statistics tools; the magtools, Hysteresis, Baseline data paths still call
+  `magXY` / `selectedFitData` / `baselineInput` rather than `resolved.data`
+  (their rows are the stated policy, verified by tests, but not one code path);
+  Surface fit / Ellipse fit / Peak wizard / Tabulate / Pie / Ternary summaries;
+  a linked Signal output is not marked Out of date when only the source's
+  exclusions change while its recipe uses the analysis view (it follows data
+  edits, as before); the Fit Y by X/Stats chooser queue paths still use
+  `resolveDataset` beside the hook's `ensureBookData`.
 
 ## Workstream E — Statistical result workspace
 
