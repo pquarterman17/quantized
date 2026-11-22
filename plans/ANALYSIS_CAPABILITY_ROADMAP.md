@@ -112,11 +112,27 @@ inconsistently exposed, and do not all share the same result lifecycle.
     mode-parametrized test in `snapshotResultSave.test.ts`. Revisit only on an
     owner decision (e.g. a UI option that lets None show a stale snapshot as
     "Current" with a visible caveat).
+  - **Row exclusion / filter notify the recalc engine (2026-11-22, lane RX).**
+    Root cause: `store/rowState.ts` writers (toggle/set/clear exclusions,
+    exclude/keep-only selection, set/clear filter) never called
+    `touchDataset`, so linked derived worksheets and committed outputs stayed
+    "Current" after the analysis view changed. Snapshot results were already
+    correct: their freshness is `analysisDataFingerprint`, which hashes the
+    filtered/excluded view (pinned by a mode-parametrized test). Fix: every
+    row-state write ends with `touchDataset(id)`, so the recalc mode applies
+    unchanged (Auto recalculates, Manual marks stale, None tracks nothing).
+    No new timing: the engine's existing 400 ms debounce coalesces a filter
+    slider storm into one pass (tested), and a filter edit that changes
+    nothing still records nothing. Open points: (1) Undo/Redo restores the
+    exclusion/filter but, like undo of a cell edit, does not touch the engine;
+    marks added by the edit stay (conservative), but an Auto recalc that ran
+    on the excluded view is not re-run after Undo. (2) Fail closed: every
+    output type counts a filter/exclusion as an input change; none is
+    exempted. Tests: `store/rowStateRecalc.test.ts`.
   - [ ] Remaining: migrate the other plain-worksheet tools in the table above
     (Baseline subtract is async: add an in-flight guard to the hook first); "Edit / reopen in
     tool" for committed outputs (they reopen as worksheets, not tool state);
-    stale marking from analysis-view-only changes (row exclusions/filters do
-    not call `touchDataset`, so they do not mark any linked output stale).
+    nothing else for stale marking (see RX below).
 - [ ] Selection semantics differ by tool: active dataset, plotted channels,
   selected worksheet columns, range ROI, excluded rows, and filtered rows are
   not presented through one understandable contract.
