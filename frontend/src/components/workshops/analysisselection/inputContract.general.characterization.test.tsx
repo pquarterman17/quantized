@@ -11,9 +11,11 @@ import { act, fireEvent, render, renderHook, screen } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { baselineALS } from "../../../lib/api/baseline";
+import { subtractMagBackground } from "../../../lib/api/magnetometry";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useBaseline } from "../baseline/useBaseline";
+import { useMagTools } from "../magtools/useMagTools";
 import OpticalGapPanel from "../opticalgap/OpticalGapPanel";
 
 const { taucMock } = vi.hoisted(() => ({ taucMock: vi.fn() }));
@@ -21,6 +23,9 @@ vi.mock("../../../lib/api/analysisExtras", () => ({ taucFit: taucMock }));
 vi.mock("../../../lib/api/baseline", () => ({
   baselineALS: vi.fn(), baselineAnchor: vi.fn(), baselineEstimate: vi.fn(), baselineModPoly: vi.fn(),
   baselineRegion: vi.fn(), baselineRollingBall: vi.fn(), baselineShirley: vi.fn(), baselineXrdLowAngle: vi.fn(),
+}));
+vi.mock("../../../lib/api/magnetometry", () => ({
+  subtractMagBackground: vi.fn(), subtractHysteresisBackground: vi.fn(), normalizeMagMoment: vi.fn(), demagCorrectField: vi.fn(),
 }));
 vi.mock("../SmallUPlot", () => ({ default: () => <div /> }));
 vi.mock("../../overlays/ToolWindow", () => ({
@@ -69,5 +74,20 @@ describe("Optical gap input", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fit gap" }));
     await screen.findByText(/Eg = /);
     expect(taucMock.mock.calls[0][0]).toMatchObject({ x: [2, 3], y: [1e3, 5e4] });
+  });
+});
+
+describe("Magnetometry tools input", () => {
+  it("the background subtraction converts every worksheet row, excluded and filtered rows included", async () => {
+    vi.mocked(subtractMagBackground).mockResolvedValue({ corrected: [0, 0, 0, 0], slope: 0, intercept: 0 });
+    useApp.setState({
+      datasets: [{
+        ...SHEET,
+        data: { ...SHEET.data, time: [2, 100, 200, 300], values: [[5], [2], [1.5], [1]], metadata: { x_column_name: "Temperature", x_column_unit: "K" } },
+      }],
+    });
+    const { result } = renderHook(() => useMagTools());
+    await act(async () => { await result.current.subtractBackground(); });
+    expect(vi.mocked(subtractMagBackground).mock.calls[0][0]).toMatchObject({ temperature: [2, 100, 200, 300], moment: [5, 2, 1.5, 1] });
   });
 });
