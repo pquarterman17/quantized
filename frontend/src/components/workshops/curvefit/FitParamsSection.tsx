@@ -16,15 +16,22 @@ import { useState } from "react";
 import type { FitParamRow } from "../../../lib/fitParams";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
+import FitPreviewControls from "./FitPreviewControls";
+import type { FitPreviewInput } from "./useFitPreview";
+import { useFitPreview } from "./useFitPreview";
 
 export interface FitParamsSectionProps {
   rows: FitParamRow[];
   setRow: (index: number, patch: Partial<FitParamRow>) => void;
   reset: () => void;
+  /** What the initial-guess preview needs (Curve Fit only); omitted = no preview control. */
+  preview?: FitPreviewInput;
 }
 
-export default function FitParamsSection({ rows, setRow, reset }: FitParamsSectionProps) {
+export default function FitParamsSection({ rows, setRow, reset, preview }: FitParamsSectionProps) {
   const [open, setOpen] = useState(false);
+  const [previewOn, setPreviewOn] = useState(false); // opt-in, off by default
+  const state = useFitPreview(previewOn && !!preview, rows, preview ?? { active: null, model: undefined, modelName: "", xy: null, landed: null });
   if (rows.length === 0) return null;
   const edited = rows.some((r) => r.fixed) || false;
 
@@ -36,10 +43,11 @@ export default function FitParamsSection({ rows, setRow, reset }: FitParamsSecti
         title="Set starting values and bounds instead of using the model's defaults"
         aria-expanded={open}
       >
-        {open ? "▾" : "▸"} Start values & bounds
+        {open ? "▾" : "▸"} Start values & bounds{previewOn && preview ? " · preview on" : ""}
       </button>
       {open && (
         <div style={{ marginTop: 6 }}>
+          {preview && <FitPreviewControls on={previewOn} setOn={setPreviewOn} state={state} rows={rows} setRow={setRow} />}
           <div
             className="qzk-ds-meta"
             style={{ display: "flex", gap: 6, color: "var(--text-faint)" }}
