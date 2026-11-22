@@ -74,6 +74,8 @@ export interface GlobalFitState {
   busy: boolean;
   /** The running job's last message ("Nelder-Mead iteration n"); null when idle. */
   progress: string | null;
+  /** The job's reported fraction (0..1); null until it reports one. */
+  progressFraction: number | null;
   error: string | null;
   run: (mode?: "fit" | "compare") => Promise<void>;
   /** The last dataset comparison (Origin "Compare Datasets"); null until run. */
@@ -108,6 +110,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const [shared, setSharedFlags] = useState<boolean[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  const [progressFraction, setProgressFraction] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GlobalFitRun | null>(null);
   const [comparison, setComparison] = useState<DatasetCompareResult | null>(null);
@@ -191,6 +194,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     }
     setBusy(true);
     setProgress("queued");
+    setProgressFraction(null);
     const op = trackJob(mode === "compare" ? "Compare datasets" : "Global fit");
     try {
       const data = [];
@@ -220,6 +224,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       op.cancellable(() => void cancel());
       const onProgress = (f: number, msg?: string) => {
         setProgress(msg || null);
+        setProgressFraction(f);
         op.progress(f, msg);
       };
       if (mode === "compare") {
@@ -243,6 +248,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       jobRef.current = null;
       setBusy(false);
       setProgress(null);
+      setProgressFraction(null);
     }
   }
 
@@ -312,6 +318,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       }),
     busy,
     progress,
+    progressFraction,
     error,
     run,
     comparison,

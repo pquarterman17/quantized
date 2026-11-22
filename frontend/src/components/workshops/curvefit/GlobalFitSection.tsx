@@ -4,6 +4,7 @@
 // in place of the single-fit body while "Global fit" is on.
 
 import { Button, Select } from "../../primitives";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { NumberField } from "../../primitives/NumberField";
 import DatasetCompareResult from "./DatasetCompareResult";
 import GlobalFitResults from "./GlobalFitResults";
@@ -112,12 +113,10 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
             Cancel
           </Button>
         )}
-        {s.busy && s.progress != null && (
-          <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-            {s.progress}
-          </span>
-        )}
       </div>
+      {s.busy && (
+        <WorkbenchProgress label="Global fit progress" progress={{ fraction: s.progressFraction, message: s.progress }} />
+      )}
       {s.error && (
         <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
           {s.error}

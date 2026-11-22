@@ -161,6 +161,26 @@ describe("useGlobalFit — channels of the active dataset", () => {
     expect(globalFitJob).not.toHaveBeenCalled();
   });
 
+  it("exposes the job's reported fraction while running, and clears it after", async () => {
+    let report!: (f: number, msg?: string) => void;
+    let finish!: (v: typeof FIT_CHANNELS) => void;
+    vi.mocked(pollJob).mockImplementationOnce((_id, onProgress) => {
+      report = onProgress as typeof report;
+      return new Promise((resolve) => { finish = resolve as typeof finish; });
+    });
+    const { result } = renderHook(() => useGlobalFit(MODEL));
+    let running!: Promise<void>;
+    act(() => { running = result.current.run(); });
+    await waitFor(() => expect(result.current.progress).toBe("queued"));
+    expect(result.current.progressFraction).toBeNull();
+    act(() => report(0.4, "iteration 4"));
+    expect(result.current.progressFraction).toBe(0.4);
+    expect(result.current.progress).toBe("iteration 4");
+    await act(async () => { finish(FIT_CHANNELS); await running; });
+    expect(result.current.progressFraction).toBeNull();
+    expect(result.current.progress).toBeNull();
+  });
+
   it("a cancel is not an error and leaves no result", async () => {
     vi.mocked(pollJob).mockRejectedValue(new JobCancelledError("j1"));
     const { result } = renderHook(() => useGlobalFit(MODEL));

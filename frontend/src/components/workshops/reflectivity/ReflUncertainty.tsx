@@ -6,6 +6,7 @@
 // useReflDream's, the summary the record's.
 
 import { Button } from "../../primitives";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import PosteriorCorrelation from "./PosteriorCorrelation";
 import PosteriorTable from "./PosteriorTable";
@@ -82,14 +83,10 @@ export default function ReflUncertainty({ dream, record }: { dream: ReflDreamSta
       )}
 
       {mine && (
-        <div style={{ marginTop: 8 }}>
-          <div aria-label="DREAM progress" style={{ height: 4, borderRadius: 2, background: "var(--surface-2)", overflow: "hidden" }}>
-            <div style={{ width: `${Math.round((dream.progress ?? 0) * 100)}%`, height: "100%", background: "var(--accent)" }} />
-          </div>
-          <div className="qzk-ds-meta" style={{ ...FAINT, ...MONO, marginTop: 4 }}>
-            {Math.round((dream.progress ?? 0) * 100)}% — {dream.message || "sampling posterior"}
-          </div>
-        </div>
+        <WorkbenchProgress
+          label="DREAM progress"
+          progress={{ fraction: dream.progress, message: dream.message || "sampling posterior" }}
+        />
       )}
 
       {dream.error && dream.errorFor === record.id && !dream.busy && (
