@@ -49,4 +49,24 @@ describe("runSequentialBatch", () => {
     expect(results.map((r) => r.status)).toEqual(["skipped", "failed", "created"]);
     expect(results[0]).toEqual({ item: ITEMS[0], status: "skipped", reason: "review declined" });
   });
+
+  it("reports an item that honoured the stop with an AbortError as stopped, with the rest", async () => {
+    const ctrl = new AbortController();
+    const results = await runSequentialBatch(
+      ITEMS,
+      async () => {
+        ctrl.abort();
+        throw new DOMException("aborted", "AbortError");
+      },
+      { signal: ctrl.signal },
+    );
+    expect(results.map((r) => r.status)).toEqual(["stopped", "stopped", "stopped"]);
+  });
+
+  it("an AbortError with no stop requested is an ordinary failure", async () => {
+    const results = await runSequentialBatch([ITEMS[0]], async () => {
+      throw new DOMException("aborted", "AbortError");
+    });
+    expect(results[0].status).toBe("failed");
+  });
 });

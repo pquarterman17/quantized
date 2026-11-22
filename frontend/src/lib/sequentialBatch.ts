@@ -32,8 +32,12 @@ export interface SequentialBatchOptions {
 const reasonOf = (error: unknown): string =>
   error instanceof Error ? error.message : "processing failed";
 
-/** Run every item in order. A stop never interrupts an item halfway through;
- * it marks all not-yet-started items stopped, leaving completed work valid. */
+const isAbort = (e: unknown): boolean => typeof e === "object" && e !== null && (e as { name?: unknown }).name === "AbortError";
+
+/** Run every item in order. A stop marks all not-yet-started items stopped,
+ * leaving completed work valid. A worker that honours the signal and throws an
+ * AbortError after the stop is "stopped" too (nothing of it was created); a
+ * worker that ignores the signal simply finishes its item. */
 export async function runSequentialBatch<T>(
   items: readonly BatchItem[],
   worker: (item: BatchItem) => Promise<T>,
@@ -54,6 +58,10 @@ export async function runSequentialBatch<T>(
     try {
       results.push({ item, status: "created", value: await worker(item) });
     } catch (error) {
+      if (options.signal?.aborted && isAbort(error)) {
+        results.push(...items.slice(i).map((rest): BatchResult<T> => ({ item: rest, status: "stopped" })));
+        break;
+      }
       results.push(
         error instanceof BatchSkip
           ? { item, status: "skipped", reason: error.message }

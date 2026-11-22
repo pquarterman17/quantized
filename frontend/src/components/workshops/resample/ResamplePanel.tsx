@@ -185,7 +185,7 @@ function ResampleWorkshop() {
             </div>
           )}
 
-          <WorkbenchProgress progress={r.progress} label="Resample batch progress" onStop={r.stop} />
+          <WorkbenchProgress progress={r.progress} label="Resample batch progress" onStop={r.stop} stopLabel="Stop" />
 
           <Button
             variant="primary"

@@ -279,7 +279,7 @@ export async function computeTransform(
     case "resample": {
       // One compute for the workshop's live preview and this commit/replay.
       const m = others[0];
-      const r = await computeResample(p, { name: primary.name, data: src }, m ? { name: m.name, data: m.data } : null);
+      const r = await computeResample(p, { name: primary.name, data: src }, m ? { name: m.name, data: m.data } : null, { signal });
       return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings, [[primary.name, src]]) };
     }
     case "sigop": {
@@ -413,10 +413,12 @@ export async function runTransform(
       ...(refused ? { refused: true } : {}),
     };
   }
+  signal?.throwIfAborted();
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
   const refs = refsOf(p);
   const others = await resolveRefs(s, refs);
+  signal?.throwIfAborted();
   const signalSnapshots = p.op === "signal"
     ? [primary, ...others].map((dataset) => ({
         id: dataset.id,
@@ -443,6 +445,8 @@ export async function runTransform(
     s().setStatus(`${c.preview.title} cancelled — nothing was created`);
     return null;
   }
+  // Closed / stopped while the review was open: the answer must not create.
+  signal?.throwIfAborted();
   assertSignalSourceUnchanged();
   // Read BEFORE addDataset, which makes the output active.
   const inputIsTarget = s().activeId === primary.id;
