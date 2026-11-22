@@ -36,7 +36,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { statsHistogram, statsQQ } from "../../lib/api";
+import { statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
@@ -66,10 +66,10 @@ import {
   computeFacetGroupDraws,
   computeStripDraw,
   computeViolinDraw,
-  histogramDraw,
   qqDraw,
   type FacetDraw,
 } from "./useStatStageCompute";
+import { computeHistogramDraw, histogramColumns } from "./statHistMulti";
 import { useStatStageDraws } from "./useStatStageDraws";
 import { useStatStageExport } from "./useStatStageExport";
 import { useStatStagePicks } from "./useStatStagePicks";
@@ -124,6 +124,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFacetCol, colorCol, setColorCol,
     effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
     dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack, barPercent, setBarLayout, valueRange,
+    histCols, setHistCols,
   } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed, picks: params.picks, onPicksChange: params.onPicksChange });
   // P2.6 box 1: the categorical marks (points / jitter / summary / error bars
   // / connect-means / labels) are the window's persisted `PlotView.statMarks`
@@ -375,15 +376,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         })
         .finally(() => !cancelled && setBusy(false));
     } else {
-      const finite = finiteOf(data, valueCol);
-      if (finite.length < (fit ? 2 : 1)) {
-        setDrawData(null);
-        setError(fit ? "need ≥ 2 finite values" : "need ≥ 1 finite value");
-        return;
-      }
+      const cols = histogramColumns(valueCol, histCols, data.labels.length);
       setBusy(true);
-      statsHistogram(finite, bins, fit)
-        .then((r) => !cancelled && setDrawData(histogramDraw(r, fit, valueLabel)))
+      computeHistogramDraw(data, cols, cols.map((c) => data.labels[c] ?? ""), bins, fit, valueLabel)
+        .then((d) => !cancelled && setDrawData(d))
         .catch((e: unknown) => {
           if (cancelled) return;
           setDrawData(null);
@@ -405,6 +401,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     rowIds,
     marksMode,
     valueCol,
+    histCols,
     dist,
     bins,
     fit,
@@ -449,7 +446,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const drawPending = effectiveFacetCol != null && marksMode ? !freshFacets : !freshDraw;
   const exportFigure = useStatStageExport(drawPending, data ? {
     data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
-    valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
+    valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, histCols, marks: rm,
     showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
   } : null, marksMode ? error : null);
 
@@ -474,6 +471,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setBins,
     fit,
     setFit,
+    histCols,
+    setHistCols,
     barStack,
     setBarStack,
     barPercent,

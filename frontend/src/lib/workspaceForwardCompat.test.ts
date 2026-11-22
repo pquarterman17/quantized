@@ -108,6 +108,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "ExportSeriesStyle.size_range": (ws) => editExport(ws, { size_range: [2, 8] }),
   "ExportSeriesStyle.drop_lines": (ws) => editExport(ws, { drop_lines: "x" }),
   "ExportSeriesStyle.connect": (ws) => editExport(ws, { connect: "spline" }),
+  "ExportSeriesStyle.stack": (ws) => editExport(ws, { stack: true }),
   "DisplayBlock.ramp": (ws) => {
     const s = spec(ws);
     s.spec = { ...s.spec, display: { ...s.spec.display, ramp: { map: "plasma" } } };
@@ -129,6 +130,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "StatPicks.barPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", barStack: true, barPercent: true }; }),
   "StatPicks.valueRange": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", valueRange: [65, 75] }; }),
+  "StatPicks.histCols": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histCols: [2] }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },

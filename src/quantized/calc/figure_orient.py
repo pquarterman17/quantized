@@ -106,6 +106,8 @@ class TransposedAxes:
         return self.real.scatter(y, x, *args, **kw)
 
     def bar(self, x: Any, height: Any, width: float = 0.8, **kw: Any) -> Any:
+        if "bottom" in kw:  # a stacked bar's base is the turned bar's left edge
+            kw["left"] = kw.pop("bottom")
         return self.real.barh(x, height, height=width, **kw)
 
     def fill_between(self, x: Any, y1: Any, y2: Any = 0, **kw: Any) -> Any:

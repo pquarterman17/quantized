@@ -32,6 +32,7 @@ __all__ = [
     "error_bar_bounds",
     "grouped_box_stats",
     "histogram",
+    "histogram_multi",
     "qq_plot",
     "violin_kde",
 ]
@@ -322,3 +323,35 @@ def histogram(
             "pdf": [float(p) for p in pdf],
         }
     return out
+
+
+def histogram_multi(
+    columns: list[NDArray[np.float64] | list[float]],
+    *,
+    bins: str | int = "fd",
+) -> dict[str, Any]:
+    """Several columns binned on ONE shared set of edges (Origin's multi-column
+    histogram): the bin rule runs on the pooled finite values, so every
+    column's counts line up bin for bin. ``series[i]`` is column ``i``'s
+    ``{"counts", "n"}``; a column with no finite value counts zeros."""
+    if not columns:
+        raise ValueError("histogram needs at least one column")
+    if isinstance(bins, int) and bins > _MAX_BINS:
+        raise ValueError(f"bins {bins} is too large; at most {_MAX_BINS}")
+    finite = [_finite(c) for c in columns]
+    pooled = np.concatenate(finite)
+    if pooled.size < 1:
+        raise ValueError("histogram needs at least 1 finite value")
+    one = [float(pooled[0]) - 0.5, float(pooled[0]) + 0.5] if np.unique(pooled).size == 1 else None
+    edges = np.histogram_bin_edges(pooled, bins=one if one else bins)
+    series = [
+        {"counts": [float(c) for c in np.histogram(v, bins=edges)[0]], "n": int(v.size)}
+        for v in finite
+    ]
+    return {
+        "edges": [float(e) for e in edges],
+        "series": series,
+        "n_bins": int(edges.size - 1),
+        "n": int(pooled.size),
+        "bins": bins,
+    }

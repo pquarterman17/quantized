@@ -33,6 +33,7 @@ from quantized.calc.figure_stat_marks import (
     resolve_marks,
     scatter_points,
 )
+from quantized.calc.figure_hist_multi import draw_histogram_multi, is_multi
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots import box_stats as _box_stats
 from quantized.calc.statplots import histogram as _histogram
@@ -405,6 +406,9 @@ def _draw_statplot(
             ax, all_ticks, cat_labels, raw_labels=raw_labels or cat_labels, **(axis_style or {}),
         )
 
+    if kind == "histogram" and is_multi(data):  # several columns, shared bins (figure_hist_multi)
+        draw_histogram_multi(ax, data, labels, bins, colors)  # type: ignore[arg-type]
+        return None
     sample = np.asarray(data, dtype=float).ravel()
     # One glyph colour (``colors[0]``): the canvas' ``seriesColor(0)``, when
     # the client sent its palette; matplotlib's own otherwise, as before.

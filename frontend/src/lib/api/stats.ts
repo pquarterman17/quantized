@@ -35,6 +35,12 @@ export function statsHistogram(
   return postJSON("/api/statplots/histogram", { data, bins, ...(fit ? { fit } : {}) });
 }
 
+/** Several columns binned on ONE shared set of edges (the multi-column
+ *  histogram): the bin rule runs on the pooled values. */
+export function statsHistogramMulti(columns: number[][], bins: string | number = "fd"): Promise<CalcResult> {
+  return postJSON("/api/statplots/histogram-multi", { columns, bins });
+}
+
 /** Shapiro-Wilk normality test (valid 3 ≤ n ≤ 5000). Returns W, p, N. */
 export function statsShapiro(x: number[]): Promise<CalcResult> {
   return postJSON("/api/stats/shapiro", { x });

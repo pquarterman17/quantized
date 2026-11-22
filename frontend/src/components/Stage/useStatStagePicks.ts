@@ -77,6 +77,9 @@ export interface StatStagePicks {
   setBarLayout: (l: "grouped" | "stacked" | "percent") => void;
   /** The value axis's saved range (an Origin layer's Y range), else null. */
   valueRange: [number, number] | null;
+  /** Extra columns a histogram bins with the value column (shared edges). */
+  histCols: number[];
+  setHistCols: (c: number[]) => void;
 }
 
 export interface UseStatStagePicksParams {
@@ -202,5 +205,11 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
         return now === l ? p : { ...freed(p), barStack: l !== "grouped", barPercent: l === "percent" };
       }, "change statistics plot"),
     valueRange: picks.valueRange ?? null,
+    histCols: picks.histCols ?? [],
+    setHistCols: (c) =>
+      write((p) => {
+        const { histCols: _drop, ...rest } = p;
+        return c.length ? { ...rest, histCols: c } : rest;
+      }, "change statistics plot"),
   };
 }

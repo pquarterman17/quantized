@@ -80,6 +80,9 @@ export interface StatStageState {
   setBins: (b: string) => void;
   fit: string | null;
   setFit: (f: string | null) => void;
+  /** Extra columns the histogram bins with `valueCol` (one graph, shared edges). */
+  histCols: number[];
+  setHistCols: (c: number[]) => void;
   /** Bar mode only (gap #20): grouped (false, clustered side-by-side) vs
    *  stacked (true, one bar per category). */
   barStack: boolean;
