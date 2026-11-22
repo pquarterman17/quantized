@@ -155,7 +155,9 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
       } finally {
         _recalcInProgress = false;
         // Lane RP: user edits made mid-pass, applied now under the current mode.
-        for (const id of drainUserTouches()) get().touchDataset(id);
+        for (const id of drainUserTouches()) {
+          try { get().touchDataset(id); } catch { /* a dataset deleted mid-pass: nothing to mark */ }
+        }
         if (_recalcPending) void ((_recalcPending = false), get().recalcNow());
       }
     },

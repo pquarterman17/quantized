@@ -96,12 +96,36 @@ describe("a user edit made while a recalc pass runs", () => {
     expect(applyCorrections).toHaveBeenCalledTimes(1);
   });
 
-  it("None: tracks nothing", async () => {
-    const { release, pass } = await heldPass("off");
-    editSource([5, 6, 7, 8]);
+  it("None: a mode switched to None mid-pass tracks nothing when the edit is replayed", async () => {
+    const { release, pass } = await heldPass("manual");
+    editSource([5, 6, 7, 8]); // queued under Manual
+    st().setRecalcMode("off");
     release();
     await pass;
     expect(st().staleDatasets).toEqual([]);
+  });
+
+  it("a row exclusion made while that sheet's own correction runs is replayed", async () => {
+    useApp.setState({ datasets: [SRC] });
+    const l = await createSignalWorksheetFromApp("src", recipe("src") as never);
+    if (!l) throw new Error("setup");
+    useApp.setState((x) => ({
+      datasets: x.datasets.map((d) => (d.id === "src" ? { ...d, raw: d.data, corrections: { signalChannels: [0] } } : d)),
+      staleDatasets: ["src"],
+    }));
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const started = new Promise<void>((r) => { entered = r; });
+    vi.mocked(applyCorrections).mockImplementationOnce(async ({ dataset }) => {
+      entered(); await gate; return structuredClone(dataset);
+    });
+    const pass = st().recalcNow();
+    await started;
+    st().toggleRowExcluded("src", 1);
+    release();
+    await pass;
+    expect(st().staleDatasets).toEqual([l]); // src settled; its linked sheet saw the exclusion
   });
 
   it("keeps the redo stack (the replay records no history)", async () => {

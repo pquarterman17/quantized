@@ -832,9 +832,10 @@ inconsistently exposed, and do not all share the same result lifecycle.
     Auto re-runs (one debounced pass, no loop: the re-run's own writes are
     tagged), Manual marks stale and None queues nothing. The replay records
     no history (the redo stack survives). Fail-before tests in
-    `store/recalcPassEdits.test.ts`. Known residual: an edit to the very
-    dataset whose correction the pass is writing at that instant is read as
-    the pass's own write (the correction overwrites it, as before).
+    `store/recalcPassEdits.test.ts`. Known residual: a DATA edit to the very dataset whose
+    correction the pass is writing at that instant is overwritten by the
+    correction (as before) and, being read as the pass's own write, is not
+    replayed; a row-state edit there is replayed.
     (3) With Replace chosen, a computation whose key matches ANOTHER
     current result (an earlier "Add as new") returns that result and replaces
     nothing; the button says "Already added as …". (4) A reopen session ends
