@@ -7,6 +7,7 @@ import type uPlot from "uplot";
 import type { HalfLim } from "../../lib/axisLim";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { PlotOverlays } from "../../lib/plotOverlays";
+import type { LabelLayout } from "../../lib/pointLabelLayout";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
 
@@ -15,6 +16,8 @@ export interface PlotViewportProps
   displayPayload: PlotPayload | null;
   /** Line of fit / smoother / density ellipse (`PlotView.overlays`); null/absent = off. */
   overlays?: PlotOverlays | null;
+  /** The point labels' shared layout (`usePointLabelLayout`); absent = none. */
+  pointLabelLayout?: LabelLayout;
   /** Gap audit 4 G19: the Y link group's registry key (`windowYSyncKey`). */
   ySyncKey?: string;
   /** Committed X/Y limits; a null side is auto for that side (`useResolvedLims`). */

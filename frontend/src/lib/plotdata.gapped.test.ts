@@ -66,8 +66,8 @@ describe("readout on a gapped plot", () => {
   }
 
   it("fills filler with the nearest real value", () => {
-    expect(readAt(1)).toEqual({ x: 1, rows: [{ label: "A", y: 5 }] });
-    expect(readAt(2)).toEqual({ x: 2, rows: [{ label: "A", y: 9 }] });
+    expect(readAt(1)).toMatchObject({ x: 1, rows: [{ label: "A", y: 5 }] });
+    expect(readAt(2)).toMatchObject({ x: 2, rows: [{ label: "A", y: 9 }] });
   });
 
   it("shows nothing inside a genuine NaN run, and never reaches across it", () => {

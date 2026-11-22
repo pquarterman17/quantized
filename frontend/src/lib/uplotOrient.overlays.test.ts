@@ -192,7 +192,7 @@ describe("orientPlugins on a turned plot", () => {
     let got: unknown = null;
     const [p] = orientPlugins([readoutPlugin((r) => (got = r))], TURNED);
     (p.hooks.setCursor as (u: uPlot) => void)(u);
-    expect(got).toEqual({ x: 5, rows: [{ label: "", y: 50 }] });
+    expect(got).toMatchObject({ x: 5, rows: [{ label: "", y: 50 }] }); // (+ idx: the point labels read it)
   });
 });
 

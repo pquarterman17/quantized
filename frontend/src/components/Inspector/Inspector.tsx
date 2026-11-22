@@ -28,6 +28,7 @@ import OriginProvenanceCard from "./OriginProvenanceCard";
 import PlotObjectsCard from "./PlotObjectsCard";
 import RefLinesCard from "./RefLinesCard";
 import FitOverlaysCard from "./FitOverlaysCard";
+import PointLabelsCard from "./PointLabelsCard";
 import RegionShadesCard from "./RegionShadesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import ShapesCard from "./ShapesCard";
@@ -135,6 +136,7 @@ function InspectorBody() {
     ["Reference lines", <RefLinesCard />],
     ["Region shades", <RegionShadesCard />],
     ["Fit overlays", stageTab !== "map" && <FitOverlaysCard />],
+    ["Point labels", stageTab !== "map" && <PointLabelsCard />],
     ["Annotations", <AnnotationsCard />],
     ["Shapes", <ShapesCard />],
     // Line/Scatter/marker controls style XY curves; a map draws none (figures audit #18).

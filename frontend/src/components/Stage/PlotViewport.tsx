@@ -35,6 +35,8 @@ import { plotDecorNeeds, startupOverlayCount, useLazyPlotParts } from "./useLazy
 import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useScatterOverlays } from "./useScatterOverlays";
+import { useCanvasPointLabels } from "./usePointLabelLayout";
+import { NO_LABELS } from "../../lib/pointLabelLayout";
 import { useResolvedLims } from "./useResolvedLims";
 import { usePlotKeyboard } from "./usePlotKeyboard";
 
@@ -48,7 +50,7 @@ export type { PlotViewportProps };
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, ySyncKey, insetTop, frameVars, onLimCrossed, overlays, ...args } =
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, ySyncKey, insetTop, frameVars, onLimCrossed, overlays, pointLabelLayout, ...args } =
     props;
   const hostRef = useRef<HTMLDivElement>(null);
   const lims = useResolvedLims(displayPayload, args, onLimCrossed); // half-open -> concrete pairs
@@ -379,6 +381,7 @@ export default function PlotViewport(props: PlotViewportProps) {
   useLazyPlotParts([args.xFmt, args.yFmt, args.y2Fmt], args.tool, () => setRebuildEpoch((e) => e + 1), { ...decor, regionResult: !!(args.integral || args.fwhmResult), shapes: !!(args.shapes?.length || args.shapeDraw?.drawKind), annotations: !!args.annotations?.length });
 
   useScatterOverlays(plotRef, displayPayload, overlays, { xScale: args.xScale ?? "linear", yScale: args.yScale ?? "linear", exchangeXY: args.exchangeXY }, args.hidden, args.seriesStyles); // gap audit 8: line of fit / smoother / ellipse
+  useCanvasPointLabels(plotRef, pointLabelLayout ?? NO_LABELS, args.plotted ?? []); // gap audit 8: point labels
   const kb = usePlotKeyboard({ plotRef, payload: displayPayload, hidden: args.hidden, onViewChange: args.onViewChange, onReadout: args.onReadout, xLabel: args.xAxisLabel, yLabel: args.yAxisLabel });
   return (
     <div ref={hostRef} {...kb.hostProps} style={{ position: "absolute", inset: 8, top: insetTop === undefined ? 8 : `max(${insetTop}px, var(--qz-dock-clear, 0px))`, right: "var(--qz-plot-right,8px)" }}>

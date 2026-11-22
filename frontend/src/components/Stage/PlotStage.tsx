@@ -18,6 +18,7 @@ import { useFocusedRampedStyles } from "./useSeriesRamp";
 import { useStageOverlays } from "./useStageOverlays";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useFocusedWindowChrome } from "./useFocusedWindowChrome";
+import { usePointLabelLayout } from "./usePointLabelLayout";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
@@ -100,6 +101,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const { bg: winBg, linkGroup: winLinkGroup, linkYGroup: winLinkYGroup } = useFocusedWindowChrome();
   const { axesBg, inkColor, isDark: isDarkBg } = resolvePlotBg(winBg);
   const focusedBindings = focusedDocument?.bindings;
+  const pointLabelLayout = usePointLabelLayout(active, displaySelection, focusedBindings?.encoding); // gap audit 8
   const tool = useApp((s) => s.plotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
@@ -309,6 +311,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         shapeDraw={shapeDraw}
         regionShades={regionShades}
         overlays={overlays}
+        pointLabelLayout={pointLabelLayout}
         seriesStyles={styleList}
         seriesCycle={seriesCycle}
         plotted={plotted}

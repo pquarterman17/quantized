@@ -140,6 +140,10 @@ export interface FigureOverrides {
   /** Line of fit / smoother / density ellipse (`PlotView.overlays`, gap audit 8):
    *  `lib/plotOverlays.ts` `overlaysWire`, drawn by `calc.figure_overlays_draw`. */
   overlays?: Record<string, unknown>;
+  /** Point labels (`PlotView.pointLabels`, gap audit 8): the laid-out list
+   *  (`lib/figurePointLabels.ts`), drawn by `calc.figure_point_labels`; `s` is the
+   *  index among the shown curves, `note` the line printed under the plot. */
+  point_labels?: { points: { x: number; y: number; text: string; s: number }[]; note?: string };
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only

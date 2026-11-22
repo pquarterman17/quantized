@@ -15,15 +15,23 @@ interface Props {
   readout: Readout | null;
   measurement: Measurement | null;
   stats: RegionStats | null;
+  /** The hovered point's worksheet row (1-based) and its label value, when a label column is set. */
+  pointRow?: { row: number; label: string | null } | null;
 }
 
-export default function PlotReadouts({ tool, readout, measurement, stats }: Props) {
+export default function PlotReadouts({ tool, readout, measurement, stats, pointRow }: Props) {
   // The keyboard cursor (usePlotKeyboard) reports through the same readout under any other tool.
   if (tool === "cursor" || (readout && tool !== "region" && tool !== "measure" && tool !== "stats")) {
     if (!readout) return null;
     return (
       <div className="qzk-glass qzk-readout">
         <div style={{ color: "var(--text-dim)" }}>x = {readout.x.toPrecision(5)}</div>
+        {pointRow && (
+          <div style={{ display: "flex", gap: 6, justifyContent: "space-between", color: "var(--text-dim)" }}>
+            <span>row {pointRow.row}</span>
+            {pointRow.label !== null && <span>{pointRow.label}</span>}
+          </div>
+        )}
         {readout.rows.map((r, i) => (
           <div
             key={`${r.label}-${i}`}
