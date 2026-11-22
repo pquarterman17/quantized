@@ -281,7 +281,7 @@ export default function StatStage() {
             connect-means and label options -- persisted on the PlotView. */}
         {categorical && (
           <StatMarksControls
-            mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} stacked={st.barStack} errorColumn={st.errorColumn}
+            mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} stacked={st.barStack} errorColumn={st.errorColumn} comparisons={st.comparisons}
           />
         )}
 

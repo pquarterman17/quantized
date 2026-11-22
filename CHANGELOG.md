@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Significance brackets and compact letters on box, violin, strip and bar plots**: in the Statistics stage's marks bar, "compare" (off by default) draws, over the groups you are plotting, either brackets with stars for the significant pairs (optionally with the exact p) or a/b/c letters (groups sharing a letter do not differ). The test is Tukey HSD over every pair, or Dunnett against a control group you pick (the first group by default); the p-values are the tests' own multiplicity-adjusted ones, with familywise alpha 0.05. The marks use exactly the groups the plot shows, so excluded and filtered rows are left out, and the value axis grows to hold them. The test, the correction and the star thresholds are written under the plot and in the exported figure, which draws the same brackets and letters (PDF, SVG, PNG, copy). Brackets show significant pairs only, and the note says so (or says no pair was significant). Nothing is drawn, and the reason is shown next to the control, when the comparison would be ambiguous: letters with Dunnett (it does not test every pair), faceted plots, a group with fewer than 2 values, fewer than 2 groups, a Dunnett control that is no longer a group, bar plots that are stacked, have several series or a fixed value range, or a plot that changed under the test. The choice is saved per plot type with the project; a project that uses it is saved in a newer file version that older releases refuse to open rather than silently dropping it.
+
 ## [0.40.1] - 2026-11-22
 
 ### Fixed

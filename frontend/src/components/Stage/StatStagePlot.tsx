@@ -37,27 +37,29 @@ interface Props {
 /** Height of the footnote strip under the figure, px. */
 const NOTE_H = 18;
 
+/** One strip line per `\n` (the error-bar note, then the significance note). */
 function ErrorNote({ text, right }: { text: string; right: number }) {
   return (
     <div
       data-testid="stat-error-note"
+      title={text}
       style={{
         position: "absolute",
         left: 16,
         right: 8 + right,
         bottom: 2,
-        height: NOTE_H - 4,
         fontFamily: "var(--font-mono)",
         fontSize: 10,
         fontStyle: "italic",
         color: "var(--text-dim)",
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
         pointerEvents: "none",
       }}
     >
-      {text}
+      {text.split("\n").map((line, i) => (
+        <div key={i} style={{ height: NOTE_H - 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {line}
+        </div>
+      ))}
     </div>
   );
 }
@@ -85,7 +87,7 @@ export default function StatStagePlot({ draw, drawFacets, theme, accent, sel, ri
     };
   };
 
-  const foot = errorNote ? NOTE_H : 0;
+  const foot = errorNote ? NOTE_H * errorNote.split("\n").length : 0;
   const plot = shownFacets ? (
     <div
       style={{
