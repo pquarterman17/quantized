@@ -26,7 +26,8 @@ import {
   transposeRows,
   type MultivarColumn,
 } from "../../../lib/multivar";
-import { analysisView } from "../../../lib/rowstate";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useActiveDataset } from "../../../store/useApp";
 import { useMultivarResultBridge } from "./useMultivarResultBridge";
 
@@ -34,6 +35,8 @@ export type CorrMethod = "pearson" | "spearman";
 
 export interface MultivarState {
   hasData: boolean;
+  /** What is analysed, under the shared input contract. */
+  inputs: AnalysisInputs;
   columns: MultivarColumn[];
   selected: number[];
   toggleColumn: (index: number) => void;
@@ -73,9 +76,6 @@ function errMsg(e: unknown, fallback: string): string {
 
 export function useMultivar(): MultivarState {
   const active = useActiveDataset();
-  const view = useMemo(() => analysisView(active), [active]);
-  const data = view.data;
-
   const columns = useMemo<MultivarColumn[]>(() => multivarColumns(active), [active]);
 
   const [selected, setSelected] = useState<number[]>(() => defaultContinuousColumns(active));
@@ -86,6 +86,12 @@ export function useMultivar(): MultivarState {
     setSelected(defaultContinuousColumns(active));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
+
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view over the picked columns; a lazy Origin preview is refused.
+  const inputs = useAnalysisInputs({ yKeys: selected, policy: ROW_POLICY.analysisView });
+  const data = inputs.ok ? inputs.data : null;
+  const rowIds = inputs.ok ? inputs.rowIds : null;
 
   function toggleColumn(index: number): void {
     setSelected((cur) => (cur.includes(index) ? cur.filter((c) => c !== index) : [...cur, index].sort((a, b) => a - b)));
@@ -108,8 +114,8 @@ export function useMultivar(): MultivarState {
     return listwiseCompleteWithIndices(cols);
   }, [data, selected]);
   const rows = complete.rows;
-  const sourceRows = useMemo(() => complete.rowIndices.map((row) => (view.rowIds?.[row] ?? row) + 1),
-    [complete.rowIndices, view.rowIds]);
+  const sourceRows = useMemo(() => complete.rowIndices.map((row) => (rowIds?.[row] ?? row) + 1),
+    [complete.rowIndices, rowIds]);
 
   const tooFewColumns = selected.length < 2;
 
@@ -211,6 +217,7 @@ export function useMultivar(): MultivarState {
 
   return {
     hasData: !!active,
+    inputs,
     columns,
     selected,
     toggleColumn,

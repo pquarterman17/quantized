@@ -9,7 +9,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reportEmit, statsRecommend, statsRunTest } from "../../../lib/api";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { analysisData } from "../../../lib/rowstate";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import {
   buildRunRequest,
   groupsByCategory,
@@ -33,6 +34,8 @@ export interface ChooserColumn {
 
 export interface StatsChooserState {
   active: Dataset | null;
+  /** What is analysed, under the shared input contract. */
+  inputs: AnalysisInputs;
   columns: ChooserColumn[];
   mode: ChooserMode;
   setMode: (m: ChooserMode) => void;
@@ -61,8 +64,6 @@ export interface StatsChooserState {
 
 export function useStatsChooser(): StatsChooserState {
   const active = useActiveDataset();
-  const data = useMemo(() => analysisData(active), [active]);
-
   const columns = useMemo<ChooserColumn[]>(() => {
     if (!active) return [];
     const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
@@ -96,6 +97,12 @@ export function useStatsChooser(): StatsChooserState {
   const [testResult, setTestResult] = useState<CalcResult | null>(null);
   const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
+
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view over the columns the current mode reads. A lazy Origin
+  // preview is refused here; "Recommend" still queues behind the full load.
+  const inputs = useAnalysisInputs({ yKeys: mode === "columns" ? cols : [valueCol, byCol], policy: ROW_POLICY.analysisView });
+  const data = inputs.ok ? inputs.data : null;
 
   const groups = useMemo<GroupSpec[]>(() => {
     if (!data) return [];
@@ -241,6 +248,7 @@ export function useStatsChooser(): StatsChooserState {
 
   return {
     active,
+    inputs,
     columns,
     mode,
     setMode: (m) => {
