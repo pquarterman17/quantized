@@ -43,6 +43,7 @@ const ELLIPSE_FIT_PRODUCER = { id: "ellipse-fit", label: "Ellipse fit", version:
 
 export function useEllipseFit(): EllipseFitState {
   const active = useActiveDataset();
+  const resolveDataset = useApp((s) => s.resolveDataset);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
   // "Open in Ellipse fit" (lane RO): start from the recorded columns and method.
@@ -78,7 +79,7 @@ export function useEllipseFit(): EllipseFitState {
       // A lazy book's arrival moves the key the result is stored under: install it
       // first, let that commit land, and only then take the key this fit is asked with.
       if (active.pending) {
-        await useApp.getState().resolveDataset(active.id);
+        await resolveDataset(active.id);
         await afterCommit();
       }
       const launchKey = liveKey.current;

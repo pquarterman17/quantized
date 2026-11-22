@@ -74,6 +74,7 @@ function defaults(cols: PickColumn[], ds: Dataset | null): [number, number, numb
 
 export function useSurfaceFit(): SurfaceFitState {
   const active = useActiveDataset();
+  const resolveDataset = useApp((s) => s.resolveDataset);
   const setStatus = useApp((s) => s.setStatus);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
@@ -200,7 +201,7 @@ export function useSurfaceFit(): SurfaceFitState {
       // A lazy book's arrival moves the key the result is stored under: install
       // it, let that commit land, then take the key this fit is asked with.
       if (active.pending) {
-        await useApp.getState().resolveDataset(active.id);
+        await resolveDataset(active.id);
         await afterCommit();
       }
       const launchKey = liveKey.current;

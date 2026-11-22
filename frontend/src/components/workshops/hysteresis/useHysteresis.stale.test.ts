@@ -42,9 +42,11 @@ describe("Hysteresis result freshness", () => {
 
   it("forced race: an answer for rows changed in flight never lands", async () => {
     let land!: (r: CalcResult) => void;
-    vi.mocked(hysteresisAnalysis).mockImplementationOnce(() => new Promise((r) => { land = r; }));
+    let started!: () => void;
+    const began = new Promise<void>((r) => { started = r; });
+    vi.mocked(hysteresisAnalysis).mockImplementationOnce(() => { started(); return new Promise((r) => { land = r; }); });
     const { result } = renderHook(() => useHysteresis());
-    await waitFor(() => expect(hysteresisAnalysis).toHaveBeenCalledTimes(1));
+    await began;
     vi.mocked(hysteresisAnalysis).mockResolvedValue({ Hc: 0.9, Mr: 0.2, Ms: 1.0 });
     act(() => useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, excludedRows: [2] })) })));
     await waitFor(() => expect(result.current.result?.Hc).toBe(0.9));

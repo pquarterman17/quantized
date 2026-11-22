@@ -99,6 +99,7 @@ const SIGNALS: readonly TaucSignal[] = ["alpha", "absorbance", "transmittance"];
 
 export function useOpticalGap(): OpticalGapState {
   const active = useActiveDataset();
+  const resolveDataset = useApp((s) => s.resolveDataset);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
 
@@ -183,7 +184,7 @@ export function useOpticalGap(): OpticalGapState {
       // A lazy book's arrival moves the key the result is stored under: install it
       // first, let that commit land, and only then take the key this fit is asked with.
       if (active.pending) {
-        await useApp.getState().resolveDataset(active.id);
+        await resolveDataset(active.id);
         await afterCommit();
       }
       const launchKey = liveKey.current;
