@@ -25,7 +25,7 @@ import type { Dataset, SeriesStyle } from "./types";
 
 export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
-  | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "box" | "histogram"
+  | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram"
   | "contour"
   | "violin" | "doubleY" | "polar" | "waterfall" | "stacked" | "ternary" | "pie";
 
@@ -49,6 +49,7 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "stackedColumnX", label: "Stacked Column per X row", glyph: GLYPHS.plotStackedColumnX, description: "Per-row bars, each Y column stacked on the ones before it." },
   { id: "stackedBarH", label: "Horizontal Stacked Bar", glyph: GLYPHS.plotStackedBarH, description: "Per-row bars on their side, each Y column stacked on the ones before it." },
   { id: "stackedArea", label: "Stacked Area", glyph: GLYPHS.plotStackedArea, description: "Each Y column filled on top of the ones before it." },
+  { id: "floatColumn", label: "Floating Column", glyph: GLYPHS.plotFloatColumn, description: "Each bar spans two Y columns, low to high; further columns pair up the same way." },
   { id: "box", label: "Box", glyph: GLYPHS.plotBox, description: "Box-and-whisker per category." },
   { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Colour map with contour lines from X/Y/Z columns." },
@@ -74,7 +75,7 @@ export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): st
     return "Needs X, Y, Z on a grid; else Plot > Contour from scattered XYZ.";
   }
   const columns = dataset.data.labels.length;
-  if ((id === "doubleY" || id === "waterfall" || id === "stacked") && columns < 2) return "Needs at least two Y columns.";
+  if ((id === "doubleY" || id === "waterfall" || id === "stacked" || id === "floatColumn") && columns < 2) return "Needs at least two Y columns.";
   // The X column counts: an A,B,C sheet imports A as X and B, C as channels.
   if (id === "ternary" && columns + 1 < 3) return "Needs three composition columns.";
   return null;
@@ -90,6 +91,7 @@ const XY_MODE: Partial<Record<PlotTypeId, SeriesMode>> = {
   stackedColumnX: "line",
   stackedBarH: "line",
   stackedArea: "line",
+  floatColumn: "line",
 };
 
 /** The view patch for an XY or Stat Stage type (contour switches tabs
@@ -117,7 +119,12 @@ export function plotTypePatch(
       // Stacked types sit each series on the running total of the earlier ones.
       if (id.startsWith("stacked") && id !== "stacked") next.stack = true;
       else delete next.stack;
-      if (id === "columnX" || id === "barH" || id === "stackedColumnX" || id === "stackedBarH") {
+      // Floating Column: the plotted columns pair up (low, high), each bar spans
+      // its pair; an odd last column stays an ordinary bar from zero.
+      const at = plotted.indexOf(ch);
+      if (id === "floatColumn" && at < plotted.length - (plotted.length % 2)) next.float = at % 2 ? "high" : "low";
+      else delete next.float;
+      if (id === "columnX" || id === "barH" || id === "stackedColumnX" || id === "stackedBarH" || id === "floatColumn") {
         next.bars = id === "barH" || id === "stackedBarH" ? "horizontal" : true;
         delete next.fill;
         next.marker = false;

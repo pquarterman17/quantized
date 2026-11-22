@@ -55,7 +55,7 @@ import { withUnit } from "./unitDisplay";
 import { measuredYAxisSize } from "./uplotAxisSize";
 import type { ResolvedExtraY } from "./multiY";
 export { withUnit }; // eager callers import it here: ~260 B less first-paint JS than direct
-import { viewHistoryPlugin, wheelZoomPlugin, type PlotViewBounds, type Readout } from "./uplotTools";
+import { readoutStacks, viewHistoryPlugin, wheelZoomPlugin, type PlotViewBounds, type Readout } from "./uplotTools";
 
 export type PlotTool =
   | "pointer"
@@ -811,7 +811,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // the chunk arrives none is pushed; the viewport rebuilds when it lands (Stage/useLazyPlotParts.ts).
   const t = toolPlugins();
   if (t && tool === "pan") plugins.push(t.panPlugin());
-  if (t && tool === "cursor") plugins.push(t.readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep));
+  if (t && tool === "cursor") plugins.push(t.readoutPlugin(onReadout, payload.yShift, payload.blockRows, payload.xStep, readoutStacks(payload.series, args.seriesStyles)));
   if (t && tool === "measure" && args.onMeasure) {
     plugins.push(t.measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }

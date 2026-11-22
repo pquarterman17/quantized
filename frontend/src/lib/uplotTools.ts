@@ -14,10 +14,26 @@
 
 import type uPlot from "uplot";
 
+import type { SeriesStyle } from "./seriesStyleTypes";
+import { stackedBelow } from "./uplotStack";
+
+/** Per uPlot data column (index 0 = X, unused), the data columns a stacked
+ *  series sits on: what the cursor readout adds up for its running total. */
+export function readoutStacks(
+  series: readonly { axis?: number }[],
+  styles: readonly (SeriesStyle | undefined)[] | undefined,
+): number[][] {
+  const axes = series.map((s) => s.axis);
+  return [[], ...series.map((_, i) => stackedBelow(styles, axes, i))];
+}
+
 /** One series' value at the cursor index. */
 export interface ReadoutRow {
   label: string;
   y: number;
+  /** A stacked series' running total (it plus the stacked series below it) when
+   *  it sits on others; `y` stays its own value. */
+  total?: number;
 }
 
 /** Readout reported by the cursor plugin (null when off-data): the cursor x plus

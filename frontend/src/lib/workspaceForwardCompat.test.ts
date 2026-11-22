@@ -109,6 +109,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "ExportSeriesStyle.drop_lines": (ws) => editExport(ws, { drop_lines: "x" }),
   "ExportSeriesStyle.connect": (ws) => editExport(ws, { connect: "spline" }),
   "ExportSeriesStyle.stack": (ws) => editExport(ws, { stack: true }),
+  "ExportSeriesStyle.float": (ws) => editExport(ws, { float: "high" }),
   "DisplayBlock.ramp": (ws) => {
     const s = spec(ws);
     s.spec = { ...s.spec, display: { ...s.spec.display, ramp: { map: "plasma" } } };
@@ -215,7 +216,7 @@ describe("forward compatibility with v0.34.0", () => {
     expect(kept.length).toBeGreaterThan(0);
     const style = {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
-      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true,
+      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true, float: "high",
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());
     const ws = load();

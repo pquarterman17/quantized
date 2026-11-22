@@ -15,8 +15,9 @@ export const BAR_FRACTION = 0.6;
 
 /** Bars from zero, or, for a stacked series, from the running total of the
  *  stacked data columns `below` it (`lib/uplotStack.ts`) to that total plus
- *  the series' own value. */
-export const barPaths = (below: readonly number[]): uPlot.Series.PathBuilder => (u, seriesIdx, idx0, idx1) => {
+ *  the series' own value. A floating column's high series passes `from`, the
+ *  data column of its low series: each bar spans that value to its own. */
+export const barPaths = (below: readonly number[], from?: number): uPlot.Series.PathBuilder => (u, seriesIdx, idx0, idx1) => {
   const xs = u.data[0];
   const ys = u.data[seriesIdx];
   const scale = u.series[seriesIdx].scale ?? "y";
@@ -36,9 +37,11 @@ export const barPaths = (below: readonly number[]): uPlot.Series.PathBuilder => 
     const y = ys[i];
     if (x == null || y == null) continue;
     const at = u.valToPos(x, "x", true);
-    const under = below.length ? stackBase(u.data as never, below, i) : 0;
+    const low = from ? u.data[from]?.[i] : 0;
+    if (low == null || !Number.isFinite(low)) continue; // a floating bar needs both ends
+    const under = from ? low : below.length ? stackBase(u.data as never, below, i) : 0;
     const base = u.valToPos(under, scale, true);
-    const end = u.valToPos(under + y, scale, true);
+    const end = u.valToPos(from ? y : under + y, scale, true);
     const [lo, len] = [Math.min(end, base), Math.abs(base - end)];
     if (turned) path.rect(lo, at - width / 2, len, width);
     else path.rect(at - width / 2, lo, width, len);
@@ -47,3 +50,6 @@ export const barPaths = (below: readonly number[]): uPlot.Series.PathBuilder => 
 };
 
 export const BAR_PATHS = barPaths([]);
+
+/** The low series of a floating column draws nothing: the high series' bar spans it. */
+export const FLOAT_LOW_PATHS: uPlot.Series.PathBuilder = () => ({ stroke: new Path2D(), fill: new Path2D() });

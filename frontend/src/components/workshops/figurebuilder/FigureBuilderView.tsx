@@ -12,6 +12,7 @@ import { xColumnLabel } from "./canonicalChannels";
 import ExportFooter from "./ExportFooter";
 import FigureOutputControls from "./FigureOutputControls";
 import PreviewStage from "./PreviewStage";
+import PreviewWarnings from "./PreviewWarnings";
 import { renderedSizeCm } from "./previewSizing";
 import PropertyPanels from "./PropertyPanels";
 import { useLiveRebase } from "./useLiveRebase";
@@ -297,6 +298,7 @@ export default function FigureBuilderView() {
                 canonicalSeries: f.canonical && f.seriesChannels.length > 0,
               }}
             />
+            <PreviewWarnings warnings={f.savedFitNote ? [f.savedFitNote] : undefined} />
             <ExportFooter
               fmt={f.fmt}
               onExport={() => void f.exportNow()}

@@ -75,6 +75,8 @@ function StyleRow({
   const setSeriesStyle = useApp((s) => s.setSeriesStyle);
   const resetSeriesStyle = useApp((s) => s.resetSeriesStyle);
   const errCol = useApp((s) => s.errKeys[channel]);
+  const above = cycle.channels[cycle.channels.indexOf(channel) - 1]; // a floating bar's low end
+  const aboveStyle = useApp((s) => (above === undefined ? undefined : s.seriesStyles[above]));
   const setErrKey = useApp((s) => s.setErrKey);
   const endHistoryRun = useApp((s) => s.endHistoryRun);
 
@@ -292,7 +294,7 @@ function StyleRow({
           setSeriesStyle={setSeriesStyle}
         />
 
-        <SeriesBarsControl channel={channel} style={style} setSeriesStyle={setSeriesStyle} />
+        <SeriesBarsControl channel={channel} style={style} setSeriesStyle={setSeriesStyle} above={above} aboveStyle={aboveStyle} />
         <SeriesMarkMapControls channel={channel} style={style} setSeriesStyle={setSeriesStyle} />
       </div>
     </details>

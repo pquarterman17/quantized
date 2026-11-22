@@ -155,8 +155,14 @@ Deferred from phase 2:
   and hands the builder a copy of the document with the full curve. Fails
   closed: a failed fetch, a stale fit or a changed row key leaves the document
   alone, so the fit is left out with the "saved fit left out" notice as
-  before. Still sync-only (display curve left out): Send to report and the
-  Figure Builder preview, which have no async seam yet.
+  before. Lane F added the last three seams: "Add to Report" from a saved
+  figure (`runSendEditableFigureToReport`), the Figure Builder Export
+  (`previewExport`) and the Figure Builder preview
+  (`useFullSavedFitDocument`: the preview cannot block, so it draws without
+  the fit and shows "Saved fit not drawn yet: loading its full curve" until
+  the curve lands, or "left out" when it cannot be loaded; it never draws
+  the thinned display curve, which would break into gaps in the server
+  render).
 - **Zoom detail** of the display curve (it is 4096 buckets over the whole
   fit; a zoomed view shows the coarser polyline) is DEFERRED: a denser curve
   for the visible x-range needs a new API (`/api/fitting/curve` takes only a
@@ -398,6 +404,10 @@ Deferred from P8:
 
 ## Completed
 
+- 2026-11-22: saved display fit in Send to report and the Figure Builder
+  (lane F): `sendFigureToReport`, the Builder's Export and its preview go
+  through `withFullSavedFit` (test `figureSavedFit.seams.test.tsx`; the send
+  and Export cases failed with the wiring reverted).
 - 2026-11-22: document-only exports of a saved display fit (lane E): Figure
   Page panels and batch / Library PDFs fetch the full curve before building
   (`lib/figureSavedFit.ts`, test `figureSavedFit.test.ts`; the panel and batch

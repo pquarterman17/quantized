@@ -137,6 +137,7 @@ export function buildExportStyles(
     if (st?.connect) spec.connect = st.connect;
     if (st?.bars) spec.bars = st.bars;
     if (st?.stack) spec.stack = true;
+    if (st?.float) spec.float = st.float; // floating column: low / high end (calc.figure_bars.floating_series)
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;
       spec.colormap = st.colormap ?? "viridis";

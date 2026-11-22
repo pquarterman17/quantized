@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["BAR_FRACTION", "draw_series", "stacked_series"]
+__all__ = ["BAR_FRACTION", "draw_series", "floating_series", "stacked_series"]
 
 BAR_FRACTION = 0.6
 
@@ -23,6 +23,33 @@ def _bar_width(xv: NDArray[np.float64]) -> float:
     finite = np.unique(xv[np.isfinite(xv)])
     gaps = np.diff(finite)
     return float(gaps.min()) * BAR_FRACTION if gaps.size else 1.0
+
+
+def floating_series(
+    series: Sequence[tuple[str, Any]],
+    series_styles: Sequence[Mapping[str, Any] | None] | None,
+) -> Sequence[Mapping[str, Any] | None] | None:
+    """Resolve ``float`` (frontend ``lib/uplotStack.floatLowColumn``): a bar
+    series flagged ``"high"`` that directly follows one flagged ``"low"`` draws
+    its bars from the low series' value to its own (Origin's floating column).
+    The high style gains ``stack_base`` (the low values: where a bar starts)
+    and the low style is marked ``float_low`` and given ``bars`` so it draws
+    nothing of its own. An unpaired flag is left as an ordinary series."""
+    if not series_styles or not any(s and s.get("float") for s in series_styles):
+        return series_styles
+    styles: list[Mapping[str, Any] | None] = list(series_styles)
+    for i in range(1, min(len(series), len(styles))):
+        hi, lo = styles[i], styles[i - 1]
+        if not (hi and lo and hi.get("float") == "high" and lo.get("float") == "low"):
+            continue
+        if not hi.get("bars"):
+            continue
+        low = np.asarray(series[i - 1][1], dtype=float)
+        if low.shape != np.asarray(series[i][1], dtype=float).shape:
+            raise ValueError("A floating column's two series must have one value per X row.")
+        styles[i] = {**hi, "stack_base": low}
+        styles[i - 1] = {**lo, "bars": lo.get("bars") or True, "float_low": True}
+    return styles
 
 
 def stacked_series(
@@ -35,7 +62,9 @@ def stacked_series(
     nothing). Its y becomes the NEW total (so the line, the error bars and the
     autoscale follow it) and its style gains ``stack_base`` (the total below),
     where a bar starts and a fill-under begins. Without ``stack`` the inputs
-    come back untouched."""
+    come back untouched. A floating column (:func:`floating_series`) is
+    resolved first."""
+    series_styles = floating_series(series, series_styles)
     if not series_styles or not any(s and s.get("stack") for s in series_styles):
         return series, series_styles
     total = np.zeros(len(xv))
@@ -66,10 +95,13 @@ def draw_series(
 ) -> tuple[Any, Any]:
     """``(artist, colour)`` for one series: ``ax.bar`` when its style asks for
     bars, else the usual ``ax.plot`` line."""
+    if spec and spec.get("float_low"):  # a floating column's low end: the high series' bar spans it
+        (line,) = ax.plot(xv, yv, label=label, **{**kw, "linestyle": "none", "marker": "none"})
+        return line, line.get_color()
     if spec and spec.get("bars"):
-        keep = np.isfinite(xv) & np.isfinite(yv)
-        base = spec.get("stack_base")  # a stacked bar: yv is the new total
+        base = spec.get("stack_base")  # stacked: yv is the new total; floating: the low values
         floor = np.zeros(len(xv)) if base is None else np.asarray(base, dtype=float)
+        keep = np.isfinite(xv) & np.isfinite(yv) & np.isfinite(floor)
         bars = ax.bar(
             xv[keep], (yv - floor)[keep], width=_bar_width(xv), label=label,
             color=kw.get("color"), alpha=0.7, bottom=floor[keep],
