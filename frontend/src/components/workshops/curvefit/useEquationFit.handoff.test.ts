@@ -8,7 +8,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
-import { captureAnalysisSelection } from "../../../lib/analysisSelection";
+import { captureAnalysisSelection, type AnalysisRangeSelection } from "../../../lib/analysisSelection";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
@@ -28,12 +28,15 @@ const OTHER: DataStruct = { ...DATA, values: [[100], [200], [300], [400]], label
 const ACTIVE: Dataset = { id: "d1", name: "run.dat", data: DATA };
 const HANDOFF: Dataset = { id: "d2", name: "other.dat", data: OTHER };
 
-function handoff(datasetId: string, extra: Partial<Parameters<typeof captureAnalysisSelection>[0]> = {}) {
+function handoff(
+  datasetId: string,
+  extra: { selection?: { datasetId: string; rows: number[] } | null; range?: AnalysisRangeSelection | null } = {},
+) {
   useAnalysisSelection.setState({
     toolId: "curvefit",
     selection: captureAnalysisSelection({
       datasets: [ACTIVE, HANDOFF], activeId: datasetId, selectedIds: [datasetId], xKey: null, yKeys: [0],
-      seriesOrder: null, errKeys: {}, selection: null, ...extra,
+      seriesOrder: null, errKeys: {}, selection: extra.selection ?? null, range: extra.range ?? null,
     }, "analysis-center"),
   });
 }
