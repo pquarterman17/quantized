@@ -37,7 +37,9 @@ import {
 import { summaryX, summaryXNote, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { trackJob, type TrackedJob } from "../../../store/pendingOpActions";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { commitBatchTable } from "../../../store/commitBatchTable";
 import {
   applyPointBudget,
   BATCH_ITEM_DEADLINE_S,
@@ -61,12 +63,16 @@ import {
   type PrepOutcome,
 } from "./peakBatchRows";
 
+const PEAK_BATCH_PRODUCER = { id: "peak-batch", label: "Peak batch", version: 1 } as const;
+
 export type BatchPhase = "idle" | "preparing" | "fitting" | "cancelling" | "done" | "cancelled" | "failed";
 
 export interface BatchRun {
   recipe: PeakRecipe;
   channels: BatchChannels;
   sources: { id: string; name: string }[];
+  /** Each read dataset's analysis-view fingerprint at run time (the commit's staleness basis). */
+  fps: Record<string, string>;
   ranAt: string;
 }
 
@@ -104,7 +110,6 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
   const resolveDataset = useApp((s) => s.resolveDataset);
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
 
   const [chosen, setRecipeName] = useState(initialRecipe);
@@ -166,10 +171,12 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
       setProgress({ done: 0, total: ids.length, message: `preparing 0/${ids.length}` });
       op.progress(0, `preparing 0/${ids.length}`);
 
+      const fps: Record<string, string> = {};
       const prepareOne = async (dsId: string): Promise<PreparedItem> => {
         try {
           const ds = await resolveDataset(dsId);
           if (!ds) return { ok: false, error: "the dataset is no longer available" };
+          fps[dsId] = analysisDataFingerprint(ds);
           // Each dataset is weighted by its OWN error column (./peakBatchPrep batchErrKeys).
           return await prepareBatchItem(ds, recipe, channels, batchErrKeys(ds, active?.id ?? null, errKeys));
         } catch (e) {
@@ -214,7 +221,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
         }
       });
       const runInfo: BatchRun = {
-        recipe, channels, sources: ids.map((i) => ({ id: i, name: names.get(i) ?? i })), ranAt: new Date().toISOString(),
+        recipe, channels, sources: ids.map((i) => ({ id: i, name: names.get(i) ?? i })), fps, ranAt: new Date().toISOString(),
       };
       const finish = (job: Parameters<typeof mergeBatch>[1], note: string, next: BatchPhase = "done") => {
         setResults(mergeBatch(preps, job));
@@ -325,11 +332,20 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     }, x);
     const note = x ? summaryXNote(x) : "";
     if (note) setStatus(`batch table: ${note}`);
-    const id = nextDatasetId();
     const n = ran.sources.length;
-    addDataset({ id, name: `Peak batch — ${ran.recipe.name} (${n} dataset${n === 1 ? "" : "s"})`, data });
-    return id;
-  }, [results, ran, addDataset, datasets, setStatus]);
+    // One undo step, no duplicate on a repeat click, stale when ANY fitted
+    // dataset changes (store/analysisOutputCommit.ts). A repeat Add (or a
+    // refusal) says so in the status line and returns null.
+    const outcome = commitBatchTable({
+      producer: PEAK_BATCH_PRODUCER,
+      sources: ran.sources.filter((s) => s.id in ran.fps).map((s) => ({ id: s.id, computedOn: ran.fps[s.id] })),
+      settings: { recipe: ran.recipe.name, x: choice ?? null },
+      name: `Peak batch — ${ran.recipe.name} (${n} dataset${n === 1 ? "" : "s"})`,
+      data,
+      status: note ? `batch table: ${note}` : `added the peak batch table (${n} dataset${n === 1 ? "" : "s"})`,
+    });
+    return outcome.kind === "created" ? outcome.outputId : null;
+  }, [results, ran, datasets, setStatus]);
 
   return {
     recipeName,

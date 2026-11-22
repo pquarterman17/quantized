@@ -5,13 +5,14 @@
 // provenance; and the panel's mode switch keeping a batch alive. Every wait
 // is on rendered STATE, never on a mock having been called.
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PeakBatchResult } from "../../../lib/api/peakBatch";
 import { DEFAULT_RECIPE, type PeakRecipe } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
+import { analysisResultsReset } from "../peaks/batchIntegrateTestSetup";
 import { useApp } from "../../../store/useApp";
 import { modelFitResponse } from "./modelFit.testkit";
 import PeakBatchView from "./PeakBatchView";
@@ -87,7 +88,7 @@ beforeEach(() => {
     }
     return json({ detail: `unexpected ${url}` }, 500);
   });
-  useApp.setState({ datasets: [A, B, C], activeId: "a", xKey: 0, yKeys: [1], seriesOrder: null, errKeys: {}, selectedIds: ["a", "b", "c"] });
+  useApp.setState({ datasets: [A, B, C], activeId: "a", xKey: 0, yKeys: [1], seriesOrder: null, errKeys: {}, selectedIds: ["a", "b", "c"], ...analysisResultsReset });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -205,6 +206,30 @@ describe("PeakBatchView", () => {
     expect(prov.recipe.fit.engine).toBe("model");
     expect(prov.sources.map((s) => s.name)).toEqual(["scan a", "scan b", "scan c"]);
     expect((added.data.metadata.text_columns as Record<string, string[]>).Dataset).toHaveLength(5);
+  });
+
+  // Lane RL2. Fail-before: a second "Add as table" wrote a second identical
+  // worksheet, with no Library result and no stale mark.
+  it("a repeat Add as table creates no duplicate, is one undo step, and goes stale with a fitted source", async () => {
+    await runAll();
+    await screen.findByRole("table", { name: "batch results" });
+    const add = screen.getByRole("button", { name: "Add as table" });
+    fireEvent.click(add);
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
+    fireEvent.click(add);
+    expect(useApp.getState().datasets).toHaveLength(4);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().status).toContain("already added");
+    const tableId = useApp.getState().datasets[3].id;
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => d.id === "c" ? { ...d, data: { ...d.data, time: [...d.data.time.slice(0, -1), 99] } } : d) }));
+      useApp.getState().touchDataset("c");
+    });
+    expect(useApp.getState().staleDatasets).toEqual([tableId]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
   });
 
   it("puts a metadata field on the table's X, sorted, blank and reported for a dataset without it", async () => {

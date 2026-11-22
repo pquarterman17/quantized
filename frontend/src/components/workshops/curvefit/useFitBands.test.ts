@@ -150,6 +150,35 @@ describe("useFitBands", () => {
     for (const [id, ds] of sourceWindows) expect(st.plotWindows.find((w) => w.id === id)?.datasetId).toBe(ds);
   });
 
+  // Lane RL2. Fail-before: a second "Plot with band" created a second identical
+  // dataset AND a second window, and neither was one undo step nor went stale.
+  it("a repeat Plot with band adds nothing, Undo removes the dataset and its window together, and a source change marks it stale", async () => {
+    useApp.setState({ analysisResults: [], history: [], future: [], staleDatasets: [], staleFits: [], recalcMode: "manual" });
+    const { result } = renderHook(() => useFitBands(TARGET));
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    const windows = useApp.getState().plotWindows.length;
+    act(() => result.current.plot());
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().plotWindows).toHaveLength(windows + 1);
+    expect(result.current.plotDisabledReason).toContain("Already added as");
+    act(() => result.current.plot());
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().plotWindows).toHaveLength(windows + 1);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    const bandId = useApp.getState().datasets[1].id;
+    act(() => {
+      useApp.setState((st) => ({ datasets: st.datasets.map((d) => d.id === "d1" ? { ...d, data: { ...d.data, time: [0, 1, 2, 3, 9] } } : d) }));
+      useApp.getState().touchDataset("d1");
+    });
+    expect(useApp.getState().staleDatasets).toEqual([bandId]);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().plotWindows).toHaveLength(windows);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+  });
+
   // Audit #9: the band is shaded around the curve ON THE MAIN GRAPH.
   it("shades the band on the Curve Fit's own overlay, at the overlay's rows, and removes it when off", async () => {
     const overlay = { datasetId: "d1", binding: SINGLE_X, y: [1, 3, null, 7, 9] };

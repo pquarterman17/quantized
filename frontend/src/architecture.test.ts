@@ -91,7 +91,6 @@ const PRIVATE_ID_SEQUENCE =
 
 describe("workshop dataset identity", () => {
   const migrated = [
-    "/components/workshops/baseline/useBaseline.ts",
     "/components/workshops/hysteresis/useHysteresis.ts",
     "/components/workshops/magtools/useMagTools.ts",
     "/components/workshops/reflectivity/useReflectivity.ts",
@@ -108,7 +107,6 @@ describe("workshop dataset identity", () => {
     "/components/workshops/pipeline/useTemplates.ts",
     "/components/workshops/reductions/useFftThickness.ts",
     "/components/workshops/reductions/useReflectivityFft.ts",
-    "/components/workshops/tabulate/useTabulate.ts",
   ];
 
   // P2.5 moved these two producers' id minting into lib/transformRun.ts, so
@@ -116,7 +114,11 @@ describe("workshop dataset identity", () => {
   // grow a PRIVATE sequence back (PR #431 review: that half of the check had
   // been lost with them). The reshapes' producer is now the Reshape & combine
   // workshop's hook (it replaced lib/worksheetTransformCommands.ts, 2026-09-26).
+  // Baseline subtract and Tabulate export (lane RL2) now commit through
+  // store/analysisOutputCommit.ts, which mints the id the same way.
   const delegating = [
+    "/components/workshops/baseline/useBaseline.ts",
+    "/components/workshops/tabulate/useTabulate.ts",
     "/components/workshops/datasetmath/useDatasetMath.ts",
     "/components/workshops/transformPreview/useReshapePreview.ts",
   ];

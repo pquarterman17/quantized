@@ -91,7 +91,8 @@ export default function TabulatePanel() {
             <Button
               variant="primary"
               size="sm"
-              disabled={!t.rows.length}
+              disabled={!t.rows.length || t.exportDisabledReason != null}
+              title={t.exportDisabledReason ?? undefined}
               onClick={t.exportDataset}
               style={{ flex: 1 }}
             >

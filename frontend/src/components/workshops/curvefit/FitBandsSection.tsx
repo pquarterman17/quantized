@@ -40,7 +40,7 @@ export default function FitBandsSection({ target }: { target: FitBandsTarget }) 
                 {levelLabel(b.level)} CI ± <span style={{ fontFamily: "var(--font-mono)" }}>{fmt(b.halfWidth)}</span> (median)
               </span>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-                <Button size="sm" onClick={b.plot}>
+                <Button size="sm" disabled={b.plotDisabledReason != null} title={b.plotDisabledReason ?? undefined} onClick={b.plot}>
                   Plot with band
                 </Button>
               </div>
