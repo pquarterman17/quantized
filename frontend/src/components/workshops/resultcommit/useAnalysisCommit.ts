@@ -4,7 +4,7 @@
 // side, store/analysisOutputCommit.ts, owns idempotency and the one undo step;
 // this hook only exposes them to a button (disabled + why, not a silent no-op).
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
@@ -16,6 +16,13 @@ export interface AnalysisCommitState {
   /** Why the commit button is disabled (null when it is enabled). */
   disabledReason: string | null;
   commit: () => AnalysisCommitOutcome | null;
+  /** For a tool whose output needs an async step (a full-data fetch) before it
+   *  can be built: `prepare` resolves the output builder, or null to abandon.
+   *  IN-FLIGHT GUARD: while one is pending a second call is ignored (prepare
+   *  does not run again), so two clicks during a slow compute make ONE commit. */
+  commitAsync: (prepare: () => Promise<AnalysisOutputCommit["output"] | null>) => Promise<AnalysisCommitOutcome | null>;
+  /** True while a `commitAsync` is pending. */
+  inFlight: boolean;
 }
 
 export function useAnalysisCommit(request: AnalysisOutputCommit | null): AnalysisCommitState {
@@ -32,9 +39,26 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
     const outputId = state.analysisResults.find((result) => result.id === resultId)?.outputs[0]?.datasetId;
     return state.datasets.find((dataset) => dataset.id === outputId)?.name ?? null;
   });
+  const pending = useRef(false);
+  const [inFlight, setInFlight] = useState(false);
+  const commitAsync: AnalysisCommitState["commitAsync"] = async (prepare) => {
+    if (!request || pending.current) return null;
+    pending.current = true;
+    setInFlight(true);
+    try {
+      const output = await prepare();
+      return output ? commitAnalysisOutput({ ...request, output }) : null;
+    } finally {
+      pending.current = false;
+      setInFlight(false);
+    }
+  };
   return {
     committedAs,
+    inFlight,
+    commitAsync,
     disabledReason: !request ? "Run the analysis first."
+      : inFlight ? "Adding the output…"
       : committedAs ? `Already added as “${committedAs}”. Undo or delete it to add it again.` : null,
     commit: () => (request ? commitAnalysisOutput(request) : null),
   };
