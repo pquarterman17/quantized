@@ -7,6 +7,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import type { AppendMatch } from "../../../lib/mergeByName";
 import type { JoinMode } from "../../../lib/worksheetJoin";
 import type { AggregateMode } from "../../../lib/worksheetTransforms";
+import ReshapeCleanFields from "./ReshapeCleanFields";
 import { keyOptions } from "./transformForm";
 import type { ReshapeState } from "./useReshapePreview";
 
@@ -163,6 +164,7 @@ export default function ReshapeFields({ r }: { r: ReshapeState }) {
       <DatasetSelect r={r} label="Dataset" value={f.primary} onChange={(id) => r.setForm({ primary: id })} />
       {f.op === "stack" && <StackFields r={r} />}
       {f.op === "unstack" && <UnstackFields r={r} />}
+      {(f.op === "dedupe" || f.op === "fillmissing" || f.op === "standardize") && <ReshapeCleanFields r={r} />}
     </>
   );
 }

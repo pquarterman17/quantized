@@ -6,6 +6,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Clean data transforms in Reshape & combine**: three new operations under Data, each previewed live (first rows, size, warnings) before Create adds one new derived worksheet; the source worksheet is never changed.
+  - *Remove duplicate rows…*: by chosen key columns (X, any column, text columns) or the whole row, keeping the first or last of each group in the original row order. Text columns stay aligned. When duplicates differ in a non-key column it warns that those values are lost.
+  - *Fill or drop missing values…*: linear interpolation on X (only between two present values that bracket the gap; never extrapolates), carry the previous value forward, or drop rows missing a value in the ticked columns. Anything that cannot be filled stays blank and is counted in a warning. Dropping every row, or interpolating a categorical column, is refused.
+  - *Z-score / min-max / rank columns…*: z-score uses the sample standard deviation, min-max maps to 0..1, rank is 1-based with ties sharing their average rank. Blank cells stay blank; the standardized columns are renamed (for example "T (z-score)") and lose their unit. A constant column or a categorical column is refused with the reason, never turned into zeros.
+  - Each is recorded as a replayable Pipeline step (one undo step, warnings stamped into the result's metadata), editable in the Pipeline panel, and replays on other files. The exported Python script marks these steps as not reproduced.
+
 ## [0.40.1] - 2026-11-22
 
 ### Fixed

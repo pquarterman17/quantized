@@ -38,7 +38,11 @@ export type TransformWarningCode =
   | "blank-output"
   | "reordered"
   // Signal filters / Reduce XY (calc.signal_ops): always informational.
-  | "sigop";
+  | "sigop"
+  // Clean data (lib/transformClean.ts): `clean` is informational.
+  | "clean"
+  | "dedupe-conflict"
+  | "gaps-unfilled";
 
 export interface TransformWarning {
   code: TransformWarningCode;
