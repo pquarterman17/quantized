@@ -103,18 +103,14 @@ Delegate each task to the cheapest model that fits it — never overkill:
 
 ## Owner standing decisions (2026-11-21)
 
-- **MATLAB is not a gate.** New behaviour need not match MATLAB, and a
-  missing `quantized_matlab` checkout never blocks work. Goldens stay as
-  regression tests: change one only deliberately, with a test for the new
-  behaviour and the reason in the commit message, never by loosening a
-  tolerance to get green.
-- **Permissive-licence dependencies are pre-approved** (BSD/MIT/Apache/PSF);
-  still no GPL runtime deps (enforced).
-- **When intent is unclear, fail closed** with a clear error rather than
-  guess; **add new behaviour as a UI option** rather than silently changing
-  an existing default.
-- **Parallel lanes:** lanes may push to their own `claude/<lane>` branch and
-  open their own PR (auto-merge on green); one PR per small batch of fixes.
+- **MATLAB is not a gate**; goldens stay as regression tests, changed only
+  deliberately (new test + reason in the commit), never by loosening.
+- **Permissive deps pre-approved** (BSD/MIT/Apache/PSF); no GPL (enforced).
+- **Fail closed** when intent is unclear; new behaviour is a UI option, not a
+  silently changed default.
+- **General before specialized:** any-plot/any-dataset features first, then
+  domain families (spectroscopy, XRD), technique-specific (hysteresis) last.
+- **Parallel lanes:** own `claude/<lane>` branch + PR, auto-merge on green.
 
 ## Planning docs
 
