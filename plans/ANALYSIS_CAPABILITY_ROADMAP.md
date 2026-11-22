@@ -700,8 +700,8 @@ How each tool resolved its inputs before this slice (✱ = migrated here):
 | Signal Processing ✱ | active worksheet | X = time axis; own signal-column checkboxes | none | **kept** (full worksheet) | ignored | "Source: name · X" + a separate "Scope: N rows (… excluded)" note |
 | Distribution ✱ | active worksheet | own column pick (default first column) | ignored | dropped | ignored (it writes them by brushing) | nothing; a lazy Origin preview was profiled |
 | Outlier screening ✱ | active worksheet | own pick (first continuous) | ignored | dropped | ignored (it writes them) | nothing; a lazy Origin preview was screened |
-| Fit Y by X | active worksheet | own X/Y picks | ignored | dropped | ignored | nothing; preview computed, report waits for the full load |
-| Multivariate, Variability, Stats tests, Stats chooser | active worksheet | own picks | ignored | dropped (`analysisView`/`analysisData`) | ignored | nothing |
+| Fit Y by X ✱ | active worksheet | own X/Y picks | ignored | dropped | ignored | nothing; preview computed, report waits for the full load |
+| Multivariate ✱, Variability ✱, Stats tests ✱, Stats chooser ✱ | active worksheet | own picks | ignored | dropped (`analysisView`/`analysisData`) | ignored | nothing |
 
 **Design.** `resolveAnalysisInputs(request)` returns inputs or a refusal.
 One precedence rule: *dataset* = the tool's selection item (a handoff, or the
@@ -728,11 +728,36 @@ a worksheet that was deleted. Every default selection is otherwise unchanged
 Processing's batch section states its own, different policy ("Input for batch
 runs": exclusions left out) rather than being converged.
 
-- [ ] Remaining: Fit Y by X, Multivariate, Variability, Stats tests/chooser
-  onto the resolver (Fit Y by X's queued report-after-load and By partition
-  need care); a UI option for Signal Processing to honour exclusions (today
+**Slice 2 (lane SEL2).** Fit Y by X, Multivariate, Variability, Statistical
+tests and the Test chooser now take their data from `resolveAnalysisInputs`
+(policy `ROW_POLICY.analysisView`, picks passed as `xKey`/`yKeys`; defaults and
+row policy unchanged, pinned first by
+`inputContract.statistics.characterization.test.tsx`) and show
+`AnalysisInputSummary`. Behaviour changes: none of the five computes on a lazy
+Origin preview any more (the hook requests the full load; Fit Y by X's leg and
+By partition run when the real rows land). Fit Y by X keeps its queued
+report-after-load and the Test chooser's "Which test?" stays enabled on a
+pending preview so it still queues (both tested). Statistical tests keeps its
+on-demand Run through `withResolved` and resolves the contract on the loaded
+worksheet inside it, so a refusal shows as the run error. A failed lazy load
+is now its own refusal, `load-failed`, with the recorded reason
+(`lib/bookData.lastBookError`), for every tool on `useAnalysisInputs`.
+Curve fit's custom-equation mode (`useEquationFit`) now shares the Curve fit
+dataset precedence, roles, selected rows and X range (fail-before tests in
+`useEquationFit.handoff.test.ts`).
+
+- [x] Fit Y by X, Multivariate, Variability, Stats tests/chooser onto the
+  resolver and summary; lazy Origin previews refuse; failed lazy loads refuse
+  distinctly.
+- [x] Curve fit custom-equation mode reads the handoff like the other modes.
+- [ ] Remaining: a UI option for Signal Processing to honour exclusions (today
   only its batch path does); the Analysis Center "Review inputs" for the
-  own-pick statistics tools.
+  own-pick statistics tools; the summary prints "X:" even for tools with no
+  meaningful X (Multivariate, Stats tests); Hysteresis, magtools, Baseline,
+  Optical gap and the other tools that read `analysisData` directly are not on
+  the resolver yet (not audited in D1); the Fit Y by X/Stats chooser queue
+  paths still use `resolveDataset` beside the hook's `ensureBookData` (same
+  single flight, but two code paths).
 
 ## Workstream E — Statistical result workspace
 
@@ -932,7 +957,8 @@ runs": exclusions left out) rather than being converged.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
-| 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated; lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
+| 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated (slice 2 adds Fit Y by X, Multivariate, Variability, Stats tests and the chooser); lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
+| 2026-11-22 | Project team | Lane SEL2: moved Fit Y by X, Multivariate, Variability, Stats tests and the Stats chooser onto the resolver and summary; added the distinct `load-failed` refusal for a failed lazy Origin load; Curve fit's custom-equation mode now reads the handoff like the other modes. | Characterization tests before migration; Fit Y by X queued-report and By-partition tests; summary/refusal tests for all five panels; fail-before tests for the equation-mode fix; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-10-15 | Project team | Added a loaded-data Curie–Weiss workflow to the Magnetometry workshop. It accepts declared molar susceptibility or converts a real M(T) sweep from total moment / emu per gram using the dataset's explicit field column plus entered sample and molar mass. It writes a normal inverse-susceptibility worksheet with an in-range fit line, exact source-row and sample-context provenance, visible θ/C/μeff/R²/n, and propagated confirmed response errors. The adversarial pass added absolute-K enforcement, filtered/excluded-row alignment, parameter/row-state/source race refusal, asymmetric inverse-error direction and label reversal, explicit unweighted/exact-input disclosures, bounded large-array range selection, and a minimum-three-row high-temperature default. | Pure calculation and route checks cover total and mass-normalized moment, T/Oe conversion, uncertainty, zero field, non-positive χ, explicit fit-range refusal, JSON-safe gaps, and missing context. Focused frontend checks cover unit/axis qualification, field selection, derived output/provenance, exclusions, missing errors, stale source and stale-control changes. Forced TypeScript, full ESLint/Ruff/mypy, clean production build, architecture and full-suite CI remain the PR gate. The private Quantum Design `mpms_mvst.dat` imported as 300 M(T) rows with its real Temperature, DC Moment, DC Moment Error, and 999.9075 Oe field; a 180.63–299.90 K fit used 120 positive rows (R² 0.99996) without modifying the source file. |
 | 2026-10-15 | Project team | Added the first derived-magnetic-quantity slice: a loaded M(H) dataset can produce a separate internal-field worksheet for an explicit sphere, in-plane/out-of-plane thin film, or axial/transverse long cylinder. The transform requires volumetric magnetization, uses SI internally while reproducing the CGS 4πN form, records exact geometry/factors/formula/units, carries confirmed Y uncertainty and creates matching X uncertainty, and leaves the source untouched. Unsupported axes/units, existing field uncertainty, and repeat correction fail closed. | Pure-calculation and route coverage checks SI/CGS equivalence, invalid factors/units/shapes, propagated errors, and OpenAPI freshness. Focused UI coverage checks prerequisites, provenance, gaps, exact error-role remapping, asymmetric-side reversal, double-correction refusal, and stale async source replacement. The reviewed backend gate passes 82 tests with one expected corpus skip plus Ruff/mypy; frontend architecture passes 56/56, forced TypeScript/full ESLint pass, and production build/preload verification pass at 817.1/817.9 kB eager. A private Quantum Design M(H) loop (401 points, non-monotonic acquisition order) was parsed and transformed row-for-row without mutating its source arrays. CI remains the complete-suite PR gate. |
 | 2026-11-19 | Project team | Added multi-output Freeze to the result workspace: per-producer output adapters, an explicit chooser, and one-undo independent worksheets. | Adapter, chooser, fail-closed, double-click and single-output tests pass; build and eager-bundle gate unchanged. |
