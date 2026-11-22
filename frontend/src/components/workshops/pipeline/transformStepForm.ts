@@ -24,7 +24,9 @@ export interface Option {
 }
 
 export type FieldSpec =
-  | { key: string; label: string; type: "text" | "number" | "bool" | "columns" }
+  | { key: string; label: string; type: "text" | "number" | "bool" }
+  /** `withX`: also offer X (-1); `text`: also offer the input's text columns, recorded by name. */
+  | { key: string; label: string; type: "columns"; withX?: boolean; text?: boolean }
   /** `text`: also offer the input's text columns, recorded by name. */
   | { key: string; label: string; type: "column"; withX?: boolean; text?: boolean }
   | { key: string; label: string; type: "select"; options: Option[]; fallback: string };
@@ -111,6 +113,21 @@ export function transformForm(d: Record<string, unknown>): TransformForm {
         ],
         note: "The averaged datasets are chosen in the workshop.",
         workshop: "algebra",
+      };
+    case "dedupe":
+      return {
+        fields: [
+          { key: "keys", label: "key columns (none = whole row)", type: "columns", withX: true, text: true },
+          select("keep", "keep", opts(["first", "last"])),
+        ],
+      };
+    case "fillmissing":
+      return {
+        fields: [select("method", "method", opts(["linear", "previous", "drop"])), { key: "channels", label: "columns to check", type: "columns" }],
+      };
+    case "standardize":
+      return {
+        fields: [select("method", "method", opts(["zscore", "minmax", "rank"])), { key: "channels", label: "columns to standardize", type: "columns" }],
       };
     case "split":
       return {
