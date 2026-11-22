@@ -8,7 +8,7 @@
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
-import { WorkbenchProgress } from "../workbench/WorkbenchParts";
+import { OutOfDateNote, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { fmtNum as fmt } from "../../../lib/format";
 import DreamConvergence from "./DreamConvergence";
 import { useBumpsFit, type EngineChoice } from "./useBumpsFit";
@@ -29,8 +29,8 @@ const ENGINE_OPTIONS: { value: EngineChoice; label: string }[] = [
 ];
 
 export default function BumpsSection({ modelName }: { modelName: string }) {
-  const { hasDataset, engine, setEngine, dream, setDream, result, busy, progress, error, run, cancel } =
-    useBumpsFit();
+  const { hasDataset, engine, setEngine, dream, setDream, result, stale, busy, progress, error, run, cancel } =
+    useBumpsFit(modelName);
 
   const setDreamField = (k: "samples" | "burn" | "pop") => (v: string) => {
     const n = posInt(v);
@@ -120,7 +120,11 @@ export default function BumpsSection({ modelName }: { modelName: string }) {
             </div>
           )}
 
-          {result && !busy && (
+          {result && !busy && stale && (
+            <OutOfDateNote block>the model, data or sampling settings changed since this fit. Fit again.</OutOfDateNote>
+          )}
+
+          {result && !busy && !stale && (
             <div style={{ marginTop: 12 }}>
               <DataTable
                 columns={["param", "value", `± ${result.uncertainty_kind}`]}

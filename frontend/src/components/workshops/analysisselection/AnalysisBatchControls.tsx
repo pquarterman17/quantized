@@ -11,6 +11,8 @@ import { analysisBatchRuntime, useAnalysisSelection } from "../../../store/analy
 import { useApp } from "../../../store/useApp";
 import { INDEX_X, defaultNameChoice, numericMetaFields, paramNamesOf, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { Button } from "../../primitives";
+import { datasetsInputsToken } from "../workbench/inputsKey";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import SummaryXPicker from "./SummaryXPicker";
 
 export interface AnalysisBatchOutcome {
@@ -56,6 +58,12 @@ interface Props {
    *  when it ends. Omitted = a finished table is kept (the long-standing
    *  default). The statistics tools reset by remounting instead (StatsBatchSection). */
   settingsKey?: string;
+  /** What a change of `settingsKey` does to a finished table. "drop" (default,
+   *  the long-standing rule): the table is dropped. "mark": the table stays,
+   *  says "Out of date" and withholds the summary worksheet and `afterRun`
+   *  until the batch is run again. Either way, a change of the selected
+   *  worksheets or of the data of a worksheet that ran marks the table. */
+  settingsChange?: "drop" | "mark";
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -72,6 +80,23 @@ interface RunRow {
   values: (string | number | null)[];
   warning: string | null;
 }
+
+/** What a finished table was run with: the worksheets asked for, the data
+ *  identity of those that ran, and (for "mark") the tool's settings. */
+interface RanWith {
+  selection: string;
+  ids: string[];
+  data: string;
+  settings: string | undefined;
+  /** A worksheet that ran changed (or was still a lazy preview) before the run ended. */
+  changed: boolean;
+}
+
+/** The selected worksheets and what is read from each, independent of order. */
+const selectionKey = (selection: AnalysisSelection): string =>
+  JSON.stringify([...selection.items].sort((a, b) => (a.datasetId < b.datasetId ? -1 : 1)));
+
+const dataKey = datasetsInputsToken;
 
 const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + status.slice(1);
 
@@ -93,7 +118,7 @@ function statisticsSelection(selection: AnalysisSelection, datasets: readonly Da
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
   toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
-  inputs = "selection", settingsKey,
+  inputs = "selection", settingsKey, settingsChange = "drop",
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -111,8 +136,10 @@ export default function AnalysisBatchControls({
   keyRef.current = settingsKey;
   if (seenKey !== settingsKey) {
     setSeenKey(settingsKey);
-    if (!running) setLastRows(null);
+    if (!running && settingsChange === "drop") setLastRows(null);
   }
+  // What the finished table was run with, for the "Out of date" marker below.
+  const [ranWith, setRanWith] = useState<RanWith | null>(null);
   const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
   // Set once the user touches the X picker: a deliberate choice (even "Input
   // order") is never replaced by the default below, in this run or a later one.
@@ -135,6 +162,13 @@ export default function AnalysisBatchControls({
   }, [lastRows, datasets]);
   const xFields = useMemo(() => numericMetaFields(ranInputs), [ranInputs]);
   const xParams = useMemo(() => paramNamesOf(ranInputs), [ranInputs]);
+  const selectionNow = useMemo(() => (current ? selectionKey(current) : ""), [current]);
+  // Out of date: the worksheets asked for, the data of one that ran, or (in
+  // "mark" mode) the tool's settings differ from what the table was run with.
+  const stale = lastRows !== null && ranWith !== null && !running && (
+    ranWith.changed || ranWith.selection !== selectionNow || ranWith.data !== dataKey(ranWith.ids, datasets) ||
+    (settingsChange === "mark" && ranWith.settings !== settingsKey)
+  );
   if (!current || current.items.length === 0) return null;
 
   const issuesById = new Map<string, string[]>();
@@ -161,6 +195,7 @@ export default function AnalysisBatchControls({
     setRunning(true);
     const warnings: string[] = [];
     const runFingerprints = new Map<string, string>();
+    let changedAtEnd = true; // a run that did not reach its end is not current
     const rows: RunRow[] = start.items.map(({ dataset, rowCount }) => {
       const selectionWarnings = start.issues
         .filter((issue) => issue.datasetId === dataset.id && issue.severity === "warning")
@@ -214,6 +249,7 @@ export default function AnalysisBatchControls({
         const live = liveDatasets.find((dataset) => dataset.id === id);
         return !live || !!live.pending || analysisDataFingerprint(live) !== runFingerprints.get(id);
       });
+      changedAtEnd = changedDuringRun;
       analysisBatchRuntime().recordHistory(`run ${label.toLowerCase()}`);
       registerAnalysisResult({
         version: ANALYSIS_RESULT_VERSION,
@@ -253,8 +289,15 @@ export default function AnalysisBatchControls({
       endOp(opId);
       runningRef.current = false;
       setRunning(false);
-      // Settings changed mid-run: this table belongs to the old ones.
-      setLastRows(keyRef.current === keyAtStart ? rows.map((row) => ({ ...row })) : null);
+      // Settings changed mid-run: this table belongs to the old ones (dropped,
+      // or kept and marked out of date).
+      const keep = settingsChange === "mark" || keyRef.current === keyAtStart;
+      setLastRows(keep ? rows.map((row) => ({ ...row })) : null);
+      const ranIds = [...runFingerprints.keys()];
+      setRanWith({
+        selection: selectionKey(snapshot), ids: ranIds, settings: keyAtStart,
+        data: dataKey(ranIds, analysisBatchRuntime().datasets), changed: changedAtEnd,
+      });
       // "010K, 050K, …": plot against the number in the name, sorted, when
       // that is a trend (defaultNameChoice) and the user has not chosen an X.
       if (!userPickedX.current) setXChoice(defaultNameChoice(rows.map((r) => ({ name: r.name }))) ?? INDEX_X);
@@ -281,6 +324,9 @@ export default function AnalysisBatchControls({
       <span>{expanded ? "▾" : "▸"}</span>
     </button>
     {expanded && <div className="qzk-analysis-input-review-body">
+      {stale && <OutOfDateNote block>
+        the worksheets, their data or the settings changed since this run. Run the batch again before using its summary.
+      </OutOfDateNote>}
       <table className="qzk-analysis-batch-table">
         <thead><tr><th>Worksheet</th><th>Rows</th><th>Status</th><th>Warning</th></tr></thead>
         <tbody>{displayRows.map((row) => <tr key={row.datasetId}>
@@ -297,14 +343,14 @@ export default function AnalysisBatchControls({
         <Button variant="primary" size="sm" disabled={blocked || running} onClick={() => void runBatch()}>
           {running ? "Running…" : `Run ${label} batch`}
         </Button>
-        {onSummarySheet && lastRows && !running && lastRows.some((row) => row.status === "completed") && (<>
+        {onSummarySheet && lastRows && !running && !stale && lastRows.some((row) => row.status === "completed") && (<>
           <SummaryXPicker choice={xChoice} onChange={pickX} metaFields={xFields} params={xParams} />
           <Button size="sm" onClick={() => onSummarySheet(lastRows, xChoice)} title="A worksheet with one row per input and a column per parameter and statistic, ready to plot">
             Create summary worksheet
           </Button>
         </>)}
       </div>
-      {afterRun && lastRows && !running && lastRows.some((row) => row.status === "completed") && afterRun(lastRows, xChoice)}
+      {afterRun && lastRows && !running && !stale && lastRows.some((row) => row.status === "completed") && afterRun(lastRows, xChoice)}
     </div>}
   </section>;
 }

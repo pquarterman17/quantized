@@ -46,6 +46,8 @@ export interface CurveFitByLevelState {
   /** True only when `results` were fitted for exactly the current levels and
    *  settings and nothing is in flight: the only state a result may be saved from. */
   current: boolean;
+  /** `results` are shown from inputs that have since changed (a refit is under way): withhold them. */
+  stale: boolean;
   /** What "Save By result" records as provenance for these levels. */
   provenance: { parameters: Record<string, AnalysisResultValue>; xKey: number | null; yKeys: number[]; rowIds: number[] | null; range: AnalysisSelectionItem["range"] };
 }
@@ -171,5 +173,5 @@ export function useCurveFitByLevel(
     parameters: { model: modelName, weighting: weight ? { ...weight } : null, customStart: start !== undefined, ...(start ? { start: { p0: start.p0.map(encodeNumber), lower: start.lower.map(encodeNumber), upper: start.upper.map(encodeNumber), fixed: start.fixed } } : {}) },
     xKey, yKeys: yKey == null ? [] : [yKey], rowIds: selected?.rowIds ?? null, range: selected?.range ?? null,
   }), [modelName, weight, start, selected, xKey, yKey]);
-  return { byOptions, byCol, setByCol, levels, totalLevels, results, busy, current, provenance };
+  return { byOptions, byCol, setByCol, levels, totalLevels, results, busy, current, stale: results.length > 0 && !current, provenance };
 }

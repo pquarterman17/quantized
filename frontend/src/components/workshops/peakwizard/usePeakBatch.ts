@@ -38,7 +38,9 @@ import { summaryX, summaryXNote, type SummaryXChoice } from "../../../lib/batchS
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { trackJob, type TrackedJob } from "../../../store/pendingOpActions";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { useLatestRef } from "../../../lib/previewKey";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetsInputsToken } from "../workbench/inputsKey";
 import { commitBatchTable } from "../../../store/commitBatchTable";
 import {
   applyPointBudget,
@@ -74,6 +76,10 @@ export interface BatchRun {
   /** Each read dataset's analysis-view fingerprint at run time (the commit's staleness basis). */
   fps: Record<string, string>;
   ranAt: string;
+  /** The row / data identity of the fitted datasets when the run ended (the "Out of date" basis). */
+  data: string;
+  /** A fitted dataset changed (or was gone) before the run ended. */
+  changed: boolean;
 }
 
 export interface PeakBatchState {
@@ -93,6 +99,8 @@ export interface PeakBatchState {
   results: BatchDatasetResult[] | null;
   /** What produced `results` (recipe as run, channels, sources, time). */
   ran: BatchRun | null;
+  /** `results` were fitted on datasets that have since changed: export and Add as table are withheld. */
+  stale: boolean;
   run: () => Promise<void>;
   cancel: () => void;
   /** Land the table in the library as a dataset; returns its id. `x` puts a
@@ -125,6 +133,8 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const [results, setResults] = useState<BatchDatasetResult[] | null>(null);
   const [ran, setRan] = useState<BatchRun | null>(null);
   const seq = useRef(0);
+  // The library as of the latest render, for the stamp taken when a run ends.
+  const latestDatasets = useLatestRef(datasets);
   const jobRef = useRef<string | null>(null);
   const opRef = useRef<TrackedJob | null>(null);
   const phaseRef = useRef<BatchPhase>("idle");
@@ -242,10 +252,20 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
           preps.push({ datasetId: dsId, name, ok: false, error: prep.error, ...(prep.notRun ? { notRun: true as const } : {}) });
         }
       });
-      const runInfo: BatchRun = {
-        recipe, channels, sources: ids.map((i) => ({ id: i, name: names.get(i) ?? i })), fps, ranAt: new Date().toISOString(),
-      };
       const finish = (job: Parameters<typeof mergeBatch>[1], note: string, next: BatchPhase = "done") => {
+        // Stamp the fitted datasets as they are NOW: one that changed while the
+        // job ran (its fingerprint no longer the one it was read with) leaves
+        // the table out of date from the start.
+        const now = latestDatasets.current;
+        const fitted = ids.filter((i) => i in fps);
+        const changed = fitted.some((i) => {
+          const d = now.find((x) => x.id === i);
+          return !d || !!d.pending || analysisDataFingerprint(d) !== fps[i];
+        });
+        const runInfo: BatchRun = {
+          recipe, channels, sources: ids.map((i) => ({ id: i, name: names.get(i) ?? i })), fps, ranAt: new Date().toISOString(),
+          data: datasetsInputsToken(fitted, now), changed,
+        };
         setResults(mergeBatch(preps, job));
         setRan(runInfo);
         setProgress((p) => ({ ...p, message: note }));
@@ -340,8 +360,11 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     void cancelBatchJob(jobRef.current).catch(() => undefined);
   };
 
+  const stale = results !== null && ran !== null && !busy &&
+    (ran.changed || ran.data !== datasetsInputsToken(Object.keys(ran.fps), datasets));
+
   const addAsTable = useCallback((choice?: SummaryXChoice): string | null => {
-    if (!results || !ran) return null;
+    if (!results || !ran || stale) return null;
     const rows = batchTableRows(results);
     const x = choice
       ? summaryX(rows.map((r) => {
@@ -367,7 +390,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
       status: note ? `batch table: ${note}` : `added the peak batch table (${n} dataset${n === 1 ? "" : "s"})`,
     });
     return outcome.kind === "created" ? outcome.outputId : null;
-  }, [results, ran, datasets, setStatus]);
+  }, [results, ran, stale, datasets, setStatus]);
 
   return {
     recipeName,
@@ -384,6 +407,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     error,
     results,
     ran,
+    stale,
     run,
     cancel,
     addAsTable,

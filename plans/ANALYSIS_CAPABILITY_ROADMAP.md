@@ -437,11 +437,15 @@ inconsistently exposed, and do not all share the same result lifecycle.
   button-only fits (Peaks panel fits, ODR, equation fit, global / compare /
   scan, Peak analyzer model fit) still keep their own state and messages.
   Progress (lane WB4): every tool on that list now says "Out of date" (see the
-  Lane WB4 block below). The gap stays open, narrowly: Bumps / DREAM, the
-  Curve fit batch / By-level tables, fit bands, the Peak analyzer batch,
-  Curie-Weiss and the reflectivity fits were outside the WB4 list and have not
-  been audited for it; until they are, "every button-only analysis" is not
-  proven.
+  Lane WB4 block below).
+  Progress (lane WB5): the tools WB4 left out are audited and covered (Lane WB5
+  block below). The gap STAYS OPEN, narrowly: the WB5 list is done, but the
+  single-run tools that were never on any WB list (Hysteresis, Optical gap,
+  Surface fit, Ellipse fit, FFT thickness / Reflectivity FFT / Pawley /
+  Williamson-Hall, the statistics tools, Fit Y by X) have not been audited for
+  "Out of date", and the tool-by-tool tick needs that audit, not an assumption.
+  Next lane: audit that list (the batch ones already inherit the shell's
+  worksheet / data marker, see WB5).
 
   **Workbench audit (lane WB, 2026-11-22).** Tools that preview before they
   commit, as found before the migration. "Key" = every input the preview
@@ -594,6 +598,60 @@ inconsistently exposed, and do not all share the same result lifecycle.
     landed as current; the Batch integrate table, CSV and trend were offered as
     current after the windows, baseline, picks or data changed.
 
+  **Lane WB5 (the remaining tools, 2026-11-22).** Audit result per tool; every
+  tool stays button-driven (or auto, where it always was) with its defaults and
+  commit paths, characterization tests first, forced races with held requests.
+  - **Bumps / DREAM (Curve fit)** (`useBumpsFit`, module session store, not the
+    hook): the result is stamped with the key it was LAUNCHED with
+    (`bumpsKey`: model, dataset rows / data, plotted channels, DREAM budget only
+    for DREAM). Out of date: marked, parameter / posterior tables withheld, its
+    fitted curve taken off the plot. A lazy book is resolved and committed first.
+  - **Reflectivity fit** (`useReflFit`, freshness in `useReflFitFreshness`, run
+    preparation split to `reflFitRunPrep` to stay under 500 lines): stamped with
+    bindings, data settings, the parameter table as sent, graded layers and the
+    bound datasets' rows / data. Out of date: marked; its curve leaves the plot;
+    Apply to model, Add fit curves, Open log-Y plot, Send to figure page and the
+    live Add to report are withheld (a saved fit in the History keeps its own
+    record). "Apply to model" re-bases the stamp. A deleted bound dataset does
+    not mark it (its curves stay addable, as before). Deliberate test change:
+    `reflFitLiveRecord.test` "record-less fit curves carry the fit's radiation":
+    a radiation picked after the fit now makes it out of date, so the curves are
+    asserted while current and withheld after the switch.
+  - **Reflectivity DREAM**: audited, no change. A run is always OF a stored record
+    (re-sends the record's request, refused when the data moved, writes to that
+    record; live bands belong to exactly that posterior), so a moved live form or
+    edited sampling controls do not make it stale; pinned in
+    `useReflDream.workbench.test`.
+  - **Batch over selected worksheets** (`AnalysisBatchControls`, shared by Curve
+    fit, Peaks, Baseline, Signal, Hysteresis, Optical gap, Surface / Ellipse fit,
+    the statistics tools, Curie-Weiss, ...): a finished table now says "Out of
+    date" when the worksheets asked for, or the rows / data of a worksheet that
+    ran, change (also mid-run), and withholds Create summary worksheet and
+    `afterRun` (plot chips, fit table). New `settingsChange: "mark"` keeps the
+    table and marks it on a settings change instead of the long-standing "drop";
+    Curve fit's batch uses it for its start table, weighting and error scaling
+    (not the model: its summary is named by the run's model, pinned by an
+    existing test). Tools with `settingsKey` keep dropping.
+  - **Curve fit By tables** (`useCurveFitByLevel`): Save was already guarded
+    (`current`); the previous levels' numbers stayed visible, unmarked, while the
+    refit ran. They are now withheld behind "Out of date" until it lands.
+  - **Fit bands** (`useFitBands`): reset on every input change was already
+    correct. Bug fixed: an older answer landing after a newer one replaced the
+    band when the transport ignored the abort (fail-before forced race).
+  - **Peak analyzer batch** (`usePeakBatch`): the recipe reset is unchanged; a
+    fitted dataset edited after (or during) the run now marks the table and
+    withholds Export CSV and Add as table (before, Add as table committed a table
+    that was born stale).
+  - **Curie-Weiss single run** (`useCurieWeiss`): the in-flight refusal was
+    already correct; the readout is now stamped with the source's rows / data,
+    plotted channels and fit settings, and marked when, back on the source
+    worksheet, any moved. On the output worksheet the commit activates it
+    describes itself and is not marked. **Curie-Weiss batch** resets by remount
+    on a settings change (unchanged) and inherits the worksheet / data marker.
+  - **Not done:** the typed refusal marker (a refusal is still told from an error
+    by comparing text in seven hooks, `useCurveFit` at its line limit): not cheap
+    enough here, left as the known nit. The shell gap is not ticked (see above).
+
 ## Product contract for every new analysis
 
 Each analysis added or modernized under this roadmap must satisfy these rules.
@@ -611,9 +669,11 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Find peaks now show "Out of date". Lane WB4: so do the Peaks panel fits, ODR,
   equation fit, Compare models, Global fit, Model scan, the Peak analyzer model
   fit and Batch integrate (an out-of-date result is never reported, exported,
-  saved or applied). Still open: the tools outside that list (Bumps / DREAM,
-  Curve fit batch / By tables, fit bands, Peak analyzer batch, Curie-Weiss,
-  reflectivity fits) are unaudited for it.
+  saved or applied). Lane WB5: so do Bumps / DREAM, the reflectivity fit, the Curie-Weiss fit, the
+  Peak analyzer batch, Curve fit By tables and every batch over worksheets (fit
+  bands and the reflectivity DREAM were audited and needed no marker). Still
+  open: single-run tools never on a WB list (Hysteresis, Optical gap, Surface /
+  Ellipse fit, the XRD reductions, the statistics tools, Fit Y by X).
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
@@ -1487,6 +1547,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane WB5: Bumps / DREAM, the reflectivity fit, the Curie-Weiss fit, the Peak analyzer batch, Curve fit By tables and the shared batch shell mark results "Out of date" and withhold their summaries, exports, plots and applies; fit bands and reflectivity DREAM audited. Fixed: a late fit-band answer replacing a newer one; a Peak batch table added after its datasets changed. Not done: typed refusal marker; the shell gap stays open (single-run tools never on a WB list unaudited). | Characterization tests first, fail-before and forced-race tests (`useBumpsFit.workbench`, `useReflFit.workbench`, `useCurieWeiss.workbench`, `PeakBatchView.stale`, `AnalysisBatchControls.stale`, `CurveFitBatchSection.stale`, `useCurveFitByLevel.stale`, `useFitBands.workbench`, `useReflDream.workbench`); one existing assertion changed deliberately (`reflFitLiveRecord.test`, see WB5 block). |
 | 2026-11-22 | Project team | Lane WB4: the remaining button-only fits say "Out of date" and fail closed: Peaks panel Fit all together / Fit each (find settings), ODR, Equation fit and Compare models (manual mode), Global fit, Model scan and Batch integrate (`useRunStamp`), Peak analyzer model fit (shared note, WorkbenchMessage). Fixed: out-of-date results reportable / exportable / drawn as current, and late answers for changed inputs landing as current. The shell gap stays open (tools outside the list unaudited). | Characterization + fail-before tests (`PeaksPanel.workbench`, `useOdrFit.workbench`, `useEquationFit.workbench`, `useCompareModels.workbench`, `useGlobalFit.workbench`, `useModelScan.workbench`, `BatchIntegrateWindow.workbench`, `useModelFit.workbench`, `useRunStamp`); forced races with held requests; no existing assertion changed (ModelScanSection test helper gained two defaults). |
 | 2026-11-22 | Project team | Lane WB3: Curve fit's single Fit and the Peak analyzer's Find peaks adopt the shell's out-of-date state (Curve fit on `useWorkbenchPreview` manual mode, `useCurveFit` split into `curveFitRun.ts`); fixed: an out-of-date Curve fit could still be reported, bootstrapped and written to a worksheet; Reshape & combine Close now dismisses an open unit-mismatch review. Not done: the other button-only fits; the shell gap stays open. | Characterization tests first (`useCurveFit.workbench.test.ts`, `PeakWizardFind.workbench.test.tsx`); fail-before `CurveFitPanel.workbench.test.tsx`, `useReshapePreview.review.test.ts`; one existing assertion changed deliberately (out-of-date wording in `CurveFitPanel.lifecycle.test.tsx`). |
 | 2026-11-22 | Project team | Lane WB2: Close now aborts a running Reshape & combine Create and Resample's Stop aborts the request in flight (fail-before tests `useReshapePreview.close.test.ts`, `useResample.stop.test.ts`, `sequentialBatch.test.ts`); Curve fit scan / bumps / global and the reflectivity DREAM run render `WorkbenchProgress`; SIMS Process / Compare / Region, the ternary / pie / field figure previews and Curve fit's equation check run on `useWorkbenchPreview` (`useDebouncedPreview` removed). Not done: manual-mode adoption by Peaks and the fits. | Characterization tests written first (`simsPreview.contract.test.ts`, `useEquationFit.check.test.ts`, extra cases in `auxFigurePreview.test.ts`) and kept as guards; two existing assertions changed deliberately (scan progress text now carries the percentage; validate call now carries an AbortSignal). |

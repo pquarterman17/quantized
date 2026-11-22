@@ -13,6 +13,7 @@
 // shows the engine, progress and Cancel, then the posterior table — and a
 // second concurrent job cannot be started while the first is live.
 
+import { useEffect } from "react";
 import { create } from "zustand";
 
 import { fitBumps, type BumpsEngine, type BumpsFitResult } from "../../../lib/fitbumps";
@@ -24,6 +25,10 @@ import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { onWorkspaceReplace } from "../../../store/workspaceReplace";
 import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
+import type { Dataset, FitOverlay } from "../../../lib/types";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { takeBackOverlay } from "./fitOverlayOwnership";
 
 export type EngineChoice = "parity" | BumpsEngine;
 
@@ -44,6 +49,8 @@ export interface BumpsFitState {
   dream: DreamSettings;
   setDream: (patch: Partial<DreamSettings>) => void;
   result: BumpsFitResult | null;
+  /** `result` was fitted with a model, channels, rows / data or DREAM budget that have since changed. */
+  stale: boolean;
   busy: boolean;
   /** DREAM job fraction (0..1) while polling; null otherwise. */
   progress: number | null;
@@ -64,6 +71,10 @@ interface BumpsSession {
   /** The dataset `result`/`error` (and a running job) belong to: the panel
    *  shows them only beside THAT dataset (review D1). */
   datasetId: string | null;
+  /** What `result` was LAUNCHED with (see `bumpsKey`), the model, and the curve it drew. */
+  key: string | null;
+  model: string | null;
+  overlay: FitOverlay | null;
 }
 
 const INITIAL: BumpsSession = {
@@ -75,9 +86,21 @@ const INITIAL: BumpsSession = {
   error: null,
   jobId: null,
   datasetId: null,
+  key: null,
+  model: null,
+  overlay: null,
 };
 
 const useBumpsSession = create<BumpsSession>(() => INITIAL);
+
+/** Every input a bumps result depends on: the model, the dataset's rows / data,
+ *  the plotted channels and, for DREAM only, the sampling budget. */
+export function bumpsKey(
+  model: string, ds: Dataset | undefined, xKey: number | null, yKeys: readonly number[] | null,
+  seriesOrder: readonly number[] | null, engine: EngineChoice, dream: DreamSettings,
+): string {
+  return JSON.stringify([model, datasetInputsToken(ds), xKey, yKeys, seriesOrder, engine, engine === "dream" ? dream : null]);
+}
 
 /** Bumped by every reset: a run that started before it is orphaned and
  *  writes nothing more into the session (or the plot). */
@@ -134,9 +157,14 @@ async function run(modelName: string): Promise<void> {
   try {
     // Resolve past a lazy preview, then fit the analysis view (excluded/
     // filtered rows dropped) — same contract as the parity fit path.
+    const hadPending = useApp.getState().datasets.find((x) => x.id === activeId)?.pending !== undefined;
     const ds = await useApp.getState().resolveDataset(activeId);
     if (!ds) return;
+    // A lazy book that just arrived moved the data identity: let that commit
+    // land, then stamp the run with the key it is launched under.
+    if (hadPending) await afterCommit();
     const state = useApp.getState();
+    const launchKey = bumpsKey(modelName, state.datasets.find((x) => x.id === activeId), state.xKey, state.yKeys, state.seriesOrder, engine, dream);
     const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
     if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
     const pairs = dropGapRows(d.x, d.y);
@@ -168,7 +196,7 @@ async function run(modelName: string): Promise<void> {
       fit = resp;
     }
     if (generation !== mine) return; // the workspace it was for is gone
-    patch({ result: fit });
+    patch({ result: fit, key: launchKey, model: modelName });
     // Overlay the fitted curve, expanded back to full row count so it stays
     // in register with the full-length plot x (same as the parity path).
     if (Array.isArray(fit.yFit)) {
@@ -176,7 +204,9 @@ async function run(modelName: string): Promise<void> {
       const kept = activeRowIndices(n, droppedRows(ds));
       const aligned = restoreGapRows(fit.yFit, pairs);
       const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-      useApp.getState().setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true });
+      const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true };
+      patch({ overlay });
+      useApp.getState().setFitOverlay(overlay);
     }
   } catch (e) {
     if (!(e instanceof JobCancelledError)) {
@@ -189,7 +219,7 @@ async function run(modelName: string): Promise<void> {
   }
 }
 
-export function useBumpsFit(): BumpsFitState {
+export function useBumpsFit(modelName?: string): BumpsFitState {
   const hasDataset = useApp((s) => s.datasets.some((d) => d.id === s.activeId));
   const activeId = useApp((s) => s.activeId);
   const engine = useBumpsSession((s) => s.engine);
@@ -201,5 +231,14 @@ export function useBumpsFit(): BumpsFitState {
   const busy = useBumpsSession((s) => s.busy);
   const progress = useBumpsSession((s) => s.progress);
   const error = useBumpsSession((s) => s.error);
-  return { hasDataset, engine, setEngine, dream, setDream, result: mine ? result : null, busy, progress, error: mine ? error : null, run, cancel };
+  const stamped = useBumpsSession((s) => s.key);
+  const ranModel = useBumpsSession((s) => s.model);
+  const overlay = useBumpsSession((s) => s.overlay);
+  const liveKey = useApp((s) => bumpsKey(modelName ?? ranModel ?? "", s.datasets.find((x) => x.id === activeId), s.xKey, s.yKeys, s.seriesOrder, engine, dream));
+  const stale = mine && result !== null && stamped !== null && stamped !== liveKey && !busy;
+  // An out-of-date fit's curve is taken off the plot (only if it is still ours).
+  useEffect(() => {
+    if (stale) takeBackOverlay(overlay);
+  }, [stale, overlay]);
+  return { hasDataset, engine, setEngine, dream, setDream, result: mine ? result : null, stale, busy, progress, error: mine ? error : null, run, cancel };
 }

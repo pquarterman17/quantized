@@ -137,7 +137,11 @@ describe("the live fit and the stored history stay in step", () => {
     act(() => useApp.setState({ datasets: [] }));
     await finish(fitResponse());
     expect(result.current.fit.liveRecord).toBeNull();
-    act(() => result.current.refl.setRadiation("neutron"));
+    // Deliberately changed (lane WB5): the radiation was picked AFTER the fit
+    // here, which moves the model the fit ran on, so the fit is out of date and
+    // its curves are withheld rather than added beside the new radiation. They
+    // are added while the fit is current, and carry the fit's own radiation.
+    expect(result.current.fit.stale).toBe(false);
     let ids: string[] = [];
     act(() => {
       ids = result.current.fit.addCurves();
@@ -145,6 +149,8 @@ describe("the live fit and the stored history stay in step", () => {
     expect(ids.length).toBeGreaterThan(0);
     const added = useApp.getState().datasets.filter((d) => ids.includes(d.id));
     expect(added.map((d) => d.data.metadata.radiation)).toEqual(ids.map(() => "xray"));
+    act(() => result.current.refl.setRadiation("neutron"));
+    expect(result.current.fit.stale).toBe(true);
   });
 
   it("a malformed stored history in a .dwk does not break the next fit", async () => {
