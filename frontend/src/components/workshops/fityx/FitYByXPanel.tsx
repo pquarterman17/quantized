@@ -6,7 +6,8 @@
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { useFitYByXStore } from "../../../store/fitYByX";
-import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
+import StatsInputReview from "../analysisselection/StatsInputReview";
+import { fitYByXRows } from "../analysisselection/statsInputReviewRows";
 import BivariateView from "./BivariateView";
 import ContingencyView from "./ContingencyView";
 import FitYByXBatchSection from "./FitYByXBatchSection";
@@ -35,7 +36,7 @@ export default function FitYByXPanel() {
         </div>
       ) : (
         <>
-          <AnalysisInputSummary inputs={f.inputs} />
+          <StatsInputReview inputs={f.inputs} rows={fitYByXRows(f.inputs, { xCol: f.xCol, yCol: f.yCol, order: f.order, band: f.bandInterval, byCol: f.byCol })} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">X (factor)</label>

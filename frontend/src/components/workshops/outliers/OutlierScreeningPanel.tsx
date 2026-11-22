@@ -8,7 +8,8 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
-import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
+import StatsInputReview from "../analysisselection/StatsInputReview";
+import { outlierRows } from "../analysisselection/statsInputReviewRows";
 import OutlierBatchSection from "./OutlierBatchSection";
 import OutlierByLevel from "./OutlierByLevel";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
@@ -33,7 +34,7 @@ export default function OutlierScreeningPanel() {
         </div>
       ) : (
         <>
-          <AnalysisInputSummary inputs={o.inputs} />
+          <StatsInputReview inputs={o.inputs} rows={outlierRows(o.inputs, o)} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">Channel</label>
