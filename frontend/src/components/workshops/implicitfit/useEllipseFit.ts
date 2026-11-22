@@ -8,7 +8,9 @@ import { useEffect, useMemo, useState } from "react";
 import { ellipseFit, type EllipseResult } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
-import { useActiveDataset } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { afterCommit } from "../workbench/afterCommit";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -57,6 +59,7 @@ export function useEllipseFit(): EllipseFitState {
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
   const key = [active?.id, fingerprint, xCol, yCol, geometric].join(":");
   const live = stored && stored.key === key ? stored : null;
+  const liveKey = useLatestRef(key);
   const hasData = !!active && columns.length >= 2;
 
   useEffect(() => {
@@ -72,11 +75,18 @@ export function useEllipseFit(): EllipseFitState {
     setBusy(true);
     setError(null);
     try {
+      // A lazy book's arrival moves the key the result is stored under: install it
+      // first, let that commit land, and only then take the key this fit is asked with.
+      if (active.pending) {
+        await useApp.getState().resolveDataset(active.id);
+        await afterCommit();
+      }
+      const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;
       const [x, y] = got.columns;
       const res = await ellipseFit({ x, y, geometric });
-      setStored({ key, res, x, y });
+      setStored({ key: launchKey, res, x, y });
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "ellipse fit failed");

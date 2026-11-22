@@ -33,6 +33,9 @@ import { useStatsTestsStore } from "../../../store/statsTests";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
 
 export interface TestColumn {
   index: number;
@@ -57,6 +60,8 @@ export interface StatsTestsState {
   busy: boolean;
   error: string | null;
   output: TestOutput | null;
+  /** The shown output ran on source rows that have since changed (Copy / Export / Report are withheld). */
+  stale: boolean;
   run: () => Promise<void>;
   copy: () => Promise<void>;
   exportCsv: () => void;
@@ -105,6 +110,10 @@ export function useStatsTests(): StatsTestsState {
   const [output, setOutput] = useState<TestOutput | null>(null);
   const [ranTest, setRanTest] = useState<StatsTestId>("anderson");
   const seq = useRef(0);
+  // Lane WB6: a settings change still drops the output (invalidate); a change to
+  // the SOURCE rows / data after the run marks it out of date instead.
+  const stamp = useRunStamp(testDef(testId).input === "none" ? "" : datasetInputsToken(active));
+  const stale = output !== null && stamp.stale;
 
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view over the columns the picked test reads. Run resolves the same
@@ -116,6 +125,7 @@ export function useStatsTests(): StatsTestsState {
 
   const invalidate = () => {
     seq.current++;
+    stamp.record(null);
     setBusy(false);
     setOutput(null);
     setError(null);
@@ -135,6 +145,7 @@ export function useStatsTests(): StatsTestsState {
     setSelRaw({ ...requested.selection, cols: [...requested.selection.cols] });
     setParamsRaw({ ...requested.params });
     seq.current++;
+    stamp.record(null);
     setBusy(false);
     setOutput(null);
     setError(null);
@@ -150,6 +161,7 @@ export function useStatsTests(): StatsTestsState {
     setBusy(true);
     setError(null);
     setOutput(null);
+    stamp.record(null);
     let built;
     if (id === "power" || !active) {
       built = buildTestRequest(id, null, runSelection, runParams);
@@ -167,6 +179,9 @@ export function useStatsTests(): StatsTestsState {
         return input.ok ? buildTestRequest(id, input.data, runSelection, runParams) : { ok: false as const, error: input.reason };
       });
       if (request !== seq.current) return;
+      // A lazy book's arrival moves the source key: let it commit, then take the key.
+      if (active.pending) await afterCommit();
+      if (request !== seq.current) return;
       built = resolved.ok ? resolved.value : { ok: false as const, error: resolved.error };
     }
     if (!built.ok) {
@@ -175,9 +190,11 @@ export function useStatsTests(): StatsTestsState {
       return;
     }
     try {
+      const launchKey = stamp.launchKey();
       const result = await runStatsTest(built.request);
       if (request !== seq.current) return;
       const described = describeResult(result, built.labels, runParams.alpha);
+      stamp.record(launchKey);
       setOutput(described);
       setRanTest(id);
       publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described);
@@ -192,18 +209,18 @@ export function useStatsTests(): StatsTestsState {
   const fileStem = `${ranTest}${active ? `_${active.name}` : ""}`.replace(/[^\w.-]+/g, "_");
 
   async function copy(): Promise<void> {
-    if (!output) return;
+    if (!output || stale) return;
     const ok = await copyText(outputToTSV(output));
     setStatus(ok ? `copied ${testDef(ranTest).label} results to clipboard` : "clipboard unavailable");
   }
 
   function exportCsv(): void {
-    if (!output) return;
+    if (!output || stale) return;
     saveBlob(csvBlob(outputToCSV(output)), `${fileStem}.csv`);
   }
 
   async function toReport(): Promise<void> {
-    if (!output) return;
+    if (!output || stale) return;
     const [main] = output.tables;
     const title = `${testDef(ranTest).label}${active ? ` — ${active.name}` : ""}`;
     setBusy(true);
@@ -251,6 +268,7 @@ export function useStatsTests(): StatsTestsState {
     busy,
     error,
     output,
+    stale,
     run,
     copy,
     exportCsv,

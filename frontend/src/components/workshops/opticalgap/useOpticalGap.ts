@@ -10,7 +10,9 @@ import { taucFit, type TaucResult, type TaucSignal, type TaucXUnit, type Transit
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
-import { useActiveDataset } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { afterCommit } from "../workbench/afterCommit";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
@@ -126,6 +128,7 @@ export function useOpticalGap(): OpticalGapState {
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
   const key = [active?.id, fingerprint, xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax].join(":");
   const result = stored && stored.key === key ? stored.res : null;
+  const liveKey = useLatestRef(key);
   const hasData = !!active && columns.length >= 2;
 
   // A new dataset resets the picks and the fit window.
@@ -177,6 +180,13 @@ export function useOpticalGap(): OpticalGapState {
     setBusy(true);
     setError(null);
     try {
+      // A lazy book's arrival moves the key the result is stored under: install it
+      // first, let that commit land, and only then take the key this fit is asked with.
+      if (active.pending) {
+        await useApp.getState().resolveDataset(active.id);
+        await afterCommit();
+      }
+      const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;
       const [x, y] = got.columns;
@@ -191,7 +201,7 @@ export function useOpticalGap(): OpticalGapState {
         e_min: lo ?? undefined,
         e_max: hi ?? undefined,
       });
-      setStored({ key, res });
+      setStored({ key: launchKey, res });
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "optical-gap fit failed");
