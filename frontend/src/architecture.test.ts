@@ -2005,6 +2005,7 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   corrections:
     "correction-pipeline params (xOff, bgPoly, smoothWindow, ...) apply to the whole dataset, not a single channel",
   bgRef: "reference-background pick: a dataset id + interp method string, not a column index",
+  installEpoch: "session-only counter of lazy-book installs, not channel-indexed",
   notes: "free-text notes, not channel-indexed",
   tags: "free-text tag list, not channel-indexed",
   group: "legacy group label string, not channel-indexed",

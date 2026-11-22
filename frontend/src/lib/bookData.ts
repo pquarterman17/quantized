@@ -116,6 +116,36 @@ export function truncateReason(reason: string): string {
 export function resetBookTransportForTests(): void {
   _bookFetches.clear();
   _bookErrors.clear();
+  _lastInstall.clear();
+}
+
+/** What the last install of a dataset wrote that a consumer may need to react to. */
+export interface BookInstallInfo {
+  /** Exclusions existed on the preview and could not be proven against the full rows. */
+  droppedExclusions: boolean;
+}
+const _lastInstall = new Map<string, BookInstallInfo>();
+/** The info of the most recent install of `id` (module scope, like the fetch
+ *  registry: a transport fact, not store state). */
+export function lastBookInstall(id: string): BookInstallInfo | undefined {
+  return _lastInstall.get(id);
+}
+
+/** The full data objects an install wrote, with the epoch and source they belong
+ *  to. A `data` object that is in here and whose dataset still carries that epoch
+ *  is the install's own; any user edit replaces `data` with an object that is not. */
+const _installed = new WeakMap<object, { epoch: number; lineage: string }>();
+
+const lineageOf = (source: BookSource): string => JSON.stringify([source.kind, source.path, source.token, source.bookId]);
+
+/** The identity of the book a dataset's rows come from, while they are still the
+ *  lazy book's own: the pending preview, or the data an install wrote and nothing
+ *  has edited since. null for every other dataset. A run key uses it so the
+ *  install of the same source is not mistaken for an edit (and an edit still is). */
+export function lazyLineage(ds: Dataset): string | null {
+  if (ds.pending) return lineageOf(ds.pending);
+  const rec = _installed.get(ds.data);
+  return rec && rec.epoch === ds.installEpoch ? rec.lineage : null;
 }
 
 function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undefined {
@@ -144,24 +174,27 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
   const p = fetchBookData(source)
     .then((full) => {
       let installed = false;
+      let dropped = false;
       set((s) => {
-        const datasets = s.datasets.map((d) =>
-          d.id === id && d.pending != null && sameBookSource(d.pending, source)
-            ? {
-                ...d,
-                ...restoreComputedColumns(d, full),
-                pending: undefined,
-                // Exclusions are row-indexed: translate them only when the
-                // preview-to-source correspondence is proven. Filters are
-                // value-based, so the existing filter remains valid.
-                excludedRows: resolvedExcludedRows(d, full.time.length),
-              }
-            : d,
-        );
+        const datasets = s.datasets.map((d) => {
+          if (d.id !== id || d.pending == null || !sameBookSource(d.pending, source)) return d;
+          const restored = restoreComputedColumns(d, full);
+          // Exclusions are row-indexed: translate them only when the
+          // preview-to-source correspondence is proven. Filters are
+          // value-based, so the existing filter remains valid.
+          const excludedRows = resolvedExcludedRows(d, full.time.length);
+          dropped = Boolean(d.excludedRows?.length) && excludedRows === undefined;
+          const installEpoch = (d.installEpoch ?? 0) + 1;
+          _installed.set(restored.data, { epoch: installEpoch, lineage: lineageOf(source) });
+          return { ...d, ...restored, pending: undefined, excludedRows, installEpoch };
+        });
         installed = datasets.some((d, i) => d !== s.datasets[i]);
         return { datasets: installed ? datasets : s.datasets };
       });
-      if (installed) _bookErrors.delete(id);
+      if (installed) {
+        _bookErrors.delete(id);
+        _lastInstall.set(id, { droppedExclusions: dropped });
+      }
       return installed;
     })
     .then(undefined, (e: unknown) => {

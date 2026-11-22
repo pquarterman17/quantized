@@ -22,7 +22,7 @@
 //     every caller shape (fire-and-forget UI trigger, await-one, await-many,
 //     await-all-pending-before-save).
 
-import { installBookData } from "../lib/bookData";
+import { installBookData, lastBookInstall } from "../lib/bookData";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { announceBookFailure } from "./pendingEdit";
@@ -91,7 +91,24 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
    *  Closing the run means the next filter edit pushes a snapshot that includes
    *  the arrived book, which is the behaviour plain `recordHistory` had. */
   const install = (id: string, source: BookSource): Promise<boolean> =>
-    installBookData(set, id, source).finally(() => get().endHistoryRun());
+    installBookData(set, id, source)
+      .then((installed) => {
+        if (installed) recheckAfterInstall(id);
+        return installed;
+      })
+      .finally(() => get().endHistoryRun());
+
+  /** Lane LZ: re-check what was judged while the book was a preview (see
+   *  ./lazyInstallFreshness). Idempotent, so every caller sharing the one fetch
+   *  may run it. If the chunk cannot load, mark everything downstream (fail closed). */
+  const recheckAfterInstall = (id: string): void => {
+    const dropped = lastBookInstall(id)?.droppedExclusions === true;
+    if (!dropped && !get().analysisResults.some((r) => r.sources.some((ref) => ref.datasetId === id))) return;
+    void import("./lazyInstallFreshness").then(
+      (m) => m.recheckAfterBookInstall(get, set, id, dropped),
+      () => get().touchDataset(id),
+    );
+  };
 
   return {
     ensureBookData: (id) => {

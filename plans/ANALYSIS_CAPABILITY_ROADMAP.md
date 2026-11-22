@@ -711,7 +711,8 @@ inconsistently exposed, and do not all share the same result lifecycle.
     block). Known limit: a lazy book resolved by FFT thickness / Reflectivity
     FFT / Pawley / Stats tests is installed before the run key is taken (as
     WB4), so an edit made exactly during that install is not distinguished
-    (see WB7: left documented).
+    (closed by lane LZ: the lazy-book install is told from an edit by
+    `datasetInputsToken`).
 
   **Lane WB7 (the last tools, and the consolidated audit, 2026-11-22).** The
   remaining tools were read from their code (state, actions, in-flight
@@ -762,14 +763,16 @@ inconsistently exposed, and do not all share the same result lifecycle.
     Recipe library results (receipts), Waterfall (live traces), Digitizer (hand
     traced input, not a computed result), Dataset math / Curve averaging /
     Metadata factors / Recode / Data filter (commit-only or live previews).
-  - **Known limit kept (not cheap):** an edit made exactly during a lazy-book
-    install is not distinguished from the install. The install replaces the
-    dataset's `.data` and clears its row state in one store write, so no key
-    read before or after can separate an edit from it; telling them apart needs
-    an install epoch in the store (a store change touching every consumer), which
-    is out of scope for an audit lane. Worst case: a result computed on the
-    installed rows is shown current although the user changed something in that
-    one window.
+  - **Lazy-book install vs edit (closed by lane LZ, 2026-11-22).** The install
+    replaces the dataset's `.data` and clears its row state in one store write, so
+    no identity key could separate it from an edit. The install now bumps a
+    session-only `Dataset.installEpoch` and records the data object it wrote
+    (`lib/bookData.lazyLineage`). `datasetInputsToken` uses the book's identity in
+    place of the data object while the rows are still the book's own: the install
+    of the same source does not move a run key (a run launched on the preview
+    lands current), a user edit afterwards still does, and an install that
+    drops or translates exclusions still moves it (fail closed). The tools'
+    resolve-then-`afterCommit` order is unchanged.
 
   **Consolidated audit (lanes WB to WB7), result-producing tools.**
   Test files are under `frontend/src/components/workshops/`.
@@ -833,9 +836,14 @@ inconsistently exposed, and do not all share the same result lifecycle.
     nothing; the button says "Already added as …". (4) A reopen session ends
     only when its panel unmounts: if the panel never mounts (a lazy chunk fails),
     a later manual open starts from the old seed with Replace preselected (the
-    banner says so). (5) A result whose source was a lazy book at load is not
-    re-checked when the book installs (the install also drops unproven
-    exclusions without a touch).
+    banner says so). (5) **Fixed (lane LZ):** when a lazy book installs, the
+    results and committed outputs whose source it is are re-checked against
+    their saved fingerprint (`store/lazyInstallFreshness`), and an install that
+    dropped exclusions it could not prove marks what reads the book
+    (`touchDataset`). Both follow the recalc mode: Auto marks and starts a pass
+    (a committed output stays stale), Manual marks, None tracks nothing.
+    Snapshot results stay fingerprint-based and are not marked. If the lazy
+    chunk fails to load, the book's downstream is marked (fail closed).
 
 ## Product contract for every new analysis
 
@@ -1737,6 +1745,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane LZ: a lazy Origin book's install is told from a user edit (session-only `Dataset.installEpoch` + `lazyLineage`; `datasetInputsToken` / `useRunStamp`), and a book's arrival re-checks the results and committed outputs sourced from it and marks what reads it when exclusions were dropped (recalc-mode rules; snapshots stay fingerprint-based). Closes the WB7 known limit and IR item 5. | Characterization (`lazyInstall.characterization.test`) then fail-before and forced-race tests (`lazyInstall.epoch.test`, `lazyInstall.chunkFail.test`); no existing assertion changed. |
 | 2026-11-22 | Project team | Lane IR: integration review of #836–#859 (result lifecycle, reopen/Replace, stale marking from row state and Undo, Signal `inputRows`, Result book, batch/By, workbench shell). Six cross-feature bugs fixed (see the Lane IR block): held committed outputs re-derived by a recalc pass, Undo-of-Replace staleness, analysis-view row-state races in Create and recompute, marks dropped during a pass, concurrent statistics batches, Signal By provenance. Five suspicions recorded as open. | Fail-before scenario tests against the real store (`store/lifecycleCrossFeature.test.ts`, `StatsBatchSection.midrun.test.tsx`, `signalBySave.test.tsx`); forced tsc, lint, vitest on store/lib/workshops and architecture, build + bundle gate. |
 | 2026-11-22 | Project team | Lane WB7: RSM peaks / strain, ROI cuts statistics and batch summary, Test chooser, built-in phase indexer, MagTools Background and Demag readouts say "Out of date" and withhold strain / cuts / export / Label / report; late answers for a dataset left or a cleared analysis no longer land. Audited with no change: Normalization, Tabulate, Spin asymmetry, calculators and the rest (consolidated table). The shell gap is ticked. Kept: an edit during a lazy-book install is not distinguished. | Characterization + fail-before + forced-race tests (`useRsm.workbench`, `useRoiCuts.stats`, `useRoiBatch.stale`, `useStatsChooser.workbench`, `BuiltInPhaseIndexer.stale`, `useMagTools.stale`, `useDemagCorrection.stale`); no existing assertion changed. |
 | 2026-11-22 | Project team | Lane WB6: FFT thickness, Reflectivity FFT, Pawley and the statistical tests say "Out of date" and withhold Library / reflection lines / copy / export / report; Surface fit retires its result on a start-value or bound edit; Ellipse fit no longer discards a fit on a lazy book; typed refusal marker replaces the text comparison in seven hooks. Audited with no change: Distribution, Fit Y by X, Multivariate, Variability, Outlier screening, Hysteresis, Optical gap, Williamson-Hall. The shell gap stays open (RSM, ROI cuts, commit-only magnetometry transforms not audited). | Characterization + fail-before + forced-race tests (`useFftThickness.workbench`, `useReflectivityFft.workbench`, `usePawley.workbench`, `useStatsTests.workbench`, `useSurfaceFit.workbench`, `useEllipseFit.workbench`, `useOpticalGap.workbench`, `useHysteresis.stale`, `useWorkbenchPreview` refusal cases); one existing assertion changed deliberately (`usePawley.test`, see the WB6 block). |
