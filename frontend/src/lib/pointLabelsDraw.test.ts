@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
 import { drawPointLabels } from "./pointLabelsDraw";
-import type { LabelLayout } from "./pointLabelLayout";
+import type { LabelLayout } from "./pointLabelText";
 
 function fakePlot(show = true) {
   const texts: { text: string; fill: unknown }[] = [];

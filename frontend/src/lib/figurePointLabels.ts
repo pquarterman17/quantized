@@ -5,7 +5,8 @@
 // returned list (`overrides.point_labels`, `calc/figure_point_labels.py`).
 
 import type { FigureOverrides } from "./figureOverrides";
-import { layoutMessage, layoutPointLabels, NO_LABELS, type LabelLayout } from "./pointLabelLayout";
+import { layoutMessage, layoutPointLabels } from "./pointLabelLayout";
+import { NO_LABELS, type LabelLayout } from "./pointLabelText";
 import type { PointLabels } from "./pointLabels";
 import type { PlotView } from "./plotview";
 import { droppedRows } from "./rowstate";

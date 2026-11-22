@@ -36,7 +36,7 @@ import { blocksDecimation } from "../../lib/marksLoader";
 import { useLivePaint } from "./useLivePaint";
 import { useScatterOverlays } from "./useScatterOverlays";
 import { useCanvasPointLabels } from "./usePointLabelLayout";
-import { NO_LABELS } from "../../lib/pointLabelLayout";
+import { NO_LABELS } from "../../lib/pointLabelText";
 import { useResolvedLims } from "./useResolvedLims";
 import { usePlotKeyboard } from "./usePlotKeyboard";
 

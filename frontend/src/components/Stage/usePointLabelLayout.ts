@@ -9,12 +9,29 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type uPlot from "uplot";
 
-import { pointLabelLayoutFor } from "../../lib/figurePointLabels";
-import { labelText, NO_LABELS, type LabelLayout } from "../../lib/pointLabelLayout";
+import { labelText, NO_LABELS, type LabelLayout } from "../../lib/pointLabelText";
 import type { PlotPayload } from "../../lib/plotdata";
 import { rowStateIdentity } from "../../lib/rowstate";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+
+type LayoutMod = typeof import("../../lib/figurePointLabels");
+let layoutMod: LayoutMod | null = null;
+
+/** The layout code (a lazy chunk: labels are off by default) once loaded; loads it the first time `needed`. */
+function useLayoutModule(needed: boolean): LayoutMod | null {
+  const [mod, setMod] = useState<LayoutMod | null>(layoutMod);
+  useEffect(() => {
+    if (!needed || mod) return;
+    let live = true;
+    void import("../../lib/figurePointLabels").then((m) => {
+      layoutMod = m;
+      if (live) setMod(m);
+    }).catch(() => undefined); // offline: labels stay off, nothing else is affected
+    return () => { live = false; };
+  }, [needed, mod]);
+  return mod;
+}
 
 /** The layout for the focused view of `active`; `selection` feeds "Selected rows". */
 export function usePointLabelLayout(
@@ -28,16 +45,17 @@ export function usePointLabelLayout(
   const seriesStyles = useApp((s) => s.seriesStyles), xScale = useApp((s) => s.xScale), yScale = useApp((s) => s.yScale);
   const waterfall = useApp((s) => s.waterfall), waterfallDx = useApp((s) => s.waterfallDx);
   const exchangeXY = useApp((s) => s.exchangeXY), groupKey = useApp((s) => s.groupKey), facetKey = useApp((s) => s.facetKey);
+  const lib = useLayoutModule(!!spec);
   const rows = selection && active && selection.datasetId === active.id ? selection.rows : null;
   const [excluded, filter] = rowStateIdentity(active); // + `active.data` below: what `droppedRows` reads
   const selectedKey = spec?.mode === "selected" && rows ? rows.join(",") : "";
   return useMemo(() => {
-    if (!spec || !active) return NO_LABELS;
+    if (!spec || !active || !lib) return NO_LABELS;
     const view = { xKey, yKeys, y2Keys, seriesOrder, hiddenChannels, seriesStyles, xScale, yScale, waterfall, waterfallDx, exchangeXY, facetKey };
-    return pointLabelLayoutFor({ dataset: active, view, spec, groupKey, encoding, selected: spec.mode === "selected" ? rows : null });
+    return lib.pointLabelLayoutFor({ dataset: active, view, spec, groupKey, encoding, selected: spec.mode === "selected" ? rows : null });
     // `active` is held by what the layout reads of it (its data, roles, exclusions, filter); `rows` by `selectedKey`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec, active?.id, active?.data, excluded, filter, active?.channelRoles, active?.columnDesignations,
+  }, [lib, spec, active?.id, active?.data, excluded, filter, active?.channelRoles, active?.columnDesignations,
     xKey, yKeys, y2Keys, seriesOrder, hiddenChannels, seriesStyles, xScale, yScale, waterfall, waterfallDx, exchangeXY, groupKey, facetKey, encoding, selectedKey]);
 }
 

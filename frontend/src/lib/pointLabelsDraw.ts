@@ -6,7 +6,8 @@
 
 import type uPlot from "uplot";
 
-import { layoutMessage, type LabelLayout } from "./pointLabelLayout";
+import { layoutMessage } from "./pointLabelLayout";
+import type { LabelLayout } from "./pointLabelText";
 
 const ratio = (): number => (typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
 

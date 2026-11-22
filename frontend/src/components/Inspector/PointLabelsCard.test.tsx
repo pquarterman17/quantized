@@ -63,11 +63,12 @@ describe("PointLabelsCard", () => {
     expect(useApp.getState().pointLabels?.topN).toBe(3);
   });
 
-  it("says why nothing is drawn: no selection, and a view that cannot carry labels", () => {
+  it("says why nothing is drawn: no selection, and a view that cannot carry labels", async () => {
     useApp.setState({ pointLabels: { key: 1, mode: "selected", topN: 10 } });
     render(<PointLabelsCard />);
     fireEvent.click(screen.getByText("Point labels"));
-    expect(screen.getByRole("status")).toHaveTextContent(/No rows selected/);
+    // The layout code is a lazy chunk (eager-bundle budget): the message appears once it has loaded.
+    expect(await screen.findByRole("status")).toHaveTextContent(/No rows selected/);
     act(() => useApp.setState({ exchangeXY: true }));
     expect(screen.getByRole("status")).toHaveTextContent(/Point labels are not drawn with exchanged/);
   });

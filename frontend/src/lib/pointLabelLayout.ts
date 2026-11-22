@@ -19,38 +19,13 @@
 //    waterfall, grouped / encoded / faceted / two-axis plots, ...) draws none and
 //    names why.
 
-import { categoricalLevels, labelForCode } from "./categorical";
 import { perSeriesXData } from "./perSeriesX";
-import { MAX_ALL_POINTS, MAX_LABEL_CHARS, type PointLabels } from "./pointLabels";
-import type { DataStruct, Dataset } from "./types";
+import { MAX_ALL_POINTS, type PointLabels } from "./pointLabels";
+import { labelTexter, NO_LABELS, type LabelLayout, type LabelPoint } from "./pointLabelText";
+import type { Dataset } from "./types";
 
 export const GRID_X = 14;
 export const GRID_Y = 10;
-
-/** One labelled point: data coordinates, the text, the dataset row (0-based),
- *  the dataset channel and its index among the shown curves. */
-export interface LabelPoint { x: number; y: number; text: string; row: number; ch: number; s: number }
-export interface LabelLayout { points: LabelPoint[]; note: string | null; refusal: string | null }
-export const NO_LABELS: LabelLayout = { points: [], note: null, refusal: null };
-
-/** The label text of one dataset row (a category name, or the number to 6
- *  significant digits), or null when blank / not a number. */
-export function labelText(data: DataStruct, key: number, row: number): string | null {
-  return labelTexter(data, key)(row);
-}
-
-/** `labelText` for many rows of one column: the category table is read once. */
-export function labelTexter(data: DataStruct, key: number): (row: number) => string | null {
-  const levels = categoricalLevels(data, key);
-  return (row) => {
-    const v = data.values[row]?.[key];
-    if (v === undefined || !Number.isFinite(v)) return null;
-    const raw = levels ? labelForCode(levels, v) : String(Number(v.toPrecision(6)));
-    const t = raw?.trim();
-    if (!t) return null;
-    return t.length > MAX_LABEL_CHARS ? `${t.slice(0, MAX_LABEL_CHARS - 1)}…` : t;
-  };
-}
 
 /** The one line the plot and the export print under the labels: a refusal
  *  ("Point labels are not drawn ...") or a thinning / empty note; null when none. */

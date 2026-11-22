@@ -7,7 +7,7 @@ import type uPlot from "uplot";
 import type { HalfLim } from "../../lib/axisLim";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { PlotOverlays } from "../../lib/plotOverlays";
-import type { LabelLayout } from "../../lib/pointLabelLayout";
+import type { LabelLayout } from "../../lib/pointLabelText";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
 

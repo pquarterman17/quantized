@@ -2,7 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
-import { NO_LABELS, type LabelLayout } from "../../lib/pointLabelLayout";
+import { NO_LABELS, type LabelLayout } from "../../lib/pointLabelText";
 import { useCanvasPointLabels } from "./usePointLabelLayout";
 
 const fake = () => ({ hooks: {} as Record<string, unknown[]>, redraw: vi.fn() });

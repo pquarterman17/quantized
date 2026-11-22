@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { GRID_X, GRID_Y, labelText, layoutMessage, layoutPointLabels, pointLabelsViewRefusal, type LabelInputs, type LabelViewState } from "./pointLabelLayout";
+import { GRID_X, GRID_Y, layoutMessage, layoutPointLabels, pointLabelsViewRefusal, type LabelInputs, type LabelViewState } from "./pointLabelLayout";
+import { labelText } from "./pointLabelText";
 import { MAX_ALL_POINTS, MAX_LABEL_CHARS, sanitizePointLabels } from "./pointLabels";
 import type { DataStruct } from "./types";
 
