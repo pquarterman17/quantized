@@ -47,7 +47,7 @@ function describeKaplanMeier(r: Extract<SurvivalTestResult, { id: "kaplan-meier"
     ? `Kaplan-Meier: median survival in ${timeName} units is ${medianText(r.groups[0].curve)}, from ${r.groups[0].curve.N} rows with ${sum(r.groups[0].curve.events)} events.`
     : `Kaplan-Meier median survival by group (${timeName} units): ${r.groups.map((g) => `${g.label} ${medianText(g.curve)}`).join("; ")}.`;
   const summary: ResultTable = {
-    title: "Median survival",
+    title: "Median survival (95% CI where the log-log pointwise band crosses 50%)",
     columns: ["group", "N", "events", "median", "95% CI low", "95% CI high"],
     rows: r.groups.map((g): Cell[] => [
       g.label || "all rows", g.curve.N, sum(g.curve.events), reached(g.curve.medianSurvival),

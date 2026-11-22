@@ -7,6 +7,7 @@ dropped (listwise deletion).
 
 from __future__ import annotations
 
+import threading
 import warnings
 from typing import Any
 
@@ -14,6 +15,20 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.heavy_import import heavy_imports
+
+# warnings.catch_warnings swaps the process-wide filter list, so concurrent
+# route threads must not interleave their fits inside it.
+_COX_FIT_LOCK = threading.Lock()
+_COX_NONCONVERGENCE_MARKERS = (
+    "failed to converge",
+    "norm(delta) is still high",
+    "suspiciously close to 0",
+)
+
+
+def _is_cox_nonconvergence(message: str) -> bool:
+    return any(m in message for m in _COX_NONCONVERGENCE_MARKERS)
+
 
 __all__ = ["kaplan_meier", "logrank_test", "logrank_groups", "cox_proportional_hazards"]
 
@@ -293,21 +308,21 @@ def cox_proportional_hazards(
     df = pd.DataFrame(cols_dict)
 
     # Fit Cox model
-    # Fail closed: lifelines reports a poorly converged fit (complete
-    # separation, collinear or near-constant predictors) as a ConvergenceWarning
-    # and still returns coefficients; those numbers are not trustworthy.
-    with heavy_imports("lifelines.exceptions"):
-        from lifelines.exceptions import ConvergenceWarning
+    # Fail closed on a poorly converged fit (complete separation, collinear
+    # predictors): lifelines only *warns* and still returns coefficients. Only
+    # the post-fit convergence verdicts refuse; lifelines also emits pre-fit
+    # ConvergenceWarning *hints* (low variance, large mean, correlation with
+    # time) on fits that are fine, so those must not refuse.
     cph = CoxPHFitter()
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", ConvergenceWarning)
-            cph.fit(df, duration_col="T", event_col="E")
-    except ConvergenceWarning as exc:
+    with _COX_FIT_LOCK, warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        cph.fit(df, duration_col="T", event_col="E")
+    failed = [str(w.message) for w in caught if _is_cox_nonconvergence(str(w.message))]
+    if failed:
         raise ValueError(
             "the Cox fit did not converge (often complete separation, collinear or "
-            f"near-constant predictors); no coefficients are reported. Detail: {exc}"
-        ) from exc
+            f"near-constant predictors); no coefficients are reported. Detail: {failed[0].strip()}"
+        )
 
     # Extract results. cph.params_/standard_errors_ are pandas Series (not
     # ndarrays), so .values is safe here — unlike statsmodels' discrete-choice

@@ -102,6 +102,17 @@ def test_cox_refuses_complete_separation_instead_of_returning_garbage() -> None:
         cox_proportional_hazards(t, e, [t.copy()])
 
 
+def test_cox_small_scale_predictor_is_not_refused() -> None:
+    # lifelines warns (a pre-fit hint, not a convergence verdict) about
+    # predictors with variance < 1e-4, e.g. a field in tesla. The fit is fine.
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=60) * 1e-3
+    t = rng.exponential(np.exp(-x * 500.0))
+    e = (rng.random(60) < 0.8).astype(float)
+    r = cox_proportional_hazards(t, e, [x])
+    assert np.isfinite(r["coeffs"][0])
+
+
 def test_routes_logrank_groups_and_refusals() -> None:
     ok = client.post(
         "/api/stats/logrank-groups",
