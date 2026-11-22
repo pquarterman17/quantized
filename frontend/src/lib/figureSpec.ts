@@ -40,6 +40,7 @@ import { facetEncoding, figureEncodingWire } from "./plotEncodingWire";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
 import { breakCompositionFromData } from "./facet";
 import { facetSplitChannels } from "./facetDomains";
+import { pointLabelsOverride } from "./figurePointLabels";
 import { perSeriesXSpec } from "./figureSpecPerSeriesX";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3 against the 500-line ceiling. Imported, NOT re-exported (no barrel pulling it in).
@@ -215,6 +216,7 @@ function buildFigureSpecForView(
 ): FigureSpec {
   // Gap audit 4 G1: the colour gradient first, on the SOURCE channels, as on screen.
   st = rampView(st, data, channelRoles, extras);
+  const labelsCtx = { dataset: extras.liveDataset ?? null, data, roles: channelRoles, view: st, spec: st.pointLabels, groupKey: extras.groupKey, encoding: extras.encoding }; // point labels: the PRE-per-series-X view
   [st, data, extras] = perSeriesXSpec(st, data, channelRoles, extras); // gap-2 #2: each Y on its own X, as on screen
   const { pageSize, overrides } = pageViewOverrides(st); // #54 Stage 3: the window page (figureViewOverrides.ts)
   // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them;
@@ -239,7 +241,6 @@ function buildFigureSpecForView(
     channelRoles,
     allowExplicitXAsY: extras.allowExplicitXAsY,
   });
-
   // Legend renames / decoded Origin captions are channel-keyed, and BUG-014
   // moved them off `dataset.labels` and onto their own per-series
   // presentation field (`series_styles[i].legend`, assembled below): the wire
@@ -357,7 +358,6 @@ function buildFigureSpecForView(
     extras.publicationSeriesStyles, groupCol !== null || (encoding !== null && encodingSplits(encoding)),
     { displayChannels, hiddenChannels: st.hiddenChannels },
   );
-
   const spec: FigureSpec = {
     dataset: wireDataset,
     x_key: st.xKey ?? undefined,
@@ -397,7 +397,7 @@ function buildFigureSpecForView(
     ...(errors?.length
       ? { error_spans: exportErrorSpans(wireDataset, plotted, errors) }
       : {}),
-    overrides: gatedOverrides,
+    overrides: pointLabelsOverride(gatedOverrides, labelsCtx, !!xBreaks), // gap audit 8: laid out once, drawn by the export
     // The axis titles' Format + drag -- not on a facet grid, whose canvas draws plain titles.
     ...(wireFacets === undefined ? axisTitleWire(st) : {}),
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),

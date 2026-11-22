@@ -54,7 +54,7 @@ describe("cursor readout on a waterfall", () => {
     live.push(u);
     await new Promise((r) => setTimeout(r, 0));
     u.setCursor({ left: u.valToPos(2, "x"), top: 10 });
-    expect(seen).toEqual({ x: 2, rows: [{ label: "a", y: 3 }, { label: "b", y: 30 }, { label: "c", y: 7 }] });
+    expect(seen).toMatchObject({ x: 2, rows: [{ label: "a", y: 3 }, { label: "b", y: 30 }, { label: "c", y: 7 }] });
   });
 
   it("reports a series' own x on a waterfall with an X offset, not the slid x", async () => {
@@ -76,6 +76,6 @@ describe("cursor readout on a waterfall", () => {
     live.push(u);
     await new Promise((r) => setTimeout(r, 0));
     u.setCursor({ left: u.valToPos(3, "x"), top: 10 }); // b's last point, drawn at x = 2 + 1
-    expect(seen).toEqual({ x: 2, rows: [{ label: "b", y: 30 }] });
+    expect(seen).toMatchObject({ x: 2, rows: [{ label: "b", y: 30 }] });
   });
 });

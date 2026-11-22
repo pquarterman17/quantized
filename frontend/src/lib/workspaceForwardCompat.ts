@@ -91,7 +91,7 @@ export const PLOT_VIEW: Classify<PlotView> = {
   facetKey: V, y2Keys: V, y2Lim: V, y2Scale: V, y2Step: V, y2AxisLabel: V, refLines: V, annotations: V,
   regionShades: V, shapes: V, seriesStyles: V, seriesLabels: V, errKeys: V, seriesOrder: V, hiddenChannels: V,
   waterfall: V, waterfallDx: V, panelFit: V, pageSetup: V,
-  layers: G, exchangeXY: G, yAxes: G, yAxisOf: G, seriesRamp: G, overlays: G,
+  layers: G, exchangeXY: G, yAxes: G, yAxisOf: G, seriesRamp: G, overlays: G, pointLabels: G,
 };
 
 export const PLOT_WINDOW: Classify<PlotWindow> = {
@@ -217,7 +217,7 @@ export const FIGURE_OVERRIDES: Classify<FigureOverrides> = {
   x_breaks: V, shapes: V, ref_lines: V, region_shades: V, inset: V,
   // Wire-only like `layers` (`overlays` from the gated `PlotView.overlays`): built from the gated `PlotView.exchangeXY` at
   // export time, never persisted by sanitizeFigureOverrides.
-  layers: K, exchange_xy: K, overlays: K,
+  layers: K, exchange_xy: K, overlays: K, point_labels: K,
 };
 
 // The export-request element is a subset of Annotation: a new key must be one.
@@ -307,6 +307,7 @@ export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
   "AxisFormat.divideMark", "ErrorBinding.origin", "StatPicks.barPercent", "StatPicks.valueRange",
   "StatPicks.histCols", "ExportSeriesStyle.stack", "ExportSeriesStyle.float", "Dataset.cellRules",
   "StatMarks.comparisons", "StatMarks.compareMethod", "StatMarks.compareControl", "StatMarks.compareExact",
+  "PlotView.overlays", "PlotView.pointLabels",
 ]);
 
 /** The gated features in `doc` that v0.35-v0.38 would lose (see NEW_SINCE_V038). */

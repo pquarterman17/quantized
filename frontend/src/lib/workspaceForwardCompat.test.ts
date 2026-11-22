@@ -74,6 +74,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxisOf = { 1: 3 };
   }),
   "PlotView.seriesRamp": (ws) => editView(ws, (v) => { v.seriesRamp = { map: "viridis" }; }),
+  "PlotView.pointLabels": (ws) => editView(ws, (v) => { v.pointLabels = { key: 1, mode: "top", topN: 5 }; }),
   "PlotView.overlays": (ws) => editView(ws, (v) => { v.overlays = { line: { band: "none", level: 0.95 }, smoother: null, ellipse: null }; }),
   "ErrorBinding.origin": (ws) => {
     const doc = plotWindow(ws).document!;
@@ -161,7 +162,7 @@ const READ_BY_V038 = [
   "ExportSeriesStyle.error_width", "ExportSeriesStyle.marker_alpha", "ExportSeriesStyle.marker_edge",
   "ExportSeriesStyle.marker_every", "ExportSeriesStyle.marker_face", "ExportSeriesStyle.marker_fill",
   "ExportSeriesStyle.ramp_rank", "ExportSeriesStyle.size_by", "ExportSeriesStyle.size_range", "MapViewState.view3d",
-  "PlotView.exchangeXY", "PlotView.layers", "PlotView.overlays", "PlotView.seriesRamp", "PlotView.yAxes", "PlotView.yAxisOf",
+  "PlotView.exchangeXY", "PlotView.layers", "PlotView.seriesRamp", "PlotView.yAxes", "PlotView.yAxisOf",
   "PlotWindow.linkYGroup", "RecipeMapView.view3d", "RecipeVisual.yAxes", "RecipeVisual.yAxisOf",
   "Workspace.savedRecodeMappings",
 ];
@@ -427,7 +428,7 @@ function populate(ws: LoadedWorkspace): void {
   const legend: Required<NonNullable<FigureOverrides["legend"]>> = { show: true, loc: "best", frame: true, anchor: [0, 0], title: "t" };
   const ticks: Required<NonNullable<FigureOverrides["ticks"]>> = { dir: "in", len: 3, minor: true };
   const spines: Required<NonNullable<FigureOverrides["spines"]>> = { top: true, right: true };
-  const overrides: Required<Omit<FigureOverrides, "layers" | "exchange_xy" | "overlays">> = { // wire-only keys: never persisted
+  const overrides: Required<Omit<FigureOverrides, "layers" | "exchange_xy" | "overlays" | "point_labels">> = { // wire-only keys: never persisted
     font_size: 9, font_name: "Arial", title_size: 9, label_size: 9, tick_size: 9, legend_size: 9,
     legend, ticks, spines,
     x_lim: [0, 1], x_reversed: true, y_lim: [0, 1], y2_lim: [0, 1],

@@ -72,6 +72,7 @@ import type { OriginDesignation } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
+import type { PointLabels } from "./pointLabels";
 import type { ColumnProps } from "./columnProps";
 import type { CellRules } from "./worksheetRulesModel";
 import type { ChannelRole, ColumnFilter, Dataset, FitSpec, LinkedCurve, ModelingType, SeriesStyle } from "./types";
@@ -327,6 +328,16 @@ export interface ViewChannelState {
   errKeys: Record<number, number>;
   /** Channel -> extra Y axis number (lib/multiY.ts); optional for older callers. */
   yAxisOf?: Record<number, number>;
+  /** Point labels (lib/pointLabels.ts): `key` is the label COLUMN; optional for older callers. */
+  pointLabels?: PointLabels | null;
+}
+
+/** The label column follows a shift; when it WAS the removed column there is no
+ *  honest substitute, so the labels turn off. */
+export function remapPointLabels(p: PointLabels | null | undefined, removedCol: ColumnShift): PointLabels | null {
+  if (!p) return null;
+  const key = remapChannel(p.key, removedCol);
+  return key === null ? null : key === p.key ? p : { ...p, key };
 }
 
 /** Remap the live plot view after `removedCol` disappears from its dataset.
@@ -357,6 +368,7 @@ export function remapViewChannels(v: ViewChannelState, removedCol: ColumnShift):
     seriesLabels: remapKeyedRecordDense(v.seriesLabels, removedCol),
     errKeys,
     ...(v.yAxisOf ? { yAxisOf: remapKeyedRecordDense(v.yAxisOf, removedCol) } : {}),
+    ...(v.pointLabels !== undefined ? { pointLabels: remapPointLabels(v.pointLabels, removedCol) } : {}),
   };
 }
 
@@ -386,12 +398,14 @@ export function remapFigureViewChannels(view: FigureViewState, removedCol: Colum
       seriesStyles: view.seriesStyles,
       seriesLabels: view.seriesLabels,
       yAxisOf: view.yAxisOf,
+      pointLabels: view.pointLabels,
     },
     removedCol,
   );
   return {
     ...view,
     yAxisOf: remapped.yAxisOf ?? view.yAxisOf,
+    pointLabels: remapped.pointLabels ?? null,
     hiddenChannels: remapped.hiddenChannels,
     seriesOrder: remapped.seriesOrder,
     seriesStyles: remapped.seriesStyles,

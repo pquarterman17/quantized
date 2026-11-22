@@ -40,6 +40,8 @@ export interface ReadoutRow {
  *  every *visible* series' y at that shared aligned-data index (a mini tooltip). */
 export interface Readout {
   x: number;
+  /** The cursor's index into the aligned data (the point labels' row number reads it). */
+  idx?: number;
   rows: ReadoutRow[];
 }
 

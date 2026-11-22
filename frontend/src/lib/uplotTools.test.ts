@@ -29,7 +29,7 @@ describe("readoutPlugin", () => {
 
   it("reports every visible series' value at the cursor index", () => {
     const r = readoutAt(1, data, series);
-    expect(r).toEqual({
+    expect(r).toMatchObject({
       x: 20,
       rows: [
         { label: "M", y: 2 },
@@ -55,6 +55,6 @@ describe("readoutPlugin", () => {
 
   it("labels an unlabeled series as empty (chip falls back to 'y')", () => {
     const r = readoutAt(0, [[5], [9]], [{}, {}]);
-    expect(r).toEqual({ x: 5, rows: [{ label: "", y: 9 }] });
+    expect(r).toMatchObject({ x: 5, rows: [{ label: "", y: 9 }] });
   });
 });

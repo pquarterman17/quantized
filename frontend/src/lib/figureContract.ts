@@ -114,6 +114,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   seriesStyles: canonical("series.styles"),
   seriesRamp: canonical("series.colorRamp"),
   overlays: canonical("plot.overlays", "Line of fit / smoother / density ellipse options (gap audit 8); null = off."),
+  pointLabels: canonical("plot.pointLabels", "Point labels from a column (gap audit 8); null = off."),
   seriesLabels: canonical("series.labels"),
   errKeys: canonical("bindings.errors"),
   seriesOrder: canonical("series.order"),

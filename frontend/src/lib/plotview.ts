@@ -8,7 +8,6 @@
 // store's `focusWindow`/`closeWindow` actions, and later item 7's `.dwk` save
 // path. Pure — no store import (this stays a lib/ module; see
 // `.claude/rules/architecture-guards.md` #1 pure-layer isolation).
-//
 // Deliberately EXCLUDED from PlotView: dataset binding (lives on the window
 // record, not the view — a window can be re-pointed at a new dataset without
 // losing its display config), tool/gadget/overlay transient state (fitOverlay,
@@ -26,6 +25,7 @@ import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRang
 import type { GraphLayer } from "./graphLayers";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizePlotOverlays, type PlotOverlays } from "./plotOverlays";
+import { sanitizePointLabels, type PointLabels } from "./pointLabels";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
@@ -193,6 +193,7 @@ export interface PlotView {
   /** Colour gradient across the curves (origin gap audit 4 G1, lib/seriesRamp.ts); null = palette. */
   seriesRamp: SeriesRamp | null;
   overlays: PlotOverlays | null; // line of fit / smoother / density ellipse (gap audit 8, lib/plotOverlays.ts); null = off
+  pointLabels: PointLabels | null; // point labels from a column (gap audit 8, lib/pointLabels.ts); null = off
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
   seriesOrder: number[] | null;
@@ -257,7 +258,7 @@ export function defaultPlotView(): PlotView {
     annotations: [],
     regionShades: [],
     shapes: [],
-    seriesStyles: {}, seriesRamp: null, overlays: null,
+    seriesStyles: {}, seriesRamp: null, overlays: null, pointLabels: null,
     seriesLabels: {},
     errKeys: {},
     seriesOrder: null,
@@ -479,7 +480,7 @@ export function sanitizePlotView(v: unknown): PlotView {
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>) // symbol values: `graphLayersSanitize.withValidLayers` (.dwk)
         : {},
-    seriesRamp: sanitizeSeriesRamp(o.seriesRamp), overlays: sanitizePlotOverlays(o.overlays), // additive: an older .dwk has none -> null
+    seriesRamp: sanitizeSeriesRamp(o.seriesRamp), overlays: sanitizePlotOverlays(o.overlays), pointLabels: sanitizePointLabels(o.pointLabels), // additive: an older .dwk has none -> null
     // Values VALIDATED, not cast — see `lib/sanitizeRecord.ts` (BUG-014 r4).
     seriesLabels: keyedRecord<string, number>(o.seriesLabels, isString),
     errKeys:

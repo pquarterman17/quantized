@@ -52,6 +52,7 @@ import { lit } from "../lib/macro";
 import type { PageSetup } from "../lib/pagesetup";
 import { nextPanelFit, type PanelFit } from "../lib/panelFit";
 import { overlaysOn, type PlotOverlays } from "../lib/plotOverlays";
+import { sanitizePointLabels, type PointLabels } from "../lib/pointLabels";
 import type { SeriesRamp } from "../lib/seriesRamp";
 import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
@@ -148,6 +149,9 @@ export interface PlotViewSettingsSlice {
   /** Fit overlays (gap audit 8, lib/plotOverlays.ts): off (null) by default; one undo step per set. */
   overlays: PlotOverlays | null;
   setOverlays: (overlays: PlotOverlays | null) => void;
+  /** Point labels from a column (gap audit 8, lib/pointLabels.ts): off (null) by default; one undo step per set. */
+  pointLabels: PointLabels | null;
+  setPointLabels: (labels: PointLabels | null) => void;
 }
 
 /** Is a multi-panel layout engaged — the per-channel stack, a facet binding, a
@@ -341,6 +345,11 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     setOverlays: (overlays) => {
       get().recordHistory("fit overlays");
       set({ overlays: overlaysOn(overlays) ? overlays : null });
+    },
+    pointLabels: null,
+    setPointLabels: (labels) => {
+      get().recordHistory("point labels");
+      set({ pointLabels: sanitizePointLabels(labels) });
     },
   };
 }
