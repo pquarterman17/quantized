@@ -27,6 +27,7 @@ import NotesCard from "./NotesCard";
 import OriginProvenanceCard from "./OriginProvenanceCard";
 import PlotObjectsCard from "./PlotObjectsCard";
 import RefLinesCard from "./RefLinesCard";
+import FitOverlaysCard from "./FitOverlaysCard";
 import RegionShadesCard from "./RegionShadesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import ShapesCard from "./ShapesCard";
@@ -39,10 +40,10 @@ import { selectionKey, useExclusiveSelection, usePlotSelection, useSelectionGuar
 import { useActiveDataset, useApp } from "../../store/useApp";
 
 /** Cards that edit the plot, not the data: hidden off the Plot / Map tabs. */
-const PLOT_CARDS = new Set(["Plot objects", "Axes", "Titles & labels", "Reference lines", "Region shades", "Annotations", "Shapes", "Series style"]);
+const PLOT_CARDS = new Set(["Plot objects", "Axes", "Titles & labels", "Reference lines", "Region shades", "Annotations", "Shapes", "Series style", "Fit overlays"]);
 /** The Plot tab's own order: the plot's series list and the plot cards first;
  *  every other card follows under a "Data" heading. */
-const PLOT_TAB_ORDER = ["Channels", "Plot objects", "Axes", "Titles & labels", "Series style", "Reference lines", "Region shades", "Annotations", "Shapes"];
+const PLOT_TAB_ORDER = ["Channels", "Plot objects", "Axes", "Titles & labels", "Series style", "Fit overlays", "Reference lines", "Region shades", "Annotations", "Shapes"];
 /** Rank of a card after every PLOT_TAB_ORDER entry: the data cards. */
 const DATA_RANK = 99;
 
@@ -133,6 +134,7 @@ function InspectorBody() {
     ["Titles & labels", <TitlesCard />],
     ["Reference lines", <RefLinesCard />],
     ["Region shades", <RegionShadesCard />],
+    ["Fit overlays", stageTab !== "map" && <FitOverlaysCard />],
     ["Annotations", <AnnotationsCard />],
     ["Shapes", <ShapesCard />],
     // Line/Scatter/marker controls style XY curves; a map draws none (figures audit #18).

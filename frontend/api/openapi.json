@@ -10890,6 +10890,73 @@
         "title": "OriginRequest",
         "type": "object"
       },
+      "OverlaySeries": {
+        "properties": {
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "y": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "OverlaySeries",
+        "type": "object"
+      },
+      "OverlaysRequest": {
+        "description": "The live plot's line of fit / smoother / density ellipse for each plotted\nseries (``calc.figure_overlays``, the same computation the export draws).\n``x`` is shared; a null is a blank cell (an excluded or filtered row).",
+        "properties": {
+          "overlays": {
+            "additionalProperties": true,
+            "title": "Overlays",
+            "type": "object"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/OverlaySeries"
+            },
+            "maxItems": 64,
+            "title": "Series",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "series",
+          "overlays"
+        ],
+        "title": "OverlaysRequest",
+        "type": "object"
+      },
       "PCARequest": {
         "properties": {
           "center": {
@@ -25917,6 +25984,50 @@
           }
         },
         "summary": "Plot Map",
+        "tags": [
+          "plot"
+        ]
+      }
+    },
+    "/api/plot/overlays": {
+      "post": {
+        "description": "Per series: each requested overlay's curve and legend text, or the reason\nit was refused (too few points, constant X, infinite values, ...).",
+        "operationId": "plot_overlays_api_plot_overlays_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverlaysRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plot Overlays Api Plot Overlays Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plot Overlays",
         "tags": [
           "plot"
         ]

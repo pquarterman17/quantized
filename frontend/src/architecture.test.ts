@@ -2081,6 +2081,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   waterfall: "numeric offset step, not a column index",
   waterfallDx: "numeric X offset step (a fraction of the x-span), not a column index",
   seriesRamp: "a colormap name + reverse/order flags (gap audit 4 G1), not a column index",
+  overlays: "line-of-fit / smoother / ellipse options (band, level, span; gap audit 8), applied to every plotted curve -- not a column index",
   panelFit: "layout-fit mode enum, not channel-indexed",
   pageSetup: "page geometry model, not channel-indexed",
 };

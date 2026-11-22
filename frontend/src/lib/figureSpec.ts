@@ -217,10 +217,11 @@ function buildFigureSpecForView(
   st = rampView(st, data, channelRoles, extras);
   [st, data, extras] = perSeriesXSpec(st, data, channelRoles, extras); // gap-2 #2: each Y on its own X, as on screen
   const { pageSize, overrides } = pageViewOverrides(st); // #54 Stage 3: the window page (figureViewOverrides.ts)
-  // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them.
+  // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them;
+  // the broken panels draw no fit overlays on screen, so none ride with them.
   const xBreaks = breakCompositionFromData(pruneToLiveDataset(data, extras.liveDataset), extras.xBreaks, st.xKey, st.yKeys) && extras.xBreaks;
   const withBreaks = xBreaks
-    ? (compactOverrides({ ...overrides, x_breaks: xBreaks.map((range) => [...range] as [number, number]) }) ?? undefined)
+    ? (compactOverrides({ ...overrides, overlays: undefined, x_breaks: xBreaks.map((range) => [...range] as [number, number]) }) ?? undefined)
     : overrides;
 
   // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden legend

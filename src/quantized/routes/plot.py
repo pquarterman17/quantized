@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.decimate import is_ascending, reduce_plot_rows, window_row_indices
+from quantized.calc.figure_overlays import series_overlays, validate_overlay_spec
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.routes._columns import COLUMNS_MEDIA_TYPE, encode_columns, wants_columns
@@ -220,3 +221,30 @@ def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
         "interpolated": bool(m.metadata.get("interpolated", False)),
         "n_points": int(m.metadata.get("n_points", 0)),
     }
+
+
+class OverlaySeries(BaseModel):
+    label: str = ""
+    y: list[float | None]
+
+
+class OverlaysRequest(BaseModel):
+    """The live plot's line of fit / smoother / density ellipse for each plotted
+    series (``calc.figure_overlays``, the same computation the export draws).
+    ``x`` is shared; a null is a blank cell (an excluded or filtered row)."""
+
+    x: list[float | None]
+    series: list[OverlaySeries] = Field(max_length=64)
+    overlays: dict[str, Any]
+
+
+@router.post("/overlays", response_model=dict[str, Any])
+def plot_overlays(req: OverlaysRequest) -> dict[str, Any]:
+    """Per series: each requested overlay's curve and legend text, or the reason
+    it was refused (too few points, constant X, infinite values, ...)."""
+    try:
+        spec = validate_overlay_spec(req.overlays)
+        out = series_overlays([(s.label, s.y) for s in req.series], req.x, spec)
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"series": to_jsonable(out)}

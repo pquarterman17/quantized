@@ -51,6 +51,7 @@ import type { HalfLim } from "../lib/axisLim";
 import { lit } from "../lib/macro";
 import type { PageSetup } from "../lib/pagesetup";
 import { nextPanelFit, type PanelFit } from "../lib/panelFit";
+import { overlaysOn, type PlotOverlays } from "../lib/plotOverlays";
 import type { SeriesRamp } from "../lib/seriesRamp";
 import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
@@ -144,6 +145,9 @@ export interface PlotViewSettingsSlice {
    *  A PlotView field declared here like `waterfallDx`; one undo step per set. */
   seriesRamp: SeriesRamp | null;
   setSeriesRamp: (ramp: SeriesRamp | null) => void;
+  /** Fit overlays (gap audit 8, lib/plotOverlays.ts): off (null) by default; one undo step per set. */
+  overlays: PlotOverlays | null;
+  setOverlays: (overlays: PlotOverlays | null) => void;
 }
 
 /** Is a multi-panel layout engaged — the per-channel stack, a facet binding, a
@@ -332,6 +336,11 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     setSeriesRamp: (seriesRamp) => {
       get().recordHistory("colour gradient");
       set({ seriesRamp });
+    },
+    overlays: null,
+    setOverlays: (overlays) => {
+      get().recordHistory("fit overlays");
+      set({ overlays: overlaysOn(overlays) ? overlays : null });
     },
   };
 }

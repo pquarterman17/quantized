@@ -315,6 +315,7 @@ function BackgroundXYWindow({
         refLines={view.refLines}
         annotations={view.annotations}
         regionShades={view.regionShades}
+        overlays={view.overlays}
         shapes={view.shapes}
         frameVars={view.showLegend}
         seriesStyles={styleList}
