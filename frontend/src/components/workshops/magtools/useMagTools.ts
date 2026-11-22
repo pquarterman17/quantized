@@ -33,6 +33,7 @@ import {
 } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetInputsToken } from "../workbench/inputsKey";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
  *  CHANNELS over the FULL data (magnetometry transforms convert every row, so
@@ -143,12 +144,24 @@ export function resolvedSourceStillCurrent(request: MagRequestView, source: Data
  *  while one of those is active. */
 interface Readout {
   owners: readonly string[];
+  /** What the fit was measured for (see {@link bgRunKey}); null when there is no fit. */
+  key: string | null;
   fit: MagBgFit | null;
   warning: string | null;
   error: string | null;
 }
 
-const EMPTY_READOUT: Readout = { owners: [], fit: null, warning: null, error: null };
+const EMPTY_READOUT: Readout = { owners: [], key: null, fit: null, warning: null, error: null };
+
+/** Every input the background fit depends on (lane WB7): the source's rows /
+ *  data, the plotted channels, the routine and ITS fraction (the other path's
+ *  fraction is not an input). */
+export function bgRunKey(
+  ds: Dataset | null, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null,
+  path: MagBgPath | null, fraction: number,
+): string {
+  return JSON.stringify([datasetInputsToken(ds), xKey, yKeys, seriesOrder, path, fraction]);
+}
 
 export interface MagToolsState {
   active: Dataset | null;
@@ -167,6 +180,10 @@ export interface MagToolsState {
   /** The plotted data's own units, for labelling the fit readout. */
   source: { fromField: string | null; xUnit: string; fromMoment: string } | null;
   fit: MagBgFit | null;
+  /** The shown fit was measured for a different source / plot / routine / fraction
+   *  than the panel now has (lane WB7): the fit and its warning are withheld. The
+   *  corrected dataset it wrote is a committed output and is unaffected. */
+  fitStale: boolean;
   warning: string | null;
   busy: boolean;
   error: string | null;
@@ -218,6 +235,11 @@ export function useMagTools(): MagToolsState {
           : null
       : bgMode;
 
+  // On the corrected dataset the readout describes the dataset itself; on the
+  // source it describes the run, so a moved input marks it.
+  const liveKey = bgRunKey(active, xKey, yKeys, seriesOrder, bgPath, bgPath === "mh" ? hiFraction : autoFraction);
+  const fitStale = visible.fit !== null && activeId === visible.owners[0] && visible.key !== liveKey;
+
   /** Switching path DISCARDS the previous readout. The two paths report
    *  different quantities (intercept vs offset), so leaving the old one on
    *  screen under the new path's label is the same mislabelling defect 4 is
@@ -233,9 +255,11 @@ export function useMagTools(): MagToolsState {
     if (!active) return;
     const request = requestView(active.id, xKey, yKeys, seriesOrder);
     const owners = [request.sourceId];
+    const fraction = bgPath === "mh" ? hiFraction : autoFraction;
     if (!bgPath) {
       setReadout({
         owners,
+        key: null,
         fit: null,
         warning: null,
         error: `Cannot tell M(T) from M(H): ${detection.reason}. Choose the data type above.`,
@@ -255,6 +279,7 @@ export function useMagTools(): MagToolsState {
       if (pairs.keep.length < 3) {
         setReadout({
           owners,
+          key: null,
           fit: null,
           warning: null,
           error: `Only ${pairs.keep.length} of ${pairs.n} rows have both a finite x and a finite moment — not enough to fit a background.`,
@@ -338,6 +363,7 @@ export function useMagTools(): MagToolsState {
       addDataset({ id: outId, name: `${stem()} (${suffix})`, data });
       setReadout({
         owners: [...owners, outId],
+        key: bgRunKey(ds, request.xKey, request.yKeys, request.seriesOrder, bgPath, fraction),
         fit,
         warning: warnings.length ? warnings.join(" ") : null,
         error: null,
@@ -345,6 +371,7 @@ export function useMagTools(): MagToolsState {
     } catch (e) {
       setReadout({
         owners,
+        key: null,
         fit: null,
         warning: null,
         error: e instanceof Error ? e.message : "background subtraction failed",
@@ -367,8 +394,9 @@ export function useMagTools(): MagToolsState {
     hiFraction,
     setHiFraction,
     source: src,
-    fit: visible.fit,
-    warning: visible.warning,
+    fit: fitStale ? null : visible.fit,
+    fitStale,
+    warning: fitStale ? null : visible.warning,
     busy,
     error: visible.error,
     subtractBackground,

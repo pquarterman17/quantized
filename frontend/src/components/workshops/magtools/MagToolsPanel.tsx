@@ -24,6 +24,7 @@ import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
 import NormalizationPane from "./NormalizationPane";
 import { useMagNormalization } from "./useMagNormalization";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 
 const BG_MODE_OPTS: { value: MagBgMode; label: string }[] = [
   { value: "auto", label: "Auto-detect" },
@@ -136,6 +137,9 @@ export default function MagToolsPanel() {
               {m.busy ? "Working…" : "Subtract background →"}
             </Button>
           </div>
+          {m.fitStale && (
+            <OutOfDateNote block>the data, plot or settings changed after this fit. Subtract again.</OutOfDateNote>
+          )}
           {m.fit && (
             <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
               {m.fit.kind === "mh"

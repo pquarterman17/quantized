@@ -36,8 +36,10 @@ import { normalizeRect, roiBoxBody, roiStatsBody, type BoxCutOptions, type RoiRe
 import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useRoisStore } from "../../../store/hooks/useRoisStore";
 import { useCutLanding } from "../../Stage/useCutLanding";
 import { csvBlob, csvTextCell } from "../../../lib/csvCell";
+import { datasetsInputsToken } from "../workbench/inputsKey";
 
 /** A dataset that did NOT contribute a result, and why — every skip/error
  *  names its dataset (RSM_CUTS_PLAN item 9: "a silent skip is the failure
@@ -156,6 +158,10 @@ export interface RoiBatchState {
    *  batch-results card's live TabulateTable preview reads this directly. */
   summaryRows: BatchSummaryRow[];
   outcome: BatchOutcome | null;
+  /** The summary rows were measured for a box, or rows / data of the datasets
+   *  that ran, that have since changed (lane WB7): the card withholds the table
+   *  and Export CSV. The cuts and summary dataset already landed are unaffected. */
+  summaryStale: boolean;
   /** Apply `rect` (already-drawn/typed box ROI; the SAME `store.mapRoi` the
    *  Box card edits) to every dataset in `store.selectedIds`, sequentially
    *  — not a parallel flood, the backend is a local single process and each
@@ -182,6 +188,13 @@ export function useRoiBatch(): RoiBatchState {
   const [summaryTable, setSummaryTable] = useState(true);
   const [summaryRows, setSummaryRows] = useState<BatchSummaryRow[]>([]);
   const [outcome, setOutcome] = useState<BatchOutcome | null>(null);
+  // What the summary rows were measured for: the box and the data of the
+  // datasets that ran (taken after a lazy book is installed, at launch for the box).
+  const [ran, setRan] = useState<{ roi: string; ids: readonly string[]; token: string } | null>(null);
+  const liveRoi = JSON.stringify(useRoisStore((s) => s.mapRoi));
+  const liveDatasets = useApp((s) => s.datasets);
+  const summaryStale = ran !== null && summaryRows.length > 0 &&
+    (ran.roi !== liveRoi || ran.token !== datasetsInputsToken(ran.ids, liveDatasets));
 
   async function applyToSelected(rect: RoiRect | null, opts: BoxCutOptions = {}): Promise<void> {
     if (busyRef.current) return; // one batch at a time — the panel must not allow a second while one runs
@@ -199,6 +212,8 @@ export function useRoiBatch(): RoiBatchState {
     setBusy(true);
     setOutcome(null);
     setSummaryRows([]);
+    setRan(null);
+    const launchRoi = JSON.stringify(useApp.getState().mapRoi);
     // Hoisted out of the `try` so the outer catch can report the partial
     // outcome (how many cuts already landed, and the first failure).
     let total = ids.length;
@@ -208,6 +223,8 @@ export function useRoiBatch(): RoiBatchState {
       const normalized = normalizeRect(rect);
       const resolved = await useApp.getState().resolveDatasets(ids);
       total = resolved.length;
+      const ranIds = resolved.map((d) => d.id);
+      const ranToken = datasetsInputsToken(ranIds, useApp.getState().datasets);
 
       const skipped: BatchNamedReason[] = [];
       const statsErrored: BatchNamedReason[] = [];
@@ -241,6 +258,7 @@ export function useRoiBatch(): RoiBatchState {
       }
 
       setSummaryRows(rows);
+      setRan({ roi: launchRoi, ids: ranIds, token: ranToken });
 
       // plotSelectedTogether itself requires >=2 datasets to overlay; below
       // that it would toast a confusing "select at least 2" for what is
@@ -281,7 +299,7 @@ export function useRoiBatch(): RoiBatchState {
   }
 
   function exportCsv(): void {
-    if (!summaryRows.length) return;
+    if (!summaryRows.length || summaryStale) return;
     saveBlob(csvBlob(summaryToCsv(summaryRows)), "roi-batch-summary.csv");
   }
 
@@ -293,6 +311,7 @@ export function useRoiBatch(): RoiBatchState {
     setSummaryTable,
     summaryRows,
     outcome,
+    summaryStale,
     applyToSelected,
     exportCsv,
   };

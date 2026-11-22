@@ -425,7 +425,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     decision on making the book the default tab; By-level / batch for the
     statistics tools (item above); other analysis-batch tools' figures (only
     hysteresis drafts exist).
-- [ ] There is no shared "preview -> commit derived output -> rerun/edit"
+- [x] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
   Progress (lane RL): the commit half exists (`useAnalysisCommit` +
@@ -441,10 +441,16 @@ inconsistently exposed, and do not all share the same result lifecycle.
   Progress (lane WB5): the tools WB4 left out are audited and covered (Lane WB5
   block below).
   Progress (lane WB6): the single-run tools never on a WB list are audited (Lane
-  WB6 block below). The gap STAYS OPEN, narrowly: the lane's list is done, but
-  RSM peaks / strain, ROI cuts, and the commit-only transforms (Demag,
-  Normalization, MagTools Background) and Tabulate were not audited (see the WB6
-  block), and the tick needs that read, not an assumption.
+  WB6 block below).
+  Progress (lane WB7, 2026-11-22): the last tools are audited from their code,
+  not their headers, and the gap is CLOSED: every tool that holds a result in
+  state and offers a report, export, Library, add-dataset or apply action is
+  in the consolidated table at the end of the Lane WB7 block, with the test
+  file that pins it. What is closed is the CONTRACT (a result is stamped with
+  its inputs, marked "Out of date" and its actions withheld, or dropped, or
+  recomputed live); the tools keep their own state hooks rather than all
+  living on `useWorkbenchPreview` (judgment calls recorded in WB3 / WB4). The
+  one documented limit left is the lazy-book install edit (see WB7).
 
   **Workbench audit (lane WB, 2026-11-22).** Tools that preview before they
   commit, as found before the migration. "Key" = every input the preview
@@ -687,13 +693,93 @@ inconsistently exposed, and do not all share the same result lifecycle.
     wavelength and source rows and expected the old fit to be added; that is now
     what is withheld, so it keeps the rename case and the moved-input cases are in
     `usePawley.workbench.test`.
-  - **Not audited (why the gap stays open):** RSM analysis / strain (button-driven
-    readouts) and ROI cuts' numeric readouts; Demag, Normalization and MagTools
-    Background are commit-only transforms (no held result) and Tabulate is a live
-    table, assessed from their headers only. Known limit: a lazy book resolved
-    by FFT thickness / Reflectivity FFT / Pawley / Stats tests is installed before
-    the run key is taken (as WB4), so an edit made exactly during that install is
-    not distinguished.
+  - **Left for WB7:** RSM analysis / strain, ROI cuts' readouts, Demag,
+    Normalization, MagTools Background and Tabulate (audited in the Lane WB7
+    block). Known limit: a lazy book resolved by FFT thickness / Reflectivity
+    FFT / Pawley / Stats tests is installed before the run key is taken (as
+    WB4), so an edit made exactly during that install is not distinguished
+    (see WB7: left documented).
+
+  **Lane WB7 (the last tools, and the consolidated audit, 2026-11-22).** The
+  remaining tools were read from their code (state, actions, in-flight
+  handling). "Live" = recomputes or clears on every input change; "receipt" =
+  state describes a commit that already landed (a dataset, a report), not a
+  result that can be re-used; "stamped" = marked "Out of date" with its actions
+  withheld (`useRunStamp` or an equivalent key).
+  - **RSM peaks / strain** (`useRsm`): the analysis was dropped on a dataset
+    switch only. Fixed: a changed "Peaks" count marks the peaks out of date and
+    withholds Compute strain, the strain readout and every peak cut (default
+    and per-row); a late answer for a dataset left, a Clear, or a changed
+    dataset no longer lands (peaks / strain / the map overlay); a lazy book
+    installed by Find peaks no longer discards its own run.
+  - **ROI cuts** (`useBoxStats`, split out of `useRoiCuts` for the 500-line
+    ceiling): the Box "Stats" readout survived a moved box and, on a RETURN to a
+    dataset with banked sector settings, the other dataset's numbers (the reset
+    ran on the first visit only). Fixed: stamped with rows + box, values
+    withheld, dropped on any dataset change, late answers dropped. The cuts and
+    profiles themselves land a named library dataset (no held result). **Batch
+    summary** (`useRoiBatch`): the preview table and Export CSV survived a moved
+    box or edited rows; now marked and withheld (the landed cuts and summary
+    dataset are receipts).
+  - **Test chooser** (`useStatsChooser`, found by the grep for result holders):
+    same class as the Stats tests: a changed source left the recommendation,
+    Run and Report on the old numbers, and a late answer for dropped picks
+    landed. Fixed: stamped with the source identity, Run / Report withheld, a
+    sequence guard on both requests.
+  - **Built-in phase indexer** (`BuiltInPhaseIndexer`, also found by the grep):
+    a changed wavelength, tolerance or peak list left the table and "Label on
+    plot" on the old indexing. Fixed: stamped, table and Label withheld.
+  - **MagTools Background / Demag**: both write a NEW dataset (commit; Demag
+    through the shared commit contract, no duplicate, stale on source change,
+    pinned by existing tests) and keep a fit / "Applied N" readout. On the source
+    that readout described the run but outlived a moved fraction, geometry,
+    plotted channel or row set. Fixed: keyed, withheld behind "Out of date" on
+    the source; on the corrected dataset it describes itself. Note: activating
+    the output resets the plot selection, so a source plotted with a non-default
+    channel reads as changed when selected again.
+  - **Audited, no change (pinned by existing tests):** Normalization (summary is
+    derived live and gates Apply; the readout holds notices / errors, not a
+    result; commit contract), Tabulate (live `useMemo` table; export through the
+    commit contract; queued export / report / copy checked against the setup key),
+    Spin asymmetry (commit-only, both channels are sources), SIMS batch results
+    (receipt of created datasets; reset on a settings change), Curve fit
+    diagnostics / fit report / full-fit loader (effects keyed on result, data and
+    level with an abort: live), Calculators (every card clears on edit and
+    discards late requests), Film stack, Pipeline last run, Apply recipe and
+    Recipe library results (receipts), Waterfall (live traces), Digitizer (hand
+    traced input, not a computed result), Dataset math / Curve averaging /
+    Metadata factors / Recode / Data filter (commit-only or live previews).
+  - **Known limit kept (not cheap):** an edit made exactly during a lazy-book
+    install is not distinguished from the install. The install replaces the
+    dataset's `.data` and clears its row state in one store write, so no key
+    read before or after can separate an edit from it; telling them apart needs
+    an install epoch in the store (a store change touching every consumer), which
+    is out of scope for an audit lane. Worst case: a result computed on the
+    installed rows is shown current although the user changed something in that
+    one window.
+
+  **Consolidated audit (lanes WB to WB7), result-producing tools.**
+  Test files are under `frontend/src/components/workshops/`.
+
+  | Tool | Behaviour | Evidence |
+  |---|---|---|
+  | Signal Processing, sigop, Reduce rows, Resample, Reshape, Baseline, SIMS, figure previews | preview shell, "Preview (not saved)" | `workbench/useWorkbenchPreview.test`, `useWorkbenchCommit.test`, `WorkbenchParts.test` |
+  | Curve fit (single, batch, By tables, bands, Bumps / DREAM) | stamped / manual mode | `curvefit/useCurveFit.workbench`, `useBumpsFit.workbench`, `CurveFitBatchSection.stale`, `useCurveFitByLevel.stale`, `useFitBands.workbench` |
+  | Peaks panel, Peak analyzer (find, fit, batch), Batch integrate | stamped | `peaks/PeaksPanel.workbench`, `peakwizard/PeakWizardFind.workbench`, `useModelFit.workbench`, `PeakBatchView.stale`, `BatchIntegrateWindow.workbench` |
+  | ODR, Equation fit, Compare models, Global fit, Model scan | stamped / manual mode | `useOdrFit.workbench`, `useEquationFit.workbench`, `useCompareModels.workbench`, `useGlobalFit.workbench`, `useModelScan.workbench` |
+  | Reflectivity fit, DREAM, FFT, Spin asymmetry | stamped / receipt | `reflectivity/useReflFit.workbench`, `useReflDream.workbench`, `reductions/useReflectivityFft.workbench`, `reflectivity/useSpinAsymmetry.test` |
+  | FFT thickness, Pawley, Williamson-Hall, Built-in phase indexer | stamped / live | `reductions/useFftThickness.workbench`, `usePawley.workbench`, `useWilliamsonHall.test`, `BuiltInPhaseIndexer.stale.test` |
+  | Statistical tests, Test chooser | stamped | `statstests/useStatsTests.workbench`, `statschooser/useStatsChooser.workbench` |
+  | Distribution, Fit Y by X, Multivariate, Variability, Outlier screening | live | `useDistribution.test`, `useFitYByX.test`, `useMultivar.test`, `useVariability.test`, `useOutlierScreening.test` |
+  | Hysteresis, Optical gap, Surface fit, Ellipse fit | live / stamped | `hysteresis/useHysteresis.stale`, `opticalgap/useOpticalGap.workbench`, `surfacefit/useSurfaceFit.workbench`, `implicitfit/useEllipseFit.workbench` |
+  | Curie-Weiss, MagTools Background, Demag | stamped | `magtools/useCurieWeiss.workbench`, `useMagTools.stale`, `useDemagCorrection.stale` |
+  | Normalization | commit-only, live summary | `magtools/useMagNormalization.test` |
+  | Batch over worksheets (shared shell) | stamped | `analysisselection/AnalysisBatchControls.stale` |
+  | RSM peaks / strain | stamped | `rsm/useRsm.workbench` |
+  | ROI cuts Stats, ROI batch summary | stamped | `roicuts/useRoiCuts.stats`, `roicuts/useRoiBatch.stale` |
+  | Tabulate | live | `tabulate/useTabulate.test`, `useTabulate.commit.test` |
+  | Calculators, Film stack | live (clear on edit, late answers dropped) | `calculators/shared.test`, `calculators/stack/FilmStackTab.test`, `useCalculators.test` |
+  | Curve fit diagnostics / fit report | live (abortable effects) | `curvefit/FitDiagnosticsSection.test`, `FitReportSection.test` |
 
   **Integration review (lane IR, 2026-11-22).** #836–#859 were reviewed one
   diff at a time; this pass drove their interactions through the real store
@@ -761,8 +847,10 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   FFT thickness, Reflectivity FFT, Pawley and the statistical tests mark a
   result "Out of date" (Surface fit retires it on a start-value edit); the other
   statistics tools, Hysteresis, Optical gap, Ellipse fit and Williamson-Hall were
-  audited and already recompute / clear. Still open: RSM, ROI cuts and the
-  commit-only magnetometry transforms (see the WB6 block).
+  audited and already recompute / clear. Lane WB7: RSM peaks / strain, the ROI
+  cuts statistics and batch summary, the Test chooser, the built-in phase
+  indexer and the MagTools Background / Demag readouts mark themselves too; the
+  consolidated table in the WB7 block covers every result-producing tool.
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
@@ -1637,6 +1725,7 @@ describer).
 | Date | Author | Change | Evidence |
 |---|---|---|---|
 | 2026-11-22 | Project team | Lane IR: integration review of #836–#859 (result lifecycle, reopen/Replace, stale marking from row state and Undo, Signal `inputRows`, Result book, batch/By, workbench shell). Six cross-feature bugs fixed (see the Lane IR block): held committed outputs re-derived by a recalc pass, Undo-of-Replace staleness, analysis-view row-state races in Create and recompute, marks dropped during a pass, concurrent statistics batches, Signal By provenance. Five suspicions recorded as open. | Fail-before scenario tests against the real store (`store/lifecycleCrossFeature.test.ts`, `StatsBatchSection.midrun.test.tsx`, `signalBySave.test.tsx`); forced tsc, lint, vitest on store/lib/workshops and architecture, build + bundle gate. |
+| 2026-11-22 | Project team | Lane WB7: RSM peaks / strain, ROI cuts statistics and batch summary, Test chooser, built-in phase indexer, MagTools Background and Demag readouts say "Out of date" and withhold strain / cuts / export / Label / report; late answers for a dataset left or a cleared analysis no longer land. Audited with no change: Normalization, Tabulate, Spin asymmetry, calculators and the rest (consolidated table). The shell gap is ticked. Kept: an edit during a lazy-book install is not distinguished. | Characterization + fail-before + forced-race tests (`useRsm.workbench`, `useRoiCuts.stats`, `useRoiBatch.stale`, `useStatsChooser.workbench`, `BuiltInPhaseIndexer.stale`, `useMagTools.stale`, `useDemagCorrection.stale`); no existing assertion changed. |
 | 2026-11-22 | Project team | Lane WB6: FFT thickness, Reflectivity FFT, Pawley and the statistical tests say "Out of date" and withhold Library / reflection lines / copy / export / report; Surface fit retires its result on a start-value or bound edit; Ellipse fit no longer discards a fit on a lazy book; typed refusal marker replaces the text comparison in seven hooks. Audited with no change: Distribution, Fit Y by X, Multivariate, Variability, Outlier screening, Hysteresis, Optical gap, Williamson-Hall. The shell gap stays open (RSM, ROI cuts, commit-only magnetometry transforms not audited). | Characterization + fail-before + forced-race tests (`useFftThickness.workbench`, `useReflectivityFft.workbench`, `usePawley.workbench`, `useStatsTests.workbench`, `useSurfaceFit.workbench`, `useEllipseFit.workbench`, `useOpticalGap.workbench`, `useHysteresis.stale`, `useWorkbenchPreview` refusal cases); one existing assertion changed deliberately (`usePawley.test`, see the WB6 block). |
 | 2026-11-22 | Project team | Lane WB5: Bumps / DREAM, the reflectivity fit, the Curie-Weiss fit, the Peak analyzer batch, Curve fit By tables and the shared batch shell mark results "Out of date" and withhold their summaries, exports, plots and applies; fit bands and reflectivity DREAM audited. Fixed: a late fit-band answer replacing a newer one; a Peak batch table added after its datasets changed. Not done: typed refusal marker; the shell gap stays open (single-run tools never on a WB list unaudited). | Characterization tests first, fail-before and forced-race tests (`useBumpsFit.workbench`, `useReflFit.workbench`, `useCurieWeiss.workbench`, `PeakBatchView.stale`, `AnalysisBatchControls.stale`, `CurveFitBatchSection.stale`, `useCurveFitByLevel.stale`, `useFitBands.workbench`, `useReflDream.workbench`); one existing assertion changed deliberately (`reflFitLiveRecord.test`, see WB5 block). |
 | 2026-11-22 | Project team | Lane WB4: the remaining button-only fits say "Out of date" and fail closed: Peaks panel Fit all together / Fit each (find settings), ODR, Equation fit and Compare models (manual mode), Global fit, Model scan and Batch integrate (`useRunStamp`), Peak analyzer model fit (shared note, WorkbenchMessage). Fixed: out-of-date results reportable / exportable / drawn as current, and late answers for changed inputs landing as current. The shell gap stays open (tools outside the list unaudited). | Characterization + fail-before tests (`PeaksPanel.workbench`, `useOdrFit.workbench`, `useEquationFit.workbench`, `useCompareModels.workbench`, `useGlobalFit.workbench`, `useModelScan.workbench`, `BatchIntegrateWindow.workbench`, `useModelFit.workbench`, `useRunStamp`); forced races with held requests; no existing assertion changed (ModelScanSection test helper gained two defaults). |

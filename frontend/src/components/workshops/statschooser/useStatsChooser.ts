@@ -23,7 +23,10 @@ import type { CalcResult, Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
 
 export type ChooserMode = "columns" | "groupby";
 
@@ -57,6 +60,8 @@ export interface StatsChooserState {
   error: string | null;
   rec: Recommendation | null;
   testResult: CalcResult | null;
+  /** The shown recommendation / result was computed for rows or data that have since changed. */
+  stale: boolean;
   recommend: () => Promise<void>;
   runRecommended: () => Promise<void>;
   toReport: () => Promise<void>;
@@ -97,6 +102,13 @@ export function useStatsChooser(): StatsChooserState {
   const [testResult, setTestResult] = useState<CalcResult | null>(null);
   const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
+  // Lane WB7: a change to the picks still DROPS the answer (invalidate); a change
+  // to the SOURCE rows / data after it landed marks it out of date and withholds
+  // Run / Report. `seq` makes an answer for dropped picks land nowhere.
+  const seq = useRef(0);
+  const stamp = useRunStamp(datasetInputsToken(active));
+  const stale = (rec !== null || testResult !== null) && stamp.stale;
+  const staleNow = useLatestRef(stale);
 
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view over the columns the current mode reads. A lazy Origin
@@ -120,6 +132,9 @@ export function useStatsChooser(): StatsChooserState {
     setCols((c) => (c.includes(i) ? c.filter((x) => x !== i) : [...c, i]));
 
   const invalidate = () => {
+    seq.current++;
+    stamp.record(null);
+    setBusy(false);
     setRec(null);
     setTestResult(null);
     setError(null);
@@ -166,20 +181,26 @@ export function useStatsChooser(): StatsChooserState {
       setError("No groups remain in the selected data; check the columns, filters, and excluded rows.");
       return;
     }
+    const request = ++seq.current;
+    const launchKey = stamp.launchKey();
     setBusy(true);
     setError(null);
     setTestResult(null);
+    stamp.record(null);
     try {
       const r = await statsRecommend({
         groups: groups.map((g) => g.values),
         paired: paired && pairable,
       });
+      if (request !== seq.current) return;
+      stamp.record(launchKey);
       setRec(r);
     } catch (e) {
+      if (request !== seq.current) return;
       setRec(null);
       setError(e instanceof Error ? e.message : "recommendation failed");
     } finally {
-      setBusy(false);
+      if (request === seq.current) setBusy(false);
     }
   }
 
@@ -205,7 +226,7 @@ export function useStatsChooser(): StatsChooserState {
   }, [active, recommendationKey, queuedRecommendation]);
 
   async function runRecommended(): Promise<void> {
-    if (!rec) return;
+    if (!rec || stale) return;
     const req = buildRunRequest(
       rec.endpoint,
       groups.map((g) => g.values),
@@ -215,20 +236,27 @@ export function useStatsChooser(): StatsChooserState {
       setError(`don't know how to run ${rec.endpoint}`);
       return;
     }
+    const request = ++seq.current;
+    const launchKey = stamp.launchKey();
     setBusy(true);
     setError(null);
     try {
-      setTestResult(await statsRunTest(req.path, req.body));
+      const result = await statsRunTest(req.path, req.body);
+      if (request !== seq.current) return;
+      stamp.record(launchKey);
+      setTestResult(result);
     } catch (e) {
+      if (request !== seq.current) return;
       setTestResult(null);
       setError(e instanceof Error ? e.message : "test failed");
     } finally {
-      setBusy(false);
+      if (request === seq.current) setBusy(false);
     }
   }
 
   async function toReport(): Promise<void> {
-    if (!rec || !testResult || !active) return;
+    if (!rec || !testResult || !active || stale) return;
+    const request = seq.current;
     setBusy(true);
     try {
       const { report } = await reportEmit({
@@ -238,6 +266,7 @@ export function useStatsChooser(): StatsChooserState {
         caption: rec.reasons.join("; "),
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
+      if (request !== seq.current || staleNow.current) return; // the answer changed while the report was built
       addReportWithProvenance(`${rec.recommendation} — ${active.name}`, report, active.id);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
@@ -282,6 +311,7 @@ export function useStatsChooser(): StatsChooserState {
     error,
     rec,
     testResult,
+    stale,
     recommend,
     runRecommended,
     toReport,
