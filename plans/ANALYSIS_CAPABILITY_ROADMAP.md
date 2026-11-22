@@ -576,6 +576,16 @@ inconsistently exposed, and do not all share the same result lifecycle.
     trend itself switches the active dataset; switching the active dataset to
     one with different column labels at the same indices is therefore not
     marked.
+  - A lazy (pending) Origin book swaps the dataset's `.data` when it is
+    installed, which moves the run key; the tools above therefore resolve their
+    pending datasets first and wait for that commit (`workbench/afterCommit`)
+    before launching the run (hook tools: otherwise the shell aborts the run on
+    the key change; stamp tools: otherwise the launch key is already out of
+    date). Out-of-date ODR / equation / global fits also take their own curve
+    off the plot (`fitOverlayOwnership.takeBackOverlay`, compare-and-clear).
+    Known nit: a refusal is told from an error by comparing message text, not a
+    flag carried with the error (identical text from two causes would show as a
+    refusal).
   - Bugs fixed (fail-before tests): an out-of-date Peaks fit was shown,
     reported and labeled as current; ODR and Equation fit let an answer for
     inputs changed in flight set the result, overlay (and macro step); an

@@ -12,6 +12,7 @@ import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
 import type { CalcResult, DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useEquationFit } from "./useEquationFit";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 
 vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn() }));
 vi.mock("../../../lib/api/curvefit", () => ({ validateEquation: vi.fn(), fitEquation: vi.fn() }));
@@ -23,6 +24,7 @@ const FIT: CalcResult = { params: [10, 0], yFit: [10, 20, 30, 40], paramNames: [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   localStorage.clear();
   vi.mocked(fitEquation).mockResolvedValue(FIT);
   vi.mocked(validateEquation).mockImplementation(async (eq: string) => ({ ok: true, params: eq.includes("c") ? ["m", "b", "c"] : ["m", "b"] }));
@@ -47,9 +49,9 @@ describe("useEquationFit on the workbench shell", () => {
     act(() => h.result.current.setRow(0, "guess", "5"));
     await act(async () => {});
     expect(fitEquation).not.toHaveBeenCalled();
-    await fit(h);
+    act(() => { void h.result.current.fit(); }); // not awaited inside act: commits must land between steps
+    await waitFor(() => expect(h.result.current.result?.params).toEqual([10, 0]));
     expect(fitEquation).toHaveBeenCalledTimes(1);
-    expect(h.result.current.result?.params).toEqual([10, 0]);
     expect(h.result.current.stale).toBe(false);
     expect(useApp.getState().fitOverlay?.datasetId).toBe("d1");
     act(() => h.result.current.clear());
@@ -127,5 +129,22 @@ describe("useEquationFit on the workbench shell", () => {
     expect(h.result.current.result).toBeNull();
     expect(useApp.getState().fitOverlay).toBeNull();
     expect(useApp.getState().macroSteps).toHaveLength(0);
+  });
+
+  it("a lazy book that arrives during Fit does not abort or stale its own run", async () => {
+    const h = await ready();
+    act(() => makePending({ id: "d1", name: "run.dat", data: DATA })); // the panel already shows the pending book
+    await fit(h);
+    expect(fitEquation).toHaveBeenCalledTimes(1);
+    expect(h.result.current.result?.params).toEqual([10, 0]);
+    expect(h.result.current.stale).toBe(false);
+  });
+
+  it("an out-of-date fit's curve is taken off the plot", async () => {
+    const h = await ready();
+    await fit(h);
+    expect(useApp.getState().fitOverlay).not.toBeNull();
+    act(() => h.result.current.setRow(0, "guess", "5"));
+    await waitFor(() => expect(useApp.getState().fitOverlay).toBeNull());
   });
 });

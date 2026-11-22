@@ -3,7 +3,7 @@
 // custom equations behind them or the data / channels it ran with change; an
 // answer for inputs changed in flight is dropped (forced with a held request).
 
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { compareModels, type CompareResult } from "../../../lib/api/fitStats";
@@ -11,6 +11,7 @@ import type { CustomFitModel } from "../../../lib/fitmodels";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useCompareModels } from "./useCompareModels";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 
 vi.mock("../../../lib/api/fitStats", () => ({ compareModels: vi.fn() }));
 
@@ -22,6 +23,7 @@ const RESULT: CompareResult = { n: 4, reference: "Linear", results: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   vi.mocked(compareModels).mockResolvedValue(RESULT);
   useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", xKey: 0, yKeys: [1], seriesOrder: null });
 });
@@ -87,5 +89,14 @@ describe("useCompareModels freshness", () => {
     expect(result.current.error).toBeTruthy();
     expect(result.current.refusal).toBe(true);
     expect(compareModels).not.toHaveBeenCalled();
+  });
+
+  it("a lazy book that arrives during Compare does not abort or stale its own run", async () => {
+    makePending({ id: "d1", name: "run.dat", data: DATA });
+    const { result } = renderHook(() => useCompareModels(["Linear", "Quadratic"], []));
+    act(() => { void result.current.compare(); }); // not awaited inside act: commits must land between steps
+    await waitFor(() => expect(result.current.result).toEqual(RESULT));
+    expect(compareModels).toHaveBeenCalledTimes(1);
+    expect(result.current.stale).toBe(false);
   });
 });

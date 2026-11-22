@@ -13,6 +13,7 @@ import { candidateGuesses, type CustomFitModel } from "../../../lib/fitmodels";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
@@ -76,6 +77,11 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
 
   async function compare(): Promise<void> {
     if (!active || picked.length < 2) return;
+    // Resolve a lazy book first: its arrival moves the key, which would abort a run launched before it.
+    if (active.pending) {
+      await resolveDataset(active.id);
+      await afterCommit();
+    }
     return preview.refresh();
   }
 

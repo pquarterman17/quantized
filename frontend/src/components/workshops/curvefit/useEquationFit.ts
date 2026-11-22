@@ -32,15 +32,17 @@ import {
 } from "../../../lib/fitmodels";
 import { codePointSpanToUtf16, type TextSpan } from "../../../lib/equationSpan";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
-import type { CalcResult, Dataset } from "../../../lib/types";
+import type { CalcResult, Dataset, FitOverlay } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { analysisTargetDataset } from "../../../lib/analysisInputs";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
+import { takeBackOverlay } from "./fitOverlayOwnership";
 
 export type { EquationParamRow };
 
@@ -171,6 +173,7 @@ export function useEquationFit(
   // Save errors and a fit refusal; a failed fit request is the preview's error.
   const [error, setError] = useState<string | null>(null);
   const [refusalText, setRefusalText] = useState<string | null>(null);
+  const ownOverlay = useRef<FitOverlay | null>(null);
   const [paramNames, setParamNames] = useState<string[]>(initial ? [...initial.params] : []);
   const [modelName, setModelName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -344,13 +347,20 @@ export function useEquationFit(
     if (Array.isArray(yFit)) {
       const aligned = restoreGapRows(yFit, pairs);
       const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-      setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true });
+      const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true };
+      ownOverlay.current = overlay;
+      setFitOverlay(overlay);
     }
     return { result: r, held: fixed, units };
   }
 
   async function fit(): Promise<void> {
     if (!active || status !== "ok" || rows.length === 0) return;
+    // Resolve a lazy book first: its arrival moves the key, which would abort a run launched before it.
+    if (active.pending) {
+      await useApp.getState().resolveDataset(active.id);
+      await afterCommit();
+    }
     return fitRun.refresh();
   }
 
@@ -412,6 +422,11 @@ export function useEquationFit(
   }
 
   const shown = fitRun.latest?.value ?? null;
+  // An out-of-date fit's curve is taken off the plot (only if it is still ours).
+  const outOfDate = shown !== null && fitRun.stale;
+  useEffect(() => {
+    if (outOfDate) takeBackOverlay(ownOverlay.current);
+  }, [outOfDate]);
   const runError = error ?? (fitRun.error || null);
   return {
     active,

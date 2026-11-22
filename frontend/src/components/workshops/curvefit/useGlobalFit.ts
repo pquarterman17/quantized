@@ -45,6 +45,7 @@ import { addReportWithProvenance } from "../../../store/addReportWithProvenance"
 import { trackJob } from "../../../store/pendingOpActions";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 import {
@@ -58,6 +59,7 @@ import {
   type GlobalMember,
   type GlobalSource,
 } from "./globalFitData";
+import { takeBackOverlay } from "./fitOverlayOwnership";
 
 /** The model to fit: a registry model, or a saved equation (`equation` set). */
 export type GlobalModel = Pick<FitModel, "name" | "paramNames" | "p0" | "lb" | "ub"> & { equation?: string };
@@ -101,11 +103,6 @@ export interface GlobalFitState {
   show: (i: number) => void;
   reporting: boolean;
   toReport: () => Promise<void>;
-}
-
-/** Clear the plot's fit overlay only if it is still `own` (atomic compare-and-clear). */
-function takeBackOverlay(own: FitOverlay | null): void {
-  if (own) useApp.setState((st) => (st.fitOverlay === own ? { fitOverlay: null } : {}));
 }
 
 export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
@@ -224,19 +221,23 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       refuse(parsed.error);
       return;
     }
-    const launchKey = stamp.launchKey(); // what this run was asked with, not what it ends under
     setBusy(true);
     setProgress("queued");
     setProgressFraction(null);
     const op = trackJob(mode === "compare" ? "Compare datasets" : "Global fit");
     try {
       const data = [];
+      const hadPending = members.some((m) => datasets.find((d) => d.id === m.datasetId)?.pending);
       for (const m of members) {
         const ds = await resolveDataset(m.datasetId);
         const d = ds ? memberData(ds, m) : null;
         if (!ds || !d || d.x.length === 0) throw new Refusal(`${m.label} has no finite X/Y pairs to fit`);
         data.push({ ds, d });
       }
+      // A lazy book that just arrived moved the key: let that commit land first,
+      // then take the key this run is asked with (not what it ends up under).
+      if (hadPending) await afterCommit();
+      const launchKey = stamp.launchKey();
       const base = rowsFromModel(model as FitModel);
       const startsEdited = rows.some((r, i) => r.start !== base[i]?.start);
       const req: GlobalFitRequest = {

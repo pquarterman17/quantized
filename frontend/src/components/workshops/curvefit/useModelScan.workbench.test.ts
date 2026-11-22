@@ -15,6 +15,7 @@ import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import { useModelScan } from "./useModelScan";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 
 vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn() }));
 vi.mock("../../../lib/fitscan", () => ({ scanFitModelsJob: vi.fn() }));
@@ -33,6 +34,7 @@ const ENTRY: ScanEntry = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   usePendingOps.setState({ ops: [] });
   localStorage.clear();
   useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", xKey: null, yKeys: [0], seriesOrder: null });
@@ -106,5 +108,13 @@ describe("useModelScan freshness", () => {
     await act(() => result.current.scan());
     expect(result.current.error).toBe("backend down");
     expect(result.current.refusal).toBe(false);
+  });
+
+  it("a lazy book that arrives during the scan does not land the ranking out of date", async () => {
+    makePending({ id: "d1", name: "run.dat", data: DATA });
+    const { result } = renderHook(() => useModelScan());
+    await act(() => result.current.scan());
+    expect(result.current.results).toEqual([ENTRY]);
+    expect(result.current.stale).toBe(false);
   });
 });

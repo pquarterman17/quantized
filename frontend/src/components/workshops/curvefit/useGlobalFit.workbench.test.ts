@@ -14,6 +14,7 @@ import { pollJob } from "../../../lib/jobs";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useGlobalFit, type GlobalModel } from "./useGlobalFit";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 
 vi.mock("../../../lib/api/globalFit", () => ({ globalFitJob: vi.fn(), compareDatasetsJob: vi.fn() }));
 vi.mock("../../../lib/api/report", () => ({ reportEmit: vi.fn() }));
@@ -41,6 +42,7 @@ const FIT: GlobalFitResult = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   vi.mocked(globalFitJob).mockResolvedValue({ job_id: "j1" });
   vi.mocked(pollJob).mockResolvedValue(FIT);
   vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t" } as never });
@@ -122,5 +124,14 @@ describe("useGlobalFit freshness", () => {
     expect(useApp.getState().fitOverlay).toBeNull();
     await act(() => result.current.toReport());
     expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("a lazy book that arrives during the fit does not land the result out of date", async () => {
+    makePending(D1);
+    const { result } = renderHook(() => useGlobalFit(MODEL));
+    await act(() => result.current.run());
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.stale).toBe(false);
+    expect(useApp.getState().fitOverlay?.datasetId).toBe("d1");
   });
 });

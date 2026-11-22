@@ -15,6 +15,7 @@ import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import BatchIntegrateWindow from "./BatchIntegrateWindow";
 import { analysisResultsReset } from "./batchIntegrateTestSetup";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 
 vi.mock("../../../lib/api/peaks", () => ({ integratePeaksBatch: vi.fn() }));
 vi.mock("../../../lib/download", () => ({ saveBlob: vi.fn() }));
@@ -38,6 +39,7 @@ const trends = () => useApp.getState().datasets.filter((d) => d.data.metadata.so
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   useApp.setState({
     datasets: [{ id: "d1", name: "hot", data: scan("300 K") }, { id: "d2", name: "cold", data: scan("100 K") }],
     activeId: "d1", selectedIds: ["d1", "d2"], xKey: null, yKeys: null, seriesOrder: null,
@@ -132,5 +134,12 @@ describe("Batch integrate freshness", () => {
     fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveAttribute("data-kind", "error"));
     expect(screen.getByRole("alert")).toHaveTextContent("server down");
+  });
+
+  it("a lazy book that arrives during the run does not land the table out of date", async () => {
+    makePending({ id: "d1", name: "hot", data: scan("300 K") });
+    await integrated();
+    expect(screen.queryByText(OUT_OF_DATE)).toBeNull();
+    expect(screen.getByRole("button", { name: "Add trend dataset" })).toBeEnabled();
   });
 });

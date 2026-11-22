@@ -15,11 +15,11 @@
 // channels and the saved equations it scanned. A ranking whose key has moved on
 // is listed but marked, and a row click no longer applies it.
 
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { type ScanEntry } from "../../../lib/api/curvefit";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { candidateGuesses, loadCustomModels } from "../../../lib/fitmodels";
+import { candidateGuesses, customModelsRevision, loadCustomModels, subscribeCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -27,6 +27,7 @@ import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 
@@ -68,13 +69,14 @@ export function useModelScan(): ModelScanState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
+  // The saved-equation library by revision (one storage read per write, not per render).
+  const library = useSyncExternalStore(subscribeCustomModels, customModelsRevision);
   const stamp = useRunStamp(
-    active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, loadCustomModels()]) : "",
+    active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, library]) : "",
   );
 
   async function scan(): Promise<void> {
     if (!active || busy) return;
-    const launchKey = stamp.launchKey(); // what this scan was asked with, not what it ends under
     setBusy(true);
     setError(null);
     setRefusalText(null);
@@ -91,6 +93,10 @@ export function useModelScan(): ModelScanState {
       // resolved.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
+      // A lazy book that just arrived moved the key: let that commit land first,
+      // then take the key this scan is asked with (not what it ends up under).
+      if (active.pending) await afterCommit();
+      const launchKey = stamp.launchKey();
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!d) {

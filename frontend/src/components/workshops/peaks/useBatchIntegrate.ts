@@ -30,6 +30,7 @@ import { integratePeaksBatch, type IntegrateBatchResponse } from "../../../lib/a
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { commitBatchTable } from "../../../store/commitBatchTable";
@@ -119,7 +120,6 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     if (block || busy || !channels) return;
     const id = ++seq.current;
     const live = () => seq.current === id;
-    const launchKey = stamp.launchKey(); // what this run was asked with, not what it ends under
     const ws = windows.map((w) => ({ ...w }));
     setPhase("running");
     setError(null);
@@ -128,6 +128,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     const series: { name: string; x: number[]; y: number[] }[] = [];
     const metaOf = new Map<string, Record<string, unknown>>();
     const fps = new Map<string, string>();
+    const hadPending = picked.some((dsId) => datasets.find((d) => d.id === dsId)?.pending);
     for (const dsId of picked) {
       const name = datasets.find((d) => d.id === dsId)?.name ?? dsId;
       try {
@@ -143,6 +144,11 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
       }
       if (!live()) return;
     }
+    // A lazy book that just arrived moved the key: let that commit land first,
+    // then take the key this run is asked with (not what it ends up under).
+    if (hadPending) await afterCommit();
+    if (!live()) return;
+    const launchKey = stamp.launchKey();
     let res: IntegrateBatchResponse | null = null;
     try {
       if (align && series.length > 1 && !sameGrid(series.map((s) => s.x))) {

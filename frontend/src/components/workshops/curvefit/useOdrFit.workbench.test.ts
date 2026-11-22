@@ -10,6 +10,7 @@ import { odrFit, type OdrResult } from "../../../lib/api/fitStats";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useOdrFit } from "./useOdrFit";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 
 vi.mock("../../../lib/api/fitStats", () => ({ odrFit: vi.fn() }));
 
@@ -32,6 +33,7 @@ const FIT: OdrResult = { slope: 2, intercept: 1, slopeErr: 0.1, interceptErr: 0.
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   vi.mocked(odrFit).mockResolvedValue(FIT);
   useApp.setState({
     datasets: [DS], activeId: "d1", xKey: 0, yKeys: [2], seriesOrder: null, errKeys: { 2: 3 }, fitOverlay: null,
@@ -109,5 +111,14 @@ describe("useOdrFit on the workbench shell", () => {
     await waitFor(() => expect(result.current.busy).toBe(false));
     expect(result.current.result).toBeNull();
     expect(useApp.getState().fitOverlay).toBeNull();
+  });
+
+  it("a lazy book that arrives during Fit does not abort or stale its own run", async () => {
+    makePending(DS);
+    const { result } = renderHook(() => useOdrFit());
+    act(() => { void result.current.run(); }); // not awaited inside act: commits must land between steps
+    await waitFor(() => expect(result.current.result).toEqual(FIT));
+    expect(odrFit).toHaveBeenCalledTimes(1);
+    expect(result.current.stale).toBe(false);
   });
 });

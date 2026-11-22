@@ -76,7 +76,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   // Only CHANGED settings go on the wire; a string key keeps the effect's deps stable.
   const findExtras = JSON.stringify(find ? findOverrides(find.params) : {});
   const findSeq = find?.seq ?? 0;
-  const fitOutOfDate = fitFind !== null && fitFind !== findExtras;
+  const fitOutOfDate = fitResult !== null && fitResult.peaks.length > 0 && fitFind !== null && fitFind !== findExtras;
 
   // A fit belongs to its data: a dataset / data / channel change forgets which
   // find settings it was made under (declared before the find effect, which

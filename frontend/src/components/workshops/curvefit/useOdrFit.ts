@@ -13,17 +13,19 @@
 // differs is out of date (`stale`), and an answer for inputs that changed while
 // it was in flight is dropped. Validation failures are refusals.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { odrFit, type OdrResult } from "../../../lib/api/fitStats";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
-import type { Dataset } from "../../../lib/types";
+import type { Dataset, FitOverlay } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
+import { takeBackOverlay } from "./fitOverlayOwnership";
 import { xErrorChannel } from "./xErrorChannel";
 
 /** |column| over the analysis rows, kept rows only; null if any is not a
@@ -59,6 +61,7 @@ export function useOdrFit(): OdrFitState {
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
   const [refusalText, setRefusalText] = useState<string | null>(null);
+  const ownOverlay = useRef<FitOverlay | null>(null);
   const key = active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, errKeys]) : "";
 
   const preview = useWorkbenchPreview<OdrRun | null>({
@@ -87,7 +90,9 @@ export function useOdrFit(): OdrFitState {
         const n = ds.data.time.length;
         const kept = activeRowIndices(n, droppedRows(ds));
         const aligned = restoreGapRows(pairs.x.map((x) => r.slope * x + r.intercept), pairs);
-        setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true });
+        const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true };
+        ownOverlay.current = overlay;
+        setFitOverlay(overlay);
         return { result: r, usedYErr: yErr != null };
       } catch (e) {
         if (e instanceof Refusal) setRefusalText(e.message);
@@ -97,6 +102,11 @@ export function useOdrFit(): OdrFitState {
   });
 
   const error = preview.error || null;
+  // An out-of-date fit's line is taken off the plot (only if it is still ours).
+  const outOfDate = preview.stale;
+  useEffect(() => {
+    if (outOfDate) takeBackOverlay(ownOverlay.current);
+  }, [outOfDate]);
   // A failed run shows its error and no result, as before.
   const latest = error ? null : preview.latest?.value ?? null;
   return {
@@ -106,6 +116,13 @@ export function useOdrFit(): OdrFitState {
     result: latest?.result ?? null,
     stale: latest !== null && preview.stale,
     usedYErr: latest?.usedYErr ?? false,
-    run: preview.refresh,
+    run: async () => {
+      // Resolve a lazy book first: its arrival moves the key, which would abort a run launched before it.
+      if (active?.pending) {
+        await resolveDataset(active.id);
+        await afterCommit();
+      }
+      return preview.refresh();
+    },
   };
 }
