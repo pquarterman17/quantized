@@ -76,15 +76,16 @@ describe("Add to Report from a saved figure with a display fit", () => {
 describe("Figure Builder: preview hook and Export", () => {
   it("the preview waits for the full curve, saying so meanwhile", async () => {
     let release: (v: unknown) => void = () => {};
-    vi.mocked(postJSON).mockImplementation(() => new Promise((r) => { release = r; }));
+    let asked = false;
+    vi.mocked(postJSON).mockImplementation(() => new Promise((r) => { asked = true; release = r; }));
     const doc = savedDoc();
     const { result } = renderHook(() => useFullSavedFitDocument(doc, SHEET, undefined));
-    expect(result.current.document).toBe(doc);
+    expect(result.current.doc).toBe(doc);
     expect(result.current.note).toMatch(/loading/i);
-    await act(async () => { await vi.waitFor(() => expect(postJSON).toHaveBeenCalled()); release({ yFit: FULL_Y }); });
+    await act(async () => { await vi.waitFor(() => expect(asked).toBe(true)); release({ yFit: FULL_Y }); });
     await waitFor(() => expect(result.current.note).toBeNull());
-    expect(result.current.document?.overlays?.fit?.full).toBeUndefined();
-    expect(result.current.document?.overlays?.fit?.y).toEqual(FULL_Y);
+    expect(result.current.doc?.overlays?.fit?.full).toBeUndefined();
+    expect(result.current.doc?.overlays?.fit?.y).toEqual(FULL_Y);
   });
 
   it("a failed fetch keeps the document and says the fit is left out", async () => {
@@ -92,13 +93,13 @@ describe("Figure Builder: preview hook and Export", () => {
     const doc = savedDoc();
     const { result } = renderHook(() => useFullSavedFitDocument(doc, SHEET, undefined));
     await waitFor(() => expect(result.current.note).toMatch(/left out/));
-    expect(result.current.document).toBe(doc);
+    expect(result.current.doc).toBe(doc);
   });
 
   it("a document with no saved display fit costs nothing", () => {
     const plain = createFigureDocument({ id: "p", name: "p", datasetId: "own", view: defaultPlotView() });
     const { result } = renderHook(() => useFullSavedFitDocument(plain, SHEET, undefined));
-    expect(result.current).toEqual({ document: plain, note: null });
+    expect(result.current).toEqual({ doc: plain, note: null });
     expect(postJSON).not.toHaveBeenCalled();
   });
 

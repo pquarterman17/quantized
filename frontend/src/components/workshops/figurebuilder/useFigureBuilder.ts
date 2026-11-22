@@ -145,8 +145,8 @@ export function useFigureBuilder() {
   // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a pure
   // function of document + dataset + the app's excluded-rows mode) -- this hook just memoizes the call.
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(
-    () => computeCanonicalReadiness(fullFit.document, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints),
-    [fullFit.document, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints?.x, tickHints?.y, tickHints?.y2], // eslint-disable-line react-hooks/exhaustive-deps -- the values, not the published object
+    () => computeCanonicalReadiness(fullFit.doc, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints),
+    [fullFit.doc, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints?.x, tickHints?.y, tickHints?.y2], // eslint-disable-line react-hooks/exhaustive-deps -- the values, not the published object
   );
   const canonicalData = canonicalReadiness?.state === "missing-source" ? null : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {

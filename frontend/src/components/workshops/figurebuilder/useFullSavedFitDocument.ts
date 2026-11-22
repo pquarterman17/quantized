@@ -15,32 +15,32 @@ interface Upgraded {
   source: FigureDocument;
   dataset: Dataset | null;
   staleFits: readonly string[] | undefined;
-  document: FigureDocument;
+  doc: FigureDocument;
 }
 
 export function useFullSavedFitDocument(
   document: FigureDocument | null,
   dataset: Dataset | null,
   staleFits: readonly string[] | undefined,
-): { document: FigureDocument | null; note: string | null } {
+): { doc: FigureDocument | null; note: string | null } {
   const [done, setDone] = useState<Upgraded | null>(null);
   const needs = document !== null && hasSavedDisplayFit(document);
   useEffect(() => {
     if (!document || !needs) return;
     let live = true;
     void withFullSavedFit(document, dataset, staleFits).then((upgraded) => {
-      if (live) setDone({ source: document, dataset, staleFits, document: upgraded });
+      if (live) setDone({ source: document, dataset, staleFits, doc: upgraded });
     });
     return () => {
       live = false;
     };
   }, [document, dataset, staleFits, needs]);
-  if (!document || !needs) return { document, note: null };
+  if (!document || !needs) return { doc: document, note: null };
   if (done && done.source === document && done.dataset === dataset && done.staleFits === staleFits) {
     // Unchanged after the fetch = it could not be upgraded (or it is stale): left out, with the builder's notice.
-    return done.document === document
-      ? { document, note: "Saved fit left out of the preview: its full curve could not be loaded (the export reports the same)." }
-      : { document: done.document, note: null };
+    return done.doc === document
+      ? { doc: document, note: "Saved fit left out of the preview: its full curve could not be loaded (the export reports the same)." }
+      : { doc: done.doc, note: null };
   }
-  return { document, note: "Saved fit not drawn yet: loading its full curve." };
+  return { doc: document, note: "Saved fit not drawn yet: loading its full curve." };
 }
