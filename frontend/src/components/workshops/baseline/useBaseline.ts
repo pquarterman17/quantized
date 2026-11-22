@@ -11,18 +11,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
-import { ownXKey } from "../../../lib/perSeriesX";
-import { magXAxis } from "../../../lib/magDataKind";
 import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
 import type { BaselineOverlay, CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { tokenOf } from "../../../lib/previewKey";
 import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { baselineSeed } from "./baselineReopen";
-import { baselineBy, callBaseline, callBaselinePreview } from "./baselineCall";
+import { baselineInput, batchInput, type BaselineBinding } from "./baselineInput";
+import { baselineBy, callBaseline, callBaselinePreview, type BaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
 const BASELINE_PRODUCER = { id: "baseline-subtract", label: "Baseline subtract", version: 1 } as const;
@@ -65,6 +65,8 @@ const DEFAULTS: BaselineParams = {
   maxIter: 50, anchorMethod: "pchip",
 };
 
+export type { BaselineBinding } from "./baselineInput";
+
 export interface BaselineState {
   active: Dataset | null;
   method: BaselineMethod;
@@ -83,7 +85,9 @@ export interface BaselineState {
   /** "Apply to N selected": the same method + params on every selected dataset,
    *  outputs grouped in one folder, ONE undo entry. */
   applyToSelected: () => Promise<void>;
-  /** Why "Subtract → new worksheet" is unavailable (already added, adding now); null when enabled. */
+  /** The shown estimate was computed for a different method, knobs, anchors or input. */
+  estimateStale: boolean;
+  /** Why "Subtract → new worksheet" is unavailable (stale, already added, adding now); null when enabled. */
   subtractDisabledReason: string | null;
   /** The output a commit replaces (opened from its result, Replace chosen), else null. */
   replacing: string | null;
@@ -100,54 +104,11 @@ export interface BaselineState {
   applyAnchors: () => Promise<void>;
 }
 
-export interface BaselineBinding {
-  datasetId: string;
-  xKey: number | null;
-  yKey: number;
-  xLabel: string;
-  yLabel: string;
-}
-
-interface BaselineInput {
+/** One estimate, with exactly what it was computed on (the shell keys it). */
+interface Estimate extends BaselinePreview {
   binding: BaselineBinding;
-  x: number[];
-  y: number[];
-}
-
-function baselineInput(
-  ds: Dataset,
-  xKey: number | null,
-  yKeys: number[] | null,
-  seriesOrder: number[] | null,
-): BaselineInput | null {
-  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
-  if (yKey == null) return null;
-  // A secondary-X Y (R2 in T1,R1,T2,R2) is estimated against its OWN X.
-  const ownX = ownXKey(ds, xKey, yKey);
-  const x = fullPlottedX(ds.data, ownX);
-  const y = ds.data.values.map((row) => row[yKey]);
-  if (x.length === 0 || x.length !== y.length) return null;
-  return {
-    binding: {
-      datasetId: ds.id,
-      xKey: ownX,
-      yKey,
-      xLabel: ownX == null ? magXAxis(ds.data, null).label || "Time" : (ds.data.labels[ownX] ?? `Channel ${ownX + 1}`),
-      yLabel: ds.data.labels[yKey] ?? `Channel ${yKey + 1}`,
-    },
-    x,
-    y,
-  };
-}
-
-/** Batch target: the SAME channels (by column label) as the active binding; the
- *  plot's index-based selection means something else in another column layout. */
-function batchInput(ds: Dataset, ref: BaselineBinding | null): BaselineInput | string {
-  if (!ref) return "select a plotted Y channel first";
-  const yKey = ds.data.labels.indexOf(ref.yLabel);
-  const xKey = ref.xKey == null ? null : ds.data.labels.indexOf(ref.xLabel);
-  if (yKey < 0 || xKey === -1) return `${ds.name}: no "${yKey < 0 ? ref.yLabel : ref.xLabel}" column`;
-  return baselineInput(ds, xKey, [yKey], null) ?? `${ds.name}: no usable Y channel`;
+  /** The source's analysis-view fingerprint: the shared commit refuses a source that changed since. */
+  fp: string;
 }
 
 export function useBaseline(): BaselineState {
@@ -167,28 +128,40 @@ export function useBaseline(): BaselineState {
   const holdSeed = useSeedHold(!!seeded, [active, xKey, yKeys, seriesOrder]);
   const [method, setMethod] = useState<BaselineMethod>(seeded?.method ?? "als");
   const [params, setParamsState] = useState<BaselineParams>(seeded?.params ?? DEFAULTS);
-  const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
-  // A lean (large SNIP / ModPoly) preview holds only display rows in `baseline`;
-  // the full array, which Subtract needs, comes from here (by result id).
-  const fullRef = useRef<(() => Promise<(number | null)[]>) | null>(null);
-  useEffect(() => {
-    if (!baseline) fullRef.current = null;
-  }, [baseline]);
-  const [estimateBinding, setEstimateBinding] = useState<BaselineBinding | null>(null);
-  // The source's analysis-view fingerprint when the estimate was computed: the
-  // shared commit refuses a source that changed since (store/analysisOutputCommit).
-  const [estimateFp, setEstimateFp] = useState<string | null>(null);
   const [anchors, setAnchors] = useState<[number, number][]>(seeded?.method === "anchor" ? seeded.anchors : []);
-  const [busy, setBusy] = useState(false);
+  const [batchBusy, setBusy] = useState(false);
   const selectedCount = useApp((s) => s.selectedIds.length);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const liveIds = useApp((s) => s.datasets.filter((d) => batchIds.includes(d.id)).map((d) => d.id).join("|"));
   const [error, setError] = useState<string | null>(null);
   const binding = active ? baselineInput(active, xKey, yKeys, seriesOrder)?.binding ?? null : null;
-  // The debounced anchor-preview effect must re-estimate with the LATEST
-  // anchors without holding compute() in its dependency list (a fresh closure
-  // every render would defeat the debounce) — the shared plugin-bridge idiom.
-  const computeRef = useRef<() => Promise<void>>(async () => {});
+  // The estimate rides the shared workbench shell (../workbench): keyed on
+  // every input it is computed from, so an answer for older inputs is never
+  // current (Subtract then says why) and one that lands after a change, a
+  // Clear or Close is dropped. Estimate is a button (manual); the anchor
+  // method re-estimates itself, debounced, as anchors are placed or dragged.
+  const preview = useWorkbenchPreview<Estimate | null>({
+    key: active ? JSON.stringify([tokenOf(active), xKey, yKeys, seriesOrder, method, params, method === "anchor" ? anchors : null]) : "",
+    auto: method === "anchor" && anchors.length >= 2,
+    delayMs: 150,
+    fallbackError: "baseline failed",
+    run: async () => {
+      // #38 deferred edge: never estimate a baseline against the small
+      // preview — resolve the active dataset's full data first.
+      const ds = active && await useApp.getState().resolveDataset(active.id);
+      if (!ds) return null;
+      const state = useApp.getState();
+      const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
+      if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
+      const res = await callBaselinePreview(method, input.x, input.y, params, anchors, baselineBy(ds.data, input.binding.xKey, input.binding.yKey));
+      return { ...res, binding: input.binding, fp: analysisDataFingerprint(ds) };
+    },
+  });
+  const shown = preview.latest?.value ?? null; // possibly stale: still drawn, never subtracted
+  const fresh = preview.current;
+  const baseline = shown?.baseline ?? null;
+  const discard = preview.discard;
+  const busy = batchBusy || preview.running;
   // MAIN #8f: the bridge exposes anchors through a GETTER so the bridge's own
   // identity can stay stable across edits (PlotViewport tears down + rebuilds
   // the uPlot instance whenever the bridge reference changes). The memo keeps
@@ -202,14 +175,12 @@ export function useBaseline(): BaselineState {
   // the anchors — they're coordinates on the OLD data).
   useEffect(() => {
     if (holdSeed()) return; // keep a reopen's recorded anchors
-    setBaseline(null);
-    setEstimateBinding(null);
-    setEstimateFp(null);
+    discard();
     setError(null);
     setAnchors([]);
     setBaselineOverlay(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay]);
+  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay, discard]);
 
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
@@ -241,35 +212,22 @@ export function useBaseline(): BaselineState {
       setError("place at least 2 anchors on the plot");
       return;
     }
-    setBusy(true);
     setError(null);
-    try {
-      // #38 deferred edge: never estimate a baseline against the small
-      // preview — resolve the active dataset's full data first.
-      const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
-      const state = useApp.getState();
-      const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
-      const { x, y } = input;
-      const res = await callBaselinePreview(method, x, y, params, anchors, baselineBy(ds.data, input.binding.xKey, input.binding.yKey));
-      fullRef.current = res.full ?? null;
-      setBaseline(res.baseline);
-      setEstimateBinding(input.binding);
-      setEstimateFp(analysisDataFingerprint(ds));
-      const overlay: BaselineOverlay = {
-        datasetId: ds.id, binding: { yKey: input.binding.yKey, xKey: input.binding.xKey }, y: res.baseline,
-        ...(res.full ? { lean: true as const } : {}),
-      };
-      if (res.full) rememberBaselineFull(overlay, res.full); // exports fetch it (store/fitOverlayUpgrade)
-      setBaselineOverlay(overlay);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "baseline failed");
-    } finally {
-      setBusy(false);
-    }
+    await preview.refresh();
   }
-  computeRef.current = compute;
+
+  // Draw each new estimate on the plot (a dropped answer never gets here).
+  useEffect(() => {
+    if (!shown || !active) return;
+    const overlay: BaselineOverlay = {
+      datasetId: active.id, binding: { yKey: shown.binding.yKey, xKey: shown.binding.xKey }, y: shown.baseline,
+      ...(shown.full ? { lean: true as const } : {}),
+    };
+    if (shown.full) rememberBaselineFull(overlay, shown.full); // exports fetch it (store/fitOverlayUpgrade)
+    setBaselineOverlay(overlay);
+    // Only a NEW estimate redraws; `active` is read for its id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, setBaselineOverlay]);
 
   // Anchor mode (#2): publish the click/drag bridge for the plot's
   // anchorEditPlugin while the method is live; null it otherwise (the same
@@ -293,18 +251,13 @@ export function useBaseline(): BaselineState {
     return () => setBaselineAnchorEdit(null);
   }, [method, active, setBaselineAnchorEdit]);
 
-  // Anchor mode (#2): live preview — re-estimate (debounced) as anchors are
-  // placed/dragged; drop the overlay when there aren't enough anchors yet.
+  // Anchor mode (#2): the shell re-estimates (debounced) as anchors are
+  // placed/dragged; drop the estimate when there aren't enough anchors yet.
   useEffect(() => {
-    if (method !== "anchor") return;
-    if (!active || anchors.length < 2) {
-      setBaseline(null);
-      setBaselineOverlay(null);
-      return;
-    }
-    const t = setTimeout(() => void computeRef.current(), 150);
-    return () => clearTimeout(t);
-  }, [method, anchors, params.anchorMethod, active, setBaselineOverlay]);
+    if (method !== "anchor" || (active && anchors.length >= 2)) return;
+    discard();
+    setBaselineOverlay(null);
+  }, [method, anchors, active, setBaselineOverlay, discard]);
 
   // The panel fires subtract/applyAnchors as `void …`: a rejected full-data
   // resolve must reach the error line or it is invisible (audit 2026-10-01).
@@ -321,13 +274,15 @@ export function useBaseline(): BaselineState {
   // full-baseline fetch is pending, stale when the source changes
   // (store/analysisOutputCommit.ts). The key covers the method, its knobs, the
   // plotted channels and the estimate itself.
-  const commit = useAnalysisCommit(active && baseline && estimateBinding && estimateFp ? {
+  // Built only from a CURRENT estimate, so method/params/anchors here are
+  // exactly the ones it was computed with.
+  const commit = useAnalysisCommit(active && fresh ? {
     producer: BASELINE_PRODUCER,
     sourceId: active.id,
-    computedOn: estimateFp,
+    computedOn: fresh.fp,
     settings: {
-      method, params, binding: estimateBinding, anchors: method === "anchor" ? anchors : null,
-      n: baseline.length, sum: baseline.reduce<number>((acc, b) => acc + (b ?? 0), 0),
+      method, params, binding: fresh.binding, anchors: method === "anchor" ? anchors : null,
+      n: fresh.baseline.length, sum: fresh.baseline.reduce<number>((acc, b) => acc + (b ?? 0), 0),
     },
     status: `subtracted ${method} baseline`,
     output: (source) => ({ name: bgSubName(source.name), data: source.data }), // replaced by commitAsync
@@ -335,15 +290,15 @@ export function useBaseline(): BaselineState {
 
   /** Subtract into a new dataset (or the reopened result's output); true only when one was written. */
   async function subtractInto(): Promise<boolean> {
-    if (!active || !baseline || !estimateBinding) return false;
-    const binding = estimateBinding;
+    if (!active || !fresh) return false;
+    const { binding, baseline, full: fetchFull } = fresh;
     const outcome = await commit.commitAsync(async () => {
       const ds = await resolveActive(active.id);
       if (!ds) return null;
       let full = baseline;
-      if (fullRef.current) {
+      if (fetchFull) {
         try {
-          full = await fullRef.current();
+          full = await fetchFull();
         } catch (e) {
           setError(`couldn't fetch the baseline — ${e instanceof Error ? e.message : "error"}`);
           return null;
@@ -402,8 +357,9 @@ export function useBaseline(): BaselineState {
     // The established correction-DAG anchor step operates on time + values[0].
     // For any other plotted pair, subtract the exact plotted-channel preview
     // into a linked dataset instead of silently correcting the wrong channel.
-    if (estimateBinding && (estimateBinding.xKey != null || estimateBinding.yKey !== 0)) {
-      if (!baseline) {
+    const plotted = fresh?.binding ?? binding;
+    if (plotted && (plotted.xKey != null || plotted.yKey !== 0)) {
+      if (!fresh) {
         setError("wait for the selected-channel preview, then Apply again");
         return;
       }
@@ -432,7 +388,7 @@ export function useBaseline(): BaselineState {
       (c.derivativeMode != null && c.derivativeMode !== "none") ||
       c.isMag === true;
     if (displayTransformed) {
-      if (baseline) {
+      if (fresh) {
         if (!(await subtractInto())) return;
         setAnchors([]);
         if (!commit.replacing) setStatus("subtracted anchor baseline (new dataset - prior corrections active)");
@@ -453,16 +409,14 @@ export function useBaseline(): BaselineState {
       // user can adjust and retry instead of re-tracing (review 2026-07-11).
       return;
     }
+    discard();
     setBaselineOverlay(null);
-    setBaseline(null);
     setAnchors([]);
     setStatus("subtracted anchor baseline (correction step)");
   }
 
   function clear(): void {
-    setBaseline(null);
-    setEstimateBinding(null);
-    setEstimateFp(null);
+    discard();
     setError(null);
     setBaselineOverlay(null);
   }
@@ -475,7 +429,7 @@ export function useBaseline(): BaselineState {
     params,
     baseline,
     busy,
-    error,
+    error: error ?? (preview.error || null),
     anchors,
     binding,
     setMethod,
@@ -483,7 +437,10 @@ export function useBaseline(): BaselineState {
     compute,
     subtract,
     applyToSelected,
-    subtractDisabledReason: baseline ? commit.disabledReason : null,
+    estimateStale: preview.stale,
+    subtractDisabledReason: !baseline ? null
+      : preview.stale ? "The method, its settings or the input changed since this estimate. Estimate again to subtract."
+        : commit.disabledReason,
     replacing: commit.replacing,
     selectedCount,
     batchOutputIds: liveIds ? liveIds.split("|") : [],

@@ -22,6 +22,7 @@ import {
   type SigopForm,
 } from "../signalprocessing/sigopModel";
 import { useSigopRun } from "../signalprocessing/useSigopRun";
+import { WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 
 export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
   const datasets = useApp((s) => s.datasets);
@@ -37,7 +38,8 @@ export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
   if (!active) return <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Select a dataset to reduce.</div>;
 
   const source = analysisData(active) ?? active.data;
-  const problem = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : run.error;
+  const refusal = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : "";
+  const problem = refusal || run.error;
   const res = run.result;
   const create = async () => {
     if (await run.commit()) onClose();
@@ -55,14 +57,16 @@ export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
       <div className="qz-signal-smooth">
         <SigopFields method={method} form={form} set={(patch) => setForm((f) => ({ ...f, ...patch }))} dataset={active} xUnit={xUnitOf(active.data)} />
       </div>
-      <SignalPreview source={source} result={res?.data ?? null} channel={channels[0] ?? available[0] ?? 0} resultChannel={0} />
-      {res && (
-        <div className="qzk-ds-meta" aria-live="polite" style={{ marginTop: 4 }}>
-          {res.rowsIn.toLocaleString()} rows → {res.rowsOut.toLocaleString()} rows
-          {res.warnings.map((w) => <div key={w.text}>{w.text}</div>)}
-        </div>
-      )}
-      {problem && <div className="qzk-ds-meta" role="alert" style={{ marginTop: 6, color: "var(--danger)" }}>{problem}</div>}
+      <WorkbenchPreviewFrame loading={run.loading}>
+        <SignalPreview source={source} result={res?.data ?? null} channel={channels[0] ?? available[0] ?? 0} resultChannel={0} />
+        {res && (
+          <div className="qzk-ds-meta" aria-live="polite" style={{ marginTop: 4 }}>
+            {res.rowsIn.toLocaleString()} rows → {res.rowsOut.toLocaleString()} rows
+            {res.warnings.map((w) => <div key={w.text}>{w.text}</div>)}
+          </div>
+        )}
+      </WorkbenchPreviewFrame>
+      <WorkbenchMessage refusal={refusal} error={run.error} />
       <Button
         variant="primary"
         size="sm"

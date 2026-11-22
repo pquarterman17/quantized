@@ -11,7 +11,7 @@ import { analysisData, droppedRows } from "../../../lib/rowstate";
 import { xUnitOf } from "../../../lib/transformResample";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { Button } from "../../primitives";
+import { WorkbenchActions, WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import SignalChannelInputs from "./SignalChannelInputs";
 import SignalOperationPicker from "./SignalOperationPicker";
 import SigopFields from "./SigopFields";
@@ -75,14 +75,16 @@ export default function SigopBody({ active, method, onPick, onClose }: {
       <div className="qz-signal-smooth">
         <SigopFields method={method} form={form} set={set} dataset={active} xUnit={xUnitOf(active.data)} />
       </div>
-      <SignalPreview
-        source={source}
-        result={run.result?.data ?? null}
-        channel={channel}
-        resultChannel={0}
-        showOriginal={method !== "ifft"}
-        flagged={flagged}
-      />
+      <WorkbenchPreviewFrame loading={run.loading}>
+        <SignalPreview
+          source={source}
+          result={run.result?.data ?? null}
+          channel={channel}
+          resultChannel={0}
+          showOriginal={method !== "ifft"}
+          flagged={flagged}
+        />
+      </WorkbenchPreviewFrame>
       {method === "despike" && run.result && (
         <div className="qz-signal-note" aria-live="polite">
           {flaggedTotal === 0
@@ -94,13 +96,15 @@ export default function SigopBody({ active, method, onPick, onClose }: {
         Reads the {(source.time.length).toLocaleString()} included rows in their original order
         {dropped ? ` (${dropped.toLocaleString()} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
       </div>
-      {problem && <p className="qz-error" role="alert">{problem}</p>}
-      <div className="qz-dialog-actions">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={Boolean(problem) || !run.result || run.busy} title={problem || (!run.result ? "Waiting for the live preview…" : undefined)} onClick={() => void create()}>
-          {run.busy ? "Creating…" : "Create worksheet"}
-        </Button>
-      </div>
+      <WorkbenchMessage refusal={validation} error={run.error} />
+      <WorkbenchActions
+        onCancel={() => { run.abort(); onClose(); }}
+        commitLabel="Create worksheet"
+        busyLabel="Creating…"
+        busy={run.busy}
+        disabledReason={problem || (!run.result ? "Waiting for the live preview…" : null)}
+        onCommit={() => void create()}
+      />
     </>
   );
 }

@@ -13,6 +13,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import OverlayOutputsButton from "../OverlayOutputsButton";
 import { useApp } from "../../../store/useApp";
+import { WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import BaselineInputSummary from "./BaselineInputSummary";
 import BaselineBatchSection from "./BaselineBatchSection";
 import BaselineByLevel from "./BaselineByLevel";
@@ -82,7 +83,7 @@ function BaselinePanelBody() {
   const {
     active, method, params, baseline, busy, error, anchors, binding,
     setMethod, setParams, compute, subtract, subtractDisabledReason, clear, pickRegion, clearAnchors, applyAnchors,
-    applyToSelected, selectedCount, batchOutputIds, replacing,
+    applyToSelected, selectedCount, batchOutputIds, replacing, estimateStale,
   } = useBaseline();
 
   const close = () => {
@@ -212,16 +213,16 @@ function BaselinePanelBody() {
           Select a dataset first.
         </div>
       )}
-      {error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--danger)" }}>
-          {error}
-        </div>
-      )}
+      <WorkbenchMessage error={error} />
       {baseline && !error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-          {method === "anchor"
-            ? "Baseline overlaid — Apply −BG subtracts it as a correction step."
-            : "Baseline overlaid — Subtract creates a new worksheet."}
+        <div style={{ marginTop: 10 }}>
+          <WorkbenchPreviewFrame stale={estimateStale}>
+            <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", whiteSpace: "normal" }}>
+              {method === "anchor"
+                ? "Baseline overlaid — Apply −BG subtracts it as a correction step."
+                : "Baseline overlaid — Subtract creates a new worksheet."}
+            </div>
+          </WorkbenchPreviewFrame>
         </div>
       )}
     </ToolWindow>

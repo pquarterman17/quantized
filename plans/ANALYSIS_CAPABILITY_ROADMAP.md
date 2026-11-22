@@ -429,8 +429,56 @@ inconsistently exposed, and do not all share the same result lifecycle.
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
   Progress (lane RL): the commit half exists (`useAnalysisCommit` +
-  `commitAnalysisOutput`, see the audit above); preview/cancel and rerun/edit
-  are not yet part of it.
+  `commitAnalysisOutput`, see the audit above). Lane WB added the preview /
+  cancel half and migrated a first slice (audit and design below); the rest of
+  the previewing tools are not migrated, so this stays open.
+
+  **Workbench audit (lane WB, 2026-11-22).** Tools that preview before they
+  commit, as found before the migration. "Key" = every input the preview
+  depends on; "stale guard" = an older answer can never replace a newer one.
+
+  | Tool | Preview | Marked provisional | Cancel leaves | Errors | Long work |
+  |---|---|---|---|---|---|
+  | Signal Processing (correction / spectral) | auto, 180 ms debounce; sequence + identity guard; AbortSignal | no ("Preview: name" key only) | nothing (Create aborted) | one red alert line, validation first | none needed (one request) |
+  | Signal Processing filters (sigop) | auto, 180 ms; AbortSignal guard | no | **a worksheet** (Create carried no signal) | alert line | none |
+  | Reduce rows (Resample window) | same hook as sigop | no | **a worksheet** (same bug) | alert div | none |
+  | Resample / align | auto, 250 ms; key-tagged result; AbortSignal | no ("Previewing…" only) | nothing; batch Stop between datasets | per-dataset lines + alert div | determinate batch progress + Stop |
+  | Reshape & combine | auto, 150 ms; key-tagged result; local compute (no abort needed) | no ("Previewing…" only) | nothing | alert div | none |
+  | Baseline | Estimate button; anchors auto, 150 ms; **no stale guard** | no ("Baseline overlaid" note) | **a late estimate's overlay**; Subtract used a stale estimate under new settings | grey/red meta line | none |
+  | Curve fit (equation check) | auto, debounced; cancelled flag, no abort | n/a (validation, not a result) | nothing | inline status | jobs: fraction progress + cancel (global / scan / bumps) |
+  | SIMS compare / region | auto (shared `useDebouncedPreview`); key + AbortSignal | no | nothing | alert | none |
+  | Ternary / aux figure preview | auto, debounced; cancelled flag + AbortSignal | image preview | nothing | alert | none |
+
+  **Design (lane WB): `components/workshops/workbench/`**, extracted from the
+  Signal Processing workbench, a hook plus four display parts that compose
+  with what exists (input summary: `AnalysisInputSummary` or the tool's own;
+  parameters: the tool's fields, unchanged):
+  - `useWorkbenchPreview({ key, run(signal), delayMs, auto })`: debounced
+    (`auto`) or explicit (`refresh()`, an Estimate button); a sequence number
+    plus AbortSignal reject stale answers; abort on key change, `discard()`
+    and unmount; AbortError is never an error. `current` is the result for
+    THIS key only (what a commit may use); `latest` keeps the last result for
+    a tool that shows it marked stale (Baseline).
+  - `useWorkbenchCommit()`: the in-flight guard for tools that commit through
+    a recorded transform (Signal Processing, sigop, Reduce rows); Cancel and
+    unmount abort it. Tools on the analysis-output contract keep
+    `useAnalysisCommit` (same guard, plus Replace vs Add as new on reopen).
+    The recorded-transform tools were deliberately not moved onto
+    `useAnalysisCommit`: their outputs are replayable pipeline steps, a
+    different provenance model.
+  - `WorkbenchPreviewFrame` ("Preview (not saved)", Previewing…, Out of date),
+    `WorkbenchMessage` (refusal vs error, one alert), `WorkbenchActions`
+    (Cancel + commit disabled WITH its reason), `WorkbenchProgress`
+    (determinate done/total or a backend fraction, optional Stop; indeterminate
+    only when no fraction is reported).
+  - `runTransform` now refuses to add an output once its signal is aborted
+    (a transport that cannot abort may still answer after Cancel).
+
+  Migrated: Signal Processing, its sigop filters, Reduce rows, Resample /
+  align, Reshape & combine, Baseline. Not migrated: SIMS compare / region,
+  the ternary and figure previews, Curve fit's equation check, and every
+  tool that computes only on a button (Peaks, fits); Baseline's overlay on
+  the main plot is not itself styled as provisional (the panel is).
 
 ## Product contract for every new analysis
 
@@ -441,6 +489,12 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
 - [ ] The input dataset, X/Y/error channels, included rows, selected range,
   units, parameters, and algorithm version are recorded.
 - [ ] Preview is visibly provisional and Cancel leaves no scientific state.
+  Progress (lane WB): the six migrated workbenches above mark previews
+  "Preview (not saved)", and closing them drops any pending preview (two
+  Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).
+  Still open: a Create already running in Reshape & combine is not aborted by
+  Close, Resample's batch stops after the dataset in flight, and the
+  unmigrated previews.
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
@@ -460,6 +514,9 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   shown in the UI rather than an implicit implementation detail.
 - [ ] Long work supports cancellation; determinate progress remains for jobs
   whose backend can expose meaningful progress rather than only busy/complete.
+  Progress (lane WB): `WorkbenchProgress` is the shared determinate display
+  (Resample's batch uses it); job-queue tools (Curve fit global / scan /
+  bumps) are not yet on it, so this stays open.
 - [x] The same saved recipe can run over selected compatible datasets without
   overwriting customized plots or raw data.
 - [x] Tests use representative files from the sibling `test-data` repository
@@ -1240,6 +1297,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane WB: audited the previewing tools and extracted a shared workbench shell from Signal Processing (`components/workshops/workbench`: `useWorkbenchPreview`, `useWorkbenchCommit`, `WorkbenchPreviewFrame` / `Message` / `Actions` / `Progress`). Signal Processing, its sigop filters, Reduce rows, Resample, Reshape & combine and Baseline migrated; previews read "Preview (not saved)". Fixed: Baseline subtracting an estimate under changed settings and drawing late estimates; sigop / Reduce rows Cancel still creating a worksheet. Defaults and debounce delays unchanged. | Characterization tests first (`SignalProcessingPanel.workbench.test.tsx`, `useResample.workbench.test.ts`); fail-before tests (`useBaseline.workbench.test.ts`, `SigopBody.workbench.test.tsx`); shell tests with forced races (`workbench/*.test.ts*`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `inputs="statistics"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY2: Save By result for the other `byrun` tools (Find peaks, Peak analyzer, Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit) and for Curve fit (its own By kept: it shows a parameter table per level; display pinned first); role-based batches drop a finished table on a settings change via an opt-in `settingsKey` (Curve fit and Hysteresis deliberately not). | Characterization tests first (`CurveFitPanel.byResults.test.tsx`); per-tool save / duplicate / Undo / out-of-date tests (`byLevelSave.test.tsx`, `signalBySave.test.tsx`); per-runner settings-change tests; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane RB: audited how the statistics tools present results and added the Result book tab to the result workspace (`lib/resultBook.ts`, `analysisresults/resultbook/`) for Distribution, Fit Y by X, Multivariate, Variability and Outlier screening: one header (shared input line while current, method, settings, freshness), collapsible table and figure sections in one order, per-section Copy, Send to report and Open as worksheet, and Reopen in tool. | Characterization tests of the existing tabs (written first) still pass; book tests cover section order, collapse state, each action, a stale result and each migrated tool; `sendAnalysisInlineTableToReport(id, tableIndex)` store test; tsc, lint, build (bundle OK). |

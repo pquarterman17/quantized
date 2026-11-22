@@ -18,7 +18,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { useAckForKey, tokenOf } from "../../../lib/previewKey";
 import { computeTransformPreview } from "../../../lib/transformPreviewCompute";
 import {
   reviewTransform,
@@ -31,16 +31,11 @@ import type { Dataset } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useTransformPreviewDialog } from "../../../store/transformPreviewDialog";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { formToRun, seedForm, type TransformForm } from "./transformForm";
 
 /** Debounce between an edit and the preview. */
 export const PREVIEW_DELAY_MS = 150;
-
-interface Preview {
-  key: string;
-  computed?: TransformComputed;
-  error?: string;
-}
 
 export interface ReshapeState {
   datasets: Dataset[];
@@ -80,7 +75,6 @@ export function useReshapePreview(): ReshapeState {
   const close = useTransformPreviewDialog((s) => s.close);
   const datasets = useApp((s) => s.datasets);
   const [form, setFormState] = useState<TransformForm>(() => seedForm(op ?? "merge", seed, datasets));
-  const [preview, setPreview] = useState<Preview>({ key: "" });
   const [busy, setBusy] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
@@ -100,23 +94,21 @@ export function useReshapePreview(): ReshapeState {
   );
 
   // Re-run when the KEY changes, not whenever an unrelated store change hands
-  // `run`/`inputs` a new identity. The inputs are read from a ref
-  // (lib/previewKey.ts — shared with the resample workshop's own preview).
-  const latest = useLatestRef({ run, inputs });
-  useDebouncedPreview(key, PREVIEW_DELAY_MS, () => {
-    const { run, inputs } = latest.current;
-    if (typeof run === "string" || !inputs.length) return undefined;
-    let live = true;
-    const [primary, ...others] = inputs;
-    computeTransformPreview(run.params, primary, others).then(
-      (computed) => { if (live) setPreview({ key, computed }); },
-      (e: unknown) => { if (live) setPreview({ key, error: message(e, "the transform failed") }); },
-    );
-    return () => { live = false; };
+  // `run`/`inputs` a new identity. The shared workbench shell (../workbench)
+  // debounces it and never lets an older answer become the current preview
+  // (the bounded compute is local, so there is no request to abort).
+  const preview = useWorkbenchPreview<TransformComputed>({
+    key: typeof run === "string" || !inputs.length ? "" : key,
+    delayMs: PREVIEW_DELAY_MS,
+    fallbackError: "the transform failed",
+    run: () => {
+      if (typeof run === "string") return Promise.reject(new Error(run));
+      const [primary, ...others] = inputs;
+      return computeTransformPreview(run.params, primary, others);
+    },
   });
 
-  const fresh = preview.key === key && key !== "";
-  const computed = fresh ? (preview.computed ?? null) : null;
+  const computed = preview.current;
   const { acknowledged: unitsAcknowledged, setAcknowledged: setUnitsAcknowledged } = useAckForKey(key);
   const blockedByUnits = !!computed && needsConfirm(computed.preview.warnings) && !unitsAcknowledged;
 
@@ -159,9 +151,9 @@ export function useReshapePreview(): ReshapeState {
     form,
     setForm,
     formError: typeof run === "string" ? run : null,
-    loading: key !== "" && !fresh,
+    loading: preview.loading,
     computed,
-    error: fresh ? (preview.error ?? null) : null,
+    error: preview.error || null,
     previewOnly: inputs.some((d) => d.pending),
     blockedByUnits,
     unitsAcknowledged,
