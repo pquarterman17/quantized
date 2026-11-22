@@ -14,8 +14,8 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { offAutoscale } from "./overlayAutoscale";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
-import { BAR_PATHS, barPaths } from "./uplotBars";
-import { stackedAreaPaths, stackedBelow } from "./uplotStack";
+import { BAR_PATHS, FLOAT_LOW_PATHS, barPaths } from "./uplotBars";
+import { floatIsLow, floatLowColumn, stackedAreaPaths, stackedBelow } from "./uplotStack";
 import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
 import { regionDecor } from "./regionDecorLoader";
 import { resolveFillBands, seriesFillProps, translucent } from "./uplotFill";
@@ -225,15 +225,21 @@ export function buildSeriesDefs(
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series
       // renders correctly regardless of the ambient default trace.
-      if (style?.bars) {
+      const axes = payload.series.map((p) => p.axis);
+      if (floatIsLow(seriesStyles, axes, i)) {
+        // A floating column's low series: the high series' bar spans it.
+        def.paths = FLOAT_LOW_PATHS;
+        def.points = { show: false };
+      } else if (style?.bars) {
         // An Origin column / bar graph: bars from zero, filled with the stroke.
-        const below = stackedBelow(seriesStyles, payload.series.map((p) => p.axis), i);
-        def.paths = below.length ? barPaths(below) : BAR_PATHS;
+        const below = stackedBelow(seriesStyles, axes, i);
+        const low = floatLowColumn(seriesStyles, axes, i) ?? undefined;
+        def.paths = low ? barPaths([], low) : below.length ? barPaths(below) : BAR_PATHS;
         def.fill = translucent(stroke, 70);
         def.points = { show: false };
       } else if (style?.stack && style.fill === "under") {
         // Stacked area: the line at the running total, the fill between the two totals.
-        def.paths = stackedAreaPaths(stackedBelow(seriesStyles, payload.series.map((p) => p.axis), i));
+        def.paths = stackedAreaPaths(stackedBelow(seriesStyles, axes, i));
         def.fill = translucent(stroke);
       } else if (style?.connect === "spline" && marks() && !(style.fill && typeof style.fill === "object")) {
         // N6 Spline connect (wins over a step shape; a fill-under follows it; a fill-BETWEEN keeps

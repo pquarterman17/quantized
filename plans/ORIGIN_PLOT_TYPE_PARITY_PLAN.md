@@ -570,13 +570,24 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     **ADDED 2026-11-22 (lane A2), residual: verify against Origin:** gallery tile "Horizontal Stacked Bar"
     (`SeriesStyle.stack` + `bars: "horizontal"`; screen `lib/uplotStack.ts` /
     `uplotBars.barPaths`, export `calc/figure_bars.stacked_series`, horizontal
-    `bottom` -> `left` in `figure_orient`). The cursor readout still shows each
-    series' own value, not the running total.
+    `bottom` -> `left` in `figure_orient`). **Lane F 2026-11-22:** the cursor readout of
+    a stacked series now shows its own value and the running total
+    (`readoutStacks` in `lib/uplotTools.ts`, `ReadoutRow.total`, chip
+    "5.0000 (total 7.0000)"; test `lib/uplotFloat.test.tsx`).
 12. **Floating column** — 9/9 `floating_column` unbuildable: no bar that
     spans two Y columns (low to high); every bar starts at zero.
-    **OPEN (lane A2, not reached):** no floating-column creation exists yet;
-    `stack` only builds cumulative bars. Needs a low/high pair of Y columns
-    (a bar base from a second column) on screen and in `figure_bars`.
+    **ADDED 2026-11-22 (lane F), residual: verify against Origin:** gallery
+    tile "Floating Column" (glyph ▯) and a Series card checkbox "Floats from
+    the series above". `SeriesStyle.float`: a `"high"` bar series directly
+    after a `"low"` one on the same Y axis draws each bar from the low value
+    to its own; the low series draws nothing (`lib/uplotStack.floatLowColumn`,
+    `uplotBars.barPaths(below, from)`; export `figure_bars.floating_series`
+    reusing the `stack_base` bar floor). The gallery pairs the plotted columns
+    (low, high, low, high, ...); an odd last column stays an ordinary bar.
+    Residuals: the low series keeps its legend entry (blank handle in the
+    export); a stale unpaired flag draws as an ordinary series; the
+    Origin-import path still draws its floating columns as data-anchored
+    rectangles (#798) rather than through `float`.
 13. **Stacked area** — 8/8 `stacked_area` unbuildable: `fill` is
     under-zero or between two curves, never cumulative on the previous
     series.

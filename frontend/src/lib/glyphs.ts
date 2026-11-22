@@ -97,6 +97,7 @@ export const plotStackedColumn = "◪";
 export const plotStackedColumnX = "▙";
 export const plotStackedBarH = "▚";
 export const plotStackedArea = "◭";
+export const plotFloatColumn = "▯";
 export const plotBox = "◫";
 export const plotHistogram = "▇";
 export const plotContour = "◎";

@@ -13,6 +13,7 @@ import type uPlot from "uplot";
 import { setActiveGestureCancel } from "./gestureCancel";
 import { computeMeasurement, type Measurement } from "./measure";
 import { computeRegionStats, type RegionStats } from "./regionStats";
+import { stackBase } from "./uplotStack";
 import { setScalesPx, type Readout, type ReadoutRow } from "./uplotTools";
 
 /**
@@ -267,12 +268,15 @@ function nearestValue(col: ArrayLike<number | null | undefined> | undefined, idx
  *  across the aligned data, so one lookup per column gives a full readout.
  *  `shift` (a waterfall's per-column stagger) and the X offset (block b of
  *  `blockRows` rows slid by b·`xStep`) are taken back off: the readout states
- *  the data, not where the display moved it. */
+ *  the data, not where the display moved it. `stacks[s]` lists the data columns
+ *  a stacked series `s` sits on (`uplotStack.readoutStacks`): its row then also
+ *  carries the running `total`. */
 export function readoutPlugin(
   onReadout: (r: Readout | null) => void,
   shift?: number[],
   blockRows?: number,
   xStep?: number,
+  stacks?: readonly (readonly number[])[],
 ): uPlot.Plugin {
   return {
     hooks: {
@@ -293,7 +297,13 @@ export function readoutPlugin(
           const y = nearestValue(u.data[s], idx);
           if (y == null) continue;
           const lbl = u.series[s]?.label;
-          rows.push({ label: typeof lbl === "string" ? lbl : "", y: y - (shift?.[s] ?? 0) });
+          const own = y - (shift?.[s] ?? 0);
+          const below = stacks?.[s];
+          rows.push({
+            label: typeof lbl === "string" ? lbl : "",
+            y: own,
+            ...(below?.length ? { total: own + stackBase(u.data as never, below, idx) } : {}),
+          });
         }
         if (rows.length === 0) {
           onReadout(null);

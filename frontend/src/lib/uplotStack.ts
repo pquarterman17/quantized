@@ -30,6 +30,28 @@ export function stackedBelow(
   return below;
 }
 
+/** A floating column (Origin's FloatCol): a series flagged `float: "high"` that
+ *  directly follows one flagged `"low"` on the same Y axis draws bars from the
+ *  low series' value to its own, row by row (`calc/figure_bars.floating_series`
+ *  pairs the same way on export). Returns the uPlot data column (1-based) of the
+ *  low series when display series `i` is such a high, else null. */
+export function floatLowColumn(
+  styles: readonly (SeriesStyle | undefined)[] | undefined,
+  axes: readonly (number | undefined)[],
+  i: number,
+): number | null {
+  const paired = i > 0 && styles?.[i]?.float === "high" && !!styles[i]?.bars && styles[i - 1]?.float === "low";
+  return paired && (axes[i - 1] ?? 0) === (axes[i] ?? 0) ? i : null;
+}
+
+/** True when display series `i` is the low of a floating pair: it draws nothing
+ *  of its own (the bar spans it to the high). */
+export const floatIsLow = (
+  styles: readonly (SeriesStyle | undefined)[] | undefined,
+  axes: readonly (number | undefined)[],
+  i: number,
+): boolean => styles?.[i]?.float === "low" && floatLowColumn(styles, axes, i + 1) !== null;
+
 /** The running total of the `below` columns at row `r`. */
 export function stackBase(data: readonly Col[], below: readonly number[], r: number): number {
   let sum = 0;

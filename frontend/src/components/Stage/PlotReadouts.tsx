@@ -30,7 +30,10 @@ export default function PlotReadouts({ tool, readout, measurement, stats }: Prop
             style={{ display: "flex", gap: 6, justifyContent: "space-between" }}
           >
             <span>{r.label || "y"}</span>
-            <span>{r.y.toPrecision(5)}</span>
+            <span title={r.total === undefined ? undefined : "This series' own value, then the running stacked total"}>
+              {r.y.toPrecision(5)}
+              {r.total === undefined ? "" : ` (total ${r.total.toPrecision(5)})`}
+            </span>
           </div>
         ))}
       </div>
