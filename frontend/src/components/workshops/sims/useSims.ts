@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { useAckForKey, tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
 import { runTransform } from "../../../lib/transformRun";
 import { computeSims, simsSource, type SimsComputed, type SimsParams } from "../../../lib/transformSims";
@@ -17,17 +17,12 @@ import type { DataStruct } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { batchCandidates, runSimsBatch, type SimsBatchCandidate, type SimsBatchProgress, type SimsBatchResult } from "./simsBatch";
 import { defaultForm, formToParams, guessReference, type SimsForm } from "./simsForm";
 
 /** Debounce between an edit and the preview request. */
 export const PREVIEW_DELAY_MS = 250;
-
-interface Preview {
-  key: string;
-  result?: SimsComputed;
-  error?: string;
-}
 
 export interface SimsState {
   datasets: { id: string; name: string }[];
@@ -88,7 +83,6 @@ export function useSims(active: boolean): SimsState {
   const dataset = datasets.find((d) => d.id === datasetId);
   const source = useMemo(() => (dataset ? simsSource(dataset) : undefined), [dataset]);
   const [form, setFormState] = useState<SimsForm>(() => defaultForm(source));
-  const [preview, setPreview] = useState<Preview>({ key: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedIds = useApp((s) => s.selectedIds);
@@ -125,26 +119,24 @@ export function useSims(active: boolean): SimsState {
   // its form keeps its half-filled state -- but that means its debounced
   // preview would otherwise keep firing full-dataset POSTs in the
   // background too. `active` (this tab being the VISIBLE one) gates the key
-  // to `""`, which `useDebouncedPreview` already treats as "nothing to
+  // to `""`, which the preview shell treats as "nothing to
   // preview" -- the same no-op path an incomplete form takes.
   const key = useMemo(
     () => (!active || typeof parsed === "string" || !dataset ? "" : JSON.stringify([parsed, dataset.id, tokenOf(dataset)])),
     [active, parsed, dataset],
   );
-  const inputs = useLatestRef({ parsed, dataset, source });
-  useDebouncedPreview(key, PREVIEW_DELAY_MS, () => {
-    const { parsed, dataset, source } = inputs.current;
-    if (typeof parsed === "string" || !dataset || !source) return undefined;
-    const ctrl = new AbortController();
-    computeSims(parsed, { id: dataset.id, name: dataset.name, data: source }, { preview: true, signal: ctrl.signal }).then(
-      (result) => { if (!ctrl.signal.aborted) setPreview({ key, result }); },
-      (e: unknown) => { if (!ctrl.signal.aborted) setPreview({ key, error: message(e, "SIMS processing failed") }); },
-    );
-    return () => { ctrl.abort(); };
+  // The shared workbench shell (../workbench) debounces the preview, aborts it
+  // on an edit or unmount, and never lets an older answer become the current one.
+  const preview = useWorkbenchPreview<SimsComputed>({
+    key,
+    delayMs: PREVIEW_DELAY_MS,
+    fallbackError: "SIMS processing failed",
+    run: (signal) => {
+      if (typeof parsed === "string" || !dataset || !source) return Promise.reject(new Error("nothing to preview"));
+      return computeSims(parsed, { id: dataset.id, name: dataset.name, data: source }, { preview: true, signal });
+    },
   });
-
-  const fresh = preview.key === key && key !== "";
-  const result = fresh ? preview.result : undefined;
+  const result = preview.current ?? undefined;
   const warnings = result?.warnings ?? [];
   // Finding 1: a confirm-level warning (calibration's `unit-override`) must
   // never pass on a plain OK — mirrors useResample.ts's `unitsAcknowledged`,
@@ -255,8 +247,8 @@ export function useSims(active: boolean): SimsState {
     },
     formError: typeof parsed === "string" ? parsed : null,
     result,
-    previewError: fresh ? (preview.error ?? null) : null,
-    loading: key !== "" && !fresh,
+    previewError: preview.error || null,
+    loading: preview.loading,
     warnings,
     previewOnly: Boolean(dataset?.pending),
     blockedByUnits,

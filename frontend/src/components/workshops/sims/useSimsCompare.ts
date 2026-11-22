@@ -10,7 +10,7 @@
 import { useMemo, useState } from "react";
 
 import { MAX_DECADES } from "../../../lib/logOffset";
-import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { tokenOf } from "../../../lib/previewKey";
 import { runTransform } from "../../../lib/transformRun";
 import { computeSimsCompare, staggerComparison, type SimsCompareComputed, type SimsCompareParams } from "../../../lib/transformSimsCompare";
 import { simsSource, speciesOf } from "../../../lib/transformSims";
@@ -19,6 +19,7 @@ import type { Dataset } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 export const COMPARE_DELAY_MS = 250;
 /** The stagger step is a whole number of decades within ±MAX_STAGGER. */
@@ -83,12 +84,6 @@ export function defaultSpecies(picked: readonly Dataset[]): string[] {
   return opts.filter((o) => picked.length === 1 || o.count === picked.length).map((o) => o.name);
 }
 
-interface Preview {
-  key: string;
-  result?: SimsCompareComputed;
-  error?: string;
-}
-
 export function useSimsCompare(active: boolean): SimsCompareState {
   const seed = useSimsDialog((s) => s.seed);
   const datasets = useApp((s) => s.datasets);
@@ -106,7 +101,6 @@ export function useSimsCompare(active: boolean): SimsCompareState {
   );
   const [species, setSpecies] = useState<string[]>(() => defaultSpecies(pickedDs));
   const [stagger, setStaggerText] = useState("0");
-  const [preview, setPreview] = useState<Preview>({ key: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,21 +144,17 @@ export function useSimsCompare(active: boolean): SimsCompareState {
     () => (active && params ? JSON.stringify([params, pickedDs.map((d) => [d.id, tokenOf(d)])]) : ""),
     [active, params, pickedDs],
   );
-  const inputs = useLatestRef({ params, pickedDs });
-  useDebouncedPreview(key, COMPARE_DELAY_MS, () => {
-    const { params, pickedDs } = inputs.current;
-    if (!params) return undefined;
-    const ctrl = new AbortController();
-    const profiles = pickedDs.map((d) => ({ id: d.id, name: d.name, data: simsSource(d) }));
-    computeSimsCompare(params, profiles, { signal: ctrl.signal }).then(
-      (result) => { if (!ctrl.signal.aborted) setPreview({ key, result }); },
-      (e: unknown) => { if (!ctrl.signal.aborted) setPreview({ key, error: message(e, "comparison failed") }); },
-    );
-    return () => { ctrl.abort(); };
+  const preview = useWorkbenchPreview<SimsCompareComputed>({
+    key,
+    delayMs: COMPARE_DELAY_MS,
+    fallbackError: "comparison failed",
+    run: (signal) => {
+      if (!params) return Promise.reject(new Error("nothing to compare"));
+      const profiles = pickedDs.map((d) => ({ id: d.id, name: d.name, data: simsSource(d) }));
+      return computeSimsCompare(params, profiles, { signal });
+    },
   });
-
-  const fresh = preview.key === key && key !== "";
-  const result = fresh ? preview.result : undefined;
+  const result = preview.current ?? undefined;
   const k = staggerDecades ?? 0;
   const offsets = useMemo(() => (result?.data.labels ?? []).map((_, i) => i * k), [result, k]);
 
@@ -212,8 +202,8 @@ export function useSimsCompare(active: boolean): SimsCompareState {
     formError,
     result,
     offsets,
-    previewError: fresh ? (preview.error ?? null) : null,
-    loading: key !== "" && !fresh,
+    previewError: preview.error || null,
+    loading: preview.loading,
     warnings: result?.warnings ?? [],
     previewOnly: pickedDs.some((d) => d.pending),
     canCreate: Boolean(result) && !formError && !busy,

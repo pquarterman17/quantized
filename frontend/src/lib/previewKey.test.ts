@@ -4,9 +4,9 @@
 // `resample/useResample.ts`, which had each grown its own near-identical copy.
 
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { tokenOf, useAckForKey, useDebouncedPreview, useLatestRef } from "./previewKey";
+import { tokenOf, useAckForKey, useLatestRef } from "./previewKey";
 
 describe("tokenOf", () => {
   it("is stable for the same object and distinct across objects", () => {
@@ -42,44 +42,5 @@ describe("useAckForKey", () => {
     const { result } = renderHook(() => useAckForKey(""));
     act(() => result.current.setAcknowledged(true));
     expect(result.current.acknowledged).toBe(false);
-  });
-});
-
-describe("useDebouncedPreview", () => {
-  it("fires once, after the delay, and not at all for a blank key", async () => {
-    vi.useFakeTimers();
-    const run = vi.fn();
-    renderHook(({ key }: { key: string }) => useDebouncedPreview(key, 100, run), { initialProps: { key: "" } });
-    await vi.advanceTimersByTimeAsync(500);
-    expect(run).not.toHaveBeenCalled();
-    vi.useRealTimers();
-  });
-
-  it("restarts the timer on a key change before it fires — the stale timer never runs", async () => {
-    vi.useFakeTimers();
-    const run = vi.fn();
-    const { rerender } = renderHook(({ key }: { key: string }) => useDebouncedPreview(key, 100, run), { initialProps: { key: "a" } });
-    await vi.advanceTimersByTimeAsync(50);
-    rerender({ key: "b" }); // "a"'s pending timer must never fire
-    await vi.advanceTimersByTimeAsync(50); // 100ms since mount, but only 50ms since "b" started
-    expect(run).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(50); // 100ms since "b" started
-    expect(run).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
-  });
-
-  it("calls the cleanup a fired run returned before the next key's timer starts", async () => {
-    vi.useFakeTimers();
-    const cleanup = vi.fn();
-    const run = vi.fn(() => cleanup);
-    const { rerender } = renderHook(({ key }: { key: string }) => useDebouncedPreview(key, 100, run), { initialProps: { key: "a" } });
-    await vi.advanceTimersByTimeAsync(100); // "a"'s run fires and returns `cleanup`
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(cleanup).not.toHaveBeenCalled();
-    rerender({ key: "b" });
-    expect(cleanup).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(100);
-    expect(run).toHaveBeenCalledTimes(2);
-    vi.useRealTimers();
   });
 });

@@ -13,13 +13,14 @@ import { measureSimsRegion, type SimsRegionResult } from "../../../lib/api/sims"
 import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import { xExtent } from "../../../lib/plotDecimate";
-import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
 import { simsSource, simsWireDataset, speciesOf } from "../../../lib/transformSims";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 export const REGION_DELAY_MS = 250;
 
@@ -89,12 +90,6 @@ function defaultForm(labels: readonly string[], time: readonly number[] | undefi
   };
 }
 
-interface Preview {
-  key: string;
-  result?: SimsRegionResult;
-  error?: string;
-}
-
 export function useSimsRegion(active: boolean): SimsRegionState {
   const seed = useSimsDialog((s) => s.seed);
   const datasets = useApp((s) => s.datasets);
@@ -105,7 +100,6 @@ export function useSimsRegion(active: boolean): SimsRegionState {
   const source = useMemo(() => (dataset ? simsSource(dataset) : undefined), [dataset]);
   const labels = useMemo(() => (source ? speciesOf(source) : []), [source]);
   const [form, setFormState] = useState<RegionForm>(() => defaultForm(labels, source?.time));
-  const [preview, setPreview] = useState<Preview>({ key: "" });
   const [busy, setBusy] = useState(false);
 
   // Indices into the SOURCE's own labels (categorical columns never picked).
@@ -115,27 +109,25 @@ export function useSimsRegion(active: boolean): SimsRegionState {
     () => (!active || typeof parsed === "string" || !dataset ? "" : JSON.stringify([parsed, dataset.id, tokenOf(dataset)])),
     [active, parsed, dataset],
   );
-  const inputs = useLatestRef({ parsed, dataset, source });
-  useDebouncedPreview(key, REGION_DELAY_MS, () => {
-    const { parsed, dataset, source } = inputs.current;
-    if (typeof parsed === "string" || !dataset || !source) return undefined;
-    const ctrl = new AbortController();
-    const body = {
-      dataset: simsWireDataset(source),
-      // The CSV's provenance line: measured on the ANALYSIS rows, and says so
-      // when exclusions or a row filter left some out.
-      dataset_name: leftOut(dataset.data.time.length, source.time.length, dataset.name),
-      ...parsed,
-    };
-    measureSimsRegion(body, ctrl.signal).then(
-      (result) => { if (!ctrl.signal.aborted) setPreview({ key, result }); },
-      (e: unknown) => { if (!ctrl.signal.aborted) setPreview({ key, error: message(e, "region measures failed") }); },
-    );
-    return () => { ctrl.abort(); };
+  const preview = useWorkbenchPreview<SimsRegionResult>({
+    key,
+    delayMs: REGION_DELAY_MS,
+    fallbackError: "region measures failed",
+    run: (signal) => {
+      if (typeof parsed === "string" || !dataset || !source) return Promise.reject(new Error("nothing to measure"));
+      return measureSimsRegion(
+        {
+          dataset: simsWireDataset(source),
+          // The CSV's provenance line: measured on the ANALYSIS rows, and says so
+          // when exclusions or a row filter left some out.
+          dataset_name: leftOut(dataset.data.time.length, source.time.length, dataset.name),
+          ...parsed,
+        },
+        signal,
+      );
+    },
   });
-
-  const fresh = preview.key === key && key !== "";
-  const result = fresh ? preview.result : undefined;
+  const result = preview.current ?? undefined;
   const xUnit = source ? xUnitOf(source) : "";
   const regionText = result ? `${g(result.region[0])}–${g(result.region[1])}${xUnit ? ` ${xUnit}` : ""}` : "";
 
@@ -184,8 +176,8 @@ export function useSimsRegion(active: boolean): SimsRegionState {
     setForm: (patch) => setFormState((f) => ({ ...f, ...patch })),
     formError: typeof parsed === "string" ? parsed : null,
     result,
-    previewError: fresh ? (preview.error ?? null) : null,
-    loading: key !== "" && !fresh,
+    previewError: preview.error || null,
+    loading: preview.loading,
     busy,
     exportCsv,
     addToReports,
