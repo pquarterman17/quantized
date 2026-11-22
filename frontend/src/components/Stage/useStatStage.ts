@@ -376,16 +376,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         })
         .finally(() => !cancelled && setBusy(false));
     } else {
-<<<<<<< HEAD
       const cols = histogramColumns(valueCol, histCols, data.labels.length);
-=======
-      const finite = finiteOf(data, valueCol);
-      if (finite.length < (fit ? 2 : 1)) {
-        setDrawData(null);
-        setError(fit ? "need ≥ 2 finite values" : "need ≥ 1 finite value");
-        return;
-      }
->>>>>>> origin/main
       setBusy(true);
       computeHistogramDraw(data, cols, cols.map((c) => data.labels[c] ?? ""), bins, fit, valueLabel)
         .then((d) => !cancelled && setDrawData(d))

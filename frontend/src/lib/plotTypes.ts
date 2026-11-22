@@ -25,11 +25,7 @@ import type { Dataset, SeriesStyle } from "./types";
 
 export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
-<<<<<<< HEAD
   | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "box" | "histogram"
-=======
-  | "column" | "stackedColumn" | "columnX" | "barH" | "box" | "histogram"
->>>>>>> origin/main
   | "contour"
   | "violin" | "doubleY" | "polar" | "waterfall" | "stacked" | "ternary";
 
@@ -50,12 +46,9 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "stackedColumn", label: "Stacked Column", glyph: GLYPHS.plotStackedColumn, description: "Bars stacked per category, one segment per series." },
   { id: "columnX", label: "Column per X row", glyph: GLYPHS.plotColumnX, description: "One bar per row at its X value, one series per Y column; the Series card colour fills the bars." },
   { id: "barH", label: "Horizontal Bar", glyph: GLYPHS.plotBarH, description: "Bars from zero at each X, turned on their side (X up the left axis)." },
-<<<<<<< HEAD
   { id: "stackedColumnX", label: "Stacked Column per X row", glyph: GLYPHS.plotStackedColumnX, description: "Per-row bars, each Y column stacked on the ones before it." },
   { id: "stackedBarH", label: "Horizontal Stacked Bar", glyph: GLYPHS.plotStackedBarH, description: "Per-row bars on their side, each Y column stacked on the ones before it." },
   { id: "stackedArea", label: "Stacked Area", glyph: GLYPHS.plotStackedArea, description: "Each Y column filled on top of the ones before it." },
-=======
->>>>>>> origin/main
   { id: "box", label: "Box", glyph: GLYPHS.plotBox, description: "Box-and-whisker per category." },
   { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Colour map with contour lines from X/Y/Z columns." },
@@ -92,12 +85,9 @@ const XY_MODE: Partial<Record<PlotTypeId, SeriesMode>> = {
   area: "line",
   columnX: "line",
   barH: "line",
-<<<<<<< HEAD
   stackedColumnX: "line",
   stackedBarH: "line",
   stackedArea: "line",
-=======
->>>>>>> origin/main
 };
 
 /** The view patch for an XY or Stat Stage type (contour switches tabs
@@ -121,16 +111,11 @@ export function plotTypePatch(
       else if (next.fill === "under") delete next.fill;
       // Bar types draw bars from zero (their fill is the bars' own); every
       // other XY type leaves bar mode, so Column per X row -> Line switches.
-<<<<<<< HEAD
       // Stacked types sit each series on the running total of the earlier ones.
       if (id.startsWith("stacked") && id !== "stacked") next.stack = true;
       else delete next.stack;
       if (id === "columnX" || id === "barH" || id === "stackedColumnX" || id === "stackedBarH") {
         next.bars = id === "barH" || id === "stackedBarH" ? "horizontal" : true;
-=======
-      if (id === "columnX" || id === "barH") {
-        next.bars = id === "barH" ? "horizontal" : true;
->>>>>>> origin/main
         delete next.fill;
         next.marker = false;
       } else delete next.bars;
