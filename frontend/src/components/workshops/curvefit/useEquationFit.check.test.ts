@@ -98,4 +98,16 @@ describe("equation check timing and races", () => {
     expect(result.current.status).toBe("ok");
     expect(result.current.validationError).toBeNull();
   });
+
+  it("aborts the check in flight on an edit and on unmount (new with the shared shell)", () => {
+    const { result, unmount } = renderHook(() => useEquationFit());
+    act(() => result.current.setEquation("a*x"));
+    tick(350);
+    expect(held[0].signal?.aborted).toBe(false);
+    act(() => result.current.setEquation("a*x+b"));
+    expect(held[0].signal?.aborted).toBe(true);
+    tick(350);
+    unmount();
+    expect(held[1].signal?.aborted).toBe(true);
+  });
 });
