@@ -1,0 +1,176 @@
+// Result book descriptions (lane RB2) for the saved results that are not one
+// of the five statistics analyses: statistical tests, Williamson–Hall (single
+// and comparison) and analysis-batch summaries. Each describer returns null
+// when its saved recipe or settings cannot be read, so the result has NO book
+// (fail closed; the other tabs still show it). Parsed without the live source.
+//
+// Shared shapes and helpers live here (not in lib/resultBook) so that module
+// stays a small model and the per-producer data sits in one place. Pure.
+
+import type { AnalysisResult } from "./analysisResult";
+import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
+import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
+import { testColumns, testDef } from "./statsTests";
+import { williamsonHallRecipe } from "./williamsonHallRecipe";
+
+export interface ResultBookSetting { label: string; value: string }
+
+export interface ResultBookInputKeys {
+  xKey?: number | null;
+  yKeys: number[];
+  /** The tool has no X axis (the summary line omits "X:"). */
+  noX?: boolean;
+}
+
+export interface Described {
+  method: string;
+  settings: ResultBookSetting[];
+  /** The columns the tool passed to the shared input resolver; null when the
+   *  tool's input is not a column pick (peak rows, several worksheets, none). */
+  inputKeys: ResultBookInputKeys | null;
+  /** What the input is, when there is no column pick to restate. */
+  inputNote?: string;
+  /** False when no tool can reopen on this result (default true). */
+  reopen?: boolean;
+}
+
+export const text = (value: unknown): string | null =>
+  typeof value === "string" && value ? value : typeof value === "number" && Number.isFinite(value) ? String(value) : null;
+
+export const settings = (entries: readonly [string, string | null][]): ResultBookSetting[] =>
+  entries.flatMap(([label, value]) => value === null ? [] : [{ label, value }]);
+
+const record = (value: unknown): Record<string, unknown> | null =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+
+const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+/** A short list: the first few names, then how many more. */
+function names(labels: readonly string[], shown = 6): string {
+  return labels.length <= shown ? labels.join(", ") : `${labels.slice(0, shown).join(", ")} and ${labels.length - shown} more`;
+}
+
+// ---- Statistical tests ----------------------------------------------------
+
+/** Where the tool shows an alpha field (StatsTestsInputs): every test except
+ *  these three, which do not read it. */
+const NO_ALPHA = new Set(["anderson", "partial-correlation", "stepwise"]);
+
+const COLUMN_ROLE: Readonly<Record<string, string>> = {
+  one: "Column", two: "Columns", paired: "Paired columns", blocks: "Conditions", columns: "Columns",
+  factorial: "Response, factor A, factor B", regression: "Response, predictors",
+};
+
+function savedLabels(result: AnalysisResult): string[] | null {
+  const labels = result.parameters?.labels;
+  return Array.isArray(labels) && labels.every((label) => typeof label === "string") ? labels as string[] : null;
+}
+
+function describeStatisticalTest(result: AnalysisResult): Described | null {
+  const recipe = statisticalTestRecipe(result);
+  if (!recipe) return null;
+  const def = testDef(recipe.testId);
+  const { params, selection } = recipe;
+  const alpha = NO_ALPHA.has(def.id) ? null : String(params.alpha);
+  if (def.input === "none") {
+    return {
+      method: def.label, inputKeys: null, inputNote: "no worksheet (planning calculation)",
+      settings: settings([
+        ["Design", params.kind], ["Tails", params.tails === 1 ? "one-sided" : "two-sided"], ["Alpha", alpha],
+        ["Effect size d", String(params.effectSize)], ["Target power", String(params.power)],
+        ["Sample size n", params.n === null ? "solved for" : String(params.n)],
+      ]),
+    };
+  }
+  const labels = savedLabels(result);
+  if (!labels) return null;
+  const role = def.input === "groups"
+    ? selection.groupMode === "category" ? "Groups (value by category)" : "Groups (first is the control)"
+    : COLUMN_ROLE[def.input] ?? "Columns";
+  return {
+    method: def.label,
+    inputKeys: { yKeys: testColumns(def.id, selection), noX: true },
+    settings: settings([
+      [role, labels.length ? names(labels) : null],
+      ["Alpha", alpha],
+      ["Alternative", def.id === "sign-test" || def.id === "dunnett" ? params.alternative : null],
+      ["Correction", def.id === "dunnett" ? "Dunnett (each group against the control)" : null],
+      ["Sums of squares", def.id === "anova2-unbalanced" ? `Type ${params.ssType === 3 ? "III" : "II"}` : null],
+      ["Criterion", def.id === "stepwise" ? params.criterion.toUpperCase() : null],
+      ["Direction", def.id === "stepwise" ? params.direction : null],
+    ]),
+  };
+}
+
+// ---- Williamson–Hall ------------------------------------------------------
+
+function describeWilliamsonHall(result: AnalysisResult): Described | null {
+  const recipe = williamsonHallRecipe(result);
+  if (!recipe) return null;
+  return {
+    method: "Williamson–Hall: crystallite size and microstrain",
+    inputKeys: null,
+    inputNote: `${plural(recipe.rows.length, "peak")} (2θ, FWHM) ${recipe.sourceKind === "peak-table" ? "from the fitted peak table" : "entered by hand"}`,
+    settings: settings([
+      ["Wavelength", `${recipe.wavelengthA} Å`], ["K factor", String(recipe.kFactor)],
+      ["Instrumental broadening", `${recipe.instrumentalBroadeningDeg}°`],
+    ]),
+  };
+}
+
+function describeWilliamsonHallBatch(result: AnalysisResult): Described | null {
+  const recipe = record(result.parameters?.recipe);
+  const items = recipe?.items;
+  if (!recipe || !Array.isArray(items) || !items.length || !finite(recipe.kFactor) || recipe.kFactor <= 0 ||
+      !finite(recipe.instrumentalBroadeningDeg) || recipe.instrumentalBroadeningDeg < 0) return null;
+  const wavelengths = new Set<number>();
+  for (const raw of items) {
+    const item = record(raw);
+    if (!item || typeof item.datasetName !== "string" || !Array.isArray(item.rows) ||
+        !finite(item.wavelengthA) || item.wavelengthA <= 0) return null;
+    wavelengths.add(item.wavelengthA);
+  }
+  return {
+    method: `Williamson–Hall comparison across ${plural(items.length, "worksheet")}`,
+    inputKeys: null, inputNote: "fitted peak tables (2θ, FWHM)", reopen: false,
+    settings: settings([
+      ["Wavelength", wavelengths.size === 1 ? `${[...wavelengths][0]} Å` : `${[...wavelengths].join(", ")} Å (per worksheet)`],
+      ["K factor", String(recipe.kFactor)], ["Instrumental broadening", `${recipe.instrumentalBroadeningDeg}°`],
+    ]),
+  };
+}
+
+// ---- Analysis batches -----------------------------------------------------
+
+const BATCH_VALUE_MAX = 80;
+
+function describeAnalysisBatch(result: AnalysisResult): Described | null {
+  const parameters = result.parameters;
+  const selection = record(parameters?.selection);
+  const table = result.tables?.find((candidate) => candidate.title === "Batch status");
+  if (!parameters || typeof parameters.toolId !== "string" || !parameters.toolId ||
+      selection?.version !== ANALYSIS_SELECTION_VERSION ||
+      !table || table.columns[0] !== "Worksheet" || table.columns[1] !== "Status") return null;
+  const completed = table.rows.filter((row) => row[1] === "Completed").length;
+  // The tool's own saved settings (provenance only): plain values, as saved.
+  const own = Object.entries(parameters).flatMap(([key, value]): [string, string][] => {
+    if (key === "toolId" || key === "selection") return [];
+    const shown = typeof value === "boolean" ? (value ? "yes" : "no") : text(value);
+    if (shown === null) return [];
+    return [[key.charAt(0).toUpperCase() + key.slice(1), shown.length > BATCH_VALUE_MAX ? `${shown.slice(0, BATCH_VALUE_MAX - 1)}…` : shown]];
+  });
+  return {
+    method: `${result.producer.label} batch`, inputKeys: null, reopen: false,
+    settings: settings([
+      ["Worksheets", String(table.rows.length)], ["Completed", String(completed)], ...own,
+    ]),
+  };
+}
+
+export const EXTRA_DESCRIBERS: Readonly<Record<string, (result: AnalysisResult) => Described | null>> = {
+  "statistical-test": describeStatisticalTest,
+  "williamson-hall": describeWilliamsonHall,
+  "williamson-hall-batch": describeWilliamsonHallBatch,
+  "analysis-batch": describeAnalysisBatch,
+};
