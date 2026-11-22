@@ -34,4 +34,27 @@ describe("usePeakAnalysisSelection — shared dataset precedence", () => {
     const { result } = renderHook(() => usePeakAnalysisSelection());
     expect(result.current.active).toBeNull();
   });
+
+  it("a live plot capture whose worksheet is gone follows the active one without its rows or roles", () => {
+    const datasets = [sheet("a"), sheet("b")];
+    useAnalysisSelection.setState({
+      toolId: "peaks",
+      selection: captureAnalysisSelection({
+        datasets, activeId: "a", selectedIds: [], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: {}, selection: { datasetId: "a", rows: [1] }, range: null,
+      }, "tool-default"),
+    });
+    useApp.setState({ datasets: [sheet("b")] });
+    // The first render (before the mount effect re-seeds from sheet b) must
+    // not carry sheet a's selected row 1 or roles onto sheet b.
+    const seen: { activeId: string | null; selectedFor: string | null }[] = [];
+    const { result } = renderHook(() => {
+      const value = usePeakAnalysisSelection();
+      seen.push({ activeId: value.activeId, selectedFor: value.selected?.datasetId ?? null });
+      return value;
+    });
+    expect(seen[0]).toEqual({ activeId: "b", selectedFor: null });
+    expect(result.current.activeId).toBe("b");
+    expect(result.current.selected?.datasetId ?? null).not.toBe("a");
+  });
 });

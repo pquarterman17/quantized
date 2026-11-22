@@ -122,11 +122,21 @@ export function analysisTargetDataset(
   return find(selection.datasetId) ?? (followActive ? find(activeId) : null);
 }
 
+/** Manually excluded rows, and Data Filter rows not also excluded. */
+function rowStateCounts(dataset: Dataset): { excludedCount: number; filteredCount: number } {
+  const n = dataset.data.time.length;
+  const excluded = excludedSet(dataset);
+  return {
+    excludedCount: [...excluded].filter((row) => row >= 0 && row < n).length,
+    filteredCount: [...filteredOutSet(dataset)].filter((row) => !excluded.has(row)).length,
+  };
+}
+
 const allRows = (n: number): number[] => Array.from({ length: n }, (_value, index) => index);
 
 export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisInputs {
   const { policy } = request;
-  const datasetSource = request.selection ? "selection" : "active";
+  let datasetSource: Common["datasetSource"] = request.selection ? "selection" : "active";
   const refuse = (code: AnalysisInputRefusal, reason: string, dataset: Dataset | null = null): AnalysisInputsRefused =>
     ({ ok: false, code, reason, dataset, policy, datasetSource });
   const dataset = analysisTargetDataset(request.datasets, request.activeId, request.selection, request.followActive);
@@ -137,6 +147,7 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
   }
   // A followed-active fallback must not apply another worksheet's roles/rows.
   const selection = request.selection && request.selection.datasetId === dataset.id ? request.selection : null;
+  datasetSource = selection ? "selection" : "active";
   if (dataset.pending) {
     return refuse("pending", "The full worksheet is still loading; its preview rows are not analysed.", dataset);
   }
@@ -174,9 +185,7 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
     rowIds = keep.map((index) => baseRows[index]);
   }
   if (rowIds.length === 0) return refuse("no-rows", "No rows remain after exclusions, filters, selected rows and range.", dataset);
-  const excluded = excludedSet(dataset);
-  const excludedCount = [...excluded].filter((row) => row >= 0 && row < n).length;
-  const filteredCount = [...filteredOutSet(dataset)].filter((row) => !excluded.has(row)).length;
+  const { excludedCount, filteredCount } = rowStateCounts(dataset);
   return {
     ok: true, policy, datasetSource, dataset, data, xKey, yKeys, columnSource, rowIds, range,
     rowCount: rowIds.length, totalRows: n, excludedCount, filteredCount, rowsNarrowed: pickedRows !== null,
@@ -215,10 +224,13 @@ export function analysisInputSummary(inputs: AnalysisInputs, heading = "Input"):
 /** The exclusion / filter / selection policy, stated in full. */
 export function analysisRowPolicyNote(inputs: AnalysisInputs): string {
   const { policy } = inputs;
-  const dropped = inputs.ok ? inputs.excludedCount + inputs.filteredCount : 0;
+  // A refusal still states the worksheet's row state (except a lazy preview,
+  // whose rows are not the real ones).
+  const state = inputs.ok ? inputs : inputs.dataset && inputs.code !== "pending" ? rowStateCounts(inputs.dataset) : null;
+  const dropped = state ? state.excludedCount + state.filteredCount : 0;
   const rowsOf = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
-  const counts = !inputs.ok ? "" : dropped === 0 ? " (none at present)"
-    : ` (${rowsOf(inputs.excludedCount, "excluded")}, ${rowsOf(inputs.filteredCount, "filtered-out")})`;
+  const counts = !state ? "" : dropped === 0 ? " (none at present)"
+    : ` (${rowsOf(state.excludedCount, "excluded")}, ${rowsOf(state.filteredCount, "filtered-out")})`;
   const rows = policy.exclusions === "drop"
     ? `Excluded and filtered-out rows are left out${counts}.`
     : dropped > 0 ? `Uses every row, including ${rowsOf(dropped, "excluded or filtered-out")}.`

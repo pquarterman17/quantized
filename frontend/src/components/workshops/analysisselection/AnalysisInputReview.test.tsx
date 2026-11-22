@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { ROW_POLICY } from "../../../lib/analysisInputs";
 import { captureAnalysisSelection } from "../../../lib/analysisSelection";
 import type { Dataset } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
@@ -68,5 +69,22 @@ describe("AnalysisInputReview", () => {
     expect(screen.queryByText(/Review inputs/)).toBeNull();
     expect(screen.queryByText(/Direct launch/)).toBeNull();
     expect(screen.getByText("Choose the columns to analyse below.")).toBeInTheDocument();
+  });
+
+  it("states the host's own row policy when it does not narrow (Curve fit Global / equation modes)", () => {
+    useAnalysisSelection.setState({
+      toolId: "curvefit",
+      selection: captureAnalysisSelection({
+        datasets: [dataset], activeId: "d1", selectedIds: ["d1"], xKey: 0, yKeys: [1],
+        seriesOrder: null, errKeys: {}, selection: { datasetId: "d1", rows: [0, 1] }, range: null,
+      }, "tool-default"),
+    });
+    const { unmount } = render(<AnalysisInputReview toolId="curvefit" singleY />);
+    expect(screen.getByText(/· 2 of 3 rows$/)).toBeInTheDocument();
+    unmount();
+    render(<AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />);
+    expect(screen.getByText(/· 3 of 3 rows$/)).toBeInTheDocument();
+    expect(screen.getByText(/Selected rows are not used\. The plot X range is not applied\./)).toBeInTheDocument();
+    expect(screen.getByText("Using the data on the current plot.")).toBeInTheDocument();
   });
 });

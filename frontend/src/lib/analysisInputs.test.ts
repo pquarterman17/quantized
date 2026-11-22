@@ -72,7 +72,7 @@ describe("resolveAnalysisInputs — stale and deleted ids fail closed", () => {
       datasets: [sheet("b")], activeId: "b", selection: item("gone", { yKeys: [1], rowIds: [0] }),
       followActive: true, policy: ROW_POLICY.selection,
     });
-    expect(result).toMatchObject({ ok: false, code: "no-response", dataset: { id: "b" } });
+    expect(result).toMatchObject({ ok: false, code: "no-response", dataset: { id: "b" }, datasetSource: "active" });
     expect(analysisTargetDataset([sheet("b")], "b", item("gone"), true)?.id).toBe("b");
   });
 
@@ -157,6 +157,12 @@ describe("resolveAnalysisInputs — row policy", () => {
     expect(analysisRowPolicyNote(inputs)).toBe(
       "Uses every row, including 2 excluded or filtered-out rows. Selected rows are not used. The plot X range is not applied.",
     );
+  });
+
+  it("a refusal still states the worksheet's row state", () => {
+    const result = resolveAnalysisInputs({ datasets: [a], activeId: "a", yKeys: [], policy: ROW_POLICY.fullWorksheet });
+    expect(result.ok).toBe(false);
+    expect(analysisRowPolicyNote(result)).toMatch(/^Uses every row, including 2 excluded or filtered-out rows\./);
   });
 
   it("returns the dataset's own data when nothing is dropped", () => {

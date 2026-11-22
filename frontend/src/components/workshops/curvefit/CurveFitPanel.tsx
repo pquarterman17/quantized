@@ -51,6 +51,7 @@ import { useFitTemplateBinding } from "./useFitTemplateBinding";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
 import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
+import { ROW_POLICY } from "../../../lib/analysisInputs";
 import { clearSelectionForTool, useAnalysisSelection } from "../../../store/analysisSelection";
 import { connectionHint } from "../../../lib/importFailureHint";
 import { historyTop, toastWithUndo } from "../../../lib/undoToast";
@@ -252,7 +253,7 @@ export default function CurveFitPanel() {
       : (reg ?? null);
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={360} x={floatingX(360, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
-        <AnalysisInputReview toolId="curvefit" singleY />
+        <AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />
         <GlobalFitSection model={globalModel} />
       </ToolWindow>
     );
@@ -263,7 +264,7 @@ export default function CurveFitPanel() {
   if (isCustom) {
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
-        <AnalysisInputReview toolId="curvefit" singleY />
+        <AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />
         <EquationModelPanel
           key={modelName}
           initial={currentCustom}
