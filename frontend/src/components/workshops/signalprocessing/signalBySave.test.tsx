@@ -64,6 +64,18 @@ describe("Signal processing: Save By result", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Save By result" })).toBeEnabled());
   });
 
+  it("does not record the single run's row choice: the levels are cut from the analysis view (lane IR)", async () => {
+    // "Use excluded/filtered rows" (#846) is the single run's option; the By
+    // levels always leave those rows out, as the worksheet batch does, so the
+    // saved provenance must not say they were used.
+    const save = await open();
+    fireEvent.click(save);
+    const [saved] = useApp.getState().analysisResults;
+    const settings = saved!.parameters!["settings"] as Record<string, unknown>;
+    expect(settings).toMatchObject({ operation: DEFAULT_SIGNAL_SETTINGS.operation });
+    expect(settings).not.toHaveProperty("useAllRows");
+  });
+
   it("goes out of date once the worksheet changes", async () => {
     const save = await open();
     fireEvent.click(save);

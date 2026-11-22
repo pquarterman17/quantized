@@ -37,6 +37,10 @@ export default function SignalScopeAndBy({ source, secondary, settings, spectral
   const run = useCallback(async (level: ByLevel, signal: AbortSignal): Promise<ByCell[]> =>
     signalSummary(await runSignalOn(settings, spectral, channels, source, level.data, signal)),
   [settings, spectral, channels, source]);
+  // The By levels are cut from the analysis view (exclusions and filters left
+  // out), like the worksheet batch: the single run's "Use excluded/filtered
+  // rows" choice neither applies to them nor is recorded as if it did.
+  const { useAllRows: _singleRunRows, ...bySettings } = settings;
   return (
     <>
       <SignalScopeNote source={source} secondary={secondary} useAllRows={settings.useAllRows} />
@@ -48,9 +52,9 @@ export default function SignalScopeAndBy({ source, secondary, settings, spectral
         columns={columns}
         headers={SIGNAL_SUMMARY_HEADERS}
         run={run}
-        runKey={JSON.stringify([settings, spectral, channels])}
+        runKey={JSON.stringify([bySettings, spectral, channels])}
         blockedReason={blockedReason}
-        save={{ toolId: "signal-processing", parameters: { settings: { ...settings }, spectral: { ...spectral }, channels }, xKey, yKeys: yKey == null ? [] : [yKey] }}
+        save={{ toolId: "signal-processing", parameters: { settings: bySettings, spectral: { ...spectral }, channels }, xKey, yKeys: yKey == null ? [] : [yKey] }}
       />
     </>
   );
