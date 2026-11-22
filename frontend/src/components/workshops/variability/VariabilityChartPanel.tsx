@@ -6,6 +6,7 @@
 // chart and tables are their own sub-components.
 
 import ToolWindow from "../../overlays/ToolWindow";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import { Button, Select } from "../../primitives";
 import { useVariabilityStore } from "../../../store/variability";
 import VariabilityChart from "./VariabilityChart";
@@ -25,6 +26,7 @@ export default function VariabilityChartPanel() {
         </div>
       ) : (
         <>
+          <AnalysisInputSummary inputs={v.inputs} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">Response (Y)</label>

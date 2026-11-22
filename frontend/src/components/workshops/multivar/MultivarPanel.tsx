@@ -14,6 +14,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useMultivarStore } from "../../../store/multivar";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import ColumnPicker from "./ColumnPicker";
 import CorrelationView from "./CorrelationView";
 import PcaView from "./PcaView";
@@ -40,6 +41,7 @@ export default function MultivarPanel() {
         </div>
       ) : (
         <>
+          <AnalysisInputSummary inputs={m.inputs} />
           <ColumnPicker m={m} />
           <div style={{ marginTop: 10 }}>
             <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} />

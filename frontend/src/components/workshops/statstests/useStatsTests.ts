@@ -14,10 +14,11 @@ import { copyText } from "../../../lib/clipboard";
 import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { analysisData } from "../../../lib/rowstate";
+import { ROW_POLICY, resolveAnalysisInputs, type AnalysisInputs } from "../../../lib/analysisInputs";
 import {
   DEFAULT_PARAMS,
   buildTestRequest,
+  testColumns,
   testDef,
   type TestDef,
   type TestParams,
@@ -31,6 +32,7 @@ import { publishStatisticalTestResult } from "../../../store/statisticalTestResu
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 
 export interface TestColumn {
   index: number;
@@ -40,6 +42,9 @@ export interface TestColumn {
 
 export interface StatsTestsState {
   active: Dataset | null;
+  /** What the picked test analyses, under the shared input contract; null for
+   *  a test that reads no data (power). */
+  inputs: AnalysisInputs | null;
   columns: TestColumn[];
   testId: StatsTestId;
   def: TestDef;
@@ -101,6 +106,14 @@ export function useStatsTests(): StatsTestsState {
   const [ranTest, setRanTest] = useState<StatsTestId>("anderson");
   const seq = useRef(0);
 
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view over the columns the picked test reads. Run resolves the same
+  // contract against the FULLY LOADED worksheet, so a lazy Origin preview is
+  // never tested and a refusal is the error shown.
+  const inputs = useAnalysisInputs({
+    yKeys: testColumns(testId, sel), policy: ROW_POLICY.analysisView, load: testDef(testId).input !== "none",
+  });
+
   const invalidate = () => {
     seq.current++;
     setBusy(false);
@@ -143,7 +156,15 @@ export function useStatsTests(): StatsTestsState {
     } else {
       const resolved = await withResolved(useApp.getState, active.id, "the statistical test", (ds) => {
         resultSource = ds;
-        return buildTestRequest(id, analysisData(ds), runSelection, runParams);
+        // With no column picked yet the contract would refuse with its generic
+        // "no response" reason, hiding the test's own, more specific pick
+        // message; resolve the row view over the X column instead and let
+        // buildTestRequest say what is missing.
+        const picked = testColumns(id, runSelection);
+        const input = resolveAnalysisInputs({
+          datasets: [ds], activeId: ds.id, yKeys: picked.length > 0 ? picked : [-1], policy: ROW_POLICY.analysisView,
+        });
+        return input.ok ? buildTestRequest(id, input.data, runSelection, runParams) : { ok: false as const, error: input.reason };
       });
       if (request !== seq.current) return;
       built = resolved.ok ? resolved.value : { ok: false as const, error: resolved.error };
@@ -205,6 +226,7 @@ export function useStatsTests(): StatsTestsState {
 
   return {
     active,
+    inputs: testDef(testId).input === "none" ? null : inputs,
     columns,
     testId,
     def: testDef(testId),

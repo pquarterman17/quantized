@@ -14,6 +14,7 @@ import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button, Select } from "../../primitives";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import StatsTestsInputs from "./StatsTestsInputs";
 import { useStatsTests } from "./useStatsTests";
 
@@ -54,6 +55,7 @@ export default function StatsTestsPanel() {
         {t.def.blurb}
       </div>
 
+      {t.inputs && t.active && <AnalysisInputSummary inputs={t.inputs} />}
       <StatsTestsInputs t={t} />
 
       <div style={{ marginTop: 10 }}>

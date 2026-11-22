@@ -6,6 +6,7 @@
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { useFitYByXStore } from "../../../store/fitYByX";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import BivariateView from "./BivariateView";
 import ContingencyView from "./ContingencyView";
 import FitYByXLevelSection from "./FitYByXLevelSection";
@@ -33,6 +34,7 @@ export default function FitYByXPanel() {
         </div>
       ) : (
         <>
+          <AnalysisInputSummary inputs={f.inputs} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">X (factor)</label>

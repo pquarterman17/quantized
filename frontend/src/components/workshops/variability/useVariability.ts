@@ -17,7 +17,8 @@ import { useEffect, useMemo, useState } from "react";
 import { reportEmit, statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { analysisView } from "../../../lib/rowstate";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import type { ModelingType } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { buildNestedLevels, toWireGroups, type VariabilityFactorLevel } from "../../../lib/variability";
@@ -33,6 +34,8 @@ export interface VariabilityColumn {
 
 export interface VariabilityState {
   hasData: boolean;
+  /** What is analysed, under the shared input contract. */
+  inputs: AnalysisInputs;
   columns: VariabilityColumn[];
   responseCol: number;
   setResponseCol: (i: number) => void;
@@ -106,11 +109,6 @@ export function useVariability(): VariabilityState {
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
-  // ONE `droppedRows` pass for both — the analysis view AND the original-row
-  // map its jittered points need (`lib/variability.buildNestedLevels`'s
-  // `rowIds`, review finding 1).
-  const { data, rowIds } = useMemo(() => analysisView(active), [active]);
-
   const columns = useMemo<VariabilityColumn[]>(() => {
     if (!active) return [];
     const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
@@ -147,6 +145,14 @@ export function useVariability(): VariabilityState {
     if (b !== factorBCol) setFactorBCol(b);
     if (r !== responseCol) setResponseCol(r);
   });
+
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view plus the original-row map the jittered points need
+  // (`lib/variability.buildNestedLevels`'s `rowIds`); a lazy Origin preview
+  // is refused.
+  const inputs = useAnalysisInputs({ yKeys: [responseCol, factorACol, factorBCol], policy: ROW_POLICY.analysisView });
+  const data = inputs.ok ? inputs.data : null;
+  const rowIds = inputs.ok ? inputs.rowIds : null;
 
   const labelOf = (i: number) => columns.find((c) => c.index === i)?.label ?? (i < 0 ? "x" : `col ${i}`);
   const responseLabel = labelOf(responseCol);
@@ -270,6 +276,7 @@ export function useVariability(): VariabilityState {
 
   return {
     hasData: !!active,
+    inputs,
     columns,
     responseCol,
     setResponseCol,

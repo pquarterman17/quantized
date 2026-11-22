@@ -220,3 +220,20 @@ export function buildTestRequest(
     }
   }
 }
+
+/** The worksheet columns a test reads for `sel` (-1 = the X/time column), in
+ *  the order its builder uses them. The shared input contract resolves these
+ *  (lib/analysisInputs); a test that reads no data ("power") reads none. */
+export function testColumns(id: StatsTestId, sel: TestSelection): number[] {
+  switch (testDef(id).input) {
+    case "one": return [sel.x];
+    case "two":
+    case "paired": return [sel.x, sel.y];
+    case "groups": return sel.groupMode === "category" ? [sel.x, sel.byCol] : [...sel.cols];
+    case "blocks":
+    case "columns": return [...sel.cols];
+    case "factorial": return [sel.x, sel.byCol, sel.byCol2];
+    case "regression": return [sel.x, ...sel.cols.filter((c) => c !== sel.x)];
+    case "none": return [];
+  }
+}

@@ -25,11 +25,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { analysisData } from "../../../lib/rowstate";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import type { Dataset, ModelingType } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { fitYByXLegRecords } from "./fitYByXReport";
@@ -59,6 +60,8 @@ export interface FitYByXLevelResult {
 
 export interface FitYByXState {
   hasData: boolean;
+  /** What is analysed, under the shared input contract. */
+  inputs: AnalysisInputs;
   datasetId: string | null;
   columns: FitYByXColumn[];
   xCol: number;
@@ -133,8 +136,6 @@ export function useFitYByX(): FitYByXState {
   const [order, setOrder] = useState(1);
   const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
 
-  const data = useMemo(() => analysisData(active), [active]);
-
   const columns = useMemo<FitYByXColumn[]>(() => {
     if (!active) return [];
     const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
@@ -153,6 +154,13 @@ export function useFitYByX(): FitYByXState {
     if (x !== xCol) setXCol(x);
     if (y !== yCol) setYCol(y);
   });
+
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view; selected rows and the plot range are not read. A lazy
+  // Origin preview is refused (nothing is computed on it); the hook requests
+  // the full load and the leg runs once the real rows land.
+  const inputs = useAnalysisInputs({ xKey: xCol, yKeys: [yCol], policy: ROW_POLICY.analysisView });
+  const data = inputs.ok ? inputs.data : null;
 
   // JMP_GAP J7 — By-column partitioning. `data` is already the analysis
   // view (guard #11), so every level below is post-exclusion/-filter too.
@@ -407,6 +415,7 @@ export function useFitYByX(): FitYByXState {
 
   return {
     hasData: !!active,
+    inputs,
     datasetId: active?.id ?? null,
     columns,
     xCol,

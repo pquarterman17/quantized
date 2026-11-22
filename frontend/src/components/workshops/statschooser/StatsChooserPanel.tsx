@@ -7,6 +7,7 @@ import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -28,6 +29,7 @@ export default function StatsChooserPanel() {
         </div>
       ) : (
         <>
+          <AnalysisInputSummary inputs={c.inputs} />
           <SegmentedControl
             options={[
               { value: "columns", label: "Columns as groups" },
@@ -92,7 +94,8 @@ export default function StatsChooserPanel() {
             <Button
               variant="primary"
               size="sm"
-              disabled={c.busy || c.groups.length === 0}
+              // A lazy Origin preview has no groups yet; the click queues behind the full load.
+              disabled={c.busy || (c.groups.length === 0 && !c.active.pending)}
               onClick={() => void c.recommend()}
             >
               {c.busy ? "Checking…" : "Which test?"}

@@ -11,6 +11,8 @@ import { useMultivar } from "./useMultivar";
 vi.mock("../../../lib/api", () => ({
   statsCorrelation: vi.fn(),
   statsPCA: vi.fn(),
+  // The input hook requests the full load of a lazy preview (never resolves here).
+  fetchBookData: vi.fn(() => new Promise(() => {})),
 }));
 
 // 3 continuous channels, 6 rows. Row 4 (0-based) has a NaN in "c" so the
