@@ -14,7 +14,7 @@
 // pattern this generalizes).
 
 import { Button } from "../../primitives";
-import { WorkbenchProgress } from "../workbench/WorkbenchParts";
+import { OutOfDateNote, WorkbenchMessage, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { ScanEntry } from "../../../lib/api/curvefit";
 import type { ModelScanState } from "./useModelScan";
@@ -31,7 +31,7 @@ function label(e: ScanEntry): string {
 }
 
 export default function ModelScanSection({ state, onApply }: Props) {
-  const { hasDataset, results, busy, progress, progressMessage, error, scan, cancel, clear } =
+  const { hasDataset, results, busy, progress, progressMessage, error, refusal, stale, scan, cancel, clear } =
     state;
 
   return (
@@ -64,14 +64,11 @@ export default function ModelScanSection({ state, onApply }: Props) {
         />
       )}
 
-      {error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
-          {error}
-        </div>
-      )}
+      <WorkbenchMessage refusal={refusal ? error : null} error={refusal ? null : error} />
 
       {results && !busy && (
         <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto" }}>
+          {stale && <OutOfDateNote block>the data, channels or saved equations changed after this scan. Scan again before applying a model.</OutOfDateNote>}
           <table className="qz-table">
             <thead>
               <tr>
@@ -87,10 +84,10 @@ export default function ModelScanSection({ state, onApply }: Props) {
               {results.map((e) => (
                 <tr
                   key={`${e.kind}:${e.name}`}
-                  title={e.error ?? "Apply this model to the workshop"}
+                  title={e.error ?? (stale ? "Out of date: scan again" : "Apply this model to the workshop")}
                   style={{ opacity: e.error ? 0.6 : 1 }}
                   onClick={() => {
-                    if (!e.error) onApply(e.kind, e.name);
+                    if (!e.error && !stale) onApply(e.kind, e.name);
                   }}
                 >
                   <td>{label(e)}</td>

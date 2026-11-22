@@ -12,6 +12,9 @@ import { compareModels, type CompareResult } from "../../../lib/api/fitStats";
 import { candidateGuesses, type CustomFitModel } from "../../../lib/fitmodels";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { Refusal } from "../workbench/refusal";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 /** Picker values of saved custom equation models carry this prefix. */
 export const CUSTOM_PREFIX = "custom:";
@@ -23,6 +26,10 @@ export interface CompareModelsState {
   canCompare: boolean;
   busy: boolean;
   error: string | null;
+  /** `error` is a refusal (nothing to compare on), not a failed request. */
+  refusal: boolean;
+  /** The shown table was compared under picks, equations or data that have since changed. */
+  stale: boolean;
   result: CompareResult | null;
   compare: () => Promise<void>;
 }
@@ -34,33 +41,47 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const [picked, setPicked] = useState<string[]>(() => initial.filter((v) => v && v !== CUSTOM_PREFIX));
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<CompareResult | null>(null);
+  const [refusalText, setRefusalText] = useState<string | null>(null);
+
+  // Rides the workbench shell in MANUAL mode: nothing runs on an edit, only the
+  // Compare button. The key is the picks, the saved equations behind them, the
+  // dataset's row / data identity and the plotted channels: a table whose key
+  // differs is out of date, and an answer for inputs changed in flight is dropped.
+  const customPicked = picked.filter((v) => v.startsWith(CUSTOM_PREFIX)).map((v) => customModels.find((m) => m.name === v.slice(CUSTOM_PREFIX.length)) ?? null);
+  const key = active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, picked, customPicked]) : "";
+  const preview = useWorkbenchPreview<CompareResult | null>({
+    key,
+    auto: false,
+    delayMs: 0,
+    fallbackError: "compare failed",
+    run: async (signal) => {
+      if (!active) return null;
+      setRefusalText(null);
+      try {
+        const ds = await resolveDataset(active.id);
+        const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
+        if (!d) throw new Refusal(fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) ?? "select a dataset to compare models on");
+        const pairs = dropGapRows(d.x, d.y);
+        const models = picked.filter((v) => !v.startsWith(CUSTOM_PREFIX));
+        const equations = customPicked
+          .filter((m): m is CustomFitModel => m != null)
+          .map((m) => ({ name: m.name, equation: m.equation, ...candidateGuesses(m) }));
+        return await compareModels({ x: pairs.x, y: pairs.y, models, equations }, signal);
+      } catch (e) {
+        if (e instanceof Refusal) setRefusalText(e.message);
+        throw e;
+      }
+    },
+  });
 
   async function compare(): Promise<void> {
     if (!active || picked.length < 2) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const ds = await resolveDataset(active.id);
-      const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
-      if (!d) throw new Error(fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) ?? "select a dataset to compare models on");
-      const pairs = dropGapRows(d.x, d.y);
-      const models = picked.filter((v) => !v.startsWith(CUSTOM_PREFIX));
-      const equations = picked
-        .filter((v) => v.startsWith(CUSTOM_PREFIX))
-        .map((v) => customModels.find((m) => m.name === v.slice(CUSTOM_PREFIX.length)))
-        .filter((m): m is CustomFitModel => m != null)
-        .map((m) => ({ name: m.name, equation: m.equation, ...candidateGuesses(m) }));
-      setResult(await compareModels({ x: pairs.x, y: pairs.y, models, equations }));
-    } catch (e) {
-      setResult(null);
-      setError(e instanceof Error ? e.message : "compare failed");
-    } finally {
-      setBusy(false);
-    }
+    return preview.refresh();
   }
+
+  // A failed run shows its error and no table, as before.
+  const error = preview.error || null;
+  const shown = error ? null : preview.latest?.value ?? null;
 
   return {
     picked,
@@ -68,10 +89,12 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
       if (value && value !== CUSTOM_PREFIX) setPicked((p) => (p.includes(value) ? p : [...p, value]));
     },
     remove: (value) => setPicked((p) => p.filter((v) => v !== value)),
-    canCompare: active != null && picked.length >= 2 && !busy,
-    busy,
+    canCompare: active != null && picked.length >= 2 && !preview.running,
+    busy: preview.running,
     error,
-    result,
+    refusal: error !== null && error === refusalText,
+    stale: shown !== null && preview.stale,
+    result: shown,
     compare,
   };
 }
