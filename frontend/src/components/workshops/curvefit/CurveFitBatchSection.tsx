@@ -190,12 +190,10 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     label={`Curve Fit (${modelName})`}
     summaryColumns={columns}
     runItem={runItem}
-    // The table says "Out of date" (and withholds the summary and plots) when a
-    // setting the fits used moves. The MODEL is not in the key: the summary is
-    // named and laid out by the model the run used (pinned in
-    // CurveFitBatchSection.summary.test), so a new pick cannot mislabel it.
-    settingsKey={JSON.stringify([paramRows, weightMode, manualKey, scaleErrors])}
-    settingsChange="mark"
+    // A change of any setting the fits used drops the finished table, as in
+    // the other plot-column batches (owner decision 2026-11-22). The MODEL is in
+    // the key: a table of another model's fits must not sit under a new pick.
+    settingsKey={JSON.stringify([modelName, paramRows, weightMode, manualKey, scaleErrors])}
     onSummarySheet={summarySheet}
     defaultExpanded={multi}
     expandSignal={expandSignal}

@@ -116,6 +116,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
     mode-parametrized test in `snapshotResultSave.test.ts`. Revisit only on an
     owner decision (e.g. a UI option that lets None show a stale snapshot as
     "Current" with a visible caveat).
+    **Owner decision (2026-11-22, lane OD): confirmed.** Saved snapshot
+    (statistics) results keep going "Out of date" when their data changes, even
+    in recalc mode None. No code change; the test above stays the pin.
   - **Row exclusion / filter notify the recalc engine (2026-11-22, lane RX).**
     Root cause: `store/rowState.ts` writers (toggle/set/clear exclusions,
     exclude/keep-only selection, set/clear filter) never called
@@ -373,7 +376,8 @@ inconsistently exposed, and do not all share the same result lifecycle.
     reading a result top to bottom, a per-table report handoff (only the first
     table could be sent), and a per-table "open as worksheet".
   - **Design (lane RB).** A "Result book" tab in the existing result workspace
-    (no new window; Overview stays the default tab). Pure model
+    (no new window; Overview stays the default tab: owner decision 2026-11-22,
+    lane OD, the Result book does not become the default). Pure model
     `lib/resultBook.ts` (one per-producer entry: method, settings, the columns
     the tool resolves); view `analysisresults/resultbook/`. Header: method,
     freshness badge and saved date, the inputs, the settings, the warnings,
@@ -422,7 +426,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
     sending it would first create a figure and open a window as a hidden side
     effect (two undo steps), which does not fit cleanly. Today: Create
     editable figure, then send it from its window. Also open: the owner
-    decision on making the book the default tab; By-level / batch for the
+    decision on making the book the default tab (**decided 2026-11-22, lane
+    OD: it does NOT become the default; Overview stays the default tab**, no
+    code change); By-level / batch for the
     statistics tools (item above); other analysis-batch tools' figures (only
     hysteresis drafts exist).
 - [ ] There is no shared "preview -> commit derived output -> rerun/edit"
@@ -624,11 +630,18 @@ inconsistently exposed, and do not all share the same result lifecycle.
     the statistics tools, Curie-Weiss, ...): a finished table now says "Out of
     date" when the worksheets asked for, or the rows / data of a worksheet that
     ran, change (also mid-run), and withholds Create summary worksheet and
-    `afterRun` (plot chips, fit table). New `settingsChange: "mark"` keeps the
-    table and marks it on a settings change instead of the long-standing "drop";
-    Curve fit's batch uses it for its start table, weighting and error scaling
-    (not the model: its summary is named by the run's model, pinned by an
-    existing test). Tools with `settingsKey` keep dropping.
+    `afterRun` (plot chips, fit table). `settingsChange: "mark"` keeps the
+    table and marks it on a settings change instead of the long-standing "drop".
+    Curve fit's batch first used it (start table, weighting, error scaling; not
+    the model). **Owner decision (2026-11-22, lane OD): Curve fit's batch resets
+    like the other plot-column batches.** It now uses the default "drop": a
+    change of the model, weighting, error scaling, manual key or start table
+    drops the finished table (a batch still running finishes and is dropped when
+    it ends, as for the other batches). The model is part of its `settingsKey`.
+    The old tests that pinned a finished table surviving a model change
+    (`CurveFitBatchSection.summary.test`, `.stale.test`) were changed
+    deliberately. `settingsChange: "mark"` has no tool using it today; it stays
+    in the shell, covered by `AnalysisBatchControls.stale.test`.
   - **Curve fit By tables** (`useCurveFitByLevel`): Save was already guarded
     (`current`); the previous levels' numbers stayed visible, unmarked, while the
     refit ran. They are now withheld behind "Out of date" until it lands.

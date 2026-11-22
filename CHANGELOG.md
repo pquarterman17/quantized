@@ -58,6 +58,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Changed
 
+- **Curve fit's batch table resets on a settings change, like the other plot-column batches (owner decision 2026-11-22)**: changing the model, weighting, error scaling or start table now drops the finished table (and its summary worksheet and plot chips) instead of keeping it marked "Out of date"; a batch still running when a setting changes lands dropped. Run the batch again to refit. Edits to the worksheets asked for or their data still mark the table "Out of date". The Result book stays off as the default tab and saved statistics snapshots still go "Out of date" in recalc mode None (both unchanged, recorded in the analysis roadmap).
 - The input line no longer prints "X:" for tools that have no X axis (Multivariate, Variability chart, Statistical tests, Test chooser, Distribution, Outlier screening). The Baseline header now reads "Input: sheet · X · Y · rows" instead of "sheet: Y vs X".
 - Optical gap, Surface fit and Ellipse fit explain a refusal (for example, no rows left after exclusions) instead of sending an empty request.
 - Distribution, Fit Y by X, Variability, Outlier screening and Multivariate share one duplicate-save check and one undo step for Save result; behaviour is otherwise unchanged. Snapshot results still go Out of date by data fingerprint in every recalculation mode, including None.
