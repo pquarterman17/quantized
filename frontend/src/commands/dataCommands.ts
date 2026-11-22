@@ -87,6 +87,9 @@ export function buildDataCommands(s: StoreGet): Action[] {
     { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", run: () => openReshape(s, "transpose") },
     { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", run: () => openReshape(s, "stack") },
     { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", run: () => openReshape(s, "unstack") },
+    { id: "remove-duplicate-rows", group: "Data", section: "Rows & summary", label: "Remove duplicate rows…", run: () => openReshape(s, "dedupe") },
+    { id: "fill-missing-values", group: "Data", section: "Rows & summary", label: "Fill or drop missing values…", run: () => openReshape(s, "fillmissing") },
+    { id: "standardize-columns", group: "Data", section: "Rows & summary", label: "Z-score / min-max / rank columns…", run: () => openReshape(s, "standardize") },
     { id: "join-by-key", group: "Data", section: "Combine & split", label: "Join datasets by key…", run: () => openReshape(s, "join") },
     {
       id: "tabulate",

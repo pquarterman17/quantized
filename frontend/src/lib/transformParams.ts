@@ -3,6 +3,7 @@
 import { metaParamsOf } from "./metadataRun";
 import { signalTransformParamsOf } from "./signalTransform";
 import type { TransformParams, DatasetRef } from "./transformRun";
+import { cleanParamsOf } from "./transformClean";
 import { averageParamsOf } from "./transformAverage";
 import { resampleParamsOf } from "./transformResample";
 import { sigopParamsOf } from "./transformSigop";
@@ -14,6 +15,7 @@ import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
 const OPS = new Set([
   "transpose", "stack", "unstack", "join", "merge", "algebra", "split",
   "resample", "sigop", "sims", "simscompare", "signal", "promote", "metaclean", "average",
+  "dedupe", "fillmissing", "standardize",
 ]);
 
 /** Validate a recorded transform step (editable .dwk/template JSON). */
@@ -93,6 +95,10 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
     case "sims": return simsParamsOf(raw);
     case "simscompare": return simsCompareParamsOf(raw);
     case "average": return averageParamsOf(raw);
+    case "dedupe":
+    case "fillmissing":
+    case "standardize":
+      return cleanParamsOf(raw);
     case "signal": return signalTransformParamsOf(raw);
     case "promote":
     case "metaclean":
