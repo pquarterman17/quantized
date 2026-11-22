@@ -2,7 +2,32 @@ import {
   sanitizeSpectralRecipe,
   type SpectralAnalysisRecipe,
 } from "./spectralWorkbench";
-import type { CorrectionParams, DataStruct } from "./types";
+import { analysisData } from "./rowstate";
+import type { CorrectionParams, DataStruct, Dataset } from "./types";
+
+/** Which rows of the source a signal recipe reads. Absent = every worksheet row
+ *  (the tool's long-standing behaviour: manually excluded and Data Filter rows
+ *  are processed too). "analysis-view" = the analysis view (both left out).
+ *  Absent is the default, so existing recipes, templates and saved projects
+ *  replay unchanged. */
+export type SignalInputRows = "analysis-view";
+
+/** The recipe field for the UI choice "Use excluded/filtered rows": on (the
+ *  default) writes nothing, off writes `inputRows: "analysis-view"`. */
+export function inputRowsOption(useAllRows: boolean): { inputRows?: SignalInputRows } {
+  return useAllRows ? {} : { inputRows: "analysis-view" };
+}
+
+/** The exact input a recipe analyses for `source` (the one place the choice is
+ *  applied, so preview, commit, replay and recompute cannot disagree). */
+export function signalRecipeInputData(recipe: { inputRows?: SignalInputRows }, source: Dataset): DataStruct {
+  if (recipe.inputRows !== "analysis-view") return source.data;
+  const view = analysisData(source) ?? source.data;
+  if (view.time.length === 0 && source.data.time.length > 0) {
+    throw new Error(`no rows of "${source.name}" remain after excluded and filtered-out rows are left out`);
+  }
+  return view;
+}
 
 export interface SignalChannelRef {
   index: number;
@@ -19,6 +44,7 @@ export interface SignalCorrectionRecipe {
   /** X-axis unit at recording time. New recipes always include it. */
   xUnit: string;
   params: CorrectionParams;
+  inputRows?: SignalInputRows;
 }
 
 export type SignalAnalysisRecipe = SignalCorrectionRecipe | SpectralAnalysisRecipe;
@@ -168,6 +194,7 @@ export function sanitizeCorrectionRecipe(value: unknown): SignalCorrectionRecipe
     channels,
     xUnit: raw.xUnit.trim(),
     params: safeParams,
+    ...(raw.inputRows === "analysis-view" ? { inputRows: "analysis-view" as const } : {}),
   };
 }
 

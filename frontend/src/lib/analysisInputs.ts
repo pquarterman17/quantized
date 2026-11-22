@@ -69,6 +69,10 @@ export interface AnalysisInputRequest {
   xKey?: number | null;
   /** Explicit in-tool response picks (-1 = the X/time column). Undefined = no pick. */
   yKeys?: readonly number[];
+  /** True for a tool with no X axis at all (Multivariate, Stats tests,
+   *  Distribution...): the summary line omits "X:". Does not change which rows
+   *  or columns are resolved. */
+  noX?: boolean;
   policy: AnalysisRowPolicy;
 }
 
@@ -88,6 +92,8 @@ export interface AnalysisInputsResolved extends Common {
    *  the policy is the plain analysis view). */
   data: DataStruct;
   xKey: number | null;
+  /** False when the tool declared it has no X (the summary omits it). */
+  hasX: boolean;
   yKeys: number[];
   columnSource: "tool" | "selection";
   /** Original worksheet rows behind `data`, ascending. */
@@ -190,7 +196,7 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
   if (rowIds.length === 0) return refuse("no-rows", "No rows remain after exclusions, filters, selected rows and range.", dataset);
   const { excludedCount, filteredCount } = rowStateCounts(dataset);
   return {
-    ok: true, policy, datasetSource, dataset, data, xKey, yKeys, columnSource, rowIds, range,
+    ok: true, policy, datasetSource, dataset, data, xKey, hasX: !request.noX, yKeys, columnSource, rowIds, range,
     rowCount: rowIds.length, totalRows: n, excludedCount, filteredCount, rowsNarrowed: pickedRows !== null,
   };
 }
@@ -214,12 +220,12 @@ const fmt = (value: number) => Number(value.toPrecision(5)).toString();
 export function analysisInputSummary(inputs: AnalysisInputs, heading = "Input"): string {
   if (!inputs.ok) return `${heading}: ${inputs.dataset?.name ?? "none"} · ${inputs.reason}`;
   const { dataset } = inputs;
-  const parts = [
-    `${heading}: ${dataset.name}`,
-    `X: ${columnName(dataset, inputs.xKey)}`,
+  const parts = [`${heading}: ${dataset.name}`];
+  if (inputs.hasX) parts.push(`X: ${columnName(dataset, inputs.xKey)}`);
+  parts.push(
     `Y: ${inputs.yKeys.map((key) => columnName(dataset, key)).join(", ")}`,
     `${inputs.rowCount.toLocaleString()} of ${inputs.totalRows.toLocaleString()} rows`,
-  ];
+  );
   if (inputs.range) parts.push(`X ${fmt(inputs.range.lo)}–${fmt(inputs.range.hi)}`);
   return parts.join(" · ");
 }

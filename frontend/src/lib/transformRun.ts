@@ -38,6 +38,7 @@ import { IN_PLACE_OPS, metaStepText, runMetaStep, type MetaStepParams } from "./
 import { analysisData } from "./rowstate";
 import {
   computeSignalTransform,
+  signalRecipeInputData,
   signalTransformStepText,
   type SignalBindOptions,
   type SignalTransformParams,
@@ -302,18 +303,17 @@ export async function computeTransform(
       return { data: r.data, name: r.name, preview: preview("Average curves", r.data, r.warnings, all.map((d) => [d.name, d.data])), datasetPatch: r.datasetPatch };
     }
     case "signal": {
-      // Signal Processing deliberately reads the full worksheet. Its UI
-      // discloses included/excluded counts and the full-row scope; unlike
-      // statistical transforms, row state is not silently baked into the
-      // linked output.
+      // Signal Processing reads the full worksheet unless its recipe says
+      // `inputRows: "analysis-view"` (the "Use excluded/filtered rows" option
+      // is off). The recipe is the record, so replay and recompute agree.
       const secondary = others[0];
       const r = await computeSignalTransform(p, primary, signal, options, secondary);
       return {
         data: r.data,
         name: r.name,
         preview: preview(signalTransformStepText(p).label, r.data, [], [
-          [primary.name, primary.data],
-          ...(secondary ? [[secondary.name, secondary.data] as [string, DataStruct]] : []),
+          [primary.name, signalRecipeInputData(p.recipe, primary)],
+          ...(secondary ? [[secondary.name, signalRecipeInputData(p.recipe, secondary)] as [string, DataStruct]] : []),
         ]),
         datasetPatch: r.datasetPatch,
       };

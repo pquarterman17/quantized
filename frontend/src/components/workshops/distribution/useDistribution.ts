@@ -200,7 +200,7 @@ export function useDistribution(): DistributionState {
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view; selected rows (which brushing writes) and the plot range
   // are not read. A lazy Origin preview is refused, never profiled.
-  const inputs = useAnalysisInputs({ yKeys: [col], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: [col], policy: ROW_POLICY.analysisView });
   const data = inputs.ok ? inputs.data : null;
 
   // JMP_GAP J7 — By-column partitioning (./useDistributionByLevels). `data`

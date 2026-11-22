@@ -6,7 +6,7 @@ import {
   rebindSpectralSecondarySource,
   type SpectralAnalysisRecipe,
 } from "../lib/spectralWorkbench";
-import { bindSignalRecipe, dataXUnit } from "../lib/signalRecipe";
+import { bindSignalRecipe, dataXUnit, signalRecipeInputData } from "../lib/signalRecipe";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
@@ -31,15 +31,16 @@ export async function recomputeSpectralWorksheet(
     }
     recipe = rebindSpectralSecondarySource(recipe, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
   }
+  const input = signalRecipeInputData(recipe, source);
   const analyzed = secondary
-    ? await runSpectralWorkbench(source.data, recipe, undefined, false, secondary.data)
-    : await runSpectralWorkbench(source.data, recipe);
+    ? await runSpectralWorkbench(input, recipe, undefined, false, signalRecipeInputData(recipe, secondary))
+    : await runSpectralWorkbench(input, recipe);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(analyzed, sheet.formulas);
   return {
     sheet: {
       ...sheet,
       data,
-      raw: source.data,
+      raw: input,
       analysisRecipe: recipe,
       formulaErrors,
       errorRoles: undefined,
@@ -84,9 +85,10 @@ export async function createSpectralWorksheet(
     if (secondary) {
       rebound = rebindSpectralSecondarySource(rebound, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
     }
+    const input = signalRecipeInputData(rebound, source);
     const data = secondary
-      ? await runSpectralWorkbench(source.data, rebound, undefined, false, secondary.data)
-      : await runSpectralWorkbench(source.data, rebound);
+      ? await runSpectralWorkbench(input, rebound, undefined, false, signalRecipeInputData(rebound, secondary))
+      : await runSpectralWorkbench(input, rebound);
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
     const currentSecondary = secondary
       ? get().datasets.find((dataset) => dataset.id === secondary.id)
@@ -103,7 +105,7 @@ export async function createSpectralWorksheet(
       id: newId,
       name: `${sourceName} (${rebound.operation})`,
       data,
-      raw: source.data,
+      raw: input,
       analysisRecipe: rebound,
       derivedFrom: { datasetId: sourceId, pipeline: pipelineLabel },
       ...(currentSource.workbookId ? { workbookId: currentSource.workbookId } : {}),

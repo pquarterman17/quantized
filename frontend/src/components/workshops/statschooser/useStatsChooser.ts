@@ -101,7 +101,7 @@ export function useStatsChooser(): StatsChooserState {
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view over the columns the current mode reads. A lazy Origin
   // preview is refused here; "Recommend" still queues behind the full load.
-  const inputs = useAnalysisInputs({ yKeys: mode === "columns" ? cols : [valueCol, byCol], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: mode === "columns" ? cols : [valueCol, byCol], policy: ROW_POLICY.analysisView });
   const data = inputs.ok ? inputs.data : null;
 
   const groups = useMemo<GroupSpec[]>(() => {

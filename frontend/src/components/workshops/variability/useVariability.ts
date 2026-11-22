@@ -150,7 +150,7 @@ export function useVariability(): VariabilityState {
   // analysis view plus the original-row map the jittered points need
   // (`lib/variability.buildNestedLevels`'s `rowIds`); a lazy Origin preview
   // is refused.
-  const inputs = useAnalysisInputs({ yKeys: [responseCol, factorACol, factorBCol], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: [responseCol, factorACol, factorBCol], policy: ROW_POLICY.analysisView });
   const data = inputs.ok ? inputs.data : null;
   const rowIds = inputs.ok ? inputs.rowIds : null;
 
