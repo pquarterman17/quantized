@@ -14,6 +14,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   - *Cox proportional hazards*: time, event and one or more predictor columns, with coefficients, hazard ratios (exp of the coefficient), 95% intervals and p-values, plus the concordance and log-likelihood.
   - Refused with the reason, never coerced: negative times, an event column that is not 0/1, data with no events (all censored), a group with no events (Kaplan-Meier), a group with fewer than 2 usable rows, fewer than 2 groups for the log-rank test, a group column with more than 12 values, a Cox model with no predictor, and a Cox fit that lifelines reports as not converged (for example complete separation), which reports no coefficients instead of unreliable ones; small-scale or time-correlated predictors alone are not refused. The median's 95% interval is where the log-log pointwise confidence band crosses 50%.
 
+### Changed
+
+- **Pawley "→ Library", the reflectivity FFT "→ Library", the Magnetometry background subtraction (M(T) and M(H) paths) and the Hysteresis background subtraction now follow the shared result contract**: each output is ONE Undo step together with its Library result, repeating the same action on the same data adds nothing (the status line says "already added as ...", and the Pawley and reflectivity FFT "→ Library" buttons are disabled with that reason), and the output is marked "Out of date" when its source worksheet changes, recalculated or only marked per Auto / Manual / None. A different setting (channel, cell tie, window, fit fraction) is a new computation. The graph digitizer already skips a repeat Create; it has no source worksheet, so it has no Out of date marking. Reopening these tools from their results ("Open in ...") is not yet available.
+
 ## [0.41.0] - 2026-11-22
 
 ### Added

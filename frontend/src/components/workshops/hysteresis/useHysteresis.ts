@@ -16,7 +16,9 @@ import { detectMagXKind, magXAxis, stampXIdentity } from "../../../lib/magDataKi
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
 import { selectionItemForTool, useAnalysisSelection } from "../../../store/analysisSelection";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 
 /** H = plotted X, M = primary plotted Y over the analysis view (excluded/
@@ -34,6 +36,8 @@ export function hysteresisInputs(
   const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
   return sel ? { h: sel.x, m: sel.y, yKey: sel.yKey } : null;
 }
+
+const HYSTERESIS_BG_PRODUCER = { id: "hysteresis-background", label: "Hysteresis background", version: 1 } as const;
 
 export interface HysteresisState {
   active: Dataset | null;
@@ -61,8 +65,6 @@ export function useHysteresis(): HysteresisState {
   const active = selected
     ? datasets.find((dataset) => dataset.id === selected.datasetId) ?? null
     : fallbackActive;
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
   const liveXKey = useApp((s) => s.xKey);
   const liveYKeys = useApp((s) => s.yKeys);
   const xKey = selected?.xKey ?? liveXKey;
@@ -231,13 +233,20 @@ export function useHysteresis(): HysteresisState {
         ),
       };
       const stem = ds.name.replace(/\.[^.]+$/, "");
-      addDataset({ id: nextDatasetId(), name: `${stem} (bg-sub)`, data });
-      setStatus(
-        res.slope === 0 && res.offset === 0
+      // One undo step with its Library result; the same subtraction of the same
+      // loop adds nothing; the output goes out of date when the source changes.
+      const outcome = commitComputedOutput({
+        producer: HYSTERESIS_BG_PRODUCER,
+        sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
+        settings: { xKey: ownKey, yKey },
+        name: `${stem} (bg-sub)`,
+        data,
+        status: res.slope === 0 && res.offset === 0
           ? "no high-field background found (too few tail points)"
           : `removed background (slope ${res.slope.toExponential(2)}` +
               `, offset ${res.offset.toExponential(2)}) + centred loop`,
-      );
+      });
+      if (outcome.kind === "refused") setError(outcome.reason);
     } catch (e) {
       setError(e instanceof Error ? e.message : "background subtraction failed");
     } finally {
