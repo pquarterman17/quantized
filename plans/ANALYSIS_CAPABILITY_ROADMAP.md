@@ -56,7 +56,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Curve fit | `fitSpec` on the source | yes (one result per source) | yes | yes | `staleFits` + fingerprint |
     | Peaks / Peak analyzer | `peakTable` on the source | yes (one result per source) | yes | yes | peak-table fingerprint |
     | Reflectivity fit | `reflFits` history record | per record | yes | yes | channel check |
-    | Distribution, Fit Y by X, Variability, Outlier screening, Multivariate | envelope tables (snapshot) | yes, five bespoke value-keyed matchers (Distribution's only in its hook) | yes | yes | fingerprint (`snapshotResultState`), mode-independent |
+    | Distribution, Fit Y by X, Variability, Outlier screening, Multivariate | envelope tables (snapshot) | yes, one shared value key (`lib/snapshotResultKey.ts`, `store/snapshotResultSave.ts`; lane RL3) | yes | yes | fingerprint (`snapshotResultState`), mode-independent **by decision** (see RL3 below) |
     | Statistical tests | envelope tables | no guard (each Run is a run) | yes | yes | fingerprint |
     | Williamson–Hall | envelope tables | boolean ref, stuck "saved" after Undo (**fixed**, lane RL) | yes | yes | fingerprint + peak binding |
     | Surface fit, Optical gap, Ellipse fit "Add … as dataset" | plain worksheet | **no** (repeat click duplicated) | yes | **none** | **never** → migrated (lane RL) |
@@ -87,6 +87,33 @@ inconsistently exposed, and do not all share the same result lifecycle.
     `store/analysisOutputCommit.test.ts`,
     `resultcommit/committedOutputTools.test.tsx` (fail-before: duplicate on
     repeat Add, no stale mark), `reductions/useWilliamsonHall.test.ts`.
+  - [x] **Snapshot save fold (lane RL3, 2026-11-22).** The five bespoke
+    duplicate checks are gone: `publishSnapshotResult`
+    (`store/snapshotResultSave.ts`) is the one save path (fail-closed source
+    check, one undo step via `asOneEditStep`), keyed by `snapshotResultKey`
+    (`lib/snapshotResultKey.ts`), which reuses `committedOutputKey`:
+    producer + source + analysis-view fingerprint + the question (view-only
+    choices such as multivariate score axes, or Rosner `k` under MAD, are not
+    part of it). The key of a saved result is derived from its stored
+    `parameters.recipe`, so results from older files still block duplicates.
+    The check reads the live `analysisResults` (no "saved" flag), so Save works
+    again after Undo or delete, and a result marked stale does not block. The
+    workshops read it through `useSavedSnapshotResult`. Distribution
+    previously guarded only in its open hook (a reopened window or a reopened
+    project allowed a duplicate): **fixed**, fail-before test in
+    `store/snapshotResultSave.test.ts`. Statistical tests keep NO guard (each
+    Run is a run).
+  - **Decision (RL3): snapshot staleness does NOT follow the recalc mode.**
+    A committed output follows the mode because the recalc graph can
+    recompute or mark it and "None" means "I will manage updates". A snapshot
+    has no recompute path (only re-running the tool replaces it) and is
+    exactly what Send to Report and figure freezing read; if None hid a source
+    change, a report could carry numbers for data that no longer exist as
+    "Current". The intent of None for statistics is unclear, so it fails
+    closed: freshness stays the data fingerprint in every mode, pinned by the
+    mode-parametrized test in `snapshotResultSave.test.ts`. Revisit only on an
+    owner decision (e.g. a UI option that lets None show a stale snapshot as
+    "Current" with a visible caveat).
   - [x] **Second slice (lane RL2, 2026-11-22).** Migrated Baseline subtract,
     Tabulate, Peak batch table, Batch integrate trend and Fit band plot onto
     `commitAnalysisOutput`. The hook gained `commitAsync` with an in-flight
@@ -105,8 +132,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     the "already added" status instead of a disabled button.
   - [ ] Remaining: migrate FFT thickness, Reflectivity model/SLD, spin
     asymmetry and the Magnetometry outputs (normalization, demag,
-    Curie–Weiss);
-    fold the five snapshot matchers into one store helper; "Edit / reopen in
+    Curie–Weiss); "Edit / reopen in
     tool" for committed outputs (they reopen as worksheets, not tool state);
     stale marking from analysis-view-only changes (row exclusions/filters do
     not call `touchDataset`, so they do not mark any linked output stale).

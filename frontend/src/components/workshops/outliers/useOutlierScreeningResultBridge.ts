@@ -1,11 +1,13 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { outlierQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { OutlierScreeningRecipe, OutlierScreeningSnapshot } from "../../../lib/outlierScreeningAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
-import { matchesOutlierScreeningResult, publishOutlierScreeningResult } from "../../../store/outlierScreeningResults";
+import { publishOutlierScreeningResult } from "../../../store/outlierScreeningResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 
 interface BridgeArgs {
   active: Dataset | null;
@@ -42,8 +44,8 @@ export function useOutlierScreeningResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
-  const savedResultExists = useApp((state) => !!args.active && !!fingerprint &&
-    state.analysisResults.some((result) => matchesOutlierScreeningResult(result, args.active!.id, fingerprint, args.recipe)));
+  const savedResultExists = useSavedSnapshotResult(args.active && fingerprint
+    ? snapshotResultKey("outlier-screening", args.active.id, fingerprint, outlierQuestion(args.recipe)) : null);
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     args.resultCurrent && !!args.snapshot && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null

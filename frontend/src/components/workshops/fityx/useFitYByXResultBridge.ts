@@ -2,10 +2,12 @@ import { useEffect, useMemo } from "react";
 
 import type { FitYByXMode, FitYByXRecipe, FitYByXSnapshot } from "../../../lib/fitYByXAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { fitYByXQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { Dataset } from "../../../lib/types";
 import { useFitYByXStore } from "../../../store/fitYByX";
-import { matchesFitYByXResult, publishFitYByXResult } from "../../../store/fitYByXResults";
+import { publishFitYByXResult } from "../../../store/fitYByXResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 import type { BivariateResult, ContingencyResult, FitYByXKind, FitYByXLevelResult, OnewayResult } from "./useFitYByX";
 
 interface BridgeArgs {
@@ -62,10 +64,8 @@ export function useFitYByXResultBridge(args: BridgeArgs): { canSaveResult: boole
     [args.active],
   );
   const mode: FitYByXMode | null = args.kind === "unsupported" ? null : args.kind;
-  const savedResultExists = useApp((state) => !!args.active && !!sourceFingerprint && !!mode &&
-    state.analysisResults.some((result) => matchesFitYByXResult(
-      result, args.active!.id, sourceFingerprint, recipe, mode,
-    )));
+  const savedResultExists = useSavedSnapshotResult(args.active && sourceFingerprint && mode
+    ? snapshotResultKey("fit-y-by-x", args.active.id, sourceFingerprint, fitYByXQuestion(recipe, mode)) : null);
   const directComplete = mode === "oneway" ? args.oneway !== null
     : mode === "bivariate" ? args.bivariate !== null
       : mode === "contingency" ? args.contingency !== null : false;
