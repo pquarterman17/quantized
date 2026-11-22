@@ -39,6 +39,7 @@ import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
 import HeaderEditor, { type HeaderEditTarget } from "./HeaderEditor";
 import SheetTabs from "./SheetTabs";
+import { useCellRules } from "./useCellRules";
 import { useColumnVisibility } from "./useColumnVisibility";
 import { useGridCursor } from "./useGridCursor";
 import { useRowReveal } from "./useRowReveal";
@@ -361,6 +362,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         hiddenCols={colVis.hiddenSet}
         frozenCols={colVis.frozen}
         onShowCols={colVis.controls.show}
+        tintOf={useCellRules(ds)}
       />
 
       <WorksheetMenus
