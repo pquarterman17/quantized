@@ -8,6 +8,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Five more tests in Statistical tests** (Analyze ▸ Statistics), reaching statistics that existed only in the backend. Each reads the same analysis rows as the other tests (excluded and filtered rows left out), shows the input line, and saves its tables as a result like the other tests.
+  - *ROC / AUC / Youden cutoff*: pick a 0/1 outcome column and a score column. Gives the AUC, the Youden-optimal cutoff (score at or above it counts as positive) with its sensitivity and specificity, and the full ROC curve table. An AUC below 0.5 is called out, since it means a lower score predicts the outcome. An outcome that is not coded 0/1, or has only one outcome, is refused.
+  - *Logistic regression* and *Poisson regression*: a response and predictor columns, with coefficients, p-values and confidence intervals plus odds ratios (logistic) or rate ratios (Poisson). A logistic response that is not 0/1 and a Poisson response that is not whole counts are refused.
+  - *Chi-square goodness of fit*: observed counts against equal expected counts, or against an expected-counts column. Negative or zero counts, and an expected column whose total differs from the observed total, are refused; nothing is rescaled for you.
+  - *P-value adjustment*: Holm (default), Bonferroni or Benjamini-Hochberg on a column of p-values, shown next to the originals. Values outside 0 to 1 are refused.
+  - Results saved before these options existed still reopen.
 - **Clean data transforms in Reshape & combine**: three new operations under Data, each previewed live (first rows, size, warnings) before Create adds one new derived worksheet; the source worksheet is never changed.
   - *Remove duplicate rows…*: by chosen key columns (X, any column, text columns) or the whole row, keeping the first or last of each group in the original row order. Text columns stay aligned. When duplicates differ in a non-key column it warns that those values are lost.
   - *Fill or drop missing values…*: linear interpolation on X (only between two present values that bracket the gap; never extrapolates), carry the previous value forward, or drop rows missing a value in the ticked columns. Anything that cannot be filled stays blank and is counted in a warning. Dropping every row, or interpolating a categorical column, is refused.
