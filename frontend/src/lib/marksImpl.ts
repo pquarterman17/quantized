@@ -84,9 +84,10 @@ function drawSizeKey(u: uPlot, specs: ColorScatterSpec[]): void {
 export function marksPlugins(
   styles: readonly (SeriesStyle | undefined)[] | undefined,
   columns?: Map<number, ColorScatterSpec>,
+  xFixed?: boolean,
 ): uPlot.Plugin[] {
   const sized = new Map([...(columns ?? [])].filter(([, s]) => s.diam));
-  const padPlugin: uPlot.Plugin = { hooks: {}, opts: (_u, o) => { padBubbleScales(o.scales ?? {}, sized); return o; } };
+  const padPlugin: uPlot.Plugin = { hooks: {}, opts: (_u, o) => { padBubbleScales(o.scales ?? {}, sized, xFixed); return o; } };
   return [...dropLinePlugins(styles), ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
 }
 

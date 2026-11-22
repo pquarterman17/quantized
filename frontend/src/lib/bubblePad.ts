@@ -10,10 +10,9 @@
 // user typed, and a zoom (a range that does not cover every bubble centre)
 // keeps its bounds.
 
-import uPlot from "uplot";
+import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
-import { isFixedXRange } from "./uplotXRange";
 
 /** The largest bubble radius (CSS px) among `specs`. */
 export function maxBubbleRadius(specs: Iterable<ColorScatterSpec>): number {
@@ -34,19 +33,27 @@ export function padForRadius(lo: number, hi: number, dmin: number, dmax: number,
   return [lo, hi];
 }
 
+/** uPlot's own Y autoscale for a plain range: a 10 % soft pad that never
+ *  crosses zero (`rangeNum(min, max, 0.1, true)`), kept local so this lazy
+ *  chunk imports nothing from the eager bundle. */
+function softPad(min: number, max: number): [number, number] {
+  const pad = (max - min || Math.abs(max) || 1) * 0.1;
+  return [min < 0 ? min - pad : Math.max(0, min - pad), max >= 0 ? max + pad : Math.min(0, max + pad)];
+}
+
 /** Wrap `scales.x` / `scales.y` so their autoscale leaves room for the biggest
- *  bubble. A fixed limit (`fixedXRange`, or `fixedYScale`'s static pair) is
- *  left alone. Mutates `scales`. */
-export function padBubbleScales(scales: uPlot.Scales, sized: Map<number, ColorScatterSpec>): void {
+ *  bubble. A fixed limit (`xFixed`, or `fixedYScale`'s static pair) is left
+ *  alone. Mutates `scales`. */
+export function padBubbleScales(scales: uPlot.Scales, sized: Map<number, ColorScatterSpec>, xFixed = false): void {
   const radius = maxBubbleRadius(sized.values());
   if (!sized.size || radius <= 0) return;
   for (const key of ["x", "y"] as const) {
     const sc = scales[key];
-    if (!sc || (sc.distr as number) === 3 || Array.isArray(sc.range) || isFixedXRange(sc.range)) continue;
+    if (!sc || (sc.distr as number) === 3 || Array.isArray(sc.range) || (key === "x" && xFixed)) continue;
     const inner = sc.range as uPlot.Range.Function | undefined;
     sc.range = (u, min, max, k) => {
       const base: uPlot.Range.MinMax =
-        typeof inner === "function" ? inner(u, min, max, k) : (key === "x" ? [min, max] : uPlot.rangeNum(min as number, max as number, 0.1, true)) as uPlot.Range.MinMax;
+        typeof inner === "function" ? inner(u, min, max, k) : key === "x" ? [min as number, max as number] : softPad(min as number, max as number);
       const [lo, hi] = base;
       if (lo == null || hi == null) return base;
       // The data extent of the visible sized series on this scale.
