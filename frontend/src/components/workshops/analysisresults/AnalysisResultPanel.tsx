@@ -330,7 +330,7 @@ export default function AnalysisResultPanel() {
               : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">{output && !output.derivedFrom ? `This result records its source; a change to the source marks it Out of date. ${NOT_RECOMPUTABLE}` : "This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result."}</p>}
           </>}
           {view === "book" && snapshotState && <ResultBook key={result.id} result={result} source={source} state={snapshotState}
-            busy={busy} setBusy={setBusy} recipeReady={!!(savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe)}
+            busy={busy} setBusy={setBusy} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
             figureBlocked={figureDisabledReason} onReopen={editSnapshot} onClose={close} />}
           {view === "table" && (isSnapshot
             ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null}

@@ -28,8 +28,11 @@ import { fitYByXRecipe } from "./fitYByXAnalysisResult";
 import { multivariateRecipe } from "./multivariateAnalysisResult";
 import { outlierScreeningRecipe } from "./outlierScreeningAnalysisResult";
 import { statisticalResultFigureDrafts, type StatisticalResultFigureDraft } from "./statisticalResultFigures";
+import { EXTRA_DESCRIBERS, settings, text, type Described, type ResultBookInputKeys, type ResultBookSetting } from "./resultBookDescribe";
 import type { Dataset } from "./types";
 import { variabilityRecipe } from "./variabilityAnalysisResult";
+
+export type { ResultBookSetting };
 
 export type ResultBookSection =
   | { key: string; kind: "table"; title: string; tableIndex: number; rows: number; cols: number;
@@ -37,27 +40,22 @@ export type ResultBookSection =
       freezeBlocked: string | null }
   | { key: string; kind: "figure"; title: string; draft: StatisticalResultFigureDraft };
 
-export interface ResultBookSetting { label: string; value: string }
-
 export interface ResultBookModel {
   method: string;
   settings: ResultBookSetting[];
-  /** The columns the tool passed to the shared input resolver. */
-  inputKeys: { xKey?: number | null; yKeys: number[] };
+  /** The columns the tool passed to the shared input resolver; null when the
+   *  tool's input is not a column pick (see `inputNote`). */
+  inputKeys: ResultBookInputKeys | null;
+  /** What the input is when there is no column pick to restate. */
+  inputNote: string | null;
+  /** A tool can reopen on this result. */
+  reopen: boolean;
   sections: ResultBookSection[];
 }
-
-interface Described { method: string; settings: ResultBookSetting[]; inputKeys: ResultBookModel["inputKeys"] }
-
-const text = (value: unknown): string | null =>
-  typeof value === "string" && value ? value : typeof value === "number" && Number.isFinite(value) ? String(value) : null;
 
 function scalar(result: AnalysisResult, key: string): string | null {
   return text(result.scalarValues?.[key]);
 }
-
-const settings = (entries: readonly [string, string | null][]): ResultBookSetting[] =>
-  entries.flatMap(([label, value]) => value === null ? [] : [{ label, value }]);
 
 const FIT_NAMES: Readonly<Record<string, string>> = {
   none: "none", normal: "normal", lognormal: "lognormal", weibull: "Weibull", gamma: "gamma", exponential: "exponential",
@@ -70,6 +68,7 @@ const OUTLIER_NAMES: Readonly<Record<string, string>> = {
  *  one entry. Each mirrors the columns its tool resolves (see the tool's
  *  useAnalysisInputs call), so the book's input line matches the tool's. */
 const DESCRIBE: Readonly<Record<string, (result: AnalysisResult) => Described | null>> = {
+  ...EXTRA_DESCRIBERS,
   "distribution-analysis": (result) => {
     const recipe = distributionRecipe(result);
     return recipe && {
@@ -157,7 +156,10 @@ export function resultBookModel(result: AnalysisResult): ResultBookModel | null 
   const figures: ResultBookSection[] = statisticalResultFigureDrafts(result).map((draft) => ({
     key: `figure:${draft.key}`, kind: "figure", title: draft.name, draft,
   }));
-  return { ...described, sections: [...tables, ...figures] };
+  return {
+    ...described, inputNote: described.inputNote ?? null, reopen: described.reopen ?? true,
+    sections: [...tables, ...figures],
+  };
 }
 
 /** The live input line for a CURRENT result (null otherwise): the same
@@ -165,14 +167,21 @@ export function resultBookModel(result: AnalysisResult): ResultBookModel | null 
 export function resultBookInputs(
   model: ResultBookModel, source: Dataset | undefined, state: SnapshotResultState,
 ): AnalysisInputs | null {
-  if (state !== "current" || !source) return null;
+  if (state !== "current" || !source || !model.inputKeys) return null;
+  const { xKey, yKeys, noX } = model.inputKeys;
   return resolveAnalysisInputs({
-    datasets: [source], activeId: source.id, policy: ROW_POLICY.analysisView,
-    yKeys: model.inputKeys.yKeys, ...(model.inputKeys.xKey !== undefined ? { xKey: model.inputKeys.xKey } : {}),
+    datasets: [source], activeId: source.id, policy: ROW_POLICY.analysisView, yKeys,
+    ...(xKey !== undefined ? { xKey } : {}), ...(noX ? { noX: true } : {}),
   });
 }
 
-/** The saved columns as recorded (for a result that is no longer current). */
-export function resultBookSavedColumns(result: AnalysisResult): string {
-  return result.selection?.channels.map((channel) => channel.label).join(", ") ?? "";
+/** The saved input as recorded, for a result whose live line is not shown
+ *  (not current, or a tool whose input is not a column pick). */
+export function resultBookSavedInput(result: AnalysisResult, model: ResultBookModel, source: Dataset | undefined): string {
+  const count = result.sources.length;
+  const worksheet = count > 1 ? `${count} worksheets` : count === 1 ? source?.name ?? "missing source" : null;
+  const detail = model.inputKeys
+    ? result.selection?.channels.map((channel) => channel.label).join(", ") ?? ""
+    : model.inputNote ?? "";
+  return `Input: ${[worksheet, detail].filter(Boolean).join(" · ")}`;
 }

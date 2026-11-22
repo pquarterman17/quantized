@@ -177,11 +177,12 @@ describe("result book", () => {
   });
 
   it("offers no book for a producer without one", () => {
-    const test = statisticalTestAnalysisResult(
+    const base = statisticalTestAnalysisResult(
       "stats", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
       { sentence: "Normal.", tables: [{ title: "Statistics", columns: ["statistic", "value"], rows: [["A²", 0.2]] }] },
       "2026-10-10T00:00:00Z",
     );
+    const test = { ...base, producer: { id: "some-other-tool", label: "Other", version: 1 } };
     useApp.setState({ analysisResults: [test], openAnalysisResultId: test.id });
     render(<AnalysisResultPanel />);
     expect(screen.queryByRole("tab", { name: "Result book" })).toBeNull();

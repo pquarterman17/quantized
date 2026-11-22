@@ -54,6 +54,12 @@ export const STATS_TESTS: readonly TestDef[] = [
   { id: "power", family: "Planning", label: "t-test power / sample size", input: "none", blurb: "How many samples do I need, or how much power do I have?" },
 ];
 
+/** Whether the workshop shows (and the test reads) an alpha field. Shared by
+ *  the inputs panel and the result book so they cannot disagree. */
+export function testUsesAlpha(id: StatsTestId): boolean {
+  return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise";
+}
+
 export function testDef(id: StatsTestId): TestDef {
   return STATS_TESTS.find((t) => t.id === id) ?? STATS_TESTS[0];
 }
