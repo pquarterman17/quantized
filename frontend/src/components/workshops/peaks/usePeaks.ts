@@ -56,6 +56,9 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   // Fit-run sequence: a dataset/data/find change below (or a newer fit) bumps
   // it, so a fit still in flight can never land on what the user moved to.
   const fitRunRef = useRef(0);
+  // The find settings a fit was made under (lane WB4): applying different ones
+  // ("Find again") leaves the fit on screen but marks it out of date.
+  const [fitFind, setFitFind] = useState<string | null>(null);
 
   // The auto-detect effect's REAL inputs (audit P2.1). It used to depend on the
   // whole `active` object, so ANY write to ANY dataset field re-ran peak
@@ -73,6 +76,12 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   // Only CHANGED settings go on the wire; a string key keeps the effect's deps stable.
   const findExtras = JSON.stringify(find ? findOverrides(find.params) : {});
   const findSeq = find?.seq ?? 0;
+  const fitOutOfDate = fitResult !== null && fitResult.peaks.length > 0 && fitFind !== null && fitFind !== findExtras;
+
+  // A fit belongs to its data: a dataset / data / channel change forgets which
+  // find settings it was made under (declared before the find effect, which
+  // re-seeds it for a restored table).
+  useEffect(() => setFitFind(null), [activeId, activeData, rowExclusions, rowFilter, activeRoles, xKey, yKeys, seriesOrder, selected]);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +115,9 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         const inputs = peakInputs(ds, xKey, yKeys, seriesOrder, liveSelection);
         if (saved && peakTableMatchesData(saved, ds) && peakTableMatchesInputs(saved, inputs, liveSelection)) {
           setFitResult(peakTableToFitResult(saved));
+          // A restored table's own settings are unknown: it is current for the
+          // settings first shown beside it, and a later change marks it.
+          setFitFind((k) => k ?? findExtras);
         }
         const { x, y, fullX, gapCount, sourceCount } = inputs;
         if (x.length === 0) throw new Error("no finite X/Y pairs are available to analyze");
@@ -156,6 +168,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       const go = confirmPeaksRefit(active.id, peaks.length); // a model fit's errors: ask first
       if (go !== true && !(await go)) return;
       const run = ++fitRunRef.current;
+      const findKey = findExtras;
       const stale = () => run !== fitRunRef.current;
       setFitting(true);
       setFitError(null);
@@ -179,6 +192,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
           "/api/peaks/fit-multi", multiBody, multiSource, multiSource && rows ? rows() : [], () => fitMultiPeak(multiBody));
         if (stale()) return;
         setFitResult(res);
+        setFitFind(findKey);
         // P2.1: the fit becomes this dataset's durable peak table (survives a
         // panel close, a dataset switch, and a `.dwk` save/reopen).
         publishFitResult(ds.id, res, "simultaneous", {
@@ -191,7 +205,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!stale()) setFitting(false);
       }
     },
-    [active, peaks, overlayFitted],
+    [active, peaks, overlayFitted, findExtras],
   );
 
   const fitEach = useCallback(
@@ -203,6 +217,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       const go = confirmPeaksRefit(active.id, peaks.length); // a model fit's errors: ask first
       if (go !== true && !(await go)) return;
       const run = ++fitRunRef.current;
+      const findKey = findExtras;
       const stale = () => run !== fitRunRef.current;
       setFitting(true);
       setFitError(null);
@@ -249,6 +264,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
           nPeaks: fitted.length, model: opts.model,
         };
         setFitResult(result);
+        setFitFind(findKey);
         // P2.1, same as fitTogether — but only when something was actually fit:
         // a cancel that produced zero peaks must not replace a good saved table
         // with an empty one.
@@ -267,7 +283,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!stale()) setFitting(false);
       }
     },
-    [active, peaks, overlayFitted],
+    [active, peaks, overlayFitted, findExtras],
   );
 
   const labelPeaks = useCallback(async (selectedIndices?: ReadonlySet<number>) => {
@@ -478,6 +494,6 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   return {
     active, peaks, busy, error, fitResult, peakTable: activeTable, toggleExcluded,
     editFittedPeak, removeFittedPeaks, addDetectedPeakAt, removeDetectedPeaks,
-    fitting, fitError, fitTogether, fitEach, labelPeaks,
+    fitting, fitError, fitOutOfDate, fitTogether, fitEach, labelPeaks,
   };
 }

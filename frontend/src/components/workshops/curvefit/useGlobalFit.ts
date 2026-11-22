@@ -12,6 +12,13 @@
 // per dataset, which suits per-dataset amplitudes far better than one shared
 // start. Bounds are always sent — the table shows what the fit will use.
 //
+// Out of date (lane WB4): a global fit stays a button on the poll-model job, so
+// it keeps its own run and stamps the result with the key it was LAUNCHED with
+// (workbench/useRunStamp): source, picks, shared ticks, start / bound table,
+// model, X channel and the picked datasets' row / data identity. A result whose
+// key has moved on is `stale`: still listed, marked, but not drawn on the plot,
+// not reported, not exported and its "Show" is off, until a refit.
+//
 // Durable save: "→ Report" lands a per-dataset table in the Library (the
 // report path every workshop uses). Nothing is written to `Dataset.fitSpec`:
 // the recalc graph refits a spec on its own, which would silently replace a
@@ -37,6 +44,10 @@ import type { FitModel, FitOverlay } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { trackJob } from "../../../store/pendingOpActions";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
+import { Refusal } from "../workbench/refusal";
+import { useRunStamp } from "../workbench/useRunStamp";
 import {
   channelMembers,
   datasetMembers,
@@ -48,6 +59,7 @@ import {
   type GlobalMember,
   type GlobalSource,
 } from "./globalFitData";
+import { takeBackOverlay } from "./fitOverlayOwnership";
 
 /** The model to fit: a registry model, or a saved equation (`equation` set). */
 export type GlobalModel = Pick<FitModel, "name" | "paramNames" | "p0" | "lb" | "ub"> & { equation?: string };
@@ -77,21 +89,20 @@ export interface GlobalFitState {
   /** The job's reported fraction (0..1); null until it reports one. */
   progressFraction: number | null;
   error: string | null;
+  /** `error` is a refusal (the picks, table or data cannot be fitted), not a failed job. */
+  refusal: boolean;
   run: (mode?: "fit" | "compare") => Promise<void>;
   /** The last dataset comparison (Origin "Compare Datasets"); null until run. */
   comparison: DatasetCompareResult | null;
   cancel: () => Promise<void>;
   result: GlobalFitRun | null;
+  /** `result` was fitted under picks, ticks, table, model or data that have since changed. */
+  stale: boolean;
   /** Member whose curve is on the plot (null: none of them is plotted). */
   shownIndex: number | null;
   show: (i: number) => void;
   reporting: boolean;
   toReport: () => Promise<void>;
-}
-
-/** Clear the plot's fit overlay only if it is still `own` (atomic compare-and-clear). */
-function takeBackOverlay(own: FitOverlay | null): void {
-  if (own) useApp.setState((st) => (st.fitOverlay === own ? { fitOverlay: null } : {}));
 }
 
 export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
@@ -112,6 +123,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const [progress, setProgress] = useState<string | null>(null);
   const [progressFraction, setProgressFraction] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refusalText, setRefusalText] = useState<string | null>(null);
   const [result, setResult] = useState<GlobalFitRun | null>(null);
   const [comparison, setComparison] = useState<DatasetCompareResult | null>(null);
   const [shown, setShown] = useState<number | null>(null);
@@ -152,9 +164,19 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const pickedKeys = picked ?? defaultPick;
 
   // A verdict describes the picks, ticks and start/bound table it was run with:
-  // changing any of them (or the source) drops it rather than leaving it up.
-  const inputsKey = `${source}|${pickedKeys.join(",")}|${shared.map(Number).join("")}|${JSON.stringify(rows)}`;
-  useEffect(() => setComparison(null), [inputsKey]);
+  // changing any of them (or the source) drops it rather than leaving it up; a
+  // fit result is marked out of date by the same key. Beyond the form it depends on the model, the X channel and the
+  // picked datasets' row / data identity (an edit to a member's rows or data).
+  const pickedIds = [...new Set(pickedKeys.map((k) => k.split(":")[0]!))];
+  const dataKey = pickedIds.map((id) => datasetInputsToken(datasets.find((d) => d.id === id))).join("|");
+  // The ticks normalized to the model's parameters (an untouched [] is all-off),
+  // and the X channel only where it defines the members: with datasets, "Show"
+  // activates another dataset, which must not count as an edit.
+  const ticks = model ? model.paramNames.map((_, j) => (shared[j] ? 1 : 0)).join("") : "";
+  const freshKey = `${source}|${pickedKeys.join(",")}|${ticks}|${JSON.stringify(rows)}|${modelKey}|${source === "channels" ? xKey : ""}|${dataKey}`;
+  const stamp = useRunStamp(freshKey);
+  const stale = result !== null && stamp.stale;
+  useEffect(() => setComparison(null), [freshKey]);
 
   // The member on the plot: the chosen one while its dataset is active, else
   // the active dataset's first member.
@@ -167,11 +189,13 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   }, [result, shown, activeId]);
 
   useEffect(() => {
-    if (!result || shownIndex == null) return;
+    // An out-of-date fit's curve is not drawn (and one already drawn is taken back).
+    if (stale) takeBackOverlay(ownOverlay.current);
+    if (!result || stale || shownIndex == null) return;
     const ov = result.overlays[shownIndex]!;
     ownOverlay.current = ov;
     setFitOverlay(ov);
-  }, [result, shownIndex, setFitOverlay]);
+  }, [result, stale, shownIndex, setFitOverlay]);
 
   // On unmount, take back only OUR overlay.
   useEffect(() => () => takeBackOverlay(ownOverlay.current), []);
@@ -179,17 +203,22 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   async function run(mode: "fit" | "compare" = "fit"): Promise<void> {
     if (!model || busy) return;
     setError(null);
+    setRefusalText(null);
+    const refuse = (message: string) => {
+      setError(message);
+      setRefusalText(message);
+    };
     const members = candidates.filter((m) => pickedKeys.includes(memberKey(m)));
     // Freeze the pick: "Show" activates a dataset, which collapses the Library
     // selection a default pick would otherwise follow.
     setPicked(pickedKeys);
     if (members.length < 2) {
-      setError("Pick at least two series to fit together.");
+      refuse("Pick at least two series to fit together.");
       return;
     }
     const parsed = parseFitParams(rows, model as FitModel);
     if (parsed.error) {
-      setError(parsed.error);
+      refuse(parsed.error);
       return;
     }
     setBusy(true);
@@ -198,12 +227,17 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     const op = trackJob(mode === "compare" ? "Compare datasets" : "Global fit");
     try {
       const data = [];
+      const hadPending = members.some((m) => datasets.find((d) => d.id === m.datasetId)?.pending);
       for (const m of members) {
         const ds = await resolveDataset(m.datasetId);
         const d = ds ? memberData(ds, m) : null;
-        if (!ds || !d || d.x.length === 0) throw new Error(`${m.label} has no finite X/Y pairs to fit`);
+        if (!ds || !d || d.x.length === 0) throw new Refusal(`${m.label} has no finite X/Y pairs to fit`);
         data.push({ ds, d });
       }
+      // A lazy book that just arrived moved the key: let that commit land first,
+      // then take the key this run is asked with (not what it ends up under).
+      if (hadPending) await afterCommit();
+      const launchKey = stamp.launchKey();
       const base = rowsFromModel(model as FitModel);
       const startsEdited = rows.some((r, i) => r.start !== base[i]?.start);
       const req: GlobalFitRequest = {
@@ -239,9 +273,11 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
         curveFit: true,
       }));
       setShown(null);
+      stamp.record(launchKey);
       setResult({ fit, members, overlays });
     } catch (e) {
       if (mode === "compare") setComparison(null);
+      if (e instanceof Refusal) setRefusalText(e.message);
       if (!(e instanceof JobCancelledError)) setError(e instanceof Error ? e.message : "global fit failed");
     } finally {
       op.end();
@@ -264,13 +300,13 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
 
   function show(i: number): void {
     const m = result?.members[i];
-    if (!m) return;
+    if (!m || stale) return;
     setShown(i);
     if (m.datasetId !== activeId) setActive(m.datasetId);
   }
 
   async function toReport(): Promise<void> {
-    if (!result || !model) return;
+    if (!result || !model || stale) return;
     setReporting(true);
     try {
       const { fit, members } = result;
@@ -320,10 +356,12 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     progress,
     progressFraction,
     error,
+    refusal: error !== null && error === refusalText,
     run,
     comparison,
     cancel,
     result,
+    stale,
     shownIndex,
     show,
     reporting,

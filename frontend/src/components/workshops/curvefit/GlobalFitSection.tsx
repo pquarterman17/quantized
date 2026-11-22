@@ -4,7 +4,7 @@
 // in place of the single-fit body while "Global fit" is on.
 
 import { Button, Select } from "../../primitives";
-import { WorkbenchProgress } from "../workbench/WorkbenchParts";
+import { WorkbenchMessage, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { NumberField } from "../../primitives/NumberField";
 import DatasetCompareResult from "./DatasetCompareResult";
 import GlobalFitResults from "./GlobalFitResults";
@@ -117,11 +117,7 @@ export default function GlobalFitSection({ model }: { model: GlobalModel | null 
       {s.busy && (
         <WorkbenchProgress label="Global fit progress" progress={{ fraction: s.progressFraction, message: s.progress }} />
       )}
-      {s.error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
-          {s.error}
-        </div>
-      )}
+      <WorkbenchMessage refusal={s.refusal ? s.error : null} error={s.refusal ? null : s.error} />
       <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         Global fits run unweighted over each series' included rows.
       </div>

@@ -3,6 +3,7 @@
 // plot, and "→ Report" into the Library. Fed by useGlobalFit.
 
 import { Button } from "../../primitives";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { fmtNum as fmt } from "../../../lib/format";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import { globalFitTable } from "../../../lib/fitTableLayer";
@@ -17,6 +18,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
 
   return (
     <div style={{ marginTop: 10 }}>
+      {s.stale && <OutOfDateNote block>the series, shared parameters, start / bound table or data changed after this fit. Fit again to plot, report or export it.</OutOfDateNote>}
       <FitConvergenceWarning result={{ exitFlag: fit.exitFlag, warnings: fit.warnings }} />
       <div style={{ maxHeight: 220, overflowY: "auto", marginTop: 6 }}>
         <table className="qz-table" aria-label="Global fit parameters">
@@ -59,6 +61,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
                 <Button
                   size="sm"
                   variant="ghost"
+                  disabled={s.stale}
                   aria-pressed={s.shownIndex === i}
                   aria-label={`Show ${m.label} fit`}
                   title="Draw this series' fitted curve on its plot"
@@ -74,7 +77,7 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
       <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
         reduced χ² {fmt(fit.chiSqRed)} · {fit.nFree} free parameters · {fit.nTotal} points
       </div>
-      <FitTableControls
+      {!s.stale && <FitTableControls
         sourceKey={`global:${members.map((m) => `${m.datasetId}:${m.yKey}`).join(",")}`}
         stats={["r2", "chiSqRed", "chiSq", "n"]}
         build={(want) => globalFitTable({
@@ -84,9 +87,9 @@ export default function GlobalFitResults({ s }: { s: GlobalFitState }) {
           nTotal: fit.nTotal,
           members: members.map((m, i) => ({ label: m.label, params: fit.params[i] ?? [], errors: fit.errors[i] ?? [], R2: fit.R2[i], chiSq: fit.chiSq?.[i] })),
         }, want)}
-      />
+      />}
       <div style={{ marginTop: 8 }}>
-        <Button size="sm" disabled={s.reporting} onClick={() => void s.toReport()}>
+        <Button size="sm" disabled={s.reporting || s.stale} title={s.stale ? "Fit again: the inputs changed after this fit." : undefined} onClick={() => void s.toReport()}>
           {s.reporting ? "Reporting…" : "→ Report"}
         </Button>
       </div>

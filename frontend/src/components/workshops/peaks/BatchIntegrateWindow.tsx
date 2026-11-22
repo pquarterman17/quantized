@@ -8,6 +8,7 @@
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select, StatusDot } from "../../primitives";
 import ToolWindow from "../../overlays/ToolWindow";
+import { WorkbenchMessage } from "../workbench/WorkbenchParts";
 import BatchIntegrateResults from "./BatchIntegrateResults";
 import BatchWindowsEditor from "./BatchWindowsEditor";
 import { useBatchIntegrate } from "./useBatchIntegrate";
@@ -80,7 +81,7 @@ export default function BatchIntegrateWindow({ seedPeaks, onClose }: {
         )}
       </div>
       {b.block && !b.busy && <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>{b.block}</div>}
-      {b.error && <div style={{ color: "var(--danger)", marginTop: 4 }}>{b.error}</div>}
+      <WorkbenchMessage refusal={b.refusal ? b.error : null} error={b.refusal ? null : b.error} />
 
       <BatchIntegrateResults b={b} />
     </ToolWindow>

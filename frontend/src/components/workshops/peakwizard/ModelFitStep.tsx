@@ -4,6 +4,7 @@
 // "Start from fit" copies the fitted values into the step-③ start values.
 
 import { Button } from "../../primitives";
+import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
 import FitProgress from "./FitProgress";
 import { freeCount } from "./peakDefaults";
 import ModelFitPreview from "./ModelFitPreview";
@@ -73,21 +74,17 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         </div>
       )}
       <SetupProblems problems={m.problems} />
-      {m.error && (
-        <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)", marginTop: 6 }}>
-          {m.error}
-        </div>
-      )}
+      <WorkbenchMessage refusal={m.errorRefusal ? m.error : null} error={m.errorRefusal ? null : m.error} />
       {m.notice && (
         <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
           {m.notice}
         </div>
       )}
       {r && m.stale && (
-        <div className="qzk-helptext" style={{ color: "var(--warn)", marginTop: 6 }}>
-          The parameters changed since this fit — its curves are off the plot and it cannot be
+        <OutOfDateNote block>
+          the parameters changed since this fit — its curves are off the plot and it cannot be
           integrated or reported until you Re-fit.
-        </div>
+        </OutOfDateNote>
       )}
       {r && (
         <>

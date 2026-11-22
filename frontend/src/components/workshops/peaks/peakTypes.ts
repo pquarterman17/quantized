@@ -28,6 +28,8 @@ export interface PeaksState {
   removeDetectedPeaks: (indices: ReadonlySet<number>) => void;
   fitting: boolean;
   fitError: string | null;
+  /** The shown fit was made under find settings that have since changed. */
+  fitOutOfDate: boolean;
   fitTogether: (opts: PeakFitOptions) => Promise<void>;
   fitEach: (opts: PeakFitOptions) => Promise<void>;
   labelPeaks: (selectedIndices?: ReadonlySet<number>) => Promise<void>;

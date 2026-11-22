@@ -13,6 +13,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
+import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
 import EquationEditor from "./EquationEditor";
 import EquationParamTable from "./EquationParamTable";
 import EquationSummary from "./EquationSummary";
@@ -119,13 +120,12 @@ export default function EquationModelPanel({ initial }: Props) {
           Select a dataset to fit.
         </div>
       )}
-      {eq.error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--danger)" }}>
-          {eq.error}
-        </div>
-      )}
+      <WorkbenchMessage refusal={eq.refusal ? eq.error : null} error={eq.refusal ? null : eq.error} />
       <FitConvergenceWarning result={eq.result} />
 
+      {eq.stale && (
+        <OutOfDateNote block>the equation, start values, data or channels changed after this fit. Fit again to find X or Y from it.</OutOfDateNote>
+      )}
       {paramRows.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <DataTable columns={["param", "value", "± err"]} rows={paramRows} />
@@ -138,7 +138,7 @@ export default function EquationModelPanel({ initial }: Props) {
       )}
 
       {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
-      {eq.result && eq.xRange && (
+      {eq.result && !eq.stale && eq.xRange && (
         <FindXYSection
           target={{ equation: eq.equation, params, xMin: eq.xRange.min, xMax: eq.xRange.max }}
         />

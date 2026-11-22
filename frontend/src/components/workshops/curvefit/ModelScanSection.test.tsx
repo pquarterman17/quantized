@@ -36,6 +36,8 @@ function state(over: Partial<ModelScanState>): ModelScanState {
     progress: null,
     progressMessage: null,
     error: null,
+    refusal: false,
+    stale: false,
     scan: vi.fn().mockResolvedValue(undefined),
     cancel: vi.fn().mockResolvedValue(undefined),
     clear: vi.fn(),

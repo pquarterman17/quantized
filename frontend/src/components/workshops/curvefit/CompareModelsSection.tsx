@@ -7,6 +7,7 @@ import { Button, Select } from "../../primitives";
 import { IconButton } from "../../primitives/IconButton";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
+import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
 import { CUSTOM_PREFIX, useCompareModels } from "./useCompareModels";
 
 interface Props {
@@ -47,13 +48,10 @@ export default function CompareModelsSection({ options, current, customModels }:
           {s.busy ? "Comparing…" : "Compare"}
         </Button>
       </div>
-      {s.error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
-          {s.error}
-        </div>
-      )}
+      <WorkbenchMessage refusal={s.refusal ? s.error : null} error={s.refusal ? null : s.error} />
       {r && !s.busy && (
         <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto" }}>
+          {s.stale && <OutOfDateNote block>the models, data or channels changed after this comparison. Compare again.</OutOfDateNote>}
           <table className="qz-table" aria-label="Model comparison">
             <thead>
               <tr>

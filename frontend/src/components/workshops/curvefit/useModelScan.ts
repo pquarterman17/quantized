@@ -8,18 +8,28 @@
 // custom equation model (lib/fitmodels) as an extra candidate. The hook lives
 // in CurveFitPanel (not the section view) so ranked results survive the
 // registry-mode <-> custom-mode flip a row-click apply can trigger.
+//
+// Out of date (lane WB4): the scan stays a button on the poll-model job (own
+// Cancel / StatusBar op), so it stamps the ranking with the key it was LAUNCHED
+// with (workbench/useRunStamp): the dataset's row / data identity, the plotted
+// channels and the saved equations it scanned. A ranking whose key has moved on
+// is listed but marked, and a row click no longer applies it.
 
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { type ScanEntry } from "../../../lib/api/curvefit";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { candidateGuesses, loadCustomModels } from "../../../lib/fitmodels";
+import { candidateGuesses, customModelsRevision, loadCustomModels, subscribeCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
-import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
+import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
+import { Refusal } from "../workbench/refusal";
+import { useRunStamp } from "../workbench/useRunStamp";
 
 /** The completed job's result payload — same shape as the synchronous
  *  POST /api/fitting/scan (lib/api.ts's ScanResponse). */
@@ -38,6 +48,10 @@ export interface ModelScanState {
   /** "Scanning i/n: name" while polling; null otherwise. */
   progressMessage: string | null;
   error: string | null;
+  /** `error` is a refusal (nothing to scan), not a failed job. */
+  refusal: boolean;
+  /** `results` were scanned under data, channels or saved equations that have since changed. */
+  stale: boolean;
   scan: () => Promise<void>;
   cancel: () => Promise<void>;
   clear: () => void;
@@ -50,12 +64,22 @@ export function useModelScan(): ModelScanState {
   const [progress, setProgress] = useState<number | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refusalText, setRefusalText] = useState<string | null>(null);
   const jobRef = useRef<string | null>(null);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
+  // The saved-equation library by revision (one storage read per write, not per render).
+  const library = useSyncExternalStore(subscribeCustomModels, customModelsRevision);
+  const stamp = useRunStamp(
+    active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, library]) : "",
+  );
 
   async function scan(): Promise<void> {
     if (!active || busy) return;
     setBusy(true);
     setError(null);
+    setRefusalText(null);
     setProgress(0);
     setProgressMessage(null);
     // P3.4: the scan is one op in the shared StatusBar location (percent +
@@ -69,11 +93,19 @@ export function useModelScan(): ModelScanState {
       // resolved.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
+      // A lazy book that just arrived moved the key: let that commit land first,
+      // then take the key this scan is asked with (not what it ends up under).
+      if (active.pending) await afterCommit();
+      const launchKey = stamp.launchKey();
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
+      if (!d) {
+        const why = fitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
+        if (why) throw new Refusal(why);
+        return;
+      }
       const pairs = dropGapRows(d.x, d.y);
-      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to scan");
+      if (pairs.x.length === 0) throw new Refusal("no finite X/Y pairs are available to scan");
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the scan.`);
       }
@@ -94,8 +126,10 @@ export function useModelScan(): ModelScanState {
         setProgressMessage(m);
         op.progress(f, m);
       });
+      stamp.record(launchKey);
       setResults(r.results);
     } catch (e) {
+      if (e instanceof Refusal) setRefusalText(e.message);
       if (!(e instanceof JobCancelledError)) {
         setError(e instanceof Error ? e.message : "scan failed");
       }
@@ -121,6 +155,7 @@ export function useModelScan(): ModelScanState {
 
   function clear(): void {
     setResults(null);
+    stamp.record(null);
     setError(null);
   }
 
@@ -131,6 +166,8 @@ export function useModelScan(): ModelScanState {
     progress,
     progressMessage,
     error,
+    refusal: error !== null && error === refusalText,
+    stale: results !== null && stamp.stale,
     scan,
     cancel,
     clear,

@@ -5,9 +5,11 @@ import { fmtNum } from "../../../lib/format";
 import { pathId } from "../../../lib/metadataKeys";
 import { toast } from "../../../store/toasts";
 import { Button, Select } from "../../primitives";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { DataTable } from "../../primitives/DataTable";
 import type { BatchIntegrateState } from "./useBatchIntegrate";
 
+const STALE_REASON = "Integrate again: the inputs changed after this run.";
 const cell = (v: number | null) => (v === null ? "—" : fmtNum(v));
 
 export default function BatchIntegrateResults({ b }: { b: BatchIntegrateState }) {
@@ -32,11 +34,12 @@ export default function BatchIntegrateResults({ b }: { b: BatchIntegrateState })
 
   return (
     <div style={{ marginTop: 10 }}>
+      {b.stale && <OutOfDateNote block>the datasets, windows, baseline or alignment changed after this run. Integrate again to export it or add the trend.</OutOfDateNote>}
       <div role="region" aria-label="batch integration results" style={{ maxHeight: 240, overflow: "auto" }}>
         <DataTable columns={["dataset", "window", "area", "centroid", "FWHM", "height", "status"]} rows={rows} />
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-        <Button size="sm" onClick={b.exportCsv}>Export CSV</Button>
+        <Button size="sm" disabled={b.stale} title={b.stale ? STALE_REASON : undefined} onClick={b.exportCsv}>Export CSV</Button>
         <span className="qzk-field-lbl" style={{ margin: 0, marginLeft: "auto" }}>Trend x</span>
         <Select
           aria-label="trend x field"
@@ -44,7 +47,7 @@ export default function BatchIntegrateResults({ b }: { b: BatchIntegrateState })
           value={b.xField}
           onChange={(e) => b.setXField(e.target.value)}
         />
-        <Button size="sm" title="One row per dataset: area, centroid and FWHM of each window." onClick={addTrend}>
+        <Button size="sm" disabled={b.stale} title={b.stale ? STALE_REASON : "One row per dataset: area, centroid and FWHM of each window."} onClick={addTrend}>
           Add trend dataset
         </Button>
       </div>

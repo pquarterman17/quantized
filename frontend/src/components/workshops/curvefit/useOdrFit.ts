@@ -6,15 +6,26 @@
 // POST /api/fitting/odr (calc.fit_odr: Deming line, λ = (mean σy / mean σx)²,
 // jackknife standard errors). The fitted line becomes the plot's fit overlay,
 // aligned to the dataset rows exactly as useCurveFit aligns its curve.
+//
+// Lane WB4: the fit rides the workbench shell in manual mode (still a button;
+// nothing runs on an edit). The run key is the dataset's row / data / error-role
+// identity plus the plotted channels and error columns; a result whose key
+// differs is out of date (`stale`), and an answer for inputs that changed while
+// it was in flight is dropped. Validation failures are refusals.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { odrFit, type OdrResult } from "../../../lib/api/fitStats";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
-import type { Dataset } from "../../../lib/types";
+import type { Dataset, FitOverlay } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { afterCommit } from "../workbench/afterCommit";
+import { Refusal } from "../workbench/refusal";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
+import { takeBackOverlay } from "./fitOverlayOwnership";
 import { xErrorChannel } from "./xErrorChannel";
 
 /** |column| over the analysis rows, kept rows only; null if any is not a
@@ -29,11 +40,17 @@ function sigmas(ds: Dataset, channel: number, keep: readonly number[]): number[]
 export interface OdrFitState {
   busy: boolean;
   error: string | null;
+  /** The error is a refusal (the inputs cannot be fitted), not a failed request. */
+  refusal: boolean;
   result: OdrResult | null;
+  /** The shown result was fitted under inputs that have since changed. */
+  stale: boolean;
   /** True when the fit used a Y-error column to set λ. */
   usedYErr: boolean;
   run: () => Promise<void>;
 }
+
+interface OdrRun { result: OdrResult; usedYErr: boolean }
 
 export function useOdrFit(): OdrFitState {
   const active = useActiveDataset();
@@ -43,41 +60,69 @@ export function useOdrFit(): OdrFitState {
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<OdrResult | null>(null);
-  const [usedYErr, setUsedYErr] = useState(false);
+  const [refusalText, setRefusalText] = useState<string | null>(null);
+  const ownOverlay = useRef<FitOverlay | null>(null);
+  const key = active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, errKeys]) : "";
 
-  async function run(): Promise<void> {
-    if (!active) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const ds = await resolveDataset(active.id);
-      const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
-      const xCh = xErrorChannel(ds);
-      const refused = ds && !d ? fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) : null;
-      if (refused) throw new Error(refused);
-      if (!ds || !d || xCh == null) throw new Error("no X-error column is designated for this dataset");
-      const pairs = dropGapRows(d.x, d.y);
-      const xErr = sigmas(ds, xCh, pairs.keep);
-      if (!xErr) throw new Error("the X-error column has non-positive or invalid values");
-      const yCh = errKeys[d.yKey];
-      const yErr = yCh != null ? sigmas(ds, yCh, pairs.keep) : null;
-      const r = await odrFit({ x: pairs.x, y: pairs.y, x_error: xErr, ...(yErr ? { y_error: yErr } : {}) });
-      setResult(r);
-      setUsedYErr(yErr != null);
-      const n = ds.data.time.length;
-      const kept = activeRowIndices(n, droppedRows(ds));
-      const aligned = restoreGapRows(pairs.x.map((x) => r.slope * x + r.intercept), pairs);
-      setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true });
-    } catch (e) {
-      setResult(null);
-      setError(e instanceof Error ? e.message : "ODR fit failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const preview = useWorkbenchPreview<OdrRun | null>({
+    key,
+    auto: false,
+    delayMs: 0,
+    fallbackError: "ODR fit failed",
+    run: async (signal) => {
+      if (!active) return null;
+      setRefusalText(null);
+      try {
+        const ds = await resolveDataset(active.id);
+        const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
+        const xCh = xErrorChannel(ds);
+        const refused = ds && !d ? fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) : null;
+        if (refused) throw new Refusal(refused);
+        if (!ds || !d || xCh == null) throw new Refusal("no X-error column is designated for this dataset");
+        const pairs = dropGapRows(d.x, d.y);
+        const xErr = sigmas(ds, xCh, pairs.keep);
+        if (!xErr) throw new Refusal("the X-error column has non-positive or invalid values");
+        const yCh = errKeys[d.yKey];
+        const yErr = yCh != null ? sigmas(ds, yCh, pairs.keep) : null;
+        const r = await odrFit({ x: pairs.x, y: pairs.y, x_error: xErr, ...(yErr ? { y_error: yErr } : {}) }, signal);
+        // The inputs changed (or the panel closed) while the request ran: its answer is not theirs.
+        if (signal.aborted) return null;
+        const n = ds.data.time.length;
+        const kept = activeRowIndices(n, droppedRows(ds));
+        const aligned = restoreGapRows(pairs.x.map((x) => r.slope * x + r.intercept), pairs);
+        const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true };
+        ownOverlay.current = overlay;
+        setFitOverlay(overlay);
+        return { result: r, usedYErr: yErr != null };
+      } catch (e) {
+        if (e instanceof Refusal) setRefusalText(e.message);
+        throw e;
+      }
+    },
+  });
 
-  return { busy, error, result, usedYErr, run };
+  const error = preview.error || null;
+  // An out-of-date fit's line is taken off the plot (only if it is still ours).
+  const outOfDate = preview.stale;
+  useEffect(() => {
+    if (outOfDate) takeBackOverlay(ownOverlay.current);
+  }, [outOfDate]);
+  // A failed run shows its error and no result, as before.
+  const latest = error ? null : preview.latest?.value ?? null;
+  return {
+    busy: preview.running,
+    error,
+    refusal: error !== null && error === refusalText,
+    result: latest?.result ?? null,
+    stale: latest !== null && preview.stale,
+    usedYErr: latest?.usedYErr ?? false,
+    run: async () => {
+      // Resolve a lazy book first: its arrival moves the key, which would abort a run launched before it.
+      if (active?.pending) {
+        await resolveDataset(active.id);
+        await afterCommit();
+      }
+      return preview.refresh();
+    },
+  };
 }

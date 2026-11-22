@@ -22,12 +22,13 @@ import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { recordRecentModel } from "../../../lib/fitModelPicker";
+import { Refusal as FitRefusal } from "../workbench/refusal";
 import { parseFitStarts } from "./fitStarts";
 import { fittedStatus, isLinearFamily, statusResult } from "./curveFitStatus";
 import { fittedWeighting, retainFitted, type Fitted } from "../../../store/curveFitSession";
 
 /** The fit cannot run on these inputs (as opposed to the backend failing). */
-export class FitRefusal extends Error {}
+export { FitRefusal };
 
 /** Resolved inputs for one run: what both Guess and Fit read. */
 async function prepare(activeId: string) {
