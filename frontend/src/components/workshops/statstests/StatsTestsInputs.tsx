@@ -4,7 +4,7 @@
 
 import type { ReactNode } from "react";
 
-import type { Alternative, TestParams } from "../../../lib/statsTests";
+import { testUsesAlpha, type Alternative, type TestParams } from "../../../lib/statsTests";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -64,7 +64,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   );
 
   const setP = (patch: Partial<TestParams>) => t.setParams(patch);
-  const usesAlpha = !["anderson", "partial-correlation", "stepwise"].includes(t.testId);
+  const usesAlpha = testUsesAlpha(t.testId);
   // Two-sample KS stays two-sided: its one-sided forms compare CDFs, which reads backwards.
   const usesAlternative = t.testId === "sign-test" || t.testId === "dunnett";
 

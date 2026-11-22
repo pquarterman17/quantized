@@ -9,7 +9,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { AnalysisResult } from "../../../../lib/analysisResult";
 import { SNAPSHOT_RESULT_STATUS, type SnapshotResultState } from "../../../../lib/analysisResultFreshness";
-import { resultBookInputs, resultBookModel, resultBookSavedColumns } from "../../../../lib/resultBook";
+import { resultBookInputs, resultBookModel, resultBookSavedInput } from "../../../../lib/resultBook";
 import type { Dataset } from "../../../../lib/types";
 import { Button } from "../../../primitives";
 import AnalysisInputSummary from "../../analysisselection/AnalysisInputSummary";
@@ -58,7 +58,6 @@ export default function ResultBook({
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
-  const columns = resultBookSavedColumns(result);
   return <div className="qz-result-book">
     <header className="qz-result-book-head">
       <div className="qz-result-book-title">
@@ -67,7 +66,7 @@ export default function ResultBook({
         <span className="qz-result-book-meta">Saved {formatDate(result.createdAt)}</span>
       </div>
       {inputs ? <AnalysisInputSummary inputs={inputs} /> : <>
-        <p className="qz-result-book-saved-input">Input: {source?.name ?? "missing source"}{columns ? ` · ${columns}` : ""}</p>
+        <p className="qz-result-book-saved-input">{resultBookSavedInput(result, model, source)}</p>
         {/* The panel already notes a missing source above the tabs. */}
         {(state === "out-of-date" || state === "pending") && <p className="qz-analysis-missing" role="note">{NOT_CURRENT[state]}</p>}
       </>}
@@ -78,11 +77,11 @@ export default function ResultBook({
         {result.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}
       </ul>}
       <div className="qz-result-book-tools">
-        <Button size="sm" disabled={!reopenable || busy !== null}
+        {model.reopen && <Button size="sm" disabled={!reopenable || busy !== null}
           title={!recipeReady ? "This result does not contain a compatible saved question."
             : state === "out-of-date" ? "The source changed; start a new analysis from the current data instead."
             : state === "source-missing" ? "The source worksheet is missing." : `Reopen ${result.producer.label} with this result's source and settings.`}
-          onClick={onReopen}>Reopen in tool</Button>
+          onClick={onReopen}>Reopen in tool</Button>}
         <Button size="sm" disabled={!model.sections.length} onClick={() => setOpen(new Set(model.sections.map((section) => section.key)))}>Expand all</Button>
         <Button size="sm" disabled={!model.sections.length} onClick={() => setOpen(new Set())}>Collapse all</Button>
       </div>
