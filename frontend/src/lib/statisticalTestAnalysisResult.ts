@@ -1,7 +1,7 @@
 import type { StatsTestId } from "./api/statsTests";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
-import { STATS_TESTS, testDef, type TestParams, type TestSelection } from "./statsTests";
+import { DEFAULT_PARAMS, STATS_TESTS, testColumns, testDef, type TestParams, type TestSelection } from "./statsTests";
 import type { TestOutput } from "./statsTestsResults";
 import type { Dataset } from "./types";
 
@@ -39,7 +39,10 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       !(params.n === null || (typeof params.n === "number" && Number.isFinite(params.n))) ||
       typeof params.power !== "number" || !Number.isFinite(params.power) ||
       !["two-sample", "paired", "one-sample"].includes(String(params.kind)) ||
-      (params.tails !== 1 && params.tails !== 2)) return null;
+      (params.tails !== 1 && params.tails !== 2) ||
+      // Added later: a result saved before them still reopens (defaults below).
+      (params.adjustMethod !== undefined && !["holm", "bonferroni", "bh"].includes(String(params.adjustMethod))) ||
+      (params.gofExpected !== undefined && !["uniform", "column"].includes(String(params.gofExpected)))) return null;
   return {
     testId: testId as StatsTestId,
     selection: {
@@ -52,24 +55,10 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       ssType: params.ssType, criterion: params.criterion, direction: params.direction as TestParams["direction"],
       effectSize: params.effectSize, n: params.n as number | null, power: params.power,
       kind: params.kind as TestParams["kind"], tails: params.tails,
+      adjustMethod: (params.adjustMethod ?? DEFAULT_PARAMS.adjustMethod) as TestParams["adjustMethod"],
+      gofExpected: (params.gofExpected ?? DEFAULT_PARAMS.gofExpected) as TestParams["gofExpected"],
     },
   };
-}
-
-function selectedColumns(testId: StatsTestId, selection: TestSelection): number[] {
-  switch (testDef(testId).input) {
-    case "one": return [selection.x];
-    case "two":
-    case "paired": return [selection.x, selection.y];
-    case "groups": return selection.groupMode === "category"
-      ? [selection.x, selection.byCol]
-      : selection.cols;
-    case "blocks":
-    case "columns": return selection.cols;
-    case "factorial": return [selection.x, selection.byCol, selection.byCol2];
-    case "regression": return [selection.x, ...selection.cols];
-    case "none": return [];
-  }
 }
 
 /** Fit the result tables inside the envelope's saved-table bounds, saying
@@ -119,7 +108,7 @@ export function statisticalTestAnalysisResult(
 ): AnalysisResult {
   const def = testDef(testId);
   const bounded = boundedTables(output);
-  const indices = [...new Set(selectedColumns(testId, selection).filter((index) => index >= 0))];
+  const indices = [...new Set(testColumns(testId, selection, params).filter((index) => index >= 0))];
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,

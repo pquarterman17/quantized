@@ -25,7 +25,7 @@ const data: DataStruct = {
 const sel = (over: Partial<TestSelection>): TestSelection => ({ ...DEFAULT_SELECTION, ...over });
 
 describe("STATS_TESTS catalog", () => {
-  it("lists the twelve wired tests, each with a one-sentence blurb", () => {
+  it("lists the wired tests, each with a one-sentence blurb", () => {
     expect(STATS_TESTS.map((t) => t.id)).toEqual([
       "anderson",
       "ks-normal",
@@ -38,6 +38,11 @@ describe("STATS_TESTS catalog", () => {
       "regression-multi",
       "stepwise",
       "partial-correlation",
+      "roc",
+      "glm-logistic",
+      "glm-poisson",
+      "chi-square-gof",
+      "adjust-p",
       "power",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);

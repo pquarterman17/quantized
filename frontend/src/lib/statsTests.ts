@@ -1,7 +1,7 @@
 // Statistical-tests workshop — the catalog of wired tests and the pure request
 // builder behind components/workshops/statstests. Turns the user's column
 // picks (on the ANALYSIS view, so exclusions and filters are honored) into a
-// schema-typed request for one of the twelve `/api/stats/*` routes that had no
+// schema-typed request for one of the `/api/stats/*` routes that had no
 // frontend caller. Pure (no React / store / fetch) so every branch unit-tests
 // standalone; result tables and interpretation live in statsTestsResults.ts.
 //
@@ -28,6 +28,8 @@ export type InputKind =
   | "factorial" // a response + two factor columns
   | "regression" // a response + >= 1 predictor columns
   | "columns" // >= 3 row-aligned columns
+  | "classifier" // a 0/1 outcome + a score, row-aligned
+  | "counts" // observed counts, optionally + expected counts, row-aligned
   | "none"; // no data (planning)
 
 export interface TestDef {
@@ -51,13 +53,18 @@ export const STATS_TESTS: readonly TestDef[] = [
   { id: "regression-multi", family: "Regression", label: "Multiple regression", input: "regression", blurb: "How does the response depend on several predictors at once?" },
   { id: "stepwise", family: "Regression", label: "Stepwise regression", input: "regression", blurb: "Which predictors are worth keeping by AIC or BIC?" },
   { id: "partial-correlation", family: "Correlation", label: "Partial correlation", input: "columns", blurb: "How strongly are two columns related once the others are held fixed?" },
+  { id: "roc", family: "Classification", label: "ROC / AUC / Youden cutoff", input: "classifier", blurb: "How well does a score separate a 0/1 outcome, and which cutoff is best?" },
+  { id: "glm-logistic", family: "Regression", label: "Logistic regression", input: "regression", blurb: "How do predictors change the odds of a 0/1 outcome?" },
+  { id: "glm-poisson", family: "Regression", label: "Poisson regression", input: "regression", blurb: "How do predictors change the rate of a count response?" },
+  { id: "chi-square-gof", family: "Categorical", label: "Chi-square goodness of fit", input: "counts", blurb: "Do observed category counts match a uniform or given distribution?" },
+  { id: "adjust-p", family: "Multiple comparisons", label: "P-value adjustment", input: "one", blurb: "Correct a column of p-values for testing many hypotheses at once." },
   { id: "power", family: "Planning", label: "t-test power / sample size", input: "none", blurb: "How many samples do I need, or how much power do I have?" },
 ];
 
 /** Whether the workshop shows (and the test reads) an alpha field. Shared by
  *  the inputs panel and the result book so they cannot disagree. */
 export function testUsesAlpha(id: StatsTestId): boolean {
-  return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise";
+  return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise" && id !== "roc";
 }
 
 export function testDef(id: StatsTestId): TestDef {
@@ -96,6 +103,10 @@ export interface TestParams {
   power: number;
   kind: "two-sample" | "paired" | "one-sample";
   tails: 1 | 2;
+  /** p-value adjustment method. */
+  adjustMethod: "holm" | "bonferroni" | "bh";
+  /** Chi-square GoF: expect equal counts, or read an expected-counts column. */
+  gofExpected: "uniform" | "column";
 }
 
 export const DEFAULT_SELECTION: TestSelection = { x: 0, y: 1, cols: [], byCol: 0, byCol2: 1, groupMode: "columns" };
@@ -111,6 +122,8 @@ export const DEFAULT_PARAMS: TestParams = {
   power: 0.8,
   kind: "two-sample",
   tails: 2,
+  adjustMethod: "holm",
+  gofExpected: "uniform",
 };
 
 export type BuildOutcome =
@@ -145,6 +158,14 @@ function levelNamer(data: DataStruct, col: number): (code: number) => string {
 }
 
 const distinct = (cols: readonly number[]): boolean => new Set(cols).size === cols.length;
+
+const binaryProblem = (y: number[], label: string): string | null =>
+  y.some((v) => v !== 0 && v !== 1)
+    ? `${label} must be coded 0/1 (it has other values).`
+    : new Set(y).size < 2 ? `${label} needs both outcomes (0 and 1) among the usable rows.` : null;
+
+const countProblem = (y: number[], label: string): string | null =>
+  y.some((v) => v < 0 || !Number.isInteger(v)) ? `${label} must hold counts (whole numbers, 0 or more).` : null;
 
 /** Build the request for `id` from the picks, or say plainly what is missing. */
 export function buildTestRequest(
@@ -220,6 +241,48 @@ export function buildTestRequest(
       return { ok: true, request: { id, body }, labels };
     }
 
+    case "roc": {
+      if (sel.x === sel.y) return fail("Pick two different columns: the 0/1 outcome and the score.");
+      const [truth, score] = completeRows(data, [sel.x, sel.y]);
+      const bad = binaryProblem(truth, name(sel.x));
+      if (bad) return fail(bad);
+      return { ok: true, request: { id, body: { y_true: truth, y_score: score } }, labels: [name(sel.x), name(sel.y)] };
+    }
+
+    case "glm-logistic":
+    case "glm-poisson": {
+      const preds = sel.cols.filter((c) => c !== sel.x);
+      if (preds.length === 0) return fail("Pick at least one predictor other than the response.");
+      const [y, ...predictors] = completeRows(data, [sel.x, ...preds]);
+      const bad = id === "glm-logistic" ? binaryProblem(y, name(sel.x)) : countProblem(y, name(sel.x));
+      if (bad) return fail(bad);
+      return { ok: true, request: { id, body: { y, predictors, alpha: p.alpha } }, labels: [name(sel.x), ...preds.map(name)] };
+    }
+
+    case "chi-square-gof": {
+      const useExpected = p.gofExpected === "column";
+      if (useExpected && sel.x === sel.y) return fail("Pick two different columns: observed and expected counts.");
+      const [observed, expected] = completeRows(data, useExpected ? [sel.x, sel.y] : [sel.x]);
+      if (observed.length < 2) return fail("Need at least 2 categories (rows) of counts.");
+      if (observed.some((v) => v < 0)) return fail(`${name(sel.x)} has negative counts; observed counts must be 0 or more.`);
+      if (!useExpected) return { ok: true, request: { id, body: { observed } }, labels: [name(sel.x)] };
+      if (expected.some((v) => v <= 0)) return fail(`${name(sel.y)} has expected counts of 0 or less; they must be positive.`);
+      const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+      const [so, se] = [sum(observed), sum(expected)];
+      if (Math.abs(so - se) > 1e-8 * Math.max(so, se)) {
+        return fail(`Expected counts total ${Number(se.toPrecision(6))} but observed total ${Number(so.toPrecision(6))}; scale the expected column to the observed total (nothing is rescaled for you).`);
+      }
+      return { ok: true, request: { id, body: { observed, expected } }, labels: [name(sel.x), name(sel.y)] };
+    }
+
+    case "adjust-p": {
+      const pv = finite(colValues(data, sel.x));
+      if (pv.length === 0) return fail("The p-value column has no numbers.");
+      const out = pv.find((v) => v < 0 || v > 1);
+      if (out !== undefined) return fail(`${name(sel.x)} must hold p-values between 0 and 1 (found ${Number(out.toPrecision(6))}).`);
+      return { ok: true, request: { id, body: { p_values: pv, method: p.adjustMethod } }, labels: [name(sel.x)] };
+    }
+
     case "partial-correlation": {
       if (sel.cols.length < 3 || !distinct(sel.cols)) return fail("Pick at least 3 columns.");
       return { ok: true, request: { id, body: { columns: completeRows(data, sel.cols) } }, labels: sel.cols.map(name) };
@@ -230,11 +293,13 @@ export function buildTestRequest(
 /** The worksheet columns a test reads for `sel` (-1 = the X/time column), in
  *  the order its builder uses them. The shared input contract resolves these
  *  (lib/analysisInputs); a test that reads no data ("power") reads none. */
-export function testColumns(id: StatsTestId, sel: TestSelection): number[] {
+export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> = DEFAULT_PARAMS): number[] {
   switch (testDef(id).input) {
     case "one": return [sel.x];
     case "two":
-    case "paired": return [sel.x, sel.y];
+    case "paired":
+    case "classifier": return [sel.x, sel.y];
+    case "counts": return p.gofExpected === "column" ? [sel.x, sel.y] : [sel.x];
     case "groups": return sel.groupMode === "category" ? [sel.x, sel.byCol] : [...sel.cols];
     case "blocks":
     case "columns": return [...sel.cols];

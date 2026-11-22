@@ -76,7 +76,31 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
         Select a dataset to analyze.
       </div>
     );
-  } else if (kind === "one") pickers = <div style={row}>{pick("Column", t.sel.x, (x) => t.setSel({ x }))}</div>;
+  } else if (kind === "one") {
+    pickers = <div style={row}>{pick(t.testId === "adjust-p" ? "P-values" : "Column", t.sel.x, (x) => t.setSel({ x }))}</div>;
+  } else if (kind === "classifier") {
+    pickers = (
+      <div style={row}>
+        {pick("Outcome (0/1)", t.sel.x, (x) => t.setSel({ x }))}
+        {pick("Score", t.sel.y, (y) => t.setSel({ y }))}
+      </div>
+    );
+  } else if (kind === "counts") {
+    pickers = (
+      <div style={row}>
+        {pick("Observed counts", t.sel.x, (x) => t.setSel({ x }))}
+        <Field label="Expected">
+          <Select
+            aria-label="Expected"
+            options={[{ value: "uniform", label: "uniform (equal counts)" }, { value: "column", label: "from a column" }]}
+            value={t.params.gofExpected}
+            onChange={(e) => setP({ gofExpected: e.target.value as TestParams["gofExpected"] })}
+          />
+        </Field>
+        {t.params.gofExpected === "column" && pick("Expected counts", t.sel.y, (y) => t.setSel({ y }))}
+      </div>
+    );
+  }
   else if (kind === "two" || kind === "paired") {
     pickers = (
       <div style={row}>
@@ -117,7 +141,13 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   } else if (kind === "regression") {
     pickers = (
       <>
-        <div style={row}>{pick("Response", t.sel.x, (x) => t.setSel({ x }))}</div>
+        <div style={row}>
+          {pick(
+            t.testId === "glm-logistic" ? "Response (0/1)" : t.testId === "glm-poisson" ? "Response (counts)" : "Response",
+            t.sel.x,
+            (x) => t.setSel({ x }),
+          )}
+        </div>
         {multi("Predictors")}
       </>
     );
@@ -152,6 +182,20 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
               options={[{ value: "3", label: "Type III" }, { value: "2", label: "Type II" }]}
               value={String(t.params.ssType)}
               onChange={(e) => setP({ ssType: e.target.value === "2" ? 2 : 3 })}
+            />
+          </Field>
+        )}
+        {t.testId === "adjust-p" && (
+          <Field label="Method">
+            <Select
+              aria-label="Method"
+              options={[
+                { value: "holm", label: "Holm" },
+                { value: "bonferroni", label: "Bonferroni" },
+                { value: "bh", label: "Benjamini-Hochberg (FDR)" },
+              ]}
+              value={t.params.adjustMethod}
+              onChange={(e) => setP({ adjustMethod: e.target.value as TestParams["adjustMethod"] })}
             />
           </Field>
         )}
