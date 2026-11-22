@@ -139,6 +139,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
+  "Dataset.cellRules": (ws) => { dataset(ws, "c").cellRules = { 0: [{ kind: "value", op: ">", a: 1, tone: "danger" }] }; },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },

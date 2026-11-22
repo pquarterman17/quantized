@@ -6,6 +6,7 @@
 import { isCategoricalChannel } from "../../../lib/categorical";
 import { originTextColumnNames, textColumnCells } from "../../../lib/originTextColumnCells";
 import type { AppendMatch } from "../../../lib/mergeByName";
+import type { DedupeKeep, FillMethod, StandardizeMethod } from "../../../lib/transformClean";
 import type { TransformParams } from "../../../lib/transformRun";
 import type { DataStruct } from "../../../lib/types";
 import type { JoinKey, JoinMode } from "../../../lib/worksheetJoin";
@@ -18,6 +19,9 @@ export const OP_OPTIONS: { value: PreviewOp; label: string }[] = [
   { value: "stack", label: "Stack columns (wide → long)" },
   { value: "unstack", label: "Unstack / pivot (long → wide)" },
   { value: "transpose", label: "Transpose" },
+  { value: "dedupe", label: "Remove duplicate rows" },
+  { value: "fillmissing", label: "Fill or drop missing values" },
+  { value: "standardize", label: "Z-score / min-max / rank columns" },
 ];
 
 export interface TransformForm {
@@ -43,6 +47,13 @@ export interface TransformForm {
   category: string;
   value: number;
   aggregate: AggregateMode;
+  /** Clean data: dedupe key options (`keyOptions` values; none = the whole row). */
+  dedupeKeys: string[];
+  keep: DedupeKeep;
+  fillMethod: FillMethod;
+  standardizeMethod: StandardizeMethod;
+  /** Fill / standardize: the 0-based columns acted on. */
+  cleanChannels: number[];
 }
 
 interface Named {
@@ -74,6 +85,12 @@ export function seedForm(op: PreviewOp, seed: readonly string[], datasets: reado
     category: defaultCategory(data),
     value: defaultValue(data, defaultCategory(data)),
     aggregate: "mean",
+    dedupeKeys: [],
+    keep: "first",
+    fillMethod: "linear",
+    standardizeMethod: "zscore",
+    // Categorical columns are refused by both ops, so they are not pre-ticked.
+    cleanChannels: Array.from({ length: n }, (_, i) => i).filter((i) => !data || !isCategoricalChannel(data, i)),
   };
 }
 
@@ -201,6 +218,20 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
         primaryId: primary.id,
         otherIds: [],
       };
+    case "dedupe": {
+      const offered = (v: string) => keyOptions(primary.data).some((o) => o.value === v);
+      if (!form.dedupeKeys.every(offered)) return "A key column is no longer in this dataset; pick the keys again.";
+      return { params: { op: "dedupe", keys: form.dedupeKeys.map(parseKey), keep: form.keep }, primaryId: primary.id, otherIds: [] };
+    }
+    case "fillmissing":
+    case "standardize": {
+      const channels = form.cleanChannels.filter((c) => c >= 0 && c < n);
+      if (!channels.length) return "Tick at least one column.";
+      const params: TransformParams = form.op === "fillmissing"
+        ? { op: "fillmissing", method: form.fillMethod, channels }
+        : { op: "standardize", method: form.standardizeMethod, channels };
+      return { params, primaryId: primary.id, otherIds: [] };
+    }
     default:
       return { params: { op: "transpose" }, primaryId: primary.id, otherIds: [] };
   }

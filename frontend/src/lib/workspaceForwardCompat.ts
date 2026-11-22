@@ -248,7 +248,7 @@ export const DATASET: Classify<Dataset> = {
   filter: V, pending: V, source: V, versionOf: V, workbookId: V,
   // Session-only (lazy-book install counter): never serialized, so 0.34 is unaffected.
   installEpoch: K,
-  linkedCurves: G, columnProps: G, hiddenCols: G, frozenCols: G,
+  linkedCurves: G, columnProps: G, hiddenCols: G, frozenCols: G, cellRules: G,
 };
 
 // Top-level `.dwk` keys added after v0.34.0. 0.34's parseWorkspace builds its
@@ -305,7 +305,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
  *  every other gated field as one v0.38.0 already read). */
 export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
   "AxisFormat.divideMark", "ErrorBinding.origin", "StatPicks.barPercent", "StatPicks.valueRange",
-  "StatPicks.histCols", "ExportSeriesStyle.stack", "ExportSeriesStyle.float",
+  "StatPicks.histCols", "ExportSeriesStyle.stack", "ExportSeriesStyle.float", "Dataset.cellRules",
   "StatMarks.comparisons", "StatMarks.compareMethod", "StatMarks.compareControl", "StatMarks.compareExact",
 ]);
 
