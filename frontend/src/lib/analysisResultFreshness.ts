@@ -14,6 +14,7 @@
 // Pure: the parser runs this inside lib/workspaceParse.worker.ts too.
 
 import type { AnalysisResult } from "./analysisResult";
+import { isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
 import { peakTableMatchesData } from "./peakTableFreshness";
 import { analysisData } from "./rowstate";
@@ -177,6 +178,10 @@ export function stampAnalysisResults(
         return { ...result, stale: true };
       }
     }
+    // A committed output (no recipe, never recomputed in place) that went stale
+    // stays stale until its tool writes a new one; an Undo of a replace brings
+    // its envelope back marked (store/analysisOutputReplace.ts, lane RO).
+    if (wasStale && isCommittedOutputResult(result)) return { ...result, stale: true };
     if (result.outputs.some((ref) => staleDatasets.includes(ref.datasetId))) return { ...result, stale: true };
     const fingerprint = sourcesFingerprint(result, byId);
     return fingerprint ? { ...result, sourceFingerprint: fingerprint } : result;

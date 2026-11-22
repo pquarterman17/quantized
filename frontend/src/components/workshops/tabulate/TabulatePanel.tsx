@@ -11,6 +11,8 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import ZoneWell from "../graphbuilder/ZoneWell";
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Switch } from "../../primitives/Switch";
 import { Button } from "../../primitives";
 import TabulateStatPicker from "./TabulateStatPicker";
@@ -19,7 +21,7 @@ import { MAX_GROUP_COLS, useTabulate } from "./useTabulate";
 
 const rejectForeignDrop = () => toast("dropped a chip from a different dataset", "info");
 
-export default function TabulatePanel() {
+function TabulatePanelBody() {
   const setOpen = useApp((s) => s.setTabulateOpen);
   const setStatus = useApp((s) => s.setStatus);
   const t = useTabulate();
@@ -33,6 +35,7 @@ export default function TabulatePanel() {
 
   return (
     <ToolWindow id="tabulate" title="Tabulate" width={620} onClose={() => setOpen(false)}>
+      <ReopenBanner tool="tabulate" />
       {!t.hasData ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to summarize.
@@ -96,7 +99,7 @@ export default function TabulatePanel() {
               onClick={t.exportDataset}
               style={{ flex: 1 }}
             >
-              Export → dataset
+              {t.replacing ? `Replace “${t.replacing}”` : "Export → dataset"}
             </Button>
             <Button size="sm" disabled={!t.rows.length} onClick={() => void copy()} style={{ flex: 1 }}>
               Copy TSV
@@ -114,4 +117,9 @@ export default function TabulatePanel() {
       )}
     </ToolWindow>
   );
+}
+
+/** Remounts the body for each "Open in <tool>" session (it seeds once, at mount). */
+export default function TabulatePanel() {
+  return <TabulatePanelBody key={useReopenScope("tabulate")} />;
 }

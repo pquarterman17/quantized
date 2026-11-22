@@ -3,6 +3,8 @@
 // read centre, semi-axes and tilt with standard errors. Logic: useEllipseFit.
 
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { fmtNum as fmt } from "../../../lib/format";
@@ -18,7 +20,7 @@ const METHODS = [
   { value: "algebraic", label: "Algebraic only (direct, fast)" },
 ];
 
-export default function EllipseFitPanel() {
+function EllipseFitPanelBody() {
   const hide = useAnalysisExtras((s) => s.hide);
   const e = useEllipseFit();
   const opts = pickOptions(e.columns);
@@ -26,6 +28,7 @@ export default function EllipseFitPanel() {
 
   return (
     <ToolWindow id="ellipse-fit" title="Ellipse fit" width={440} onClose={() => hide("ellipse-fit")}>
+      <ReopenBanner tool="ellipse-fit" />
       {!e.hasData ? (
         <div className="qzk-helptext">Select a dataset with two columns of points that trace an ellipse or a part of one.</div>
       ) : (
@@ -108,7 +111,7 @@ export default function EllipseFitPanel() {
               </div>
               <div style={{ marginTop: 10 }}>
                 <Button size="sm" disabled={!!e.addDisabledReason} title={e.addDisabledReason ?? "Add the fitted ellipse as a dataset to overlay on the points"} onClick={e.addEllipse}>
-                  Add fitted ellipse as dataset
+                  {e.replacing ? `Replace “${e.replacing}”` : "Add fitted ellipse as dataset"}
                 </Button>
               </div>
             </>
@@ -119,4 +122,9 @@ export default function EllipseFitPanel() {
       )}
     </ToolWindow>
   );
+}
+
+/** Remounts the body for each "Open in <tool>" session (it seeds once, at mount). */
+export default function EllipseFitPanel() {
+  return <EllipseFitPanelBody key={useReopenScope("ellipse-fit")} />;
 }

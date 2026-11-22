@@ -273,7 +273,7 @@ export default function AnalysisResultPanel() {
     ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"
     : isPeak
     ? !source ? "Source missing" : !peakTable ? "Incomplete" : peakStale ? "Out of date" : "Current"
-    : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) ? "Out of date" : "Current";
+    : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) || (result.stale && !output.derivedFrom) ? "Out of date" : "Current";
   const figureDisabledReason = busy !== null
     ? "Finish the current result action before creating an editable figure."
     : snapshotState === "out-of-date"

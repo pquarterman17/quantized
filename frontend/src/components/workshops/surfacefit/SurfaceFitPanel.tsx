@@ -4,6 +4,8 @@
 // model surface and residuals as a new dataset. Logic lives in useSurfaceFit.
 
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
@@ -18,7 +20,7 @@ import { useSurfaceFit } from "./useSurfaceFit";
 
 const RAMP = `linear-gradient(to right, ${[0, 0.25, 0.5, 0.75, 1].map((t) => colormapCss("rdbu", t)).join(", ")})`;
 
-export default function SurfaceFitPanel() {
+function SurfaceFitPanelBody() {
   const hide = useAnalysisExtras((s) => s.hide);
   const f = useSurfaceFit();
   const opts = pickOptions(f.columns);
@@ -27,6 +29,7 @@ export default function SurfaceFitPanel() {
 
   return (
     <ToolWindow id="surface-fit" title="Surface fit z = f(x, y)" width={480} onClose={() => hide("surface-fit")}>
+      <ReopenBanner tool="surface-fit" />
       {!f.hasData ? (
         <div className="qzk-helptext">
           Select a dataset with at least three columns: the X axis plus two channels, such as a map or a long-form
@@ -161,7 +164,7 @@ export default function SurfaceFitPanel() {
                   Copy MD
                 </Button>
                 <Button size="sm" disabled={!!f.addDisabledReason} title={f.addDisabledReason ?? "Add X, Y, the fitted Z, the data Z and the residual as a new dataset"} onClick={f.addFittedSurface}>
-                  Add fitted surface as dataset
+                  {f.replacing ? `Replace “${f.replacing}”` : "Add fitted surface as dataset"}
                 </Button>
               </div>
             </>
@@ -172,4 +175,9 @@ export default function SurfaceFitPanel() {
       )}
     </ToolWindow>
   );
+}
+
+/** Remounts the body for each "Open in <tool>" session (it seeds once, at mount). */
+export default function SurfaceFitPanel() {
+  return <SurfaceFitPanelBody key={useReopenScope("surface-fit")} />;
 }
