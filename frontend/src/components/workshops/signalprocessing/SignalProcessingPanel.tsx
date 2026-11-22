@@ -23,6 +23,7 @@ import SignalChannelInputs from "./SignalChannelInputs";
 import SignalOperationPicker, { useAppliedOperationSeed } from "./SignalOperationPicker";
 import SigopBody from "./SigopBody";
 import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
+import SpectrogramBody from "./SpectrogramBody";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
 import SignalInputSummary from "./SignalInputSummary";
@@ -63,6 +64,7 @@ export default function SignalProcessingPanel() {
   const [channels, setChannels] = useState<number[]>([]);
   const [settings, setSettings] = useState<SignalSettings>(DEFAULT_SIGNAL_SETTINGS);
   const [sigop, setSigop] = useState<SigopFilterMethod | null>(null); // median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT
+  const [spectrogram, setSpectrogram] = useState(false); // short-time FFT: its own body, committed as a map worksheet
   const [spectralSettings, setSpectralSettings] = useState(DEFAULT_SPECTRAL_SETTINGS);
   const [correlationMode, setCorrelationMode] = useState<CorrelationSourceMode>("same");
   const [secondaryId, setSecondaryId] = useState("");
@@ -75,7 +77,8 @@ export default function SignalProcessingPanel() {
   };
   const pick = (op: string) => {
     setSigop(isSigopFilter(op) ? op : null);
-    if (!isSigopFilter(op)) setSettings((c) => ({ ...c, operation: op as SignalSettings["operation"] }));
+    setSpectrogram(op === "spectrogram");
+    if (!isSigopFilter(op) && op !== "spectrogram") setSettings((c) => ({ ...c, operation: op as SignalSettings["operation"] }));
   };
   useAppliedOperationSeed(pick, busy);
   const spectralOperation = isSpectralOperation(settings.operation) ? settings.operation : null;
@@ -170,7 +173,7 @@ export default function SignalProcessingPanel() {
   // Shared workbench shell: debounced, stale-rejecting, aborted on change/unmount.
   // `current` is only ever the preview of exactly these inputs (by identity).
   const preview = useWorkbenchPreview({
-    key: sigop || !active || !inputData || validation || !recipe || (!spectral && !params) ? ""
+    key: sigop || spectrogram || !active || !inputData || validation || !recipe || (!spectral && !params) ? ""
       : JSON.stringify([active.id, tokenOf(active), tokenOf(inputData), secondaryInput ? tokenOf(secondaryInput) : null, tokenOf(recipe), params ? tokenOf(params) : null]),
     delayMs: 180,
     run: (signal) => spectral
@@ -231,7 +234,7 @@ export default function SignalProcessingPanel() {
     <ToolWindow id="signal-processing" title="Signal Processing" width={620} y={90} dockable onClose={close}>
       <div className="qz-signal-workbench">
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
-        {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : (
+        {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : spectrogram ? <SpectrogramBody active={active} onPick={pick} onClose={close} /> : (
           <>
             <SignalInputSummary channels={channels} useAllRows={settings.useAllRows} onUseAllRows={(useAllRows) => setSettings((c) => ({ ...c, useAllRows }))} />
             <SignalOperationPicker value={settings.operation} onChange={pick} />

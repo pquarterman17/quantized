@@ -244,6 +244,11 @@ CASES = [
         MAP_GOOD,
     ),
     (
+        "/api/spectral/spectrogram",
+        lambda ds: {"dataset": ds, "channel": 0, "segment_len": 8, "overlap": 0.5},
+        SPECTRUM_GOOD,
+    ),
+    (
         "/api/transform/resample",
         lambda ds: {"dataset": ds, "mode": "n_points", "n_points": 5},
         GOOD_DATASET,
