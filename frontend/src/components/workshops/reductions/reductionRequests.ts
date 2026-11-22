@@ -1,6 +1,6 @@
 // The request bodies of the FFT thickness and reflectivity FFT runs, built in
 // one place for the single run (useFftThickness / useReflectivityFft) and the
-// batch over worksheets (reductionBatch.ts), so the two cannot drift: a batch
+// batch over worksheets (reductionBatchItems.ts), so the two cannot drift: a batch
 // row for the active worksheet sends exactly what the panel's Compute sends.
 
 import type { reflectivityFft, fftThickness } from "../../../lib/api/reductions";
@@ -50,7 +50,7 @@ export interface ReflectivityFftSettings {
 // imported: sharing that module across two lazy chunks splits it into a third
 // and grows the eager preload map.
 const NM = /nm(⁻¹|\^?-1)|1\/nm/;
-const unitOf = (d: DataStruct | undefined): string => String(d?.metadata?.x_column_unit ?? "").toLowerCase();
+export const unitOf = (d: DataStruct | undefined): string => String(d?.metadata?.x_column_unit ?? "").toLowerCase();
 
 export function xIsQ(d: DataStruct | undefined): boolean {
   const unit = unitOf(d);

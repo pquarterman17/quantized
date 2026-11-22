@@ -15,7 +15,7 @@ import {
 import {
   type PawleyCentering, type PawleyFields, type PawleyTie, pawleyInputProblem, pawleyNumbers,
 } from "./pawleyInputs";
-import type { FftThicknessSettings, ReflectivityFftSettings } from "./reductionRequests";
+import { type FftThicknessSettings, type ReflectivityFftSettings, unitOf } from "./reductionRequests";
 
 /** The panel's channel NAME (the batch reads the same-named column), or why not. */
 function channelName(active: Dataset | null, col: number): { name: string | null; problem: string | null } {
@@ -32,7 +32,7 @@ export function FftThicknessBatch({ active, col, settings }: { active: Dataset |
   }, [name, problem, settings]);
   return <StatsBatchSection
     toolId="fft-thickness" label="FFT thickness"
-    meaning={`Each worksheet is run on its column named "${name ?? "—"}", with 2θ from its X axis and this panel's wavelength, range, window and maximum thickness. A worksheet that records a different wavelength fails.`}
+    meaning={`Each worksheet is run on its column named "${name ?? "—"}", with 2θ from its X axis and this panel's wavelength, range, window and maximum thickness. A worksheet that records a different wavelength, or whose x is not 2θ in degrees, fails.`}
     summaryColumns={FFT_THICKNESS_BATCH_HEADERS} runItem={runItem}
     resultParameters={{ ...(name ? { channel: name } : {}), ...settings }} blockedReason={blocked}
   />;
@@ -40,16 +40,17 @@ export function FftThicknessBatch({ active, col, settings }: { active: Dataset |
 
 export function ReflectivityFftBatch({ active, col, settings }: { active: Dataset | null; col: number; settings: ReflectivityFftSettings }) {
   const { name, problem } = channelName(active, col);
+  const rangeUnit = unitOf(active?.data);
   const blocked = problem ?? (!settings.isNeutron && !(settings.wavelength > 0) ? "Set a positive wavelength for XRR (2θ) mode." : null);
   const runItem = useCallback(async (dataset: Dataset) => {
     if (!name) throw new Error(problem ?? "Pick a channel first.");
-    return reflectivityFftBatchItem(dataset, name, settings);
-  }, [name, problem, settings]);
+    return reflectivityFftBatchItem(dataset, name, settings, rangeUnit);
+  }, [name, problem, settings, rangeUnit]);
   return <StatsBatchSection
     toolId="reflectivity-fft" label="Reflectivity FFT"
     meaning={`Each worksheet is run on its column named "${name ?? "—"}" in this panel's mode (${settings.isNeutron ? "Q, neutron" : "2θ, X-ray"}) and settings. A worksheet whose own axis reads as the other mode, or (X-ray) records a different wavelength, fails.`}
     summaryColumns={REFLECTIVITY_FFT_BATCH_HEADERS} runItem={runItem}
-    resultParameters={{ ...(name ? { channel: name } : {}), ...settings }} blockedReason={blocked}
+    resultParameters={{ ...(name ? { channel: name } : {}), ...settings, rangeUnit }} blockedReason={blocked}
   />;
 }
 

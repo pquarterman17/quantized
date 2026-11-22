@@ -1062,8 +1062,12 @@ describer).
 - *Fail closed per worksheet.* Thickness and cell scale with the wavelength, so
   a worksheet whose file records a different wavelength than the panel's is an
   error row (a file that records none runs with the panel's, as the single run
-  does); a Reflectivity FFT worksheet whose axis reads as the other probe
-  (Q versus 2θ) fails; a Pawley worksheet whose x is not 2θ in degrees fails
+  does); an FFT thickness worksheet whose x is not 2θ in degrees fails (the
+  single run does not check; the batch is stricter on purpose); a Reflectivity
+  FFT worksheet whose axis reads as the other probe (Q versus 2θ) fails, as
+  does one whose x unit differs from the panel's when an x range is set (the
+  range was typed in the panel worksheet's unit); a Curie–Weiss worksheet reads
+  the response's own X (T2 for R2 on a T1,R1,T2,R2 sheet); a Pawley worksheet whose x is not 2θ in degrees fails
   (`pawleyAxisProblem`); a Curie–Weiss worksheet whose X is not a declared K
   temperature or whose response is not molar susceptibility fails.
 - *FFT thickness:* thickness, uncertainty, points used. *Reflectivity FFT:*

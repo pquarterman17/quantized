@@ -15,6 +15,7 @@
 // stays a single-run output.
 
 import { magneticCurieWeissDataFit } from "../../../lib/api/magnetic";
+import { ownXKey } from "../../../lib/perSeriesX";
 import { columnByName, statsBatchData } from "../../../lib/statsBatchColumns";
 import type { Dataset } from "../../../lib/types";
 import type { AnalysisBatchOutcome } from "../analysisselection/AnalysisBatchControls";
@@ -40,11 +41,16 @@ export async function curieWeissBatchItem(
   if (col < 0) throw new Error(`"${channel}" is the X axis of this worksheet, not a response channel.`);
   const blocked = curieWeissBatchBlockReason(choice, data.units[col] ?? "");
   if (blocked) throw new Error(blocked);
-  const problem = curieWeissProblem({ ...dataset, data }, null, col, choice, 0, 0, fitMin, fitMax, null);
+  const view = { ...dataset, data };
+  const problem = curieWeissProblem(view, null, col, choice, 0, 0, fitMin, fitMax, null);
   if (problem) throw new Error(problem);
+  // The temperature is the response's OWN X (R2 in T1,R1,T2,R2 reads T2): the
+  // axis `curieWeissProblem` just checked, and the one the single run reads.
+  const xCol = ownXKey(view, null, col);
   const temperature: number[] = [];
   const response: number[] = [];
-  data.time.forEach((t, row) => {
+  data.time.forEach((t0, row) => {
+    const t = xCol == null ? t0 : data.values[row]![xCol]!;
     const y = data.values[row]![col]!;
     if (Number.isFinite(t) && Number.isFinite(y)) { temperature.push(t); response.push(y); }
   });

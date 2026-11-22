@@ -96,3 +96,18 @@ describe("Curie-Weiss batch", () => {
     await waitFor(() => expect(screen.queryByText("Completed")).toBeNull());
   });
 });
+
+describe("Curie-Weiss batch on a multi-X sheet", () => {
+  it("reads the response's OWN temperature column, as the single run does", async () => {
+    const { curieWeissBatchItem } = await import("./curieWeissBatch");
+    const data: DataStruct = {
+      time: [1, 2, 3, 4],
+      values: [[100, 0.04, 110, 0.05], [200, 0.02, 210, 0.03], [300, 0.013, 310, 0.02], [400, 0.01, 410, 0.015]],
+      labels: ["T1", "Chi1", "T2", "Chi2"], units: ["K", "cm3/mol", "K", "cm3/mol"],
+      metadata: { x_column_name: "idx", x_column_unit: "K" },
+    };
+    const ds: Dataset = { id: "x", name: "x.dat", data, columnDesignations: ["X", "Y", "X", "Y"] };
+    await curieWeissBatchItem(ds, "Chi2", "auto", 100, 500);
+    expect(vi.mocked(magneticCurieWeissDataFit).mock.calls[0]![0]).toMatchObject({ temperature: [110, 210, 310, 410], response: [0.05, 0.03, 0.02, 0.015] });
+  });
+});

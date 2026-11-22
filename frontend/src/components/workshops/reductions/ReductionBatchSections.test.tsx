@@ -207,3 +207,25 @@ describe("Pawley batch", () => {
     expect(screen.getByRole("button", { name: "Run Pawley batch" })).toBeDisabled();
   });
 });
+
+describe("worksheet checks that fail closed (review round)", () => {
+  it("FFT thickness: a worksheet whose x is not 2θ in degrees is an error row", async () => {
+    setup([sheet("a", A), sheet("q", scan(["Intensity"], [[1], [2], [3], [4]], { x_column_name: "Qz", x_column_unit: "1/Ang" }))]);
+    render(<FftThicknessSection />);
+    openBatch();
+    run("FFT thickness");
+    await finished();
+    expect(savedRows().map((r) => r[1])).toEqual(["Completed", "Failed"]);
+    expect(savedRows()[1]!.at(-1)).toMatch(/not 2θ in degrees/);
+    expect(fftThickness).toHaveBeenCalledTimes(1);
+  });
+
+  it("Reflectivity FFT: an x range typed in another unit than the worksheet's is an error row", async () => {
+    const { reflectivityFftBatchItem } = await import("./reductionBatchItems");
+    const settings = { isNeutron: true, wavelength: 1.5406, xMin: 0.02, xMax: null, windowFn: "hann", preprocess: "logR" as const, maxThicknessNm: 500, peakProminence: 0.05 };
+    const nm = { id: "n", name: "n.xy", data: scan(["R"], [[1], [2], [3], [4]], { x_column_unit: "1/nm" }) };
+    await expect(reflectivityFftBatchItem(nm, "R", settings, "1/ang")).rejects.toThrow(/x range was set in "1\/ang"/);
+    expect(reflectivityFft).not.toHaveBeenCalled();
+    await expect(reflectivityFftBatchItem(nm, "R", { ...settings, xMin: null }, "1/ang")).resolves.toBeTruthy();
+  });
+});

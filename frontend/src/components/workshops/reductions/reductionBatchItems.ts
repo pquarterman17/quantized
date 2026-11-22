@@ -12,20 +12,21 @@
 //    worksheet. Thickness and cell both scale with lambda, so a worksheet whose
 //    file records a DIFFERENT wavelength is an error row, never silently run
 //    with the panel's;
-//  * a Q-versus-2θ mismatch between the panel's mode and the worksheet's own
+//  * an FFT-thickness worksheet whose x is not 2θ in degrees, a Reflectivity FFT
+//    x range typed in another x unit than the worksheet's, a Q-versus-2θ mismatch between the panel's mode and the worksheet's own
 //    axis, and a Pawley worksheet whose x is not 2θ in degrees, are error rows.
 // The request bodies are the single run's own (reductionRequests, pawleyBody).
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { pawleyRefine, fftThickness, reflectivityFft } from "../../../lib/api/reductions";
-import { xChannelIdentity } from "../../../lib/peakTableFit";
+import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
 import { columnByName, statsBatchData } from "../../../lib/statsBatchColumns";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import type { AnalysisBatchOutcome } from "../analysisselection/AnalysisBatchControls";
 import {
   type FftThicknessSettings, type ReflectivityFftSettings,
-  fftThicknessBody, reflectivityFftBody, xIsQ,
+  fftThicknessBody, reflectivityFftBody, unitOf, xIsQ,
 } from "./reductionRequests";
 import {
   PAWLEY_MAX_POINTS, type PawleyRunSettings, pawleyAxisProblem, pawleyBody, pawleyVerdict, scanRange,
@@ -59,6 +60,10 @@ export async function fftThicknessBatchItem(
   dataset: Dataset, channel: string, s: FftThicknessSettings,
 ): Promise<AnalysisBatchOutcome> {
   const { data, col } = readScan(dataset, channel);
+  const axis = xChannelIdentity(data, null);
+  if (!xAxisIsTwoThetaDegrees(axis)) {
+    throw new Error(`the x axis is ${axis.xLabel || "unlabeled"} (${axis.xUnit || "no unit recorded"}), not 2θ in degrees.`);
+  }
   const problem = wavelengthProblem(data, s.wavelength);
   if (problem) throw new Error(problem);
   const r = await fftThickness(fftThicknessBody(data, col, s));
@@ -69,11 +74,16 @@ export async function fftThicknessBatchItem(
 }
 
 export async function reflectivityFftBatchItem(
-  dataset: Dataset, channel: string, s: ReflectivityFftSettings,
+  dataset: Dataset, channel: string, s: ReflectivityFftSettings, rangeUnit: string,
 ): Promise<AnalysisBatchOutcome> {
   const { data, col } = readScan(dataset, channel);
   if (xIsQ(data) !== s.isNeutron) {
     throw new Error(`this worksheet's x axis reads as ${xIsQ(data) ? "Q (neutron)" : "2θ (X-ray)"} but the batch is set to ${s.isNeutron ? "Q (neutron)" : "2θ (X-ray)"}.`);
+  }
+  // The panel's x range was typed in the PANEL worksheet's x unit; another
+  // unit (nm-1 versus 1/Å) would silently rescale the window.
+  if ((s.xMin != null || s.xMax != null) && unitOf(data).trim() !== rangeUnit.trim()) {
+    throw new Error(`the x range was set in "${rangeUnit || "no unit"}" but this worksheet's x unit is "${unitOf(data).trim() || "no unit"}".`);
   }
   if (!s.isNeutron) {
     const problem = wavelengthProblem(data, s.wavelength);
