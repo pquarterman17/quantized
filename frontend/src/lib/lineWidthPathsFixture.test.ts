@@ -9,8 +9,8 @@
 //   - the Graph Builder preview strokes every series at a fixed
 //     `GRAPH_PREVIEW_LINE_PX`, whatever the plot template or the Preferences
 //     width, and the encoded export draws the PREVIEW's series;
-//   - the polar canvas strokes every series at a fixed `POLAR_LINE_PX` and
-//     ignores a series' own width, which the polar request never sends.
+//   - the polar canvas strokes a series at its Series-card width (else the
+//     default `POLAR_LINE_PX`), and the polar request sends that same width.
 // The canvas half reads each width back out of the real renderer (uPlot's
 // options; the two Canvas2D painters through a recording context). The request
 // half reads the exact request each path sends. The backend half
@@ -161,11 +161,11 @@ const CASES: Case[] = [
   },
   {
     kind: "polar",
-    name: "Polar: every series at the canvas' fixed width, its own width ignored",
+    name: "Polar: a Series-card width is drawn and exported; an unstyled series keeps the 1.5 px default",
     template: "presentation",
     style: "poster",
     seriesStyles: { 1: { width: 4, color: "#d62728" } },
-    drawn: [at(1.5), at(1.5)],
+    drawn: [at(1.5), at(4)],
   },
 ];
 
@@ -298,8 +298,8 @@ function fresh() {
     rule:
       "A line with no explicit width exports at the width its canvas draws it (px sent as pt), never the style "
       + "preset's line_width: a spatial page cell at the plot template's width (the Preferences default under "
-      + "Screen), the Graph Builder's encoded export at its preview's fixed 1.5 px, the polar figure at the polar "
-      + "canvas' fixed 1.5 px.",
+      + "Screen), the Graph Builder's encoded export at its preview's fixed 1.5 px, the polar figure at the "
+      + "Series card's width (1.5 px when it sets none).",
     cases: CASES.map((c) => ({ name: c.name, ...request(c), drawn: c.drawn })),
   };
 }

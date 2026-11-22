@@ -6,6 +6,7 @@
 import { applyWaterfall } from "../commands/waterfallCommand";
 import type { AxisId } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
+import { openAuxFigure } from "./ternaryPending";
 import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
 import { PLOT_TYPE_COMMANDS, PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
 import { effectiveChannels } from "./plotdata";
@@ -45,6 +46,7 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void): void {
     // Gap-audit-2 #17: these open the tool the app already has for them.
     if (id === "waterfall") void applyWaterfall();
     else if (id === "ternary") openTernary?.();
+    else if (id === "pie") openAuxFigure("pieOpen"); // labels = the X column, wedges = the first channel; the workshop re-picks
     else s.setStackMode(true);
     s.setStageTab("plot");
     s.setStatus(`plot type: ${label}`);
