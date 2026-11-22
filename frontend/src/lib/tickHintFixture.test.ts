@@ -60,6 +60,11 @@ interface Case {
   expect: Partial<Record<Axis, "screen" | "auto">>;
 }
 
+// V8's `**` is not correctly rounded before Node 26 (1 ulp off on Node 22), which moved the
+// committed wire fixture by Node version. The square is a plain (correctly rounded)
+// product; the fractional power is rounded to 10 significant digits, far above that ulp.
+const sig10 = (x: number): number => Number(x.toPrecision(10));
+
 // An MPMS M(T) sweep: moment falling from ~0.0095 emu, and a resistance.
 const T = Array.from({ length: 149 }, (_, i) => 2 + 2 * i);
 const DS: Dataset = {
@@ -67,7 +72,7 @@ const DS: Dataset = {
   name: "mt.csv",
   data: {
     time: T,
-    values: T.map((t) => [0.0095 * (2 / t) ** 0.6, 270 + 40 * (t / 298) ** 2]),
+    values: T.map((t) => [0.0095 * sig10((2 / t) ** 0.6), 270 + 40 * ((t / 298) * (t / 298))]),
     labels: ["Moment", "R"],
     units: ["emu", "ohm"],
     metadata: {},

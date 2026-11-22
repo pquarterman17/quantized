@@ -47,6 +47,10 @@ const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", 
 
 // Transport-style channels: 0 T (K), 1 R (ohm), 2 M (emu), 3 P (mbar),
 // 4 F (%) for a probability axis, 5 G (count) for log2, 6 dP (mbar) = P's ±.
+// The inputs are Node-version independent: V8's `**` is not correctly rounded before
+// Node 26 (off by 1 ulp on Node 22), which moved the committed wire fixture. 10^(i-6)
+// is spelled as literals and 2^(i+0.5) as sqrt(2) * 2^i (integer powers of two are exact).
+const DECADES = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1];
 function dataset(): Dataset {
   const t = [0, 1, 2, 3, 4, 5];
   return {
@@ -54,7 +58,7 @@ function dataset(): Dataset {
     name: "transport.csv",
     data: {
       time: t,
-      values: t.map((i) => [300 - 10 * i, 1 + 0.5 * i, 10 ** (i - 6), 2 + i, 5 + 18 * i, 2 ** (i + 0.5), 0.5]),
+      values: t.map((i) => [300 - 10 * i, 1 + 0.5 * i, DECADES[i], 2 + i, 5 + 18 * i, Math.SQRT2 * 2 ** i, 0.5]),
       labels: ["T", "R", "M", "P", "F", "G", "dP"],
       units: ["K", "ohm", "emu", "mbar", "%", "count", "mbar"],
       metadata: {},
