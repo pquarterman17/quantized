@@ -420,3 +420,14 @@ def test_origin_graph_several_y2_channels_use_the_nested_range_form() -> None:
     assert "plotxy iy:=(1,2) plot:=201 ogl:=[<new>];" in ogs
     assert "plotxy iy:=([%(qzbk$)]data!(1,3),[%(qzbk$)]data!(1,4)) plot:=201 ogl:=2!;" in ogs
     assert "):(" not in ogs
+
+
+def test_origin_graph_explicit_empty_y_keys_fails_closed() -> None:
+    # `y_keys=()` is an explicit "plot nothing", not "all channels" (None). It
+    # used to write a script with no graph and no notice; now the export is
+    # refused with a message (the route turns this into a 422).
+    ds = _three_channel_ds()
+    with pytest.raises(ValueError, match="no channels selected"):
+        format_origin_script(ds, make_graph=True, graph=GraphSpec(y_keys=()))
+    _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec(y_keys=None))
+    assert "plotxy" in ogs  # None still means every channel

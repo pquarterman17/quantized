@@ -224,7 +224,7 @@ export interface PageBlock {
 // ── Small validation primitives ───────────────────────────────────────────
 
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
-const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
+const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime", "clock"];
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);

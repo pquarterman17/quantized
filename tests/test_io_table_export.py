@@ -143,3 +143,42 @@ def test_the_route(tmp_path: Path) -> None:
     assert openpyxl.load_workbook(io.BytesIO(r.content)).sheetnames == ["s"]
     body["sheets"][0]["columns"][1]["cells"] = ["a"]  # type: ignore[index]
     assert client.post("/api/export/worksheet", json=body).status_code == 422
+
+
+def test_xlsx_row_limit_message_counts_the_real_header_rows() -> None:
+    """The limit is Excel's 1,048,576 rows less what this sheet writes above
+    the data: nothing without a header, a Long Name row (and a Units row only
+    when some column has a unit), plus the preamble. It was off by two."""
+    too_many: list[float | str | None] = [None] * 1_048_577
+    with pytest.raises(ValueError, match=r"at most 1048576 data rows"):
+        format_xlsx([ExportSheet("s", [ExportColumn("a", "", "number", too_many)])], header=False)
+    with pytest.raises(ValueError, match=r"at most 1048575 data rows"):
+        format_xlsx([ExportSheet("s", [ExportColumn("a", "", "number", too_many[:-1])])])
+    with pytest.raises(ValueError, match=r"at most 1048574 data rows"):
+        format_xlsx([ExportSheet("s", [ExportColumn("a", "V", "number", too_many[:-1])])])
+
+
+def test_a_string_in_a_number_column_is_refused_or_parsed() -> None:
+    sheet = ExportSheet("s", [ExportColumn("x", "", "number", [1.0, "oops", 3.0])])
+    with pytest.raises(ValueError, match=r"column 'x'.*row 2.*'oops'.*not a number"):
+        format_delimited(sheet)
+    with pytest.raises(ValueError, match="not a number"):
+        format_xlsx([sheet])
+    # Clearly numeric text is parsed, not blanked.
+    ok = ExportSheet(
+        "s",
+        [
+            ExportColumn("x", "", "number", ["1.5", " 2 ", "", None, 4.0]),
+            ExportColumn("k", "", "number", [0.0] * 5),
+        ],
+    )
+    assert format_delimited(ok).splitlines() == ["x,k", "1.5,0", "2,0", ",0", ",0", "4,0"]
+    r = client.post(
+        "/api/export/worksheet",
+        json={
+            "fmt": "csv",
+            "sheets": [{"name": "s", "columns": [{"name": "x", "cells": [1, "bad"]}]}],
+        },
+    )
+    assert r.status_code == 422, r.text
+    assert "not a number" in r.text

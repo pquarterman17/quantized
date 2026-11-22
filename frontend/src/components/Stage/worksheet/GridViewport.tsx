@@ -205,7 +205,7 @@ export default function GridViewport({
   const cellEdit = cursor?.cellEdit ?? ownCellEdit;
   // Per-column number precision: each drawn column is scanned once per data change.
   // A column with a user display format (Column Properties) uses that instead.
-  const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate), [data.time, data.values, columnProps, xIsDate]);
+  const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate || (data.metadata?.time_is_clock === true && "clock")), [data.time, data.values, columnProps, xIsDate, data.metadata]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
