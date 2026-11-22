@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { DistributionFitPick, DistributionRecipe, DistributionHistogram, DistributionNormality, DistributionRankedFit } from "../../../lib/distributionAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { distributionQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { CalcResult, Dataset } from "../../../lib/types";
-import { hasDistributionResult, publishDistributionResult } from "../../../store/distributionResults";
+import { publishDistributionResult } from "../../../store/distributionResults";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
+import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 import type { DistributionLevelResult, Quantiles, RankingMetric } from "./useDistribution";
 
 interface BridgeArgs {
@@ -60,11 +62,9 @@ export function useDistributionResultBridge(args: BridgeArgs): { canSaveResult: 
     [args.active],
   );
   const snapshotKey = sourceFingerprint && args.active
-    ? JSON.stringify({ source: args.active.id, fingerprint: sourceFingerprint, recipe: savedRecipe })
+    ? snapshotResultKey("distribution-analysis", args.active.id, sourceFingerprint, distributionQuestion(savedRecipe))
     : null;
-  const [saved, setSaved] = useState<{ id: string; key: string } | null>(null);
-  const savedRef = useRef<{ id: string; key: string } | null>(null);
-  const savedResultExists = useApp((state) => !!saved && state.analysisResults.some((result) => result.id === saved.id));
+  const savedResultExists = useSavedSnapshotResult(snapshotKey);
 
   useEffect(() => {
     if (!request) return;
@@ -82,10 +82,10 @@ export function useDistributionResultBridge(args: BridgeArgs): { canSaveResult: 
   const fitRequested = !partitioned && (args.fitDist !== "none" || args.compareOpen);
   const canSaveResult = !!args.active && !args.active.pending && complete &&
     !args.busy && !args.byBusy && (!fitRequested || (!args.fitBusy && args.fitsReady)) &&
-    !(savedResultExists && snapshotKey !== null && saved?.key === snapshotKey);
+    !savedResultExists;
 
   const saveResult = (): string | null => {
-    if (snapshotKey !== null && savedRef.current?.key === snapshotKey && hasDistributionResult(savedRef.current.id)) {
+    if (savedResultExists) {
       setStatus("this Distribution result is already saved");
       return null;
     }
@@ -93,7 +93,7 @@ export function useDistributionResultBridge(args: BridgeArgs): { canSaveResult: 
       setStatus("wait for the full Distribution analysis before saving a result");
       return null;
     }
-    const id = publishDistributionResult(args.active, savedRecipe, {
+    return publishDistributionResult(args.active, savedRecipe, {
       label: args.label, byLabel: partitioned ? args.byLabel : null, hist: partitioned ? null : args.hist,
       desc: partitioned ? null : args.desc,
       norm: partitioned ? null : args.norm, normNote: partitioned ? null : args.normNote, levels: args.byResults,
@@ -101,12 +101,6 @@ export function useDistributionResultBridge(args: BridgeArgs): { canSaveResult: 
       rankingMetric: args.rankingMetric, quantiles: partitioned ? null : args.quantiles,
       percentileValue: partitioned ? null : args.percentileValue, skipped: partitioned ? [] : args.skipped,
     });
-    if (id) {
-      const record = { id, key: snapshotKey };
-      savedRef.current = record;
-      setSaved(record);
-    }
-    return id;
   };
   return { canSaveResult, saveResult };
 }
