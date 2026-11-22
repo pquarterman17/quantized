@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { analysisDataFingerprint } from "../../lib/analysisResultFreshness";
 import { reportEmit } from "../../lib/api";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -222,15 +223,21 @@ describe("useGadgetChip — differentiate mode (gap #34)", () => {
 });
 
 describe("useGadgetChip — fft mode (gap #34)", () => {
-  it("exposes the live preview; commit() adds a new library dataset via the store", () => {
+  it("exposes the live preview; commit() adds a new library dataset via the store", async () => {
+    // The commit goes through the shared output contract (lazy-loaded, so it
+    // lands asynchronously) and only takes a preview stamped with its source.
+    const active = useApp.getState().datasets[0];
     useApp.setState({
       gadgetMode: "fft",
-      gadgetFftPreview: { freq: [0, 1, 2], magnitude: [0, 5, 1], df: 1, nfft: 4, fs: 4, windowName: "hanning" },
+      gadgetFftPreview: {
+        freq: [0, 1, 2], magnitude: [0, 5, 1], df: 1, nfft: 4, fs: 4, windowName: "hanning",
+        source: { id: active.id, computedOn: analysisDataFingerprint(active), roi: [0, 2], xKey: null, yKey: null },
+      },
     });
     const { result } = renderHook(() => useGadgetChip());
     expect(result.current.fftPreview?.magnitude).toEqual([0, 5, 1]);
     result.current.commit();
-    expect(useApp.getState().datasets).toHaveLength(2);
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     expect(useApp.getState().datasets[1].name).toContain("FFT");
   });
 });

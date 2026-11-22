@@ -37,7 +37,10 @@ export interface AnalysisOutputCommit {
   /** Inputs plus the result digest the output encodes (small: no arrays of data). */
   settings: CommitSettings;
   /** Built only when a new output is actually written. */
-  output: (source: Dataset) => { name: string; data: DataStruct; errorRoles?: Dataset["errorRoles"]; derivedFrom?: Dataset["derivedFrom"] };
+  output: (source: Dataset) => { name: string; data: DataStruct; errorRoles?: Dataset["errorRoles"]; derivedFrom?: Dataset["derivedFrom"];
+    /** Further fields of a NEW output worksheet (its book / folder, column designations):
+     *  a transform's `datasetPatch`. A replace keeps the old output's own. */
+    patch?: Partial<Dataset> };
   /** Runs inside the one undo step, just before the worksheet is added (only
    *  when a NEW output is written): a tool that opens its output in a window of
    *  its own creates that window here, so Undo removes it with the output. */
@@ -113,6 +116,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   if (request.replace) return replaceCommittedOutput(request, request.replace, source, extraSources, key, refuse);
   const built = request.output(source);
   const output: Dataset = {
+    ...built.patch,
     id: nextDatasetId(), name: built.name, data: built.data,
     ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
     ...(built.derivedFrom ? { derivedFrom: built.derivedFrom } : {}),

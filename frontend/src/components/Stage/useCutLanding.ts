@@ -11,9 +11,24 @@
 
 import { useState } from "react";
 
+import type { AnalysisResultProducer } from "../../lib/analysisResult";
+import { analysisDataFingerprint } from "../../lib/analysisResultFreshness";
+import type { CommitSettings } from "../../lib/committedOutput";
 import { cutName } from "../../lib/mapcuts";
-import type { DataStruct } from "../../lib/types";
+import type { Dataset, DataStruct } from "../../lib/types";
+import { commitComputedOutput } from "../../store/commitComputedOutput";
 import { nextDatasetId, useApp } from "../../store/useApp";
+
+/** What a committed cut is computed from (lane RL2): the producer, the source
+ *  worksheet(s) as they were when the request was made, and the cut's settings
+ *  (the digest of the output itself is added to the key). */
+export interface CutCommit {
+  producer: AnalysisResultProducer;
+  sources: readonly Dataset[];
+  settings: CommitSettings;
+}
+
+export type CutCommitResult = { id: string; kind: "created" | "existing" | "replaced" };
 
 export interface CutLandingState {
   busy: boolean;
@@ -30,6 +45,12 @@ export interface CutLandingState {
    *  a time); a sequential caller (item 9's batch loop) awaits each call in
    *  turn, so `busy` has already cleared before the next one starts. */
   land: (promise: Promise<DataStruct>, namePrefix?: string) => Promise<string | null>;
+  /** `land` through the shared commit contract (store/analysisOutputCommit.ts):
+   *  ONE undo step with its Library result, no duplicate on a repeat of the same
+   *  cut, and the output goes out of date when its source worksheet changes.
+   *  Resolves to the output (`existing`: the worksheet an earlier identical cut
+   *  already added), or null on failure or a refusal (the status line says why). */
+  landCommitted: (promise: Promise<DataStruct>, commit: CutCommit, namePrefix?: string) => Promise<CutCommitResult | null>;
 }
 
 export function useCutLanding(): CutLandingState {
@@ -62,5 +83,26 @@ export function useCutLanding(): CutLandingState {
     }
   }
 
-  return { busy, land };
+  async function landCommitted(promise: Promise<DataStruct>, commit: CutCommit, namePrefix?: string): Promise<CutCommitResult | null> {
+    if (busy) return null;
+    // The sources' analysis views as of THIS request: a change while the cut
+    // computes makes the commit refuse rather than land a stale cut.
+    const sources = commit.sources.map((source) => ({ id: source.id, computedOn: analysisDataFingerprint(source) }));
+    setBusy(true);
+    try {
+      const data = await promise;
+      const name = namePrefix ? `${namePrefix}${cutName(data)}` : cutName(data);
+      const outcome = commitComputedOutput({
+        producer: commit.producer, sources, settings: commit.settings, name, data, status: `cut added: ${name}`,
+      });
+      return outcome.kind === "refused" ? null : { id: outcome.outputId, kind: outcome.kind };
+    } catch (e) {
+      setStatus(e instanceof Error ? `cut failed: ${e.message}` : "cut failed");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return { busy, land, landCommitted };
 }
