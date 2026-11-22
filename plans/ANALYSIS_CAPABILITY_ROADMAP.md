@@ -93,7 +93,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     guard (a second click during a pending compute does not run `prepare`
     again: one commit); the contract gained `alsoFrom` (multi-source outputs:
     every source is fingerprint-checked, keyed and listed in the envelope, so
-    any one changing marks the output stale; `resultcommit/commitBatchTable.ts`
+    any one changing marks the output stale; `store/commitBatchTable.ts`
     for batch tables) and `beforeWrite`/`intoFocused` (a tool that opens its
     output in its own window creates it inside the one undo step). Digitizer
     Create got a duplicate guard only (no source worksheet to go stale).

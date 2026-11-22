@@ -41,6 +41,8 @@ export interface DigitizerState {
 
 export function useDigitizer(): DigitizerState {
   const addDataset = useApp((s) => s.addDataset);
+  const datasets = useApp((s) => s.datasets);
+  const setActive = useApp((s) => s.setActive);
   const setStatus = useApp((s) => s.setStatus);
   const [image, setImageState] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("x1");
@@ -105,9 +107,9 @@ export function useDigitizer(): DigitizerState {
     const title = name.trim() || "digitized";
     const key = JSON.stringify([title, refs, traced]);
     const prior = made.current;
-    const live = prior?.key === key ? useApp.getState().datasets.find((d) => d.id === prior.id) : undefined;
+    const live = prior?.key === key ? datasets.find((d) => d.id === prior.id) : undefined;
     if (live) {
-      useApp.getState().setActive(live.id);
+      setActive(live.id);
       setStatus(`this digitization is already added as “${live.name}”; nothing was duplicated`);
       return;
     }

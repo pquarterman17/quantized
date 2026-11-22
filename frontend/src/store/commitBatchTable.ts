@@ -7,12 +7,12 @@
 // written: the same run and choices find the existing worksheet, anything that
 // changes the table commits normally.
 
-import { dataFingerprint } from "../../../lib/dataFingerprint";
-import type { AnalysisResultProducer } from "../../../lib/analysisResult";
-import type { CommitSettings } from "../../../lib/committedOutput";
-import type { DataStruct } from "../../../lib/types";
-import { commitAnalysisOutput, type AnalysisCommitOutcome } from "../../../store/analysisOutputCommit";
-import { useApp } from "../../../store/useApp";
+import { dataFingerprint } from "../lib/dataFingerprint";
+import type { AnalysisResultProducer } from "../lib/analysisResult";
+import type { CommitSettings } from "../lib/committedOutput";
+import type { DataStruct } from "../lib/types";
+import { commitAnalysisOutput, type AnalysisCommitOutcome } from "./analysisOutputCommit";
+import { useApp } from "./useApp";
 
 export function commitBatchTable(args: {
   producer: AnalysisResultProducer;

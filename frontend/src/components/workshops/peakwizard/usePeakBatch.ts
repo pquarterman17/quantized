@@ -39,7 +39,7 @@ import type { PeakRecipe } from "../../../lib/peakwizard";
 import { trackJob, type TrackedJob } from "../../../store/pendingOpActions";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { commitBatchTable } from "../resultcommit/commitBatchTable";
+import { commitBatchTable } from "../../../store/commitBatchTable";
 import {
   applyPointBudget,
   BATCH_ITEM_DEADLINE_S,

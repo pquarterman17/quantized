@@ -20,7 +20,7 @@ import { keysAcross, metaValue, pathFromId, type MetaKeyInfo } from "../../../li
 import { integratePeaksBatch, type IntegrateBatchResponse } from "../../../lib/api/peaks";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { commitBatchTable } from "../resultcommit/commitBatchTable";
+import { commitBatchTable } from "../../../store/commitBatchTable";
 import {
   batchBody,
   batchIntegrateCsv,
