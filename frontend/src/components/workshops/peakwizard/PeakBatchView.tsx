@@ -20,8 +20,18 @@ import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import PeakBatchTable from "./PeakBatchTable";
 import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchRows";
 import { usePeakBatch } from "./usePeakBatch";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
 
 const faint = { color: "var(--text-faint)" } as const;
+
+/** A recorded summary-X choice, or null when the record is not one. */
+function recordedX(value: unknown): SummaryXChoice | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { source, sort } = value as { source?: { kind?: unknown }; sort?: unknown };
+  if (typeof sort !== "boolean" || !source || typeof source.kind !== "string") return null;
+  return ["index", "name", "meta", "param"].includes(source.kind) ? (value as SummaryXChoice) : null;
+}
 
 export default function PeakBatchView({ recipes, current, pollMs }: {
   recipes: PeakRecipe[];
@@ -37,7 +47,8 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
   // The sort lives here so the table and the CSV share one order.
   const [sort, setSort] = useState<BatchSort | null>(null);
   const shown = useMemo(() => (sort ? sortRows(rows, sort.key, sort.dir) : rows), [rows, sort]);
-  const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
+  const seedX = useReopenSeed("peak-batch", useApp((s) => s.activeId ?? undefined))?.settings["x"];
+  const [xChoice, setXChoice] = useState<SummaryXChoice>(() => recordedX(seedX) ?? INDEX_X);
   const ranSets = useMemo(() => {
     const ids = new Set(b.results?.map((r) => r.datasetId) ?? []);
     return datasets.filter((d) => ids.has(d.id));
@@ -53,17 +64,19 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
     saveBlob(csvBlob(batchCsv(shown)), `peak-batch-${safe}.csv`);
   };
   const addTable = () => {
-    const id = b.addAsTable(xChoice);
-    if (id) toast("batch table added to the library");
+    const out = b.addAsTable(xChoice);
+    if (out) toast(out.replaced ? "batch table replaced" : "batch table added to the library");
   };
 
   return (
     <div>
+      <ReopenBanner tool="peak-batch" />
       <div className="qzk-field-lbl" style={{ marginTop: 0 }}>Recipe</div>
+      {b.recipeNote && <div className="qzk-helptext" role="alert" style={{ color: "var(--warn)", marginBottom: 4 }}>{b.recipeNote}</div>}
       <Select
         aria-label="batch recipe"
         options={recipes.length
-          ? recipes.map((r) => ({ value: r.name, label: r.name }))
+          ? [...(b.recipeName === "" ? [{ value: "", label: "— pick a saved recipe —" }] : []), ...recipes.map((r) => ({ value: r.name, label: r.name }))]
           : [{ value: "", label: "— no saved recipes —" }]}
         value={b.recipeName}
         disabled={busy}

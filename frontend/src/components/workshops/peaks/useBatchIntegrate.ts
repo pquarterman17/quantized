@@ -34,6 +34,8 @@ import { afterCommit } from "../workbench/afterCommit";
 import { Refusal, type Failure, failureOf } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { commitBatchTable } from "../../../store/commitBatchTable";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
 import {
   batchBody,
   batchIntegrateCsv,
@@ -67,8 +69,22 @@ interface BatchRun {
   ranAt: string;
 }
 
+/** Recorded integration windows, or null when the record is not a usable list. */
+function recordedWindows(value: unknown): IntegrateWindow[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const out: IntegrateWindow[] = [];
+  for (const w of value) {
+    if (!w || typeof w !== "object" || typeof w.lo !== "number" || typeof w.hi !== "number") return null;
+    out.push({ lo: w.lo, hi: w.hi });
+  }
+  return out;
+}
+
 export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: number }[]) {
   const active = useActiveDataset();
+  // Opened from a committed trend (lane RO2): every recorded source is picked,
+  // with the recorded windows, baseline, alignment and trend X.
+  const seed = useReopenSeed(BATCH_INTEGRATE_PRODUCER.id, active?.id);
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const xKey = useApp((s) => s.xKey);
@@ -78,17 +94,18 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   const resolveDataset = useApp((s) => s.resolveDataset);
 
   const [pickedRaw, setPicked] = useState<string[]>(() =>
-    selectedIds.length > 1 ? [...selectedIds] : active ? [active.id] : []);
+    seed ? [...seed.sourceIds]
+      : selectedIds.length > 1 ? [...selectedIds] : active ? [active.id] : []);
   const picked = useMemo(() => pickedRaw.filter((id) => datasets.some((d) => d.id === id)), [pickedRaw, datasets]);
-  const [windows, setWindows] = useState<IntegrateWindow[]>(() => windowsFromPeaks(seedPeaks));
-  const [baseline, setBaseline] = useState<"linear" | "none">("linear");
-  const [align, setAlign] = useState(false);
+  const [windows, setWindows] = useState<IntegrateWindow[]>(() => recordedWindows(seed?.settings["windows"]) ?? windowsFromPeaks(seedPeaks));
+  const [baseline, setBaseline] = useState<"linear" | "none">(() => (seed?.settings["baseline"] === "none" ? "none" : "linear"));
+  const [align, setAlign] = useState(() => seed?.settings["aligned"] === true);
   const [phase, setPhase] = useState<BatchIntegratePhase>("idle");
   // The failure carries its kind (a typed `Refusal`), not a text to compare.
   const [failure, setFailure] = useState<Failure | null>(null);
   const error = failure?.message ?? null;
   const [run, setRun] = useState<BatchRun | null>(null);
-  const [xField, setXField] = useState("");
+  const [xField, setXField] = useState(() => (typeof seed?.settings["xField"] === "string" ? seed.settings["xField"] : ""));
   const seq = useRef(0);
   useEffect(() => () => void seq.current++, []);
 
@@ -174,15 +191,24 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     if (run && !stale) saveBlob(csvBlob(batchIntegrateCsv(run.rows)), "peak-batch-integrate.csv");
   };
 
-  /** Land the trend in the library; returns its id and whatever was skipped. */
-  const addTrend = (): { id: string; skipped: string[] } | null => {
+  const buildTrend = (r: BatchRun) => trendStruct(r.rows, r.windows, r.outcomes, r.metaOf, xField ? pathFromId(xField) : null, {
+    baseline: r.baseline, aligned: r.aligned, ranAt: r.ranAt, channels: { x: r.channels.xLabel, y: r.channels.yLabel },
+  });
+  // Replace's column check (lane RPL) runs before the button, on the table it would write.
+  const primaryId = run?.outcomes.find((o) => o.ok && run.fps.has(o.datasetId))?.datasetId;
+  const trendLabels = useMemo(
+    () => (run && !stale ? buildTrend(run).data.labels : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [run, stale, xField],
+  );
+  useReplaceLayoutBlock(BATCH_INTEGRATE_PRODUCER.id, primaryId, trendLabels);
+
+  /** Land the trend in the library (or replace the reopened one); returns its id and whatever was skipped. */
+  const addTrend = (): { id: string; skipped: string[]; replaced: boolean } | null => {
     if (!run || stale) return null;
     const field = xField ? pathFromId(xField) : null;
-    const { data, skipped } = trendStruct(run.rows, run.windows, run.outcomes, run.metaOf, field, {
-      baseline: run.baseline, aligned: run.aligned, ranAt: run.ranAt,
-      channels: { x: run.channels.xLabel, y: run.channels.yLabel },
-    });
-    if (data.time.length === 0) return { id: "", skipped };
+    const { data, skipped } = buildTrend(run);
+    if (data.time.length === 0) return { id: "", skipped, replaced: false };
     const vs = field ? ` vs ${String(data.metadata.x_column_name)}` : "";
     // One undo step, no duplicate on a repeat click, stale when ANY integrated
     // dataset changes (store/analysisOutputCommit.ts).
@@ -190,11 +216,12 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
       producer: BATCH_INTEGRATE_PRODUCER,
       sources: run.outcomes.filter((o) => o.ok && run.fps.has(o.datasetId)).map((o) => ({ id: o.datasetId, computedOn: run.fps.get(o.datasetId)! })),
       settings: { windows: run.windows, baseline: run.baseline, aligned: run.aligned, xField, y: run.channels.yLabel },
+      reopenExtra: { channels: run.channels },
       name: `Integrated ${run.channels.yLabel}${vs} (${data.time.length} datasets)`,
       data,
     });
     // A repeat Add (or a refusal) already said so in the status line.
-    return outcome.kind === "created" ? { id: outcome.outputId, skipped } : null;
+    return outcome.kind === "created" || outcome.kind === "replaced" ? { id: outcome.outputId, skipped, replaced: outcome.kind === "replaced" } : null;
   };
 
   return {

@@ -44,6 +44,8 @@ export function useSeedHold(active: boolean, deps: readonly unknown[]): () => bo
 export interface ReopenSeedValue {
   settings: ReopenSeed;
   extra: ReopenSeed | null;
+  /** Every recorded source, primary first (a batch table or spin asymmetry has several). */
+  sourceIds: readonly string[];
 }
 
 /** The recorded settings to start from, read ONCE at mount, and only when the
@@ -51,7 +53,7 @@ export interface ReopenSeedValue {
 export function useReopenSeed(tool: string, activeId: string | undefined): ReopenSeedValue | null {
   const [seed] = useState<ReopenSeedValue | null>(() => {
     const session = useToolReopen.getState().sessions[tool];
-    return session?.seed && session.sourceId === activeId ? { settings: session.seed, extra: session.extra } : null;
+    return session?.seed && session.sourceId === activeId ? { settings: session.seed, extra: session.extra, sourceIds: session.sourceIds } : null;
   });
   return seed;
 }

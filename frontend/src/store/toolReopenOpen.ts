@@ -11,9 +11,27 @@
 import { planReopen } from "../lib/committedOutputReopen";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
 import { useToolReopen } from "./toolReopen";
+import { planRecordedChannels, recordedChannels } from "./toolReopenChannels";
+import { endSessionWhenClosed } from "./toolReopenWatch";
 import { useApp } from "./useApp";
 
 const EXTRAS: readonly string[] = ["surface-fit", "optical-gap", "ellipse-fit"] satisfies AnalysisExtra[];
+
+/** Batch tools that read the ACTIVE dataset's plotted X/Y in every picked dataset. */
+const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate"];
+
+/** Whether each tool is open (the session ends when it closes: lane RO2). */
+const isToolOpen = (tool: string): boolean => {
+  const app = useApp.getState();
+  switch (tool) {
+    case "baseline-subtract": return app.baselineOpen;
+    case "tabulate": return app.tabulateOpen;
+    case "peak-batch": return app.peakWizardOpen;
+    case "peak-batch-integrate": return app.peaksOpen;
+    case "spin-asymmetry": return app.reflectivityOpen;
+    default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
+  }
+};
 
 /** True when the tool opened (with or without the recorded settings). */
 export function openCommittedResultInTool(resultId: string): boolean {
@@ -28,12 +46,25 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setStatus(`${plan.label}: ${plan.reason}`, "danger");
     return false;
   }
+  // A batch tool runs on the plotted channels: plot the recorded ones, or say they moved.
+  const source = plan.sourceId ? app.datasets.find((dataset) => dataset.id === plan.sourceId) : undefined;
+  const channels = CHANNEL_TOOLS.includes(plan.tool) && source && plan.seed
+    ? planRecordedChannels(source, recordedChannels(plan.extra)) : null;
+  const notice = [plan.notice, channels?.kind === "problem" ? channels.problem : null].filter(Boolean).join(" ") || null;
   useToolReopen.getState().start(plan.tool, {
-    resultId: result.id, resultName: result.name, sourceId: plan.sourceId, outputId: plan.outputId,
-    outputName: plan.outputName, seed: plan.seed, extra: plan.extra, notice: plan.notice, replaceBlocked: plan.replaceBlocked,
+    resultId: result.id, resultName: result.name, sourceId: plan.sourceId, sourceIds: plan.sourceIds, outputId: plan.outputId,
+    outputName: plan.outputName, seed: plan.seed, extra: plan.extra, notice, replaceBlocked: plan.replaceBlocked,
   });
   if (plan.sourceId) app.setActive(plan.sourceId);
   let replot = "";
+  if (channels?.kind === "plot") {
+    const now = useApp.getState();
+    if (now.xKey !== channels.xKey || now.yKeys?.length !== 1 || now.yKeys[0] !== channels.yKey) {
+      replot = `plotted “${channels.label}”, the channel this result ran on (Undo restores the previous plot); `;
+      now.recordHistory(`plot the recorded ${plan.toolLabel} channel`);
+      useApp.setState({ xKey: channels.xKey, yKeys: [channels.yKey] });
+    }
+  }
   if (plan.tool === "baseline-subtract") {
     // The estimate follows the plotted channels: plot the recorded ones.
     // Only when they differ, as ONE undoable view change (no macro step: the
@@ -53,9 +84,16 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setBaselineOpen(true);
   } else if (plan.tool === "tabulate") {
     app.setTabulateOpen(true);
+  } else if (plan.tool === "peak-batch") {
+    app.setPeakWizardOpen(true);
+  } else if (plan.tool === "peak-batch-integrate") {
+    app.setPeaksOpen(true);
+  } else if (plan.tool === "spin-asymmetry") {
+    app.setReflectivityOpen(true);
   } else if (EXTRAS.includes(plan.tool)) {
     useAnalysisExtras.getState().show(plan.tool as AnalysisExtra);
   }
-  useApp.getState().setStatus(plan.notice ?? `${replot}opened ${plan.toolLabel} with the settings of “${result.name}”`, plan.notice ? "warn" : "ok");
+  endSessionWhenClosed(plan.tool, () => isToolOpen(plan.tool));
+  useApp.getState().setStatus(notice ?? `${replot}opened ${plan.toolLabel} with the settings of “${result.name}”`, notice ? "warn" : "ok");
   return true;
 }

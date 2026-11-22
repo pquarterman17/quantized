@@ -10,6 +10,8 @@ import { spinAsymmetry } from "../../../lib/api/reductions";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import type { Dataset } from "../../../lib/types";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
 import { asymmetryStruct, defaultChannels, pairChannels, readChannel, spinRequest } from "./spinAsymmetry";
 
 const SPIN_ASYMMETRY_PRODUCER = { id: "spin-asymmetry", label: "Spin asymmetry", version: 1 } as const;
@@ -20,17 +22,36 @@ export interface ChannelPick {
   errCol: number | null;
 }
 
+/** A recorded channel pick of `ds`, or null when it no longer fits (a column index out of range). */
+function recordedPick(ds: Dataset | undefined, value: unknown): ChannelPick | null {
+  if (!ds || !value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { col, errCol } = value as { col?: unknown; errCol?: unknown };
+  const n = ds.data.labels.length;
+  const ok = (c: unknown): c is number => typeof c === "number" && Number.isInteger(c) && c >= 0 && c < n;
+  if (!ok(col) || (errCol !== null && !ok(errCol))) return null;
+  return { id: ds.id, col, errCol: errCol === null ? null : (errCol as number) };
+}
+
 export function useSpinAsymmetry() {
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
   const resolveDataset = useApp((s) => s.resolveDataset);
+  // Opened from a committed result (lane RO2): R++ is its first source, R-- the
+  // one its settings name; a pick whose column no longer exists falls back to
+  // the default pick rather than guessing.
+  const seed = useReopenSeed(SPIN_ASYMMETRY_PRODUCER.id, active?.id);
 
   const pickFor = (id: string): ChannelPick => {
     const ds = datasets.find((d) => d.id === id);
     return { id, ...(ds ? defaultChannels(ds) : { col: 0, errCol: null }) };
   };
-  const [pp, setPp] = useState<ChannelPick>(() => pickFor(active?.id ?? datasets[0]?.id ?? ""));
-  const [mm, setMm] = useState<ChannelPick>(() => pickFor(datasets.find((d) => d.id !== pp.id)?.id ?? ""));
+  const [pp, setPp] = useState<ChannelPick>(() =>
+    (seed && recordedPick(datasets.find((d) => d.id === seed.sourceIds[0]), seed.settings["pp"])) || pickFor(active?.id ?? datasets[0]?.id ?? ""));
+  const [mm, setMm] = useState<ChannelPick>(() => {
+    const mmId = seed && (typeof seed.settings["mmId"] === "string" ? seed.settings["mmId"] : seed.sourceIds[1] ?? seed.sourceIds[0]);
+    return (seed && recordedPick(datasets.find((d) => d.id === mmId), seed.settings["mm"]))
+      || pickFor(datasets.find((d) => d.id !== pp.id)?.id ?? "");
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -75,7 +96,7 @@ export function useSpinAsymmetry() {
       if (outcome.kind === "refused") throw new Error(outcome.reason);
       setDone(outcome.kind === "existing"
         ? `"${name}" is already added; nothing was duplicated.`
-        : `Added "${name}": ${res.n_valid} of ${pair.q.length} Q points valid.`);
+        : `${outcome.kind === "replaced" ? "Replaced with" : "Added"} "${name}": ${res.n_valid} of ${pair.q.length} Q points valid.`);
     } catch (e) {
       if (seq.current !== id) return;
       setError(e instanceof Error ? e.message : "spin asymmetry failed");

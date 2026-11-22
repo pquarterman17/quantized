@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useBatchWindowOpen } from "./useBatchWindowOpen";
 import PeakFitControls from "./PeakFitControls";
 import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
@@ -52,7 +53,7 @@ export default function PeaksPanel() {
   const plotView = useApp(useShallow((s) => ({ xKey: s.xKey, yKeys: s.yKeys, seriesOrder: s.seriesOrder })));
   const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
-  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useBatchWindowOpen();
   const [find, setFind] = useState<PeakFindRequest>({ params: { ...DEFAULT_PEAK_FIND }, seq: 0 });
   const {
     active,

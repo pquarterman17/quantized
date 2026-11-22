@@ -18,6 +18,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button } from "../../primitives";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import LayerTable from "./LayerTable";
 import ReflFitView from "./ReflFitView";
 import { gradedFitBlock } from "./reflGraded";
@@ -31,8 +32,11 @@ const SpinAsymmetryView = lazyRegion(() => import("./SpinAsymmetryView"), "Spin 
 export default function ReflectivityPanel() {
   const setOpen = useApp((s) => s.setReflectivityOpen);
   const requestedFit = useApp((s) => s.reflectivityFitRecordId);
-  const [mode, setMode] = useState<Mode>(requestedFit ? "fit" : "model");
+  // "Open in Spin asymmetry" (lane RO2): show that mode, and remount it per session so it seeds afresh.
+  const reopenNonce = useReopenScope("spin-asymmetry");
+  const [mode, setMode] = useState<Mode>(reopenNonce ? "asym" : requestedFit ? "fit" : "model");
   useEffect(() => { if (requestedFit) setMode("fit"); }, [requestedFit]);
+  useEffect(() => { if (reopenNonce) setMode("asym"); }, [reopenNonce]);
   const refl = useReflectivity();
   const fit = useReflFit(refl);
   const { presets, layers, radiation, grid, busy, error } = refl;
@@ -68,7 +72,7 @@ export default function ReflectivityPanel() {
       </div>
 
       {mode === "asym" ? (
-        <SpinAsymmetryView />
+        <SpinAsymmetryView key={reopenNonce} />
       ) : (
         <>
           <LayerTable

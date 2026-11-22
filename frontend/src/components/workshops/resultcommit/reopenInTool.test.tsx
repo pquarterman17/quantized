@@ -281,17 +281,17 @@ describe("Baseline and Tabulate seed round-trip", () => {
 
 describe("a producer that cannot reopen", () => {
   const batch = {
-    version: 1 as const, id: "b1", name: "Peak batch · loop +1", producer: { id: "peak-batch", label: "Peak batch", version: 1 },
-    sources: [{ datasetId: "src", role: "input" as const }, { datasetId: "src2", role: "input" as const }],
+    version: 1 as const, id: "b1", name: "Fit band · loop", producer: { id: "fit-band", label: "Fit band", version: 1 },
+    sources: [{ datasetId: "src", role: "input" as const }],
     outputs: [{ datasetId: "out", role: "linked-worksheet" as const }],
     parameters: { commitKey: "k", settings: {} }, warnings: [], createdAt: "2026-11-22T00:00:00Z",
   };
 
   it("is disabled with the reason in the result workspace", () => {
     render(<ReopenInToolButton result={batch} disabled={false} />);
-    const button = screen.getByRole("button", { name: "Open in Peak batch" });
+    const button = screen.getByRole("button", { name: "Open in Fit band" });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", expect.stringContaining("several worksheets"));
+    expect(button).toHaveAttribute("title", expect.stringContaining("covariance"));
     expect(openCommittedResultInTool("b1")).toBe(false); // unknown id here: refuses, opens nothing
   });
 
@@ -299,11 +299,11 @@ describe("a producer that cannot reopen", () => {
     useApp.setState({ analysisResults: [batch] });
     const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [], analysisResults: [batch] });
     const node = hierarchy.byKey.get("analysis-result:b1") as Extract<ArtifactNode, { kind: "analysis-result" }>;
-    const item = buildArtifactMenu(node).find((i): i is Extract<ContextMenuItem, { label: string }> => "label" in i && i.label === "Open in Peak batch");
+    const item = buildArtifactMenu(node).find((i): i is Extract<ContextMenuItem, { label: string }> => "label" in i && i.label === "Open in Fit band");
     expect(item).toMatchObject({ disabled: true });
-    expect(item && "title" in item ? item.title : "").toContain("several worksheets");
+    expect(item && "title" in item ? item.title : "").toContain("covariance");
     expect(openCommittedResultInTool("b1")).toBe(false);
-    expect(useApp.getState().status).toContain("several worksheets");
+    expect(useApp.getState().status).toContain("covariance");
     expect(useToolReopen.getState().sessions).toEqual({});
   });
 });

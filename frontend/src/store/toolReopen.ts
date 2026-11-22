@@ -17,6 +17,8 @@ export interface ReopenSession {
   resultName: string;
   /** The recorded source; null when it no longer exists (no seed then). */
   sourceId: string | null;
+  /** Every recorded source, primary first (a batch table or spin asymmetry has several). */
+  sourceIds: readonly string[];
   outputId: string | null;
   outputName: string | null;
   seed: ReopenSeed | null;
@@ -72,4 +74,11 @@ export function replaceTargetFor(sessions: State["sessions"], tool: string, sour
   const session = sessions[tool];
   return session && session.mode === "replace" && !session.replaceBlocked && !session.layoutBlocked && session.sourceId === sourceId
     ? session.resultId : undefined;
+}
+
+/** The `replace` field of a commit request made OUTSIDE a React hook (a store
+ *  commit helper): the session target as of now, or nothing. */
+export function replaceRequestFor(tool: string, sourceId: string): { replace?: string } {
+  const replace = replaceTargetFor(useToolReopen.getState().sessions, tool, sourceId);
+  return replace ? { replace } : {};
 }

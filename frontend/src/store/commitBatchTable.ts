@@ -12,6 +12,7 @@ import type { AnalysisResultProducer } from "../lib/analysisResult";
 import type { CommitSettings } from "../lib/committedOutput";
 import type { DataStruct } from "../lib/types";
 import { commitAnalysisOutput, type AnalysisCommitOutcome } from "./analysisOutputCommit";
+import { replaceRequestFor } from "./toolReopen";
 import { useApp } from "./useApp";
 
 export function commitBatchTable(args: {
@@ -22,6 +23,8 @@ export function commitBatchTable(args: {
   name: string;
   data: DataStruct;
   status?: string;
+  /** Unkeyed tool state "Open in <tool>" restores beside the settings. */
+  reopenExtra?: CommitSettings;
 }): AnalysisCommitOutcome {
   const [primary, ...rest] = args.sources;
   if (!primary) {
@@ -33,8 +36,12 @@ export function commitBatchTable(args: {
     sourceId: primary.id,
     computedOn: primary.computedOn,
     alsoFrom: rest,
+    // Opened from this tool's committed result with Replace chosen: commit INTO it
+    // (read at commit time, so a late switch to Add as new is honoured).
+    ...replaceRequestFor(args.producer.id, primary.id),
     settings: { ...args.settings, output: dataFingerprint(args.data) },
     output: () => ({ name: args.name, data: args.data }),
     ...(args.status ? { status: args.status } : {}),
+    ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
   });
 }

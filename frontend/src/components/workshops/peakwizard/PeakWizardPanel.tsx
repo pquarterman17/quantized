@@ -9,7 +9,7 @@
 // many datasets. Once opened it stays MOUNTED (hidden) while the wizard is
 // shown, so switching modes never cancels a running batch or drops its table.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { floatingX } from "../../overlays/floatingX";
@@ -29,6 +29,7 @@ import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import PeakBatchView from "./PeakBatchView";
 import PeakWizardByLevel from "./PeakWizardByLevel";
 import { fitRunningBlock } from "./peakNavGate";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 
 export default function PeakWizardPanel() {
   const setOpen = useApp((s) => s.setPeakWizardOpen);
@@ -36,8 +37,13 @@ export default function PeakWizardPanel() {
   const baselineIsFitted = useApp((s) => Boolean(s.baselineOverlay?.fitOf));
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const w = usePeakWizard();
-  const [mode, setMode] = useState<"wizard" | "batch">("wizard");
-  const [batchOpened, setBatchOpened] = useState(false);
+  // "Open in Peak batch" (lane RO2): show Batch mode, and remount it per session so it seeds afresh.
+  const reopenNonce = useReopenScope("peak-batch");
+  const [mode, setMode] = useState<"wizard" | "batch">(reopenNonce ? "batch" : "wizard");
+  const [batchOpened, setBatchOpened] = useState(reopenNonce > 0);
+  useEffect(() => {
+    if (reopenNonce) { setMode("batch"); setBatchOpened(true); }
+  }, [reopenNonce]);
   const show = (m: "wizard" | "batch") => {
     setMode(m);
     if (m === "batch") setBatchOpened(true);
@@ -88,7 +94,7 @@ export default function PeakWizardPanel() {
       </div>
       {batchOpened && (
         <div hidden={mode !== "batch"}>
-          <PeakBatchView recipes={w.recipes} current={w.recipe.name} />
+          <PeakBatchView key={reopenNonce} recipes={w.recipes} current={w.recipe.name} />
         </div>
       )}
       {mode === "batch" ? null : !w.active ? (

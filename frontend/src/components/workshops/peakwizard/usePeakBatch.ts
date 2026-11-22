@@ -42,6 +42,8 @@ import { useLatestRef } from "../../../lib/previewKey";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetsInputsToken } from "../workbench/inputsKey";
 import { commitBatchTable } from "../../../store/commitBatchTable";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
 import {
   applyPointBudget,
   BATCH_ITEM_DEADLINE_S,
@@ -67,6 +69,15 @@ import {
 
 const PEAK_BATCH_PRODUCER = { id: "peak-batch", label: "Peak batch", version: 1 } as const;
 
+/** A short content hash of a recipe, recorded beside a committed table so a
+ *  reopen can say the saved recipe of that name has changed since (lane RO2). */
+export function recipeDigest(recipe: PeakRecipe): string {
+  const text = JSON.stringify(recipe);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16);
+}
+
 export type BatchPhase = "idle" | "preparing" | "fitting" | "cancelling" | "done" | "cancelled" | "failed";
 
 export interface BatchRun {
@@ -91,6 +102,8 @@ export interface PeakBatchState {
   channels: BatchChannels | null;
   /** Why Run is disabled right now, or null. */
   block: string | null;
+  /** Opened from a committed table: the recorded recipe is gone or has changed since (else null). */
+  recipeNote: string | null;
   phase: BatchPhase;
   done: number;
   total: number;
@@ -105,7 +118,7 @@ export interface PeakBatchState {
   cancel: () => void;
   /** Land the table in the library as a dataset; returns its id. `x` puts a
    *  physical parameter of each row's dataset on X (default: the row number). */
-  addAsTable: (x?: SummaryXChoice) => string | null;
+  addAsTable: (x?: SummaryXChoice) => { id: string; replaced: boolean } | null;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -120,11 +133,15 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const resolveDataset = useApp((s) => s.resolveDataset);
   const setStatus = useApp((s) => s.setStatus);
 
-  const [chosen, setRecipeName] = useState(initialRecipe);
+  // Opened from a committed table (lane RO2): its recipe and every source it fitted.
+  const seed = useReopenSeed(PEAK_BATCH_PRODUCER.id, active?.id);
+  const seedRecipe = typeof seed?.settings["recipe"] === "string" ? seed.settings["recipe"] : null;
+  const [chosen, setRecipeName] = useState(seedRecipe ?? initialRecipe);
   // The chosen recipe while it is still saved, else the first saved one (a
-  // recipe saved or deleted in the wizard after this view opened).
-  const recipeName = recipes.some((r) => r.name === chosen) ? chosen : (recipes[0]?.name ?? "");
-  const [pickedRaw, setPicked] = useState<string[]>(() => (active ? [active.id] : []));
+  // recipe saved or deleted in the wizard after this view opened). A reopened
+  // table's recipe that is no longer saved is NOT swapped for another one.
+  const recipeName = recipes.some((r) => r.name === chosen) ? chosen : (seedRecipe !== null && chosen === seedRecipe ? "" : (recipes[0]?.name ?? ""));
+  const [pickedRaw, setPicked] = useState<string[]>(() => (seed ? [...seed.sourceIds] : active ? [active.id] : []));
   // A dataset deleted from the library since it was picked is not counted.
   const picked = useMemo(() => pickedRaw.filter((id) => datasets.some((d) => d.id === id)), [pickedRaw, datasets]);
   const [phase, setPhase] = useState<BatchPhase>("idle");
@@ -143,10 +160,19 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const channels = useMemo(() => batchChannels(active, xKey, yKeys, seriesOrder), [active, xKey, yKeys, seriesOrder]);
   const recipe = recipes.find((r) => r.name === recipeName) ?? null;
   const busy = phase === "preparing" || phase === "fitting" || phase === "cancelling";
+  const recipeDigestNow = recipe ? recipeDigest(recipe) : null;
+  const recordedDigest = typeof seed?.extra?.["recipeDigest"] === "string" ? seed.extra["recipeDigest"] : null;
+  const recipeNote = !seedRecipe ? null
+    : !recipes.some((r) => r.name === seedRecipe) ? `The recipe “${seedRecipe}” of this table is not saved any more: pick a saved recipe, or save it again in step 5 of the wizard.`
+    : recipeName === seedRecipe && recordedDigest !== null && recordedDigest !== recipeDigestNow
+      ? `The saved recipe “${seedRecipe}” changed after this table was computed; Run again to see what it gives now.`
+    : null;
   const block = busy
     ? null
     : !recipe
-      ? "save a recipe first (step 5 of the wizard), then pick it here"
+      ? (seedRecipe !== null && recipeName === "" && recipes.length > 0
+        ? `pick a saved recipe: “${seedRecipe}” is not saved any more`
+        : "save a recipe first (step 5 of the wizard), then pick it here")
       : recipeBatchBlock(recipe)
         ?? (!channels ? "select a dataset with a plotted Y column: the batch fits those columns, by name, in every dataset" : null)
         ?? (picked.length === 0 ? "pick at least one dataset" : null)
@@ -363,7 +389,14 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const stale = results !== null && ran !== null && !busy &&
     (ran.changed || ran.data !== datasetsInputsToken(Object.keys(ran.fps), datasets));
 
-  const addAsTable = useCallback((choice?: SummaryXChoice): string | null => {
+  // Replace's column check (lane RPL) runs before the button, on the table it would write.
+  const primaryId = ran?.sources.find((s) => s.id in ran.fps)?.id;
+  const tableLabels = useMemo(() => (results && ran && !stale
+    ? batchDataStruct(batchTableRows(results), { recipeName: ran.recipe.name, recipe: ran.recipe, sources: ran.sources, ranAt: ran.ranAt }).labels
+    : null), [results, ran, stale]);
+  useReplaceLayoutBlock(PEAK_BATCH_PRODUCER.id, primaryId, tableLabels);
+
+  const addAsTable = useCallback((choice?: SummaryXChoice): { id: string; replaced: boolean } | null => {
     if (!results || !ran || stale) return null;
     const rows = batchTableRows(results);
     const x = choice
@@ -385,11 +418,12 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
       producer: PEAK_BATCH_PRODUCER,
       sources: ran.sources.filter((s) => s.id in ran.fps).map((s) => ({ id: s.id, computedOn: ran.fps[s.id] })),
       settings: { recipe: ran.recipe.name, x: choice ?? null },
+      reopenExtra: { channels: ran.channels, recipeDigest: recipeDigest(ran.recipe) },
       name: `Peak batch — ${ran.recipe.name} (${n} dataset${n === 1 ? "" : "s"})`,
       data,
       status: note ? `batch table: ${note}` : `added the peak batch table (${n} dataset${n === 1 ? "" : "s"})`,
     });
-    return outcome.kind === "created" ? outcome.outputId : null;
+    return outcome.kind === "created" || outcome.kind === "replaced" ? { id: outcome.outputId, replaced: outcome.kind === "replaced" } : null;
   }, [results, ran, stale, datasets, setStatus]);
 
   return {
@@ -400,6 +434,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     setPicked,
     channels,
     block,
+    recipeNote,
     phase,
     done: progress.done,
     total: progress.total,

@@ -34,10 +34,12 @@ import { useApp } from "./useApp";
  *  computed on, the output's own view (to detect edits), the name the TOOL gave
  *  it (to tell a user's rename apart) and the tool extras. */
 export function reopenRecord(
-  request: Pick<AnalysisOutputCommit, "computedOn" | "reopenExtra">, output: Dataset, toolName: string,
+  request: Pick<AnalysisOutputCommit, "computedOn" | "reopenExtra" | "alsoFrom">, output: Dataset, toolName: string,
 ): CommitSettings {
   return {
     computedOn: request.computedOn,
+    // A multi-source output: each further source's view as computed (reopen checks them).
+    ...(request.alsoFrom?.length ? { alsoFrom: request.alsoFrom } : {}),
     output: analysisDataFingerprint(output),
     name: toolName,
     ...(request.reopenExtra ? { extra: request.reopenExtra } : {}),
@@ -94,7 +96,8 @@ export function replaceCommittedOutput(
   const { stale: _wasStale, ...rest } = target;
   const next = {
     ...rest,
-    producer: fresh.producer, parameters: fresh.parameters, sourceFingerprint: fresh.sourceFingerprint,
+    // `sources` too: a multi-source output may now be computed from other worksheets (lane RO2).
+    producer: fresh.producer, sources: fresh.sources, parameters: fresh.parameters, sourceFingerprint: fresh.sourceFingerprint,
     tableRefs: fresh.tableRefs, plotBindings: fresh.plotBindings, warnings: [], updatedAt: new Date().toISOString(),
   };
   if (state.staleDatasets.includes(outputId)) {

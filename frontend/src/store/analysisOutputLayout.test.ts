@@ -179,7 +179,7 @@ describe("sheet() readers", () => {
 
 describe("the reopen session carries the pre-commit reason", () => {
   it("a layout block flips Replace to Add as new and refuses setMode('replace')", () => {
-    const session = { resultId: "r", resultName: "R", sourceId: "src", outputId: "o", outputName: "O", seed: null, extra: null, notice: null, replaceBlocked: null };
+    const session = { resultId: "r", resultName: "R", sourceId: "src", sourceIds: ["src"], outputId: "o", outputName: "O", seed: null, extra: null, notice: null, replaceBlocked: null };
     useToolReopen.getState().start("ellipse-fit", session);
     expect(useToolReopen.getState().sessions["ellipse-fit"].mode).toBe("replace");
     useToolReopen.getState().setLayoutBlocked("ellipse-fit", "Replace would remove column ‘χ’");
@@ -191,7 +191,7 @@ describe("the reopen session carries the pre-commit reason", () => {
   });
 
   it("a mode the user picked is never overridden when a block clears", () => {
-    const session = { resultId: "r", resultName: "R", sourceId: "src", outputId: "o", outputName: "O", seed: null, extra: null, notice: null, replaceBlocked: null };
+    const session = { resultId: "r", resultName: "R", sourceId: "src", sourceIds: ["src"], outputId: "o", outputName: "O", seed: null, extra: null, notice: null, replaceBlocked: null };
     useToolReopen.getState().start("ellipse-fit", session);
     useToolReopen.getState().setMode("ellipse-fit", "new");
     useToolReopen.getState().setLayoutBlocked("ellipse-fit", "x");
