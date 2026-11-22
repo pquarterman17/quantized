@@ -5,10 +5,11 @@
 import { Button } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { fmtNum as fmt } from "../../../lib/format";
+import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
 import { useOdrFit } from "./useOdrFit";
 
 export default function OdrSection() {
-  const { busy, error, result, usedYErr, run } = useOdrFit();
+  const { busy, error, refusal, result, stale, usedYErr, run } = useOdrFit();
   return (
     <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-soft)" }}>
       <label className="qzk-field-lbl">Errors in x and y</label>
@@ -20,13 +21,10 @@ export default function OdrSection() {
       >
         {busy ? "Fitting…" : "Fit line (ODR)"}
       </Button>
-      {error && (
-        <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>
-          {error}
-        </div>
-      )}
+      <WorkbenchMessage refusal={refusal ? error : null} error={refusal ? null : error} />
       {result && !busy && (
         <div style={{ marginTop: 8 }}>
+          {stale && <OutOfDateNote block>the data, channels or error columns changed after this fit. Fit again.</OutOfDateNote>}
           <DataTable
             columns={["param", "value", "± err"]}
             rows={[
