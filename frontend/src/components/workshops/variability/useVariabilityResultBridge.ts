@@ -1,12 +1,14 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { snapshotResultKey, variabilityQuestion } from "../../../lib/snapshotResultKey";
 import type { VariabilityRecipe } from "../../../lib/variabilityAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import type { VariabilityFactorLevel } from "../../../lib/variability";
 import { useVariabilityStore } from "../../../store/variability";
-import { matchesVariabilityResult, publishVariabilityResult } from "../../../store/variabilityResults";
+import { publishVariabilityResult } from "../../../store/variabilityResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 import type { NestedAnovaResponse, VarianceComponentsResponse, VariabilitySummaryResponse } from "./useVariability";
 
 interface BridgeArgs {
@@ -56,8 +58,8 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
-  const savedResultExists = useApp((state) => !!args.active && !!fingerprint &&
-    state.analysisResults.some((result) => matchesVariabilityResult(result, args.active!.id, fingerprint, recipe)));
+  const savedResultExists = useSavedSnapshotResult(args.active && fingerprint
+    ? snapshotResultKey("variability-analysis", args.active.id, fingerprint, variabilityQuestion(recipe)) : null);
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     !!args.anova && !!args.summary && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null

@@ -1,12 +1,14 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { multivariateQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { CorrelationResponse, PCAResponse } from "../../../lib/api";
 import { multivariateSnapshotMatchesRecipe, type MultivariateRecipe, type MultivariateSnapshot } from "../../../lib/multivariateAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useMultivarStore } from "../../../store/multivar";
-import { matchesMultivariateResult, publishMultivariateResult } from "../../../store/multivariateResults";
+import { publishMultivariateResult } from "../../../store/multivariateResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 
 interface BridgeArgs {
   active: Dataset | null;
@@ -59,8 +61,8 @@ export function useMultivarResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
-  const savedResultExists = useApp((state) => !!args.active && !!fingerprint &&
-    state.analysisResults.some((result) => matchesMultivariateResult(result, args.active!.id, fingerprint, recipe)));
+  const savedResultExists = useSavedSnapshotResult(args.active && fingerprint
+    ? snapshotResultKey("multivariate-analysis", args.active.id, fingerprint, multivariateQuestion(recipe)) : null);
   const snapshot: MultivariateSnapshot | null = args.correlation && args.pca ? {
     labels: args.labels, sourceRows: args.sourceRows, inputRows: args.inputRows,
     correlation: args.correlation, pca: args.pca,

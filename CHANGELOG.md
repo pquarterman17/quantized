@@ -15,10 +15,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **Distribution Save result** now blocks a repeat save of the same data and settings for good (before, only the open window remembered it, so reopening the window or a reopened project allowed duplicates); Save works again after Undo or deleting the result.
 - **Williamson–Hall Save result** is available again after Undo removes the saved result (it stayed "already saved").
 
 ### Changed
 
+- Distribution, Fit Y by X, Variability, Outlier screening and Multivariate share one duplicate-save check and one undo step for Save result; behaviour is otherwise unchanged. Snapshot results still go Out of date by data fingerprint in every recalculation mode, including None.
 - **Peak find is ~2x faster on large traces** (1M rows: 70 s to 36 s): the SNIP clip runs as a compiled `numba` kernel with the same results, and falls back to the previous numpy code where numba is unavailable.
 
 ## [0.39.0] - 2026-11-21
