@@ -312,7 +312,6 @@ export default function StatStage() {
             />
           </Picker>
         )}
-
         {st.mode === "qq" && (
           <Picker label="dist">
             <Select

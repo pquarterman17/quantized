@@ -41,11 +41,16 @@ def test_route_and_export() -> None:
     assert r.status_code == 200, r.text
     assert len(r.json()["series"]) == 2
     assert client.post("/api/statplots/histogram-multi", json={"columns": []}).status_code == 422
-    out = render_statplot_figure("histogram", [A, B], labels=["a", "b"], fmt="svg", colors=["#ff0000", "#0000ff"])
+    out = render_statplot_figure(
+        "histogram", [A, B], labels=["a", "b"], fmt="svg", colors=["#ff0000", "#0000ff"]
+    )
     assert b"<svg" in out and b"#ff0000" in out
     e = client.post(
         "/api/export/statplot-figure",
-        json={"kind": "histogram", "data": [A[:4], B], "labels": ["a", "b"], "fmt": "svg", "palette": ["#112233", "#445566"]},
+        json={
+            "kind": "histogram", "data": [A[:4], B], "labels": ["a", "b"], "fmt": "svg",
+            "palette": ["#112233", "#445566"],
+        },
     )
     assert e.status_code == 200, e.text
     assert b"#112233" in e.content and b"#445566" in e.content

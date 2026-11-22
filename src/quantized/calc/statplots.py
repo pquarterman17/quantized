@@ -19,6 +19,7 @@ oracles:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -326,7 +327,7 @@ def histogram(
 
 
 def histogram_multi(
-    columns: list[NDArray[np.float64] | list[float]],
+    columns: Sequence[NDArray[np.float64] | list[float]],
     *,
     bins: str | int = "fd",
 ) -> dict[str, Any]:

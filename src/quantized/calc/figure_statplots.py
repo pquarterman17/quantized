@@ -24,6 +24,7 @@ from quantized.calc.figure_group_notes import (
     connect_segments,
     mark_empty_slots,
 )
+from quantized.calc.figure_hist_multi import draw_histogram_multi, is_multi
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_stat_colors import check_aligned, color_boxes, color_violins
@@ -33,7 +34,6 @@ from quantized.calc.figure_stat_marks import (
     resolve_marks,
     scatter_points,
 )
-from quantized.calc.figure_hist_multi import draw_histogram_multi, is_multi
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots import box_stats as _box_stats
 from quantized.calc.statplots import histogram as _histogram

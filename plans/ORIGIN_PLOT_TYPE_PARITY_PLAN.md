@@ -567,11 +567,23 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     orientation is still open.
 11. **Horizontal stacked bar** — 11/11 `stacked_bar` unbuildable: the Stat
     Stage bar is vertical only and `bars: "horizontal"` has no stacking.
+    **ADDED 2026-11-22 (lane A2), residual: verify against Origin:** gallery tile "Horizontal Stacked Bar"
+    (`SeriesStyle.stack` + `bars: "horizontal"`; screen `lib/uplotStack.ts` /
+    `uplotBars.barPaths`, export `calc/figure_bars.stacked_series`, horizontal
+    `bottom` -> `left` in `figure_orient`). The cursor readout still shows each
+    series' own value, not the running total.
 12. **Floating column** — 9/9 `floating_column` unbuildable: no bar that
     spans two Y columns (low to high); every bar starts at zero.
+    **OPEN (lane A2, not reached):** no floating-column creation exists yet;
+    `stack` only builds cumulative bars. Needs a low/high pair of Y columns
+    (a bar base from a second column) on screen and in `figure_bars`.
 13. **Stacked area** — 8/8 `stacked_area` unbuildable: `fill` is
     under-zero or between two curves, never cumulative on the previous
     series.
+    **ADDED 2026-11-22 (lane A2), residual: verify against Origin:** gallery tile "Stacked Area"
+    (`stack` + `fill: "under"`): the line at the running total, the fill
+    between the two totals, on screen (`stackedAreaPaths`) and in the export
+    (`stack_base` -> `fill_between`); autoscale covers the totals.
 14. **Column / stacked column per X row** — 8/11 `column` and 8/11
     `stacked_column` built the wrong figure. With a numeric X the gallery's
     Column routes to the Stat Stage, which has no category column and
@@ -587,6 +599,8 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     (XY-stage bars). Stacked column per X row is still open (needs a
     cumulative bar base on screen and in `calc/figure_bars.py`, plus the
     autoscale).
+    **ADDED 2026-11-22 (lane A2), residual: verify against Origin:** gallery tile "Stacked Column per X row"
+    (`SeriesStyle.stack`; screen + export + autoscale totals).
 15. **Histogram of several columns** — 8/11 `histogram`: the gallery's
     Histogram bins only the first plotted column; Origin bins every
     selected Y column in one graph. `single_point` (1 row) exports nothing
@@ -595,6 +609,12 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     histogram (screen and export, `calc/statplots.histogram`; a distribution
     fit still needs >= 2 values). Binning several Y columns in one graph is
     still open.
+    **ADDED 2026-11-22 (lane A2), residual: verify against Origin:** the Stat Stage histogram has a "+ columns"
+    picker (`statPicks.histCols`); several columns are binned on shared edges
+    (`calc.statplots.histogram_multi`, `/api/statplots/histogram-multi`), drawn
+    as translucent bar sets with a legend on screen (`statRenderHist.ts`) and in
+    the export (`calc/figure_hist_multi.py`). A distribution fit stays a
+    single-column feature (ignored for several columns).
 16. **Double-Y axis assignment** — 6/8 `double_y` put the wrong curve on the
     right axis: `plotTypePatch("doubleY")` moves the LAST plotted column to
     Y2, Origin's `DOUBLEY` template puts the SECOND Y column on the right

@@ -14,7 +14,7 @@ import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { offAutoscale } from "./overlayAutoscale";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
-import { barPaths } from "./uplotBars";
+import { BAR_PATHS, barPaths } from "./uplotBars";
 import { stackedAreaPaths, stackedBelow } from "./uplotStack";
 import { ensureMarks, marks, marksPending, usesMarks } from "./marksLoader";
 import { regionDecor } from "./regionDecorLoader";
@@ -227,7 +227,8 @@ export function buildSeriesDefs(
       // renders correctly regardless of the ambient default trace.
       if (style?.bars) {
         // An Origin column / bar graph: bars from zero, filled with the stroke.
-        def.paths = barPaths(stackedBelow(seriesStyles, payload.series.map((p) => p.axis), i));
+        const below = stackedBelow(seriesStyles, payload.series.map((p) => p.axis), i);
+        def.paths = below.length ? barPaths(below) : BAR_PATHS;
         def.fill = translucent(stroke, 70);
         def.points = { show: false };
       } else if (style?.stack && style.fill === "under") {

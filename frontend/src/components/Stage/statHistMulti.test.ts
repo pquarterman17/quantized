@@ -10,7 +10,7 @@ import { computeHistogramDraw, histogramColumns, multiHistogramSpec } from "./st
 
 const data: DataStruct = {
   time: [0, 1, 2],
-  values: [[1, 3, NaN], [2, 4, 5], [2, 5, 5]],
+  values: [[1, 2, 2], [3, 4, 5], [NaN, 5, 5]],
   labels: ["A", "B", "C"],
   units: ["", "", ""],
   metadata: {},

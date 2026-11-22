@@ -215,7 +215,7 @@ describe("forward compatibility with v0.34.0", () => {
     expect(kept.length).toBeGreaterThan(0);
     const style = {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
-      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline",
+      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true,
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());
     const ws = load();

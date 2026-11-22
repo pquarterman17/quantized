@@ -246,7 +246,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             data: Any = req.data
             # a histogram of several columns sends one list per column (shared bins)
             multi = req.kind == "histogram" and bool(data) and isinstance(data[0], list)
-            data = [list(g) for g in data] if multi or req.kind in ("box", "violin", "strip") else list(data)
+            grouped = multi or req.kind in ("box", "violin", "strip")
+            data = [list(g) for g in data] if grouped else list(data)
             img = render_statplot_figure(
                 req.kind, data, labels=req.labels, fmt=req.fmt, style=req.style,
                 dist=req.dist, bins=req.bins, fit=req.fit,
@@ -259,7 +260,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 # qq / histogram: one glyph colour, the canvas' seriesColor(0).
                 colors=position_colors(
                     req.color_levels, req.palette,
-                    len(data) if multi or req.kind in ("box", "violin", "strip") else 1,
+                    len(data) if grouped else 1,
                 ),
                 svg_text_as_paths=req.svg_text_as_paths,
             )

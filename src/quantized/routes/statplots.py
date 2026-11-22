@@ -119,6 +119,7 @@ class HistogramMultiRequest(BaseModel):
 def histogram_multi_route(req: HistogramMultiRequest) -> dict[str, Any]:
     """Several columns binned on shared edges (one graph, one bin rule)."""
     try:
-        return _wrap(histogram_multi([np.asarray(c, dtype=float) for c in req.columns], bins=req.bins))
+        columns = [np.asarray(c, dtype=float) for c in req.columns]
+        return _wrap(histogram_multi(columns, bins=req.bins))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
