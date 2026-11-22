@@ -32,6 +32,9 @@ export interface ByLevelRunState {
   levels: ByLevel[];
   rows: ByLevelRow[];
   busy: boolean;
+  /** True only when `rows` were computed for exactly the current levels and
+   *  `runKey` and nothing is in flight: the only state a result may be saved from. */
+  current: boolean;
 }
 
 /** `run` may read the latest tool settings through closure: it is held in a ref
@@ -46,17 +49,27 @@ export function useByLevelRun(
 ): ByLevelRunState {
   const part = useByPartition(active, data, columns);
   const [rows, setRows] = useState<ByLevelRow[]>([]);
+  const [ranFor, setRanFor] = useState<{ levels: ByLevel[]; key: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const runRef = useRef(run);
   runRef.current = run;
+  // A By column the caller no longer offers (it became the analysed column,
+  // say) resets to none instead of partitioning by the analysed column.
+  const { byCol, byOptions, setByCol } = part;
+  useEffect(() => {
+    if (byCol !== null && !byOptions.some((option) => option.index === byCol)) setByCol(null);
+  }, [byCol, byOptions, setByCol]);
 
   useEffect(() => {
     if (part.levels.length === 0) {
       setRows([]);
+      setRanFor(null);
       setBusy(false);
       return;
     }
     const controller = new AbortController();
+    const levels = part.levels;
+    const key = runKey;
     setBusy(true);
     void Promise.all(
       part.levels.map(async (level): Promise<ByLevelRow> => {
@@ -70,11 +83,13 @@ export function useByLevelRun(
     ).then((result) => {
       if (!controller.signal.aborted) {
         setRows(result);
+        setRanFor({ levels, key });
         setBusy(false);
       }
     });
     return () => controller.abort();
   }, [part.levels, runKey]);
 
-  return { byOptions: part.byOptions, byCol: part.byCol, setByCol: part.setByCol, totalLevels: part.totalLevels, levels: part.levels, rows, busy };
+  const current = !busy && ranFor !== null && ranFor.levels === part.levels && ranFor.key === runKey;
+  return { byOptions: part.byOptions, byCol: part.byCol, setByCol: part.setByCol, totalLevels: part.totalLevels, levels: part.levels, rows, busy, current };
 }

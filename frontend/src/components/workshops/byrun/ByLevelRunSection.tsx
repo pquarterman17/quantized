@@ -1,15 +1,18 @@
 // The shared "By" block for single-curve tools: an optional categorical-column
 // select and one summary row per level (see ./useByLevelRun). Renders nothing
-// when the worksheet has no categorical column to group by.
+// when the worksheet has no categorical column to group by. With `save` (opt-in
+// per tool) a finished run can be recorded as one analysis-batch result, one
+// row per level (./useSaveByResult); without it the section stays display-only.
 
 import { useMemo } from "react";
 
 import { fmtNum } from "../../../lib/format";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { DataTable } from "../../primitives/DataTable";
-import { Select } from "../../primitives";
+import { Button, Select } from "../../primitives";
 import type { ByColumnOption } from "../useByPartition";
 import { type ByCell, useByLevelRun } from "./useByLevelRun";
+import { type ByResultSaveOptions, useSaveByResult } from "./useSaveByResult";
 import type { ByLevel } from "../useByPartition";
 
 interface Props {
@@ -27,11 +30,13 @@ interface Props {
   runKey: string;
   /** Why By cannot run right now (shown instead of results once a column is picked). */
   blockedReason?: string | null;
+  /** Offer "Save By result" (one analysis-batch result, one row per level). */
+  save?: ByResultSaveOptions;
 }
 
 const cell = (v: ByCell): string => (typeof v === "number" ? fmtNum(v) : v ?? "—");
 
-export default function ByLevelRunSection({ tool, active, data, columns, headers, run, runKey, blockedReason }: Props) {
+export default function ByLevelRunSection({ tool, active, data, columns, headers, run, runKey, blockedReason, save }: Props) {
   const guarded = useMemo(
     () => async (level: ByLevel, signal: AbortSignal): Promise<ByCell[]> => {
       if (blockedReason) throw new Error(blockedReason);
@@ -40,6 +45,7 @@ export default function ByLevelRunSection({ tool, active, data, columns, headers
     [run, blockedReason],
   );
   const by = useByLevelRun(active, data, columns, guarded, `${runKey}|${blockedReason ?? ""}`);
+  const saver = useSaveByResult(tool, active, headers, by, save);
   if (by.byOptions.length === 0) return null;
   return (
     <section aria-label={`${tool} by level`} style={{ marginTop: 10 }}>
@@ -66,6 +72,15 @@ export default function ByLevelRunSection({ tool, active, data, columns, headers
                 ? [r.label, r.n, <span key="e" style={{ color: "var(--text-faint)" }}>{r.error}</span>, ...headers.slice(1).map(() => "")]
                 : [r.label, r.n, ...r.values.map(cell)])}
             />
+          )}
+          {save && !blockedReason && (
+            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+              <Button size="sm" disabled={saver.disabledReason !== null} onClick={saver.save}
+                title={saver.disabledReason ?? "One result with a row per level, in the Library and the Result book"}>
+                Save By result
+              </Button>
+              {saver.disabledReason && <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>{saver.disabledReason}</span>}
+            </div>
           )}
         </div>
       )}

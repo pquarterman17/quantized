@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ANALYSIS_RESULT_VERSION, type AnalysisResultValue } from "../../../lib/analysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { analysisSelectionSnapshot, resolveAnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
+import { analysisSelectionSnapshot, resolveAnalysisSelection, type AnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { Dataset } from "../../../lib/types";
 import { registerAnalysisResult } from "../../../store/analysisResultActions";
 import { nextAnalysisResultId } from "../../../store/idSeq";
@@ -40,6 +40,16 @@ interface Props {
   /** Open the section each time this changes (a header action that means "the
    *  batch": the section may be mounted already, and collapsed). */
   expandSignal?: number;
+  /** What each worksheet's input is. "selection" (default): the item's
+   *  plot roles, on the analysis view narrowed by its selected rows and X
+   *  range. "statistics": the statistics tools' contract -- every row of the
+   *  analysis view (the items' row / range / ROI narrowing is dropped from the
+   *  run AND its saved provenance, so the batch reads what the single run
+   *  reads) and columns read BY NAME by `runItem` (lib/statsBatchColumns), so
+   *  the plot X / Y roles are not checked: every channel is kept as a
+   *  candidate and preflight only refuses a worksheet that is gone, has no
+   *  channel or no rows. */
+  inputs?: "selection" | "statistics";
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -59,11 +69,25 @@ interface RunRow {
 
 const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + status.slice(1);
 
+/** The "statistics" input contract over a selection: analysis-view rows, no
+ *  plot roles (every channel a candidate; the tool reads its columns by name). */
+function statisticsSelection(selection: AnalysisSelection, datasets: readonly Dataset[]): AnalysisSelection {
+  const width = new Map(datasets.map((dataset) => [dataset.id, dataset.data.labels.length]));
+  return {
+    ...selection,
+    items: selection.items.map((item) => ({
+      ...item, xKey: null, yKeys: Array.from({ length: width.get(item.datasetId) ?? 0 }, (_v, index) => index),
+      errorBindings: [], errorKeys: {}, factorKeys: [], rowIds: null, range: null, roi: null,
+    })),
+  };
+}
+
 /** Shared batch shell: honest preflight first, sequential execution so cancel
  * has a deterministic boundary, and one durable result even after a partial
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
   toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
+  inputs = "selection",
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -83,7 +107,11 @@ export default function AnalysisBatchControls({
   const pickX = (choice: SummaryXChoice) => { userPickedX.current = true; setXChoice(choice); };
   const cancelRef = useRef(false);
   const runningRef = useRef(false);
-  const current = owner === toolId ? selection : null;
+  const owned = owner === toolId ? selection : null;
+  const current = useMemo(
+    () => owned && inputs === "statistics" ? statisticsSelection(owned, datasets) : owned,
+    [owned, inputs, datasets],
+  );
   const resolved = useMemo(
     () => current ? resolveAnalysisSelection(current, datasets) : { items: [], issues: [] },
     [current, datasets],

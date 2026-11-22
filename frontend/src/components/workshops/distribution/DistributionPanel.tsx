@@ -16,6 +16,7 @@ import { Button, Select, StatusDot } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import BoxStrip from "./BoxStrip";
+import DistributionBatchSection from "./DistributionBatchSection";
 import CompareDistributionsTable from "./CompareDistributionsTable";
 import DistributionLevelSection from "./DistributionLevelSection";
 import HistogramStrip from "./HistogramStrip";
@@ -279,6 +280,8 @@ export default function DistributionPanel() {
               </Button>
             </div>
           )}
+
+          <DistributionBatchSection column={d.columns.find((c) => c.index === d.col)?.label ?? null} />
         </>
       )}
     </ToolWindow>

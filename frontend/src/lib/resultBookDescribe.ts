@@ -148,20 +148,25 @@ function describeAnalysisBatch(result: AnalysisResult): Described | null {
   const table = result.tables?.find((candidate) => candidate.title === "Batch status");
   if (!parameters || typeof parameters.toolId !== "string" || !parameters.toolId ||
       selection?.version !== ANALYSIS_SELECTION_VERSION ||
-      !table || table.columns[0] !== "Worksheet" || table.columns[1] !== "Status") return null;
+      !table || table.columns[1] !== "Status") return null;
+  // A worksheet batch has one row per worksheet; a saved By run
+  // (lib/byLevelBatchResult) one row per level of its saved By column.
+  const byColumn = typeof parameters.byColumn === "string" && parameters.byColumn ? parameters.byColumn : null;
+  if (table.columns[0] !== (byColumn ? "Level" : "Worksheet")) return null;
   const completed = table.rows.filter((row) => row[1] === "Completed").length;
   // The tool's own saved settings (provenance only): plain values, as saved.
   const own = Object.entries(parameters).flatMap(([key, value]): [string, string][] => {
-    if (key === "toolId" || key === "selection") return [];
+    if (key === "toolId" || key === "selection" || key === "byColumn") return [];
     const shown = typeof value === "boolean" ? (value ? "yes" : "no") : text(value);
     // A JSON-string blob (a tool's whole settings object) is not a readable setting.
     if (shown === null || /^[{[]/.test(shown)) return [];
     return [[key.charAt(0).toUpperCase() + key.slice(1), shown.length > BATCH_VALUE_MAX ? `${shown.slice(0, BATCH_VALUE_MAX - 1)}…` : shown]];
   });
   return {
-    method: `${result.producer.label} batch`, inputKeys: null, reopen: false,
+    method: byColumn ? `${result.producer.label} by ${byColumn}` : `${result.producer.label} batch`,
+    inputKeys: null, reopen: false,
     settings: settings([
-      ["Worksheets", String(table.rows.length)], ["Completed", String(completed)], ...own,
+      [byColumn ? "Levels" : "Worksheets", String(table.rows.length)], ["Completed", String(completed)], ...own,
     ]),
   };
 }

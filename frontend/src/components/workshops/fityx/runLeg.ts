@@ -10,8 +10,9 @@ import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey, type RegressionBand } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
 import { postBySource } from "../../../lib/fitSource";
+import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import type { Recommendation } from "../../../lib/statschooser";
-import type { CalcResult, DataStruct } from "../../../lib/types";
+import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
 
 /** "unsupported" = a nominal/ordinal Y against a continuous X — JMP maps
  *  that combination to logistic fitting, out of this workbench's 3 legs. */
@@ -77,6 +78,15 @@ function optional<K extends string, T>(failed: SubtestFailures<K>, key: K, p: Pr
 
 const withFailures = <K extends string>(failed: SubtestFailures<K>): { failed?: SubtestFailures<K> } =>
   Object.keys(failed).length ? { failed } : {};
+
+/** The leg a pair of columns dispatches to, from their modeling types (the
+ *  time axis, -1, is never categorical; mirrors lib/plotdata.ts). */
+export function fitYByXKind(dataset: Dataset | null, xCol: number, yCol: number): FitYByXKind {
+  const categorical = (index: number): boolean =>
+    !!dataset && index >= 0 && isCategorical(channelModelingType(dataset, index));
+  if (categorical(xCol)) return categorical(yCol) ? "contingency" : "oneway";
+  return categorical(yCol) ? "unsupported" : "bivariate";
+}
 
 /** Only local minimum-sample validation is safe to omit from a By report. */
 export class InsufficientDataError extends Error {}

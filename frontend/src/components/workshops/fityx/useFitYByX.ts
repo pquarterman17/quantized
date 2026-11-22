@@ -26,12 +26,12 @@ import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
-import type { Dataset, ModelingType } from "../../../lib/types";
+import type { Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
-import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
+import { colValues, fitYByXKind, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { fitYByXLegRecords } from "./fitYByXReport";
 import { useFitYByXResultBridge } from "./useFitYByXResultBridge";
@@ -121,12 +121,6 @@ function firstContinuous(active: ReturnType<typeof useActiveDataset>, avoid: num
   return 0;
 }
 
-/** The time axis (-1) is never categorical (mirrors lib/plotdata.ts). */
-function colType(active: ReturnType<typeof useActiveDataset>, index: number): ModelingType {
-  if (!active || index < 0) return "continuous";
-  return channelModelingType(active, index);
-}
-
 export function useFitYByX(): FitYByXState {
   const active = useActiveDataset();
   const setStatus = useApp((s) => s.setStatus);
@@ -184,11 +178,7 @@ export function useFitYByX(): FitYByXState {
   const yLabel = labelOf(yCol);
   const byLabel = byPartition.byOptions.find((column) => column.index === byPartition.byCol)?.label ?? null;
 
-  const xType = colType(active, xCol);
-  const yType = colType(active, yCol);
-  const kind: FitYByXKind = isCategorical(xType)
-    ? (isCategorical(yType) ? "contingency" : "oneway")
-    : (isCategorical(yType) ? "unsupported" : "bivariate");
+  const kind: FitYByXKind = fitYByXKind(active, xCol, yCol);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

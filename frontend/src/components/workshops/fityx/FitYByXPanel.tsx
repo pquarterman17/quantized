@@ -9,6 +9,7 @@ import { useFitYByXStore } from "../../../store/fitYByX";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import BivariateView from "./BivariateView";
 import ContingencyView from "./ContingencyView";
+import FitYByXBatchSection from "./FitYByXBatchSection";
 import FitYByXLevelSection from "./FitYByXLevelSection";
 import OnewayView from "./OnewayView";
 import { useFitYByX } from "./useFitYByX";
@@ -147,6 +148,8 @@ export default function FitYByXPanel() {
               </Button>
             </div>
           )}
+
+          <FitYByXBatchSection xLabel={f.xLabel} yLabel={f.yLabel} kind={f.kind} order={f.order} />
         </>
       )}
     </ToolWindow>
