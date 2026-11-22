@@ -330,6 +330,8 @@ export function usePawley(): PawleyState {
       wavelength: fitInput.wavelength, fwhm: fitInput.profileFwhm,
       // The refinement it produced, so a different outcome is a different output.
       cell: result.cell, rwp: result.rwp, n: fitInput.x.length,
+      // Recorded in the output's metadata, so they are part of what it is.
+      cellInitial: result.cell_initial, hklMax: result.hkl_max, startCellFrom: fitInput.startCellFrom?.name ?? null,
     },
     status: "added Pawley observed/model/background/residual dataset",
     output: () => {

@@ -112,6 +112,16 @@ describe("Pawley → Library", () => {
     expect(outputs()).toHaveLength(2);
   });
 
+  it("a refinement that started from a different cell is a different output", async () => {
+    const r = await refine();
+    act(() => r.current.toLibrary());
+    act(() => useApp.getState().setActive("d1"));
+    vi.mocked(pawleyRefine).mockResolvedValue({ ...PAWLEY, cell_initial: [5.5, 5.5, 5.5, 90, 90, 90] });
+    await act(async () => { await r.current.compute(); });
+    act(() => r.current.toLibrary());
+    expect(outputs()).toHaveLength(2);
+  });
+
   it("refuses a result that went out of date (nothing is added)", async () => {
     const r = await refine();
     changeSource();
