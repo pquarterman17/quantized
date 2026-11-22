@@ -9,7 +9,7 @@
 //  1. the EXACT set of top-level keys each call changes (a whole-getState()
 //     identity diff — a recordHistory call would show as a `history` change);
 //  2. the 400 ms debounce: a burst of touches schedules ONE pass;
-//  3. the re-entrancy contract: a touch mid-pass is ignored, and a
+//  3. the re-entrancy contract: a touch mid-pass is deferred (lane RP), and a
 //     `recalcNow` mid-pass is not dropped but runs as a follow-up pass.
 // The last two depend on module-level state shared by every call, so they
 // are what a mis-wired slice (state per call, or a guard on the wrong flag)
@@ -212,20 +212,19 @@ describe("recalcNow re-entrancy (module-level scheduler state)", () => {
     });
   });
 
-  it("a touch that arrives mid-pass is ignored (the recalc's own writes never re-mark)", async () => {
+  it("a touch that arrives mid-pass is deferred, not applied mid-pass (the recalc's own writes never re-mark)", async () => {
     seed({ staleDatasets: [], staleFits: ["a"] });
     const held = holdFit();
     const pass = act().recalcNow();
     await held.entered;
     useApp.setState({ staleDatasets: [] });
     act().touchDataset("a");
-    expect(act().staleDatasets).toEqual([]);
+    expect(act().staleDatasets).toEqual([]); // nothing marked while the pass runs
     held.release();
     await pass;
-    expect(act().staleFits).toEqual([]);
-    // ...and the guard lifts once the pass settles.
-    act().touchDataset("a");
+    // Lane RP: it was a USER edit, so it is applied once the pass settles.
     expect(act().staleDatasets).toEqual(["b"]);
+    expect(act().staleFits).toEqual(["a"]);
   });
 
   it("a recalcNow that arrives mid-pass runs as a follow-up pass, not a no-op", async () => {

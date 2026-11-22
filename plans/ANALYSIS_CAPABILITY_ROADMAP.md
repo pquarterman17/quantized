@@ -831,11 +831,19 @@ inconsistently exposed, and do not all share the same result lifecycle.
     live view, saved figures, legacy live figures, Graph Builder specs, graph
     curves and inset layers, `sheet()` readers and other results are remapped;
     a derived worksheet reading the output blocks any layout change; pages and
-    report entries hold no channel index. (2) During a recalc pass, edits still do not mark derived
-    (non-committed) worksheets; the pass's own writes and user edits cannot be
-    told apart there. A source data edit is caught by the recompute's own
-    unchanged-input check; a row-state edit on a full-worksheet recipe needs no
-    mark. (3) With Replace chosen, a computation whose key matches ANOTHER
+    report entries hold no channel index. (2) ~~During a recalc pass, edits still do not mark derived
+    (non-committed) worksheets~~ **Fixed (lane RP):** the pass now names the
+    dataset it is writing (`store/recalcPassState.ts`); any other
+    `touchDataset` mid-pass is a user edit, queued (a Set, so a burst is one)
+    and replayed through the ordinary `touchDataset` when the pass settles, so
+    Auto re-runs (one debounced pass, no loop: the re-run's own writes are
+    tagged), Manual marks stale and None queues nothing. The replay records
+    no history (the redo stack survives). Fail-before tests in
+    `store/recalcPassEdits.test.ts`. Known residual: a DATA edit to the very dataset whose
+    correction the pass is writing at that instant is overwritten by the
+    correction (as before) and, being read as the pass's own write, is not
+    replayed; a row-state edit there is replayed.
+    (3) With Replace chosen, a computation whose key matches ANOTHER
     current result (an earlier "Add as new") returns that result and replaces
     nothing; the button says "Already added as …". (4) A reopen session ends
     only when its panel unmounts: if the panel never mounts (a lazy chunk fails),
