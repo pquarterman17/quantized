@@ -647,9 +647,11 @@ describe("useCurveFit — By grouping (JMP_GAP_PLAN J7 residual)", () => {
 
     expect(fitModel).toHaveBeenCalledWith(
       expect.objectContaining({ model: "Linear", x: [0, 1, 2, 3, 4, 5], y: [10, 20, 30, 40, 50, 60] }),
+      expect.any(AbortSignal),
     );
     expect(fitModel).toHaveBeenCalledWith(
       expect.objectContaining({ model: "Linear", x: [6, 7, 8, 9, 10, 11], y: [15, 25, 35, 45, 55, 65] }),
+      expect.any(AbortSignal),
     );
     // Display-only: the singleton overlay/spec are untouched by By fetches.
     expect(useApp.getState().fitOverlay).toBeNull();
@@ -689,7 +691,7 @@ describe("useCurveFit — By grouping (JMP_GAP_PLAN J7 residual)", () => {
         expect.objectContaining({ params: [7] }),
       ]),
     );
-    expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ model: "Quadratic" }));
+    expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ model: "Quadratic" }), expect.any(AbortSignal));
   });
 
   it("clears byResults when By is set back to none", async () => {

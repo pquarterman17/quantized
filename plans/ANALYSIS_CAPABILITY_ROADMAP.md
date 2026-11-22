@@ -299,7 +299,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Multivariate, Variability, Outlier screening, Stats tests/chooser | 2+ numeric / factors / numeric Y | no | no |
     | Calculators, Digitizer | none | n/a | n/a |
 
-    Gaps (recorded, not built): Batch is missing for Magnetometry tools, Pawley, XRD reference, both FFT tools,
+    Gaps (recorded, not built; BY3 later added batch for the FFT tools, Pawley and Curie-Weiss): Batch is missing for Magnetometry tools, Pawley, XRD reference, both FFT tools,
     Reflectivity, and every statistics tool; By is missing everywhere except
     Curve fit, Distribution, Fit Y by X and (lane C, 2026-11-22) Find peaks,
     Peak analyzer, Baseline, Signal Processing and (lane C2) Surface fit,
@@ -977,14 +977,16 @@ panel; **own** = a tool-specific result or worksheet. ✱ = changed here.
 | Find peaks ✱ | `AnalysisBatchControls` → AB; Batch integrate → worksheet (`commitBatchTable`) | `byrun` → disp, **Save By result → AB** |
 | Peak analyzer ✱ | own `usePeakBatch` (job queue, cancel) → peak batch table worksheet | `byrun` → disp, **Save By result → AB** |
 | Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit ✱ | `AnalysisBatchControls` (role-based columns) → AB | `byrun` → disp, **Save By result → AB** |
-| Hysteresis | `AnalysisBatchControls` → AB (+ trend figures) | none |
-| Williamson–Hall | own section → `williamson-hall-batch` | none |
+| Hysteresis ✱ | `AnalysisBatchControls` → AB (+ trend figures) | **`byrun` → disp, Save By result → AB** |
+| Williamson–Hall | own section → `williamson-hall-batch` | none (decided below) |
 | SIMS | own `simsBatch` (review dialog) → one worksheet per profile | none |
 | Distribution ✱ | **`StatsBatchSection` → AB** | own By → disp; kept in its own Save result |
 | Fit Y by X ✱ | **`StatsBatchSection` → AB** | own By → disp; kept in its own Save result |
 | Outlier screening ✱ | **`StatsBatchSection` → AB** | **`byrun` → disp, Save By result → AB** |
 | Multivariate, Variability, Stats tests / chooser | none (decided below) | none (decided below) |
-| Magnetometry tools, Pawley, XRD reference, FFT tools, Reflectivity | none | none |
+| FFT thickness, Reflectivity FFT, Pawley ✱ | **`StatsBatchSection` → AB** | none |
+| Curie–Weiss ✱ | **`StatsBatchSection` → AB** (molar susceptibility only) | none |
+| Magnetometry Background / Units / Internal field, XRD reference, Reflectivity fit | none (decided below) | none |
 
 **Design (one contract, existing pieces).**
 - *Worksheets:* `analysisselection/AnalysisBatchControls` stays the one
@@ -1093,11 +1095,77 @@ describer).
   Curve fit's own By gets Save By result (kept on its own runner, see
   "Lane BY2"); the role-based batches reset their finished table when their
   settings change (`settingsKey`).
+- [x] BY3: batch for FFT thickness, Reflectivity FFT, Pawley and Curie–Weiss;
+  Hysteresis By with Save By result; Curve fit By aborts in-flight fits;
+  Peak analyzer batch resets on a recipe change (decisions below).
 - [ ] Remaining: Curve fit's batch still keeps a finished table under changed
-  settings (decision above); Peak analyzer's own batch runner has no reset;
-  By for Hysteresis and Williamson–Hall; batch for Magnetometry tools, Pawley,
-  XRD reference, both FFT tools and Reflectivity; Curve fit By still runs all
-  levels at once with no abort (the `byrun` runner aborts on a change).
+  settings (decision in BY2); a Peak analyzer table does not reset on a
+  channel change (decision below); batch for the magnetometry transforms
+  (Background, Units, Internal field: they write worksheets, and Units and
+  Internal field need per-sample mass / geometry, so a shared value would be a
+  guess; a Background estimate-only batch like Baseline's is possible and not
+  built); Pawley batch cannot add the model worksheet; Curie–Weiss batch for
+  raw-moment worksheets (needs per-worksheet mass / molar mass / field).
+
+**Lane BY3 (2026-11-22): domain tools.**
+- *Contract.* The reductions that read one scan reuse `StatsBatchSection`
+  (`reductions/ReductionBatchSections.tsx`, `magtools/CurieWeissBatch.tsx`).
+  A worksheet = its analysis view with its own X axis (2θ / Q / temperature)
+  and the column with the panel's channel NAME (a missing or duplicated name is
+  an error row); every setting is the panel's, the same for all worksheets.
+  The request bodies are the single run's own, built in one place
+  (`reductionRequests.ts`, `pawleyBody`) so a batch row for the active
+  worksheet sends what the panel sends.
+- *Fail closed per worksheet.* Thickness and cell scale with the wavelength, so
+  a worksheet whose file records a different wavelength than the panel's is an
+  error row (a file that records none runs with the panel's, as the single run
+  does); an FFT thickness worksheet whose x is not 2θ in degrees fails (the
+  single run does not check; the batch is stricter on purpose); a Reflectivity
+  FFT worksheet whose axis reads as the other probe (Q versus 2θ) fails, as
+  does one whose x unit differs from the panel's when an x range is set (the
+  range was typed in the panel worksheet's unit); a Curie–Weiss worksheet reads
+  the response's own X (T2 for R2 on a T1,R1,T2,R2 sheet); a Pawley worksheet whose x is not 2θ in degrees fails
+  (`pawleyAxisProblem`); a Curie–Weiss worksheet whose X is not a declared K
+  temperature or whose response is not molar susceptibility fails.
+- *FFT thickness:* thickness, uncertainty, points used. *Reflectivity FFT:*
+  first thickness, peak count, all thicknesses, superlattice period when
+  detected. *Pawley:* refined a, b, c, Rwp, Rwp (background only), reflections,
+  and the single run's verdict as a warning; the observed/model worksheet and
+  reference lines stay single-run. *Curie–Weiss:* θ_CW, C, μ_eff, R², n fit over
+  the panel's K window (blocked, not guessed, when the panel's response is a raw
+  moment: its sample mass, molar mass and field column belong to one sample);
+  the inverse-susceptibility worksheet stays single-run.
+- *Not built, fail closed (recorded):* **XRD reference** (sticks are drawn once
+  on the shared plot, not a per-worksheet result); **Reflectivity fit** (one
+  layer model bound to a set of polarization channels; a worksheet is a
+  channel, not an independent fit, and the starting model is sample-specific;
+  its multi-dataset binding is the batch); **Williamson–Hall By** (its input is
+  a peak list, not a column of rows, so a level has no peak list; its own batch
+  over worksheets' peak tables stays).
+- *Hysteresis By:* a level = the analysis-view rows with that By value, run as
+  its own loop on the single run's H (the M's own X, which must be a declared
+  field) and M; below 20 finite pairs is an error row; blocked while a Library
+  row / range / ROI selection restricts the run (the per-level cut does not
+  apply it, and silently analysing other rows than the panel would be a guess).
+  Save By result uses toolId `hysteresis` with a `byColumn` parameter and no
+  `hysteresisTrend`, so the trend-figure code ignores it.
+- *Curve fit By abort:* `fitModel` is given an `AbortSignal` that is aborted
+  when the inputs change or the panel unmounts; late results of the old run
+  never land. Three existing By assertions gained `expect.any(AbortSignal)` as
+  the second argument (the request fields they check are unchanged).
+- *Peak analyzer batch reset:* a finished table is dropped when the chosen
+  recipe (name or content) changes; a run in flight finishes and is then
+  dropped. Deliberately NOT on the plotted channel: the view's channels follow
+  the active worksheet, and adding the batch table itself activates a new
+  worksheet (pinned by "a repeat Add as table creates no duplicate"); the table
+  records the channels it ran on and lists its own sources.
+- *Tests:* `ReductionBatchSections.test.tsx` (name-matched channel, wavelength /
+  axis / probe error rows, backend failure row, cancel, settings reset, the
+  single run's request), `CurieWeissBatch.test.tsx`,
+  `HysteresisByLevel.test.tsx` (single run unchanged, per-level run, error row,
+  save / duplicate / Undo / out of date), `useCurveFitByLevel.abort.test.ts`,
+  `PeakBatchView.reset.test.tsx`; the existing single-run suites of every
+  touched hook pass unchanged.
 
 ## Workstream E — Statistical result workspace
 
@@ -1300,6 +1368,7 @@ describer).
 | 2026-11-22 | Project team | Lane WB: audited the previewing tools and extracted a shared workbench shell from Signal Processing (`components/workshops/workbench`: `useWorkbenchPreview`, `useWorkbenchCommit`, `WorkbenchPreviewFrame` / `Message` / `Actions` / `Progress`). Signal Processing, its sigop filters, Reduce rows, Resample, Reshape & combine and Baseline migrated; previews read "Preview (not saved)". Fixed: Baseline subtracting an estimate under changed settings and drawing late estimates; sigop / Reduce rows Cancel still creating a worksheet. Defaults and debounce delays unchanged. | Characterization tests first (`SignalProcessingPanel.workbench.test.tsx`, `useResample.workbench.test.ts`); fail-before tests (`useBaseline.workbench.test.ts`, `SigopBody.workbench.test.tsx`); shell tests with forced races (`workbench/*.test.ts*`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `inputs="statistics"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY2: Save By result for the other `byrun` tools (Find peaks, Peak analyzer, Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit) and for Curve fit (its own By kept: it shows a parameter table per level; display pinned first); role-based batches drop a finished table on a settings change via an opt-in `settingsKey` (Curve fit and Hysteresis deliberately not). | Characterization tests first (`CurveFitPanel.byResults.test.tsx`); per-tool save / duplicate / Undo / out-of-date tests (`byLevelSave.test.tsx`, `signalBySave.test.tsx`); per-runner settings-change tests; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
+| 2026-11-22 | Project team | Lane BY3: batch over selected worksheets for FFT thickness, Reflectivity FFT, Pawley and Curie–Weiss (name-matched channel, panel settings, fail closed on wavelength / axis / basis mismatch); Hysteresis By + Save By result; Curve fit By abort; Peak analyzer batch reset on a recipe change. XRD reference, Reflectivity fit and Williamson–Hall By recorded as fail-closed. Single-run defaults unchanged. | Single-run suites first (unchanged and green after extracting the shared request builders); `ReductionBatchSections.test.tsx`, `CurieWeissBatch.test.tsx`, `HysteresisByLevel.test.tsx`, `useCurveFitByLevel.abort.test.ts`, `PeakBatchView.reset.test.tsx`; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane RB: audited how the statistics tools present results and added the Result book tab to the result workspace (`lib/resultBook.ts`, `analysisresults/resultbook/`) for Distribution, Fit Y by X, Multivariate, Variability and Outlier screening: one header (shared input line while current, method, settings, freshness), collapsible table and figure sections in one order, per-section Copy, Send to report and Open as worksheet, and Reopen in tool. | Characterization tests of the existing tabs (written first) still pass; book tests cover section order, collapse state, each action, a stale result and each migrated tool; `sendAnalysisInlineTableToReport(id, tableIndex)` store test; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane RB2: extended the Result book to saved statistical tests, Williamson–Hall results, Williamson–Hall comparisons and analysis-batch results (`lib/resultBookDescribe.ts`); the book fails closed (no tab) when a result's settings cannot be read; per-figure Send to report deliberately not added (see the Statistical engines item). | Tests per tool for header, section order, actions, stale state and the no-book cases (`resultbook/ResultBookMore.test.tsx`); the RB tests still pass; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated (slice 2 adds Fit Y by X, Multivariate, Variability, Stats tests and the chooser); lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
