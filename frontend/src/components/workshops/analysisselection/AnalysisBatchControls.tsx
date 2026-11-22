@@ -50,6 +50,12 @@ interface Props {
    *  candidate and preflight only refuses a worksheet that is gone, has no
    *  channel or no rows. */
   inputs?: "selection" | "statistics";
+  /** Every setting the per-worksheet values depend on, as one string. When it
+   *  changes, the finished table is dropped (rows run with other settings must
+   *  not sit under the new ones); a run in flight finishes and is dropped
+   *  when it ends. Omitted = a finished table is kept (the long-standing
+   *  default). The statistics tools reset by remounting instead (StatsBatchSection). */
+  settingsKey?: string;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -87,7 +93,7 @@ function statisticsSelection(selection: AnalysisSelection, datasets: readonly Da
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
   toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
-  inputs = "selection",
+  inputs = "selection", settingsKey,
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -100,6 +106,13 @@ export default function AnalysisBatchControls({
   }
   const [running, setRunning] = useState(false);
   const [lastRows, setLastRows] = useState<RunRow[] | null>(null);
+  const [seenKey, setSeenKey] = useState(settingsKey);
+  const keyRef = useRef(settingsKey);
+  keyRef.current = settingsKey;
+  if (seenKey !== settingsKey) {
+    setSeenKey(settingsKey);
+    if (!running) setLastRows(null);
+  }
   const [xChoice, setXChoice] = useState<SummaryXChoice>(INDEX_X);
   // Set once the user touches the X picker: a deliberate choice (even "Input
   // order") is never replaced by the default below, in this run or a later one.
@@ -142,6 +155,7 @@ export default function AnalysisBatchControls({
     snapshot.items.sort((a, b) => libraryIds.indexOf(a.datasetId) - libraryIds.indexOf(b.datasetId));
     const start = resolveAnalysisSelection(snapshot, analysisBatchRuntime().datasets);
     if (start.issues.some((issue) => issue.severity === "error") || start.items.length === 0) return;
+    const keyAtStart = settingsKey;
     cancelRef.current = false;
     runningRef.current = true;
     setRunning(true);
@@ -239,7 +253,8 @@ export default function AnalysisBatchControls({
       endOp(opId);
       runningRef.current = false;
       setRunning(false);
-      setLastRows(rows.map((row) => ({ ...row })));
+      // Settings changed mid-run: this table belongs to the old ones.
+      setLastRows(keyRef.current === keyAtStart ? rows.map((row) => ({ ...row })) : null);
       // "010K, 050K, …": plot against the number in the name, sorted, when
       // that is a trend (defaultNameChoice) and the user has not chosen an X.
       if (!userPickedX.current) setXChoice(defaultNameChoice(rows.map((r) => ({ name: r.name }))) ?? INDEX_X);

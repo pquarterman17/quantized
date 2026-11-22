@@ -44,6 +44,7 @@ export default function SignalBatchSection({ settings, spectral, blockedReason }
       resultParameters={{ operation: settings.operation, settings: JSON.stringify(batchSettings) }}
       blockedReason={blockedReason}
       runItem={runItem}
+      settingsKey={JSON.stringify([settings.operation, batchSettings, spectral])}
     />
   </>;
 }

@@ -83,3 +83,18 @@ describe("OpticalGapBatchSection", () => {
     expect(taucFit).not.toHaveBeenCalled();
   });
 });
+
+describe("OpticalGapBatchSection settings change", () => {
+  it("drops the finished table when a setting changes", async () => {
+    seed([sheet("a", 10), sheet("b", 20)]);
+    const { rerender } = render(<OpticalGapBatchSection g={{ ...SETTINGS }} />);
+    run();
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    rerender(<OpticalGapBatchSection g={{ ...SETTINGS }} />);
+    expect(screen.getAllByText("Completed")).toHaveLength(2);
+    rerender(<OpticalGapBatchSection g={{ ...SETTINGS, eMin: "1.5" }} />);
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getAllByText("Ready")).toHaveLength(2);
+    expect(register).toHaveBeenCalledOnce();
+  });
+});

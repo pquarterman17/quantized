@@ -40,6 +40,7 @@ export default function SurfaceFitBatchSection({ f }: { f: Pick<SurfaceFitState,
       resultParameters={{ model: model?.name ?? "", lower: boundsJson("lower"), upper: boundsJson("upper") }}
       blockedReason={blocked}
       runItem={runItem}
+      settingsKey={JSON.stringify([model?.name, boundsJson("lower"), boundsJson("upper")])}
     />
   </>;
 }

@@ -41,6 +41,7 @@ export default function BaselineBatchSection({ b }: { b: Pick<BaselineState, "me
       resultParameters={{ method, params: JSON.stringify(params) }}
       blockedReason={blocked}
       runItem={runItem}
+      settingsKey={JSON.stringify([method, params])}
     />
   </>;
 }

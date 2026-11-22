@@ -110,4 +110,19 @@ describe("Signal Processing batch", () => {
     fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
     expect(screen.getByRole("button", { name: /^Run .* batch$/ })).toBeDisabled();
   });
+
+  it("drops the finished table when the operation's settings change", async () => {
+    vi.mocked(applyCorrections).mockImplementation(async ({ dataset }) => out(dataset.values[0]![1]!) as never);
+    const { rerender } = mount();
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Run .* batch$/ }));
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    const source = useApp.getState().datasets[0]!;
+    rerender(<SignalScopeAndBy source={source} {...props} settings={{ ...DEFAULT_SIGNAL_SETTINGS }} />);
+    expect(screen.getAllByText("Completed")).toHaveLength(2); // same settings: kept
+    rerender(<SignalScopeAndBy source={source} {...props} settings={{ ...DEFAULT_SIGNAL_SETTINGS, smoothWindow: 9 }} />);
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getAllByText("Ready")).toHaveLength(2);
+    expect(register).toHaveBeenCalledOnce();
+  });
 });
