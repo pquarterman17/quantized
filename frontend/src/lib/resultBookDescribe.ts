@@ -56,6 +56,7 @@ function names(labels: readonly string[], shown = 6): string {
 const COLUMN_ROLE: Readonly<Record<string, string>> = {
   one: "Column", two: "Columns", paired: "Paired columns", blocks: "Conditions", columns: "Columns",
   factorial: "Response, factor A, factor B", regression: "Response, predictors",
+  classifier: "Outcome (0/1), score", counts: "Observed counts (and expected)",
 };
 
 function savedLabels(result: AnalysisResult): string[] | null {
@@ -86,7 +87,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
     : COLUMN_ROLE[def.input] ?? "Columns";
   return {
     method: def.label,
-    inputKeys: { yKeys: testColumns(def.id, selection), noX: true },
+    inputKeys: { yKeys: testColumns(def.id, selection, params), noX: true },
     settings: settings([
       [role, labels.length ? names(labels) : null],
       ["Alpha", alpha],
@@ -95,6 +96,8 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
       ["Sums of squares", def.id === "anova2-unbalanced" ? `Type ${params.ssType === 3 ? "III" : "II"}` : null],
       ["Criterion", def.id === "stepwise" ? params.criterion.toUpperCase() : null],
       ["Direction", def.id === "stepwise" ? params.direction : null],
+      ["Adjustment", def.id === "adjust-p" ? params.adjustMethod : null],
+      ["Expected counts", def.id === "chi-square-gof" ? (params.gofExpected === "column" ? "from a column" : "uniform") : null],
     ]),
   };
 }

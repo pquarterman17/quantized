@@ -37,6 +37,29 @@ describe("statisticalTestAnalysisResult", () => {
     });
   });
 
+  it("reopens a result saved before the adjust / expected-counts params existed, and refuses invalid ones", () => {
+    const result = statisticalTestAnalysisResult(
+      "r", source, "adjust-p", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["A"],
+      { sentence: "ok", tables: [{ columns: ["a"], rows: [[1]] }] },
+    );
+    const params = result.parameters as unknown as { params: Record<string, unknown> };
+    const withParams = (p: Record<string, unknown>) => ({ ...result, parameters: { ...params, params: p } }) as unknown as typeof result;
+    const { adjustMethod: _a, gofExpected: _g, ...legacy } = params.params;
+    expect(statisticalTestRecipe(withParams(legacy))?.params)
+      .toMatchObject({ adjustMethod: "holm", gofExpected: "uniform" });
+    expect(statisticalTestRecipe(withParams({ ...legacy, adjustMethod: "sidak" }))).toBeNull();
+    expect(statisticalTestRecipe(withParams({ ...legacy, gofExpected: "other" }))).toBeNull();
+  });
+
+  it("records only the columns a chi-square test reads (no expected column when uniform)", () => {
+    const sel = { ...DEFAULT_SELECTION, x: 0, y: 1 };
+    const out = { sentence: "ok", tables: [{ columns: ["a"], rows: [[1]] }] };
+    const uniform = statisticalTestAnalysisResult("u", source, "chi-square-gof", sel, DEFAULT_PARAMS, ["A"], out);
+    const column = statisticalTestAnalysisResult("c", source, "chi-square-gof", sel, { ...DEFAULT_PARAMS, gofExpected: "column" }, ["A", "B"], out);
+    expect(uniform.selection?.channels.map((c) => c.index)).toEqual([0]);
+    expect(column.selection?.channels.map((c) => c.index)).toEqual([0, 1]);
+  });
+
   it("supports source-free power calculations and normalizes non-finite result cells", () => {
     const result = statisticalTestAnalysisResult(
       "power", null, "power", DEFAULT_SELECTION, DEFAULT_PARAMS, [],
