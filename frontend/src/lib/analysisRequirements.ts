@@ -10,19 +10,13 @@
 
 import { ANALYSIS_TOOL_METADATA, dimensions, type AnalysisToolMetadata } from "./analysisCenter";
 import { canRenderMap, mapGateResolved } from "./mapdata";
-import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "./peakTableFit";
+import { EXTRA_REQUIREMENTS, type Predicate, type RequirementContext } from "./analysisExtraRequirements";
 import { techniqueOf } from "./techniqueDefaults";
 import type { Dataset } from "./types";
 import type { Action } from "../store/commands";
 
-export interface RequirementContext {
-  dataset: Dataset | undefined;
-  /** Every worksheet in the project (the "N or more worksheets" check). */
-  datasets: readonly Dataset[];
-}
-
-/** A predicate returns the reason it is NOT met, or undefined when it is. */
-type Predicate = (ctx: RequirementContext) => string | undefined;
+export { EXTRA_REQUIREMENTS };
+export type { RequirementContext };
 
 const needsDataset: Predicate = ({ dataset }) => (dataset ? undefined : "Needs an active worksheet");
 const withData = (check: (ds: Dataset) => string | undefined): Predicate => (ctx) => (ctx.dataset ? check(ctx.dataset) : undefined);
@@ -47,20 +41,6 @@ const BASE: Record<AnalysisToolMetadata["requirement"], readonly Predicate[]> = 
   ],
   // A lazy Origin preview or an unclassified grid is not "no map": stay enabled.
   map: [needsDataset, withData((ds) => (ds.pending || !mapGateResolved(ds.data) || canRenderMap(ds.data) ? undefined : "Needs a 2-D map (x, y, intensity)"))],
-};
-
-const twoSheets: Predicate = ({ datasets }) => (datasets.length >= 2 ? undefined : "Needs 2 or more worksheets");
-// A lazy preview carries no x metadata yet; do not call it "not 2θ".
-const twoTheta: Predicate = withData((ds) =>
-  ds.pending || xAxisIsTwoThetaDegrees(xChannelIdentity(ds.data, null)) ? undefined : "Needs a 2θ X axis",
-);
-
-/** Requirements beyond the kind in ANALYSIS_TOOL_METADATA. Williamson-Hall is
- *  deliberately absent: it accepts typed peak positions, so any worksheet works. */
-export const EXTRA_REQUIREMENTS: Readonly<Record<string, readonly Predicate[]>> = {
-  "average-curves": [twoSheets],
-  "reductions-pawley": [twoTheta],
-  "reductions-reference": [twoTheta],
 };
 
 function techniqueReason(meta: AnalysisToolMetadata, ctx: RequirementContext): string | undefined {

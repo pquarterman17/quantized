@@ -40,7 +40,7 @@ function boxMinMax(): [HTMLInputElement, HTMLInputElement, HTMLInputElement, HTM
 }
 
 function selectRegionMethod(): void {
-  fireEvent.change(screen.getByRole("combobox"), { target: { value: "region" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Baseline method" }), { target: { value: "region" } });
 }
 
 beforeEach(() => {

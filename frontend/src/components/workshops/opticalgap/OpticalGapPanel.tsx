@@ -14,6 +14,8 @@ import { fmtNum as fmt } from "../../../lib/format";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import SmallUPlot from "../SmallUPlot";
 import { pickOptions } from "../analysisextras/columnPicks";
+import OpticalGapBatchSection from "./OpticalGapBatchSection";
+import OpticalGapByLevel from "./OpticalGapByLevel";
 import { taucPayload } from "./taucPlot";
 import { TRANSITIONS, useOpticalGap } from "./useOpticalGap";
 
@@ -164,6 +166,8 @@ export default function OpticalGapPanel() {
               </div>
             </>
           )}
+          <OpticalGapByLevel g={g} />
+          <OpticalGapBatchSection g={g} />
         </>
       )}
     </ToolWindow>
