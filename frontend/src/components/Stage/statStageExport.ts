@@ -48,6 +48,7 @@ import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statst
 import type { DataStruct } from "../../lib/types";
 import { boxValueDomain, drawMarks, stripValueDomain } from "./statDrawMarks";
 import { barMarksWire } from "./statBarMarks";
+import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -408,6 +409,8 @@ export interface StatStageExportInputs extends FacetedExportInputs {
   dist: string;
   bins: string;
   fit: string | null;
+  /** Extra histogram columns binned with `valueCol` (shared edges). */
+  histCols?: readonly number[];
   /** The CURRENT grouping's nest column label (null: not nested). The draw
    *  can lag a "then by" change (it is null while recomputing), so the
    *  nested-axis flag comes from here when given, never from a pending draw. */
@@ -444,6 +447,12 @@ export async function exportStatStage(
       y_label: o.barValueLabel,
       filename: `bar_${o.barValueLabel}`,
     } }, signal, out);
+    return;
+  }
+  const hc = mode === "histogram" ? histogramColumns(o.valueCol, o.histCols ?? [], o.data.labels.length) : [];
+  if (hc.length > 1) {
+    const s = multiHistogramSpec(o.data, hc, hc.map((c) => o.data.labels[c] ?? ""), o.bins, fmt, o.valueLabel);
+    if (s) await deliver({ route: "statplot", spec: { ...s, ...paletteWire() } }, signal, out);
     return;
   }
   // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always

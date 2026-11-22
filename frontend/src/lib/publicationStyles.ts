@@ -79,6 +79,8 @@ export interface ExportSeriesStyle {
   step?: "pre" | "post" | "mid";
   /** `SeriesStyle.bars`: drawn by `calc.figure_bars` as bars from zero. */
   bars?: boolean | "horizontal";
+  /** `SeriesStyle.stack`: stacked on the series before it (`calc.figure_bars.stacked_series`). */
+  stack?: boolean;
   /** BUG-014: this series' legend text, used VERBATIM by the renderer
    *  (`calc.figure_labels.series_display_name`) — unit included or not,
    *  exactly as the user typed it, which is the on-screen rule
@@ -207,6 +209,7 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     for (const k of ["size_by", "size_range", "drop_lines", "connect", "error_band", "marker_edge", "marker_face", "marker_alpha", "marker_every"] as const) {
       if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     }
+    if (raw.stack === true) style.stack = true;
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
     // `legend` is NOT restored -- see its own doc on ExportSeriesStyle above:
     // a rename persists in `view.seriesLabels` and is re-laid on every export.

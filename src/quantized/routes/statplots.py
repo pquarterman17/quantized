@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from quantized.calc.statplots import (
     grouped_box_stats,
     histogram,
+    histogram_multi,
     qq_plot,
     violin_kde,
 )
@@ -105,5 +106,20 @@ def histogram_route(req: HistogramRequest) -> dict[str, Any]:
                 bins=req.bins, density=req.density, fit=req.fit,
             )
         )
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class HistogramMultiRequest(BaseModel):
+    columns: list[list[float]] = Field(min_length=1, max_length=64)
+    bins: str | Annotated[int, Field(ge=1, le=100_000)] = "fd"
+
+
+@router.post("/histogram-multi")
+def histogram_multi_route(req: HistogramMultiRequest) -> dict[str, Any]:
+    """Several columns binned on shared edges (one graph, one bin rule)."""
+    try:
+        columns = [np.asarray(c, dtype=float) for c in req.columns]
+        return _wrap(histogram_multi(columns, bins=req.bins))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

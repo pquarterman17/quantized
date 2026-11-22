@@ -360,6 +360,57 @@
         "title": "ArrheniusRequest",
         "type": "object"
       },
+      "ArrottRequest": {
+        "properties": {
+          "beta": {
+            "default": 0.5,
+            "title": "Beta",
+            "type": "number"
+          },
+          "field_unit": {
+            "default": "Oe",
+            "title": "Field Unit",
+            "type": "string"
+          },
+          "gamma": {
+            "default": 1.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "isotherms": {
+            "items": {
+              "$ref": "#/components/schemas/Isotherm"
+            },
+            "title": "Isotherms",
+            "type": "array"
+          },
+          "magnetization_unit": {
+            "default": "emu/cm3",
+            "title": "Magnetization Unit",
+            "type": "string"
+          },
+          "window": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Window",
+            "type": "array"
+          }
+        },
+        "required": [
+          "isotherms",
+          "window"
+        ],
+        "title": "ArrottRequest",
+        "type": "object"
+      },
       "AtomSite": {
         "properties": {
           "label": {
@@ -4829,6 +4880,47 @@
         "title": "EllipseRequest",
         "type": "object"
       },
+      "EntropyRequest": {
+        "properties": {
+          "field_unit": {
+            "default": "Oe",
+            "title": "Field Unit",
+            "type": "string"
+          },
+          "isotherms": {
+            "items": {
+              "$ref": "#/components/schemas/Isotherm"
+            },
+            "title": "Isotherms",
+            "type": "array"
+          },
+          "magnetization_unit": {
+            "default": "emu/cm3",
+            "title": "Magnetization Unit",
+            "type": "string"
+          },
+          "max_fields": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Max Fields",
+            "type": "array"
+          },
+          "n_grid": {
+            "default": 201,
+            "maximum": 5001.0,
+            "minimum": 11.0,
+            "title": "N Grid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "isotherms",
+          "max_fields"
+        ],
+        "title": "EntropyRequest",
+        "type": "object"
+      },
       "EquationFitRequest": {
         "properties": {
           "calc_errors": {
@@ -8089,6 +8181,41 @@
         "title": "Hdf5Request",
         "type": "object"
       },
+      "HistogramMultiRequest": {
+        "properties": {
+          "bins": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              }
+            ],
+            "default": "fd",
+            "title": "Bins"
+          },
+          "columns": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "HistogramMultiRequest",
+        "type": "object"
+      },
       "HistogramRequest": {
         "properties": {
           "bins": {
@@ -8444,6 +8571,36 @@
           }
         },
         "title": "IntrinsicRequest",
+        "type": "object"
+      },
+      "Isotherm": {
+        "properties": {
+          "field": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Field",
+            "type": "array"
+          },
+          "magnetization": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Magnetization",
+            "type": "array"
+          },
+          "temperature": {
+            "description": "Kelvin",
+            "title": "Temperature",
+            "type": "number"
+          }
+        },
+        "required": [
+          "temperature",
+          "field",
+          "magnetization"
+        ],
+        "title": "Isotherm",
         "type": "object"
       },
       "KSNormalRequest": {
@@ -13718,6 +13875,69 @@
           }
         },
         "title": "SampleProfileIn",
+        "type": "object"
+      },
+      "SaturationRequest": {
+        "properties": {
+          "field": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Field",
+            "type": "array"
+          },
+          "field_unit": {
+            "default": "Oe",
+            "title": "Field Unit",
+            "type": "string"
+          },
+          "h_min": {
+            "title": "H Min",
+            "type": "number"
+          },
+          "include_a": {
+            "default": true,
+            "title": "Include A",
+            "type": "boolean"
+          },
+          "include_b": {
+            "default": true,
+            "title": "Include B",
+            "type": "boolean"
+          },
+          "include_chi": {
+            "default": true,
+            "title": "Include Chi",
+            "type": "boolean"
+          },
+          "magnetization": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Magnetization",
+            "type": "array"
+          },
+          "magnetization_unit": {
+            "default": "emu/cm3",
+            "title": "Magnetization Unit",
+            "type": "string"
+          },
+          "symmetry": {
+            "default": "uniaxial",
+            "enum": [
+              "uniaxial",
+              "cubic"
+            ],
+            "title": "Symmetry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "magnetization",
+          "h_min"
+        ],
+        "title": "SaturationRequest",
         "type": "object"
       },
       "SauerbreyRequest": {
@@ -22732,6 +22952,94 @@
         ]
       }
     },
+    "/api/magnetic/approach-to-saturation": {
+      "post": {
+        "description": "Law-of-approach-to-saturation fit: Ms, a, b, chi_hf (+ K1).",
+        "operationId": "approach_api_magnetic_approach_to_saturation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaturationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approach Api Magnetic Approach To Saturation Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approach",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/arrott": {
+      "post": {
+        "description": "Arrott / Arrott-Noakes lines per isotherm and the Tc intercept crossing.",
+        "operationId": "arrott_api_magnetic_arrott_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrottRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Arrott Api Magnetic Arrott Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Arrott",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
     "/api/magnetic/bohr-magneton": {
       "post": {
         "description": "Moment \u2192 number of Bohr magnetons.",
@@ -23035,6 +23343,50 @@
           }
         },
         "summary": "Domain Wall",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/entropy-change": {
+      "post": {
+        "description": "Maxwell-relation magnetic entropy change dS_M(T) and RCP from isotherms.",
+        "operationId": "entropy_change_api_magnetic_entropy_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntropyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Entropy Change Api Magnetic Entropy Change Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Entropy Change",
         "tags": [
           "magnetic"
         ]
@@ -26684,6 +27036,50 @@
           }
         },
         "summary": "Histogram Route",
+        "tags": [
+          "statplots"
+        ]
+      }
+    },
+    "/api/statplots/histogram-multi": {
+      "post": {
+        "description": "Several columns binned on shared edges (one graph, one bin rule).",
+        "operationId": "histogram_multi_route_api_statplots_histogram_multi_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistogramMultiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Histogram Multi Route Api Statplots Histogram Multi Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Histogram Multi Route",
         "tags": [
           "statplots"
         ]

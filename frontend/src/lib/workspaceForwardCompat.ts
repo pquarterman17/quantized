@@ -104,7 +104,7 @@ export const PLOT_WINDOW: Classify<PlotWindow> = {
 // so every new per-series key survives a 0.34 open + save (measured).
 export const SERIES_STYLE: Classify<SeriesStyle> = {
   color: V, width: V, line: V, marker: V, markerSize: V, markerShape: V, fill: V, colorBy: V, colormap: V,
-  step: V, logOffset: V, bars: V, explicit: V,
+  step: V, logOffset: V, bars: V, explicit: V, stack: K,
   markerFill: K, markerEdge: K, markerFillColor: K, markerAlpha: K, markerEvery: K, rampRank: K, errorBar: K,
   sizeBy: K, sizeRange: K, dropLines: K, connect: K,
 };
@@ -117,7 +117,7 @@ export const AXIS_FORMAT: Classify<AxisFormat> = {
 // Publication (export) styles ARE sanitized by 0.34: new keys are dropped.
 export const EXPORT_SERIES_STYLE: Classify<ExportSeriesStyle> = {
   color: V, width: V, line: V, marker: V, marker_size: V, marker_shape: V, fill: V, color_by: V, colormap: V,
-  step: V, bars: V, legend: V, colorDerived: V,
+  step: V, bars: V, stack: G, legend: V, colorDerived: V,
   marker_fill: G, error_cap: G, error_width: G, error_color: G, error_band: G, marker_edge: G, marker_face: G,
   marker_alpha: G, marker_every: G, ramp_rank: G, size_by: G, size_range: G, drop_lines: G, connect: G,
 };
@@ -177,7 +177,7 @@ export const STAT_MARKS: Classify<StatMarks> = {
 // only the keys it lists, so an Origin 100 % stack would reopen as a plain
 // stack of raw values, and its saved Y range would be lost.
 export const STAT_PICKS: Classify<StatPicks> = {
-  mode: V, dist: V, bins: V, fit: V, barStack: V, cols: V, barPercent: G, valueRange: G,
+  mode: V, dist: V, bins: V, fit: V, barStack: V, cols: V, barPercent: G, valueRange: G, histCols: G,
 };
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
@@ -300,6 +300,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
  *  every other gated field as one v0.38.0 already read). */
 export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
   "AxisFormat.divideMark", "ErrorBinding.origin", "StatPicks.barPercent", "StatPicks.valueRange",
+  "StatPicks.histCols", "ExportSeriesStyle.stack",
 ]);
 
 /** The gated features in `doc` that v0.35-v0.38 would lose (see NEW_SINCE_V038). */

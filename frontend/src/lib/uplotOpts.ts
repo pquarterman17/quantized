@@ -987,7 +987,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // a fixed yLim still win; double-click reset re-ranges back to the extents.
   const y2ScaleEff: AxisScale = args.y2Scale ?? yScale;
   // Every scale's autoscale covers the drawn error bars too, as the export's (`lib/uplotErrorRange.ts`).
-  const reach = errorReach(payload, args.errorBars, args.errorSpans);
+  const reach = errorReach(payload, args.errorBars, args.errorSpans, args.seriesStyles);
   const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale), reach) : null;
   const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the

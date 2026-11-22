@@ -91,6 +91,11 @@ export interface SeriesStyle {
    *  `"horizontal"` (an Origin bar graph) also turns the plot on its side:
    *  X runs up the left axis (`lib/uplotOrient.ts`, `calc/figure_orient.py`). */
   bars?: boolean | "horizontal";
+  /** Stack on the running total of the stacked series plotted before this one
+   *  on the same Y axis (Origin's stacked column / bar / area): bars start at
+   *  that total, a `fill: "under"` area is drawn between it and the new total.
+   *  `lib/uplotStack.ts` on the canvas, `calc/figure_bars.stacked_series` on export. */
+  stack?: boolean;
   /** A COMPLETE style (a Graph Builder mark, `plotspec.markSeriesStyle`): the
    *  Preferences default trace fills nothing, so an unset `width` draws a line,
    *  an unset `marker` none and an unset `step` a straight line. Absent (every
