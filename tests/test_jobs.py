@@ -311,3 +311,18 @@ def test_app_lifespan_shuts_down_executor() -> None:
             mock_jobs._pool.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
 
         asyncio.run(run_test())
+
+
+def test_submit_after_pool_shutdown_recreates_the_executor() -> None:
+    """The app lifespan shuts the singleton's pool down on exit; a later submit
+    in the same process (another lifespan, or a client that never ran one) must
+    still run, not raise ``cannot schedule new futures after shutdown``."""
+    store = JobStore()
+    store._pool.shutdown(wait=False, cancel_futures=True)
+    job_id = store.submit(lambda progress, abort: 42)
+    deadline = time.monotonic() + 10
+    job = store.get(job_id)
+    assert job is not None
+    while job.status not in ("done", "error") and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert job.status == "done" and job.result == 42

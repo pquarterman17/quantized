@@ -75,6 +75,13 @@ def test_xy_routes_by_handle_are_identical(route: str, rule: str) -> None:
     body = XY_ROUTES[route]
     if route == "/api/peaks/fit-multi" and yc != 1:  # seed the peak the channel holds
         body = {**PEAK, "peaks": [{"center": 30.0, "fwhm": 6.0, "height": 600.0}]}
+    elif route == "/api/peaks/fit-multi" and xc == -1:
+        # X is the row index (0..N-1), not T1: the R1 peak sits at row ~N/2 with
+        # a FWHM of ~N/15. A seed in T1 units is off by a factor of ~300, the
+        # fit then runs to its wall-clock deadline (a slow box, e.g. a Windows CI
+        # runner, stops it at a different point than a fast one) and the two
+        # responses differ though their inputs are identical.
+        body = {**PEAK, "peaks": [{"center": N / 2, "fwhm": N / 15, "height": 900.0}]}
     a = client.post(route, json={**body, "x": x, "y": y})
     b = client.post(route, json=_by_rows(body, xc, yc, rows, handle=_handle()))
     _same(a, b)
