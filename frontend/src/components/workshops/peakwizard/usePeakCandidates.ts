@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
+import { tokenOf } from "../../../lib/previewKey";
 import { visiblePeakMarkers } from "../../../lib/peakMarkersVisible";
 import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
@@ -82,6 +83,8 @@ interface Inputs {
 }
 
 let nextCandidateId = 1;
+/** Every input a find depends on: its settings and the trace it ran on. */
+const findKeyOf = (f: PeakRecipe["find"], seg: CandidateSegment, y: number[]): string => JSON.stringify([f, tokenOf(seg), tokenOf(y)]);
 const includedIds = (cs: readonly CandidatePeak[]): number[] => cs.filter((c) => c.included).map((c) => c.id);
 
 /** The Peak analyzer's `ToolWindow` id — shared with PeakWizardPanel so the
@@ -99,6 +102,13 @@ export function usePeakCandidates(inp: Inputs) {
   const [candidates, setCandidates] = useState<CandidatePeak[]>([]);
   const [findBusy, setFindBusy] = useState(false);
   const [findError, setFindError] = useState<string | null>(null);
+  // Workbench shell vocabulary (../workbench): Find stays a button (plus the
+  // one automatic find on entering step 2), so the candidate list is the last
+  // find's answer, hand-edited. `foundKey` names the settings and the working
+  // trace that answer was computed for; once either moves on it is OUT OF DATE
+  // (`findStale`: the step says so), never silently re-found.
+  const [foundKey, setFoundKey] = useState<string | null>(null);
+  const [findRefused, setFindRefused] = useState(false);
   // Click-on-plot marker editing (item 5): Escape pauses the mode without
   // leaving step ②; re-entering the step (or any step change and back) resets
   // it, so the pause never outlives the step it was raised on.
@@ -133,8 +143,12 @@ export function usePeakCandidates(inp: Inputs) {
     const id = ++findSeq.current;
     setFindBusy(true);
     setFindError(null);
+    setFindRefused(false);
     try {
-      if (segment.x.length === 0) throw new Error("no finite X/Y pairs are available to analyze");
+      if (segment.x.length === 0) {
+        setFindRefused(true);
+        throw new Error("no finite X/Y pairs are available to analyze");
+      }
       if (segment.gapCount > 0) {
         toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from peak analysis.`);
       }
@@ -146,6 +160,7 @@ export function usePeakCandidates(inp: Inputs) {
         id: nextCandidateId++,
         center: p.center, height: p.height, bg: p.bg, fwhm: p.fwhm, included: true, manual: false,
       })));
+      setFoundKey(findKeyOf(override ?? find, segment, workingY));
       onReplaced();
     } catch (e) {
       if (findSeq.current !== id || segmentRef.current !== segment) return;
@@ -155,6 +170,8 @@ export function usePeakCandidates(inp: Inputs) {
       if (findSeq.current === id) setFindBusy(false);
     }
   }, [active, segment, workingY, find, commit, onReplaced]);
+  const findStale =
+    foundKey !== null && candidates.length > 0 && !!segment && !!workingY && foundKey !== findKeyOf(find, segment, workingY);
 
   // Keep the marker overlay in sync with the included candidates. M3
   // review finding (same latent bug as usePeaks.ts's L1/L2, third call
@@ -289,9 +306,14 @@ export function usePeakCandidates(inp: Inputs) {
 
   return {
     candidates,
-    clearCandidates: () => commit([]),
+    clearCandidates: () => {
+      setFoundKey(null);
+      commit([]);
+    },
     findBusy,
     findError,
+    findRefused,
+    findStale,
     runFind,
     togglePeak,
     removePeak,

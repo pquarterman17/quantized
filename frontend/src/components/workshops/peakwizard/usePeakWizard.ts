@@ -84,6 +84,8 @@ export interface PeakWizardState {
   candidates: CandidatePeak[];
   findBusy: boolean;
   findError: string | null;
+  findRefused: boolean; // findError is a refusal, not a backend failure
+  findStale: boolean; // the candidates were found under other settings / another trace
   /** `find`: run with these settings instead of the recipe's (see
    *  usePeakCandidates's `runFind`). */
   runFind: (find?: PeakRecipe["find"], opts?: { auto?: boolean }) => Promise<void>;
@@ -466,6 +468,8 @@ export function usePeakWizard(): PeakWizardState {
     candidates,
     findBusy: cands.findBusy,
     findError: cands.findError,
+    findRefused: cands.findRefused,
+    findStale: cands.findStale,
     runFind,
     togglePeak: cands.togglePeak,
     removePeak: cands.removePeak,

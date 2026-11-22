@@ -137,7 +137,7 @@ export function useReshapePreview(): ReshapeState {
     await committing.run(async (signal) => {
       try {
         const out = await runTransform(useApp.getState, run.params, run.primaryId, (pv) =>
-          samePreview(pv, previewed) ? Promise.resolve(true) : reviewTransform(pv),
+          samePreview(pv, previewed) ? Promise.resolve(true) : reviewTransform(pv, signal),
           signal,
         );
         if (out) {

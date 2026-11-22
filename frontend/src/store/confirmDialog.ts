@@ -41,15 +41,25 @@ export const useConfirm = create<ConfirmState>((set, get) => ({
   close: () => set({ title: null, message: "", confirmLabel: "OK", danger: false, resolve: null }),
 }));
 
-/** Open a confirm dialog; resolves true on confirm, false on cancel/backdrop/Esc. */
+/** Open a confirm dialog; resolves true on confirm, false on cancel/backdrop/Esc.
+ *  With a `signal`, aborting it while THIS dialog is still the open one
+ *  dismisses it (answer false): a caller that gives up (a window closed, a
+ *  commit cancelled) never leaves a dialog whose Confirm would do nothing. */
 export function askConfirm(
   title: string,
   message = "",
   confirmLabel = "OK",
   danger = false,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     useConfirm.getState().open(title, message, confirmLabel, danger, resolve);
+    if (!signal) return;
+    const dismiss = () => {
+      if (useConfirm.getState().resolve === resolve) cancelPendingConfirm();
+    };
+    if (signal.aborted) dismiss();
+    else signal.addEventListener("abort", dismiss, { once: true });
   });
 }
 

@@ -22,6 +22,7 @@
 
 import { useEffect, useState } from "react";
 
+import { WorkbenchMessage } from "../workbench/WorkbenchParts";
 import ToolWindow from "../../overlays/ToolWindow";
 import { floatingX } from "../../overlays/floatingX";
 import { Select } from "../../primitives";
@@ -91,6 +92,7 @@ export default function CurveFitPanel() {
     guessOnly,
     busy,
     error,
+    refusal,
     run,
     clear,
     runCornerPlot,
@@ -296,11 +298,7 @@ export default function CurveFitPanel() {
   return (
     <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable onClose={close} header={header}>
       {/* Above the tabs: a failed fit OR auto-guess shows on whichever tab is open. */}
-      {error && (
-        <div className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
-          {error}{connectionHint(error)}
-        </div>
-      )}
+      <WorkbenchMessage refusal={refusal ? error : null} error={refusal || !error ? null : `${error}${connectionHint(error)}`} />
       <TabPanel id="setup" tab={tab}>
         <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
         {weighting}

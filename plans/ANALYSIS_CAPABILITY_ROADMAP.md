@@ -432,6 +432,10 @@ inconsistently exposed, and do not all share the same result lifecycle.
   `commitAnalysisOutput`, see the audit above). Lane WB added the preview /
   cancel half and migrated a first slice (audit and design below); the rest of
   the previewing tools are not migrated, so this stays open.
+  Progress (lane WB3): the manual mode is now used by Curve fit's single Fit
+  and the Peak analyzer's Find peaks; the shell stays open because the other
+  button-only fits (Peaks panel fits, ODR, equation fit, global / compare /
+  scan, Peak analyzer model fit) still keep their own state and messages.
 
   **Workbench audit (lane WB, 2026-11-22).** Tools that preview before they
   commit, as found before the migration. "Key" = every input the preview
@@ -487,6 +491,37 @@ inconsistently exposed, and do not all share the same result lifecycle.
   by Close; Resample's batch Stop aborts the request in flight (the API takes
   an AbortSignal; an item that honours the stop is "stopped", not "failed").
 
+
+  **Lane WB3 (manual mode adopted, 2026-11-22).**
+  - Curve fit's single Fit (`useCurveFit`, request half split into
+    `curveFitRun.ts`) runs through `useWorkbenchPreview` with `auto: false`.
+    The key is every setting (model, start / bounds / held table unless it is
+    the untouched registry default, weighting, plotted channels); data changes
+    keep `fitInputsChanged`. A fit is out of date when either differs
+    (`OutOfDateNote`, new in `WorkbenchParts`, shared with the preview frame),
+    an error belongs to the key it ran with, validation failures are
+    `FitRefusal` (WorkbenchMessage `refusal`) and backend failures `error`.
+    Known limit: a fit whose request is in flight when a setting changes still
+    records its FitSpec on the dataset it ran on (unchanged, pinned by an
+    existing test) but is shown out of date, not current.
+  - Bug found and fixed: an out-of-date fit (data, weighting or, now, any
+    setting) could still be reported, bootstrapped into a corner plot and
+    written to a worksheet; Report / Corner plot are disabled with the reason
+    and Bands / Fit report / Output to worksheet are withheld until a refit.
+  - Peak analyzer Find peaks keeps its button plus the one auto-find on
+    entering step 2; the candidate list records the settings and trace it was
+    found for and shows `OutOfDateNote` when either moves on. It does NOT run
+    on `useWorkbenchPreview`: the list is hand-edited working state and Find
+    can be applied with settings patched in the same gesture, which the
+    hook's key rules (abort on key change) do not fit; Next / Fit are not
+    blocked by it (the model fit records its own inputs). Judgment call, open
+    to revisit.
+  - Not migrated: the Peaks panel's Fit all together / Fit each (a dataset
+    switch is guarded, a find-settings change after a fit is not marked), ODR,
+    equation fit, global / compare / scan, Peak analyzer model fit, Batch
+    integrate. Nit fixed: Close in Reshape & combine now dismisses its open
+    unit-mismatch review dialog.
+
 ## Product contract for every new analysis
 
 Each analysis added or modernized under this roadmap must satisfy these rules.
@@ -500,9 +535,10 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   "Preview (not saved)", and closing them drops any pending preview (two
   Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).
   Lane WB2 closed the Reshape & combine Close gap and made Resample's Stop
-  abort the request in flight. Still open: the button-only tools (Peaks, the
-  fits) have no preview shell, so they show no "Out of date" / "Preview (not
-  saved)" states.
+  abort the request in flight. Lane WB3: Curve fit's Fit and the Peak analyzer's
+  Find peaks now show "Out of date". Still open: the other button-only fits
+  (Peaks panel fits, ODR, equation fit, global / compare / scan) have no
+  "Out of date" state.
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
@@ -1376,6 +1412,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane WB3: Curve fit's single Fit and the Peak analyzer's Find peaks adopt the shell's out-of-date state (Curve fit on `useWorkbenchPreview` manual mode, `useCurveFit` split into `curveFitRun.ts`); fixed: an out-of-date Curve fit could still be reported, bootstrapped and written to a worksheet; Reshape & combine Close now dismisses an open unit-mismatch review. Not done: the other button-only fits; the shell gap stays open. | Characterization tests first (`useCurveFit.workbench.test.ts`, `PeakWizardFind.workbench.test.tsx`); fail-before `CurveFitPanel.workbench.test.tsx`, `useReshapePreview.review.test.ts`; one existing assertion changed deliberately (out-of-date wording in `CurveFitPanel.lifecycle.test.tsx`). |
 | 2026-11-22 | Project team | Lane WB2: Close now aborts a running Reshape & combine Create and Resample's Stop aborts the request in flight (fail-before tests `useReshapePreview.close.test.ts`, `useResample.stop.test.ts`, `sequentialBatch.test.ts`); Curve fit scan / bumps / global and the reflectivity DREAM run render `WorkbenchProgress`; SIMS Process / Compare / Region, the ternary / pie / field figure previews and Curve fit's equation check run on `useWorkbenchPreview` (`useDebouncedPreview` removed). Not done: manual-mode adoption by Peaks and the fits. | Characterization tests written first (`simsPreview.contract.test.ts`, `useEquationFit.check.test.ts`, extra cases in `auxFigurePreview.test.ts`) and kept as guards; two existing assertions changed deliberately (scan progress text now carries the percentage; validate call now carries an AbortSignal). |
 | 2026-11-22 | Project team | Lane WB: audited the previewing tools and extracted a shared workbench shell from Signal Processing (`components/workshops/workbench`: `useWorkbenchPreview`, `useWorkbenchCommit`, `WorkbenchPreviewFrame` / `Message` / `Actions` / `Progress`). Signal Processing, its sigop filters, Reduce rows, Resample, Reshape & combine and Baseline migrated; previews read "Preview (not saved)". Fixed: Baseline subtracting an estimate under changed settings and drawing late estimates; sigop / Reduce rows Cancel still creating a worksheet. Defaults and debounce delays unchanged. | Characterization tests first (`SignalProcessingPanel.workbench.test.tsx`, `useResample.workbench.test.ts`); fail-before tests (`useBaseline.workbench.test.ts`, `SigopBody.workbench.test.tsx`); shell tests with forced races (`workbench/*.test.ts*`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `inputs="statistics"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |

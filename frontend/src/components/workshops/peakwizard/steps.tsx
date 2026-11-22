@@ -13,6 +13,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select, StatusDot } from "../../primitives";
+import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
 import ModelFitStep from "./ModelFitStep";
 import ModelSetupView, { EngineSelect } from "./ModelSetupView";
 import { prominenceFloor } from "./peakDefaults";
@@ -56,9 +57,10 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
           tallest peak (Advanced ▸ Min prominence, Sensitivity).
         </div>
       )}
-      {w.findError && (
-        <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
-          {w.findError}
+      <WorkbenchMessage refusal={w.findRefused ? w.findError : null} error={w.findRefused ? null : w.findError} />
+      {w.findStale && !w.findBusy && (
+        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--warn)" }}>
+          <OutOfDateNote block>the peaks below were found with other settings or another trace. Press Find peaks to find them again (your edits to the list are replaced).</OutOfDateNote>
         </div>
       )}
       <StepFindAdvanced w={w} />
