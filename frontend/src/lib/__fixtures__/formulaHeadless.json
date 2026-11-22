@@ -68,13 +68,13 @@
   {
    "expr": "A / B",
    "app": [
-    -1.3333333333333333,
+    -1.3333333333333,
     0,
     "-Infinity",
     -1,
     "NaN",
     0,
-    -9.999999999999999e+299
+    -1e+300
    ]
   },
   {
@@ -165,10 +165,10 @@
    "expr": "1 ** C + pow(B, 0.5)",
    "app": [
     "NaN",
-    2.414213562373095,
+    2.4142135623731,
     1,
     "NaN",
-    3.23606797749979,
+    3.2360679774998,
     "Infinity",
     1
    ]
@@ -189,7 +189,7 @@
    "expr": "sqrt(A) + log(B)",
    "app": [
     "NaN",
-    0.6931471805599453,
+    0.69314718055995,
     "NaN",
     "NaN",
     "NaN",
@@ -200,21 +200,21 @@
   {
    "expr": "ln(abs(x)) + log10(abs(C)) + log2(abs(A))",
    "app": [
-    2.6931471805599454,
+    2.6931471805599,
     "-Infinity",
     "-Infinity",
     "NaN",
     "NaN",
-    2.721570379219453,
-    3.147683133008303
+    2.7215703792195,
+    3.1476831330083
    ]
   },
   {
    "expr": "sin(x) * cos(A) + tan(B) + atan2(A, B) + atan(C) + asin(C) + acos(x / 10)",
    "app": [
-    7.079549178952335,
+    7.0795491789523,
     -3.3998427084574,
-    0.9872463845991051,
+    0.98724638459911,
     "NaN",
     "NaN",
     "NaN",
@@ -224,9 +224,9 @@
   {
    "expr": "arcsin(C) + arccos(C) + arctan(A) + sinh(C) + cosh(C) + tanh(A)",
    "app": [
-    6.614225118661041,
-    1.938675767966339,
-    0.7906199883603475,
+    6.614225118661,
+    1.9386757679663,
+    0.79061998836035,
     "NaN",
     "NaN",
     "NaN",
@@ -236,13 +236,13 @@
   {
    "expr": "exp(C) + sign(A) + abs(B)",
    "app": [
-    6.718281828459045,
-    2.3678794411714423,
-    0.6487212707001282,
+    6.718281828459,
+    2.3678794411714,
+    0.64872127070013,
     "NaN",
     "NaN",
     "Infinity",
-    1095.6331584284585
+    1095.6331584285
    ]
   },
   {
@@ -260,25 +260,25 @@
   {
    "expr": "hypot(A, B) + hypot(A, B, C)",
    "app": [
-    10.099019513592784,
-    4.23606797749979,
-    14.0178344238091,
+    10.099019513593,
+    4.2360679774998,
+    14.017834423809,
     "NaN",
     "NaN",
     "Infinity",
-    8.071067811865476
+    8.0710678118655
    ]
   },
   {
    "expr": "min(A, B) + max(A, B, C) + min(pi)",
    "app": [
-    4.141592653589793,
-    5.141592653589793,
-    -3.358407346410207,
+    4.1415926535898,
+    5.1415926535898,
+    -3.3584073464102,
     "NaN",
     "NaN",
     "Infinity",
-    9.141592653589793
+    9.1415926535898
    ]
   },
   {
@@ -308,13 +308,13 @@
   {
    "expr": "np.sqrt(abs(A)) * numpy.pi + math.e",
    "app": [
-    9.00146713563863,
-    2.718281828459045,
-    11.030154710525126,
-    5.859874482048838,
+    9.0014671356386,
+    2.718281828459,
+    11.030154710525,
+    5.8598744820488,
     "NaN",
-    7.685575961357095,
-    5.859874482048838
+    7.6855759613571,
+    5.8598744820488
    ]
   },
   {
@@ -338,7 +338,7 @@
     "NaN",
     "NaN",
     "-Infinity",
-    0.0297029702970297
+    0.02970297029703
    ]
   },
   {
@@ -368,13 +368,13 @@
   {
    "expr": "sin(A, B) + cos(x, 1, 2)",
    "app": [
-    -1.1729493318550706,
-    0.8775825618903728,
-    0.34301340128121094,
-    1.8103834065185413,
+    -1.1729493318551,
+    0.87758256189037,
+    0.34301340128121,
+    1.8103834065185,
     "NaN",
-    -0.391520352496489,
-    -1.6805425138843488
+    -0.39152035249649,
+    -1.6805425138843
    ]
   },
   {
@@ -404,8 +404,8 @@
   {
    "expr": "B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B*B - x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x",
    "app": [
-    1.8739277038847965e+286,
-    4.149515568880993e+180,
+    1.8739277038848e+286,
+    4.149515568881e+180,
     0,
     -149,
     "Infinity",
