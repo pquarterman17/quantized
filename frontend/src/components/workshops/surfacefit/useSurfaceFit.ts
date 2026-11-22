@@ -20,7 +20,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
-import { seedNumber, seedStrings, useReopenSeed } from "../resultcommit/useReopenSession";
+import { seedNumber, seedStrings, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { surfaceResultText } from "./surfaceFitText";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, mapDefaults, parseField, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
@@ -92,10 +92,10 @@ export function useSurfaceFit(): SurfaceFitState {
   const [p0, setP0] = useState<string[]>(() => seedStrings(seed?.extra?.p0));
   const [lower, setLower] = useState<string[]>(() => seedStrings(seed?.extra?.lower));
   const [upper, setUpper] = useState<string[]>(() => seedStrings(seed?.extra?.upper));
-  const resetMounted = useRef(false);
+  const holdSeed = useSeedHold(!!seed, [active?.id]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stored, setStored] = useState<{ key: string; res: SurfaceFitResult; x: number[]; y: number[]; z: number[] } | null>(null);
+  const [stored, setStored] = useState<{ key: string; res: SurfaceFitResult; x: number[]; y: number[]; z: number[]; start: { p0: string[]; lower: string[]; upper: string[] } } | null>(null);
   const [guessing, setGuessing] = useState(false);
   const seq = useRef(0);
 
@@ -122,9 +122,7 @@ export function useSurfaceFit(): SurfaceFitState {
   // A new dataset resets the picks; a changed column list keeps them on their
   // columns (or resets one whose column is gone, with a toast).
   useEffect(() => {
-    const first = !resetMounted.current;
-    resetMounted.current = true;
-    if (first && seed) return; // a reopen's recorded picks, not the defaults
+    if (holdSeed()) return; // a reopen's recorded picks, not the defaults
     setPicks(defaults(columns, active));
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,7 +197,7 @@ export function useSurfaceFit(): SurfaceFitState {
       if (!got) return;
       const [x, y, z] = got.columns;
       const res = await surfaceFit({ x, y, z, model: model.name, p0: start as number[], lower: lo, upper: hi });
-      setStored({ key, res, x, y, z });
+      setStored({ key, res, x, y, z, start: { p0, lower, upper } }); // what it ran from, for a reopen
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "surface fit failed");
@@ -217,7 +215,7 @@ export function useSurfaceFit(): SurfaceFitState {
     sourceId: active.id,
     computedOn: fingerprint,
     settings: { xCol, yCol, zCol, model: result.model_name, params: result.params, errors: result.errors, n: result.n_points },
-    reopenExtra: { p0, lower, upper },
+    reopenExtra: live.start,
     status: `added the ${result.model_name} fitted surface (${result.n_points} points)`,
     output: (source) => {
       const d = source.data;

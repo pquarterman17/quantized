@@ -3,7 +3,7 @@
 // state hook calls `useReopenSeed` once, so its controls START from the
 // recorded settings instead of being patched after their own reset effects ran.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ReopenSeed } from "../../../lib/committedOutputReopen";
 import { useToolReopen } from "../../../store/toolReopen";
@@ -12,8 +12,33 @@ import { useToolReopen } from "../../../store/toolReopen";
  *  it (so it seeds afresh). Closing the panel ends the session. */
 export function useReopenScope(tool: string): number {
   const nonce = useToolReopen((s) => s.sessions[tool]?.nonce ?? 0);
-  useEffect(() => () => useToolReopen.getState().end(tool), [tool]);
+  useEffect(() => {
+    mounted.set(tool, (mounted.get(tool) ?? 0) + 1);
+    return () => {
+      mounted.set(tool, (mounted.get(tool) ?? 1) - 1);
+      // Deferred: StrictMode's simulated unmount/remount must not end it.
+      queueMicrotask(() => {
+        if (!mounted.get(tool)) useToolReopen.getState().end(tool);
+      });
+    };
+  }, [tool]);
   return nonce;
+}
+
+const mounted = new Map<string, number>();
+
+/** True while `deps` still equal their values at mount AND `active` (a seed
+ *  was applied): a tool's reset effect skips itself then, so the seeded
+ *  values stand. Value-based (not "first run"), so StrictMode's double effect
+ *  run behaves the same; the hold ends for good at the first difference. */
+export function useSeedHold(active: boolean, deps: readonly unknown[]): () => boolean {
+  const held = useRef<readonly unknown[] | null>(active ? deps : null);
+  return () => {
+    const at = held.current;
+    if (at && at.length === deps.length && at.every((value, i) => Object.is(value, deps[i]))) return true;
+    held.current = null;
+    return false;
+  };
 }
 
 export interface ReopenSeedValue {

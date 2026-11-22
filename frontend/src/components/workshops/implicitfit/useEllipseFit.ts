@@ -3,14 +3,14 @@
 // the direct algebraic fit, refined to orthogonal distance. "Add fitted
 // ellipse" writes the curve as a dataset to overlay on the points.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ellipseFit, type EllipseResult } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
-import { seedNumber, useReopenSeed } from "../resultcommit/useReopenSession";
+import { seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
@@ -45,7 +45,7 @@ export function useEllipseFit(): EllipseFitState {
   const load = useLoadColumns();
   // "Open in Ellipse fit" (lane RO): start from the recorded columns and method.
   const seed = useReopenSeed(ELLIPSE_FIT_PRODUCER.id, active?.id)?.settings;
-  const resetMounted = useRef(false);
+  const holdSeed = useSeedHold(!!seed, [active?.id]);
   const [picks, setPicks] = useState<[number, number]>(() => (seed ? [seedNumber(seed.xCol, -1), seedNumber(seed.yCol, 0)] : [-1, 0]));
   const [geometric, setGeometric] = useState(() => seed?.geometric !== false);
   const [busy, setBusy] = useState(false);
@@ -60,12 +60,11 @@ export function useEllipseFit(): EllipseFitState {
   const hasData = !!active && columns.length >= 2;
 
   useEffect(() => {
-    const first = !resetMounted.current;
-    resetMounted.current = true;
-    if (first && seed) return; // a reopen's recorded picks, not the defaults
+    if (holdSeed()) return; // a reopen's recorded picks, not the defaults
     setPicks([-1, 0]);
     setError(null);
-  }, [active?.id, seed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id]);
   useFollowColumnPicks(active, (follow) => setPicks((p) => [follow(p[0]) ?? -1, follow(p[1]) ?? 0]));
 
   async function fit(): Promise<void> {

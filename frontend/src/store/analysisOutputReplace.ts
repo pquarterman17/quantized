@@ -17,7 +17,7 @@
 
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputResult, type CommitSettings } from "../lib/committedOutput";
-import { isCommittedOutputResult } from "../lib/committedOutputGraph";
+import { isCommittedOutputResult, REOPEN_PARAM } from "../lib/committedOutputGraph";
 import { replaceBlockedReason } from "../lib/committedOutputReopen";
 import type { Dataset } from "../lib/types";
 import type { AnalysisCommitOutcome, AnalysisOutputCommit } from "./analysisOutputCommit";
@@ -25,13 +25,23 @@ import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
 /** What the envelope records for a later reopen: the source view the output was
- *  computed on, the output's own view (to detect edits) and the tool extras. */
-export function reopenRecord(request: Pick<AnalysisOutputCommit, "computedOn" | "reopenExtra">, output: Dataset): CommitSettings {
+ *  computed on, the output's own view (to detect edits), the name the TOOL gave
+ *  it (to tell a user's rename apart) and the tool extras. */
+export function reopenRecord(
+  request: Pick<AnalysisOutputCommit, "computedOn" | "reopenExtra">, output: Dataset, toolName: string,
+): CommitSettings {
   return {
     computedOn: request.computedOn,
     output: analysisDataFingerprint(output),
+    name: toolName,
     ...(request.reopenExtra ? { extra: request.reopenExtra } : {}),
   };
+}
+
+function pick<K extends keyof Dataset>(dataset: Dataset, keys: readonly K[]): Partial<Pick<Dataset, K>> {
+  const out: Partial<Pick<Dataset, K>> = {};
+  for (const key of keys) if (dataset[key] !== undefined) out[key] = dataset[key];
+  return out;
 }
 
 export function replaceCommittedOutput(
@@ -57,12 +67,19 @@ export function replaceCommittedOutput(
 
   const built = request.output(source);
   // A user's rename of the output survives; the tool's own name follows the new computation.
-  const name = old.name === target.tableRefs?.[0]?.label ? built.name : old.name;
-  const { errorRoles: _oldRoles, ...kept } = old;
-  const output: Dataset = { ...kept, name, data: built.data, ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}) };
+  const recorded = target.parameters?.[REOPEN_PARAM];
+  const toolName = recorded && typeof recorded === "object" && !Array.isArray(recorded) && typeof recorded["name"] === "string"
+    ? recorded["name"] : target.tableRefs?.[0]?.label;
+  const name = old.name === toolName ? built.name : old.name;
+  // Only identity and Library organisation carry over; nothing shaped by the
+  // old data does (replaceBlockedReason refused any worksheet edit already).
+  const output: Dataset = {
+    ...pick(old, ["notes", "tags", "group", "folderId", "order", "workbookId", "importedAt", "source"]),
+    id: old.id, name, data: built.data, ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
+  };
   const fresh = committedOutputResult({
     id: target.id, producer: request.producer, source, extraSources, output, key, settings: request.settings,
-    reopen: reopenRecord(request, output), createdAt: target.createdAt,
+    reopen: reopenRecord(request, output, built.name), createdAt: target.createdAt,
   });
   const { stale: _wasStale, ...rest } = target;
   const next = {

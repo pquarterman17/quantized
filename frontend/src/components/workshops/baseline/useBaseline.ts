@@ -20,7 +20,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
-import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { baselineSeed } from "./baselineReopen";
 import { baselineBy, callBaseline, callBaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
@@ -164,7 +164,7 @@ export function useBaseline(): BaselineState {
   // "Open in Baseline" (lane RO): start from the recorded method, knobs, anchors.
   const seed = useReopenSeed(BASELINE_PRODUCER.id, active?.id);
   const [seeded] = useState(() => baselineSeed(seed?.settings, DEFAULTS));
-  const resetMounted = useRef(false);
+  const holdSeed = useSeedHold(!!seeded, [active, xKey, yKeys, seriesOrder]);
   const [method, setMethod] = useState<BaselineMethod>(seeded?.method ?? "als");
   const [params, setParamsState] = useState<BaselineParams>(seeded?.params ?? DEFAULTS);
   const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
@@ -201,16 +201,15 @@ export function useBaseline(): BaselineState {
   // A new active dataset invalidates the current estimate + its overlay (and
   // the anchors — they're coordinates on the OLD data).
   useEffect(() => {
-    const first = !resetMounted.current;
-    resetMounted.current = true;
-    if (first && seeded) return; // keep a reopen's recorded anchors
+    if (holdSeed()) return; // keep a reopen's recorded anchors
     setBaseline(null);
     setEstimateBinding(null);
     setEstimateFp(null);
     setError(null);
     setAnchors([]);
     setBaselineOverlay(null);
-  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay, seeded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay]);
 
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
@@ -410,7 +409,7 @@ export function useBaseline(): BaselineState {
       }
       if (!(await subtractInto())) return;
       setAnchors([]);
-      setStatus("subtracted selected-channel anchor baseline (new dataset)");
+      if (!commit.replacing) setStatus("subtracted selected-channel anchor baseline (new dataset)");
       return;
     }
     // Preview-consistency guard (review 2026-07-11): anchors are picked on
@@ -436,7 +435,7 @@ export function useBaseline(): BaselineState {
       if (baseline) {
         if (!(await subtractInto())) return;
         setAnchors([]);
-        setStatus("subtracted anchor baseline (new dataset - prior corrections active)");
+        if (!commit.replacing) setStatus("subtracted anchor baseline (new dataset - prior corrections active)");
       } else {
         setError("prior corrections active: wait for the preview, then Apply again");
       }

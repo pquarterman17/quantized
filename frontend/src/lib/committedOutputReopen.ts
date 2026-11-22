@@ -83,11 +83,22 @@ export function replaceBlockedReason(result: AnalysisResult, output: Dataset | u
   if (typeof recorded !== "string") {
     return "This result was added before its output could be checked for edits, so it is kept; the commit adds a new output.";
   }
+  const attached = WORKSHEET_EDITS.filter((field) => output[field] !== undefined);
+  if (attached.length) {
+    return `“${output.name}” carries worksheet edits (${attached.join(", ")}) made for its old data; replacing it would drop or misapply them, so the commit adds a new output.`;
+  }
   if (recorded !== analysisDataFingerprint(output)) {
     return `“${output.name}” was edited after it was added; replacing it would discard those edits, so the commit adds a new output.`;
   }
   return null;
 }
+
+/** Worksheet state a user attaches to an output that is shaped by its data
+ *  (column indexes, rows, fits): a replace could not carry it over honestly. */
+const WORKSHEET_EDITS = [
+  "formulas", "channelRoles", "columnDesignations", "columnProps", "hiddenCols", "frozenCols", "excludedRows",
+  "filter", "fitSpec", "peakTable", "reflFits", "linkedCurves", "corrections", "bgRef", "raw", "derivedFrom",
+] as const satisfies readonly (keyof Dataset)[];
 
 export function reopenLabel(result: AnalysisResult): string {
   const tool = REOPEN_TOOLS[result.producer.id];

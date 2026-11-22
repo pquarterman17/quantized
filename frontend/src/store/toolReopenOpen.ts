@@ -33,12 +33,21 @@ export function openCommittedResultInTool(resultId: string): boolean {
     outputName: plan.outputName, seed: plan.seed, extra: plan.extra, notice: plan.notice, replaceBlocked: plan.replaceBlocked,
   });
   if (plan.sourceId) app.setActive(plan.sourceId);
+  let replot = "";
   if (plan.tool === "baseline-subtract") {
     // The estimate follows the plotted channels: plot the recorded ones.
+    // Only when they differ, as ONE undoable view change (no macro step: the
+    // user did not ask for it) that the status line names.
     const binding = plan.seed?.["binding"];
     if (plan.sourceId && binding && typeof binding === "object" && !Array.isArray(binding) && typeof binding["yKey"] === "number") {
-      app.setXKey(typeof binding["xKey"] === "number" ? binding["xKey"] : null);
-      app.setYKeys([binding["yKey"]]);
+      const xKey = typeof binding["xKey"] === "number" ? binding["xKey"] : null;
+      const yKeys = [binding["yKey"]];
+      const now = useApp.getState();
+      if (now.xKey !== xKey || now.yKeys?.length !== 1 || now.yKeys[0] !== yKeys[0]) {
+        replot = `plotted “${typeof binding["yLabel"] === "string" ? binding["yLabel"] : `channel ${yKeys[0]! + 1}`}”, the channel this result was estimated on (Undo restores the previous plot); `;
+        now.recordHistory("plot the recorded Baseline channel");
+        useApp.setState({ xKey, yKeys });
+      }
     }
     app.setStageTab("plot");
     app.setBaselineOpen(true);
@@ -47,6 +56,6 @@ export function openCommittedResultInTool(resultId: string): boolean {
   } else if (EXTRAS.includes(plan.tool)) {
     useAnalysisExtras.getState().show(plan.tool as AnalysisExtra);
   }
-  useApp.getState().setStatus(plan.notice ?? `opened ${plan.toolLabel} with the settings of “${result.name}”`, plan.notice ? "warn" : "ok");
+  useApp.getState().setStatus(plan.notice ?? `${replot}opened ${plan.toolLabel} with the settings of “${result.name}”`, plan.notice ? "warn" : "ok");
   return true;
 }

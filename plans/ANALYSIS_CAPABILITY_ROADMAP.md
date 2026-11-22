@@ -148,18 +148,31 @@ inconsistently exposed, and do not all share the same result lifecycle.
       “output”" is preselected and the commit button says so; "Add as a new
       output" is one click away. Replace writes into the SAME worksheet id
       and the SAME result id (plots, figures, notes and the Library item
-      follow; a user's rename of the output is kept) as one undo step
-      (`store/analysisOutputReplace.ts`). Replace is disabled with the reason,
-      and the commit adds new instead, when the output worksheet was deleted
-      or edited since it was added (would discard edits), when the result
-      predates the output record (older files), or when the source is missing.
+      follow; a user's rename of the output is kept, compared against the
+      tool's own recorded name) as one undo step
+      (`store/analysisOutputReplace.ts`). Only identity and Library
+      organisation fields carry over to the new data. Replace is disabled with
+      the reason, and the commit adds new instead, when the output worksheet
+      was deleted or edited since it was added (data, or data-shaped worksheet
+      state such as formulas, column roles/designations, exclusions, fits),
+      when the result predates the output record (older files), or when the
+      source is missing. The Replace/Add-as-new choice is read at commit time,
+      so switching it during a slow Baseline fetch is honoured.
+    - Baseline re-plots the recorded channel only when it differs, as ONE
+      undoable view step ("plot the recorded Baseline channel", no macro step)
+      that the status line names.
+    - StrictMode-safe: the session ends on a deferred unmount check, and the
+      tools' reset effects skip by VALUE (`useSeedHold`: the deps still equal
+      their values at mount), not by "first run".
     - **Fail closed:** a missing source opens the tool with a notice and NO
       settings (never seeded onto another worksheet); a changed source opens
       seeded with a notice to re-run on the current data (the commit itself
       still refuses a computation older than the source). Undo of a replace
       keeps the stale state honest: `staleDatasets` is outside undo, so a
-      stale old output's envelope is marked `stale` before the step and
-      `findCommittedResultId` / the stamp treat it as stale.
+      stale old output's envelope is marked `stale` before the step;
+      `findCommittedResultId`, the result workspace status and the save stamp
+      (`stampAnalysisResults` keeps `stale` for committed outputs) honour it,
+      so it is still stale after save and reopen.
     - **Not supported, disabled with the reason:** Peak batch table and Batch
       integrate trend (multi-source), Fit band plot (follows a live Curve Fit
       the result does not record). Signal Processing outputs keep their own
@@ -167,9 +180,11 @@ inconsistently exposed, and do not all share the same result lifecycle.
       the workbench). Snapshot results keep their existing Edit (`openWith`).
     - Tests: `lib/committedOutputReopen.test.ts` (plan per case),
       `store/analysisOutputReplace.test.ts` (one undo step, idempotent, rename
-      kept, edited output refused, stale across Undo),
+      kept across replaces, edited output and column roles refused, stale
+      across Undo and save/reopen),
       `resultcommit/reopenInTool.test.tsx` (seed round-trip for all five tools,
-      replace vs add-as-new through the panel, missing/changed source notice,
+      replace vs add-as-new through the panel, StrictMode double mount, a mode
+      switch during a pending commit, missing/changed source notice,
       disabled-with-reason in the workspace and the Library menu).
   - [ ] Remaining: migrate FFT thickness, Reflectivity model/SLD, spin
     asymmetry and the Magnetometry outputs (normalization, demag,

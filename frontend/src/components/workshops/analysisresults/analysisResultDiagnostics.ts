@@ -41,7 +41,7 @@ export function analysisResultDiagnostics({
       .map((ref) => `Source worksheet ${ref.datasetId} is missing.`),
     ...result.outputs.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId))
       .map((ref) => `Output worksheet ${ref.datasetId} is missing.`),
-    ...(output && (staleDatasets.includes(output.id) || result.stale)
+    ...(output && (staleDatasets.includes(output.id) || (result.stale && !output.derivedFrom))
       ? [output.derivedFrom ? "The linked output is out of date and should be recalculated." : COMMITTED_OUTPUT_STALE]
       : []),
     ...(peakTable?.provenance.warnings ?? []),

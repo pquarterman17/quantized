@@ -5,13 +5,14 @@
 // reopen is disabled with the reason (result workspace and Library menu).
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EllipseResult, SurfaceFitResult, TaucResult } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { buildLibraryHierarchy } from "../../../lib/libraryHierarchy";
 import type { DataStruct } from "../../../lib/types";
-import { commitAnalysisOutput } from "../../../store/analysisOutputCommit";
+import { commitAnalysisOutput, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { useToolReopen } from "../../../store/toolReopen";
 import { openCommittedResultInTool } from "../../../store/toolReopenOpen";
@@ -24,6 +25,7 @@ import EllipseFitPanel from "../implicitfit/EllipseFitPanel";
 import OpticalGapPanel from "../opticalgap/OpticalGapPanel";
 import SurfaceFitPanel from "../surfacefit/SurfaceFitPanel";
 import { useTabulate } from "../tabulate/useTabulate";
+import { useAnalysisCommit } from "./useAnalysisCommit";
 
 const { ellipseMock, taucMock, surfaceMock } = vi.hoisted(() => ({
   ellipseMock: vi.fn(), taucMock: vi.fn(), surfaceMock: vi.fn(),
@@ -135,6 +137,36 @@ describe("Ellipse fit: reopen, adjust, replace", () => {
     expect(useApp.getState().analysisResults).toHaveLength(2);
   });
 
+  it("survives StrictMode's double mount: the session and the seeded values stand", async () => {
+    await commitAlgebraicEllipse();
+    act(() => { openCommittedResultInTool(resultId()); });
+    render(<StrictMode><EllipseFitPanel /></StrictMode>);
+    await act(async () => { await Promise.resolve(); });
+    expect(Object.keys(useToolReopen.getState().sessions)).toEqual(["ellipse-fit"]);
+    expect(screen.getByLabelText("Method")).toHaveValue("algebraic");
+    expect(screen.getByRole("radio", { name: /Replace/ })).toBeChecked();
+  });
+
+  it("a switch to Add as new while a commit is pending is honoured", async () => {
+    await commitAlgebraicEllipse();
+    act(() => { openCommittedResultInTool(resultId()); });
+    const source = useApp.getState().datasets.find((d) => d.id === "src")!;
+    const { result } = renderHook(() => useAnalysisCommit({
+      producer: { id: "ellipse-fit", label: "Ellipse fit", version: 1 }, sourceId: "src",
+      computedOn: analysisDataFingerprint(source), settings: { geometric: true, other: 1 },
+      output: (s) => ({ name: `${s.name} (other)`, data: XY }),
+    }));
+    expect(result.current.replacing).toBe("loop (fitted ellipse)");
+    let release: (value: AnalysisOutputCommit["output"]) => void = () => undefined;
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.commitAsync(() => new Promise((resolve) => { release = resolve; }));
+    });
+    act(() => useToolReopen.getState().setMode("ellipse-fit", "new"));
+    await act(async () => { release((s) => ({ name: `${s.name} (other)`, data: XY })); await pending; });
+    expect(outputs()).toHaveLength(2);
+  });
+
   it("a missing source opens the tool with a notice, no settings and no replace", async () => {
     await commitAlgebraicEllipse();
     act(() => useApp.setState((s) => ({ datasets: s.datasets.filter((d) => d.id !== "src") })));
@@ -161,6 +193,7 @@ describe("Ellipse fit: reopen, adjust, replace", () => {
     act(() => { openCommittedResultInTool(resultId()); });
     const view = render(<EllipseFitPanel />);
     view.unmount();
+    await act(async () => { await Promise.resolve(); }); // the end is deferred one microtask
     expect(useToolReopen.getState().sessions).toEqual({});
     render(<EllipseFitPanel />);
     expect(screen.getByLabelText("Method")).toHaveValue("geometric");
@@ -219,6 +252,9 @@ describe("Baseline and Tabulate seed round-trip", () => {
     expect(out.kind).toBe("created");
     act(() => { openCommittedResultInTool(resultId()); });
     expect(useApp.getState()).toMatchObject({ baselineOpen: true, activeId: "src", yKeys: [1], stageTab: "plot" });
+    // Re-plotting the recorded channel is ONE undoable step, and said.
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["add Baseline subtract output", "plot the recorded Baseline channel"]);
+    expect(useApp.getState().status).toContain("plotted “z”");
     const { result } = renderHook(() => useBaseline());
     expect(result.current.method).toBe("snip");
     expect(result.current.params.maxWindowDeg).toBe(7);

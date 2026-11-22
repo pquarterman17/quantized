@@ -4,7 +4,8 @@
 // across Undo even though `staleDatasets` itself is not undone.
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
+import { analysisDataFingerprint, stampAnalysisResults } from "../lib/analysisResultFreshness";
+import { staleAnalysisOutputs } from "../lib/analysisResultStaleLoad";
 import { REOPEN_PARAM } from "../lib/committedOutputGraph";
 import { findCommittedResultId } from "../lib/committedOutput";
 import type { Dataset, DataStruct } from "../lib/types";
@@ -46,7 +47,7 @@ describe("replacing a committed output (Open in <tool>)", () => {
     commitAnalysisOutput(request({ geometric: true }, 1, { reopenExtra: { p0: ["1"] } }));
     const [result] = useApp.getState().analysisResults;
     expect(result.parameters?.[REOPEN_PARAM]).toEqual({
-      computedOn: analysisDataFingerprint(SOURCE), output: analysisDataFingerprint(outputs()[0]), extra: { p0: ["1"] },
+      computedOn: analysisDataFingerprint(SOURCE), output: analysisDataFingerprint(outputs()[0]), name: "Film (fit 1)", extra: { p0: ["1"] },
     });
   });
 
@@ -79,11 +80,29 @@ describe("replacing a committed output (Open in <tool>)", () => {
     expect(useApp.getState().history).toHaveLength(1);
   });
 
-  it("keeps a user's rename of the output worksheet", () => {
+  it("keeps a user's rename of the output worksheet, across repeated replaces", () => {
     const { resultId, outputId } = commitFirst();
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === outputId ? { ...d, name: "My ellipse" } : d)) }));
     commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId }));
     expect(outputs()[0].name).toBe("My ellipse");
+    commitAnalysisOutput(request({ geometric: true }, 9, { replace: resultId }));
+    expect(outputs()[0].name).toBe("My ellipse");
+  });
+
+  it("an unrenamed output follows the tool's new name", () => {
+    const { resultId } = commitFirst();
+    commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId }));
+    commitAnalysisOutput(request({ geometric: true }, 9, { replace: resultId }));
+    expect(outputs()[0].name).toBe("Film (fit 9)");
+  });
+
+  it("refuses when the output carries worksheet edits shaped by its old data (column roles)", () => {
+    const { resultId, outputId } = commitFirst();
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === outputId ? { ...d, channelRoles: { 0: "label" as const } } : d)) }));
+    const outcome = commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId }));
+    expect(outcome.kind).toBe("refused");
+    expect(useApp.getState().status).toContain("channelRoles");
+    expect(outputs()[0].data.values).toEqual([[1], [1], [1]]);
   });
 
   it("refuses (writes nothing) when the output worksheet was edited after it was added", () => {
@@ -113,5 +132,9 @@ describe("replacing a committed output (Open in <tool>)", () => {
     // ...so the old computation no longer blocks a commit as if it were current.
     const s = useApp.getState();
     expect(findCommittedResultId(s.analysisResults, s.datasets, s.staleDatasets, oldKey)).toBeNull();
+    // ...and a save keeps it stale, so the reopened file marks it stale again.
+    const saved = stampAnalysisResults(s.analysisResults, s.datasets, s.staleDatasets);
+    expect(saved[0].stale).toBe(true);
+    expect(staleAnalysisOutputs(saved, s.datasets)).toEqual([outputId]);
   });
 });

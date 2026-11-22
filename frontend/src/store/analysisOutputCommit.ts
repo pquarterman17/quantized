@@ -106,7 +106,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   };
   const result = committedOutputResult({
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
-    reopen: reopenRecord(request, output),
+    reopen: reopenRecord(request, output, output.name),
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     request.beforeWrite?.();

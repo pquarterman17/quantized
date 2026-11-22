@@ -11,7 +11,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
-import { seedChoice, seedNumber, useReopenSeed } from "../resultcommit/useReopenSession";
+import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, parseField, pickColumns, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
@@ -103,7 +103,7 @@ export function useOpticalGap(): OpticalGapState {
   const text = (v: unknown): string => (typeof v === "string" ? v : "");
   const seededPicks: [number, number] | null = seed ? [seedNumber(seed.xCol, -1), seedNumber(seed.yCol, 0)] : null;
   const holdGuess = useRef(seededPicks?.join(":") ?? null);
-  const resetMounted = useRef(false);
+  const holdSeed = useSeedHold(!!seed, [active?.id]);
   const [picks, setPicks] = useState<[number, number]>(() => seededPicks ?? [-1, 0]);
   const [xUnit, setXUnit] = useState<TaucXUnit>(() => seedChoice(seed?.xUnit, X_UNITS, "eV"));
   const [signal, setSignal] = useState<TaucSignal>(() => seedChoice(seed?.signal, SIGNALS, "alpha"));
@@ -125,14 +125,13 @@ export function useOpticalGap(): OpticalGapState {
 
   // A new dataset resets the picks and the fit window.
   useEffect(() => {
-    const first = !resetMounted.current;
-    resetMounted.current = true;
-    if (first && seed) return; // a reopen's recorded choices, not the defaults
+    if (holdSeed()) return; // a reopen's recorded choices, not the defaults
     setPicks([-1, 0]);
     setError(null);
     setEMin("");
     setEMax("");
-  }, [active?.id, seed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id]);
   // The picked columns say what the X unit and the signal are (re-read when a pick changes).
   useEffect(() => {
     if (!active) return;
