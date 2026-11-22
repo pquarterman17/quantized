@@ -28,6 +28,7 @@ import {
 } from "../../../lib/transformRun";
 import { needsConfirm } from "../../../lib/transformWarnings";
 import type { Dataset } from "../../../lib/types";
+import { cancelPendingConfirm, useConfirm } from "../../../store/confirmDialog";
 import { toast } from "../../../store/toasts";
 import { useTransformPreviewDialog } from "../../../store/transformPreviewDialog";
 import { useApp } from "../../../store/useApp";
@@ -58,6 +59,20 @@ export interface ReshapeState {
   commitError: string | null;
   create: () => Promise<void>;
   close: () => void;
+}
+
+/** The review dialog for a commit, dismissed (answered "no") if the commit is
+ *  aborted while it is up, so Close never leaves a dialog whose Confirm would
+ *  silently create nothing. Only OUR dialog is dismissed, never a later one. */
+function reviewUntilAborted(pv: TransformPreview, signal: AbortSignal): Promise<boolean> {
+  const answer = reviewTransform(pv);
+  const mine = useConfirm.getState().resolve; // askConfirm opens synchronously
+  const dismiss = () => {
+    if (mine && useConfirm.getState().resolve === mine) cancelPendingConfirm();
+  };
+  if (signal.aborted) dismiss();
+  else signal.addEventListener("abort", dismiss, { once: true });
+  return answer.finally(() => signal.removeEventListener("abort", dismiss));
 }
 
 const message = (e: unknown, fallback: string): string => (e instanceof Error ? e.message : fallback);
@@ -137,7 +152,7 @@ export function useReshapePreview(): ReshapeState {
     await committing.run(async (signal) => {
       try {
         const out = await runTransform(useApp.getState, run.params, run.primaryId, (pv) =>
-          samePreview(pv, previewed) ? Promise.resolve(true) : reviewTransform(pv),
+          samePreview(pv, previewed) ? Promise.resolve(true) : reviewUntilAborted(pv, signal),
           signal,
         );
         if (out) {
