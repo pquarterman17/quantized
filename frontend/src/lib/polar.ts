@@ -40,8 +40,8 @@ export const POLAR_LINE_PX = 1.5;
 /** A series' polar stroke width: its Series-card width when set and positive,
  *  else `POLAR_LINE_PX`. ONE rule for the canvas and the export (sent as pt). */
 export function polarLineWidth(style: { width?: number } | undefined): number {
-  const w = style?.width;
-  return typeof w === "number" && Number.isFinite(w) && w > 0 ? w : POLAR_LINE_PX;
+  const w = style?.width ?? 0;
+  return w > 0 ? w : POLAR_LINE_PX;
 }
 
 /** The channels the polar view draws: `yKeys`, or every channel. No hidden or

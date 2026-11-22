@@ -48,12 +48,12 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Colour map with contour lines from X/Y/Z columns." },
   { id: "violin", label: "Violin", glyph: GLYPHS.plotViolin, description: "Distribution shape per category, mirrored." },
-  { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The second plotted column on a second Y axis at the right; the others stay on the left." },
+  { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The second column on a right-hand Y axis." },
   { id: "polar", label: "Polar", glyph: GLYPHS.plotPolar, description: "Angle (X, degrees) against radius (Y)." },
   { id: "waterfall", label: "Waterfall", glyph: GLYPHS.plotWaterfall, description: "Curves offset vertically so overlapping traces separate." },
   { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
   { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
-  { id: "pie", label: "Pie / Doughnut", glyph: GLYPHS.plotPie, description: "Wedges sized by a value column, labelled by the X column; a hole makes a doughnut." },
+  { id: "pie", label: "Pie / Doughnut", glyph: GLYPHS.plotPie, description: "Wedges by value; a hole makes a doughnut." },
 ];
 
 /** Types that open an existing tool rather than restyle the graph. */
@@ -70,7 +70,6 @@ export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): st
   }
   const columns = dataset.data.labels.length;
   if ((id === "doubleY" || id === "waterfall" || id === "stacked") && columns < 2) return "Needs at least two Y columns.";
-  if (id === "pie" && columns < 1) return "Needs a value column.";
   // The X column counts: an A,B,C sheet imports A as X and B, C as channels.
   if (id === "ternary" && columns + 1 < 3) return "Needs three composition columns.";
   return null;

@@ -10,10 +10,10 @@
 // user typed, and a zoom (a range that does not cover every bubble centre)
 // keeps its bounds.
 
-import type uPlot from "uplot";
+import uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
-import { uplotDefault } from "./uplotErrorRange";
+import { isFixedXRange } from "./uplotXRange";
 
 /** The largest bubble radius (CSS px) among `specs`. */
 export function maxBubbleRadius(specs: Iterable<ColorScatterSpec>): number {
@@ -35,23 +35,18 @@ export function padForRadius(lo: number, hi: number, dmin: number, dmax: number,
 }
 
 /** Wrap `scales.x` / `scales.y` so their autoscale leaves room for the biggest
- *  bubble. `padX` / `padY` are false for a fixed limit. Mutates `scales`. */
-export function padBubbleScales(
-  scales: uPlot.Scales,
-  columns: Map<number, ColorScatterSpec> | undefined,
-  padX: boolean,
-  padY: boolean,
-): void {
-  const sized = new Map([...(columns ?? [])].filter(([, s]) => s.diam));
+ *  bubble. A fixed limit (`fixedXRange`, or `fixedYScale`'s static pair) is
+ *  left alone. Mutates `scales`. */
+export function padBubbleScales(scales: uPlot.Scales, sized: Map<number, ColorScatterSpec>): void {
   const radius = maxBubbleRadius(sized.values());
   if (!sized.size || radius <= 0) return;
   for (const key of ["x", "y"] as const) {
     const sc = scales[key];
-    if (!sc || (key === "x" ? !padX : !padY) || sc.distr === 3) continue;
-    const inner = sc.range;
+    if (!sc || (sc.distr as number) === 3 || Array.isArray(sc.range) || isFixedXRange(sc.range)) continue;
+    const inner = sc.range as uPlot.Range.Function | undefined;
     sc.range = (u, min, max, k) => {
       const base: uPlot.Range.MinMax =
-        typeof inner === "function" ? inner(u, min, max, k) : Array.isArray(inner) ? (inner as uPlot.Range.MinMax) : uplotDefault(u, min as number, max as number, k, key === "x");
+        typeof inner === "function" ? inner(u, min, max, k) : (key === "x" ? [min, max] : uPlot.rangeNum(min as number, max as number, 0.1, true)) as uPlot.Range.MinMax;
       const [lo, hi] = base;
       if (lo == null || hi == null) return base;
       // The data extent of the visible sized series on this scale.

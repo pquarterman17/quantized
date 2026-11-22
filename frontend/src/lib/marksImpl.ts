@@ -3,12 +3,12 @@
 
 import type { ColorScatterSpec } from "./colorscatter";
 import { fmtNum } from "./format";
+import { padBubbleScales } from "./bubblePad"; // bubble axis padding
 import { buildSizeKey, sizeDiameter, sizeLegendEntries } from "./sizescatter";
 import type { DataStruct, SeriesStyle } from "./types";
 
 export { SPLINE_PATHS } from "./uplotSpline";
 export { symbolPoints } from "./symbolDetails"; // gap audit 4 G10
-export { padBubbleScales } from "./bubblePad"; // bubble axis padding
 export { rampedStyles } from "./seriesRampImpl"; // gap audit 4 G1 (Stage/useSeriesRamp)
 import { colorScatterFill, paintColorPoint } from "./colorscatter";
 import { dropLinePlugins, seriesStrokeColor } from "./uplotDropLines";
@@ -86,7 +86,8 @@ export function marksPlugins(
   columns?: Map<number, ColorScatterSpec>,
 ): uPlot.Plugin[] {
   const sized = new Map([...(columns ?? [])].filter(([, s]) => s.diam));
-  return [...dropLinePlugins(styles), ...(sized.size ? [sizeScatterPlugin(sized)] : [])];
+  const padPlugin: uPlot.Plugin = { hooks: {}, opts: (_u, o) => { padBubbleScales(o.scales ?? {}, sized); return o; } };
+  return [...dropLinePlugins(styles), ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
 }
 
 /** Add N5 size-by to the colour-by columns: a size-only series gets a flat spec

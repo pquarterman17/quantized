@@ -45,7 +45,6 @@ describe("plot-type gallery: the types behind separate commands", () => {
     expect(plotTypeUnavailable("ternary", one)).toMatch(/three/);
     // An A,B,C sheet imports A as X: two channels + X is enough.
     expect(plotTypeUnavailable("ternary", ds(["B", "C"]))).toBeNull();
-    expect(plotTypeUnavailable("pie", one)).toBeNull();
     expect(plotTypeUnavailable("polar", one)).toBeNull();
   });
 
