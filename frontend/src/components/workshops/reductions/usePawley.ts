@@ -160,7 +160,8 @@ export function usePawley(): PawleyState {
   const [latticeSource, setLatticeSource] = useState<LatticeSource | null>(null);
   // Lane WB6: the result is stamped with the key its run LAUNCHED with (every
   // setting that reaches the request plus the source rows' identity).
-  const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), col, fields, tie, symmetry, refineCell]));
+  const runKey = JSON.stringify([datasetInputsToken(active), col, fields, tie, symmetry, refineCell]);
+  const stamp = useRunStamp(runKey);
   const stale = result !== null && stamp.stale;
   const settingsKey = JSON.stringify([col, fields, tie, symmetry, refineCell]);
   const settingsRef = useLatestRef(settingsKey);
@@ -242,10 +243,15 @@ export function usePawley(): PawleyState {
     if (!active || !canCompute || !xIdentity) return;
     const token = ++runToken.current;
     const clickSettings = settingsKey;
+    const clickKey = runKey;
     const n = numbers;
     setBusy(true);
     setError(null);
     try {
+      // The key this run LAUNCHES with is the click's own render key: the refs below catch
+      // up in a passive effect, and a row or fingerprint change during the awaits must
+      // leave the result stamped with the rows the click was made on (so it lands stale),
+      // never current. Only a lazy book's arrival legitimately moves the key.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) throw new Error("Could not load the full dataset.");
       // A lazy book's arrival moves the run key: let it commit, then take the key.
@@ -254,7 +260,7 @@ export function usePawley(): PawleyState {
       // The user changed a setting while the book loaded: this request carries the
       // old ones, so abandon it rather than stamp it with the new key.
       if (settingsRef.current !== clickSettings) return;
-      const launchKey = stamp.launchKey();
+      const launchKey = active.pending ? stamp.launchKey() : clickKey;
       const d = analysisData(ds) ?? ds.data;
       const pairs = dropGapRows(d.time, d.values.map((row) => row[col]));
       if (pairs.keep.length < 3) throw new Error("Pawley refinement needs at least 3 finite points.");

@@ -76,9 +76,10 @@ export function useReflectivityFft(): ReflectivityFftState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Lane WB6: stamped with the key the run LAUNCHED with (see useFftThickness).
-  const stamp = useRunStamp(JSON.stringify([
+  const runKey = JSON.stringify([
     datasetInputsToken(active), col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
-  ]));
+  ]);
+  const stamp = useRunStamp(runKey);
   const stale = result !== null && stamp.stale;
   const settingsKey = JSON.stringify([col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence]);
   const settingsRef = useLatestRef(settingsKey);
@@ -103,11 +104,16 @@ export function useReflectivityFft(): ReflectivityFftState {
     }
     const id = ++seq.current;
     const clickSettings = settingsKey;
+    const clickKey = runKey;
     setBusy(true);
     setError(null);
     try {
       // #38 deferred edge: resolve the active dataset's full data first; a lazy
       // book's arrival moves the run key, so it commits before the key is taken.
+      // The key this run LAUNCHES with is the click's own render key: the refs below catch
+      // up in a passive effect, and a row or fingerprint change during the awaits must
+      // leave the result stamped with the rows the click was made on (so it lands stale),
+      // never current. Only a lazy book's arrival legitimately moves the key.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       if (active.pending) await afterCommit();
@@ -115,7 +121,7 @@ export function useReflectivityFft(): ReflectivityFftState {
       // The user changed a setting while the book loaded: this request carries the
       // old ones, so abandon it rather than stamp it with the new key.
       if (settingsRef.current !== clickSettings) return;
-      const launchKey = stamp.launchKey();
+      const launchKey = active.pending ? stamp.launchKey() : clickKey;
       const d = analysisData(ds) ?? ds.data;
       const res = await reflectivityFft(reflectivityFftBody(d, col, {
         isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
