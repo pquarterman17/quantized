@@ -242,4 +242,44 @@ describe("StatsTestsPanel", () => {
     expect(await screen.findByText(/no evidence Hc departs from normal/)).toBeInTheDocument();
     expect(runMock).toHaveBeenCalledWith({ id: "anderson", body: { x: [10, 11, 12, 13, 14] } });
   });
+
+  describe("survival", () => {
+    const surv: Dataset = {
+      id: "s1", name: "trial",
+      data: {
+        time: [1, 2, 3, 4, 5, 6],
+        values: [[5, 1, 0], [6, 0, 0], [7, 1, 0], [8, 1, 1], [9, 0, 1], [10, 1, 1]],
+        labels: ["weeks", "relapse", "arm"], units: ["", "", ""], metadata: {},
+      },
+    };
+    const curve = { times: [0, 5], survival: [1, 0.8], ciLow: [1, 0.5], ciHigh: [1, 0.9], atRisk: [6, 6], events: [0, 1], medianSurvival: null, medianCiLow: null, medianCiHigh: null, N: 6 };
+
+    it("runs Kaplan-Meier on the analysis rows (excluded rows left out) and saves a result", async () => {
+      useApp.setState({ datasets: [{ ...surv, excludedRows: [0] }], activeId: "s1" });
+      runMock.mockResolvedValue({ id: "kaplan-meier", data: { groups: [{ label: "", curve }] } });
+      render(<StatsTestsPanel />);
+      pickTest(/Kaplan-Meier/);
+      fireEvent.change(screen.getByLabelText("Time"), { target: { value: "0" } });
+      fireEvent.change(screen.getByLabelText("Event (0/1)"), { target: { value: "1" } });
+      fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+      expect(await screen.findByText(/median survival in weeks units is not reached/)).toBeInTheDocument();
+      expect(runMock).toHaveBeenCalledWith({
+        id: "kaplan-meier",
+        body: { groups: [{ label: "", time: [6, 7, 8, 9, 10], event: [0, 1, 1, 0, 1] }] },
+      });
+      expect(useApp.getState().analysisResults[0]).toMatchObject({ parameters: { testId: "kaplan-meier" } });
+    });
+
+    it("refuses an event column that is not 0/1 with the reason, without calling the backend", async () => {
+      useApp.setState({ datasets: [surv], activeId: "s1" });
+      render(<StatsTestsPanel />);
+      pickTest(/Log-rank/);
+      fireEvent.change(screen.getByLabelText("Time"), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText("Event (0/1)"), { target: { value: "0" } });
+      fireEvent.change(screen.getByLabelText("Group by"), { target: { value: "2" } });
+      fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+      expect(await screen.findByText(/weeks must be coded 0\/1/)).toBeInTheDocument();
+      expect(runMock).not.toHaveBeenCalled();
+    });
+  });
 });

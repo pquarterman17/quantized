@@ -47,7 +47,7 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 |--:|---|---|:-:|
 | 1 | Finish the result-lifecycle contract for the remaining 'add as dataset' writers (Pawley, reflectivity FFT, hysteresis, MagTools background, digitizer) and reopen for Units / Internal field / Curie-Weiss / fit bands | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:289` | M |
 | 2 | Move magtools, Hysteresis, Baseline and the stats-chooser queue paths onto the shared `analysisInputs` resolver (one code path, not just one policy) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1426` | M |
-| 3 | Survival UI (Kaplan-Meier, log-rank, Cox) in Statistical tests; ROC/GLM/chi-square/p-adjust already shipped (#877) | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md:5213` | M |
+| 3 | Survival UI (Kaplan-Meier, log-rank, Cox) in Statistical tests (DONE 2026-11-22, KM curve plotting deferred); ROC/GLM/chi-square/p-adjust already shipped (#877) | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md:5213` | M |
 | 4 | Batch/By leftovers: Curve fit batch reset on changed settings, Peak analyzer reset on channel change, Background estimate-only batch, Pawley batch model sheet | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1568` | M |
 | 5 | One expandable result book across the statistics tools (tables and plots behave like one Origin/JMP result) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:411` | L |
 | 6 | Rendered-output (visual) equivalence for the nine regression-matrix fixtures; screen canvas has no rendered comparison | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md:10688` | L |

@@ -9436,6 +9436,37 @@
         "title": "LineCutRequest",
         "type": "object"
       },
+      "LogRankGroupsRequest": {
+        "description": "Request for the log-rank test across k >= 2 groups (parallel lists).",
+        "properties": {
+          "events": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "times": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Times",
+            "type": "array"
+          }
+        },
+        "required": [
+          "times",
+          "events"
+        ],
+        "title": "LogRankGroupsRequest",
+        "type": "object"
+      },
       "LogRankRequest": {
         "description": "Request for log-rank test between two groups.",
         "properties": {
@@ -29665,6 +29696,50 @@
           }
         },
         "summary": "Logrank Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/logrank-groups": {
+      "post": {
+        "description": "Log-rank test across two or more groups.",
+        "operationId": "logrank_groups_route_api_stats_logrank_groups_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogRankGroupsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Logrank Groups Route Api Stats Logrank Groups Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Logrank Groups Route",
         "tags": [
           "stats"
         ]
