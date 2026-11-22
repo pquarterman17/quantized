@@ -11,8 +11,9 @@
 
 import { useMemo, useState } from "react";
 
-import { reviewTransform, runTransform } from "../../../lib/transformRun";
+import { reviewTransform } from "../../../lib/transformRun";
 import type { AverageGrid, AverageParams } from "../../../lib/transformAverage";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { useApp } from "../../../store/useApp";
 
 export interface CurveAverageState {
@@ -93,8 +94,11 @@ export function useCurveAverage(): CurveAverageState {
       with: live.slice(1).map((id) => ({ id, name: all.find((d) => d.id === id)?.name ?? id })),
     };
     try {
-      await runTransform(useApp.getState, p, live[0], reviewTransform);
+      // Through the shared commit contract: one undo step with its Library result,
+      // and averaging the same curves again adds nothing.
+      const out = await commitTransformOutput(useApp.getState, p, live[0], reviewTransform);
       setUnitRefused(false);
+      if (out?.existing) setError(`Already added as “${out.name}”; nothing was duplicated. Undo or delete it to average again.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "averaging failed";
       setUnitRefused(/units differ/.test(msg));

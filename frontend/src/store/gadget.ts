@@ -41,10 +41,15 @@ import {
 } from "../lib/quickfit";
 import type { CalcResult, DataStruct, FitOverlay, OverlayBinding } from "../lib/types";
 import { toast } from "./toasts";
-import { nextDatasetId } from "./idSeq";
 import type { GadgetRunCtx, GadgetRunner } from "./gadgetRun";
 import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import type { AppState } from "./useApp";
+
+/** The FFT preview plus the source it was computed on (stamped by gadgetRun.ts;
+ *  `commitGadgetFft` refuses a preview without one, and one whose worksheet changed). */
+export type GadgetFftPreview = FftSpectralResult & {
+  source?: { id: string; computedOn: string; roi: [number, number]; xKey: number | null; yKey: number | null };
+};
 
 /** The ROI-gadget / quick-fit state + actions composed into `useApp`. */
 export interface GadgetSlice {
@@ -83,7 +88,7 @@ export interface GadgetSlice {
   /** Live FFT preview (recomputed on every ROI move, like the other modes);
    *  "Commit" turns it into a new library dataset (`commitGadgetFft`) rather
    *  than a durable per-dataset spec — there's nothing fitSpec-like to write. */
-  gadgetFftPreview: FftSpectralResult | null;
+  gadgetFftPreview: GadgetFftPreview | null;
   /** Paired-cursors mode: two independent x positions (unordered — order
    *  carries the Δx/slope sign), placed/dragged by `gadgetCursorsPlugin`. */
   gadgetCursors: [number, number] | null;
@@ -293,9 +298,31 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         units: [""],
         metadata: { source: "fft gadget", sourceDataset: active.name, window: r.windowName },
       };
-      get().addDataset({ id: nextDatasetId(), name: `${active.name} — FFT`, data });
-      get().setStatus("FFT spectrum added to library");
-      toast("FFT spectrum added to library", "ok");
+      const source = r.source;
+      if (!source || source.id !== active.id) {
+        const why = "FFT gadget: this spectrum was not computed on the active worksheet; move the region to compute it again before adding it";
+        get().setStatus(why, "danger");
+        toast(why, "danger");
+        return;
+      }
+      // The shared commit contract (lazy: it is not part of the entry chunk): ONE
+      // undo step with a Library result, no duplicate on a repeat click, and the
+      // output goes out of date when its source worksheet changes.
+      void import("./commitComputedOutput").then(({ commitComputedOutput }) => {
+        const outcome = commitComputedOutput({
+          producer: { id: "gadget-fft", label: "Gadget FFT", version: 1 },
+          sources: [{ id: source.id, computedOn: source.computedOn }],
+          settings: { roi: source.roi, xKey: source.xKey, yKey: source.yKey, window: r.windowName ?? null },
+          name: `${active.name} — FFT`,
+          data,
+          status: "FFT spectrum added to library",
+        });
+        if (outcome.kind === "created" || outcome.kind === "replaced") toast("FFT spectrum added to library", "ok");
+      }, () => {
+        const why = "FFT gadget: the commit code failed to load; nothing was added. Try again.";
+        get().setStatus(why, "danger");
+        toast(why, "danger");
+      });
     },
     // Paired-cursors mode: recomputed synchronously on every placement/drag
     // (cheap nearest-sample math, not an API call) against the FULL first
