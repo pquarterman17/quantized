@@ -1,5 +1,6 @@
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { DEMAG_SHAPES, useDemagCorrection, type DemagShape } from "./useDemagCorrection";
 
 const SHAPE_OPTIONS = [
@@ -38,6 +39,9 @@ export default function DemagCorrectionPane() {
         <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--warn, #c90)" }}>
           {d.problem}
         </div>
+      )}
+      {d.stale && (
+        <OutOfDateNote block>the geometry, plot or data changed after the last correction. Create it again.</OutOfDateNote>
       )}
       {d.nFactor != null && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
