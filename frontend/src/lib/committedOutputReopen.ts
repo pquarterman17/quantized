@@ -110,7 +110,7 @@ export function replaceBlockedReason(result: AnalysisResult, output: Dataset | u
 /** Worksheet state a user attaches to an output that is shaped by its data
  *  (column indexes, rows, fits): a replace could not carry it over honestly. */
 const WORKSHEET_EDITS = [
-  "formulas", "channelRoles", "columnDesignations", "columnProps", "hiddenCols", "frozenCols", "excludedRows",
+  "formulas", "channelRoles", "columnDesignations", "columnProps", "hiddenCols", "frozenCols", "cellRules", "excludedRows",
   "filter", "fitSpec", "peakTable", "reflFits", "linkedCurves", "corrections", "bgRef", "raw", "derivedFrom",
 ] as const satisfies readonly (keyof Dataset)[];
 

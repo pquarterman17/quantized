@@ -121,7 +121,7 @@ export function useReshapePreview(): ReshapeState {
       // A new primary dataset has different columns: re-seed its fields.
       if (patch.primary !== undefined && patch.primary !== f.primary) {
         const fresh = seedForm(f.op, [patch.primary, f.right], datasets);
-        return { ...next, channels: fresh.channels, key: fresh.key, category: fresh.category, value: fresh.value, leftKey: "-1" };
+        return { ...next, channels: fresh.channels, cleanChannels: fresh.cleanChannels, dedupeKeys: [], key: fresh.key, category: fresh.category, value: fresh.value, leftKey: "-1" };
       }
       if (patch.right !== undefined && patch.right !== f.right) return { ...next, rightKey: "-1" };
       return next;

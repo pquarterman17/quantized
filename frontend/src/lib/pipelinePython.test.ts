@@ -203,7 +203,7 @@ describe("pipelineToPython", () => {
     const rows = pipelineToPython([imported(), makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, rowIds: [1, 2, 3] })]);
     expect(rows).toContain("NOT REPRODUCED: it fitted an explicit row selection");
     expect(rows).not.toContain("fit_model");
-    for (const op of ["join", "merge", "stack", "split", "algebra", "signal"]) {
+    for (const op of ["join", "merge", "stack", "split", "algebra", "signal", "dedupe", "fillmissing", "standardize"]) {
       expect(pipelineToPython([imported(), makeStep("transform", op, "", { op })])).toContain(`NOT REPRODUCED: the ${op} transform has no quantized.api equivalent`);
     }
     const match = pipelineToPython([imported(), makeStep("transform", "Resample", "", { op: "resample", mode: "match", method: "linear" })]);

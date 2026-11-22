@@ -56,6 +56,10 @@ function openWorkshop(
   else openMetaFactors(applied.length ? applied : withPrimary);
 }
 
+/** Numbers first (ascending), then text-column names. */
+const cmpKey = (a: number | string, b: number | string): number =>
+  typeof a === "number" && typeof b === "number" ? a - b : typeof a === "number" ? -1 : typeof b === "number" ? 1 : a.localeCompare(b);
+
 const fieldBox = { display: "inline-flex", flexDirection: "column", gap: 2, marginRight: 8, marginTop: 4 } as const;
 
 function Field({ f, draft, labels, textNames, set }: { f: FieldSpec; draft: Draft; labels: readonly string[]; textNames: readonly string[]; set: (k: string, v: unknown) => void }) {
@@ -70,15 +74,23 @@ function Field({ f, draft, labels, textNames, set }: { f: FieldSpec; draft: Draf
     );
   }
   if (f.type === "columns") {
-    const picked = Array.isArray(v) ? (v as number[]) : [];
-    const toggle = (c: number, on: boolean) =>
-      set(f.key, on ? [...new Set([...picked, c])].sort((a, b) => a - b) : picked.filter((x) => x !== c));
+    // A picked entry is a column index, or (a dedupe key) a text column's name.
+    const picked = Array.isArray(v) ? (v as (number | string)[]) : [];
+    const nums = picked.filter((x): x is number => typeof x === "number");
+    const names = f.text ? [...new Set([...textNames, ...picked.filter((x): x is string => typeof x === "string")])] : [];
+    const toggle = (c: number | string, on: boolean) =>
+      set(f.key, on ? [...new Set([...picked, c])].sort(cmpKey) : picked.filter((x) => x !== c));
     return (
       <div role="group" aria-label={f.label} style={{ marginTop: 4, display: "grid", gap: 2, maxHeight: 110, overflowY: "auto" }}>
         <label className="qzk-field-lbl">{f.label}</label>
-        {columnOptions(labels, false, picked).map((o) => (
+        {columnOptions(labels, f.withX === true, nums).map((o) => (
           <Checkbox key={o.value} checked={picked.includes(Number(o.value))} onChange={(on) => toggle(Number(o.value), on)}>
             {o.label}
+          </Checkbox>
+        ))}
+        {names.map((name) => (
+          <Checkbox key={`t:${name}`} checked={picked.includes(name)} onChange={(on) => toggle(name, on)}>
+            {`${name} (text column)`}
           </Checkbox>
         ))}
       </div>

@@ -44,6 +44,7 @@ import {
   type SignalTransformParams,
 } from "./signalTransform";
 import { averageLabel, computeAverage, type AverageParams } from "./transformAverage";
+import { cleanLabel, computeClean, type CleanParams } from "./transformClean";
 import { computeResample, resampleLabel, type ResampleParams } from "./transformResample";
 import { reviewTransform } from "./transformReview";
 import { computeSigop, sigopLabel, type SigopParams } from "./transformSigop";
@@ -59,14 +60,7 @@ import {
   type TransformWarning,
 } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
-import {
-  joinWorksheets,
-  stackWorksheet,
-  transposeWorksheet,
-  unstackWorksheet,
-  type AggregateMode,
-  type JoinMode,
-} from "./worksheetTransforms";
+import { joinWorksheets, stackWorksheet, transposeWorksheet, unstackWorksheet, type AggregateMode, type JoinMode } from "./worksheetTransforms";
 import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
 import { nextDatasetId, type AppState } from "../store/useApp";
 
@@ -101,6 +95,7 @@ export type TransformParams =
   | SimsParams
   | SimsCompareParams
   | AverageParams
+  | CleanParams
   | SignalTransformParams
   // In place, no output (lib/metadataRun.ts): a metadata factor / cleanup.
   | MetaStepParams;
@@ -179,6 +174,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "sims": label = simsLabel(p, primaryName); break;
     case "simscompare": label = simsCompareLabel(p, primaryName); break;
     case "average": label = averageLabel(p, primaryName); break;
+    case "dedupe": case "fillmissing": case "standardize": label = cleanLabel(p, primaryName); break;
     case "signal": return signalTransformStepText(p);
     default: label = `${op[0].toUpperCase()}${op.slice(1)} ${primaryName}`;
   }
@@ -285,6 +281,10 @@ export async function computeTransform(
     case "sigop": {
       const r = await computeSigop(p, { name: primary.name, data: src }, { signal });
       return { data: r.data, name: r.name, preview: preview(sigopLabel(p, primary.name), r.data, r.warnings, [[primary.name, src]]) };
+    }
+    case "dedupe": case "fillmissing": case "standardize": {
+      const r = computeClean(p, { name: primary.name, data: src });
+      return { data: r.data, name: r.name, preview: preview(cleanLabel(p, primary.name), r.data, r.warnings, [[primary.name, src]]) };
     }
     case "sims": {
       const r = await computeSims(p, { id: primary.id, name: primary.name, data: src });

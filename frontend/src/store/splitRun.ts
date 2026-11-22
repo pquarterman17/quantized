@@ -72,6 +72,7 @@ export async function runSplit(
     if (src.columnProps) child.columnProps = { ...src.columnProps };
     if (src.hiddenCols) child.hiddenCols = [...src.hiddenCols];
     if (src.frozenCols) child.frozenCols = src.frozenCols;
+    if (src.cellRules) child.cellRules = structuredClone(src.cellRules);
     // F5: preserve `[]` (O1 marker) vs `undefined` exactly -- `[]` is
     // truthy, so this carries an explicit empty array too, unlike a
     // `?.length` guard which would collapse it to "not carried".

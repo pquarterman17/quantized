@@ -12,7 +12,7 @@ import { create } from "zustand";
 
 import type { StoreGet } from "../lib/exportActive";
 
-export type PreviewOp = "merge" | "join" | "stack" | "unstack" | "transpose";
+export type PreviewOp = "merge" | "join" | "stack" | "unstack" | "transpose" | "dedupe" | "fillmissing" | "standardize";
 
 interface TransformPreviewState {
   /** Non-null while the workshop is open. */
