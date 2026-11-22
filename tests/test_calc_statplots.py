@@ -227,6 +227,15 @@ def test_histogram_normal_fit_overlay() -> None:
     assert abs(x[int(np.argmax(pdf))] - mu) < sigma
 
 
-def test_histogram_too_small_raises() -> None:
+def test_histogram_single_point_is_one_unit_bin() -> None:
+    got = histogram([3.0])
+    assert got["counts"] == [1.0]
+    assert got["edges"] == [2.5, 3.5]
+    assert got["n_bins"] == 1 and got["n"] == 1
+
+
+def test_histogram_empty_or_single_point_fit_raises() -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        histogram([])
     with pytest.raises(ValueError, match="at least 2"):
-        histogram([1.0])
+        histogram([1.0], fit="norm")
