@@ -102,6 +102,13 @@ const REFUSED = [
 const wire = (v: number): number | string =>
   Number.isNaN(v) ? "NaN" : v === Infinity ? "Infinity" : v === -Infinity ? "-Infinity" : v;
 
+// The app's outputs are pinned to 14 significant digits: V8's pow / libm results
+// differ by an ulp across Node versions (22 vs 26+), so the full double is not a
+// stable fixture. tests/test_column_formula.py compares at rtol=1e-13, which
+// 14-digit rounding (relative error <= 5e-15) stays well inside.
+const wireApp = (v: number): number | string =>
+  Number.isFinite(v) ? Number(v.toPrecision(14)) : wire(v);
+
 describe("headless formula subset", () => {
   it("accepts every element-wise case and refuses every app-only form", () => {
     for (const expr of CASES) expect(headlessFormulaProblem(expr), expr).toBeNull();
@@ -114,7 +121,7 @@ describe("headless formula subset", () => {
   it("pins the app's own numbers for tests/test_column_formula.py", () => {
     const cases = CASES.map((expr) => {
       const out = applyFormulas(DATA, [{ name: "out", expr }]);
-      return { expr, app: out.values.map((row) => wire(row[row.length - 1])) };
+      return { expr, app: out.values.map((row) => wireApp(row[row.length - 1])) };
     });
     const fixture = {
       data: { time: DATA.time, values: DATA.values.map((r) => r.map(wire)), labels: DATA.labels },
