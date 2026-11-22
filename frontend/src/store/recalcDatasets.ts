@@ -119,11 +119,16 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
   const nameOf = (id: string): string => get().datasets.find((x) => x.id === id)?.name ?? id;
   // Lane RL: a committed analysis output has no recipe to replay; it STAYS
   // stale until its tool runs again (lib/committedOutputGraph.ts). Never
-  // "clear" it here as if it had been recalculated.
+  // "clear" it here as if it had been recalculated. Lane IR: a `derivedFrom`
+  // link on one (Curie–Weiss keeps it as provenance) is NOT a replayable
+  // pipeline: re-deriving it overwrote the fitted table with the source's own
+  // columns. Only corrections applied to the output itself re-run, and the
+  // output stays stale afterwards (they cannot bring it up to date with a
+  // changed source).
   const held = committedOutputIds(get().analysisResults);
   const recomputable = get().staleDatasets.filter((id) => {
     const d = held.has(id) ? get().datasets.find((x) => x.id === id) : undefined;
-    return !d || !!d.derivedFrom || !!d.corrections;
+    return !d || (!d.derivedFrom && !!d.corrections);
   });
   const order = sortForRecalc(get().datasets, recomputable);
   for (const id of order) {
@@ -166,7 +171,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
       const before = get().status;
       try {
         if (await get().applyCorrections(id, d.corrections, d.bgRef)) {
-          set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
+          if (!held.has(id)) set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
           continue;
         }
         failed.set(id, get().status === before ? "correction refused" : get().status); /* stays stale */

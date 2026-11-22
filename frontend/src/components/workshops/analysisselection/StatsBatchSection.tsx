@@ -50,8 +50,10 @@ function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resul
     {blockedReason && <p className="qzk-analysis-input-issue error">{blockedReason}</p>}
     <AnalysisBatchControls
       // A settings change starts a fresh table: rows run with other settings
-      // must not sit under the new column / method.
-      key={JSON.stringify(resultParameters ?? {})}
+      // must not sit under the new column / method. Through `settingsKey`
+      // ("drop"), not a remount key: a remount let a running batch go on
+      // unseen while the fresh instance offered Run again (lane IR).
+      settingsKey={JSON.stringify(resultParameters ?? {})}
       toolId={toolId}
       label={label}
       summaryColumns={[...summaryColumns]}

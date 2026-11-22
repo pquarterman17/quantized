@@ -794,6 +794,49 @@ inconsistently exposed, and do not all share the same result lifecycle.
   | Calculators, Film stack | live (clear on edit, late answers dropped) | `calculators/shared.test`, `calculators/stack/FilmStackTab.test`, `useCalculators.test` |
   | Curve fit diagnostics / fit report | live (abortable effects) | `curvefit/FitDiagnosticsSection.test`, `FitReportSection.test` |
 
+  **Integration review (lane IR, 2026-11-22).** #836–#859 were reviewed one
+  diff at a time; this pass drove their interactions through the real store
+  (`store/lifecycleCrossFeature.test.ts`, `StatsBatchSection.midrun.test.tsx`,
+  `signalBySave.test.tsx`). Fixed, each with a fail-before test:
+  - Curie–Weiss (committed in RL4 but keeping `derivedFrom`) was re-derived by a
+    recalc pass as a plain derived sheet: the source's columns overwrote the
+    fitted table and the stale mark cleared. A held committed output never takes
+    the `derivedFrom` path; corrections of its own re-run, and it stays stale.
+  - Undo of a Replace of a stale committed output left it out of
+    `staleDatasets` (the Library badge said current) while a save + reopen of
+    the same state said stale. Undo/Redo of a replace now syncs the output's
+    session staleness to the restored envelope (only when the commit key
+    changed, so other undos keep session staleness).
+  - An analysis-view Signal recipe (`inputRows`) did not check row state for a
+    mid-run change: Create wrote an output of the old view, and a linked
+    recompute cleared its stale mark. Both refuse now.
+  - `touchDataset` dropped every mark during a recalc pass, so an exclusion on a
+    committed output's source made mid-pass left it Current. Committed outputs
+    (never recomputed by a pass) are now marked during a pass.
+  - A statistics batch remounted on a settings change, so a running batch went
+    on unseen and Run was offered again (two concurrent batches). It now uses
+    `settingsKey` (drop).
+  - Signal Processing's Save By result recorded the single run's "Use
+    excluded/filtered rows" although By levels always come from the analysis
+    view (as the worksheet batch already noted).
+  - **Open (recorded, fail closed, not changed):** (1) Replace writes into the
+    same worksheet id even when the new output has a different column count or
+    labels (Tabulate stats); figures bound to channel indexes are neither
+    remapped nor refused. Whether Replace should refuse a layout change or
+    remap bindings is an owner decision; until then prefer "Add as new" when the
+    columns change. (2) During a recalc pass, edits still do not mark derived
+    (non-committed) worksheets; the pass's own writes and user edits cannot be
+    told apart there. A source data edit is caught by the recompute's own
+    unchanged-input check; a row-state edit on a full-worksheet recipe needs no
+    mark. (3) With Replace chosen, a computation whose key matches ANOTHER
+    current result (an earlier "Add as new") returns that result and replaces
+    nothing; the button says "Already added as …". (4) A reopen session ends
+    only when its panel unmounts: if the panel never mounts (a lazy chunk fails),
+    a later manual open starts from the old seed with Replace preselected (the
+    banner says so). (5) A result whose source was a lazy book at load is not
+    re-checked when the book installs (the install also drops unproven
+    exclusions without a touch).
+
 ## Product contract for every new analysis
 
 Each analysis added or modernized under this roadmap must satisfy these rules.
@@ -1694,6 +1737,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane IR: integration review of #836–#859 (result lifecycle, reopen/Replace, stale marking from row state and Undo, Signal `inputRows`, Result book, batch/By, workbench shell). Six cross-feature bugs fixed (see the Lane IR block): held committed outputs re-derived by a recalc pass, Undo-of-Replace staleness, analysis-view row-state races in Create and recompute, marks dropped during a pass, concurrent statistics batches, Signal By provenance. Five suspicions recorded as open. | Fail-before scenario tests against the real store (`store/lifecycleCrossFeature.test.ts`, `StatsBatchSection.midrun.test.tsx`, `signalBySave.test.tsx`); forced tsc, lint, vitest on store/lib/workshops and architecture, build + bundle gate. |
 | 2026-11-22 | Project team | Lane WB7: RSM peaks / strain, ROI cuts statistics and batch summary, Test chooser, built-in phase indexer, MagTools Background and Demag readouts say "Out of date" and withhold strain / cuts / export / Label / report; late answers for a dataset left or a cleared analysis no longer land. Audited with no change: Normalization, Tabulate, Spin asymmetry, calculators and the rest (consolidated table). The shell gap is ticked. Kept: an edit during a lazy-book install is not distinguished. | Characterization + fail-before + forced-race tests (`useRsm.workbench`, `useRoiCuts.stats`, `useRoiBatch.stale`, `useStatsChooser.workbench`, `BuiltInPhaseIndexer.stale`, `useMagTools.stale`, `useDemagCorrection.stale`); no existing assertion changed. |
 | 2026-11-22 | Project team | Lane WB6: FFT thickness, Reflectivity FFT, Pawley and the statistical tests say "Out of date" and withhold Library / reflection lines / copy / export / report; Surface fit retires its result on a start-value or bound edit; Ellipse fit no longer discards a fit on a lazy book; typed refusal marker replaces the text comparison in seven hooks. Audited with no change: Distribution, Fit Y by X, Multivariate, Variability, Outlier screening, Hysteresis, Optical gap, Williamson-Hall. The shell gap stays open (RSM, ROI cuts, commit-only magnetometry transforms not audited). | Characterization + fail-before + forced-race tests (`useFftThickness.workbench`, `useReflectivityFft.workbench`, `usePawley.workbench`, `useStatsTests.workbench`, `useSurfaceFit.workbench`, `useEllipseFit.workbench`, `useOpticalGap.workbench`, `useHysteresis.stale`, `useWorkbenchPreview` refusal cases); one existing assertion changed deliberately (`usePawley.test`, see the WB6 block). |
 | 2026-11-22 | Project team | Lane WB5: Bumps / DREAM, the reflectivity fit, the Curie-Weiss fit, the Peak analyzer batch, Curve fit By tables and the shared batch shell mark results "Out of date" and withhold their summaries, exports, plots and applies; fit bands and reflectivity DREAM audited. Fixed: a late fit-band answer replacing a newer one; a Peak batch table added after its datasets changed. Not done: typed refusal marker; the shell gap stays open (single-run tools never on a WB list unaudited). | Characterization tests first, fail-before and forced-race tests (`useBumpsFit.workbench`, `useReflFit.workbench`, `useCurieWeiss.workbench`, `PeakBatchView.stale`, `AnalysisBatchControls.stale`, `CurveFitBatchSection.stale`, `useCurveFitByLevel.stale`, `useFitBands.workbench`, `useReflDream.workbench`); one existing assertion changed deliberately (`reflFitLiveRecord.test`, see WB5 block). |

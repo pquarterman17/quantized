@@ -85,13 +85,21 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
     // order inside one pass, because `down.fits` came from the SAME walk.
     setRecalcMode: (recalcMode) => set({ recalcMode }),
     touchDataset: (id) => {
-      if (_recalcInProgress) return; // the recalc's own writes never re-mark
       const s = get();
       if (s.recalcMode === "off") return;
       const down = downstreamOf(s.datasets, id);
       // Lane RL: a committed analysis output (lib/committedOutputGraph.ts) of
       // the touched dataset, or of anything it re-derives, is stale too.
       const committed = committedOutputsOf(s.analysisResults, [id, ...down.datasets]);
+      if (_recalcInProgress) {
+        // The recalc's own writes never re-mark what a pass recomputes. A
+        // committed output is never recomputed by a pass (it stays stale), so
+        // marking it cannot feed the loop, and an edit made DURING a pass (an
+        // exclusion, say) must not leave it reading Current (lane IR).
+        const marked = markStale(s.staleDatasets, committed);
+        if (marked !== s.staleDatasets) set({ staleDatasets: marked });
+        return;
+      }
       const staleDatasets = markStale(s.staleDatasets, [...down.datasets, ...committed]);
       const staleFits = markStale(s.staleFits, down.fits);
       if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) {
