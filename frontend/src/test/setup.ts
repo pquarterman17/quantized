@@ -1,11 +1,14 @@
-import "@testing-library/jest-dom/vitest";
-
-import { cleanup, configure } from "@testing-library/react";
-import { Path2D as NapiPath2D } from "@napi-rs/canvas";
-import { JSDOM } from "jsdom";
 import { afterEach } from "vitest";
 
 import { monospaceEstimate, setLabelMeasurer } from "../components/Stage/statLabelMetrics";
+
+// Files that need no DOM run in vitest's `node` environment (see the `unit`
+// project in vite.config.ts): creating a jsdom environment per file is the
+// single largest cost of the suite. Everything DOM-shaped below is gated on
+// `window` so one setup file serves both environments, and the heavy imports
+// (Testing Library, jsdom, the canvas backend) load only when there is a DOM
+// to install them into.
+const hasDom = typeof window !== "undefined";
 
 // The full suite creates more than 1,100 isolated jsdom environments in
 // parallel. Under that scheduler load, a healthy lazy import or worker-backed
@@ -13,7 +16,19 @@ import { monospaceEstimate, setLabelMeasurer } from "../components/Stage/statLab
 // same interaction finishes in milliseconds alone. Keep assertions strict,
 // but give async DOM queries the same contention allowance as Vitest's
 // existing 20 s per-test ceiling.
-configure({ asyncUtilTimeout: 5_000 });
+if (hasDom) {
+  await import("@testing-library/jest-dom/vitest");
+  const { cleanup, configure } = await import("@testing-library/react");
+  configure({ asyncUtilTimeout: 5_000 });
+  // `globals` is off in the vitest config, so RTL's automatic afterEach
+  // cleanup doesn't register itself. Unmount rendered components/hooks
+  // between tests so a prior test's lingering store subscriptions can't
+  // intercept a later test's state changes (otherwise renderHook instances
+  // accumulate within a file).
+  afterEach(() => {
+    cleanup();
+  });
+}
 
 // @napi-rs/canvas gives jsdom a REAL `measureText`, in whatever monospace font
 // this machine resolves — the Stat Stage's label metrics would then differ
@@ -28,7 +43,8 @@ setLabelMeasurer(monospaceEstimate);
 // "work" only because nothing checked. Install the real one globally, as every
 // browser has it; the many `g.Path2D ??= class {...}` stubs then stay unused,
 // and a test that must RECORD path calls extends it.
-if (!("Path2D" in globalThis)) {
+if (hasDom && !("Path2D" in globalThis)) {
+  const { Path2D: NapiPath2D } = await import("@napi-rs/canvas");
   Object.defineProperty(globalThis, "Path2D", { value: NapiPath2D, configurable: true, writable: true });
 }
 
@@ -50,7 +66,8 @@ if (!("Path2D" in globalThis)) {
 // drift from what the browser and CI actually do. setupFiles run once per
 // test FILE, so each file gets its own isolated storage, which is what the
 // `localStorage.clear()` in the affected suites' beforeEach already assumes.
-if (globalThis.localStorage === undefined) {
+if (hasDom && globalThis.localStorage === undefined) {
+  const { JSDOM } = await import("jsdom");
   const { localStorage } = new JSDOM("", { url: "http://localhost/" }).window;
   Object.defineProperty(globalThis, "localStorage", {
     value: localStorage,
@@ -67,7 +84,7 @@ if (globalThis.localStorage === undefined) {
 // path real users take; this adds the reflection only, none of the behaviour,
 // which e2e/specs/modal-inert.spec.ts pins in real Chromium instead. The one
 // test of the fallback deletes this for its own duration.
-if (!("inert" in HTMLElement.prototype)) {
+if (hasDom && !("inert" in HTMLElement.prototype)) {
   Object.defineProperty(HTMLElement.prototype, "inert", {
     configurable: true,
     get(this: HTMLElement) {
@@ -78,11 +95,3 @@ if (!("inert" in HTMLElement.prototype)) {
     },
   });
 }
-
-// `globals` is off in the vitest config, so RTL's automatic afterEach cleanup
-// doesn't register itself. Unmount rendered components/hooks between tests so a
-// prior test's lingering store subscriptions can't intercept a later test's
-// state changes (otherwise renderHook instances accumulate within a file).
-afterEach(() => {
-  cleanup();
-});
