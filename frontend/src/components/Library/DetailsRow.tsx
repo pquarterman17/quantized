@@ -55,7 +55,7 @@ import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextAction
 import { buildLibraryTileMenu } from "./libraryTileMenu";
 import { isSelected, openLibraryNode } from "./libraryOpen";
 import { selectLibraryNode } from "../../lib/librarySelect";
-import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
+import { LIBRARY_NODE_GLYPH, libraryNodeLabel } from "./nodeIcons";
 import { renameLibraryNode } from "../../lib/libraryRename";
 import { useDetailsDragDrop, type DetailsDragDropContext } from "./useDetailsDragDrop";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
@@ -270,7 +270,7 @@ export default function DetailsRow({
          *  WORKSHEET mark) and an undifferentiated "·" for the other six
          *  kinds. It now reads the one shared map, so a row looks the same
          *  here as in Tree and Tiles, and every kind is nameable. */}
-        <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL[node.kind]}>
+        <span className="qzk-ds-icon" aria-hidden="true" title={libraryNodeLabel(node)}>
           {LIBRARY_NODE_GLYPH[node.kind]}
         </span>
         {renameDraft != null ? (
