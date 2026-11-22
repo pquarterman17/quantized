@@ -1,7 +1,9 @@
 // Statistical tests workshop — view. One ToolWindow for the tests the Test
 // chooser does not cover: normality (Anderson-Darling, KS), two-sample and
 // paired comparisons, Dunnett / Friedman / repeated-measures / two-way ANOVA,
-// multiple and stepwise regression, partial correlation, and t-test power.
+// multiple and stepwise regression, partial correlation, t-test power, ROC /
+// AUC / Youden, logistic and Poisson regression, chi-square goodness of fit and
+// p-value adjustment.
 // Pick a test and its columns, Run, read one plain-language sentence plus the
 // results table, then Copy / Export CSV / → Report. All state lives in
 // useStatsTests; the pickers are StatsTestsInputs.
