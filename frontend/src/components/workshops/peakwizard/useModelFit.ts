@@ -109,6 +109,8 @@ export interface ModelFitState {
   problems: string[];
   busy: boolean;
   error: string | null;
+  /** `error` is a refusal (nothing to fit / a bad table), not a failed request. */
+  errorRefusal: boolean;
   notice: string | null;
   result: PeakModelFitResponse | null;
   /** The table changed since `result` was fitted: not reportable. */
@@ -188,6 +190,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorIsRefusal, setErrorIsRefusal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [ran, setRan] = useState<Ran | null>(null);
   const [publishNote, setPublishNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -298,10 +301,12 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     if (publishing) return; // a publish in flight must finish (or be refused) first
     if (!active || !segment || !workingY || peaks.length === 0) {
       setError("include at least one peak first");
+      setErrorIsRefusal(true);
       return;
     }
     if (problems.length > 0) {
       setError(`fix the parameter table first: ${problems[0]}`);
+      setErrorIsRefusal(true);
       return;
     }
     abortRef.current?.abort();
@@ -311,6 +316,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     const sent = setupJson;
     setBusy(true);
     setError(null);
+    setErrorIsRefusal(false);
     setNotice(null);
     setPublishNote(null);
     setRefusal(null);
@@ -411,6 +417,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     problems,
     busy,
     error,
+    errorRefusal: error !== null && errorIsRefusal,
     notice,
     result: ran?.result ?? null,
     stale,
