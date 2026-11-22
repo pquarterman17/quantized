@@ -1,6 +1,6 @@
-import type { CorrectionParams, Dataset } from "../../../lib/types";
+import type { CorrectionParams, DataStruct, Dataset } from "../../../lib/types";
 import type { SignalCorrectionRecipe } from "../../../lib/signalTransform";
-import { dataXUnit } from "../../../lib/signalRecipe";
+import { dataXUnit, inputRowsOption, signalRecipeInputData } from "../../../lib/signalRecipe";
 import type { SpectralOperation } from "../../../lib/spectralWorkbench";
 
 export type CorrectionOperation =
@@ -33,6 +33,10 @@ export interface SignalSettings {
   /** Worksheet audit #9: blank the bound Y errors of the output instead of
    *  propagating them (required for a nonlinear operation). */
   dropUncertainty: boolean;
+  /** "Use excluded/filtered rows" (default ON = the tool's long-standing
+   *  full-worksheet input). Off = the analysis view. Single run only: the batch
+   *  and By paths always use their own row policy. */
+  useAllRows: boolean;
 }
 
 export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
@@ -49,7 +53,18 @@ export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
   xMin: "",
   xMax: "",
   dropUncertainty: false,
+  useAllRows: true,
 };
+
+/** The recipe carrying the row choice (written only when it is not the default). */
+export function withInputRows<T extends { inputRows?: "analysis-view" }>(recipe: T, useAllRows: boolean): T {
+  return { ...recipe, ...inputRowsOption(useAllRows) };
+}
+
+/** The rows a single run analyses for `dataset` under the row choice. */
+export function signalInputData(dataset: Dataset, useAllRows: boolean): DataStruct {
+  return signalRecipeInputData(inputRowsOption(useAllRows), dataset);
+}
 
 export function enteredFinite(value: string): boolean {
   return value.trim() !== "" && Number.isFinite(Number(value));

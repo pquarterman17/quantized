@@ -6,7 +6,7 @@ import {
   rebindSpectralSecondarySource,
   type SpectralAnalysisRecipe,
 } from "../lib/spectralWorkbench";
-import { bindSignalRecipe, dataXUnit } from "../lib/signalRecipe";
+import { bindSignalRecipe, dataXUnit, signalRecipeInputData } from "../lib/signalRecipe";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
@@ -32,8 +32,8 @@ export async function recomputeSpectralWorksheet(
     recipe = rebindSpectralSecondarySource(recipe, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
   }
   const analyzed = secondary
-    ? await runSpectralWorkbench(source.data, recipe, undefined, false, secondary.data)
-    : await runSpectralWorkbench(source.data, recipe);
+    ? await runSpectralWorkbench(signalRecipeInputData(recipe, source), recipe, undefined, false, signalRecipeInputData(recipe, secondary))
+    : await runSpectralWorkbench(signalRecipeInputData(recipe, source), recipe);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(analyzed, sheet.formulas);
   return {
     sheet: {
@@ -85,8 +85,8 @@ export async function createSpectralWorksheet(
       rebound = rebindSpectralSecondarySource(rebound, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
     }
     const data = secondary
-      ? await runSpectralWorkbench(source.data, rebound, undefined, false, secondary.data)
-      : await runSpectralWorkbench(source.data, rebound);
+      ? await runSpectralWorkbench(signalRecipeInputData(rebound, source), rebound, undefined, false, signalRecipeInputData(rebound, secondary))
+      : await runSpectralWorkbench(signalRecipeInputData(rebound, source), rebound);
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
     const currentSecondary = secondary
       ? get().datasets.find((dataset) => dataset.id === secondary.id)

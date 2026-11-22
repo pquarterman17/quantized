@@ -37,6 +37,8 @@ import {
   operationLabel,
   selectedBoundErrorTargets,
   settingsToParams,
+  signalInputData,
+  withInputRows,
   type SignalSettings,
 } from "./signalProcessingModel";
 import {
@@ -116,6 +118,8 @@ export default function SignalProcessingPanel() {
     setSettings((current) => ({ ...current, xMin: String(min), xMax: String(max) }));
   }, [activeId, active?.data.time]);
 
+  const inputData = useMemo(() => active ? signalInputData(active, settings.useAllRows) : undefined, [active, settings.useAllRows]);
+  const secondaryInput = useMemo(() => secondary ? signalInputData(secondary, settings.useAllRows) : undefined, [secondary, settings.useAllRows]);
   const params = useMemo(
     () => spectral ? null : settingsToParams(settings, channels),
     [settings, channels, spectral],
@@ -123,7 +127,7 @@ export default function SignalProcessingPanel() {
   const recipe = useMemo(
     () => !active
       ? null
-      : spectralOperation
+      : withInputRows(spectralOperation
         ? buildSpectralRecipe(
             spectralOperation,
             spectralSettings,
@@ -133,7 +137,7 @@ export default function SignalProcessingPanel() {
               ? { dataset: secondary, channel: secondaryChannel }
               : undefined,
           )
-        : buildCorrectionRecipe(settings, channels, active),
+        : buildCorrectionRecipe(settings, channels, active), settings.useAllRows),
     [active, channels, crossWorksheet, secondary, secondaryChannel, settings, spectralOperation, spectralSettings],
   );
   const requestSpec = recipe;
@@ -142,8 +146,8 @@ export default function SignalProcessingPanel() {
     && active
     && requestSpec
     && previewFor?.datasetId === active.id
-    && previewFor.data === active.data
-    && previewFor.secondaryData === secondary?.data
+    && previewFor.data === inputData
+    && previewFor.secondaryData === secondaryInput
     && previewFor.request === requestSpec,
   );
   const displayedPreview = previewCurrent ? preview : null;
@@ -200,17 +204,17 @@ export default function SignalProcessingPanel() {
     const timer = window.setTimeout(() => {
       const request = spectral
         ? secondary
-          ? runSpectralWorkbench(active.data, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true, secondary.data)
-          : runSpectralWorkbench(active.data, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true)
+          ? runSpectralWorkbench(inputData!, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true, secondaryInput!)
+          : runSpectralWorkbench(inputData!, recipe as ReturnType<typeof buildSpectralRecipe>, controller.signal, true)
         : applyCorrections({
-            dataset: active.data,
+            dataset: inputData!,
             params: params!,
             ...(active.errorRoles ? { error_bindings: active.errorRoles } : {}),
           }, controller.signal);
       void request.then((result) => {
         if (!cancelled && previewSequence.current === sequence) {
           setPreview(result);
-          setPreviewFor({ datasetId: active.id, data: active.data, secondaryData: secondary?.data, request: recipe });
+          setPreviewFor({ datasetId: active.id, data: inputData!, secondaryData: secondaryInput, request: recipe });
         }
       }).catch((error: unknown) => {
         const aborted = typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
@@ -224,7 +228,7 @@ export default function SignalProcessingPanel() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [active, params, recipe, secondary, sigop, spectral, validation]);
+  }, [active, inputData, params, recipe, secondary, secondaryInput, sigop, spectral, validation]);
 
   const commit = async () => {
     if (!active || !displayedPreview || validation || outputError || commitInFlight.current) return;
@@ -273,7 +277,7 @@ export default function SignalProcessingPanel() {
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
         {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : (
           <>
-            <SignalInputSummary channels={channels} />
+            <SignalInputSummary channels={channels} useAllRows={settings.useAllRows} onUseAllRows={(useAllRows) => setSettings((c) => ({ ...c, useAllRows }))} />
             <SignalOperationPicker value={settings.operation} onChange={pick} />
             {settings.operation === "correlation" ? (
               <CorrelationInputs
@@ -370,7 +374,7 @@ export default function SignalProcessingPanel() {
               </div>
             )}
             {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
-            <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
+            <SignalPreview source={inputData ?? active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
             {spectral && <SpectralReadout result={displayedPreview} />}
             {correctionOp && <SignalUncertaintyControls operation={correctionOp} boundLabels={boundTargets.map((c) => active.data.labels[c])} blocked={Boolean(errorBlock)} drop={settings.dropUncertainty} setDrop={(dropUncertainty) => setSettings((current) => ({ ...current, dropUncertainty }))} />}
             <SignalScopeAndBy source={active} secondary={secondary} settings={settings} spectral={spectralSettings} channels={channels} sigopFilter={sigop !== null} crossWorksheet={crossWorksheet} validation={validation} />

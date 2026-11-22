@@ -42,6 +42,8 @@ export interface SpectralAnalysisRecipe {
   bandwidth?: number;
   order: number;
   correlationDemean: boolean;
+  /** Absent = every worksheet row; see SignalInputRows (lib/signalRecipe). */
+  inputRows?: "analysis-view";
 }
 
 export const DEFAULT_SPECTRAL_RECIPE: Omit<SpectralAnalysisRecipe, "channels"> = {
@@ -232,5 +234,6 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     ...(finite(r.bandwidth) ? { bandwidth: r.bandwidth } : {}),
     order: Number(r.order),
     correlationDemean: r.correlationDemean !== false,
+    ...(r.inputRows === "analysis-view" ? { inputRows: "analysis-view" as const } : {}),
   };
 }

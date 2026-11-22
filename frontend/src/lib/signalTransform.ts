@@ -4,6 +4,7 @@ import { lit } from "./macro";
 import {
   bindSignalRecipe,
   dataXUnit,
+  signalRecipeInputData,
   signalRecipeLabel,
   type SignalAnalysisRecipe,
   type SignalBindOptions,
@@ -22,12 +23,14 @@ export {
   signalRecipeLabel,
   signalRecipeNeedsXUnit,
   signalTransformParamsOf,
+  signalRecipeInputData,
 } from "./signalRecipe";
 export type {
   SignalAnalysisRecipe,
   SignalBindOptions,
   SignalChannelRef,
   SignalCorrectionRecipe,
+  SignalInputRows,
   SignalTransformParams,
 } from "./signalRecipe";
 
@@ -73,10 +76,13 @@ export async function computeSignalTransform(
     );
   }
   const label = signalRecipeLabel(recipe);
+  // The recipe's row choice (default: every worksheet row) applies to every
+  // input; `raw` below stays the full source data.
+  const input = signalRecipeInputData(recipe, source);
   if (recipe.kind === "spectral") {
     const data = secondary
-      ? await runSpectralWorkbench(source.data, recipe, signal, false, secondary.data)
-      : await runSpectralWorkbench(source.data, recipe, signal);
+      ? await runSpectralWorkbench(input, recipe, signal, false, signalRecipeInputData(recipe, secondary))
+      : await runSpectralWorkbench(input, recipe, signal);
     const sourceName = secondary ? `${source.name} vs ${secondary.name}` : source.name;
     return {
       data,
@@ -92,7 +98,7 @@ export async function computeSignalTransform(
     };
   }
   const data = await applyCorrections({
-    dataset: source.data,
+    dataset: input,
     params: recipe.params,
     ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
   }, signal);
