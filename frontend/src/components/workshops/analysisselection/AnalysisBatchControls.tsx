@@ -40,6 +40,12 @@ interface Props {
   /** Open the section each time this changes (a header action that means "the
    *  batch": the section may be mounted already, and collapsed). */
   expandSignal?: number;
+  /** Which rows of each worksheet a run reads. "selection" (default): the
+   *  analysis view narrowed by the item's selected rows and X range.
+   *  "analysisView": the statistics tools' policy, every row of the analysis
+   *  view; the items' row / range / ROI narrowing is dropped from the run AND
+   *  its saved provenance, so the batch reads what the tool's single run reads. */
+  rowPolicy?: "selection" | "analysisView";
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -64,6 +70,7 @@ const displayStatus = (status: RunStatus): string => status[0].toUpperCase() + s
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
   toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
+  rowPolicy = "selection",
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -83,7 +90,13 @@ export default function AnalysisBatchControls({
   const pickX = (choice: SummaryXChoice) => { userPickedX.current = true; setXChoice(choice); };
   const cancelRef = useRef(false);
   const runningRef = useRef(false);
-  const current = owner === toolId ? selection : null;
+  const owned = owner === toolId ? selection : null;
+  const current = useMemo(
+    () => owned && rowPolicy === "analysisView"
+      ? { ...owned, items: owned.items.map((item) => ({ ...item, rowIds: null, range: null, roi: null })) }
+      : owned,
+    [owned, rowPolicy],
+  );
   const resolved = useMemo(
     () => current ? resolveAnalysisSelection(current, datasets) : { items: [], issues: [] },
     [current, datasets],

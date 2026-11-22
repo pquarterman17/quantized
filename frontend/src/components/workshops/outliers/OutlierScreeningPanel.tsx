@@ -9,6 +9,8 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
+import OutlierBatchSection from "./OutlierBatchSection";
+import OutlierByLevel from "./OutlierByLevel";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
 
 function fmt(v: number | null | undefined, digits = 4): string {
@@ -154,6 +156,9 @@ export default function OutlierScreeningPanel() {
               </div>
             </>
           )}
+
+          <OutlierByLevel o={o} />
+          <OutlierBatchSection o={o} />
         </>
       )}
     </ToolWindow>

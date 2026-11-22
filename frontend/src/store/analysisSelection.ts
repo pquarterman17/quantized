@@ -101,6 +101,7 @@ export function analysisBatchRuntime() {
   const state = useApp.getState();
   return {
     datasets: state.datasets,
+    analysisResults: state.analysisResults,
     resolveDataset: state.resolveDataset,
     recordHistory: state.recordHistory,
     setStatus: state.setStatus,
