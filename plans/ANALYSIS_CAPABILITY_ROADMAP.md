@@ -64,9 +64,13 @@ inconsistently exposed, and do not all share the same result lifecycle.
     (`withAnalysisRequirements`), so they cannot disagree. Analyze opens with
     "Recent analyses" (last 5, the Analysis Center's persisted `recent` list,
     now fed by every launch path) and "Open results (N)" for the active
-    worksheet. Not yet done: the Analysis Center still evaluates its own
-    `compatibility()` (same metadata, longer messages, no worksheet-count or 2θ
-    check); converge it onto the predicate table.
+    worksheet. The Analysis Center's own
+    `compatibility()` is converged (lane C, 2026-11-21): the worksheet-count
+    and 2θ checks now live in `lib/analysisExtraRequirements.ts`
+    (`EXTRA_REQUIREMENTS`), read by both the menu/palette predicate and
+    `analysisTools(actions, dataset, datasets)`, so Average curves, Pawley and
+    XRD reference are unavailable in the Center for the same reason as in the
+    menu (`lib/analysisCenterExtra.test.ts`).
   - **Audit (2026-11-19): input needs vs. batch / By support.** "Batch" = run
     over selected worksheets; "By" = per-level of a grouping column.
 
@@ -78,15 +82,15 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Ellipse fit | 2 numeric columns | no | no |
     | Hysteresis | numeric Y (magnetometry) | yes | no |
     | Magnetometry tools | numeric Y (magnetometry) | no | no |
-    | Find peaks | numeric Y | yes (integrate windows) | no |
-    | Peak analyzer (wizard) | numeric Y | yes | no |
-    | Baseline | numeric Y | recipe only | no |
+    | Find peaks | numeric Y | yes (integrate windows) | yes |
+    | Peak analyzer (wizard) | numeric Y | yes | yes |
+    | Baseline | numeric Y | yes (estimate summary) | yes |
     | Reflectivity / Reflectometry view | numeric Y (refl/XRD) | no | no |
     | RSM, ROI cuts | 2-D map | ROI cuts only | no |
     | Williamson-Hall | any (typed peaks ok) | yes | no |
     | Pawley, XRD reference | 2θ X axis | no | no |
     | Film thickness FFT, Reflectivity FFT | numeric Y | no | no |
-    | Signal Processing | numeric Y | recipe only | no |
+    | Signal Processing | numeric Y | yes (summary) + recipes | yes |
     | Average curves | 2+ worksheets | n/a (is the batch) | no |
     | SIMS | numeric Y (SIMS) | yes | no |
     | Distribution | numeric Y | no | yes |
@@ -97,8 +101,35 @@ inconsistently exposed, and do not all share the same result lifecycle.
     Gaps (recorded, not built): Batch is missing for Surface fit, Optical gap,
     Ellipse fit, Magnetometry tools, Pawley, XRD reference, both FFT tools,
     Reflectivity, and every statistics tool; By is missing everywhere except
-    Curve fit, Distribution and Fit Y by X. Baseline and Signal Processing
-    reach batch only through Pipeline Studio recipes.
+    Curve fit, Distribution, Fit Y by X and (lane C, 2026-11-22) Find peaks,
+    Peak analyzer, Baseline and Signal Processing. Signal Processing reaches
+    batch only through Pipeline Studio recipes.
+  - **By slice landed (#22, lane C):** one shared runner
+    (`components/workshops/byrun/`: `useByLevelRun`, `ByLevelRunSection`,
+    `levelPairs`) runs a tool's own computation once per level of a
+    categorical column and shows one summary row per level (display-only; a
+    failing level is an error row). Wired into Find peaks (peaks, strongest
+    centre / SNR), Peak analyzer (recipe baseline + find; step 2), Baseline
+    (baseline range, residual RMS; the hand-placed anchor method is refused
+    with a reason) and Signal Processing (correction and spectral operations;
+    the sigop filters and two-worksheet correlation say they are not
+    available). Tests: `byrun/byLevelTools.test.tsx`.
+  - **Batch slice: Baseline (#18/#19, lane C):** Baseline now carries Review
+    inputs and the shared batch (`baseline/BaselineBatchSection.tsx`): the
+    chosen method and settings are estimated on every selected worksheet's
+    plotted channel and one result table (baseline min / max, residual RMS,
+    per-input status) is recorded. Estimate-only; "Apply to N selected" still
+    writes the subtracted worksheets. Anchor method refused with a reason.
+    Tests: `baseline/BaselineBatchSection.test.tsx`.
+  - **Batch slice: Signal Processing (#18/#19, lane C):** Review inputs plus
+    the shared batch (`signalprocessing/SignalBatchSection.tsx`): the
+    configured correction or spectral operation runs on every selected
+    worksheet's own measured channels / rows / X range and one result table
+    (rows out, finite outputs, mean of the first output) is recorded.
+    Summary-only (Create new worksheet and the Library recipe apply still
+    write outputs); sigop filters and two-worksheet correlation refuse with a
+    reason. Tests: `signalprocessing/SignalScopeAndBy.test.tsx`. Still open
+    from #18/#19: Surface fit, Optical gap, Ellipse fit.
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.

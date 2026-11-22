@@ -42,7 +42,7 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
   // recompute when it resolves, so they are not shown unavailable on first open.
   const mapGate = useMapGate(dataset?.data);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mapGate is the recompute signal
-  const tools = useMemo(() => analysisTools(actions, dataset), [actions, dataset, mapGate]);
+  const tools = useMemo(() => analysisTools(actions, dataset, datasets), [actions, dataset, datasets, mapGate]);
 
   useEscapeSurface("workspace", () => {
     onBack();

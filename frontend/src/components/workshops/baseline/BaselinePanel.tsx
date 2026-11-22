@@ -11,6 +11,8 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import OverlayOutputsButton from "../OverlayOutputsButton";
 import { useApp } from "../../../store/useApp";
+import BaselineBatchSection from "./BaselineBatchSection";
+import BaselineByLevel from "./BaselineByLevel";
 import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
 
 const METHODS: { value: BaselineMethod; label: string }[] = [
@@ -89,6 +91,7 @@ export default function BaselinePanel() {
     <ToolWindow id="baseline" title="Baseline" width={320} dockable onClose={close}>
       <label className="qzk-field-lbl">Method</label>
       <Select
+        aria-label="Baseline method"
         options={METHODS}
         value={method}
         onChange={(e) => setMethod(e.target.value as BaselineMethod)}
@@ -197,6 +200,8 @@ export default function BaselinePanel() {
         </Button>
       )}
       <OverlayOutputsButton ids={batchOutputIds} />
+      <BaselineByLevel b={{ method, params }} />
+      <BaselineBatchSection b={{ method, params }} />
 
       {!active && (
         <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
