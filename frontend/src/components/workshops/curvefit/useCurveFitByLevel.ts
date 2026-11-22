@@ -62,6 +62,10 @@ export interface CurveFitByLevelStart {
   fixed: boolean[];
 }
 
+/** A bound / start value as a saved setting: ±Infinity and NaN become named strings
+ *  (a result's settings cannot hold them), so "unbounded" survives the save. */
+const encodeNumber = (v: number): number | string => (Number.isFinite(v) ? v : Number.isNaN(v) ? "nan" : v > 0 ? "inf" : "-inf");
+
 export function useCurveFitByLevel(
   active: Dataset | null,
   data: DataStruct | null,
@@ -160,7 +164,7 @@ export function useCurveFitByLevel(
   const inputsNow = [byPartition.levels, modelName, xKey, yKey, start, active, weight];
   const current = !busy && ranFor !== null && ranFor.every((v, i) => v === inputsNow[i]);
   const provenance = useMemo(() => ({
-    parameters: { model: modelName, weighting: weight ? { ...weight } : null, customStart: start !== undefined, ...(start ? { start: { p0: start.p0, lower: start.lower, upper: start.upper, fixed: start.fixed } } : {}) },
+    parameters: { model: modelName, weighting: weight ? { ...weight } : null, customStart: start !== undefined, ...(start ? { start: { p0: start.p0.map(encodeNumber), lower: start.lower.map(encodeNumber), upper: start.upper.map(encodeNumber), fixed: start.fixed } } : {}) },
     xKey, yKeys: yKey == null ? [] : [yKey], rowIds: selected?.rowIds ?? null, range: selected?.range ?? null,
   }), [modelName, weight, start, selected, xKey, yKey]);
   return { byOptions, byCol, setByCol, levels, totalLevels, results, busy, current, provenance };

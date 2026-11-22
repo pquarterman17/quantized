@@ -144,4 +144,16 @@ describe("Curve fit Save By result", () => {
     useApp.setState({ datasets: [{ ...useApp.getState().datasets[0]!, excludedRows: [2] }] });
     expect(snapshotResultState(saved!, useApp.getState().datasets)).toBe("out-of-date");
   });
+
+  it("still refuses a duplicate with an unresolved model (its parameter names are a fresh array each render)", async () => {
+    vi.mocked(listFitModels).mockResolvedValue({ models: [] });
+    render(<CurveFitPanel />);
+    await pickGroup();
+    const save = await screen.findByRole("button", { name: "Save By result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(save).toBeDisabled());
+    expect(screen.getByText("This By result is already saved.")).toBeInTheDocument();
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+  });
 });

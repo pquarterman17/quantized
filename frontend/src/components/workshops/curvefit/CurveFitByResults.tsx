@@ -36,7 +36,10 @@ export function curveFitByTable(results: readonly CurveFitLevelResult[], paramNa
 }
 
 export default function CurveFitByResults({ active, by, paramNames }: { active: Dataset | null; by: CurveFitByLevelState; paramNames: string[] }) {
-  const table = useMemo(() => curveFitByTable(by.results, paramNames), [by.results, paramNames]);
+  // Keyed on the names' CONTENT: the panel hands over a fresh [] for a model it
+  // cannot resolve, and a new rows identity would defeat "already saved".
+  const namesKey = paramNames.join("\u0000");
+  const table = useMemo(() => curveFitByTable(by.results, namesKey ? namesKey.split("\u0000") : []), [by.results, namesKey]);
   const saver = useSaveByResult("Curve fit", active, table.headers, { ...by, rows: table.rows }, {
     toolId: "curvefit", ...by.provenance,
   });
