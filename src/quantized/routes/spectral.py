@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, StrictInt
 
 from quantized.calc.spectral import fft_spectral
 from quantized.calc.spectral_workbench import spectral_workbench
+from quantized.calc.spectrogram import spectrogram_dataset
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
@@ -59,6 +60,19 @@ class SpectralWorkbenchRequest(BaseModel):
     order: StrictInt = Field(default=4, ge=1, le=20)
     correlation_demean: bool = True
     include_diagnostics: bool = False
+
+
+class SpectrogramRequest(BaseModel):
+    dataset: dict[str, Any]
+    channel: StrictInt = Field(ge=0)
+    segment_len: StrictInt = Field(ge=1)
+    window: str = "hann"
+    overlap: float = Field(default=0.5, ge=0.0, lt=1.0)
+    scaling: str = "psd"
+    detrend: str = "mean"
+    x_min: float | None = None
+    x_max: float | None = None
+    resample: bool = False
 
 
 @router.post("/fft")
@@ -116,6 +130,27 @@ def workbench(req: SpectralWorkbenchRequest) -> DataStructResponse:
             secondary_ds=secondary_ds,
             secondary_channel=req.secondary_channel,
             secondary_name=req.secondary_name,
+        )
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DataStructResponse(datastruct_payload(out))
+
+
+@router.post("/spectrogram", response_model=dict[str, Any], response_class=DataStructResponse)
+def spectrogram(req: SpectrogramRequest) -> DataStructResponse:
+    """Short-time Fourier transform of one channel as a long-form map table."""
+    try:
+        out = spectrogram_dataset(
+            DataStruct.from_dict(req.dataset),
+            channel=req.channel,
+            segment_len=req.segment_len,
+            window=req.window,
+            overlap=req.overlap,
+            scaling=req.scaling,
+            detrend=req.detrend,
+            x_min=req.x_min,
+            x_max=req.x_max,
+            resample=req.resample,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

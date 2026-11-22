@@ -28,7 +28,7 @@ function names(dataset: Dataset | null, keys: readonly number[]): string {
   return keys.length === 0 ? "not picked" : keys.map((key) => name(dataset, key)).join(", ");
 }
 
-const ALPHA_TESTS: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["dunnett", "anova-rm", "anova2-unbalanced", "regression-multi"]);
+const ALPHA_TESTS: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["dunnett", "anova-rm", "anova2-unbalanced", "regression-multi", "glm-logistic", "glm-poisson", "chi-square-gof", "adjust-p"]);
 const on = (value: boolean): string => (value ? "on" : "off");
 const optional = (dataset: Dataset | null, key: number | null): string => (key === null ? "none" : name(dataset, key));
 
@@ -90,7 +90,12 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
   const { sel, params } = s;
   const rows: ReviewRow[] = [{ label: "Test", value: testDef(s.testId).label }];
   switch (testDef(s.testId).input) {
-    case "one": rows.push({ label: "Column", value: name(ds, sel.x) }); break;
+    case "one": rows.push({ label: s.testId === "adjust-p" ? "P-values" : "Column", value: name(ds, sel.x) }); break;
+    case "classifier": rows.push({ label: "Outcome (0/1)", value: name(ds, sel.x) }, { label: "Score", value: name(ds, sel.y) }); break;
+    case "counts":
+      rows.push({ label: "Observed counts", value: name(ds, sel.x) });
+      rows.push(params.gofExpected === "column" ? { label: "Expected counts", value: name(ds, sel.y) } : { label: "Expected", value: "uniform" });
+      break;
     case "two":
     case "paired":
       rows.push({ label: "First column", value: name(ds, sel.x) }, { label: "Second column", value: name(ds, sel.y) });
@@ -119,6 +124,7 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
   if (ALPHA_TESTS.has(s.testId)) rows.push({ label: "Alpha", value: String(params.alpha) });
   if (s.testId === "sign-test" || s.testId === "dunnett") rows.push({ label: "Alternative", value: params.alternative });
   if (s.testId === "anova2-unbalanced") rows.push({ label: "Sum of squares type", value: String(params.ssType) });
+  if (s.testId === "adjust-p") rows.push({ label: "Method", value: params.adjustMethod });
   if (s.testId === "stepwise") rows.push({ label: "Criterion", value: params.criterion.toUpperCase() }, { label: "Direction", value: params.direction });
   return rows;
 }

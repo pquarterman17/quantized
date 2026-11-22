@@ -24,6 +24,8 @@ export function commitComputedOutput(args: {
   data: DataStruct;
   errorRoles?: Dataset["errorRoles"];
   derivedFrom?: Dataset["derivedFrom"];
+  /** Further fields of a new output worksheet (its book / folder, column designations). */
+  patch?: Partial<Dataset>;
   status?: string;
   /** Unkeyed tool state "Open in <tool>" restores beside the settings. */
   reopenExtra?: CommitSettings;
@@ -47,6 +49,7 @@ export function commitComputedOutput(args: {
       name: args.name, data: args.data,
       ...(args.errorRoles ? { errorRoles: args.errorRoles } : {}),
       ...(args.derivedFrom ? { derivedFrom: args.derivedFrom } : {}),
+      ...(args.patch ? { patch: args.patch } : {}),
     }),
     ...(args.status ? { status: args.status } : {}),
     ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),

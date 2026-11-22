@@ -25,10 +25,10 @@ import {
   type ResampleComputed,
   type ResampleParams,
 } from "../../../lib/transformResample";
-import { runTransform } from "../../../lib/transformRun";
 import { needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import type { Dataset } from "../../../lib/types";
 import { useResampleDialog } from "../../../store/resampleDialog";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
@@ -193,10 +193,13 @@ export function useResample(): ResampleState {
         async (item) => {
           const ds = byId.get(item.id);
           if (!ds) throw new Error("the input dataset is unavailable");
-          const out = await runTransform(s, paramsFor(ds), ds.id, undefined, ctrl.signal);
+          // Through the shared commit contract: one undo step with its Library
+          // result, and a repeat of the same resample adds nothing.
+          const out = await commitTransformOutput(s, paramsFor(ds), ds.id, undefined, ctrl.signal);
           // A declined review is the user's choice, not a failure (the
           // pre-coordinator loop skipped it silently, the same way).
           if (!out) throw new BatchSkip("not created (review declined)");
+          if (out.existing) throw new Error(`already added as “${out.name}”; nothing was duplicated`);
           return ds;
         },
         { signal: ctrl.signal, onProgress: setProgress },

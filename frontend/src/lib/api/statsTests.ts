@@ -10,6 +10,10 @@
 
 import { postJSON } from "./http";
 import type { components } from "./schema";
+import {
+  statsAdjustP, statsChiSquareGof, statsGlmLogistic, statsGlmPoisson, statsRoc,
+  type AdjustPResult, type ChiSquareGofResult, type GlmResult, type RocResult,
+} from "./statsTestsExtra";
 
 type S = components["schemas"];
 type Num = number | null;
@@ -176,7 +180,12 @@ export type StatsTestRequest =
   | { id: "regression-multi"; body: S["MultiRegressionRequest"] }
   | { id: "stepwise"; body: S["StepwiseRequest"] }
   | { id: "partial-correlation"; body: S["PartialCorrelationRequest"] }
-  | { id: "power"; body: S["PowerRequest"] };
+  | { id: "power"; body: S["PowerRequest"] }
+  | { id: "roc"; body: S["RocRequest"] }
+  | { id: "glm-logistic"; body: S["GlmRequest"] }
+  | { id: "glm-poisson"; body: S["GlmRequest"] }
+  | { id: "chi-square-gof"; body: S["ChiSquareGofRequest"] }
+  | { id: "adjust-p"; body: S["AdjustPRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -193,7 +202,12 @@ export type StatsTestResult =
   | { id: "regression-multi"; data: MultiRegressionResult }
   | { id: "stepwise"; data: StepwiseResult }
   | { id: "partial-correlation"; data: PartialCorrelationResult }
-  | { id: "power"; data: PowerResult };
+  | { id: "power"; data: PowerResult }
+  | { id: "roc"; data: RocResult }
+  | { id: "glm-logistic"; data: GlmResult }
+  | { id: "glm-poisson"; data: GlmResult }
+  | { id: "chi-square-gof"; data: ChiSquareGofResult }
+  | { id: "adjust-p"; data: AdjustPResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -282,5 +296,15 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsPartialCorrelation(req.body, signal) };
     case "power":
       return { id: req.id, data: await statsPower(req.body, signal) };
+    case "roc":
+      return { id: req.id, data: await statsRoc(req.body, signal) };
+    case "glm-logistic":
+      return { id: req.id, data: await statsGlmLogistic(req.body, signal) };
+    case "glm-poisson":
+      return { id: req.id, data: await statsGlmPoisson(req.body, signal) };
+    case "chi-square-gof":
+      return { id: req.id, data: await statsChiSquareGof(req.body, signal) };
+    case "adjust-p":
+      return { id: req.id, data: await statsAdjustP(req.body, signal) };
   }
 }

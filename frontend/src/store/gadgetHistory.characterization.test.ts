@@ -19,6 +19,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset, DataStruct } from "../lib/types";
+import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { useApp } from "./useApp";
 import { useToasts } from "./toasts";
 
@@ -116,18 +117,25 @@ describe("ROI-gadget / quick-fit undo-history contract", () => {
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
 
-  it("commitGadgetFft records exactly ONE undo entry — attributable to addDataset, not the gadget action itself — plus status + an ok toast", () => {
+  // Lane RL2 (deliberate change, with its own tests in gadget.test.ts): the
+  // commit goes through the shared contract, so its one undo entry now carries
+  // the contract's label and a Library result lands with it. The preview must
+  // carry the source stamp the compute puts on it.
+  it("commitGadgetFft records exactly ONE undo entry (the shared commit's) plus status + an ok toast", async () => {
+    const source = { id: "a", computedOn: analysisDataFingerprint(useApp.getState().datasets[0]), roi: [0, 5] as [number, number], xKey: null, yKey: null };
     useApp.setState({
-      gadgetFftPreview: { freq: [0, 1, 2], magnitude: [0, 5, 1], df: 1, nfft: 4, fs: 4, windowName: "hanning" },
+      gadgetFftPreview: { freq: [0, 1, 2], magnitude: [0, 5, 1], df: 1, nfft: 4, fs: 4, windowName: "hanning", source },
     });
     expect(useApp.getState().history).toHaveLength(0);
 
     useApp.getState().commitGadgetFft();
+    await vi.dynamicImportSettled();
 
     const s = useApp.getState();
     expect(s.datasets).toHaveLength(2); // addDataset ran
     expect(s.history).toHaveLength(1); // exactly one entry, not zero and not two
-    expect(s.history.at(-1)?.label).toBe("add dataset"); // addDataset's own label — never a gadget-authored one
+    expect(s.history.at(-1)?.label).toBe("add Gadget FFT output");
+    expect(s.analysisResults).toHaveLength(1);
     expect(s.status).toBe("FFT spectrum added to library");
     expect(useToasts.getState().toasts.at(-1)).toEqual(
       expect.objectContaining({ msg: "FFT spectrum added to library", kind: "ok" }),

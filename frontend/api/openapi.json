@@ -16514,6 +16514,81 @@
         "title": "SpectralWorkbenchRequest",
         "type": "object"
       },
+      "SpectrogramRequest": {
+        "properties": {
+          "channel": {
+            "minimum": 0.0,
+            "title": "Channel",
+            "type": "integer"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "detrend": {
+            "default": "mean",
+            "title": "Detrend",
+            "type": "string"
+          },
+          "overlap": {
+            "default": 0.5,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overlap",
+            "type": "number"
+          },
+          "resample": {
+            "default": false,
+            "title": "Resample",
+            "type": "boolean"
+          },
+          "scaling": {
+            "default": "psd",
+            "title": "Scaling",
+            "type": "string"
+          },
+          "segment_len": {
+            "minimum": 1.0,
+            "title": "Segment Len",
+            "type": "integer"
+          },
+          "window": {
+            "default": "hann",
+            "title": "Window",
+            "type": "string"
+          },
+          "x_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Max"
+          },
+          "x_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Min"
+          }
+        },
+        "required": [
+          "dataset",
+          "channel",
+          "segment_len"
+        ],
+        "title": "SpectrogramRequest",
+        "type": "object"
+      },
       "SpinAsymmetryRequest": {
         "properties": {
           "dr_mm": {
@@ -28013,6 +28088,50 @@
           }
         },
         "summary": "Fft",
+        "tags": [
+          "spectral"
+        ]
+      }
+    },
+    "/api/spectral/spectrogram": {
+      "post": {
+        "description": "Short-time Fourier transform of one channel as a long-form map table.",
+        "operationId": "spectrogram_api_spectral_spectrogram_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpectrogramRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spectrogram Api Spectral Spectrogram Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spectrogram",
         "tags": [
           "spectral"
         ]

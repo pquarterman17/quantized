@@ -16,12 +16,12 @@ import { loadFormulaExtension } from "../lib/formulaExt";
 import { baseColumns, channelLetter } from "../lib/formula";
 import { frequencyTable, frequencyWorksheet } from "../lib/frequencyCount";
 import { lit } from "../lib/macro";
+import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { analysisData } from "../lib/rowstate";
 import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { uniqueTemplateName } from "../lib/uniqueName";
 import { withRecomputedFormulas } from "./computedColumns";
-import { nextDatasetId } from "./idSeq";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -167,11 +167,20 @@ export async function runFrequencyCount(): Promise<void> {
   } catch (e) {
     return fail(`Frequency count: ${e instanceof Error ? e.message : "failed"}`);
   }
-  const id = nextDatasetId();
   const name = `${ds.name} — frequency of ${label}`;
-  s.addDataset({ id, name, data, ...(ds.workbookId ? { workbookId: ds.workbookId } : {}), ...(ds.folderId ? { folderId: ds.folderId } : {}) });
-  s.setActive(id);
-  const message = `created "${name}" — ${data.time.length} bins`;
-  s.setStatus(message);
-  toast(message, "ok");
+  // The shared commit contract (store/analysisOutputCommit.ts): one undo step with a
+  // Library result, no duplicate on a repeat run, out of date when the source changes.
+  // The ANALYSIS rows were counted, so the key carries their fingerprint.
+  const { commitComputedOutput } = await import("./commitComputedOutput");
+  const outcome = commitComputedOutput({
+    producer: { id: "frequency-count", label: "Frequency count", version: 1 },
+    sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
+    settings: { column: channel, bins: parsed.bins ?? null, width: parsed.width ?? null, min: parsed.min ?? null, max: parsed.max ?? null },
+    name, data,
+    patch: { ...(ds.workbookId ? { workbookId: ds.workbookId } : {}), ...(ds.folderId ? { folderId: ds.folderId } : {}) },
+    status: `created "${name}" — ${data.time.length} bins`,
+  });
+  if (outcome.kind === "refused") return toast(outcome.reason, "danger");
+  if (outcome.kind === "existing") return toast("this frequency count is already in the Library; nothing was duplicated", "info");
+  toast(`created "${name}" — ${data.time.length} bins`, "ok");
 }
