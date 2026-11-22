@@ -31,4 +31,24 @@ describe("the error-bar / region-decor chunk loader", () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(useApp.getState().status).toMatch(/Error bars.*could not load/);
   });
+
+  it("a store that cannot be reached (torn down, half-initialised) still resolves to null, never a rejection", async () => {
+    // The fallback imports the store lazily. In the vitest `node` project a test file can end while
+    // the startup chunk import is in flight; the later store import then yields a namespace with no
+    // `useApp`, and the unguarded `useApp.getState()` surfaced as an unhandled rejection in whichever
+    // file happened to be running.
+    vi.resetModules();
+    vi.doMock("../store/useApp", () => ({ useApp: undefined }));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { settleDecor: fresh } = await import("./regionDecorLoader");
+      const load = vi.fn<() => Promise<DecorModule>>().mockRejectedValue(new Error("closed"));
+      await expect(fresh(load)).resolves.toBeNull();
+      expect(errors).toHaveBeenCalledTimes(1);
+    } finally {
+      errors.mockRestore();
+      vi.doUnmock("../store/useApp");
+      vi.resetModules();
+    }
+  });
 });

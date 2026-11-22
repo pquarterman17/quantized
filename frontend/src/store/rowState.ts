@@ -35,6 +35,13 @@
 // hand-edited one — loads pending WITH row state, and the unguarded clear is
 // what lets the user get rid of it.
 //
+// RECALC: exclusions and filters are part of a dataset's ANALYSIS VIEW, so every
+// write below ends with `touchDataset(id)`, exactly as a cell edit does. That
+// marks linked derived worksheets and committed outputs stale (or recalculates
+// them in "auto"; "off" tracks nothing) through the engine's own 400 ms
+// debounce, so a slider storm yields one pass. Snapshot results need no mark:
+// their freshness is the analysis-view fingerprint, read on demand.
+//
 // This is the first resolve-then-apply slice. Cell edits, computed columns,
 // level order, recode and local analysis guards still use the older refusal
 // contract and remain tracked in BUG-009.
@@ -149,6 +156,7 @@ export function createRowStateSlice(
           return { ...d, excludedRows: next.length ? next : undefined };
         }),
       }));
+      get().touchDataset(id);
     },
 
     setRowsExcluded: (id, rows) => {
@@ -169,6 +177,7 @@ export function createRowStateSlice(
           return { ...d, excludedRows: clean.length ? clean : undefined };
         }),
       }));
+      get().touchDataset(id);
     },
 
     // NOT pending-guarded, deliberately — see the module header.
@@ -178,6 +187,7 @@ export function createRowStateSlice(
       set((s) => ({
         datasets: s.datasets.map((d) => (d.id === id ? { ...d, excludedRows: undefined } : d)),
       }));
+      get().touchDataset(id);
     },
 
     toggleRowSelected: (row) => {
@@ -215,6 +225,7 @@ export function createRowStateSlice(
             d.id === sel.datasetId ? { ...d, excludedRows: mergeExcluded(d.excludedRows, sel.rows) } : d,
           ),
         }));
+        get().touchDataset(sel.datasetId);
         if (windowId) get().clearWorksheetRowSelection(windowId);
         else set(() => ({ selection: null }));
       })) return;
@@ -224,6 +235,7 @@ export function createRowStateSlice(
           d.id === sel.datasetId ? { ...d, excludedRows: mergeExcluded(d.excludedRows, sel.rows) } : d,
         ),
       }));
+      get().touchDataset(sel.datasetId);
       if (windowId) get().clearWorksheetRowSelection(windowId);
       else set(() => ({ selection: null }));
     },
@@ -242,6 +254,7 @@ export function createRowStateSlice(
             ? { ...d, excludedRows: keepOnlyExcluded(sel.rows, resolved.data.time.length) }
             : d),
         }));
+        get().touchDataset(sel.datasetId);
         if (windowId) get().clearWorksheetRowSelection(windowId);
         else set(() => ({ selection: null }));
       })) return;
@@ -254,6 +267,7 @@ export function createRowStateSlice(
           d.id === sel.datasetId ? { ...d, excludedRows: keepOnlyExcluded(sel.rows, d.data.time.length) } : d,
         ),
       }));
+      get().touchDataset(sel.datasetId);
       if (windowId) get().clearWorksheetRowSelection(windowId);
       else set(() => ({ selection: null }));
     },
@@ -292,6 +306,7 @@ export function createRowStateSlice(
           d.id === id ? { ...d, filter: next.length ? next : undefined } : d,
         ),
       }));
+      get().touchDataset(id);
     },
 
     // NOT pending-guarded, deliberately — see the module header.
@@ -310,6 +325,7 @@ export function createRowStateSlice(
       set((s) => ({
         datasets: s.datasets.map((d) => (d.id === id ? { ...d, filter: undefined } : d)),
       }));
+      get().touchDataset(id);
     },
   };
 }
