@@ -286,11 +286,16 @@ def histogram(
     distribution-fit overlay.
     """
     v = _finite(data)
-    if v.size < 2:
-        raise ValueError("histogram needs at least 2 finite values")
+    if v.size < 1:
+        raise ValueError("histogram needs at least 1 finite value")
+    if v.size == 1 and fit is not None:
+        raise ValueError("a distribution fit needs at least 2 finite values")
     if isinstance(bins, int) and bins > _MAX_BINS:
         raise ValueError(f"bins {bins} is too large; at most {_MAX_BINS}")
-    counts, edges = np.histogram(v, bins=bins, density=density)
+    # One point: numpy's rule would give a zero-width range; draw the single
+    # unit-wide bin centred on it (Origin's one-bin histogram), whatever `bins`.
+    one = [float(v[0]) - 0.5, float(v[0]) + 0.5] if v.size == 1 else None
+    counts, edges = np.histogram(v, bins=one if one else bins, density=density)
     centers = 0.5 * (edges[:-1] + edges[1:])
     out: dict[str, Any] = {
         "counts": [float(c) for c in counts],
