@@ -89,7 +89,7 @@ describe("CurveFitBatchSection out of date", () => {
     vi.mocked(fitModel).mockImplementation(async () => { await gate; return { params: [5, 10], errors: [0.1, 0.2], R2: 0.99, RMSE: 0.1, chiSqRed: 0.01, nPoints: 3 }; });
     const { rerender } = render(<CurveFitBatchSection {...base} />);
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Linear) batch" }));
-    await screen.findByRole("button", { name: /Stop|Cancel/ });
+    await screen.findByText("Running…");
     rerender(<CurveFitBatchSection {...base} weightMode="poisson" />);
     release();
     await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
