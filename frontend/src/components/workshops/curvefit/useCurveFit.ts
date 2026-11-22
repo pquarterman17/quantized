@@ -29,7 +29,7 @@ import {
 } from "../../../lib/fitParams";
 import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
 import type { ByColumnOption } from "../useByPartition";
-import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
+import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitByLevelState, type CurveFitLevelResult } from "./useCurveFitByLevel";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
@@ -97,10 +97,8 @@ export interface CurveFitState {
   /** Non-fatal weighting note (e.g. missing/invalid error column → fit ran
    *  unweighted); null when weighting resolved cleanly. */
   weightNote: string | null;
-  // ── "By" grouping (JMP_GAP J7 residual) ─────────────────────────────────
-  // Display-only: none of it touches the plot overlay, the recorded macro/
-  // pipeline step, or the durable FitSpec, and levels honour the panel's
-  // weighting (see useCurveFitByLevel's header doc).
+  // ── "By" grouping (JMP_GAP J7 residual): display-only, honours the panel's
+  // weighting; never touches the overlay, macro step or FitSpec (see useCurveFitByLevel).
   byOptions: ByColumnOption[];
   byCol: number | null;
   setByCol: (i: number | null) => void;
@@ -110,6 +108,7 @@ export interface CurveFitState {
   byTotalLevels: number;
   byResults: CurveFitLevelResult[];
   byBusy: boolean;
+  byRun: CurveFitByLevelState; // for "Save By result": its `current` / `provenance`
 }
 
 export function useCurveFit(): CurveFitState {
@@ -277,7 +276,7 @@ export function useCurveFit(): CurveFitState {
   );
   const byLevel = useCurveFitByLevel(
     active, data, byColumns, modelName, xKey, plottedYKeyNow, customStart, byWeight,
-    selected?.factorKeys[0] ?? null,
+    selected?.factorKeys[0] ?? null, selected,
   );
 
   async function run(kind: "guess" | "fit"): Promise<void> {
@@ -495,5 +494,6 @@ export function useCurveFit(): CurveFitState {
     byTotalLevels: byLevel.totalLevels,
     byResults: byLevel.results,
     byBusy: byLevel.busy,
+    byRun: byLevel,
   };
 }

@@ -15,9 +15,11 @@
 // Guard #11 is satisfied upstream: `data` is already the analysis view
 // (lib/rowstate.analysisData), so every level below is post-exclusion/-filter.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { fitModel } from "../../../lib/api";
+import type { AnalysisResultValue } from "../../../lib/analysisResult";
+import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { dyForData, weightRequestFields } from "../../../lib/fitweights";
 import { ownXKey } from "../../../lib/perSeriesX";
 import type { CalcResult, Dataset, DataStruct, FitWeighting } from "../../../lib/types";
@@ -41,6 +43,11 @@ export interface CurveFitByLevelState {
   totalLevels: number;
   results: CurveFitLevelResult[];
   busy: boolean;
+  /** True only when `results` were fitted for exactly the current levels and
+   *  settings and nothing is in flight: the only state a result may be saved from. */
+  current: boolean;
+  /** What "Save By result" records as provenance for these levels. */
+  provenance: { parameters: Record<string, AnalysisResultValue>; xKey: number | null; yKeys: number[]; rowIds: number[] | null; range: AnalysisSelectionItem["range"] };
 }
 
 /** Custom starting values / bounds / fixed flags (MAIN_PLAN #30). When the
@@ -65,18 +72,22 @@ export function useCurveFitByLevel(
   start: CurveFitByLevelStart | undefined,
   weight: FitWeighting | undefined = undefined,
   initialByCol: number | null = null,
+  selected: AnalysisSelectionItem | null = null,
 ): CurveFitByLevelState {
   const byPartition = useByPartition(active, data, columns, initialByCol);
   const [results, setResults] = useState<CurveFitLevelResult[]>([]);
   const [busy, setBusy] = useState(false);
+  const [ranFor, setRanFor] = useState<unknown[] | null>(null);
 
   useEffect(() => {
     if (byPartition.levels.length === 0 || yKey == null) {
       setResults([]);
+      setRanFor(null);
       setBusy(false);
       return;
     }
     let cancelled = false;
+    const ranInputs = [byPartition.levels, modelName, xKey, yKey, start, active, weight];
     setBusy(true);
     void Promise.all(
       byPartition.levels.map(async (lvl): Promise<CurveFitLevelResult> => {
@@ -132,7 +143,10 @@ export function useCurveFitByLevel(
       }),
     )
       .then((r) => {
-        if (!cancelled) setResults(r);
+        if (!cancelled) {
+          setResults(r);
+          setRanFor(ranInputs);
+        }
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -143,5 +157,11 @@ export function useCurveFitByLevel(
   }, [byPartition.levels, modelName, xKey, yKey, start, active, weight]);
 
   const { byOptions, byCol, setByCol, levels, totalLevels } = byPartition;
-  return { byOptions, byCol, setByCol, levels, totalLevels, results, busy };
+  const inputsNow = [byPartition.levels, modelName, xKey, yKey, start, active, weight];
+  const current = !busy && ranFor !== null && ranFor.every((v, i) => v === inputsNow[i]);
+  const provenance = useMemo(() => ({
+    parameters: { model: modelName, weighting: weight ? { ...weight } : null, customStart: start !== undefined, ...(start ? { start: { p0: start.p0, lower: start.lower, upper: start.upper, fixed: start.fixed } } : {}) },
+    xKey, yKeys: yKey == null ? [] : [yKey], rowIds: selected?.rowIds ?? null, range: selected?.range ?? null,
+  }), [modelName, weight, start, selected, xKey, yKey]);
+  return { byOptions, byCol, setByCol, levels, totalLevels, results, busy, current, provenance };
 }
