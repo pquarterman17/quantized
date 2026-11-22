@@ -82,6 +82,10 @@ export interface StatStagePicks {
   setHistCols: (c: number[]) => void;
 }
 
+// A stable empty list: `histCols` is an effect dependency of the draw compute,
+// so a fresh `[]` per render would re-fire it forever (setBusy -> render -> new []).
+const NO_HIST_COLS: number[] = [];
+
 export interface UseStatStagePicksParams {
   active: Dataset | null;
   /** The channels that read as categorical, in channel order — the option
@@ -205,7 +209,7 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
         return now === l ? p : { ...freed(p), barStack: l !== "grouped", barPercent: l === "percent" };
       }, "change statistics plot"),
     valueRange: picks.valueRange ?? null,
-    histCols: picks.histCols ?? [],
+    histCols: picks.histCols ?? NO_HIST_COLS,
     setHistCols: (c) =>
       write((p) => {
         const { histCols: _drop, ...rest } = p;
