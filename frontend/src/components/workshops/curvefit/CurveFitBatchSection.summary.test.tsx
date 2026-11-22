@@ -75,14 +75,11 @@ describe("CurveFitBatchSection — summary worksheet row order", () => {
 });
 
 describe("CurveFitBatchSection — summary worksheet", () => {
-  it("keeps the run's model and parameter columns after the panel's model changes", async () => {
-    const props = { paramRows: [], weightMode: "none" as const, manualKey: null };
-    const { rerender } = render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} {...props} />);
+  it("summary describes the run's model and parameter columns", async () => {
+    render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="none" manualKey={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
     await screen.findByRole("button", { name: "Create summary worksheet" });
     await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
-
-    rerender(<CurveFitBatchSection modelName="Linear" model={LINEAR} {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Create summary worksheet" }));
     const added = useApp.getState().datasets.at(-1)!;
     expect(added.name).toBe("Curve Fit summary — Gaussian (2 worksheets)");
@@ -93,6 +90,24 @@ describe("CurveFitBatchSection — summary worksheet", () => {
     // selection (it used to become the active dataset and the only input).
     expect(useApp.getState().activeId).toBe("a");
     expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
+  });
+
+  // Owner decision 2026-11-22: this used to pin the opposite (the finished
+  // table survived a model change and its summary kept the run's model). The
+  // batch now resets on a model change like the other plot-column batches, so
+  // a summary of the old model can no longer sit under a new pick.
+  it("drops the finished table when the panel's model changes", async () => {
+    const props = { paramRows: [], weightMode: "none" as const, manualKey: null };
+    const { rerender } = render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
+    await screen.findByRole("button", { name: "Create summary worksheet" });
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+
+    rerender(<CurveFitBatchSection modelName="Linear" model={LINEAR} {...props} />);
+    expect(screen.queryByRole("button", { name: "Create summary worksheet" })).toBeNull();
+    expect(screen.queryByText(/Out of date/)).toBeNull();
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(useApp.getState().datasets).toHaveLength(2);
   });
 });
 
