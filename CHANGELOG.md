@@ -9,6 +9,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 ### Changed
 
 - **Resample, Average curves, the ROI cuts workshop (box / sector / chi cuts and the batch's cuts and summary table), the ROI gadget's FFT and Frequency count now follow the shared result contract**: each output is ONE Undo step together with its Library result, repeating the same action on the same data adds nothing (Resample's Create names the datasets already added and keeps them picked; Average says "Already added as ..."; a batch lists the cuts already added as skipped instead of counting them new; the gadget and Frequency count say so), and the output is marked "Out of date" when any of its source worksheets changes (every curve of an average, the match dataset of a resample), recalculated or only marked per Auto / Manual / None. A different box, grid or setting is a new computation. The gadget's FFT also refuses a spectrum whose worksheet changed since it was computed. Row statistics adds live formula columns to the same worksheet, not a new one, so it is unchanged. Pipeline and macro replay of Resample and Average are unchanged.
+
 ### Added
 
 - **Clean data transforms in Reshape & combine**: three new operations under Data, each previewed live (first rows, size, warnings) before Create adds one new derived worksheet; the source worksheet is never changed.
