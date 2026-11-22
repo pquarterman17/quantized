@@ -160,3 +160,32 @@ export function pawleyVerdict(r: PawleyResult, refined: boolean): string | null 
   }
   return null;
 }
+
+export type PawleyCentering = "P" | "F" | "I" | "A" | "B" | "C" | "R";
+
+export interface PawleyRunSettings {
+  n: PawleyNumbers;
+  symmetry: PawleyCentering;
+  tie: PawleyTie;
+  refineCell: boolean;
+}
+
+/** The refinement request for one scan, built once for the panel's Refine and
+ *  the batch over worksheets so a batch row sends what the panel sends. Only
+ *  reflections inside the measured scan are fit and counted: a scan through
+ *  the direct beam starts below 0, and no reflection lives there. */
+export function pawleyBody(x: number[], y: number[], range: { min: number; max: number }, s: PawleyRunSettings) {
+  const { n } = s;
+  return {
+    two_theta: x,
+    intensity: y,
+    a: n.a, b: n.b, c: n.c, alpha: n.alpha, beta: n.beta, gamma: n.gamma,
+    symmetry: s.symmetry,
+    tie: s.tie,
+    wavelength: n.wavelength,
+    min_two_theta: Math.max(0, range.min),
+    max_two_theta: range.max,
+    profile_fwhm: n.fwhm,
+    refine_cell: s.refineCell,
+  };
+}

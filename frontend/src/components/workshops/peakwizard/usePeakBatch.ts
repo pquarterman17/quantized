@@ -142,6 +142,27 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
         ?? (picked.length === 0 ? "pick at least one dataset" : null)
         ?? (picked.length > BATCH_MAX_DATASETS ? `at most ${BATCH_MAX_DATASETS} datasets per batch` : null);
 
+  // A finished table belongs to the recipe it ran with. When the chosen recipe
+  // changes (switched, or re-saved with other settings), the old rows must not
+  // sit under the new one: drop them. A run in flight finishes with the recipe
+  // it started with, then is dropped the same way (this effect re-runs when
+  // the phase turns terminal). NOT a reset: picking other datasets, or the
+  // plotted channel / active worksheet moving (adding the table itself
+  // activates a new worksheet): the table lists its own sources and records
+  // the channels it ran on (`ran`).
+  const settingsKey = JSON.stringify(recipe);
+  const ranKey = useRef<string | null>(null);
+  const terminal = phase === "done" || phase === "cancelled" || phase === "failed";
+  useEffect(() => {
+    if (!terminal || ranKey.current === null || ranKey.current === settingsKey) return;
+    ranKey.current = null;
+    setResults(null);
+    setRan(null);
+    setError(null);
+    setProgress({ done: 0, total: 0, message: "" });
+    setPhase("idle");
+  }, [terminal, settingsKey]);
+
   // Unmount: stop writing, and do not leave a job fitting for nobody.
   useEffect(() => () => {
     seq.current++;
@@ -162,6 +183,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     try {
       const id = ++seq.current;
       const live = () => seq.current === id;
+      ranKey.current = settingsKey;
       const ids = picked;
       const names = new Map(datasets.map((d) => [d.id, d.name]));
       setPhase("preparing");

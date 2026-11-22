@@ -14,23 +14,10 @@ import type { ReflectivityFftResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { type ReflFftPreprocess, reflectivityFftBody, xIsQ } from "./reductionRequests";
 import type { ReductionColumn } from "./useFftThickness";
 
-export type ReflFftPreprocess = "logR" | "logRQ4" | "R" | "RQ4";
-
-// The file's own say on its x axis. `is_neutron` means "x is Q in Å⁻¹" to the
-// backend, so a neutron probe (ORSO/NCNR metadata) or a reciprocal-length x
-// unit opens checked. Restated from reflectivity/reflFitData rather than
-// imported: sharing that module across two lazy chunks splits it into a third
-// and grows the eager preload map.
-const NM = /nm(⁻¹|\^?-1)|1\/nm/;
-function unitOf(d: DataStruct | undefined): string {
-  return String(d?.metadata?.x_column_unit ?? "").toLowerCase();
-}
-function xIsQ(d: DataStruct | undefined): boolean {
-  const unit = unitOf(d);
-  return /neutron/i.test(String(d?.metadata?.probe ?? "")) || NM.test(unit) || /ang|å|a-1|1\/a/.test(unit);
-}
+export type { ReflFftPreprocess };
 
 export interface ReflectivityFftState {
   active: Dataset | null;
@@ -104,20 +91,9 @@ export function useReflectivityFft(): ReflectivityFftState {
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       const d = analysisData(ds) ?? ds.data;
-      const y = d.values.map((row) => row[col]);
-      const k = isNeutron && NM.test(unitOf(d)) ? 0.1 : 1; // nm⁻¹ → Å⁻¹
-      const res = await reflectivityFft({
-        x: k === 1 ? d.time : d.time.map((q) => q * k),
-        reflectivity: y,
-        is_neutron: isNeutron,
-        wavelength_a: isNeutron ? undefined : wavelength,
-        x_min: xMin == null ? undefined : xMin * k,
-        x_max: xMax == null ? undefined : xMax * k,
-        window: windowFn,
-        preprocess,
-        max_thickness_nm: maxThicknessNm,
-        peak_prominence_threshold: peakProminence,
-      });
+      const res = await reflectivityFft(reflectivityFftBody(d, col, {
+        isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
+      }));
       setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "reflectivity FFT failed");

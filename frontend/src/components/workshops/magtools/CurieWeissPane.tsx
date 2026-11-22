@@ -2,6 +2,8 @@ import { Button, Select } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
 import { fmtNum } from "../../../lib/format";
 import { MASS_UNITS, type MassUnit } from "../../../lib/sampleGeometry";
+import { useApp } from "../../../store/useApp";
+import CurieWeissBatch from "./CurieWeissBatch";
 import { useCurieWeiss } from "./useCurieWeiss";
 import type { CurieWeissBasisChoice } from "./curieWeissData";
 
@@ -13,6 +15,7 @@ const BASIS_OPTIONS = [
 
 export default function CurieWeissPane() {
   const c = useCurieWeiss();
+  const plotXKey = useApp((state) => state.xKey);
   const responseLabel = c.active?.data.labels[c.yKey] ?? "response";
   const responseUnit = c.active?.data.units[c.yKey] ?? "";
   const rawMoment = c.basis === "total_moment" || c.basis === "mass_moment";
@@ -83,6 +86,7 @@ export default function CurieWeissPane() {
       </div>}
       {c.warning && <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--warn, #c90)" }}>{c.warning}</div>}
       {c.error && <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>{c.error}</div>}
+      <CurieWeissBatch active={c.active} yKey={c.yKey} plotXKey={plotXKey} basisChoice={c.basisChoice} fitMin={c.fitMin} fitMax={c.fitMax} />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { fftThicknessBody } from "./reductionRequests";
 
 const FFT_THICKNESS_PRODUCER = { id: "fft-thickness", label: "FFT thickness", version: 1 } as const;
 
@@ -91,16 +92,7 @@ export function useFftThickness(): FftThicknessState {
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       const d = analysisData(ds) ?? ds.data;
-      const y = d.values.map((row) => row[col]);
-      const res = await fftThickness({
-        two_theta_deg: d.time,
-        intensity: y,
-        wavelength_a: wavelength,
-        two_theta_min: twoThetaMin ?? undefined,
-        two_theta_max: twoThetaMax ?? undefined,
-        window: windowFn,
-        max_thickness_nm: maxThicknessNm,
-      });
+      const res = await fftThickness(fftThicknessBody(d, col, { wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm }));
       setComputed({
         res, sourceId: ds.id, sourceName: ds.name, computedOn: analysisDataFingerprint(ds),
         inputs: { col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm },
