@@ -1004,8 +1004,9 @@ work.
           decode the `__STGCOLFILTER` condition (column name + threshold
           text, e.g. `error` / `0.07`, are visible in the bytes) and apply it
           as a row filter, then re-check the row counts over COM
-    - [ ] `plot_type_not_drawn` (12): histograms (type 219) and the other
+    - [x] `plot_type_not_drawn` (12): histograms (type 219) and the other
           plot types the frontend does not rebuild
+          DONE (#712 / #787: histograms are decoded and drawn, `histogram_of_several_columns` is the remaining kind); verified 2026-11-21 (Lane OD triage).
     - [ ] 12 newly placed sheet-1 curves (Figure_9/10 `Book1B`, Catchment
           B-E Graph1/2 `Book1`) keep a binding whose Text X the importer
           did not produce (2026-11-15 slice 2 adds 16 more: Figure_9/10
@@ -1085,13 +1086,14 @@ work.
     2026-11-15. After #73, on the 113 COM-checked `.opju` (Origin 2026b
     `wks.col.*`), no decoded designation, long name, unit or X long name
     is wrong; what is left is absent (fail closed) or a model limit.
-    - [ ] Error bars plotted FROM a Y-designated column: 816 bar tokens
+    - [x] Error bars plotted FROM a Y-designated column: 816 bar tokens
           (36 error-bar files) sit on columns Origin itself types Y
           (`wks.col.type` = 1, 861 of 861 COM-checked), so the attach
           model (a bar pairs a Y-error column with its preceding Y) cannot
           attach them; they stay curves. Needs the bar's decorated dataset
           (`x_dataset` / the curve token) instead of the designation
-    - [ ] Bars DRAWN on a Y Origin decorates with another error column:
+          DONE (#778: the bar's curve token names the decorated curve at offsets 35-36, F-061; no designation pairing); verified 2026-11-21 (Lane OD triage).
+    - [x] Bars DRAWN on a Y Origin decorates with another error column:
           the frontend pairs a Y-error column with the nearest preceding Y
           (`lib/errorbars.ts` `originErrKeys`), not with the Y Origin's
           error-bar plot decorates. Drawn bars vs COM `plot_type` 231 on
@@ -1102,9 +1104,11 @@ work.
           record's associated column id (offset 35) and draw a bar only
           where it agrees; the decoded error-bar token's X is never the
           decorated Y (2,736 of 2,736), so the token alone cannot pair it
-    - [ ] 798 bar tokens designated Y-error pair (by designation) with a
+          DONE (#778 attaches by the recorded id (F-061, `test_realdata_bars_attach_where_origin_plots_them`) and #788 draws the halves); verified 2026-11-21 (Lane OD triage).
+    - [x] 798 bar tokens designated Y-error pair (by designation) with a
           different Y than Origin decorates and 196 have their Y undrawn;
           none of them is drawn on a wrong Y (counted above)
+          DONE (#778, same fix: bars attach to the decorated curve, not the preceding Y); verified 2026-11-21 (Lane OD triage).
     - [ ] Absent, fail closed: 2,354 long names, 379 units, 39 X long
           names on COM-covered columns (sheets whose records do not cover
           every decoded column, or a contradicted positional reading)
