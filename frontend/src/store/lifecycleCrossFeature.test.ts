@@ -3,7 +3,8 @@
 // real store: the shared commit (lane RL), its reopen/Replace (lane RO), stale
 // marking from row state and Undo (#839/#841), the Signal Processing
 // "Use excluded/filtered rows" option (#846) and the save/reopen freshness
-// stamp. Every test here failed before its fix.
+// stamp. Each bug scenario failed before its fix; the save/reopen scenario is
+// coverage of the combined round trip (it passed as found).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { analysisDataFingerprint, stampAnalysisResults } from "../lib/analysisResultFreshness";
@@ -174,6 +175,39 @@ describe("Signal Processing with excluded/filtered rows left out: a row-state ed
     held.release();
     await pass;
     expect(useApp.getState().staleDatasets).toEqual([id]);
+  });
+});
+
+describe("save and reopen of a project with committed and linked outputs", () => {
+  it("keeps a committed output replaceable, its staleness, and an analysis-view linked output current", async () => {
+    const OTHER: Dataset = { id: "other", name: "Other", data: data([1, 2, 3, 4]), excludedRows: [3] };
+    useApp.setState({ datasets: [SOURCE, OTHER] });
+    const linked = await createSignalWorksheetFromApp("other", {
+      kind: "signal-correction", version: 1, operation: "Smooth", xUnit: "",
+      channels: [{ index: 0, label: "y", unit: "" }],
+      params: { signalChannels: [0], smoothEnabled: true, smoothMethod: "moving", smoothWindow: 2 },
+      inputRows: "analysis-view",
+    });
+    const committed = commitAnalysisOutput({
+      producer: { id: "ellipse-fit", label: "Ellipse fit", version: 1 }, sourceId: "src",
+      computedOn: analysisDataFingerprint(src()), settings: { geometric: true },
+      output: () => ({
+        name: "Film (fit)",
+        data: { ...data([1, Number.NaN, 3, -0]), metadata: { x_column_name: "x", x_column_unit: "mm", fit: { r2: 0.5 } } },
+      }),
+    });
+    if (committed.kind !== "created" || !linked) throw new Error("setup");
+    const { parseWorkspace, serializeWorkspace } = await import("../lib/workspace");
+    const { planReopen } = await import("../lib/committedOutputReopen");
+    const s = useApp.getState();
+    const reopened = parseWorkspace(serializeWorkspace({
+      datasets: s.datasets, analysisResults: s.analysisResults, staleDatasets: s.staleDatasets, recalcMode: "manual",
+    }));
+    expect(reopened.staleDatasets ?? []).toEqual([]);
+    const result = reopened.analysisResults!.find((r) => r.id === committed.resultId)!;
+    const plan = planReopen(result, reopened.datasets);
+    expect(plan.ok && plan.replaceBlocked).toBeNull();
+    expect(plan.ok && plan.notice).toBeNull();
   });
 });
 
