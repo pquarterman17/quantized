@@ -12,6 +12,8 @@ interface Options {
   xKey?: number | null;
   yKeys?: readonly number[];
   policy: AnalysisRowPolicy;
+  /** False for a tool state that reads no data (do not request the full load). */
+  load?: boolean;
 }
 
 /** Live `resolveAnalysisInputs` over the store. A lazy Origin preview is
@@ -19,7 +21,7 @@ interface Options {
  *  refusal clears itself once the real rows land. If that load FAILS the
  *  refusal becomes "load-failed" with the recorded reason (lib/bookData's
  *  `lastBookError`), which a retry (Re-import / Relink) replaces. */
-export function useAnalysisInputs({ selection, followActive = false, xKey, yKeys, policy }: Options): AnalysisInputs {
+export function useAnalysisInputs({ selection, followActive = false, xKey, yKeys, policy, load = true }: Options): AnalysisInputs {
   // Memo on the TARGET dataset only: an edit to an unrelated worksheet must
   // not hand the tool a new `data` object (and a refetch).
   const target = useApp((state) => analysisTargetDataset(state.datasets, state.activeId, selection, followActive));
@@ -37,17 +39,21 @@ export function useAnalysisInputs({ selection, followActive = false, xKey, yKeys
   // is a new object, so the failure does not outlive it.
   const [failed, setFailed] = useState<{ dataset: Dataset; reason: string } | null>(null);
   useEffect(() => {
-    if (!pendingDataset?.pending) return;
+    if (!load || !pendingDataset?.pending) return;
     // ensureBookData is single-flight and idempotent.
     ensureBookData(pendingDataset.id);
     const { id, pending } = pendingDataset;
     let live = true;
-    void bookFetchSettled(id, pending)?.then(() => {
+    const check = () => {
       const reason = lastBookError(id, pending);
       if (live && reason !== null) setFailed({ dataset: pendingDataset, reason });
-    });
+    };
+    // No fetch registered (it already settled): read the recorded failure now.
+    const settled = bookFetchSettled(id, pending);
+    if (settled) void settled.then(check);
+    else check();
     return () => { live = false; };
-  }, [pendingDataset, ensureBookData]);
+  }, [pendingDataset, ensureBookData, load]);
   if (pendingDataset && failed?.dataset === pendingDataset) {
     return {
       ...inputs as Extract<AnalysisInputs, { ok: false }>,

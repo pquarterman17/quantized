@@ -129,6 +129,23 @@ describe("Statistical tests Run resolves the contract on the loaded worksheet", 
     expect(runStatsTest).not.toHaveBeenCalled();
   });
 
+  it("with no columns picked the test's own pick message is shown, not the generic refusal", async () => {
+    const { result } = renderHook(() => useStatsTests());
+    act(() => { result.current.setTestId("dunnett"); result.current.setSel({ groupMode: "columns", cols: [] }); });
+    await act(async () => { await result.current.run(); });
+    expect(result.current.error).toBe("Pick at least 2 groups; the first is the control.");
+  });
+
+  it("the data-free power test does not request a full load of a lazy worksheet", () => {
+    useApp.setState({ datasets: [LAZY] });
+    const { result } = renderHook(() => useStatsTests());
+    act(() => result.current.setTestId("power"));
+    expect(vi.mocked(fetchBookData).mock.calls.length).toBe(1); // the initial test's kick only
+    vi.mocked(fetchBookData).mockClear();
+    act(() => result.current.setParams({ alpha: 0.1 }));
+    expect(fetchBookData).not.toHaveBeenCalled();
+  });
+
   it("a lazy preview is loaded first and the test runs on the full analysis view", async () => {
     useApp.setState({ datasets: [LAZY] });
     const FULL = { ...SHEET.data, time: [0, 1, 2, 3, 4], values: [[10, 1], [20, 2], [30, 3], [40, 4], [50, 5]] };
