@@ -11,6 +11,7 @@ import { colormapCss } from "../../../lib/colormap";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { pickOptions } from "../analysisextras/columnPicks";
+import SurfaceFitBatchSection from "./SurfaceFitBatchSection";
 import SurfaceResidualMap, { residualScale } from "./SurfaceResidualMap";
 import { useSurfaceFit } from "./useSurfaceFit";
 
@@ -164,6 +165,7 @@ export default function SurfaceFitPanel() {
               </div>
             </>
           )}
+          <SurfaceFitBatchSection f={f} />
         </>
       )}
     </ToolWindow>
