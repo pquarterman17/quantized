@@ -97,6 +97,29 @@ describe("statistics tools show the shared summary", () => {
   });
 });
 
+describe("a failed lazy load", () => {
+  it("is a distinct refusal that names the reason and is not analysed", async () => {
+    useApp.setState({ datasets: [LAZY] });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("source moved"));
+    render(<FitYByXPanel />);
+    const line = screen.getByLabelText("Analysis input");
+    await waitFor(() => expect(line).toHaveAttribute("data-refusal", "load-failed"));
+    expect(line).toHaveTextContent("could not be loaded (source moved)");
+    expect(line).toHaveClass("blocked");
+    expect(statsRegression).not.toHaveBeenCalled();
+  });
+
+  it("clears when the book is replaced by a loaded one", async () => {
+    useApp.setState({ datasets: [LAZY] });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("source moved"));
+    render(<FitYByXPanel />);
+    const line = screen.getByLabelText("Analysis input");
+    await waitFor(() => expect(line).toHaveAttribute("data-refusal", "load-failed"));
+    act(() => useApp.setState({ datasets: [SHEET] }));
+    expect(line).not.toHaveAttribute("data-refusal");
+  });
+});
+
 describe("Statistical tests Run resolves the contract on the loaded worksheet", () => {
   it("refuses with the resolver's reason when the picked column no longer exists", async () => {
     const { result } = renderHook(() => useStatsTests());

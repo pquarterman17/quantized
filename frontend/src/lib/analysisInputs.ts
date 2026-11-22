@@ -24,7 +24,10 @@
 // Fail closed: no worksheet, a deleted worksheet or column, no response
 // column, an empty explicit row selection, zero remaining rows, or a lazy
 // Origin preview (its rows are a downsample, never the real data) each return
-// a refusal with a reason instead of inputs. Pure: no store, no React.
+// a refusal with a reason instead of inputs. A lazy preview whose full load
+// FAILED is a distinct refusal ("load-failed", set by useAnalysisInputs, which
+// can see the load state; this module stays pure) so the line says why it will
+// not clear on its own. Pure: no store, no React.
 
 import type { AnalysisRangeSelection, AnalysisSelectionItem } from "./analysisSelection";
 import { sliceDataStruct } from "./datasetsplit";
@@ -70,7 +73,7 @@ export interface AnalysisInputRequest {
 }
 
 export type AnalysisInputRefusal =
-  | "no-dataset" | "missing-dataset" | "pending" | "missing-column" | "no-response" | "no-rows";
+  | "no-dataset" | "missing-dataset" | "pending" | "load-failed" | "missing-column" | "no-response" | "no-rows";
 
 interface Common {
   policy: AnalysisRowPolicy;
@@ -226,7 +229,7 @@ export function analysisRowPolicyNote(inputs: AnalysisInputs): string {
   const { policy } = inputs;
   // A refusal still states the worksheet's row state (except a lazy preview,
   // whose rows are not the real ones).
-  const state = inputs.ok ? inputs : inputs.dataset && inputs.code !== "pending" ? rowStateCounts(inputs.dataset) : null;
+  const state = inputs.ok ? inputs : inputs.dataset && inputs.code !== "pending" && inputs.code !== "load-failed" ? rowStateCounts(inputs.dataset) : null;
   const dropped = state ? state.excludedCount + state.filteredCount : 0;
   const rowsOf = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
   const counts = !state ? "" : dropped === 0 ? " (none at present)"
