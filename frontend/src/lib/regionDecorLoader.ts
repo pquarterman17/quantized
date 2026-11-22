@@ -28,8 +28,15 @@ export async function settleDecor(load: () => Promise<DecorModule>): Promise<Dec
   }
   // Imported only on failure, as marksLoader does: a static import would pull the store into every
   // module that reaches this one.
-  const { useApp } = await import("../store/useApp");
-  useApp.getState().setStatus("Error bars, shades and colour-mapped points could not load; reload.", "danger");
+  // The report itself must never reject: this runs fire-and-forget at module load (`regionDecorSettled`), and
+  // the store can be unreachable then (a worker torn down mid-import, a half-initialised namespace), which
+  // surfaced as an unhandled rejection in whatever test file was running. Say it on the console instead.
+  try {
+    const { useApp } = await import("../store/useApp");
+    useApp.getState().setStatus("Error bars, shades and colour-mapped points could not load; reload.", "danger");
+  } catch (e) {
+    console.error("Error bars, shades and colour-mapped points could not load, and the status line is unavailable:", e);
+  }
   return null;
 }
 

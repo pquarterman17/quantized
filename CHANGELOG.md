@@ -17,6 +17,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **Excluding or filtering worksheet rows** now marks linked derived worksheets and committed analysis outputs Out of date (Auto recalculates, Manual marks them, None tracks nothing), the same as editing a cell; saved statistics results already followed the filtered/excluded view.
 - **Graph digitizer Create** no longer adds a second identical worksheet on a repeat click (it has no source worksheet, so there is no Out of date marking).
 - **Distribution Save result** now blocks a repeat save of the same data and settings for good (before, only the open window remembered it, so reopening the window or a reopened project allowed duplicates); Save works again after Undo or deleting the result.
 - **Williamson–Hall Save result** is available again after Undo removes the saved result (it stayed "already saved").
