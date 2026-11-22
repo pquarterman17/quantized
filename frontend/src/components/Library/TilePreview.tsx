@@ -12,7 +12,7 @@ import { plural } from "../../lib/plural";
 
 import { fmtNum } from "../../lib/format";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
-import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
+import { LIBRARY_NODE_GLYPH, libraryNodeLabel } from "./nodeIcons";
 import { useThumbnail } from "./useThumbnail";
 
 // UX-004: both of these local maps are gone. Tiles used to draw a WORKSHEET
@@ -89,7 +89,7 @@ function ArtifactPreview({ node }: { node: LibraryNode }) {
         </>
       )}
       {caption && <small role={thumb.status === "error" ? "status" : undefined}>{caption}</small>}
-      <span className="qzk-preview-badge" aria-hidden="true">{LIBRARY_NODE_LABEL[node.kind]}</span>
+      <span className="qzk-preview-badge" aria-hidden="true">{libraryNodeLabel(node)}</span>
     </div>
   );
 }

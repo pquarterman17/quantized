@@ -1,3 +1,5 @@
+// (Also the "Origin link tables" row, `variant: "link-tables"`: it holds
+// link-table BOOKS, not figure entries; same disclosure, different children.)
 // The virtual "Unresolved Origin figures (N)" row in the Library tree: one
 // collapsed disclosure per imported project that gathers the graph entries
 // that bound no source (lib/libraryHierarchy.ts `origin-group`; derived, never
@@ -14,7 +16,8 @@ import { plural } from "../../lib/plural";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
-import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
+import { LINK_TABLES_NOTE } from "../../lib/libraryLinkTables";
+import { LIBRARY_NODE_GLYPH, libraryNodeLabel } from "./nodeIcons";
 
 interface Props {
   node: Extract<LibraryNode, { kind: "origin-group" }>;
@@ -26,8 +29,11 @@ interface Props {
 
 export default function OriginGroupRow({ node, depth, expanded, treeItem }: Props) {
   const toggle = useLibraryStore((s) => s.toggleOriginGroupExpanded);
-  const { id, stem, count } = node.entity;
-  const what = `${count} graph window${plural(count)} from ${stem} with no matching imported book`;
+  const { id, stem, count, variant } = node.entity;
+  const linkTables = variant === "link-tables";
+  const what = linkTables
+    ? `${count} Origin link table${plural(count)}: ${LINK_TABLES_NOTE}`
+    : `${count} graph window${plural(count)} from ${stem} with no matching imported book`;
   return (
     <div
       className="qzk-folder-head qzk-origin-group-row"
@@ -36,7 +42,9 @@ export default function OriginGroupRow({ node, depth, expanded, treeItem }: Prop
       tabIndex={0}
       {...treeItem}
       aria-label={`${node.name}: ${what}; ${expanded ? "expanded" : "collapsed"}`}
-      title={`${what}. Expand to inspect each one; Recover… on a row chooses its source.`}
+      title={linkTables
+        ? `${what}. These books hold links into Origin fit reports; every book is kept.`
+        : `${what}. Expand to inspect each one; Recover… on a row chooses its source.`}
       onClick={() => toggle(id)}
       onContextMenu={(e) => e.preventDefault()}
       onKeyDown={(e) => spaceActivates(e, () => toggle(id))}
@@ -47,11 +55,12 @@ export default function OriginGroupRow({ node, depth, expanded, treeItem }: Prop
       <span className="qzk-drag-handle" aria-hidden="true" style={{ visibility: "hidden" }}>⠿</span>
       <span className="qzk-menu-btn" aria-hidden="true" style={{ visibility: "hidden" }}>⋯</span>
       <span className="qzk-group-caret" aria-hidden="true">{expanded ? "▾" : "▸"}</span>
-      <span className="qzk-workbook-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL["origin-group"]}>
+      <span className="qzk-workbook-icon" aria-hidden="true" title={libraryNodeLabel(node)}>
         {LIBRARY_NODE_GLYPH["origin-group"]}
       </span>
       <span className="qzk-group-name">{node.name}</span>
-      <span className="qzk-group-count" title={`${count} unresolved graph window${plural(count)}`}>{count}</span>
+      {linkTables && <span className="qzk-group-note">{LINK_TABLES_NOTE}</span>}
+      <span className="qzk-group-count" title={linkTables ? what : `${count} unresolved graph window${plural(count)}`}>{count}</span>
     </div>
   );
 }

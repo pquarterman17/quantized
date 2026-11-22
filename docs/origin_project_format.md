@@ -677,6 +677,16 @@ FPC-top-N-byte-compact encodings of 9.5/-1.5, no match. The reference
 string only names *which* statistic a report cell represents; Origin's
 cache of the *value* lives somewhere this module does not decode.
 
+**Link-table books (`TableN`).** In an `.opju` the small fit-parameter
+tables Origin writes beside a fit (a column of row labels such as
+`Intercept` / `Slope`, a column of `cell://[Book1]FitLinear1!Parameters.Slope.Value+Error`
+links) arrive through the ordinary text path (`origin_text_columns`), not
+`origin_report_sheets`. A book with no numbers whose text cells are only such
+links and short row labels in link rows is stamped
+`metadata["origin_link_table"]` (`link_tables.is_origin_link_table`, ledger F-118) and the
+Library groups it; the links themselves are not resolved (the fit's value behind
+each one is still not decoded) and nothing is dropped.
+
 ### 3.5 `.opju` (CPYUA) dataset records — the structural grammar
 
 **Solved and shipping** (`opju_blocks.py`, `opju_values.py`,

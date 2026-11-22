@@ -3,6 +3,7 @@
 // reinterpret these artifact/source facts.
 
 import { dimensionsOf } from "./libraryDetails";
+import { LINK_TABLES_NOTE } from "./libraryLinkTables";
 import { plural } from "./plural";
 import type { LibraryNode } from "./libraryHierarchy";
 
@@ -21,6 +22,9 @@ export function libraryTileSummary(node: LibraryNode): LibraryTileSummary {
     case "folder":
       return { primary: count(node.children.length, "item"), secondary: "Folder", warning: null };
     case "origin-group":
+      if (node.entity.variant === "link-tables") {
+        return { primary: count(node.children.length, "book"), secondary: LINK_TABLES_NOTE, warning: null };
+      }
       return { primary: count(node.children.length, "figure"), secondary: "No matching imported book", warning: null };
     case "workbook": {
       const worksheets = node.children.filter((child) => child.kind === "worksheet").length;
