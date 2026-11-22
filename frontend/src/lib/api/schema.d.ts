@@ -4294,6 +4294,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spectral/spectrogram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spectrogram
+         * @description Short-time Fourier transform of one channel as a long-form map table.
+         */
+        post: operations["spectrogram_api_spectral_spectrogram_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spectral/workbench": {
         parameters: {
             query?: never;
@@ -12322,6 +12342,46 @@ export interface components {
              */
             zero_pad?: number;
         };
+        /** SpectrogramRequest */
+        SpectrogramRequest: {
+            /** Channel */
+            channel: number;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Detrend
+             * @default mean
+             */
+            detrend?: string;
+            /**
+             * Overlap
+             * @default 0.5
+             */
+            overlap?: number;
+            /**
+             * Resample
+             * @default false
+             */
+            resample?: boolean;
+            /**
+             * Scaling
+             * @default psd
+             */
+            scaling?: string;
+            /** Segment Len */
+            segment_len: number;
+            /**
+             * Window
+             * @default hann
+             */
+            window?: string;
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+        };
         /** SpinAsymmetryRequest */
         SpinAsymmetryRequest: {
             /** Dr Mm */
@@ -20175,6 +20235,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spectrogram_api_spectral_spectrogram_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpectrogramRequest"];
             };
         };
         responses: {

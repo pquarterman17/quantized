@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Spectrogram (short-time FFT) in Signal Processing**: pick "Spectrogram · short-time FFT" to see how a signal's spectrum changes along its X axis. Choose one signal column, a window (Hann, Hamming, Blackman, flat top or none), a segment length in rows, the overlap in percent, the scaling (power spectral density, power spectrum or amplitude) and how each segment is detrended. The preview is a heat map with its segment, frequency and value ranges written out. "Add as map worksheet" creates a worksheet (X = segment centre, then frequency, then the spectrum) that the Map tab opens, linked to its source, in one Undo step; adding the same computation again is refused and names the existing worksheet, and a changed source marks it out of date. An unevenly spaced X axis is refused unless you tick "Resample an uneven axis onto an even grid" (off by default), and a segment longer than the data, an overlap of 100 % or more, or a result over 2 million cells is refused with the reason and nothing is added. Frequency is in cycles per X unit; excluded and filtered rows are left out.
+
 ## [0.40.1] - 2026-11-22
 
 ### Fixed
