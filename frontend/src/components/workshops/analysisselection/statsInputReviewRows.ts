@@ -6,7 +6,7 @@
 
 import { analysisColumnName, type AnalysisInputs } from "../../../lib/analysisInputs";
 import type { StatsTestId } from "../../../lib/api/statsTests";
-import { testDef, testUsesAlpha, type TestParams, type TestSelection } from "../../../lib/statsTests";
+import { testDef, type TestParams, type TestSelection } from "../../../lib/statsTests";
 import type { Dataset } from "../../../lib/types";
 
 export interface ReviewRow {
@@ -17,7 +17,9 @@ export interface ReviewRow {
 const datasetOf = (inputs: AnalysisInputs | null): Dataset | null => inputs?.dataset ?? null;
 
 function name(dataset: Dataset | null, key: number | null | undefined): string {
-  if (!dataset || key === null || key === undefined) return "not picked";
+  if (key === null || key === undefined) return "not picked";
+  // No resolved worksheet (loading / failed): the pick exists but cannot be named.
+  if (!dataset) return key < 0 ? "X column" : `column ${key + 1}`;
   if (key < -1 || key >= dataset.data.labels.length) return "missing";
   return analysisColumnName(dataset, key);
 }
@@ -26,6 +28,7 @@ function names(dataset: Dataset | null, keys: readonly number[]): string {
   return keys.length === 0 ? "not picked" : keys.map((key) => name(dataset, key)).join(", ");
 }
 
+const ALPHA_TESTS: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["dunnett", "anova-rm", "anova2-unbalanced", "regression-multi"]);
 const on = (value: boolean): string => (value ? "on" : "off");
 const optional = (dataset: Dataset | null, key: number | null): string => (key === null ? "none" : name(dataset, key));
 
@@ -52,14 +55,14 @@ export function outlierRows(
 
 export function fitYByXRows(
   inputs: AnalysisInputs,
-  s: { xCol: number; yCol: number; order: number; band: string; byCol: number | null },
+  s: { xCol: number; yCol: number; kind: string; order: number; band: string; byCol: number | null },
 ): ReviewRow[] {
   const ds = datasetOf(inputs);
   return [
     { label: "X (factor)", value: name(ds, s.xCol) },
     { label: "Y (response)", value: name(ds, s.yCol) },
-    { label: "Polynomial order", value: String(s.order) },
-    { label: "Band", value: s.band },
+    // Order and band are read by the bivariate leg only.
+    ...(s.kind === "bivariate" ? [{ label: "Polynomial order", value: String(s.order) }, { label: "Band", value: s.band }] : []),
     { label: "By", value: optional(ds, s.byCol) },
   ];
 }
@@ -112,7 +115,8 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
       );
       return rows;
   }
-  if (testUsesAlpha(s.testId)) rows.push({ label: "Alpha", value: String(params.alpha) });
+  // Only what buildTestRequest sends: the panel also shows alpha for tests that ignore it.
+  if (ALPHA_TESTS.has(s.testId)) rows.push({ label: "Alpha", value: String(params.alpha) });
   if (s.testId === "sign-test" || s.testId === "dunnett") rows.push({ label: "Alternative", value: params.alternative });
   if (s.testId === "anova2-unbalanced") rows.push({ label: "Sum of squares type", value: String(params.ssType) });
   if (s.testId === "stepwise") rows.push({ label: "Criterion", value: params.criterion.toUpperCase() }, { label: "Direction", value: params.direction });

@@ -36,7 +36,7 @@ export default function FitYByXPanel() {
         </div>
       ) : (
         <>
-          <StatsInputReview inputs={f.inputs} rows={fitYByXRows(f.inputs, { xCol: f.xCol, yCol: f.yCol, order: f.order, band: f.bandInterval, byCol: f.byCol })} />
+          <StatsInputReview inputs={f.inputs} rows={fitYByXRows(f.inputs, { xCol: f.xCol, yCol: f.yCol, kind: f.kind, order: f.order, band: f.bandInterval, byCol: f.byCol })} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">X (factor)</label>

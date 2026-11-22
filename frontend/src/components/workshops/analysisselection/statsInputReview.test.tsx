@@ -144,6 +144,15 @@ describe("the card reflects each tool's own picks and settings", () => {
     expect(within(card()).getByLabelText("Analysis input")).toHaveTextContent("Y: v (V)");
   });
 
+  it("Fit Y by X: order and band are listed only for the bivariate leg", () => {
+    const grouped: Dataset = { ...SHEET, data: { ...SHEET.data, values: SHEET.data.values.map(([v], i) => [v, i % 2]) }, channelTypes: { 1: "nominal" } };
+    useApp.setState({ datasets: [grouped] });
+    render(<FitYByXPanel />);
+    pick("X (factor)", "1");
+    expect(rows()).not.toHaveProperty("Polynomial order");
+    expect(rows()).not.toHaveProperty("Band");
+  });
+
   it("Multivariate: the picked columns, correlation method and standardize", () => {
     render(<MultivarPanel />);
     expect(rows()).toEqual({ Columns: "v (V), w (A)", Correlation: "pearson", "PCA standardize": "off" });
@@ -172,9 +181,10 @@ describe("the card reflects each tool's own picks and settings", () => {
     render(<StatsTestsPanel />);
     expect(rows()).toEqual({ Test: "Anderson-Darling", Column: "v (V)" });
     pick("Test", "ks-two-sample");
-    expect(rows()).toEqual({ Test: "Two-sample Kolmogorov-Smirnov", "First column": "v (V)", "Second column": "w (A)", Alpha: "0.05" });
+    expect(rows()).toEqual({ Test: "Two-sample Kolmogorov-Smirnov", "First column": "v (V)", "Second column": "w (A)" });
+    expect(rows()).not.toHaveProperty("Alpha"); // the panel shows an alpha field, but this run never sends it
     pick("Test", "dunnett");
-    expect(rows()).toMatchObject({ "Group columns (first is control)": "v (V), w (A)", Alternative: "two-sided" });
+    expect(rows()).toMatchObject({ "Group columns (first is control)": "v (V), w (A)", Alternative: "two-sided", Alpha: "0.05" });
     pick("Test", "stepwise");
     expect(rows()).toMatchObject({ Response: "v (V)", Criterion: "AIC", Direction: "forward" });
     expect(rows()).not.toHaveProperty("Alpha");
