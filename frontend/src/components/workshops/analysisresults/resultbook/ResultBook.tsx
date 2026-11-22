@@ -19,10 +19,9 @@ import ResultBookSection from "./ResultBookSection";
 import { useResultBookActions } from "./useResultBookActions";
 import "./resultBook.css";
 
-const NOT_CURRENT: Readonly<Record<Exclude<SnapshotResultState, "current">, string>> = {
+const NOT_CURRENT: Readonly<Record<"out-of-date" | "pending", string>> = {
   "out-of-date": "The source changed since this result was saved. The values below are the saved ones; reopen in the tool to analyse the current data.",
   "pending": "The full source worksheet is still loading, so the saved input cannot be verified yet. The values below are the saved ones.",
-  "source-missing": "The source worksheet is missing. The values below are the saved ones and cannot be verified.",
 };
 const REPORT_BLOCKED: Readonly<Record<Exclude<SnapshotResultState, "current">, string>> = {
   "out-of-date": "Run the analysis again before adding these values to a report.",
@@ -45,7 +44,7 @@ export default function ResultBook({
   onReopen: () => void;
   onClose: () => void;
 }) {
-  const model = useMemo(() => resultBookModel(result, source), [result, source]);
+  const model = useMemo(() => resultBookModel(result), [result]);
   const inputs = useMemo(() => model ? resultBookInputs(model, source, state) : null, [model, source, state]);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set(model?.sections[0] ? [model.sections[0].key] : []));
   const actions = useResultBookActions(result, busy, setBusy, onClose);
@@ -69,7 +68,8 @@ export default function ResultBook({
       </div>
       {inputs ? <AnalysisInputSummary inputs={inputs} /> : <>
         <p className="qz-result-book-saved-input">Input: {source?.name ?? "missing source"}{columns ? ` · ${columns}` : ""}</p>
-        {state !== "current" && <p className="qz-analysis-missing" role="note">{NOT_CURRENT[state]}</p>}
+        {/* The panel already notes a missing source above the tabs. */}
+        {(state === "out-of-date" || state === "pending") && <p className="qz-analysis-missing" role="note">{NOT_CURRENT[state]}</p>}
       </>}
       {!!model.settings.length && <dl className="qz-result-book-settings" aria-label="Settings">
         {model.settings.map((setting) => <div key={setting.label}><dt>{setting.label}</dt><dd>{setting.value}</dd></div>)}

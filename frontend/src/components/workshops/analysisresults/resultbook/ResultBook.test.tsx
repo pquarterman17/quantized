@@ -117,10 +117,11 @@ describe("result book", () => {
     expect(useApp.getState()).toMatchObject({ activeId: created.id, stageTab: "worksheet", openAnalysisResultId: null });
   });
 
-  it("creates an editable figure from a figure section", async () => {
+  it("creates an editable figure from a collapsed figure section's header", async () => {
     const result = distribution();
     const panel = openBook(result);
-    fireEvent.click(within(panel).getByRole("button", { name: "Expand all" }));
+    const figureToggle = toggles(panel).at(-1)!;
+    expect(figureToggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(within(panel).getAllByRole("button", { name: /Create editable figure:/ })[0]);
     await waitFor(() => expect(useApp.getState().editableFigures).toHaveLength(1));
     expect(useApp.getState().openAnalysisResultId).toBeNull();
@@ -148,6 +149,31 @@ describe("result book", () => {
     expect(within(panel).getByRole("button", { name: "Copy table: Summary" })).toBeEnabled();
     fireEvent.click(within(panel).getByRole("button", { name: "Expand all" }));
     for (const create of within(panel).getAllByRole("button", { name: /Create editable figure:/ })) expect(create).toBeDisabled();
+  });
+
+  it("disables Open as worksheet, with the reason, for a table Freeze cannot take", () => {
+    const result = distribution();
+    const tables = result.tables!.map((table, index) => index === 1 ? { ...table, rows: [] } : table);
+    const panel = openBook({ ...result, tables });
+    const open = within(panel).getByRole("button", { name: "Open as worksheet: Histogram" });
+    expect(open).toBeDisabled();
+    expect(open).toHaveAttribute("title", "Can't open as a worksheet: empty table.");
+    expect(within(panel).getByRole("button", { name: "Open as worksheet: Summary" })).toBeEnabled();
+  });
+
+  it("keeps the book of a result whose source lost the analysed column", () => {
+    const result = fitYByX();
+    const shrunk = { ...source, data: { ...source.data, values: [[], [], []], labels: [], units: [] } };
+    const panel = openBook(result, [shrunk]);
+    expect(within(panel).getByText("Out of date", { selector: ".qz-analysis-status" })).toBeInTheDocument();
+    expect(toggles(panel)).toHaveLength(result.tables!.length + statisticalResultFigureDrafts(result).length);
+  });
+
+  it("offers no book tab when the saved recipe does not parse", () => {
+    const result = { ...distribution(), parameters: {} };
+    useApp.setState({ analysisResults: [result], openAnalysisResultId: result.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.queryByRole("tab", { name: "Result book" })).toBeNull();
   });
 
   it("offers no book for a producer without one", () => {

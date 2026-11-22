@@ -1,6 +1,7 @@
 // One collapsible section of the result book: a saved table or a saved
-// figure. The header (title, size, actions) is always visible, so a section's
-// actions work collapsed; the body renders only when expanded.
+// figure. The header (title, size, actions) is always visible, so every
+// section's actions work collapsed; the body (the table, or the figure
+// preview) renders only when expanded.
 
 import type { AnalysisResultTable } from "../../../../lib/analysisResult";
 import { fmtNum } from "../../../../lib/format";
@@ -50,10 +51,12 @@ export default function ResultBookSection({ section, table, open, onToggle, acti
             title={actions.reportBlocked ?? `Adds the “${section.title}” table to the report.`}
             aria-label={`Send to report: ${section.title}`}
             onClick={() => actions.onReport(section.tableIndex)}>Send to report</Button>
-          <Button size="sm" disabled={actions.disabled} aria-label={`Open as worksheet: ${section.title}`}
-            title="Creates an independent worksheet from this saved table and opens it."
+          <Button size="sm" disabled={actions.disabled || section.freezeBlocked !== null} aria-label={`Open as worksheet: ${section.title}`}
+            title={section.freezeBlocked ? `Can't open as a worksheet: ${section.freezeBlocked}.` : "Creates an independent worksheet from this saved table and opens it."}
             onClick={() => actions.onOpenTable(section.tableIndex)}>Open as worksheet</Button>
-        </> : null}
+        </> : <Button size="sm" variant="primary" disabled={actions.disabled || actions.figureBlocked !== undefined}
+          title={actions.figureBlocked} aria-label={`Create editable figure: ${section.title}`}
+          onClick={() => actions.onCreateFigure(section.draft)}>Create editable figure</Button>}
       </span>
     </header>
     {open && <div id={bodyId} className="qz-result-book-body">
@@ -65,8 +68,7 @@ export default function ResultBookSection({ section, table, open, onToggle, acti
             Showing {PREVIEW_ROWS} of {table.rows.length} rows. Copy and Open as worksheet use the complete table.
           </p>}
         </> : <p className="qz-analysis-empty">This saved table is unavailable.</p>
-        : <StatisticalFigureCard draft={section.draft} disabled={actions.disabled || actions.figureBlocked !== undefined}
-          disabledReason={actions.figureBlocked} onCreate={actions.onCreateFigure} />}
+        : <StatisticalFigureCard draft={section.draft} disabled previewOnly onCreate={actions.onCreateFigure} />}
     </div>}
   </section>;
 }

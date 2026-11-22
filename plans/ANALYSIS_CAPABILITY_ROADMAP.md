@@ -376,9 +376,13 @@ inconsistently exposed, and do not all share the same result lifecycle.
     draft order; the first section opens expanded. Table sections: Copy
     table, Send to report (that table, titled "result · table"; current
     results only), Open as worksheet (freezes that table into an
-    independent worksheet and shows it). Figure sections: Create editable
-    figure (the existing frozen-draft path; send the figure to a report from
-    its window).
+    independent worksheet and shows it; disabled with the Freeze reason for
+    a table that cannot become one). Figure sections: Create editable figure
+    (the existing frozen-draft path; send the figure to a report from its
+    window). Every action sits in the section header, so it works collapsed.
+    The recipe is parsed without the live source, so a source that lost a
+    column still shows its (out-of-date) book; an unparsable recipe shows no
+    book tab.
   - **First slice done (lane RB):** Distribution, Fit Y by X, Multivariate,
     Variability and Outlier screening. Remaining: Statistical tests (no
     figure drafts; one entry in `lib/resultBook.ts` once its method/settings

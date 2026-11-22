@@ -10,7 +10,9 @@
 // tool, so the same result always reads the same way.
 //
 // FAIL CLOSED: an unknown producer, or a supported one whose saved recipe does
-// not parse, has no book (null): the existing tabs still show it. The input
+// not parse, has no book (null, and no tab): the existing tabs still show it.
+// The recipe is parsed WITHOUT the live worksheet, so a source that later lost
+// a column still shows its saved book (out of date). The input
 // line is restated from the live worksheet ONLY while the result is current
 // (lib/analysisResultFreshness: same analysis-view fingerprint, so the same
 // rows); otherwise the book says the saved values no longer match the source
@@ -19,6 +21,7 @@
 
 import type { AnalysisResult } from "./analysisResult";
 import { ROW_POLICY, resolveAnalysisInputs, type AnalysisInputs } from "./analysisInputs";
+import { inlineTableOutputs } from "./analysisResultFreezeOutputs";
 import type { SnapshotResultState } from "./analysisResultFreshness";
 import { distributionRecipe } from "./distributionAnalysisResult";
 import { fitYByXRecipe } from "./fitYByXAnalysisResult";
@@ -29,7 +32,9 @@ import type { Dataset } from "./types";
 import { variabilityRecipe } from "./variabilityAnalysisResult";
 
 export type ResultBookSection =
-  | { key: string; kind: "table"; title: string; tableIndex: number; rows: number; cols: number }
+  | { key: string; kind: "table"; title: string; tableIndex: number; rows: number; cols: number;
+      /** Why the table cannot become a worksheet (the Freeze rule), or null. */
+      freezeBlocked: string | null }
   | { key: string; kind: "figure"; title: string; draft: StatisticalResultFigureDraft };
 
 export interface ResultBookSetting { label: string; value: string }
@@ -64,9 +69,9 @@ const OUTLIER_NAMES: Readonly<Record<string, string>> = {
 /** Per-producer description, as data: a new statistics producer plugs in with
  *  one entry. Each mirrors the columns its tool resolves (see the tool's
  *  useAnalysisInputs call), so the book's input line matches the tool's. */
-const DESCRIBE: Readonly<Record<string, (result: AnalysisResult, source?: Dataset) => Described | null>> = {
-  "distribution-analysis": (result, source) => {
-    const recipe = distributionRecipe(result, source);
+const DESCRIBE: Readonly<Record<string, (result: AnalysisResult) => Described | null>> = {
+  "distribution-analysis": (result) => {
+    const recipe = distributionRecipe(result);
     return recipe && {
       method: recipe.fitDist === "none" ? "Distribution: descriptive summary and Shapiro–Wilk"
         : `Distribution: descriptive summary, Shapiro–Wilk and a ${FIT_NAMES[recipe.fitDist]} fit`,
@@ -79,8 +84,8 @@ const DESCRIBE: Readonly<Record<string, (result: AnalysisResult, source?: Datase
       ]),
     };
   },
-  "fit-y-by-x": (result, source) => {
-    const recipe = fitYByXRecipe(result, source);
+  "fit-y-by-x": (result) => {
+    const recipe = fitYByXRecipe(result);
     const mode = scalar(result, "Mode");
     return recipe && {
       method: `Fit Y by X${mode ? `: ${mode}` : ""}`,
@@ -91,8 +96,8 @@ const DESCRIBE: Readonly<Record<string, (result: AnalysisResult, source?: Datase
       ]),
     };
   },
-  "multivariate-analysis": (result, source) => {
-    const recipe = multivariateRecipe(result, source);
+  "multivariate-analysis": (result) => {
+    const recipe = multivariateRecipe(result);
     return recipe && {
       method: `Multivariate: ${recipe.method === "pearson" ? "Pearson" : "Spearman"} correlation and PCA`,
       inputKeys: { yKeys: [...recipe.columns] },
@@ -103,8 +108,8 @@ const DESCRIBE: Readonly<Record<string, (result: AnalysisResult, source?: Datase
       ]),
     };
   },
-  "variability-analysis": (result, source) => {
-    const recipe = variabilityRecipe(result, source);
+  "variability-analysis": (result) => {
+    const recipe = variabilityRecipe(result);
     return recipe && {
       method: "Variability: nested ANOVA and variance components",
       inputKeys: { yKeys: [recipe.responseCol, recipe.factorACol, recipe.factorBCol] },
@@ -114,8 +119,8 @@ const DESCRIBE: Readonly<Record<string, (result: AnalysisResult, source?: Datase
       ]),
     };
   },
-  "outlier-screening": (result, source) => {
-    const recipe = outlierScreeningRecipe(result, source);
+  "outlier-screening": (result) => {
+    const recipe = outlierScreeningRecipe(result);
     return recipe && {
       method: `Outlier screening: ${OUTLIER_NAMES[recipe.method] ?? recipe.method}`,
       inputKeys: { yKeys: [recipe.col] },
@@ -131,17 +136,23 @@ const DESCRIBE: Readonly<Record<string, (result: AnalysisResult, source?: Datase
 
 export const RESULT_BOOK_PRODUCERS: readonly string[] = Object.keys(DESCRIBE);
 
-export function hasResultBook(result: AnalysisResult): boolean {
-  return Object.hasOwn(DESCRIBE, result.producer.id) && result.outputs.length === 0;
+function describe(result: AnalysisResult): Described | null {
+  return Object.hasOwn(DESCRIBE, result.producer.id) && result.outputs.length === 0
+    ? DESCRIBE[result.producer.id](result) : null;
 }
 
-export function resultBookModel(result: AnalysisResult, source?: Dataset): ResultBookModel | null {
-  if (!hasResultBook(result)) return null;
-  const described = DESCRIBE[result.producer.id](result, source);
+export function hasResultBook(result: AnalysisResult): boolean {
+  return describe(result) !== null;
+}
+
+export function resultBookModel(result: AnalysisResult): ResultBookModel | null {
+  const described = describe(result);
   if (!described) return null;
+  const freeze = inlineTableOutputs(result, []);
   const tables: ResultBookSection[] = (result.tables ?? []).map((table, index) => ({
     key: `table:${index}`, kind: "table", title: table.title || `Table ${index + 1}`, tableIndex: index,
     rows: table.rows.length, cols: table.columns.length,
+    freezeBlocked: freeze[index]?.freezable ? null : freeze[index]?.reason ?? "this table cannot become a worksheet",
   }));
   const figures: ResultBookSection[] = statisticalResultFigureDrafts(result).map((draft) => ({
     key: `figure:${draft.key}`, kind: "figure", title: draft.name, draft,

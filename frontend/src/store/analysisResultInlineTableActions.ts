@@ -103,7 +103,9 @@ export async function sendAnalysisInlineTableToReport(id: string, tableIndex?: n
       records: table.rows.map((row) => Object.fromEntries(table.columns.map((column, index) => [column || "row", row[index]]))),
       columns: table.columns.map((column) => column || "row"),
       title,
-      caption: typeof result.scalarValues?.Interpretation === "string" ? result.scalarValues.Interpretation : "",
+      // The interpretation describes the summary (first) table; a later table
+      // sent on its own carries no caption rather than a misleading one.
+      caption: (tableIndex ?? 0) === 0 && typeof result.scalarValues?.Interpretation === "string" ? result.scalarValues.Interpretation : "",
       source_refs: result.sources.map((source) => ({ kind: "dataset" as const, id: source.datasetId,
         name: initial.datasets.find((dataset) => dataset.id === source.datasetId)?.name ?? source.datasetId })),
     });

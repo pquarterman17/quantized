@@ -281,7 +281,7 @@ describe("analysis result output actions", () => {
     reportEmit.mockResolvedValueOnce({ report: { title: "test", sections: [] } });
     expect(await sendAnalysisInlineTableToReport(inline.id, 1)).toBe(true);
     expect(reportEmit).toHaveBeenLastCalledWith(expect.objectContaining({
-      title: "Smooth · Trace · Histogram", columns: ["center", "count"],
+      title: "Smooth · Trace · Histogram", columns: ["center", "count"], caption: "",
       records: [{ center: 1, count: 2 }, { center: 2, count: 1 }],
     }));
     expect(useApp.getState().reports.at(-1)?.name).toBe("Smooth · Trace · Histogram");

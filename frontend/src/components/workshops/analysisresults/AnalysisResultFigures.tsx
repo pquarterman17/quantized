@@ -86,10 +86,12 @@ function FigureCard({ result, index, savedBinding, onOpen, onBuild, onReport, on
   </article>;
 }
 
-export function StatisticalFigureCard({ draft, disabled, disabledReason, onCreate }: {
+export function StatisticalFigureCard({ draft, disabled, disabledReason, onCreate, previewOnly = false }: {
   draft: StatisticalResultFigureDraft;
   disabled: boolean;
   disabledReason?: string;
+  /** Preview and description only: the caller places the create action (the result book's section header). */
+  previewOnly?: boolean;
   onCreate: (draft: StatisticalResultFigureDraft) => void;
 }) {
   const channel = draft.view.yKeys?.[0] ?? 0;
@@ -103,12 +105,12 @@ export function StatisticalFigureCard({ draft, disabled, disabledReason, onCreat
     <div className="qz-analysis-figure-info">
       <strong>{draft.name}</strong>
       <span>{draft.description}</span>
-      <div className="qz-analysis-figure-actions">
+      {!previewOnly && <div className="qz-analysis-figure-actions">
         <Button size="sm" variant="primary" disabled={disabled}
           title={disabledReason}
           aria-label={`Create editable figure: ${draft.name}`}
           onClick={() => onCreate(draft)}>Create editable figure</Button>
-      </div>
+      </div>}
     </div>
   </article>;
 }
