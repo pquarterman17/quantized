@@ -851,9 +851,10 @@ dataset precedence, roles, selected rows and X range (fail-before tests in
   or hand-edited file, a change made in mode None) still read Current after
   reopen. It now hashes the analysis view for an output whose recipe says
   `inputRows: "analysis-view"`, in both the stamp and the load scan
-  (`lib/analysisResultFreshnessRows.test.ts`, fail-before verified). Cost: a
-  project saved before this with such an output reads Out of date once on
-  reopen (fail closed). A full-worksheet recipe keeps the raw-data hash:
+  (`lib/analysisResultFreshnessRows.test.ts`, fail-before verified). The view
+  hash carries a `v~` prefix so the stored value names its own kind: a project
+  saved before this is still judged on the raw data (no spurious Out of date)
+  until it is saved again. A full-worksheet recipe keeps the raw-data hash:
   exclusions do not change its numbers, so the durable state does not go
   stale. In-session it is still marked stale by the engine on an exclusion
   change (the link is to the source's whole state; a recalculation is a no-op

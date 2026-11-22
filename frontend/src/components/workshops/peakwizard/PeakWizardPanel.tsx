@@ -97,10 +97,10 @@ export default function PeakWizardPanel() {
         </div>
       ) : (
         <>
+          {w.binding && <ToolInputSummary load={false} xKey={w.binding.xKey} columns={[w.binding.yKey]} />}
           {/* Step chips: click to jump (state persists across steps). One
               line (UX-F): an inactive chip shows only its number (shell.css);
               its label stays its accessible name and tooltip. */}
-          {w.binding && <ToolInputSummary load={false} xKey={w.binding.xKey} columns={[w.binding.yKey]} />}
           <div className="qzk-wizard-steps">
             {WIZARD_STEPS.map((label, i) => (
               <button

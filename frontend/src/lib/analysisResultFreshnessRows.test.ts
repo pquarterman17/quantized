@@ -49,4 +49,10 @@ describe("linked output freshness and the source's row state", () => {
     expect(stamped.sourceFingerprint).toBe(dataFingerprint(data([1, 2, 3, 4])));
     expect(staleAnalysisOutputs([stamped], [source({ excludedRows: [1] }), output(false)])).toEqual([]);
   });
+
+  it("a fingerprint saved before this (raw-data hash) is still judged on the raw data, not flagged for nothing", () => {
+    const legacy: AnalysisResult = { ...RESULT, sourceFingerprint: dataFingerprint(data([1, 2, 3, 4])) };
+    expect(staleAnalysisOutputs([legacy], [source(), output(true)])).toEqual([]);
+    expect(staleAnalysisOutputs([legacy], [{ ...source(), data: data([1, 2, 3, 5]) }, output(true)])).toEqual(["o"]);
+  });
 });

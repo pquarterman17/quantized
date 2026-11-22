@@ -53,18 +53,30 @@ export function outputReadsAnalysisView(result: AnalysisResult, byId: ReadonlyMa
   return result.outputs.some((ref) => byId.get(ref.datasetId)?.analysisRecipe?.inputRows === "analysis-view");
 }
 
+/** Marks a per-source hash taken over the analysis view. The prefix makes the
+ *  kind part of the stored value, so a fingerprint saved before analysis-view
+ *  outputs were hashed this way (no prefix: the raw-data hash) is still
+ *  compared against the raw data and is not flagged stale for no reason. */
+export const VIEW_FINGERPRINT_PREFIX = "v~";
+
 /** The result's sources' fingerprint, or null when it can't be judged (a
  *  source or output missing, or a lazily loaded book still pending, whose
- *  data is only a preview). Exported for the load-side scan
- *  (lib/analysisResultStaleLoad.ts) so both sides hash the same thing: the
- *  analysis view for an analysis-view recipe, the raw data otherwise. */
-export function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
+ *  data is only a preview). `kind` defaults to what the outputs' recipes say
+ *  (the analysis view for an analysis-view recipe, the raw data otherwise);
+ *  the load-side scan passes the kind the STORED value was taken with. Shared
+ *  with lib/analysisResultStaleLoad.ts so both sides hash the same thing. A
+ *  result with several outputs uses the analysis view when ANY of them reads
+ *  it (Signal Processing writes one output; this is the conservative choice). */
+export function sourcesFingerprint(
+  result: AnalysisResult,
+  byId: ReadonlyMap<string, Dataset>,
+  kind: "view" | "raw" = outputReadsAnalysisView(result, byId) ? "view" : "raw",
+): string | null {
   const refs = [...result.sources, ...result.outputs].map((ref) => byId.get(ref.datasetId));
   if (result.sources.length === 0 || refs.some((dataset) => !dataset || dataset.pending)) return null;
-  const view = outputReadsAnalysisView(result, byId);
   return result.sources.map((ref) => {
     const source = byId.get(ref.datasetId)!;
-    return view ? analysisDataFingerprint(source) : dataFingerprint(source.data);
+    return kind === "view" ? `${VIEW_FINGERPRINT_PREFIX}${analysisDataFingerprint(source)}` : dataFingerprint(source.data);
   }).join(":");
 }
 
