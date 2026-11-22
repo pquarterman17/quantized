@@ -1673,6 +1673,9 @@ Check these only with automated coverage plus an owner-visible desktop run.
       the window, reopen from the Library row, assert the reopened document
       `toEqual` the saved one. Runs in CI's `e2e.yml`. Owner desktop run still
       gates the checkbox.
+      **Store/serializer half added 2026-11-22 (Lane FA, no bug found):** `frontend/src/store/figureJourneys.a3a5.test.ts`
+      (save, close, project reopen, figure reopen; complete document, window and live-facade
+      `toEqual`; a second cycle is stable). Still human: the desktop click-through.
 - [ ] **A4 Complex 1-D:** Repeat A3 with y2, asymmetric errors, hidden/reordered
       series, custom formats, annotations, shapes, and waterfall offset.
       **Automated half DONE 2026-08-12** — the same spec carries y2 keys,
@@ -1687,6 +1690,15 @@ Check these only with automated coverage plus an owner-visible desktop run.
       bindings instead of re-deriving them from the legacy symmetric-only
       projection. Verified load-bearing twice, by planting a shapes-dropping
       reopen and an asymmetric-error-dropping rebuild; each reddens it.
+      **Store/serializer half added 2026-11-22 (Lane FA, no bug found):** `frontend/src/store/figureJourneys.a3a5.test.ts` drives the real
+      store (`saveFigure`/`closeWindow`/`loadWorkspace`/`openEditableFigure`) through
+      `serializeWorkspace` + `parseWorkspace`: y2 keys/scale/limits/format/label, asymmetric Y
+      errors (`bindings.errors`, kept when the reopened figure is edited and saved again),
+      hidden + reordered + renamed series, custom formats, annotation, shape, ref line, waterfall
+      offsets; asserts each is in the SAVED document first, then `toEqual` on the whole document
+      and the live facade after reopen. Also pins every `PlotView` field through the live facade
+      and the document-only fields (frozen snapshot with NaN, axis breaks, encoding, publication
+      overrides/series styles, output). Still human: how the reopened figure LOOKS and feels.
 - [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
       and export with the same series and labels. **Automated half DONE
       2026-08-14** — `e2e/specs/group-facet-journey.spec.ts`, a real-Chromium
@@ -1709,6 +1721,10 @@ Check these only with automated coverage plus an owner-visible desktop run.
       per-level suffix in `calc.plotting.build_grouped_series` reddens the
       exported-SVG label assertion directly. Runs in CI's `e2e.yml`. Owner
       desktop run still gates the checkbox.
+      **Store/serializer half added 2026-11-22 (Lane FA):** `frontend/src/store/figureJourneys.a3a5.test.ts` pins `groupKey`/`facetKey`
+      in the saved document, back into the live facade after a file round trip, kept out of the
+      visual state, and cleared when unset. Facet RENDERING is still the F2.3i gap above.
+      Still human: Group/Facet build on the Stage and eyeballing the export.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
       save/reopen, edit one panel, and preserve layout. **Automated half DONE
       2026-09-13** — `e2e/specs/multi-panel-journey.spec.ts`, a real-Chromium
@@ -1760,6 +1776,13 @@ Check these only with automated coverage plus an owner-visible desktop run.
       spec's post-rearrange slot-order assertion (`slot(win, 0)` still
       shows the pre-rearrange figure); reverted byte-identical. Owner
       desktop run still gates the checkbox.
+      **Store/file half added 2026-11-22 (Lane FA, no bug found):**
+      `frontend/src/components/workshops/figurepage/useFigurePage.journeyA6.test.ts` drives the
+      real Figure Page hook + store + `.dwk` writer/reader: 2x2 from four saved figures, link
+      then unlink (flags on the page request), swap rearrange with a caption, layout gaps/align/
+      resize mode, save, file round trip, reopen (`buildSpec()` equals the pre-save spec),
+      edit one panel, save, round trip again (only that override changed; a linked page reopens
+      linked). Still human: Shift+Arrow/drag feel and the look of the linked page.
 - [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
       seconds and visually compare it with the internal figure. **Code half
       DONE 2026-09-29 (ChatGPT-Sol; revised in PR #492 review):** single
@@ -1815,6 +1838,11 @@ Check these only with automated coverage plus an owner-visible desktop run.
       mapping. All eight reverted byte-identical. Runs in CI's `ci.yml`
       (`backend` job's `pytest -n auto`; `frontend` job's vitest). Owner
       desktop run still gates the checkbox.
+      **Backend supplement added 2026-11-22 (Lane FA, no bug found):**
+      `tests/test_export_vector_parity.py` adds asymmetric Y-error bar extents ([y-minus, y+plus]
+      in data units), secondary axis limits/scale/tick format on the saved Figure, log scale +
+      limits, reordered series reordering the legend, and SVG vs PDF page size (`/MediaBox`).
+      Still human: glyph/visual comparison against the screen and a PDF viewer.
 - [ ] **A9 Time targets:** First unfamiliar dataset to acceptable figure in at
       most 20 minutes; routine figure in at most 2 minutes; copy/paste in
       seconds.
