@@ -9,6 +9,15 @@
 // run is one request; a newer run, or unmount, makes an older one write
 // nothing (the `seq` pattern of usePeakBatch).
 //
+// OUT OF DATE (lane WB4). The run keeps its own sequenced request (it resolves
+// several datasets before the one call, so it is not a useWorkbenchPreview
+// run) and stamps the table with the key it was LAUNCHED with
+// (workbench/useRunStamp): the picks, windows, baseline, alignment, the plot's X/Y
+// selection (not the active dataset's labels: Add trend itself switches the active
+// dataset) and each picked dataset's row / data identity. A table whose key has
+// moved on is `stale`: it stays listed, marked, but cannot be exported to CSV or
+// written to the library as the trend dataset until the next Integrate.
+//
 // Store access by selector only (architecture.test.ts's getState ratchet).
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +29,9 @@ import { keysAcross, metaValue, pathFromId, type MetaKeyInfo } from "../../../li
 import { integratePeaksBatch, type IntegrateBatchResponse } from "../../../lib/api/peaks";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { Refusal } from "../workbench/refusal";
+import { useRunStamp } from "../workbench/useRunStamp";
 import { commitBatchTable } from "../../../store/commitBatchTable";
 import {
   batchBody,
@@ -72,6 +84,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   const [align, setAlign] = useState(false);
   const [phase, setPhase] = useState<BatchIntegratePhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [refusalText, setRefusalText] = useState<string | null>(null);
   const [run, setRun] = useState<BatchRun | null>(null);
   const [xField, setXField] = useState("");
   const seq = useRef(0);
@@ -84,6 +97,12 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     : !channels
       ? "select a dataset with a plotted Y column: the batch integrates that column, by name, in every dataset"
       : picked.length === 0 ? "pick at least one dataset" : windowsProblem(windows);
+
+  const stamp = useRunStamp(JSON.stringify([
+    picked, windows, baseline, align, xKey, yKeys, seriesOrder,
+    picked.map((id) => datasetInputsToken(datasets.find((d) => d.id === id))),
+  ]));
+  const stale = run !== null && stamp.stale;
 
   // Numeric metadata fields the integrated datasets carry, for the trend's x.
   const fields: MetaKeyInfo[] = useMemo(() => {
@@ -100,9 +119,11 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     if (block || busy || !channels) return;
     const id = ++seq.current;
     const live = () => seq.current === id;
+    const launchKey = stamp.launchKey(); // what this run was asked with, not what it ends under
     const ws = windows.map((w) => ({ ...w }));
     setPhase("running");
     setError(null);
+    setRefusalText(null);
     const outcomes: SourceOutcome[] = [];
     const series: { name: string; x: number[]; y: number[] }[] = [];
     const metaOf = new Map<string, Record<string, unknown>>();
@@ -125,16 +146,18 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     let res: IntegrateBatchResponse | null = null;
     try {
       if (align && series.length > 1 && !sameGrid(series.map((s) => s.x))) {
-        throw new Error("alignment needs every dataset on the same x grid; these differ — turn Align off");
+        throw new Refusal("alignment needs every dataset on the same x grid; these differ — turn Align off");
       }
       if (series.length > 0) res = await integratePeaksBatch(batchBody(series, ws, { baseline, align }));
     } catch (e) {
       if (!live()) return;
+      if (e instanceof Refusal) setRefusalText(e.message);
       setError(e instanceof Error ? e.message : "the batch failed");
       setPhase("failed");
       return;
     }
     if (!live()) return;
+    stamp.record(launchKey);
     setRun({
       rows: batchIntegrateRows(outcomes, res, ws), outcomes, windows: ws, channels, baseline,
       aligned: res?.aligned ?? false, metaOf, fps, ranAt: new Date().toISOString(),
@@ -143,12 +166,12 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   };
 
   const exportCsv = () => {
-    if (run) saveBlob(csvBlob(batchIntegrateCsv(run.rows)), "peak-batch-integrate.csv");
+    if (run && !stale) saveBlob(csvBlob(batchIntegrateCsv(run.rows)), "peak-batch-integrate.csv");
   };
 
   /** Land the trend in the library; returns its id and whatever was skipped. */
   const addTrend = (): { id: string; skipped: string[] } | null => {
-    if (!run) return null;
+    if (!run || stale) return null;
     const field = xField ? pathFromId(xField) : null;
     const { data, skipped } = trendStruct(run.rows, run.windows, run.outcomes, run.metaOf, field, {
       baseline: run.baseline, aligned: run.aligned, ranAt: run.ranAt,
@@ -174,7 +197,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     togglePicked: (dsId: string) => setPicked((p) => (p.includes(dsId) ? p.filter((x) => x !== dsId) : [...p, dsId])),
     windows, setWindows, seedWindows: windowsFromPeaks(seedPeaks), roi,
     baseline, setBaseline, align, setAlign,
-    channels, block, busy, phase, error,
+    channels, block, busy, phase, error, refusal: error !== null && error === refusalText, stale,
     rows: run?.rows ?? null, fields, xField, setXField,
     start, exportCsv, addTrend,
   };
