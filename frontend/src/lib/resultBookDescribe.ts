@@ -10,7 +10,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
 import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
-import { testColumns, testDef } from "./statsTests";
+import { testColumns, testDef, testUsesAlpha } from "./statsTests";
 import { williamsonHallRecipe } from "./williamsonHallRecipe";
 
 export interface ResultBookSetting { label: string; value: string }
@@ -53,10 +53,6 @@ function names(labels: readonly string[], shown = 6): string {
 
 // ---- Statistical tests ----------------------------------------------------
 
-/** Where the tool shows an alpha field (StatsTestsInputs): every test except
- *  these three, which do not read it. */
-const NO_ALPHA = new Set(["anderson", "partial-correlation", "stepwise"]);
-
 const COLUMN_ROLE: Readonly<Record<string, string>> = {
   one: "Column", two: "Columns", paired: "Paired columns", blocks: "Conditions", columns: "Columns",
   factorial: "Response, factor A, factor B", regression: "Response, predictors",
@@ -72,7 +68,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
   if (!recipe) return null;
   const def = testDef(recipe.testId);
   const { params, selection } = recipe;
-  const alpha = NO_ALPHA.has(def.id) ? null : String(params.alpha);
+  const alpha = testUsesAlpha(def.id) ? String(params.alpha) : null;
   if (def.input === "none") {
     return {
       method: def.label, inputKeys: null, inputNote: "no worksheet (planning calculation)",
@@ -127,7 +123,8 @@ function describeWilliamsonHallBatch(result: AnalysisResult): Described | null {
   const wavelengths = new Set<number>();
   for (const raw of items) {
     const item = record(raw);
-    if (!item || typeof item.datasetName !== "string" || !Array.isArray(item.rows) ||
+    if (!item || typeof item.datasetName !== "string" || !Array.isArray(item.rows) || item.rows.length < 2 ||
+        !item.rows.every((row) => finite(record(row)?.twoTheta) && finite(record(row)?.fwhm)) ||
         !finite(item.wavelengthA) || item.wavelengthA <= 0) return null;
     wavelengths.add(item.wavelengthA);
   }
@@ -157,7 +154,8 @@ function describeAnalysisBatch(result: AnalysisResult): Described | null {
   const own = Object.entries(parameters).flatMap(([key, value]): [string, string][] => {
     if (key === "toolId" || key === "selection") return [];
     const shown = typeof value === "boolean" ? (value ? "yes" : "no") : text(value);
-    if (shown === null) return [];
+    // A JSON-string blob (a tool's whole settings object) is not a readable setting.
+    if (shown === null || /^[{[]/.test(shown)) return [];
     return [[key.charAt(0).toUpperCase() + key.slice(1), shown.length > BATCH_VALUE_MAX ? `${shown.slice(0, BATCH_VALUE_MAX - 1)}…` : shown]];
   });
   return {

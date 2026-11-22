@@ -229,10 +229,15 @@ describe("result book for a Williamson–Hall comparison", () => {
   });
 
   it("has no book tab when the saved comparison recipe does not parse", () => {
-    const result = { ...williamsonHallBatch(sheets), parameters: { recipe: { items: [] } } };
-    useApp.setState({ datasets: sheets, analysisResults: [result], openAnalysisResultId: result.id });
-    render(<AnalysisResultPanel />);
-    expect(screen.queryByRole("tab", { name: "Result book" })).toBeNull();
+    const good = williamsonHallBatch(sheets);
+    const recipe = good.parameters!.recipe as { items: Record<string, unknown>[] };
+    for (const items of [[], [{ ...recipe.items[0], rows: [] }]]) {
+      const result = { ...good, parameters: { recipe: { ...recipe, items } } } as AnalysisResult;
+      useApp.setState({ datasets: sheets, analysisResults: [result], openAnalysisResultId: result.id });
+      const { unmount } = render(<AnalysisResultPanel />);
+      expect(screen.queryByRole("tab", { name: "Result book" })).toBeNull();
+      unmount();
+    }
   });
 });
 
@@ -249,6 +254,7 @@ describe("result book for an analysis batch", () => {
     expect(settings).toHaveTextContent("Completed1");
     expect(settings).toHaveTextContent("Methodlinear");
     expect(settings).not.toHaveTextContent("Selection");
+    expect(settings).not.toHaveTextContent("Params");
     expect(titles(panel)).toEqual(["Batch status"]);
     expect(within(panel).getByRole("list", { name: "Warnings" })).toHaveTextContent("b: no data");
     expect(within(panel).queryByRole("button", { name: "Reopen in tool" })).toBeNull();
