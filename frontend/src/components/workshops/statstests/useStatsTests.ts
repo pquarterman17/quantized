@@ -111,7 +111,7 @@ export function useStatsTests(): StatsTestsState {
   // contract against the FULLY LOADED worksheet, so a lazy Origin preview is
   // never tested and a refusal is the error shown.
   const inputs = useAnalysisInputs({
-    yKeys: testColumns(testId, sel), policy: ROW_POLICY.analysisView, load: testDef(testId).input !== "none",
+    noX: true, yKeys: testColumns(testId, sel), policy: ROW_POLICY.analysisView, load: testDef(testId).input !== "none",
   });
 
   const invalidate = () => {
@@ -162,7 +162,7 @@ export function useStatsTests(): StatsTestsState {
         // buildTestRequest say what is missing.
         const picked = testColumns(id, runSelection);
         const input = resolveAnalysisInputs({
-          datasets: [ds], activeId: ds.id, yKeys: picked.length > 0 ? picked : [-1], policy: ROW_POLICY.analysisView,
+          datasets: [ds], activeId: ds.id, noX: true, yKeys: picked.length > 0 ? picked : [-1], policy: ROW_POLICY.analysisView,
         });
         return input.ok ? buildTestRequest(id, input.data, runSelection, runParams) : { ok: false as const, error: input.reason };
       });

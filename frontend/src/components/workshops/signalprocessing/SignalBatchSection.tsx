@@ -31,6 +31,9 @@ export default function SignalBatchSection({ settings, spectral, blockedReason }
     const out = await runSignalOn(settings, spectral, channels, dataset, analysisSelectionData(dataset, selection));
     return { values: signalSummary(out) };
   }, [settings, spectral]);
+  // The batch has its own row policy (exclusions left out), so the single-run
+  // "Use excluded/filtered rows" choice is not recorded as if it applied.
+  const { useAllRows: _singleRunRows, ...batchSettings } = settings;
   return <>
     <AnalysisInputReview toolId="signal-processing" supportsBatch heading="Input for batch runs" />
     {blockedReason && <p className="qzk-analysis-input-issue error">{blockedReason}</p>}
@@ -38,7 +41,7 @@ export default function SignalBatchSection({ settings, spectral, blockedReason }
       toolId="signal-processing"
       label={operationLabel(settings.operation)}
       summaryColumns={[...SIGNAL_SUMMARY_HEADERS]}
-      resultParameters={{ operation: settings.operation, settings: JSON.stringify(settings) }}
+      resultParameters={{ operation: settings.operation, settings: JSON.stringify(batchSettings) }}
       blockedReason={blockedReason}
       runItem={runItem}
     />

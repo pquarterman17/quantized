@@ -19,6 +19,7 @@ import {
   type MagBgMode,
   type MagTab,
 } from "./useMagTools";
+import MagInputSummary from "./MagInputSummary";
 import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
 import NormalizationPane from "./NormalizationPane";
@@ -70,6 +71,8 @@ export default function MagToolsPanel() {
           Select a dataset first.
         </div>
       )}
+
+      {m.active && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
 
       {m.tab === "background" ? (
         <div style={{ marginTop: 12 }}>

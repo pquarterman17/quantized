@@ -39,7 +39,7 @@ export default function SignalScopeAndBy({ source, secondary, settings, spectral
   [settings, spectral, channels, source]);
   return (
     <>
-      <SignalScopeNote source={source} secondary={secondary} />
+      <SignalScopeNote source={source} secondary={secondary} useAllRows={settings.useAllRows} />
       <SignalBatchSection settings={settings} spectral={spectral} blockedReason={blockedReason} />
       <ByLevelRunSection
         tool="Signal processing"

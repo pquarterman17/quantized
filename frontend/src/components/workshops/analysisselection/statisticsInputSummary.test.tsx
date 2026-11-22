@@ -78,6 +78,13 @@ describe("statistics tools show the shared summary", () => {
     expect(line).not.toHaveClass("blocked");
   });
 
+  it.each(PANELS)("%s prints X only when the tool has an X axis", (name, panel) => {
+    render(panel());
+    const line = screen.getByLabelText("Analysis input");
+    if (name === "Fit Y by X") expect(line).toHaveTextContent("X: ");
+    else expect(line).not.toHaveTextContent(/\bX: /);
+  });
+
   it("Statistical tests shows no summary for the data-free power test", () => {
     const { result } = renderHook(() => useStatsTests());
     act(() => result.current.setTestId("power"));

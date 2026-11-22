@@ -8,6 +8,8 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Signal Processing "Use excluded/filtered rows"**: on by default (the single run still uses every worksheet row, as before). Turn it off to run on the analysis view; the input line and its note say which, and the choice is saved with the recipe, so a saved recipe, a replay and a recalculation of the linked worksheet use the same rows.
+- **Baseline, Optical gap and the magnetometry tools** (Background, Units, Internal field, Curie-Weiss) state their input and row policy in the shared input line. Their rows are unchanged (Baseline and the magnetometry conversions use every row, Optical gap and Curie-Weiss leave excluded and filtered-out rows out).
 - **One input line for analysis tools**: Curve fit, Peaks, Distribution, Outlier screening, Signal Processing, Fit Y by X, Multivariate, Variability chart, Statistical tests and the Test chooser now state what they analyse in the same form ("Input: sheet · X · Y · N of M rows · range") with the exact row policy under it (whether excluded and filtered-out rows, selected rows and the plot range are used). Tools keep their own defaults; where they differ (Signal Processing uses every row, the statistics tools leave excluded and filtered-out rows out) the line says so.
 - **Shared "add result as dataset" contract**: Surface fit, Optical gap and Ellipse fit outputs now land as one undo step together with a Library result; clicking Add again on the same computation creates no duplicate (the button says it is already added); a change to the source marks the output Out of date in Auto and Manual recalculation mode (None tracks nothing), and that state survives save and reopen.
 - **Baseline subtract, Tabulate export, Peak batch table, Batch integrate trend and Fit band plot** now use the same contract: one undo step with a Library result, no duplicate on a repeat click (two clicks while a baseline is still being fetched make one worksheet), and the output goes Out of date when its source changes (for the two batch tables, when ANY of the datasets they summarise changes).
@@ -32,6 +34,8 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Changed
 
+- The input line no longer prints "X:" for tools that have no X axis (Multivariate, Variability chart, Statistical tests, Test chooser, Distribution, Outlier screening). The Baseline header now reads "Input: sheet · X · Y · rows" instead of "sheet: Y vs X".
+- Optical gap, Surface fit and Ellipse fit explain a refusal (for example, no rows left after exclusions) instead of sending an empty request.
 - Distribution, Fit Y by X, Variability, Outlier screening and Multivariate share one duplicate-save check and one undo step for Save result; behaviour is otherwise unchanged. Snapshot results still go Out of date by data fingerprint in every recalculation mode, including None.
 - **Peak find is ~2x faster on large traces** (1M rows: 70 s to 36 s): the SNIP clip runs as a compiled `numba` kernel with the same results, and falls back to the previous numpy code where numba is unavailable.
 

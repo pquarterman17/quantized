@@ -7,9 +7,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { taucFit, type TaucResult, type TaucSignal, type TaucXUnit, type TransitionKind } from "../../../lib/api/analysisExtras";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset } from "../../../store/useApp";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -24,6 +26,7 @@ export const TRANSITIONS: { value: TransitionKind; label: string }[] = [
 
 export interface OpticalGapState {
   hasData: boolean;
+  inputs: AnalysisInputs;
   columns: PickColumn[];
   xCol: number;
   yCol: number;
@@ -118,6 +121,8 @@ export function useOpticalGap(): OpticalGapState {
 
   const xCol = validPick(columns, picks[0], -1);
   const yCol = validPick(columns, picks[1], 0);
+  // The shared input contract: the analysis view of the picked X and Y (the fit loads through it too).
+  const inputs = useAnalysisInputs({ xKey: xCol, yKeys: [yCol], policy: ROW_POLICY.analysisView });
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
   const key = [active?.id, fingerprint, xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax].join(":");
   const result = stored && stored.key === key ? stored.res : null;
@@ -246,6 +251,7 @@ export function useOpticalGap(): OpticalGapState {
 
   return {
     hasData,
+    inputs,
     columns,
     xCol,
     yCol,

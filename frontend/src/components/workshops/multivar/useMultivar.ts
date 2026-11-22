@@ -89,7 +89,7 @@ export function useMultivar(): MultivarState {
 
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view over the picked columns; a lazy Origin preview is refused.
-  const inputs = useAnalysisInputs({ yKeys: selected, policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: selected, policy: ROW_POLICY.analysisView });
   const data = inputs.ok ? inputs.data : null;
   const rowIds = inputs.ok ? inputs.rowIds : null;
 

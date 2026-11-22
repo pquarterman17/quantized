@@ -1,7 +1,7 @@
 import { applyCorrections } from "../lib/api";
 import { remapChannelList, type ColumnShift } from "../lib/channelRemap";
 import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
-import { bindSignalRecipe } from "../lib/signalRecipe";
+import { bindSignalRecipe, signalRecipeInputData } from "../lib/signalRecipe";
 import type { Dataset } from "../lib/types";
 import { shiftForColumnChange } from "./derivedSheetShift";
 import type { AppState } from "./useApp";
@@ -57,8 +57,9 @@ export async function runDerivedWorksheetRecompute(
     const own = sheet.formulas?.length ?? 0;
     const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
     const shifted = shiftForColumnChange(sheet, before, source.data.labels);
+    const input = signalRecipeInputData(recipe, source);
     const corrected = await applyCorrections({
-      dataset: source.data,
+      dataset: input,
       params: recipe.params,
       ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
     });
@@ -68,7 +69,7 @@ export async function runDerivedWorksheetRecompute(
       sheet: {
         ...shifted.sheet,
         data,
-        raw: source.data,
+        raw: input, // row-aligned with the output (the source data under the default)
         corrections: recipe.params,
         analysisRecipe: recipe,
         formulaErrors: errors,

@@ -4,6 +4,7 @@ import { lit } from "./macro";
 import {
   bindSignalRecipe,
   dataXUnit,
+  signalRecipeInputData,
   signalRecipeLabel,
   type SignalAnalysisRecipe,
   type SignalBindOptions,
@@ -22,12 +23,14 @@ export {
   signalRecipeLabel,
   signalRecipeNeedsXUnit,
   signalTransformParamsOf,
+  signalRecipeInputData,
 } from "./signalRecipe";
 export type {
   SignalAnalysisRecipe,
   SignalBindOptions,
   SignalChannelRef,
   SignalCorrectionRecipe,
+  SignalInputRows,
   SignalTransformParams,
 } from "./signalRecipe";
 
@@ -73,17 +76,21 @@ export async function computeSignalTransform(
     );
   }
   const label = signalRecipeLabel(recipe);
+  // The recipe's row choice (default: every worksheet row) applies to every
+  // input; `raw` below is the input actually analysed, so it stays row-aligned
+  // with the output (it IS the source data under the default).
+  const input = signalRecipeInputData(recipe, source);
   if (recipe.kind === "spectral") {
     const data = secondary
-      ? await runSpectralWorkbench(source.data, recipe, signal, false, secondary.data)
-      : await runSpectralWorkbench(source.data, recipe, signal);
+      ? await runSpectralWorkbench(input, recipe, signal, false, signalRecipeInputData(recipe, secondary))
+      : await runSpectralWorkbench(input, recipe, signal);
     const sourceName = secondary ? `${source.name} vs ${secondary.name}` : source.name;
     return {
       data,
       name: `${sourceName} (${recipe.operation})`,
       recipe,
       datasetPatch: {
-        raw: source.data,
+        raw: input,
         analysisRecipe: recipe,
         derivedFrom: { datasetId: source.id, pipeline: label },
         ...(source.workbookId ? { workbookId: source.workbookId } : {}),
@@ -92,7 +99,7 @@ export async function computeSignalTransform(
     };
   }
   const data = await applyCorrections({
-    dataset: source.data,
+    dataset: input,
     params: recipe.params,
     ...(source.errorRoles ? { error_bindings: source.errorRoles } : {}),
   }, signal);
@@ -101,7 +108,7 @@ export async function computeSignalTransform(
     name: `${source.name} (${recipe.operation})`,
     recipe,
     datasetPatch: {
-      raw: source.data,
+      raw: input,
       corrections: recipe.params,
       analysisRecipe: recipe,
       derivedFrom: { datasetId: source.id, pipeline: label },

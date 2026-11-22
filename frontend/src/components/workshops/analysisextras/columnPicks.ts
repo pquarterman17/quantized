@@ -2,12 +2,12 @@
 // optical gap, ellipse fit; gap audit 5 lane I). Every pick is an index into
 // the active dataset: -1 is the X/time axis, 0.. are the value channels (the
 // same convention as the outlier / distribution workshops). Data is read through
-// lib/rowstate.analysisData (excluded / filtered rows never reach a fit) after
-// resolving the FULL dataset, never a large file's small preview.
+// the shared input contract (lib/analysisInputs, ROW_POLICY.analysisView:
+// excluded / filtered rows never reach a fit) after resolving the FULL dataset, never a large file's small preview.
 
 import { useCallback } from "react";
 
-import { analysisData } from "../../../lib/rowstate";
+import { resolveAnalysisInputs, ROW_POLICY } from "../../../lib/analysisInputs";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -50,8 +50,10 @@ export function finiteColumns(d: DataStruct, picks: readonly number[]): number[]
 }
 
 /** Loader for the picked columns of the FULL analysis view of dataset `id`,
- *  finite rows only (null when the dataset is gone). Taken through a selector, so a panel never
- *  reads the store imperatively in render. */
+ *  finite rows only (null when the dataset is gone). A refusal of the contract
+ *  (deleted column, no rows left after exclusions and filters) rejects with its
+ *  reason. Taken through a selector, so a panel never reads the store
+ *  imperatively in render. */
 export function useLoadColumns(): (
   id: string,
   picks: readonly number[],
@@ -61,8 +63,9 @@ export function useLoadColumns(): (
     async (id, picks) => {
       const ds = await resolve(id);
       if (!ds) return null;
-      const d = analysisData(ds) ?? ds.data;
-      return { columns: finiteColumns(d, picks), data: ds.data };
+      const inputs = resolveAnalysisInputs({ datasets: [ds], activeId: ds.id, yKeys: picks, noX: true, policy: ROW_POLICY.analysisView });
+      if (!inputs.ok) throw new Error(inputs.reason);
+      return { columns: finiteColumns(inputs.data, picks), data: ds.data };
     },
     [resolve],
   );
