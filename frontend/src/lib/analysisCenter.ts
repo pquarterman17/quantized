@@ -1,5 +1,6 @@
 import { channelModelingType, isCategorical } from "./modeling";
 import { canRenderMap, MAP_GATE_CHECKING, mapGateResolved } from "./mapdata";
+import { EXTRA_REQUIREMENTS } from "./analysisExtraRequirements";
 import { techniqueOf } from "./techniqueDefaults";
 import type { Dataset, Technique } from "./types";
 import type { Action } from "../store/commands";
@@ -93,7 +94,7 @@ export function dimensions(dataset: Dataset): { rows: number; columns: number; n
   };
 }
 
-function compatibility(meta: AnalysisToolMetadata, dataset: Dataset | undefined): { available: boolean; reason?: string } {
+function compatibility(id: string, meta: AnalysisToolMetadata, dataset: Dataset | undefined, datasets: readonly Dataset[]): { available: boolean; reason?: string } {
   if (meta.requirement === "none") return { available: true };
   if (!dataset) return { available: false, reason: "Select a worksheet first." };
   const technique = techniqueOf(dataset);
@@ -115,15 +116,23 @@ function compatibility(meta: AnalysisToolMetadata, dataset: Dataset | undefined)
     if (!canRenderMap(dataset.data) && !mapGateResolved(dataset.data)) return { available: false, reason: MAP_GATE_CHECKING };
     if (!canRenderMap(dataset.data)) return { available: false, reason: "A 2-D map with x, y, and intensity columns is required." };
   }
+  // Worksheet-count and 2θ checks live in the shared predicate table the
+  // Analyze menu and palette read (lib/analysisExtraRequirements.ts).
+  for (const predicate of EXTRA_REQUIREMENTS[id] ?? []) {
+    const reason = predicate({ dataset, datasets });
+    if (reason) return { available: false, reason: `${reason}.` };
+  }
   return { available: true };
 }
 
-export function analysisTools(actions: readonly Action[], dataset: Dataset | undefined): AnalysisTool[] {
+/** `datasets` is every worksheet in the project (the "2 or more worksheets"
+ *  check); omitted, it defaults to just the active one. */
+export function analysisTools(actions: readonly Action[], dataset: Dataset | undefined, datasets: readonly Dataset[] = dataset ? [dataset] : []): AnalysisTool[] {
   const technique = techniqueOf(dataset);
   return actions.flatMap((action) => {
     const meta = ANALYSIS_TOOL_METADATA[action.id];
     if (!meta) return [];
-    const state = compatibility(meta, dataset);
+    const state = compatibility(action.id, meta, dataset, datasets);
     const commandDisabled = state.available && (typeof action.disabled === "function" ? action.disabled() : action.disabled === true);
     const commandReason = typeof action.disabledReason === "function" ? action.disabledReason() : action.disabledReason;
     const available = state.available && !commandDisabled;

@@ -60,7 +60,7 @@ export async function launchAnalysisCenterTool(
         state.setStatus(`${name} skipped: the Analysis Center was closed while data loaded`);
         return;
       }
-      const refreshed = analysisTools([tool.action], resolved)[0];
+      const refreshed = analysisTools([tool.action], resolved, state.datasets)[0];
       if (!refreshed?.available) {
         const message = `${name} was not opened: ${refreshed?.unavailableReason ?? "the loaded worksheet is not compatible"}`;
         state.setStatus(message);
