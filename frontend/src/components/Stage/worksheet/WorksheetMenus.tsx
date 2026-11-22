@@ -25,6 +25,7 @@ import type { ScvTarget } from "../../../lib/setColumnValues";
 import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
 import { legendFromParamsDialog, orderByParamDialog } from "./worksheetParamDialogs";
 import { modelingTypeItems } from "./columnTypeMenu";
+import { cellRulesItems } from "./cellRulesDialog";
 import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
@@ -121,6 +122,7 @@ function columnItems(
           ...modelingTypeItems(targets, ds.channelTypes, (cols, t) => setColumnsModelingType(ds.id, cols, t)),
         ]),
     ...(colView ? [{ separator: true } as const, ...columnViewItems(colView, targets)] : []),
+    ...cellRulesItems(ds, targets),
     ...(readOnly
       ? []
       : columnEditItems(col, {

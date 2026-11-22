@@ -482,7 +482,7 @@ export interface Dataset {
    *  stay pinned while scrolling sideways. Sorted unique indices / a count;
    *  absent = none. Round-trips .dwk (lib/worksheetColumnView.ts). */
   hiddenCols?: number[];
-  frozenCols?: number;
+  frozenCols?: number; cellRules?: import("./worksheetRulesModel").CellRules; // cellRules: conditional format (view only, .dwk v7)
   /** Excluded original-row indices (JMP-style row state, #50). Excluded rows
    *  stay visible in the worksheet (greyed) but drop from analysis everywhere.
    *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
