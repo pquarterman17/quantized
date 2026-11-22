@@ -108,3 +108,22 @@ describe("buildFitAnnotationText", () => {
     expect(text).toContain("\\$m");
   });
 });
+
+describe("user text cannot open a math region", () => {
+  // The rich-text grammar (and matplotlib's) has no backslash escape: a
+  // backslash only marks the `$` right after it as literal. So escaping `$`
+  // alone is complete; doubling backslashes would print them twice.
+  const hostile = ["a\\", "b$c", "d\\$e", "\\$$"];
+  for (const format of ["plain", "latex"] as const) {
+    it(`${format}: names with backslashes and dollars stay literal text`, () => {
+      const { text } = buildFitAnnotationText(
+        input("Linear", hostile, { params: [1, 2, 3, 4], errors: [0.1, 0.1, 0.1, 0.1] }),
+        opt({ format, equation: false, r2: false }),
+      );
+      const parsed = parseRichText(text);
+      const rendered = parsed.nodes.map((n) => ("text" in n ? n.text : "")).join("");
+      expect(parsed.nodes.every((n) => n.kind === "text")).toBe(true);
+      for (const name of hostile) expect(rendered).toContain(`${name} = `);
+    });
+  }
+});
