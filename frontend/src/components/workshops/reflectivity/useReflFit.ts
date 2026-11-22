@@ -16,12 +16,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
-import { droppedRows } from "../../../lib/rowstate";
 import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
   alignToRows,
-  buildChannel,
   channelLambda,
   DEFAULT_SETTINGS,
   defaultChannels,
@@ -29,12 +27,14 @@ import {
   effectiveWeighting,
   MAX_CHANNELS,
   probeRadiation,
-  type BuiltChannel,
   type ChannelBinding,
   type FitDataSettings,
   type Weighting,
 } from "./reflFitData";
-import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
+import { recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
+import { prepareRunChannels } from "./reflFitRunPrep";
+import { useReflFitFreshness } from "./useReflFitFreshness";
+import { afterCommit } from "../workbench/afterCommit";
 import { curveDatasetFor, curveDatasets, liveCurves, presentIds, savedCurves } from "./reflFitCurves";
 import type { RestoredSetup } from "./reflFitRestore";
 import { gradedSpecs } from "./reflGraded";
@@ -91,6 +91,8 @@ export interface ReflFitState {
   /** Why "Apply to model" is unavailable (the stack or radiation changed
    *  since the fit), or null. */
   applyBlocked: string | null;
+  /** `result` was fitted under bindings, settings, parameters or data that have since changed. */
+  stale: boolean;
   curvesAdded: boolean;
   selectDataset: (id: string) => void;
   setChannel: (index: number, patch: Partial<ChannelBinding>) => void;
@@ -159,9 +161,19 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const firstData = datasets.find((d) => d.id === channels[0]?.datasetId)?.data;
   const lambda = channelLambda(settings, firstData);
 
-  const applyBlocked = result && basis ? applyBlockedReason(basis, layers, radiation) : null;
+  const fresh = useReflFitFreshness({
+    channels, settings, sentParams: toRequestParams(params), sentGraded: gradedSpecs(layers), datasets,
+    hasResult: result !== null, overlay: fitOverlay, ownOverlay: ownOverlayRef, setOverlay: setFitOverlay,
+  });
+  const stale = fresh.stale;
+
+  const applyBlocked = result && basis
+    ? (applyBlockedReason(basis, layers, radiation) ??
+      (stale ? "the fit is out of date: its data, bindings, settings or parameters changed since it ran" : null))
+    : null;
 
   function clearResult(): void {
+    fresh.forget();
     setResult(null);
     setLiveRecord(null);
     setBasis(null);
@@ -286,36 +298,20 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     setBusy(true);
     clearResult();
     try {
-      const built: BuiltChannel[] = [];
-      const sizes: number[] = [];
-      const saved: ReflFitRecord["request"]["channels"] = [];
-      for (const [i, b] of channels.entries()) {
-        const ds = await resolveDataset(b.datasetId);
-        if (!ds) throw new Error(`channel ${i + 1}: its dataset is no longer in the library`);
-        const labels = ds.data.labels;
-        const label = `${ds.name} · ${labels[b.rCol] ?? "R"}${b.spin === "none" ? "" : ` (${b.spin})`}`;
-        const lam = settings.xKind === "twotheta" ? channelLambda(settings, ds.data) : null;
-        const one = buildChannel(ds.data, droppedRows(ds), b, settings, weighting, lam, label);
-        built.push(one);
-        sizes.push(ds.data.time.length);
-        const colLabel = (c: number | null): string | null => (c == null ? null : (labels[c] ?? ""));
-        saved.push({
-          ...b,
-          datasetName: ds.name,
-          rLabel: labels[b.rCol] ?? "",
-          drLabel: colLabel(b.drCol),
-          dqLabel: colLabel(b.dqCol),
-          lambda: lam,
-          digest: channelDigest(one.channel),
-        });
-      }
+      const { built, sizes, saved, hadPending } = await prepareRunChannels(channels, datasets, resolveDataset, settings, weighting);
       if (controller.signal.aborted) return;
+      // A lazy book that just arrived moved the data identity: let that commit
+      // land, then stamp the run with the key it is launched under.
+      if (hadPending) await afterCommit();
+      if (controller.signal.aborted) return;
+      const launched = fresh.launch(channels, settings, sentParams, sentGraded);
       const res = await reflFit(
         { parameters: sentParams, channels: built.map((b) => b.channel), weighting, ...graded },
         controller.signal,
       );
       if (id !== runIdRef.current) return;
       setResult(res);
+      fresh.record(launched);
       setBasis(fitBasis);
       // Stored FIRST, so no render ever sees a live record the store lacks;
       // `publish` numbers it from the library as it is now.
@@ -406,7 +402,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   }, [liveGone]);
 
   function addCurves(): string[] {
-    if (!result) return [];
+    if (!result || stale) return [];
     // Reused only while every one is still in the library.
     if (presentIds(curveIds, datasets)) return curveIds;
     // Named for, placed with, and pointing back at the fit's record
@@ -427,7 +423,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
 
   const sendFigure = useReflFitFigure();
   function sendToFigure(): void {
-    if (!result) return;
+    if (!result || stale) return;
     const ids = addCurves();
     const base = liveRecord ? curveDatasetFor(liveRecord, datasets).base : "Reflectivity fit";
     if (ids.length) sendFigure({ ids, curves: liveCurves(result), weighting: result.weighting, base });
@@ -441,7 +437,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
 
   function applyToModel(): void {
     if (!result || !basis) return;
-    const blocked = applyBlockedReason(basis, layers, radiation);
+    const blocked = applyBlocked; // the stack / radiation reason first, then "out of date"
     if (blocked) {
       setError(`cannot apply: ${blocked}`);
       return;
@@ -451,6 +447,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     // Applying turns moved-SLD rows manual; the result still describes this
     // (same-order) stack, so re-applying stays allowed.
     setBasis({ layers: next, radiation });
+    fresh.rebase();
     setGlobals((g) => fittedGlobals(result.parameters, g));
     setStatus("applied the fitted values to the layer model");
   }
@@ -469,6 +466,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     history,
     dream,
     applyBlocked,
+    stale,
     curvesAdded: presentIds(curveIds, datasets),
     selectDataset,
     setChannel,

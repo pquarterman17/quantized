@@ -7,6 +7,7 @@
 import { useMemo } from "react";
 
 import { Button } from "../../primitives";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import FitDataBinding from "./FitDataBinding";
 import FitParamTable from "./FitParamTable";
 import FitResults from "./FitResults";
@@ -67,23 +68,24 @@ export default function ReflFitView({ fit, blocked = null }: { fit: ReflFitState
       {live && fit.result && (
         <>
           <div className="qzk-field-lbl" style={SECTION}>Result</div>
+          {fit.stale && <OutOfDateNote block>the data, bindings, settings or parameters changed since this fit. Run the fit again.</OutOfDateNote>}
           <FitResults result={fit.result} />
           {curves && <ReflFitPlots curves={curves} weighting={fit.result.weighting} />}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
             <Button size="sm" disabled={fit.applyBlocked != null || blocked != null} title={fit.applyBlocked ?? blocked ?? undefined} onClick={fit.applyToModel}>
               Apply to model
             </Button>
-            <Button size="sm" disabled={fit.curvesAdded} onClick={() => void fit.addCurves()}>
+            <Button size="sm" disabled={fit.curvesAdded || fit.stale} onClick={() => void fit.addCurves()}>
               {fit.curvesAdded ? "Fit curves added" : "Add fit curves"}
             </Button>
-            <Button size="sm" onClick={fit.openLogPlot}>
+            <Button size="sm" disabled={fit.stale} onClick={fit.openLogPlot}>
               Open log-Y plot
             </Button>
-            <Button size="sm" title="Lay out data, model, residuals and SLD as linked figures on a new figure page." onClick={fit.sendToFigure}>
+            <Button size="sm" disabled={fit.stale} title="Lay out data, model, residuals and SLD as linked figures on a new figure page." onClick={fit.sendToFigure}>
               Send to figure page
             </Button>
             {liveRecord && (
-              <Button size="sm" disabled={h.reporting} onClick={() => void h.addToReport(liveRecord)}>
+              <Button size="sm" disabled={h.reporting || fit.stale} title={fit.stale ? "The fit is out of date; pick it in the History to report the saved fit" : undefined} onClick={() => void h.addToReport(liveRecord)}>
                 Add to report
               </Button>
             )}

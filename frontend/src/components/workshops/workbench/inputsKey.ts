@@ -14,3 +14,8 @@ export function datasetInputsToken(ds: Dataset | null | undefined): string {
   if (!ds) return "";
   return JSON.stringify([ds.id, ...rowStateIdentity(ds).map(part), part(ds.errorRoles), part(ds.channelRoles)]);
 }
+
+/** `datasetInputsToken` of each dataset id in `ids` (a missing one reads ""), joined. */
+export function datasetsInputsToken(ids: readonly string[], datasets: readonly Dataset[]): string {
+  return ids.map((id) => datasetInputsToken(datasets.find((d) => d.id === id))).join("|");
+}

@@ -16,6 +16,7 @@ import { useApp } from "../../../store/useApp";
 import { Button, Select, StatusDot } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import SummaryXPicker from "../analysisselection/SummaryXPicker";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import PeakBatchTable from "./PeakBatchTable";
 import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchRows";
 import { usePeakBatch } from "./usePeakBatch";
@@ -119,11 +120,15 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
       {b.results && (
         <>
           <PeakBatchTable rows={shown} sort={sort} onSort={(key) => setSort((s) => nextSort(s, key))} />
-          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <Button size="sm" onClick={exportCsv}>Export CSV</Button>
-            <SummaryXPicker choice={xChoice} onChange={setXChoice} metaFields={xFields} params={xParams} />
-            <Button size="sm" onClick={addTable}>Add as table</Button>
-          </div>
+          {b.stale ? (
+            <OutOfDateNote block>a fitted dataset changed since this run. Run the batch again to export it or add it as a table.</OutOfDateNote>
+          ) : (
+            <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <Button size="sm" onClick={exportCsv}>Export CSV</Button>
+              <SummaryXPicker choice={xChoice} onChange={setXChoice} metaFields={xFields} params={xParams} />
+              <Button size="sm" onClick={addTable}>Add as table</Button>
+            </div>
+          )}
         </>
       )}
     </div>

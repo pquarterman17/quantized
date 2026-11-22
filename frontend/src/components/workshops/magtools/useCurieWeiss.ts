@@ -6,6 +6,9 @@ import { massInGrams, type MassUnit } from "../../../lib/sampleGeometry";
 import { analysisView, rowStateIdentity } from "../../../lib/rowstate";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
@@ -126,6 +129,22 @@ export function useCurieWeiss() {
   const activeId = active?.id ?? null;
   const visible = activeId && readout.owners.includes(activeId) ? readout : EMPTY;
 
+  // Out of date (lane WB5): the readout is stamped with the source's rows / data,
+  // plotted channels and fit settings the fit was LAUNCHED with. It is judged
+  // against the SOURCE worksheet and the form as they are now; on the output
+  // worksheet itself (activated by the commit, which also re-seeds the range)
+  // the readout simply describes that worksheet and is not marked.
+  const datasets = useApp((state) => state.datasets);
+  const sourceId = readout.owners[0] ?? activeId;
+  const onSource = activeId !== null && activeId === sourceId;
+  const liveKey = JSON.stringify([
+    datasetInputsToken(datasets.find((d) => d.id === sourceId)),
+    onSource ? [xKey, yKey] : null,
+    basisChoice, fieldKey, sampleMassG, molarMass, fitMin, fitMax,
+  ]);
+  const stamp = useRunStamp(liveKey);
+  const stale = onSource && visible.theta != null && stamp.stale;
+
   async function fit(): Promise<void> {
     if (!active || busyRef.current) return;
     busyRef.current = true;
@@ -134,9 +153,19 @@ export function useCurieWeiss() {
     const owners = [request.sourceId];
     setBusy(true);
     setReadout(EMPTY);
+    stamp.record(null);
     try {
+      const hadPending = currentRequestDataset(request.sourceId)?.pending !== undefined;
       const dataset = await resolveCurrentRequest(request);
       if (!dataset) return;
+      // A lazy book that just arrived moved the data identity: let that commit
+      // land, then stamp the run with the key it is launched under.
+      if (hadPending) await afterCommit();
+      const launchKey = JSON.stringify([
+        datasetInputsToken(currentRequestDataset(dataset.id)),
+        [request.xKey, magXY(dataset, request.xKey, request.yKeys, request.seriesOrder).yKey],
+        runParams.basisChoice, runParams.fieldKey, runParams.sampleMassG, runParams.molarMass, runParams.fitMin, runParams.fitMax,
+      ]);
       const sourceRowState = rowStateIdentity(dataset);
       const view = analysisView(dataset);
       if (!view.data) return;
@@ -325,6 +354,7 @@ export function useCurieWeiss() {
         warnings.push("The selected response was explicitly treated as cm³/mol despite its unrecognized unit label.");
       }
       if (result.C <= 0) warnings.push("The fitted Curie constant is non-positive; μeff is not physically meaningful.");
+      stamp.record(launchKey);
       setReadout({
         owners: [...owners, outcome.outputId], theta: result.theta_cw, curie: result.C,
         moment: result.mu_eff, r2: result.r2, nFit: result.n_fit,
@@ -344,6 +374,6 @@ export function useCurieWeiss() {
     sampleMass, setSampleMass, massUnit, setMassUnit, molarMass, setMolarMass,
     fitMin, setFitMin, fitMax, setFitMax, problem, busy, fit,
     theta: visible.theta, curie: visible.curie, moment: visible.moment,
-    r2: visible.r2, nFit: visible.nFit, warning: visible.warning, error: visible.error,
+    r2: visible.r2, nFit: visible.nFit, warning: visible.warning, error: visible.error, stale,
   };
 }

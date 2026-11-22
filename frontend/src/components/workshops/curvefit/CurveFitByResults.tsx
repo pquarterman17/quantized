@@ -11,6 +11,7 @@ import type { Dataset } from "../../../lib/types";
 import type { ByLevelRow } from "../byrun/useByLevelRun";
 import { useSaveByResult } from "../byrun/useSaveByResult";
 import { Button } from "../../primitives";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import CurveFitByLevelSection from "./CurveFitByLevelSection";
 import type { CurveFitByLevelState, CurveFitLevelResult } from "./useCurveFitByLevel";
 
@@ -50,7 +51,11 @@ export default function CurveFitByResults({ active, by, paramNames }: { active: 
           By column has {by.totalLevels} levels — showing the first {by.levels.length}
         </div>
       )}
-      {by.busy && by.results.length === 0 ? (
+      {by.stale ? (
+        // Results of inputs that have since changed are not shown as current
+        // while the refit runs (and Save is off until it ends).
+        <OutOfDateNote block>the inputs changed since these levels were fitted; refitting {by.levels.length} levels…</OutOfDateNote>
+      ) : by.busy && by.results.length === 0 ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           fitting {by.levels.length} levels…
         </div>

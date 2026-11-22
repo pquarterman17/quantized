@@ -3,6 +3,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { fmtNum } from "../../../lib/format";
 import { MASS_UNITS, type MassUnit } from "../../../lib/sampleGeometry";
 import { useApp } from "../../../store/useApp";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import CurieWeissBatch from "./CurieWeissBatch";
 import { useCurieWeiss } from "./useCurieWeiss";
 import type { CurieWeissBasisChoice } from "./curieWeissData";
@@ -80,6 +81,7 @@ export default function CurieWeissPane() {
         </Button>
       </div>
       {c.problem && <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--warn, #c90)" }}>{c.problem}</div>}
+      {c.stale && <OutOfDateNote block>the data or fit settings changed since this fit. Create the fit again.</OutOfDateNote>}
       {c.theta != null && <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
         θ<sub>CW</sub> = {fmtNum(c.theta)} K · C = {fmtNum(c.curie ?? Number.NaN)} cm³·K/mol ·
         μ<sub>eff</sub> = {fmtNum(c.moment ?? Number.NaN)} μ<sub>B</sub> · R² = {fmtNum(c.r2 ?? Number.NaN)} · n = {c.nFit}

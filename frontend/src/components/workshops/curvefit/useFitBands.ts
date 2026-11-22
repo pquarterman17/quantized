@@ -121,6 +121,9 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
       ctrl.signal,
     )
       .then((b) => {
+        // An answer for inputs that have since changed is dropped, whether or
+        // not its transport honoured the abort.
+        if (ctrl.signal.aborted) return;
         const n = rows.x.length;
         setBand({ ...b, yFit: b.yFit.slice(0, n), ciLo: b.ciLo.slice(0, n), ciHi: b.ciHi.slice(0, n), piLo: b.piLo.slice(0, n), piHi: b.piHi.slice(0, n) });
         if (mine && !bandIsEmpty(b)) setCurveFitOverlayBand(mine, overlayBand(mine, plotRows.idx, b, n, prediction));
