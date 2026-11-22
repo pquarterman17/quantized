@@ -100,6 +100,8 @@ export interface PeakWizardState {
   markerEditActive: boolean;
   /** Points in the working segment (the fit's N). */
   points: number;
+  /** The plotted Y and the X it is read against (null: nothing to analyse). */
+  binding: { yKey: number; xKey: number | null } | null;
   // ④ fit
   /** Keep only the strongest included peaks and fit again (step ④'s offer
    *  when the time limit is likely). */
@@ -471,6 +473,7 @@ export function usePeakWizard(): PeakWizardState {
     addPeakAt: cands.addPeakAt,
     markerEditActive: cands.markerEditActive,
     points: segment?.x.length ?? 0,
+    binding: segment?.binding ?? null,
     fitStrongest,
     fitBusy,
     fitError,

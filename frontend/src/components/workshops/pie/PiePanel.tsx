@@ -7,6 +7,7 @@
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
+import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import AuxFigureFrame from "../ternary/AuxFigureFrame";
 import { useAuxFigureStore } from "../ternary/auxFigureStore";
 import { usePie } from "./usePie";
@@ -28,7 +29,8 @@ export default function PiePanel() {
         </div>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <ToolInputSummary noX load={false} columns={[p.picks.labels, ...p.picks.values]} />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 120 }}>
               <label className="qzk-field-lbl">Labels</label>
               <Select

@@ -10,6 +10,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { pickOptions } from "../analysisextras/columnPicks";
+import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import EllipseFitBatchSection from "./EllipseFitBatchSection";
 import EllipseFitByLevel from "./EllipseFitByLevel";
 import EllipsePlot from "./EllipsePlot";
@@ -33,7 +34,8 @@ function EllipseFitPanelBody() {
         <div className="qzk-helptext">Select a dataset with two columns of points that trace an ellipse or a part of one.</div>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <ToolInputSummary xKey={e.xCol} columns={[e.yCol]} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
             <div>
               <label className="qzk-field-lbl">X</label>
               <Select aria-label="X column" options={opts} value={String(e.xCol)} onChange={(ev) => e.setXCol(Number(ev.target.value))} />
