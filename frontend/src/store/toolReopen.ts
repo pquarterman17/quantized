@@ -23,15 +23,19 @@ export interface ReopenSession {
   extra: ReopenSeed | null;
   notice: string | null;
   replaceBlocked: string | null;
+  /** Why the NEW computation's columns cannot replace the old output's (lane
+   *  RPL: a bound column would vanish); set by the commit hook before commit. */
+  layoutBlocked: string | null;
   mode: ReopenMode;
 }
 
 interface State {
   /** Keyed by tool (= the producer id). */
   sessions: Readonly<Record<string, ReopenSession>>;
-  start: (tool: string, session: Omit<ReopenSession, "nonce" | "mode">) => void;
+  start: (tool: string, session: Omit<ReopenSession, "nonce" | "mode" | "layoutBlocked">) => void;
   end: (tool: string) => void;
   setMode: (tool: string, mode: ReopenMode) => void;
+  setLayoutBlocked: (tool: string, reason: string | null) => void;
 }
 
 let nonce = 0;
@@ -39,7 +43,7 @@ let nonce = 0;
 export const useToolReopen = create<State>((set) => ({
   sessions: {},
   start: (tool, session) => set((s) => ({
-    sessions: { ...s.sessions, [tool]: { ...session, nonce: ++nonce, mode: session.replaceBlocked ? "new" : "replace" } },
+    sessions: { ...s.sessions, [tool]: { ...session, layoutBlocked: null, nonce: ++nonce, mode: session.replaceBlocked ? "new" : "replace" } },
   })),
   end: (tool) => set((s) => {
     if (!s.sessions[tool]) return s;
@@ -48,14 +52,19 @@ export const useToolReopen = create<State>((set) => ({
   }),
   setMode: (tool, mode) => set((s) => {
     const session = s.sessions[tool];
-    if (!session || (mode === "replace" && session.replaceBlocked)) return s;
+    if (!session || (mode === "replace" && (session.replaceBlocked || session.layoutBlocked))) return s;
     return { sessions: { ...s.sessions, [tool]: { ...session, mode } } };
+  }),
+  setLayoutBlocked: (tool, reason) => set((s) => {
+    const session = s.sessions[tool];
+    if (!session || session.layoutBlocked === reason) return s;
+    return { sessions: { ...s.sessions, [tool]: { ...session, layoutBlocked: reason, ...(reason && session.mode === "replace" ? { mode: "new" as const } : {}) } } };
   }),
 }));
 
 /** The result a commit of `tool` on `sourceId` should replace, or undefined. */
 export function replaceTargetFor(sessions: State["sessions"], tool: string, sourceId: string): string | undefined {
   const session = sessions[tool];
-  return session && session.mode === "replace" && !session.replaceBlocked && session.sourceId === sourceId
+  return session && session.mode === "replace" && !session.replaceBlocked && !session.layoutBlocked && session.sourceId === sourceId
     ? session.resultId : undefined;
 }

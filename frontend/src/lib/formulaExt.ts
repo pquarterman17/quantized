@@ -40,6 +40,8 @@ export interface FormulaExtension {
   renameSheetRefs(datasets: readonly Dataset[], id: string, newName: string): { datasets: Dataset[]; changed: string[] };
   renameRefusal(datasets: readonly Dataset[], id: string, newName: string): string | null;
   shiftSheetRefs(datasets: readonly Dataset[], id: string, shift: ColumnShift): { datasets: Dataset[]; changed: string[] };
+  /** Columns of worksheet `id` other worksheets read via sheet(): index -> reader names. */
+  sheetColumnsRead(datasets: readonly Dataset[], id: string): Map<number, string[]>;
   /** Evaluate `fn` with `sheet()` reading `datasets` instead of the live
    *  store — for a recompute inside a store update, before it is committed. */
   withSheetDatasets<T>(datasets: readonly Dataset[], fn: () => T): T;
