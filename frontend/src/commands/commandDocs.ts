@@ -142,6 +142,9 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Pivot category and value columns into separate columns in a wide worksheet.",
     keywords: "jmp unstack pivot wide long reshape",
   },
+  "remove-duplicate-rows": { description: "Create a derived dataset without repeated rows (by chosen key columns, or the whole row), recorded for replay.", keywords: "dedupe deduplicate duplicates unique clean" },
+  "fill-missing-values": { description: "Create a derived dataset with missing values interpolated, carried forward or their rows dropped, recorded for replay.", keywords: "nan blank gap interpolate impute drop na clean" },
+  "standardize-columns": { description: "Create a derived dataset with chosen columns z-scored, min-max scaled or ranked, recorded for replay.", keywords: "normalize normalise zscore standardize scale rank clean" },
   "join-by-key": { description: "Combine two datasets by matching values in selected key columns.", keywords: "jmp join merge key combine text reshape" },
   tabulate: {
     description: "Calculate grouped summary statistics and create a linked result table.",
