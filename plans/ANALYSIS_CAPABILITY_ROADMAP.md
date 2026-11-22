@@ -249,7 +249,13 @@ inconsistently exposed, and do not all share the same result lifecycle.
     - **Decision: Replace of a multi-source output keeps the PRIMARY source.**
       The commit still requires the same first source, but the other sources
       may differ (the user may have unpicked a scan); the replaced result now
-      takes the new source list (it used to keep the old one). Replace runs
+      takes the new source list (it used to keep the old one). When the first
+      source changes (the first scan is unpicked, R++ is changed) Replace is
+      disabled with the reason and the mode falls back to Add as new, visibly
+      (`useReplaceLayoutBlock`), rather than adding quietly under a Replace
+      banner. A recorded setting the tool cannot restore (a Spin asymmetry
+      column that no longer exists, unreadable Batch integrate windows) does
+      the same until the user has set it; nothing is guessed. Replace runs
       through the layout verdict: before the commit button for the two batch
       tables (the banner shows the reason by name), at commit time for all
       three (Spin asymmetry computes and commits in one step, so it is checked

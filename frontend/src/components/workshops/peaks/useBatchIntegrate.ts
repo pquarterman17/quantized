@@ -97,7 +97,12 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     seed ? [...seed.sourceIds]
       : selectedIds.length > 1 ? [...selectedIds] : active ? [active.id] : []);
   const picked = useMemo(() => pickedRaw.filter((id) => datasets.some((d) => d.id === id)), [pickedRaw, datasets]);
-  const [windows, setWindows] = useState<IntegrateWindow[]>(() => recordedWindows(seed?.settings["windows"]) ?? windowsFromPeaks(seedPeaks));
+  const [windows, setWindowsRaw] = useState<IntegrateWindow[]>(() => recordedWindows(seed?.settings["windows"]) ?? windowsFromPeaks(seedPeaks));
+  // Recorded windows that cannot be restored are NOT replaced by the current
+  // peaks' without saying so: the commit adds a new output until they are set.
+  const [seedProblem, setSeedProblem] = useState<string | null>(() => (seed && recordedWindows(seed.settings["windows"]) === null
+    ? "The recorded integration windows could not be restored, so the windows come from the current peaks. Set them; until then a commit adds a new output." : null));
+  const setWindows = (next: IntegrateWindow[]) => { setSeedProblem(null); setWindowsRaw(next); };
   const [baseline, setBaseline] = useState<"linear" | "none">(() => (seed?.settings["baseline"] === "none" ? "none" : "linear"));
   const [align, setAlign] = useState(() => seed?.settings["aligned"] === true);
   const [phase, setPhase] = useState<BatchIntegratePhase>("idle");
@@ -201,7 +206,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [run, stale, xField],
   );
-  useReplaceLayoutBlock(BATCH_INTEGRATE_PRODUCER.id, primaryId, trendLabels);
+  useReplaceLayoutBlock(BATCH_INTEGRATE_PRODUCER.id, primaryId, trendLabels, seedProblem);
 
   /** Land the trend in the library (or replace the reopened one); returns its id and whatever was skipped. */
   const addTrend = (): { id: string; skipped: string[]; replaced: boolean } | null => {
@@ -227,7 +232,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   return {
     datasets, selectedIds, picked, setPicked,
     togglePicked: (dsId: string) => setPicked((p) => (p.includes(dsId) ? p.filter((x) => x !== dsId) : [...p, dsId])),
-    windows, setWindows, seedWindows: windowsFromPeaks(seedPeaks), roi,
+    seedProblem, windows, setWindows, seedWindows: windowsFromPeaks(seedPeaks), roi,
     baseline, setBaseline, align, setAlign,
     channels, block, busy, phase, error, refusal: failure?.refusal === true, stale,
     rows: run?.rows ?? null, fields, xField, setXField,

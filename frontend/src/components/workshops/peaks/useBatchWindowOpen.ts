@@ -9,7 +9,9 @@ import { useToolReopen } from "../../../store/toolReopen";
 
 export function useBatchWindowOpen(): [boolean, (open: boolean) => void] {
   const nonce = useToolReopen((s) => s.sessions["peak-batch-integrate"]?.nonce ?? 0);
+  const end = useToolReopen((s) => s.end);
   const [open, setOpen] = useState(nonce > 0);
   useEffect(() => { if (nonce > 0) setOpen(true); }, [nonce]);
-  return [open, setOpen];
+  // Closing the window ends the session even if the window never mounted (its chunk failed).
+  return [open, (next) => { if (!next) end("peak-batch-integrate"); setOpen(next); }];
 }

@@ -166,4 +166,17 @@ describe("Batch integrate: reopen, adjust, replace", () => {
     expect(session.seed).not.toBeNull();
     expect(session.notice).toContain("“cold” changed after this result was computed");
   });
+
+  it("recorded windows that cannot be restored are said, and Replace is off", async () => {
+    await commitTrend();
+    act(() => useApp.setState((s) => ({
+      analysisResults: s.analysisResults.map((r) => ({
+        ...r, parameters: { ...r.parameters, settings: { ...(r.parameters!["settings"] as object), windows: "garbled" } },
+      })),
+    })));
+    act(() => { openCommittedResultInTool(resultId()); });
+    render(<BatchIntegrateWindow seedPeaks={[{ center: 1, fwhm: 0.5 }]} onClose={() => {}} />);
+    expect(screen.getByText(/recorded integration windows could not be restored/)).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "Add as a new output" })).toBeChecked();
+  });
 });

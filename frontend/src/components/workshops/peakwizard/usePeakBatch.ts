@@ -165,6 +165,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const recipeNote = !seedRecipe ? null
     : !recipes.some((r) => r.name === seedRecipe) ? `The recipe “${seedRecipe}” of this table is not saved any more: pick a saved recipe, or save it again in step 5 of the wizard.`
     : recipeName === seedRecipe && recordedDigest !== null && recordedDigest !== recipeDigestNow
+      && !(ran && recipeDigest(ran.recipe) === recipeDigestNow)
       ? `The saved recipe “${seedRecipe}” changed after this table was computed; Run again to see what it gives now.`
     : null;
   const block = busy

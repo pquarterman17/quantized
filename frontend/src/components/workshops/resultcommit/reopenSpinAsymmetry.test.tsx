@@ -117,4 +117,24 @@ describe("Spin asymmetry: reopen, adjust, replace", () => {
     expect(screen.getByText(/Opened from the result/)).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("“rmm” changed");
   });
+
+  // Fail-before (review finding): a recorded pick that no longer fit silently fell
+  // back to the defaults while Replace stayed armed.
+  it("a recorded column that no longer exists is NOT guessed: it says so, and Replace is off until the user picks", async () => {
+    await commitOnce();
+    act(() => useApp.setState((s) => ({
+      analysisResults: s.analysisResults.map((r) => ({
+        ...r, parameters: { ...r.parameters, settings: { ...(r.parameters!["settings"] as object), mm: { col: 9, errCol: null } } },
+      })),
+    })));
+    act(() => { openCommittedResultInTool(resultId()); });
+    const { result } = renderHook(() => useSpinAsymmetry());
+    expect(result.current.seedProblem).toContain("no longer fit their worksheets");
+    expect(useToolReopen.getState().sessions["spin-asymmetry"]!.mode).toBe("new");
+    expect(useToolReopen.getState().sessions["spin-asymmetry"]!.layoutBlocked).toContain("no longer fit");
+    // Picking the channels lifts it, and Replace is back.
+    act(() => result.current.setMm({ col: 0, errCol: 1 }));
+    expect(result.current.seedProblem).toBeNull();
+    expect(useToolReopen.getState().sessions["spin-asymmetry"]!.mode).toBe("replace");
+  });
 });

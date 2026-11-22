@@ -170,4 +170,33 @@ describe("Peak batch: reopen, adjust, replace", () => {
     render(<PeakBatchView recipes={[edited]} current="two peaks" pollMs={5} />);
     expect(screen.getByRole("alert")).toHaveTextContent("changed after this table was computed");
   });
+
+  it("a recipe edited since is flagged only until a run with the current recipe", async () => {
+    await commitTable();
+    act(() => { openCommittedResultInTool(resultId()); });
+    const edited: PeakRecipe = { ...RECIPE, name: "two peaks", minProminence: (RECIPE as { minProminence?: number }).minProminence === 7 ? 8 : 7 } as PeakRecipe;
+    render(<PeakBatchView recipes={[edited]} current="two peaks" pollMs={5} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("changed after this table was computed");
+    fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
+    await screen.findByRole("table", { name: "batch results" });
+    expect(screen.queryByText(/changed after this table was computed/)).toBeNull();
+  });
+
+  // Fail-before (review finding): unpicking the first source made the commit add a
+  // NEW table while the banner still offered Replace.
+  it("Replace needs the same first source: when it is unpicked the banner says so and the commit adds new", async () => {
+    await commitTable();
+    act(() => { openCommittedResultInTool(resultId()); });
+    render(<PeakBatchView recipes={[RECIPE]} current="" pollMs={5} />);
+    expect(screen.getByRole("radio", { name: /Replace “Peak batch/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "scan a" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
+    await screen.findByRole("table", { name: "batch results" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Add as table" })).toBeEnabled());
+    expect(await screen.findByText(/Replace keeps the first source of the result/)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Replace “Peak batch/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Add as a new output" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Add as table" }));
+    expect(tables()).toHaveLength(2);
+  });
 });

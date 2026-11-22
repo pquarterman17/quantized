@@ -5,6 +5,13 @@
 // Add as new; the commit checks it again at commit time. A tool that builds its
 // table before the commit button (a batch table, a trend) passes its labels;
 // one that computes and commits in one step is only checked at commit time.
+//
+// Lane RO2 adds two more reasons that turn Replace into Add as new, visibly,
+// rather than letting a commit quietly add while the banner says Replace:
+// a MULTI-source output whose first source is no longer the recorded one (a
+// commit replaces only on the same first source), and `forced` (a recorded
+// setting the tool could not restore, so the computation is not the recorded
+// one).
 
 import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -13,9 +20,15 @@ import { outputLayoutVerdict } from "../../../store/analysisOutputLayout";
 import { useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
 
-export function useReplaceLayoutBlock(tool: string | undefined, sourceId: string | undefined, newLabels: readonly string[] | null): void {
+export function useReplaceLayoutBlock(
+  tool: string | undefined, sourceId: string | undefined, newLabels: readonly string[] | null, forced: string | null = null,
+): void {
   // The reopened result, whichever mode is chosen: the reason must stay visible while "Add as new" is picked.
   const checkId = useToolReopen((s) => (tool && sourceId && s.sessions[tool]?.sourceId === sourceId ? s.sessions[tool]?.resultId : undefined));
+  const recordedFirst = useToolReopen((s) => {
+    const session = tool ? s.sessions[tool] : undefined;
+    return session && session.sourceIds.length > 1 ? session.sourceId : null;
+  });
   // Only the slices the verdict reads, so unrelated store updates (pan, zoom, status) do not rescan.
   const slices = useApp(useShallow((s) => ({
     datasets: s.datasets, plotWindows: s.plotWindows, layers: s.layers, activeId: s.activeId, editableFigures: s.editableFigures,
@@ -23,11 +36,16 @@ export function useReplaceLayoutBlock(tool: string | undefined, sourceId: string
     y2Keys: s.y2Keys, groupKey: s.groupKey, facetKey: s.facetKey, errKeys: s.errKeys,
   })));
   const layoutReason = useMemo(() => {
+    if (forced) return forced;
+    if (recordedFirst && sourceId && sourceId !== recordedFirst) {
+      const name = (id: string) => slices.datasets.find((d) => d.id === id)?.name ?? id;
+      return `Replace keeps the first source of the result (“${name(recordedFirst)}”), and the first source is now “${name(sourceId)}”, so the commit adds a new output.`;
+    }
     const outputId = checkId && slices.analysisResults.find((result) => result.id === checkId)?.outputs[0]?.datasetId;
     if (!outputId || !newLabels || !checkId) return null;
     const verdict = outputLayoutVerdict(slices, outputId, newLabels, checkId);
     return verdict.ok ? null : verdict.reason;
-  }, [slices, newLabels, checkId]);
+  }, [slices, newLabels, checkId, forced, recordedFirst, sourceId]);
   const setLayoutBlocked = useToolReopen((s) => s.setLayoutBlocked);
   useEffect(() => {
     if (!tool) return undefined;
