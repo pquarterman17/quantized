@@ -1,6 +1,7 @@
 import type { CorrectionParams, DataStruct, Dataset } from "../../../lib/types";
 import type { SignalCorrectionRecipe } from "../../../lib/signalTransform";
-import { dataXUnit, inputRowsOption, signalRecipeInputData } from "../../../lib/signalRecipe";
+import { analysisData } from "../../../lib/rowstate";
+import { dataXUnit, inputRowsOption } from "../../../lib/signalRecipe";
 import type { SpectralOperation } from "../../../lib/spectralWorkbench";
 
 export type CorrectionOperation =
@@ -63,7 +64,7 @@ export function withInputRows<T extends { inputRows?: "analysis-view" }>(recipe:
 
 /** The rows a single run analyses for `dataset` under the row choice. */
 export function signalInputData(dataset: Dataset, useAllRows: boolean): DataStruct {
-  return signalRecipeInputData(inputRowsOption(useAllRows), dataset);
+  return useAllRows ? dataset.data : analysisData(dataset) ?? dataset.data; // may be empty: the panel says so
 }
 
 export function enteredFinite(value: string): boolean {

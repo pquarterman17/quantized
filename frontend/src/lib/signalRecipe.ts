@@ -21,7 +21,12 @@ export function inputRowsOption(useAllRows: boolean): { inputRows?: SignalInputR
 /** The exact input a recipe analyses for `source` (the one place the choice is
  *  applied, so preview, commit, replay and recompute cannot disagree). */
 export function signalRecipeInputData(recipe: { inputRows?: SignalInputRows }, source: Dataset): DataStruct {
-  return recipe.inputRows === "analysis-view" ? analysisData(source) ?? source.data : source.data;
+  if (recipe.inputRows !== "analysis-view") return source.data;
+  const view = analysisData(source) ?? source.data;
+  if (view.time.length === 0 && source.data.time.length > 0) {
+    throw new Error(`no rows of "${source.name}" remain after excluded and filtered-out rows are left out`);
+  }
+  return view;
 }
 
 export interface SignalChannelRef {

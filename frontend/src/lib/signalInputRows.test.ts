@@ -51,8 +51,17 @@ describe("signal recipe input rows", () => {
     expect(correctionMock.mock.calls[0][0].dataset.time).toEqual([1, 2, 3]);
     const out = await computeSignalTransform({ op: "signal", recipe: { ...base, inputRows: "analysis-view" } }, SHEET);
     expect(correctionMock.mock.calls[1][0].dataset.time).toEqual([1, 3]);
-    expect(out.datasetPatch.raw).toBe(SHEET.data); // the record of the source stays complete
+    expect(out.datasetPatch.raw?.time).toEqual([1, 3]); // raw stays row-aligned with the output
+    expect((await computeSignalTransform({ op: "signal", recipe: base }, SHEET)).datasetPatch.raw).toBe(SHEET.data);
     expect(out.datasetPatch.analysisRecipe).toMatchObject({ inputRows: "analysis-view" });
+  });
+
+  it("refuses an empty analysis view instead of sending zero rows", async () => {
+    const none = { ...SHEET, excludedRows: [0, 1, 2] };
+    await expect(computeSignalTransform({ op: "signal", recipe: { ...base, inputRows: "analysis-view" } }, none)).rejects.toThrow(/no rows of "scan" remain/);
+    expect(correctionMock).not.toHaveBeenCalled();
+    await computeSignalTransform({ op: "signal", recipe: base }, none); // the default still analyses every row
+    expect(correctionMock).toHaveBeenCalledTimes(1);
   });
 
   it("spectral replay honours it too", async () => {

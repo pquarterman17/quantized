@@ -31,15 +31,16 @@ export async function recomputeSpectralWorksheet(
     }
     recipe = rebindSpectralSecondarySource(recipe, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
   }
+  const input = signalRecipeInputData(recipe, source);
   const analyzed = secondary
-    ? await runSpectralWorkbench(signalRecipeInputData(recipe, source), recipe, undefined, false, signalRecipeInputData(recipe, secondary))
-    : await runSpectralWorkbench(signalRecipeInputData(recipe, source), recipe);
+    ? await runSpectralWorkbench(input, recipe, undefined, false, signalRecipeInputData(recipe, secondary))
+    : await runSpectralWorkbench(input, recipe);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(analyzed, sheet.formulas);
   return {
     sheet: {
       ...sheet,
       data,
-      raw: source.data,
+      raw: input,
       analysisRecipe: recipe,
       formulaErrors,
       errorRoles: undefined,
@@ -84,9 +85,10 @@ export async function createSpectralWorksheet(
     if (secondary) {
       rebound = rebindSpectralSecondarySource(rebound, secondary.data.labels, secondary.data.units, dataXUnit(secondary.data));
     }
+    const input = signalRecipeInputData(rebound, source);
     const data = secondary
-      ? await runSpectralWorkbench(signalRecipeInputData(rebound, source), rebound, undefined, false, signalRecipeInputData(rebound, secondary))
-      : await runSpectralWorkbench(signalRecipeInputData(rebound, source), rebound);
+      ? await runSpectralWorkbench(input, rebound, undefined, false, signalRecipeInputData(rebound, secondary))
+      : await runSpectralWorkbench(input, rebound);
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
     const currentSecondary = secondary
       ? get().datasets.find((dataset) => dataset.id === secondary.id)
@@ -103,7 +105,7 @@ export async function createSpectralWorksheet(
       id: newId,
       name: `${sourceName} (${rebound.operation})`,
       data,
-      raw: source.data,
+      raw: input,
       analysisRecipe: rebound,
       derivedFrom: { datasetId: sourceId, pipeline: pipelineLabel },
       ...(currentSource.workbookId ? { workbookId: currentSource.workbookId } : {}),

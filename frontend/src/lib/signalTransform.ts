@@ -77,7 +77,8 @@ export async function computeSignalTransform(
   }
   const label = signalRecipeLabel(recipe);
   // The recipe's row choice (default: every worksheet row) applies to every
-  // input; `raw` below stays the full source data.
+  // input; `raw` below is the input actually analysed, so it stays row-aligned
+  // with the output (it IS the source data under the default).
   const input = signalRecipeInputData(recipe, source);
   if (recipe.kind === "spectral") {
     const data = secondary
@@ -89,7 +90,7 @@ export async function computeSignalTransform(
       name: `${sourceName} (${recipe.operation})`,
       recipe,
       datasetPatch: {
-        raw: source.data,
+        raw: input,
         analysisRecipe: recipe,
         derivedFrom: { datasetId: source.id, pipeline: label },
         ...(source.workbookId ? { workbookId: source.workbookId } : {}),
@@ -107,7 +108,7 @@ export async function computeSignalTransform(
     name: `${source.name} (${recipe.operation})`,
     recipe,
     datasetPatch: {
-      raw: source.data,
+      raw: input,
       corrections: recipe.params,
       analysisRecipe: recipe,
       derivedFrom: { datasetId: source.id, pipeline: label },

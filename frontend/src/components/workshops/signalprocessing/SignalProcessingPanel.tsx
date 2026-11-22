@@ -187,6 +187,7 @@ export default function SignalProcessingPanel() {
     ? "Select a dataset first."
     : active.pending
       ? "Wait for the full dataset to load."
+      : inputData?.time.length === 0 ? "No rows remain after excluded and filtered-out rows are left out."
       : channels.length === 0
         ? "Select at least one signal column."
         : crossWorksheet && (!secondary || secondary.pending || secondaryChannel === null)

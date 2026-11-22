@@ -119,4 +119,15 @@ describe("Signal Processing row option", () => {
     await waitFor(() => expect(useApp.getState().status).toContain("saved recipe"));
     expect(saveRecipeMock.mock.calls[0][2]).toMatchObject({ inputRows: "analysis-view" });
   });
+
+  it("off with every row excluded: says so and does not send an empty preview", async () => {
+    useApp.setState({ datasets: [{ ...SHEET, excludedRows: [0, 1, 2, 3] }] });
+    render(<SignalProcessingPanel />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeEnabled());
+    const before = correctionMock.mock.calls.length;
+    fireEvent.click(checkbox());
+    expect(screen.getByRole("alert")).toHaveTextContent("No rows remain after excluded and filtered-out rows are left out.");
+    expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeDisabled();
+    expect(correctionMock.mock.calls.length).toBe(before);
+  });
 });
