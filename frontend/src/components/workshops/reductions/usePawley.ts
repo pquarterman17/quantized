@@ -31,17 +31,19 @@ import {
   PAWLEY_DEFAULT_FIELDS,
   PAWLEY_MAX_POINTS,
   type PawleyField,
+  type PawleyCentering,
   type PawleyFields,
   type PawleyTie,
   parseField,
   pawleyAxisProblem,
+  pawleyBody,
   pawleyInputProblem,
   pawleyNumbers,
   pawleyVerdict,
   scanRange,
 } from "./pawleyInputs";
 
-export type PawleyCentering = "P" | "F" | "I" | "A" | "B" | "C" | "R";
+export type { PawleyCentering };
 
 export interface PawleyState {
   active: Dataset | null;
@@ -237,25 +239,7 @@ export function usePawley(): PawleyState {
       if (pairs.keep.length < 3) throw new Error("Pawley refinement needs at least 3 finite points.");
       const range = scanRange(pairs.x);
       if (!(range.max > range.min)) throw new Error("The scan covers a single 2θ value.");
-      const res = await pawleyRefine({
-        two_theta: pairs.x,
-        intensity: pairs.y,
-        a: n.a,
-        b: n.b,
-        c: n.c,
-        alpha: n.alpha,
-        beta: n.beta,
-        gamma: n.gamma,
-        symmetry,
-        tie,
-        wavelength: n.wavelength,
-        // Only reflections inside the measured scan are fit and counted. A
-        // scan through the direct beam starts below 0; no reflection lives there.
-        min_two_theta: Math.max(0, range.min),
-        max_two_theta: range.max,
-        profile_fwhm: n.fwhm,
-        refine_cell: refineCell,
-      });
+      const res = await pawleyRefine(pawleyBody(pairs.x, pairs.y, range, { n, symmetry, tie, refineCell }));
       if (token !== runToken.current) return;
       const len = pairs.x.length;
       if (res.model.length !== len || res.residual.length !== len || res.background.length !== len) {

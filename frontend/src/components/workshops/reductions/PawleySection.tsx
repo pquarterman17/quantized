@@ -4,6 +4,7 @@ import { NumberField } from "../../primitives/NumberField";
 import StructurePresetPicker from "../structures/StructurePresetPicker";
 import type { PawleyField, PawleyTie } from "./pawleyInputs";
 import { pawleyVerdict } from "./pawleyInputs";
+import { PawleyBatch } from "./ReductionBatchSections";
 import { type PawleyCentering, usePawley } from "./usePawley";
 
 const CENTERING: { value: PawleyCentering; label: string }[] = [
@@ -147,6 +148,7 @@ export default function PawleySection() {
           </div>
         </div>
       )}
+      <PawleyBatch active={s.active} col={s.col} fields={s.fields} tie={s.tie} symmetry={s.symmetry} refineCell={s.refineCell} />
     </div>
   );
 }

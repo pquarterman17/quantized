@@ -6,6 +6,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { FftThicknessBatch } from "./ReductionBatchSections";
 import { useFftThickness } from "./useFftThickness";
 
 const WINDOWS = [
@@ -124,6 +125,7 @@ export default function FftThicknessSection() {
           </Button>
         </div>
       )}
+      <FftThicknessBatch active={active} col={col} settings={{ wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm }} />
     </div>
   );
 }

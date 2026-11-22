@@ -8,6 +8,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { ReflectivityFftBatch } from "./ReductionBatchSections";
 import { type ReflFftPreprocess, useReflectivityFft } from "./useReflectivityFft";
 
 const WINDOWS = [
@@ -175,6 +176,8 @@ export default function ReflectivityFftSection() {
           </Button>
         </div>
       )}
+      <ReflectivityFftBatch active={active} col={col}
+        settings={{ isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence }} />
     </div>
   );
 }
