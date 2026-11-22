@@ -10,6 +10,7 @@ import { clearSelectionForTool } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
 import HysteresisBatchSection from "./HysteresisBatchSection";
+import HysteresisByLevel from "./HysteresisByLevel";
 import { useHysteresis } from "./useHysteresis";
 
 export default function HysteresisPanel() {
@@ -81,6 +82,7 @@ export default function HysteresisPanel() {
         </div>
       )}
       <HysteresisBatchSection />
+      <HysteresisByLevel />
     </ToolWindow>
   );
 }
