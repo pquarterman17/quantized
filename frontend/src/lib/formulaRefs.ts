@@ -63,7 +63,7 @@ import { CONSTS } from "./formulaFuncs";
 import { MATH_FUNCS } from "./formulaMath";
 import { tryParseSpecialCall } from "./formulaSpecial";
 import { textColumnEntries } from "./originTextColumnCells";
-import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, shiftSheetRefs } from "./sheetRefs";
+import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
 import type { DataStruct, Dataset } from "./types";
 
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
@@ -443,5 +443,6 @@ registerFormulaExtension({
   renameSheetRefs,
   renameRefusal,
   shiftSheetRefs,
+  sheetColumnsRead,
   withSheetDatasets,
 });

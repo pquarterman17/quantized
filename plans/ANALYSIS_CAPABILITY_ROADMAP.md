@@ -822,12 +822,19 @@ inconsistently exposed, and do not all share the same result lifecycle.
   - Signal Processing's Save By result recorded the single run's "Use
     excluded/filtered rows" although By levels always come from the analysis
     view (as the worksheet batch already noted).
-  - **Open (recorded, fail closed, not changed):** (1) Replace writes into the
-    same worksheet id even when the new output has a different column count or
-    labels (Tabulate stats); figures bound to channel indexes are neither
-    remapped nor refused. Whether Replace should refuse a layout change or
-    remap bindings is an owner decision; until then prefer "Add as new" when the
-    columns change. (2) ~~During a recalc pass, edits still do not mark derived
+  - **Open (recorded, fail closed, not changed):** (1) **Resolved (lane RPL,
+    2026-11-22, owner decision):** Replace now compares the old and new column
+    layouts by name. When every column any binding uses still exists (once, by
+    name), the bindings follow by name in the same single undo step (reorder is
+    handled; columns nobody uses may come or go); otherwise Replace is disabled
+    with the reason by name ("Replace would remove column ‘χ’ used by figure
+    “Figure 2” and result “Report 1”") and "Add as new" stays. Checked before the
+    commit (the reopen banner) and again at commit time. Sites: `store/analysisOutputLayout.ts`,
+    `lib/outputColumnBindings.ts`, `lib/outputColumnMap.ts`; plots, windows, the
+    live view, saved figures, legacy live figures, Graph Builder specs, graph
+    curves and inset layers, `sheet()` readers and other results are remapped;
+    a derived worksheet reading the output blocks any layout change; pages and
+    report entries hold no channel index. (2) ~~During a recalc pass, edits still do not mark derived
     (non-committed) worksheets~~ **Fixed (lane RP):** the pass now names the
     dataset it is writing (`store/recalcPassState.ts`); any other
     `touchDataset` mid-pass is a user edit, queued (a Set, so a burst is one)

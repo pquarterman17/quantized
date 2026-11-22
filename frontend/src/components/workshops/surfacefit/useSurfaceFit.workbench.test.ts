@@ -80,6 +80,20 @@ describe("Surface fit result freshness", () => {
     expect(result.current.result).toBeNull();
   });
 
+  it("forced race: a click from a render the ref has not caught up with still runs, on that render's inputs (fail-before: dropped silently)", async () => {
+    // The refs behind the in-flight guard catch up in a passive effect, so a click made
+    // just after a commit can see a ref that disagrees with its own render. Forced here
+    // by calling the fit of render A after render B's effects have run.
+    const { result } = renderHook(() => useSurfaceFit());
+    await waitFor(() => expect(result.current.p0[0]).toBe("1.5"));
+    const fitFromA = result.current.fit;
+    act(() => result.current.setBound("p0", 0, "9"));
+    await act(async () => { await fitFromA(); });
+    expect(fitMock).toHaveBeenCalledTimes(1);
+    expect(fitMock.mock.calls[0][0]).toMatchObject({ p0: [1.5, 0.5, 0.25] });
+    expect(result.current.result).toBeNull(); // asked with start values the panel no longer shows
+  });
+
   it("a lazy book does not discard its fit", async () => {
     makePending({ id: "d1", name: "map.csv", data: DATA });
     const { result } = await fitted();

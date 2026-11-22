@@ -5,6 +5,11 @@
 // its notes and its name stay), in ONE undo step: Ctrl+Z restores the old data
 // and the old envelope together.
 //
+// Figures, plots, graph curves, sheet() formulas and other results bound to the
+// old worksheet by column index are re-pointed BY COLUMN NAME in the same step
+// (store/analysisOutputLayout.ts); a bound column that would vanish or become
+// ambiguous refuses the replace, by name.
+//
 // FAIL CLOSED: the target must still be a committed result of the same
 // producer on the same source, and its output worksheet must be unedited since
 // it was added (lib/committedOutputReopen.ts's `replaceBlockedReason`);
@@ -21,6 +26,7 @@ import { isCommittedOutputResult, REOPEN_PARAM } from "../lib/committedOutputGra
 import { replaceBlockedReason } from "../lib/committedOutputReopen";
 import type { Dataset } from "../lib/types";
 import type { AnalysisCommitOutcome, AnalysisOutputCommit } from "./analysisOutputCommit";
+import { outputLayoutPatch, outputLayoutVerdict } from "./analysisOutputLayout";
 import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
@@ -66,6 +72,10 @@ export function replaceCommittedOutput(
   if (blocked || !old) return refuse(`${label}: ${blocked ?? "the output is missing"} Choose “Add as new” to keep it.`);
 
   const built = request.output(source);
+  // Everything bound to the old worksheet by column index must follow by name,
+  // or the replace is refused (re-checked here, at commit time, on live state).
+  const layout = outputLayoutVerdict(state, outputId, built.data.labels, target.id);
+  if (!layout.ok) return refuse(`${label}: ${layout.reason} Choose “Add as new” to keep it.`);
   // A user's rename of the output survives; the tool's own name follows the new computation.
   const recorded = target.parameters?.[REOPEN_PARAM];
   const toolName = recorded && typeof recorded === "object" && !Array.isArray(recorded) && typeof recorded["name"] === "string"
@@ -93,10 +103,12 @@ export function replaceCommittedOutput(
   const step = `replace ${label} output`;
   asOneEditStep(get, step, () => {
     get().recordHistory(step);
-    useApp.setState((s) => ({
-      datasets: s.datasets.map((dataset) => (dataset.id === outputId ? output : dataset)),
-      analysisResults: s.analysisResults.map((result) => (result.id === target.id ? next : result)),
-    }));
+    useApp.setState((s) => {
+      const datasets = s.datasets.map((dataset) => (dataset.id === outputId ? output : dataset));
+      const analysisResults = s.analysisResults.map((result) => (result.id === target.id ? next : result));
+      // Bindings follow their columns by name in this same step (Undo restores them with the data).
+      return { datasets, analysisResults, ...outputLayoutPatch({ ...s, datasets, analysisResults }, outputId, layout.shifts, datasets, target.id) };
+    });
   });
   useApp.setState((s) => ({ staleDatasets: s.staleDatasets.filter((id) => id !== outputId) }));
   // Anything derived FROM the output is now out of date.
