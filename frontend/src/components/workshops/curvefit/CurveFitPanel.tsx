@@ -98,6 +98,7 @@ export default function CurveFitPanel() {
     runCornerPlot,
     cornerBusy,
     xRange,
+    fitXy,
     weightMode,
     setWeightMode,
     manualKey,
@@ -128,7 +129,10 @@ export default function CurveFitPanel() {
   const [runKind, setRunKind] = useState<"guess" | "fit">("fit"); // what `busy` is doing
 
   const fitParams = (
-    <FitParamsSection rows={paramInputs} setRow={setParamRow} reset={resetParamRows} />
+    <FitParamsSection
+      rows={paramInputs} setRow={setParamRow} reset={resetParamRows}
+      preview={{ active, model: models.find((m) => m.name === modelName), modelName, xy: fitXy, landed: fitData ? result : null }}
+    />
   );
 
   const weighting = (
