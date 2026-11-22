@@ -59,6 +59,11 @@ export type AnalysisCommitOutcome =
   | { kind: "created" | "existing" | "replaced"; resultId: string; outputId: string }
   | { kind: "refused"; reason: string };
 
+/** Why Replace is refused when another current result holds the same computation. */
+function duplicateOfOtherReason(label: string, existingName: string): string {
+  return `${label}: “${existingName}” already holds this exact computation, so replacing would leave two identical outputs. Delete it, or choose “Add as a new output” to go to it; nothing was changed.`;
+}
+
 export function commitKeyFor(request: Pick<AnalysisOutputCommit, "producer" | "sourceId" | "computedOn" | "settings" | "alsoFrom">): string {
   // Single-source keys stay byte-identical to the original contract.
   const settings = request.alsoFrom?.length ? { ...request.settings, alsoFrom: request.alsoFrom } : request.settings;
@@ -94,6 +99,13 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     const existing = state.analysisResults.find((result) => result.id === existingId)!;
     const outputId = existing.outputs[0]!.datasetId;
     const name = state.datasets.find((dataset) => dataset.id === outputId)?.name ?? outputId;
+    if (request.replace && existingId !== request.replace) {
+      // Replace was chosen, but ANOTHER current result already holds exactly
+      // this computation (an earlier "Add as new"): replacing the target would
+      // leave two identical outputs, and returning the other one would replace
+      // nothing while looking like it had. Fail closed with the reason (lane RO2).
+      return refuse(duplicateOfOtherReason(request.producer.label, name));
+    }
     state.setActive(outputId);
     get().setStatus(`this ${request.producer.label} output is already added as “${name}”; nothing was duplicated`);
     return { kind: "existing", resultId: existingId, outputId };

@@ -29,7 +29,7 @@ export default function BatchIntegrateResults({ b }: { b: BatchIntegrateState })
     if (!out) return;
     const skipped = out.skipped.length ? ` (${out.skipped.length} skipped: ${out.skipped.join("; ")})` : "";
     if (!out.id) toast(`no dataset could be added to the trend${skipped}`, "danger");
-    else toast(`trend added to the library${skipped}`, out.skipped.length ? "info" : undefined);
+    else toast(`trend ${out.replaced ? "replaced" : "added to the library"}${skipped}`, out.skipped.length ? "info" : undefined);
   };
 
   return (

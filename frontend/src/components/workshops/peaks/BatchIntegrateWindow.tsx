@@ -11,11 +11,18 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { WorkbenchMessage } from "../workbench/WorkbenchParts";
 import BatchIntegrateResults from "./BatchIntegrateResults";
 import BatchWindowsEditor from "./BatchWindowsEditor";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { useBatchIntegrate } from "./useBatchIntegrate";
 
 const faint = { color: "var(--text-faint)" } as const;
 
-export default function BatchIntegrateWindow({ seedPeaks, onClose }: {
+/** Remounts the body for each "Open in Batch integrate" session (it seeds once, at mount). */
+export default function BatchIntegrateWindow(props: { seedPeaks: readonly { center: number; fwhm: number }[]; onClose: () => void }) {
+  return <BatchIntegrateBody key={useReopenScope("peak-batch-integrate")} {...props} />;
+}
+
+function BatchIntegrateBody({ seedPeaks, onClose }: {
   /** The Peaks panel's peaks (fitted when present, else detected). */
   seedPeaks: readonly { center: number; fwhm: number }[];
   onClose: () => void;
@@ -25,6 +32,7 @@ export default function BatchIntegrateWindow({ seedPeaks, onClose }: {
 
   return (
     <ToolWindow id="peaks-batch-integrate" title="Batch integrate" width={480} onClose={onClose}>
+      <ReopenBanner tool="peak-batch-integrate" />
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 0 }}>
         {ch
           ? <>Integrates <b>{ch.yLabel}</b> vs <b>{ch.xLabel ?? "X"}</b>, matched by column name in each dataset.</>

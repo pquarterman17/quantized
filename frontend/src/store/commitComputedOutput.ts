@@ -12,6 +12,7 @@ import type { CommitSettings } from "../lib/committedOutput";
 import { dataFingerprint } from "../lib/dataFingerprint";
 import type { Dataset, DataStruct } from "../lib/types";
 import { commitAnalysisOutput, type AnalysisCommitOutcome } from "./analysisOutputCommit";
+import { replaceRequestFor } from "./toolReopen";
 import { useApp } from "./useApp";
 
 export function commitComputedOutput(args: {
@@ -24,6 +25,8 @@ export function commitComputedOutput(args: {
   errorRoles?: Dataset["errorRoles"];
   derivedFrom?: Dataset["derivedFrom"];
   status?: string;
+  /** Unkeyed tool state "Open in <tool>" restores beside the settings. */
+  reopenExtra?: CommitSettings;
 }): AnalysisCommitOutcome {
   // The same worksheet twice (two channels of one file) is one source.
   const [primary, ...rest] = args.sources.filter((s, i, all) => all.findIndex((o) => o.id === s.id) === i);
@@ -36,6 +39,9 @@ export function commitComputedOutput(args: {
     sourceId: primary.id,
     computedOn: primary.computedOn,
     alsoFrom: rest,
+    // Opened from this tool's committed result with Replace chosen: commit INTO it
+    // (read at commit time, so a late switch to Add as new is honoured).
+    ...replaceRequestFor(args.producer.id, primary.id),
     settings: { ...args.settings, output: dataFingerprint(args.data) },
     output: () => ({
       name: args.name, data: args.data,
@@ -43,5 +49,6 @@ export function commitComputedOutput(args: {
       ...(args.derivedFrom ? { derivedFrom: args.derivedFrom } : {}),
     }),
     ...(args.status ? { status: args.status } : {}),
+    ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
   });
 }

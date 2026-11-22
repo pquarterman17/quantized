@@ -4,6 +4,7 @@
 // ./useSpinAsymmetry, rules in ./spinAsymmetry.
 
 import { Button, Select } from "../../primitives";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useSpinAsymmetry, type ChannelPick, type SpinAsymmetryState } from "./useSpinAsymmetry";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -43,6 +44,7 @@ export default function SpinAsymmetryView() {
   const s = useSpinAsymmetry();
   return (
     <div style={{ marginTop: 12 }}>
+      <ReopenBanner tool="spin-asymmetry" />
       <div className="qzk-helptext" style={{ ...faint, marginTop: 0 }}>
         SA = (R++ − R−−)/(R++ + R−−) on one shared Q grid.
       </div>

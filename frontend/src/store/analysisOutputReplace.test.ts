@@ -138,3 +138,44 @@ describe("replacing a committed output (Open in <tool>)", () => {
     expect(staleAnalysisOutputs(saved, s.datasets)).toEqual([outputId]);
   });
 });
+
+// Lane RO2, IR suspected item 3. Fail-before: with Replace chosen, a computation
+// whose key matched ANOTHER current result returned that result ("existing")
+// and replaced nothing, while looking like it had.
+describe("Replace when another current result already holds the computation", () => {
+  it("refuses with the reason, naming the other output, and writes nothing", () => {
+    const { resultId } = commitFirst(); // R1: geometric
+    const second = commitAnalysisOutput(request({ geometric: false }, 7)); // R2: Add as new
+    if (second.kind !== "created") throw new Error("setup");
+    const before = useApp.getState();
+    const outcome = commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId }));
+    expect(outcome.kind).toBe("refused");
+    expect(outcome.kind === "refused" && outcome.reason).toContain("already holds this exact computation");
+    expect(outcome.kind === "refused" && outcome.reason).toContain("Film (fit 7)");
+    expect(outcome.kind === "refused" && outcome.reason).toContain("nothing was changed");
+    expect(useApp.getState().datasets).toBe(before.datasets);
+    expect(useApp.getState().analysisResults).toBe(before.analysisResults);
+    expect(useApp.getState().history).toHaveLength(2);
+    expect(useApp.getState().status).toContain("already holds this exact computation");
+  });
+
+  it("Add as new still goes to the existing result, as before", () => {
+    commitFirst();
+    const second = commitAnalysisOutput(request({ geometric: false }, 7));
+    if (second.kind !== "created") throw new Error("setup");
+    expect(commitAnalysisOutput(request({ geometric: false }, 7))).toMatchObject({ kind: "existing", resultId: second.resultId });
+  });
+
+  it("an unchanged computation of the target itself is still just 'existing' (nothing to replace)", () => {
+    const { resultId } = commitFirst();
+    expect(commitAnalysisOutput(request({ geometric: true }, 1, { replace: resultId }))).toMatchObject({ kind: "existing", resultId });
+  });
+
+  it("a stale holder of the computation does not block the replace", () => {
+    const { resultId } = commitFirst();
+    const second = commitAnalysisOutput(request({ geometric: false }, 7));
+    if (second.kind !== "created") throw new Error("setup");
+    useApp.setState({ staleDatasets: [second.outputId] });
+    expect(commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId })).kind).toBe("replaced");
+  });
+});

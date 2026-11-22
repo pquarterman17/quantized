@@ -198,9 +198,8 @@ inconsistently exposed, and do not all share the same result lifecycle.
       `findCommittedResultId`, the result workspace status and the save stamp
       (`stampAnalysisResults` keeps `stale` for committed outputs) honour it,
       so it is still stale after save and reopen.
-    - **Not supported, disabled with the reason:** Peak batch table and Batch
-      integrate trend (multi-source), Fit band plot (follows a live Curve Fit
-      the result does not record). Signal Processing outputs keep their own
+    - **Not supported, disabled with the reason:** Fit band plot (see the
+      lane RO2 decision below). Signal Processing outputs keep their own
       path (Recalculate in place / Rerun as new from the recipe; no reopen into
       the workbench). Snapshot results keep their existing Edit (`openWith`).
     - Tests: `lib/committedOutputReopen.test.ts` (plan per case),
@@ -230,9 +229,66 @@ inconsistently exposed, and do not all share the same result lifecycle.
     `useReflectivity`) from "mint ids themselves" to "delegating", since the
     id is now minted in the store; the private-sequence check still covers
     them.
-  - [ ] Remaining: reopen for multi-source batch tables, spin asymmetry and
-    fit bands, and for the tools above once their settings are recorded; the
-    other "add as dataset" writers outside the audit (Pawley, reflectivity
+  - [x] **Multi-source reopen, fit-band decision and IR items 3 and 4 (lane
+    RO2, 2026-11-22).**
+    - **Peak batch table, Batch integrate trend and Spin asymmetry reopen**
+      (`lib/committedOutputReopen.ts` plans on ALL recorded sources;
+      `ReopenPlan.sourceIds`, the session's `sourceIds`). The further sources'
+      analysis-view fingerprints are recorded beside the settings
+      (`parameters.reopen.alsoFrom`); a missing source opens the tool with no
+      settings and a count/ids notice (Replace blocked), a changed or still
+      loading one is named, and a result with no record for a further source
+      says it cannot be checked (never assumed current). Peak batch and Batch
+      integrate also record the channels they ran on (`reopen.extra.channels`),
+      and reopening plots them (one undoable step, named in the status) or says
+      they moved (`store/toolReopenChannels.ts`). Peak batch records a digest of
+      the recipe: a recipe that is gone is not swapped for the first saved one
+      (Run is blocked until one is picked), an edited one is flagged. The tools
+      mount through their existing hosts: the wizard's Batch mode, the Peaks
+      panel's Batch integrate window, the Reflectivity panel's Spin asym. mode.
+    - **Decision: Replace of a multi-source output keeps the PRIMARY source.**
+      The commit still requires the same first source, but the other sources
+      may differ (the user may have unpicked a scan); the replaced result now
+      takes the new source list (it used to keep the old one). When the first
+      source changes (the first scan is unpicked, R++ is changed) Replace is
+      disabled with the reason and the mode falls back to Add as new, visibly
+      (`useReplaceLayoutBlock`), rather than adding quietly under a Replace
+      banner. A recorded setting the tool cannot restore (a Spin asymmetry
+      column that no longer exists, unreadable Batch integrate windows) does
+      the same until the user has set it; nothing is guessed. Replace runs
+      through the layout verdict: before the commit button for the two batch
+      tables (the banner shows the reason by name), at commit time for all
+      three (Spin asymmetry computes and commits in one step, so it is checked
+      only then and a refusal is shown in the tool).
+    - **Decision: a fit band does NOT reopen.** The band is a statement about
+      one fit and needs its covariance, free-parameter count, observation
+      variance / weights and fit range; the result records only the model, the
+      fitted values, level, prediction flag, point count and a width digest, and
+      Curve Fit has no editing session to seed. Reopening on those values would
+      draw a band for whatever fit is live. The button stays disabled with that
+      reason. Revisit if the band envelope ever records the fit's covariance
+      and range.
+    - **IR item 3 resolved: Replace refuses a duplicate.** With Replace chosen,
+      a computation identical to ANOTHER current result is refused ("“X”
+      already holds this exact computation, so replacing would leave two
+      identical outputs..."), and the button says the same, instead of
+      returning that result and replacing nothing. An unchanged computation of
+      the target itself is still "existing"; a stale holder does not block;
+      Add as new is unchanged. Test: `store/analysisOutputReplace.test.ts`
+      (fails on the old code).
+    - **IR item 4 resolved: the session ends when its tool closes.**
+      `store/toolReopenWatch.ts` ends the session when the tool's open flag
+      goes false, whether or not the panel ever mounted (the panel's unmount
+      only ends a session of a panel that mounted). Test:
+      `resultcommit/reopenSessionExpiry.test.tsx`.
+    - Tests: `lib/committedOutputReopen.test.ts` (multi-source plans),
+      `resultcommit/reopenPeakBatch.test.tsx`,
+      `reopenBatchIntegrate.test.tsx`, `reopenSpinAsymmetry.test.tsx` (seed
+      round trip, replace in one undo step, add as new, missing/changed source,
+      recipe gone or edited, layout verdict), `reopenSessionExpiry.test.tsx`.
+  - [ ] Remaining: reopen for the tools above once their settings are
+    recorded (FFT thickness, Units, Internal field, Curie-Weiss, fit bands);
+    the other "add as dataset" writers outside the audit (Pawley, reflectivity
     FFT, ROI cuts, resample, hysteresis, the Magnetometry background
     subtraction) are not migrated.
 - [ ] Selection semantics differ by tool: active dataset, plotted channels,
@@ -846,12 +902,12 @@ inconsistently exposed, and do not all share the same result lifecycle.
     correction the pass is writing at that instant is overwritten by the
     correction (as before) and, being read as the pass's own write, is not
     replayed; a row-state edit there is replayed.
-    (3) With Replace chosen, a computation whose key matches ANOTHER
-    current result (an earlier "Add as new") returns that result and replaces
-    nothing; the button says "Already added as …". (4) A reopen session ends
-    only when its panel unmounts: if the panel never mounts (a lazy chunk fails),
-    a later manual open starts from the old seed with Replace preselected (the
-    banner says so). (5) **Fixed (lane LZ):** when a lazy book installs, the
+    (3) **Resolved (lane RO2):** with Replace
+    chosen, a computation whose key matches ANOTHER current result is refused
+    with the reason (naming that result) instead of returning it and replacing
+    nothing. (4) **Resolved (lane RO2):** a reopen session ends when its tool's
+    open flag goes false (`store/toolReopenWatch.ts`), so a panel that never
+    mounted no longer leaves a seed for a later manual open. (5) **Fixed (lane LZ):** when a lazy book installs, the
     results and committed outputs whose source it is are re-checked against
     their saved fingerprint (`store/lazyInstallFreshness`), and an install that
     dropped exclusions it could not prove marks what reads the book

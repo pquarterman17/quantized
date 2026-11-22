@@ -4,14 +4,13 @@
 // side, store/analysisOutputCommit.ts, owns idempotency and the one undo step;
 // this hook only exposes them to a button (disabled + why, not a silent no-op).
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useMemo, useRef, useState } from "react";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
-import { outputLayoutVerdict } from "../../../store/analysisOutputLayout";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
 import { replaceTargetFor, useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
+import { useReplaceLayoutBlock } from "./useReplaceLayoutBlock";
 
 export interface AnalysisCommitState {
   /** Name of the existing output worksheet when this computation is already committed. */
@@ -50,25 +49,7 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
     try { return request.output(source).data.labels; } catch { return null; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyForLabels, checkId, source]);
-  // Only the slices the verdict reads, so unrelated store updates (pan, zoom, status) do not rescan.
-  const slices = useApp(useShallow((s) => ({
-    datasets: s.datasets, plotWindows: s.plotWindows, layers: s.layers, activeId: s.activeId, editableFigures: s.editableFigures,
-    figureDocs: s.figureDocs, savedPlotSpecs: s.savedPlotSpecs, analysisResults: s.analysisResults, xKey: s.xKey, yKeys: s.yKeys,
-    y2Keys: s.y2Keys, groupKey: s.groupKey, facetKey: s.facetKey, errKeys: s.errKeys,
-  })));
-  const layoutReason = useMemo(() => {
-    const outputId = checkId && slices.analysisResults.find((result) => result.id === checkId)?.outputs[0]?.datasetId;
-    if (!outputId || !newLabels || !checkId) return null;
-    const verdict = outputLayoutVerdict(slices, outputId, newLabels, checkId);
-    return verdict.ok ? null : verdict.reason;
-  }, [slices, newLabels, checkId]);
-  const setLayoutBlocked = useToolReopen((s) => s.setLayoutBlocked);
-  useEffect(() => {
-    if (!tool) return undefined;
-    setLayoutBlocked(tool, layoutReason);
-    // Cleared when the request goes away (settings invalidated) or the tool closes.
-    return () => setLayoutBlocked(tool, null);
-  }, [tool, layoutReason, setLayoutBlocked]);
+  useReplaceLayoutBlock(tool, request?.sourceId, newLabels);
   // The replace target is read AT COMMIT TIME (after a slow prepare too), so a
   // switch to "Add as a new output" while a commit is pending is honoured.
   const withTarget = (req: AnalysisOutputCommit): AnalysisOutputCommit => {
@@ -110,6 +91,9 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
     commitAsync,
     disabledReason: !request ? "Run the analysis first."
       : inFlight ? "Adding the output…"
+      : committedAs && replace && resultId !== replace
+        // Replace chosen, but ANOTHER result already holds this computation (RO2).
+        ? `“${committedAs}” already holds this exact computation, so Replace would leave two identical outputs. Delete it, or choose “Add as a new output” to go to it.`
       : committedAs ? `Already added as “${committedAs}”. Undo or delete it to add it again.` : null,
     commit: () => (request ? commitAnalysisOutput(withTarget(request)) : null),
   };
