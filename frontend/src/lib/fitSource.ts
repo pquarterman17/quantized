@@ -28,7 +28,7 @@ import { hasDatasetHandle, postJSONDatasetAware } from "./api/datasetCache";
 import { fitEquation, type EquationFitRequest } from "./api/curvefit";
 import { withResiduals } from "./fitResiduals";
 import { fetchJSON, type HttpError } from "./api/http";
-import type { CalcResult, DataStruct } from "./types";
+import type { CalcResult, DataStruct, FitWeighting } from "./types";
 
 /** Where a fit's x/y came from: `data`'s column `xKey` (null = time) and
  *  column `yKey`, at the rows the fit reads. */
@@ -37,6 +37,10 @@ export interface FitSource {
   xKey: number | null;
   yKey: number;
 }
+
+/** Rows as ascending numbers, or as `[start, count]` runs already (a whole
+ *  column is `{ runs: [[0, n]] }`, not an n-long array). */
+export type Rows = readonly number[] | { runs: [number, number][] };
 
 /** Strictly ascending rows as [start, count] runs; null otherwise. */
 export function rowRuns(rows: readonly number[]): [number, number][] | null {
@@ -52,29 +56,72 @@ export function rowRuns(rows: readonly number[]): [number, number][] | null {
   return runs;
 }
 
+/** Which columns a route reads: both (the default), only Y (ALS, rolling
+ *  ball, ModPoly) or only the one sample `xKey` names (descriptive stats). */
+export type SourceOnly = "x" | "y";
+
+/** Weights taken straight from a dataset column (`dyForFit`'s error-column
+ *  and direct modes): `dy` = the column whose absolute value is sigma,
+ *  `weights` = the column used as is. The server reads them at the same rows
+ *  as x/y, so `dy` / `weights` leave the request. */
+export interface WeightCols {
+  dy?: number;
+  weights?: number;
+}
+
+/** The weight column behind a resolved weighting, or undefined when the
+ *  vector is derived (poisson: sqrt of y) and must ride as an array. Only
+ *  meaningful once `dyForFit` produced a vector: it already refused a missing
+ *  or invalid column. */
+export function weightColsOf(weight: FitWeighting): WeightCols | undefined {
+  if (weight.errKey == null) return undefined;
+  if (weight.mode === "yerr" || weight.mode === "manual") return { dy: weight.errKey };
+  return weight.mode === "direct" ? { weights: weight.errKey } : undefined;
+}
+
 /** The fields that replace x/y for `src` at `rows`, or null when the arrays
  *  must be posted (no handle for `src.data`, or rows not ascending). */
-export function sourceFields(src: FitSource, rows: readonly number[]): Record<string, unknown> | null {
+export function sourceFields(
+  src: FitSource,
+  rows: Rows,
+  only?: SourceOnly,
+): Record<string, unknown> | null {
   if (!hasDatasetHandle(src.data)) return null;
-  const runs = rowRuns(rows);
+  const runs = "runs" in rows ? rows.runs : rowRuns(rows);
   if (!runs) return null;
-  return { dataset: src.data, x_channel: src.xKey ?? -1, y_channel: src.yKey, rows: runs };
+  return {
+    dataset: src.data,
+    ...(only === "y" ? {} : { x_channel: src.xKey ?? -1 }),
+    ...(only === "x" ? {} : { y_channel: src.yKey }),
+    rows: runs,
+  };
 }
 
 /** POST `body` to `path` with its x/y replaced by `src` at `rows` when the
- *  server holds the dataset, else run `arrays` (the request as it was). */
-export async function postBySource<T, B extends { x: readonly number[]; y: readonly number[] } = { x: readonly number[]; y: readonly number[] }>(
+ *  server holds the dataset, else run `arrays` (the request as it was).
+ *  `opts.weights`: columns that replace `body.dy` / `body.weights` the same
+ *  way (the arrays path keeps them); `opts.only`: a y-only or x-only route. */
+export async function postBySource<T, B extends object = { x: readonly number[]; y: readonly number[] }>(
   path: string,
   body: B,
   src: FitSource | undefined,
-  rows: readonly number[],
+  rows: Rows,
   arrays: () => Promise<T>,
+  opts: { only?: SourceOnly; weights?: WeightCols } = {},
 ): Promise<T> {
-  const fields = src ? sourceFields(src, rows) : null;
+  const fields = src ? sourceFields(src, rows, opts.only) : null;
   if (!fields) return arrays();
-  const { x: _x, y: _y, ...rest } = body;
+  const { x: _x, y: _y, dy, weights, ...rest } = body as B & Record<string, unknown>;
+  const cols = opts.weights;
+  const kept = {
+    ...rest,
+    ...(cols?.dy === undefined && dy !== undefined ? { dy } : {}),
+    ...(cols?.weights === undefined && weights !== undefined ? { weights } : {}),
+    ...(cols?.dy !== undefined ? { dy_channel: cols.dy } : {}),
+    ...(cols?.weights !== undefined ? { weights_channel: cols.weights } : {}),
+  };
   try {
-    return await postJSONDatasetAware<T>(path, { ...rest, ...fields }, undefined, fetchJSON);
+    return await postJSONDatasetAware<T>(path, { ...kept, ...fields }, undefined, fetchJSON);
   } catch (err) {
     const status = (err as HttpError | null)?.status;
     if (status === 409 || status === 413) return arrays();
@@ -91,8 +138,10 @@ export async function leanEquationFit(
   req: EquationFitRequest,
   src: FitSource | undefined,
   rows: readonly number[],
+  weights?: WeightCols,
 ): Promise<CalcResult> {
   const body = { ...req, return_residuals: false };
-  const raw = await postBySource<CalcResult>("/api/fitting/equation/fit", body, src, rows, () => fitEquation(body));
+  const raw = await postBySource<CalcResult>(
+    "/api/fitting/equation/fit", body, src, rows, () => fitEquation(body), { weights });
   return withResiduals(raw, req.y);
 }

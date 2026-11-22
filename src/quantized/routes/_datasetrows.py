@@ -52,7 +52,11 @@ from quantized.datastruct import DataStruct
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._errors import CALC_ERRORS
 
-__all__ = ["XYSource", "expand_runs", "gather_xy", "source_xy"]
+__all__ = [
+    "XSource", "XYSource", "YSource", "expand_runs", "gather_xy", "json_equivalent", "source_x",
+    "source_xy",
+    "source_xyw", "source_y",
+]
 
 TIME_CHANNEL = -1
 
@@ -73,19 +77,72 @@ class XYSource(BaseModel):
 
     @model_validator(mode="after")
     def _one_source(self) -> XYSource:
-        selection = (self.dataset, self.dataset_handle, self.x_channel, self.y_channel, self.rows)
-        by_rows = any(v is not None for v in selection)
-        if self.x is not None or self.y is not None:
-            if by_rows:
-                raise ValueError("send x/y or a dataset row selection, not both")
-            if self.x is None or self.y is None:
-                raise ValueError("x and y are both required")
-        elif not by_rows:
-            raise ValueError("x and y are required (or a dataset row selection)")
-        elif self.dataset is None and self.dataset_handle is None:
-            raise ValueError("a row selection needs dataset_handle (or dataset)")
-        elif self.x_channel is None or self.y_channel is None or self.rows is None:
-            raise ValueError("a row selection needs x_channel, y_channel and rows")
+        _check_source(
+            {"x": self.x, "y": self.y},
+            (self.dataset, self.dataset_handle),
+            {"x_channel": self.x_channel, "y_channel": self.y_channel, "rows": self.rows},
+        )
+        return self
+
+
+def _check_source(
+    arrays: dict[str, Any], dataset: tuple[Any, Any], selection: dict[str, Any]
+) -> None:
+    """The one-source rule shared by every ``*Source`` model: the arrays, OR
+    a dataset (``dataset`` / ``dataset_handle``) with its channels and rows."""
+    by_rows = any(v is not None for v in (*dataset, *selection.values()))
+    if any(v is not None for v in arrays.values()):
+        if by_rows:
+            raise ValueError("send " + "/".join(arrays) + " or a dataset row selection, not both")
+        if any(v is None for v in arrays.values()):
+            raise ValueError(" and ".join(arrays) + " are both required")
+    elif not by_rows:
+        raise ValueError(" and ".join(arrays) + " are required (or a dataset row selection)")
+    elif dataset[0] is None and dataset[1] is None:
+        raise ValueError("a row selection needs dataset_handle (or dataset)")
+    elif any(v is None for v in selection.values()):
+        names = list(selection)
+        raise ValueError("a row selection needs " + ", ".join(names[:-1]) + " and " + names[-1])
+
+
+class YSource(BaseModel):
+    """``y`` posted, or a dataset's ``y_channel`` at ``rows`` (ALS, rolling
+    ball and ModPoly read ``y`` alone)."""
+
+    y: list[float] | None = None
+    dataset: dict[str, Any] | None = None
+    dataset_handle: str | None = None
+    y_channel: int | None = Field(default=None, ge=TIME_CHANNEL)
+    rows: list[tuple[int, int]] | None = None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> YSource:
+        _check_source(
+            {"y": self.y},
+            (self.dataset, self.dataset_handle),
+            {"y_channel": self.y_channel, "rows": self.rows},
+        )
+        return self
+
+
+class XSource(BaseModel):
+    """``x`` posted (``null`` = a gap), or a dataset's ``x_channel`` at
+    ``rows``. A sample statistic drops gaps itself, so the gather keeps them
+    (as NaN, which is what a posted ``null`` becomes)."""
+
+    x: list[float | None] | None = None
+    dataset: dict[str, Any] | None = None
+    dataset_handle: str | None = None
+    x_channel: int | None = Field(default=None, ge=TIME_CHANNEL)
+    rows: list[tuple[int, int]] | None = None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> XSource:
+        _check_source(
+            {"x": self.x},
+            (self.dataset, self.dataset_handle),
+            {"x_channel": self.x_channel, "rows": self.rows},
+        )
         return self
 
 
@@ -116,6 +173,17 @@ def _column(ds: DataStruct, channel: int) -> NDArray[np.float64]:
     return np.asarray(ds.values[:, channel], dtype=float)
 
 
+def _json_doubles(col: NDArray[np.float64], idx: NDArray[np.intp]) -> NDArray[np.float64]:
+    """The rows of ``col`` as ``JSON.stringify`` would write them: ``-0`` as
+    ``+0`` (``-0 + 0 == +0`` in IEEE-754; every other double unchanged)."""
+    return np.add(col[idx], 0.0)
+
+
+def _finite(*cols: NDArray[np.float64]) -> None:
+    if not all(np.isfinite(c).all() for c in cols):
+        raise ValueError("the row selection includes a gap (a non-finite x or y)")
+
+
 def gather_xy(
     ds: DataStruct, x_channel: int, y_channel: int, runs: list[tuple[int, int]]
 ) -> tuple[list[float], list[float]]:
@@ -123,28 +191,109 @@ def gather_xy(
     doc): the rows of the two channels, ``-0`` written as ``+0``, and a
     ``ValueError`` for a non-finite value the array path cannot carry."""
     idx = expand_runs(runs, len(ds.time))
-    x = np.add(_column(ds, x_channel)[idx], 0.0)
-    y = np.add(_column(ds, y_channel)[idx], 0.0)
-    if not (np.isfinite(x).all() and np.isfinite(y).all()):
-        raise ValueError("the row selection includes a gap (a non-finite x or y)")
+    x = _json_doubles(_column(ds, x_channel), idx)
+    y = _json_doubles(_column(ds, y_channel), idx)
+    _finite(x, y)
     return x.tolist(), y.tolist()
+
+
+def _resolve(
+    req: Any, response: Response, runs: list[tuple[int, int]]
+) -> tuple[DataStruct, NDArray[np.intp]]:
+    """The request's dataset (409 on an unknown handle; a posted ``dataset``
+    is cached and its handle set as ``X-Dataset-Handle`` on ``response``, so
+    only a successful response carries it) and its row indices."""
+    ds, handle = resolve_or_409(
+        CachedDatasetRequest(dataset=req.dataset, dataset_handle=req.dataset_handle))
+    idx = expand_runs(runs, len(ds.time))
+    if handle is not None:
+        response.headers["X-Dataset-Handle"] = handle
+    return ds, idx
+
+
+def _by_rows(req: Any, response: Response, channels: list[int]) -> list[NDArray[np.float64]]:
+    """``channels`` of the request's dataset at its rows, as the array path
+    would have parsed them (``-0`` -> ``+0``). 422 for a bad channel / rows."""
+    try:
+        ds, idx = _resolve(req, response, req.rows)
+        return [_json_doubles(_column(ds, c), idx) for c in channels]
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def source_xy(req: XYSource, response: Response) -> tuple[list[float], list[float]]:
     """The request's ``x``/``y``: posted, or gathered from its dataset.
 
-    409 for an unknown handle, 422 for a bad channel or selection. A posted
-    ``dataset`` is cached and its handle set as ``X-Dataset-Handle`` on
-    ``response`` (so only a successful response carries it)."""
+    409 for an unknown handle, 422 for a bad channel or selection."""
     if req.x is not None and req.y is not None:
         return req.x, req.y
-    assert req.x_channel is not None and req.y_channel is not None and req.rows is not None
+    assert req.x_channel is not None and req.y_channel is not None
+    x, y = _by_rows(req, response, [req.x_channel, req.y_channel])
+    return _gathered_pair(x, y)
+
+
+def _gathered_pair(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> tuple[list[float], list[float]]:
     try:
-        ds, handle = resolve_or_409(
-            CachedDatasetRequest(dataset=req.dataset, dataset_handle=req.dataset_handle))
-        x, y = gather_xy(ds, req.x_channel, req.y_channel, req.rows)
+        _finite(x, y)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if handle is not None:
-        response.headers["X-Dataset-Handle"] = handle
-    return x, y
+    return x.tolist(), y.tolist()
+
+
+def source_xyw(
+    req: XYSource, response: Response, dy_channel: int | None, weights_channel: int | None
+) -> tuple[list[float], list[float], list[float] | None, list[float] | None]:
+    """``source_xy`` plus the fit's weight columns read from the same dataset
+    and rows: ``dy`` is ``|column|`` (the client's ``dyForFit`` takes the abs of
+    an error column), ``weights`` the column as is. ``None`` for a channel not
+    asked for. A channel needs a dataset selection (422 with posted x/y)."""
+    if dy_channel is None and weights_channel is None:
+        x, y = source_xy(req, response)
+        return x, y, None, None
+    if req.x is not None and req.y is not None:
+        raise HTTPException(
+            status_code=422, detail="dy_channel / weights_channel need a dataset row selection")
+    assert req.x_channel is not None and req.y_channel is not None
+    wanted = [c for c in (dy_channel, weights_channel) if c is not None]
+    cols = _by_rows(req, response, [req.x_channel, req.y_channel, *wanted])
+    x, y = _gathered_pair(cols[0], cols[1])
+    for c in cols[2:]:
+        _gathered_pair(c, c)  # a non-finite weight is a gap the array path cannot carry
+    rest = iter(cols[2:])
+    dy = np.abs(next(rest)).tolist() if dy_channel is not None else None
+    weights = next(rest).tolist() if weights_channel is not None else None
+    return x, y, dy, weights
+
+
+def source_y(req: YSource, response: Response) -> list[float]:
+    """``y`` posted, or gathered (finite) from the dataset."""
+    if req.y is not None:
+        return req.y
+    assert req.y_channel is not None
+    (y,) = _by_rows(req, response, [req.y_channel])
+    return _gathered_pair(y, y)[0]
+
+
+def source_x(req: XSource, response: Response) -> NDArray[np.float64]:
+    """The sample as floats with gaps as NaN: posted (``null`` -> NaN) or
+    gathered (a non-finite value is what ``JSON.stringify`` writes as
+    ``null``, so it is NaN here too)."""
+    if req.x is not None:
+        return np.asarray([np.nan if v is None else v for v in req.x], dtype=float)
+    assert req.x_channel is not None
+    (x,) = _by_rows(req, response, [req.x_channel])
+    return np.where(np.isfinite(x), x, np.nan)
+
+
+def json_equivalent(ds: DataStruct) -> DataStruct:
+    """``ds`` as the array path would have parsed it from the client's JSON:
+    ``-0`` as ``+0`` and a non-finite value as NaN (``JSON.stringify`` writes
+    ``null`` for Infinity and ``"0"`` for ``-0``). Used when a whole cached
+    dataset replaces a posted one."""
+    def clean(a: NDArray[np.float64]) -> NDArray[np.float64]:
+        out = np.add(np.asarray(a, dtype=float), 0.0)
+        return np.where(np.isfinite(out), out, np.nan)
+    return DataStruct.from_dict(
+        {**ds.to_dict(), "time": clean(ds.time), "values": clean(ds.values)})

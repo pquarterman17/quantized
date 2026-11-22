@@ -355,7 +355,7 @@ export function useCurveFit(): CurveFitState {
                 ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
               }
             : {}),
-        }, modelName, rows, source);
+        }, modelName, rows, source, finiteDy ? weight : undefined);
         // A fit request can outlive an edit/reimport. Never attach its result
         // or row tokens to the replacement worksheet object it did not fit.
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {

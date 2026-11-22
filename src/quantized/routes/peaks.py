@@ -148,9 +148,8 @@ class PeakSeed(BaseModel):
     eta: float | None = None
 
 
-class FitMultiPeakRequest(BaseModel):
-    x: list[float]
-    y: list[float]
+class FitMultiPeakRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows: XYSource.
     peaks: list[PeakSeed]
     model: str = "Lorentzian"
     bg_degree: int = 1
@@ -166,7 +165,7 @@ class FitMultiPeakRequest(BaseModel):
 
 
 @router.post("/fit-multi")
-def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
+def fit_multi(req: FitMultiPeakRequest, response: Response) -> dict[str, Any]:
     """Fit all ``peaks`` + a polynomial background simultaneously; returns the
     global-fit result (fitted peaks, bg coeffs, R2/rmse)."""
     if req.model not in MULTI_MODELS:
@@ -176,8 +175,9 @@ def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
     if not req.peaks:
         raise HTTPException(status_code=422, detail="need at least one peak seed")
     seeds = [p.model_dump(exclude_none=True) for p in req.peaks]
+    x, y = source_xy(req, response)
     result = call_calc(fit_multi_peak,
-        req.x, req.y, seeds,
+        x, y, seeds,
         model=req.model, bg_degree=req.bg_degree,
         constrain=req.constrain, link_mode=req.link_mode, polish=req.polish,
         deadline_s=req.deadline_s,

@@ -32,7 +32,7 @@ from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
-from quantized.routes._datasetrows import XYSource, source_xy
+from quantized.routes._datasetrows import XYSource, source_xy, source_xyw
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._fit_options import (
     FitOptions,
@@ -102,7 +102,7 @@ def autoguess(req: GuessRequest, response: Response) -> dict[str, Any]:
 def fit(req: FitRequest, response: Response) -> dict[str, Any]:
     """Bounded nonlinear least-squares fit of a named model to (x, y)."""
     _require_model(req.model)
-    x, y = source_xy(req, response)
+    x, y, dy_col, w_col = source_xyw(req, response, req.dy_channel, req.weights_channel)
 
     def model_fcn(
         xx: NDArray[np.float64], pp: NDArray[np.float64]
@@ -115,7 +115,7 @@ def fit(req: FitRequest, response: Response) -> dict[str, Any]:
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
         check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
-        weights = resolve_weights(req, len(x))
+        weights = resolve_weights(req, len(x), dy_col, w_col)
         result = curve_fit(
             x,
             y,
@@ -262,7 +262,7 @@ def equation_validate(req: EquationValidateRequest) -> EquationValidateResponse:
 @router.post("/equation/fit")
 def equation_fit(req: EquationFitRequest, response: Response) -> dict[str, Any]:
     """Fit a custom equation model to (x, y); same result shape as /fit."""
-    x, y = source_xy(req, response)
+    x, y, dy_col, w_col = source_xyw(req, response, req.dy_channel, req.weights_channel)
     try:
         fcn, names = equation_model(req.equation)
         if not names:
@@ -275,7 +275,7 @@ def equation_fit(req: EquationFitRequest, response: Response) -> dict[str, Any]:
                             lower, upper)
         p0 = auto_start(fcn, names, x, y, given=given, lower=lower, upper=upper,
                         fixed=req.fixed)
-        weights = resolve_weights(req, len(x))
+        weights = resolve_weights(req, len(x), dy_col, w_col)
         result = curve_fit(
             x,
             y,

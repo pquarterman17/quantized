@@ -11,7 +11,8 @@
 // refuses an X that reverses direction (calc/reduce_xy.py explains why).
 // Lazy: only the workshops and the transform runner import it.
 
-import { sigopDataset, type SigopResult } from "./api/sigop";
+import type { SigopResult } from "./api/sigop";
+import { sigopOf } from "./api/sigopByHandle";
 import { blanksToNaN } from "./blankCells";
 import type { TransformWarning } from "./transformWarnings";
 import type { DataStruct } from "./types";
@@ -73,15 +74,10 @@ export async function computeSigop(
   opts: { signal?: AbortSignal } = {},
 ): Promise<SigopComputed> {
   const d = source.data;
-  const res: SigopResult = await sigopDataset({
-    dataset: {
-      time: d.time, values: d.values, labels: d.labels, units: d.units,
-      metadata: d.metadata, cat_levels: d.cat_levels, level_order: d.level_order,
-    },
-    method: p.method,
-    channels: p.channels,
-    args: p.args,
-  }, opts.signal);
+  const res: SigopResult = await sigopOf(d, {
+    time: d.time, values: d.values, labels: d.labels, units: d.units,
+    metadata: d.metadata, cat_levels: d.cat_levels, level_order: d.level_order,
+  }, { method: p.method, channels: p.channels, args: p.args }, opts.signal);
   const provenance = { sigop_of: source.name, sigop_method: p.method };
   return {
     data: blanksToNaN({ ...res.dataset, metadata: { ...res.dataset.metadata, ...provenance } }),

@@ -7,7 +7,7 @@ import { postJSON } from "./http";
 import type { components } from "./schema";
 import type { DataStruct } from "../types";
 
-export type SigopRequest = Omit<components["schemas"]["SigopRequest"], "dataset"> & {
+export type SigopRequest = Omit<components["schemas"]["SigopRequest"], "dataset" | "dataset_handle"> & {
   dataset: Pick<DataStruct, "time" | "values" | "labels" | "units" | "metadata" | "cat_levels" | "level_order">;
 };
 

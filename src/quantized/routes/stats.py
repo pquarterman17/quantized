@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from quantized.calc.stats import (
@@ -44,20 +44,22 @@ from quantized.calc.stats_tests import (
     sign_test,
     wilcoxon_signed_rank,
 )
+from quantized.routes._datasetrows import XSource, XYSource, source_x, source_xy
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import to_jsonable
 
-router = APIRouter(prefix="/api/stats", tags=["stats"])
+router = APIRouter(prefix="/api/stats", tags=["stats"], route_class=OffloopJSONRoute)
 
 
-class DescriptiveRequest(BaseModel):
-    # null = a NaN gap (JSON has no NaN); dropped like NaN by the calc.
-    x: list[float | None]
+class DescriptiveRequest(XSource):
+    # x (null = a NaN gap; JSON has no NaN; dropped like NaN by the calc), or
+    # a dataset handle + x_channel + rows (plans/LARGE_PAYLOAD_PLAN.md).
+    pass
 
 
-class RegressionRequest(BaseModel):
-    x: list[float]
-    y: list[float]
+class RegressionRequest(XYSource):
+    # x/y, or a dataset handle + channels + rows (plans/LARGE_PAYLOAD_PLAN.md).
     order: int = 1
     alpha: float = 0.05
     # JMP_GAP_PLAN J3 residual (Fit Y by X's bivariate leg): an OPT-IN
@@ -145,17 +147,17 @@ def _wrap(result: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/descriptive")
-def descriptive(req: DescriptiveRequest) -> dict[str, Any]:
+def descriptive(req: DescriptiveRequest, response: Response) -> dict[str, Any]:
     """Descriptive statistics of a 1-D array (NaNs dropped)."""
+    x = source_x(req, response)
     try:
-        x = np.asarray([np.nan if v is None else v for v in req.x], dtype=float)
         return _wrap(descriptive_stats(x))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/regression")
-def regression(req: RegressionRequest) -> dict[str, Any]:
+def regression(req: RegressionRequest, response: Response) -> dict[str, Any]:
     """Polynomial least-squares regression with inference.
 
     ``band_x`` (JMP_GAP_PLAN J3 residual) is opt-in: omitted/empty leaves the
@@ -164,10 +166,11 @@ def regression(req: RegressionRequest) -> dict[str, Any]:
     alongside the unchanged top-level fields. ``band_interval="prediction"``
     switches that band to a new-observation prediction band instead.
     """
+    xs, ys = source_xy(req, response)
     try:
         result = lin_regress(
-            np.asarray(req.x, dtype=float),
-            np.asarray(req.y, dtype=float),
+            np.asarray(xs, dtype=float),
+            np.asarray(ys, dtype=float),
             order=req.order,
             alpha=req.alpha,
         )
@@ -175,8 +178,8 @@ def regression(req: RegressionRequest) -> dict[str, Any]:
             result = {
                 **result,
                 "band": polynomial_confidence_band(
-                    np.asarray(req.x, dtype=float),
-                    np.asarray(req.y, dtype=float),
+                    np.asarray(xs, dtype=float),
+                    np.asarray(ys, dtype=float),
                     np.asarray(req.band_x, dtype=float),
                     order=req.order,
                     alpha=req.alpha,
