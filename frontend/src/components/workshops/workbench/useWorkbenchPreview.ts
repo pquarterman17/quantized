@@ -86,7 +86,9 @@ export function useWorkbenchPreview<T>({
     const c = new AbortController();
     live.current = c;
     const owns = () => mounted.current && seq.current === id && !c.signal.aborted;
-    setState((s) => ({ ...s, pendingKey: forKey }));
+    // A rerun for a key that earlier failed starts clean: the old failure is
+    // not the answer for this run.
+    setState((s) => ({ ...s, pendingKey: forKey, error: s.error?.key === forKey ? null : s.error }));
     // Started synchronously (the request goes out now); a run that throws
     // before returning its promise is an error like any other.
     let launched: Promise<T>;
@@ -144,7 +146,9 @@ export function useWorkbenchPreview<T>({
       seq.current += 1;
       live.current?.abort();
       live.current = null;
-      setState((s) => (s.pendingKey === null ? s : { ...s, pendingKey: null }));
+      // A failure belongs to its key: leaving the key forgets it, so coming
+      // back to that key does not show it again while the rerun is scheduled.
+      setState((s) => (s.pendingKey === null && s.error === null ? s : { ...s, pendingKey: null, error: null }));
     };
   }, [key, auto, delayMs, start]);
 

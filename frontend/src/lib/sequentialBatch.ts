@@ -25,6 +25,10 @@ export type BatchResult<T> =
 export class BatchSkip extends Error {}
 
 export interface SequentialBatchOptions {
+  /** Stop. By default the item in flight finishes. A worker that passes this
+   *  signal on and throws an AbortError BEFORE it writes anything (Resample)
+   *  is abandoned mid-item and reported "stopped"; a worker must not abort
+   *  after a side effect. */
   signal?: AbortSignal;
   onProgress?: (progress: BatchProgress) => void;
 }

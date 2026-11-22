@@ -86,6 +86,15 @@ describe("WorkbenchProgress", () => {
     expect(screen.getByRole("progressbar", { name: "Job" })).not.toHaveAttribute("value");
   });
 
+  it("clamps an out-of-range fraction and shows NaN as indeterminate", () => {
+    const { rerender } = render(<WorkbenchProgress progress={{ fraction: 1.7, message: "x" }} label="Job" />);
+    expect(screen.getByRole("progressbar", { name: "Job" })).toHaveAttribute("value", "1");
+    expect(screen.getByText("100% x")).toBeInTheDocument();
+    rerender(<WorkbenchProgress progress={{ fraction: Number.NaN, message: "x" }} label="Job" />);
+    expect(screen.getByRole("progressbar", { name: "Job" })).not.toHaveAttribute("value");
+    expect(screen.getByText("x")).toBeInTheDocument();
+  });
+
   it("renders nothing without progress", () => {
     const { container } = render(<WorkbenchProgress progress={null} label="Job" />);
     expect(container).toBeEmptyDOMElement();
