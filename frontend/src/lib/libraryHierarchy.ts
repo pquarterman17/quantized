@@ -6,6 +6,7 @@ import type { FigureDoc } from "./figuredoc";
 import type { FigureDocument } from "./figureDocument";
 import type { AnalysisResult } from "./analysisResult";
 import { originSheetNumber } from "./grouping";
+import { LINK_TABLES_GROUP_NAME, planLinkTableGroups } from "./libraryLinkTables";
 import { byOrder } from "./order";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type { PageDocument } from "./pageDocument";
@@ -66,8 +67,13 @@ export interface OriginFigureGroup {
   id: string;
   /** The import's file stem (the figures' own `stem`). */
   stem: string;
-  /** How many unresolved figures it holds. */
+  /** How many unresolved figures it holds (or, for `link-tables`, books). */
   count: number;
+  /** Absent: the unresolved-figures group. `link-tables`: the collapsed group
+   *  of Origin link-table BOOKS (metadata `origin_link_table`, set by the
+   *  importer: books of `cell://` links whose targets are not decoded). It
+   *  holds the books themselves; nothing is hidden or dropped. */
+  variant?: "link-tables";
 }
 
 export interface LibraryHierarchyInput {
@@ -259,15 +265,28 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     add("folder", folder, folder.name, parentKey, 0, folder.order);
   });
 
+  // Origin link-table books gather under one collapsed group per containing
+  // folder (never dropped: the group holds the books and their sheets).
+  const linkPlan = planLinkTableGroups(input.workbooks, input.datasets, folderById);
+
   input.workbooks.forEach((workbook) => {
-    const parentKey = workbook.folderId && folderById.has(workbook.folderId)
-      ? keyOf("folder", workbook.folderId)
-      : null;
+    const linkGroupId = linkPlan.groupOfWorkbook.get(workbook.id);
+    const parentKey = linkGroupId
+      ? keyOf("origin-group", linkGroupId)
+      : workbook.folderId && folderById.has(workbook.folderId)
+        ? keyOf("folder", workbook.folderId)
+        : null;
     if (workbook.folderId && !folderById.has(workbook.folderId)) {
       warnings.push(`workbook "${workbook.name}" referenced missing folder "${workbook.folderId}"; placed at root`);
     }
     add("workbook", workbook, workbook.name, parentKey, 1, workbook.order);
   });
+
+  for (const [id, group] of linkPlan.groups) {
+    const entity: OriginFigureGroup = { id, stem: "", count: group.count, variant: "link-tables" };
+    add("origin-group", entity, LINK_TABLES_GROUP_NAME,
+      group.folderId ? keyOf("folder", group.folderId) : null, 1, undefined);
+  }
 
   input.datasets.forEach((dataset) => {
     const validWorkbook = dataset.workbookId && workbookById.has(dataset.workbookId);

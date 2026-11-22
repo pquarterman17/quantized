@@ -102,6 +102,9 @@ export interface StatStageState {
    *  null = none. */
   errorColumn: string | null;
   setMarks: (patch: StatMarks, label?: string) => void;
+  /** Gap audit 8 lane SIG: why comparisons draw nothing (null: fine / off) and
+   *  the compared groups' labels (the Dunnett control picker's options). */
+  comparisons: { error: string | null; labels: string[] };
   /** Box/Violin/Strip/Bar "facet by" column (GUI_INTERACTION #11) — null = no
    *  facet (the ordinary single-panel draw). A persisted pick
    *  (`PlotView.statPicks`); background windows drop it (see the module

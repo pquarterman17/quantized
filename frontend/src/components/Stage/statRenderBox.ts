@@ -24,6 +24,7 @@ import { glyphColor } from "../../lib/statColor";
 import {
   axisStyleOf,
   boxValueDomain,
+  comparisonExtent,
   drawMarks,
   stripValueDomain,
   summaryErrorBounds,
@@ -36,6 +37,7 @@ import {
   type Rect,
   type StatDrawData,
 } from "./statRender";
+import { drawComparisons } from "./statDrawComparisons";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan, type SlotPlan } from "./statRenderSlots";
 
 /** Jittered raw-point overlay for one category slot (JMP_GAP J5 #1): each
@@ -222,7 +224,7 @@ export function drawBoxesWithMarks(
 ) {
   if (!d.boxes.length) return;
   const m = drawMarks(d);
-  const domain = boxValueDomain(d.boxes, m);
+  const domain = boxValueDomain(d.boxes, m, comparisonExtent(d));
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = drawGroupAxis(ctx, rect, d, d.boxes.map((b) => b.label), d.boxes.map((b) => b.n), ink, muted);
   const slots = plan.groupSlot.map((i) => plan.slots[i]);
@@ -288,6 +290,7 @@ export function drawBoxesWithMarks(
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
   // every box glyph.
   if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps, d.nestLabel);
+  drawComparisons(ctx, rect, plan.slots, vy, d.comparisons, ink);
 }
 
 // ── Strip (points-only, JMP_GAP J5 #3) ──────────────────────────────────────
@@ -324,4 +327,5 @@ export function drawStrip(
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the
   // jittered points.
   if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps, d.nestLabel);
+  drawComparisons(ctx, rect, plan.slots, vy, d.comparisons, ink);
 }

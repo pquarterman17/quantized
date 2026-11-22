@@ -55,7 +55,8 @@
 // Library row also renders. That test is the reason the collisions above
 // cannot come back.
 
-import type { LibraryNodeKind } from "../../lib/libraryHierarchy";
+import type { LibraryNode, LibraryNodeKind } from "../../lib/libraryHierarchy";
+import { LINK_TABLES_GROUP_NAME } from "../../lib/libraryLinkTables";
 import * as GLYPHS from "../../lib/glyphs";
 
 /** Every Library node kind, in tree-hierarchy order. A literal list (rather
@@ -84,7 +85,7 @@ export const LIBRARY_NODE_KINDS = [
  * | worksheet          | ≡     | U+2261     | free-standing rules, no box: the rows of one sheet. The lightest mark in the set, deliberately — a worksheet is by far the most numerous row in an imported Origin project. |
  * | analysis-result    | ⌬     | U+232C     | a linked analysis record: distinct from its worksheet output. |
  * | origin-figure      | ⌁     | U+2301     | a zigzag trace: a plotted graph recovered from Origin. Unchanged. |
- * | origin-group       | ⊘     | U+2298     | a circled slash: the derived group of Origin graph entries with no bound source. |
+ * | origin-group       | ⊘     | U+2298     | a circled slash: the derived group of Origin graph entries with no bound source, or (variant `link-tables`) of Origin link-table books. |
  * | editable-figure    | ◇     | U+25C7     | outline diamond: a live figure document you can still edit. Unchanged. |
  * | publication-figure | ◆     | U+25C6     | solid diamond: the same family, set for publication. Replaces the old ◉/❄ pair, which swapped the TYPE mark to say "frozen" and so left a frozen publication figure with no type mark at all — frozen-ness is now its own ❄ status mark beside the name. |
  * | page               | ▢     | U+25A2     | a rounded empty square (▭ is the Rectangle shape tool): the blank canvas a figure page lays panels onto. |
@@ -121,6 +122,15 @@ export const LIBRARY_NODE_LABEL: Record<LibraryNodeKind, string> = {
   page: "Figure page",
   report: "Report",
 };
+
+/** The type label of one node: `LIBRARY_NODE_LABEL`, except that the
+ *  `origin-group` holding Origin link-table books (variant `link-tables`) is
+ *  not a group of figures. */
+export function libraryNodeLabel(node: LibraryNode): string {
+  return node.kind === "origin-group" && node.entity.variant === "link-tables"
+    ? LINK_TABLES_GROUP_NAME
+    : LIBRARY_NODE_LABEL[node.kind];
+}
 
 /** The mark a publication figure carries beside its type glyph when its data
  *  is frozen rather than re-read from the worksheet. A STATUS, not a type —

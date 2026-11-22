@@ -5,7 +5,9 @@ import { Select } from "../../primitives";
 import type { SignalOperation } from "./signalProcessingModel";
 import { SIGOP_FILTER_OPTIONS, type SigopFilterMethod } from "./sigopModel";
 
-const OPTIONS: { value: SignalOperation | SigopFilterMethod; label: string }[] = [
+export type PickerOperation = SignalOperation | SigopFilterMethod | "spectrogram";
+
+const OPTIONS: { value: PickerOperation; label: string }[] = [
   { value: "smooth", label: "Smooth" },
   { value: "normalize-range", label: "Normalize · 0–1" },
   { value: "normalize-peak", label: "Normalize · peak = 1" },
@@ -20,6 +22,7 @@ const OPTIONS: { value: SignalOperation | SigopFilterMethod; label: string }[] =
   { value: "fft", label: "Spectrum · FFT / PSD / phase" },
   { value: "filter", label: "Filter · frequency domain" },
   { value: "correlation", label: "Cross-correlation" },
+  { value: "spectrogram", label: "Spectrogram · short-time FFT" },
   ...SIGOP_FILTER_OPTIONS,
 ];
 
@@ -44,12 +47,12 @@ export function useAppliedOperationSeed(pick: (operation: string) => void, hold 
 }
 
 export default function SignalOperationPicker({ value, onChange }: {
-  value: SignalOperation | SigopFilterMethod;
-  onChange: (operation: SignalOperation | SigopFilterMethod) => void;
+  value: PickerOperation;
+  onChange: (operation: PickerOperation) => void;
 }) {
   return (
     <label className="qz-signal-field">Operation
-      <Select value={value} onChange={(event) => onChange(event.target.value as SignalOperation | SigopFilterMethod)} options={OPTIONS} />
+      <Select value={value} onChange={(event) => onChange(event.target.value as PickerOperation)} options={OPTIONS} />
     </label>
   );
 }

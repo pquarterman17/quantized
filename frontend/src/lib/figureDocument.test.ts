@@ -384,7 +384,8 @@ describe("FigureDocument overlays", () => {
   it("is absent unless given, so a document without one serializes as before", () => {
     const plain = createFigureDocument({ id: "f", name: "F", datasetId: "d1", view: defaultPlotView() });
     expect(plain).not.toHaveProperty("overlays");
-    expect(serializeFigureDocument(plain)).not.toContain("overlays");
+    // The document's plot view carries `PlotView.overlays` (fit overlays, null = off); only a top-level key would be this field.
+    expect(JSON.parse(serializeFigureDocument(plain))).not.toHaveProperty("overlays");
   });
 
   it("survives a view commit and a rename, and is dropped on a rebind to another dataset", () => {

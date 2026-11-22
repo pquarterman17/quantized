@@ -2242,6 +2242,16 @@
             ],
             "title": "Color Levels"
           },
+          "comparisons": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonMarks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "counts": {
             "anyOf": [
               {
@@ -3001,6 +3011,111 @@
           "y"
         ],
         "title": "CompareRequest",
+        "type": "object"
+      },
+      "ComparisonBracket": {
+        "properties": {
+          "a": {
+            "minimum": 0.0,
+            "title": "A",
+            "type": "integer"
+          },
+          "b": {
+            "minimum": 0.0,
+            "title": "B",
+            "type": "integer"
+          },
+          "label": {
+            "maxLength": 40,
+            "title": "Label",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "y",
+          "label"
+        ],
+        "title": "ComparisonBracket",
+        "type": "object"
+      },
+      "ComparisonLetter": {
+        "properties": {
+          "slot": {
+            "minimum": 0.0,
+            "title": "Slot",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 40,
+            "title": "Text",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "slot",
+          "y",
+          "text"
+        ],
+        "title": "ComparisonLetter",
+        "type": "object"
+      },
+      "ComparisonMarks": {
+        "description": "Significance brackets / compact letters, ALREADY laid out by the client\n(``lib/statComparisons.ComparisonMarks``): the figure draws them and names\nthe test in ``note`` (``calc.figure_stat_comparisons``). Slots are axis\ncategory slots; ``y`` / ``tick`` / ``top`` are value-axis units.",
+        "properties": {
+          "brackets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComparisonBracket"
+            },
+            "maxItems": 400,
+            "title": "Brackets",
+            "type": "array"
+          },
+          "letters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComparisonLetter"
+            },
+            "maxItems": 400,
+            "title": "Letters",
+            "type": "array"
+          },
+          "note": {
+            "maxLength": 300,
+            "title": "Note",
+            "type": "string"
+          },
+          "tick": {
+            "default": 0.0,
+            "title": "Tick",
+            "type": "number"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "ComparisonMarks",
         "type": "object"
       },
       "ConductivityRequest": {
@@ -10775,6 +10890,73 @@
         "title": "OriginRequest",
         "type": "object"
       },
+      "OverlaySeries": {
+        "properties": {
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "y": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "OverlaySeries",
+        "type": "object"
+      },
+      "OverlaysRequest": {
+        "description": "The live plot's line of fit / smoother / density ellipse for each plotted\nseries (``calc.figure_overlays``, the same computation the export draws).\n``x`` is shared; a null is a blank cell (an excluded or filtered row).",
+        "properties": {
+          "overlays": {
+            "additionalProperties": true,
+            "title": "Overlays",
+            "type": "object"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/OverlaySeries"
+            },
+            "maxItems": 64,
+            "title": "Series",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "series",
+          "overlays"
+        ],
+        "title": "OverlaysRequest",
+        "type": "object"
+      },
       "PCARequest": {
         "properties": {
           "center": {
@@ -16447,6 +16629,81 @@
         "title": "SpectralWorkbenchRequest",
         "type": "object"
       },
+      "SpectrogramRequest": {
+        "properties": {
+          "channel": {
+            "minimum": 0.0,
+            "title": "Channel",
+            "type": "integer"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "detrend": {
+            "default": "mean",
+            "title": "Detrend",
+            "type": "string"
+          },
+          "overlap": {
+            "default": 0.5,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overlap",
+            "type": "number"
+          },
+          "resample": {
+            "default": false,
+            "title": "Resample",
+            "type": "boolean"
+          },
+          "scaling": {
+            "default": "psd",
+            "title": "Scaling",
+            "type": "string"
+          },
+          "segment_len": {
+            "minimum": 1.0,
+            "title": "Segment Len",
+            "type": "integer"
+          },
+          "window": {
+            "default": "hann",
+            "title": "Window",
+            "type": "string"
+          },
+          "x_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Max"
+          },
+          "x_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Min"
+          }
+        },
+        "required": [
+          "dataset",
+          "channel",
+          "segment_len"
+        ],
+        "title": "SpectrogramRequest",
+        "type": "object"
+      },
       "SpinAsymmetryRequest": {
         "properties": {
           "dr_mm": {
@@ -17030,6 +17287,16 @@
               }
             ],
             "title": "Color Levels"
+          },
+          "comparisons": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonMarks"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "connect_breaks": {
             "anyOf": [
@@ -25722,6 +25989,50 @@
         ]
       }
     },
+    "/api/plot/overlays": {
+      "post": {
+        "description": "Per series: each requested overlay's curve and legend text, or the reason\nit was refused (too few points, constant X, infinite values, ...).",
+        "operationId": "plot_overlays_api_plot_overlays_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverlaysRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plot Overlays Api Plot Overlays Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plot Overlays",
+        "tags": [
+          "plot"
+        ]
+      }
+    },
     "/api/plot/series": {
       "post": {
         "description": "Build uPlot-ready series from a posted DataStruct.",
@@ -27902,6 +28213,50 @@
           }
         },
         "summary": "Fft",
+        "tags": [
+          "spectral"
+        ]
+      }
+    },
+    "/api/spectral/spectrogram": {
+      "post": {
+        "description": "Short-time Fourier transform of one channel as a long-form map table.",
+        "operationId": "spectrogram_api_spectral_spectrogram_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpectrogramRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spectrogram Api Spectral Spectrogram Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spectrogram",
         "tags": [
           "spectral"
         ]

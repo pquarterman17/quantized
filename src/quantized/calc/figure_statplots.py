@@ -28,6 +28,7 @@ from quantized.calc.figure_hist_multi import draw_histogram_multi, is_multi
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_stat_colors import check_aligned, color_boxes, color_violins
+from quantized.calc.figure_stat_comparisons import draw_comparisons
 from quantized.calc.figure_stat_marks import (
     draw_violin_inner,
     overlay_summary,
@@ -87,6 +88,7 @@ def render_statplot_figure(
     axis_style: dict[str, Any] | None = None,
     y_domain: tuple[float, float] | list[float] | None = None,
     colors: list[str | None] | None = None,
+    comparisons: dict[str, Any] | None = None,
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Render a statistical plot to image bytes.
@@ -150,6 +152,10 @@ def render_statplot_figure(
     grouped kinds, parallel to ``data``): each group's glyph colour -- the box
     or violin body, fill and edge, and its points. ``None`` = unchanged.
 
+    ``comparisons`` (gap audit 8 lane SIG; grouped kinds): significance brackets /
+    compact letters, already laid out by the client
+    (``calc.figure_stat_comparisons``). ``None`` = unchanged; any other kind refuses.
+
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
     the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
@@ -159,6 +165,8 @@ def render_statplot_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in STATPLOT_KINDS:
         raise ValueError(f"kind must be one of {STATPLOT_KINDS}")
+    if comparisons and kind not in _GROUPED:
+        raise ValueError(f"significance marks apply to {_GROUPED}, not {kind!r}")
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
@@ -196,7 +204,7 @@ def render_statplot_figure(
             show_points=show_points, point_row_indices=point_row_indices,
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
-            raw_labels=raw_labels, colors=colors,
+            raw_labels=raw_labels, colors=colors, comparisons=comparisons,
         )
         if y_domain is not None:
             ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
@@ -301,6 +309,7 @@ def _draw_statplot(
     axis_style: dict[str, Any] | None = None,
     raw_labels: list[str] | None = None,
     colors: list[str | None] | None = None,
+    comparisons: dict[str, Any] | None = None,
 ) -> Any | None:
     """Draw one panel. Returns the outer-tier axis of a two-tier nested
     category axis (the x title goes on it), else ``None``.
@@ -399,6 +408,7 @@ def _draw_statplot(
             _draw_connect_means_line(
                 ax, all_groups, all_ticks, cat_labels, connect_breaks, axis_tiers, all_stats,
             )
+        draw_comparisons(ax, comparisons, all_ticks)
         mark_empty_slots(ax, all_ticks, empty)
         if show_n:
             annotate_top_counts(ax, all_ticks, [g.size for g in all_groups])

@@ -74,6 +74,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     v.yAxisOf = { 1: 3 };
   }),
   "PlotView.seriesRamp": (ws) => editView(ws, (v) => { v.seriesRamp = { map: "viridis" }; }),
+  "PlotView.overlays": (ws) => editView(ws, (v) => { v.overlays = { line: { band: "none", level: 0.95 }, smoother: null, ellipse: null }; }),
   "ErrorBinding.origin": (ws) => {
     const doc = plotWindow(ws).document!;
     doc.bindings = { ...doc.bindings, errors: [...doc.bindings.errors, { channel: 1, target: 0, axis: "x", side: "both", origin: true }] };
@@ -132,6 +133,10 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatPicks.barPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", barStack: true, barPercent: true }; }),
   "StatPicks.valueRange": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", valueRange: [65, 75] }; }),
   "StatPicks.histCols": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histCols: [2] }; }),
+  "StatMarks.comparisons": (ws) => editView(ws, (v) => { v.statMarks = { box: { comparisons: "brackets" } }; }),
+  "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
+  "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
+  "StatMarks.compareExact": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareExact: true } }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -156,7 +161,7 @@ const READ_BY_V038 = [
   "ExportSeriesStyle.error_width", "ExportSeriesStyle.marker_alpha", "ExportSeriesStyle.marker_edge",
   "ExportSeriesStyle.marker_every", "ExportSeriesStyle.marker_face", "ExportSeriesStyle.marker_fill",
   "ExportSeriesStyle.ramp_rank", "ExportSeriesStyle.size_by", "ExportSeriesStyle.size_range", "MapViewState.view3d",
-  "PlotView.exchangeXY", "PlotView.layers", "PlotView.seriesRamp", "PlotView.yAxes", "PlotView.yAxisOf",
+  "PlotView.exchangeXY", "PlotView.layers", "PlotView.overlays", "PlotView.seriesRamp", "PlotView.yAxes", "PlotView.yAxisOf",
   "PlotWindow.linkYGroup", "RecipeMapView.view3d", "RecipeVisual.yAxes", "RecipeVisual.yAxisOf",
   "Workspace.savedRecodeMappings",
 ];
@@ -397,7 +402,7 @@ function populate(ws: LoadedWorkspace): void {
   };
   const shade: Required<RegionShade> = { id: "pg", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, fullHeight: true };
   const inset: Required<InsetView> = { x: [0, 1], y: [0, 1], y2: [0, 1], yZoom: true, at: [0.1, 0.1, 0.3, 0.3], lines: true };
-  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true };
+  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true, comparisons: "letters", compareMethod: "tukey", compareControl: "c", compareExact: true };
   editView(ws, (v) => {
     v.annotations = [...v.annotations, annotation];
     v.shapes = [...v.shapes, shape];
@@ -422,7 +427,7 @@ function populate(ws: LoadedWorkspace): void {
   const legend: Required<NonNullable<FigureOverrides["legend"]>> = { show: true, loc: "best", frame: true, anchor: [0, 0], title: "t" };
   const ticks: Required<NonNullable<FigureOverrides["ticks"]>> = { dir: "in", len: 3, minor: true };
   const spines: Required<NonNullable<FigureOverrides["spines"]>> = { top: true, right: true };
-  const overrides: Required<Omit<FigureOverrides, "layers" | "exchange_xy">> = { // wire-only keys: never persisted
+  const overrides: Required<Omit<FigureOverrides, "layers" | "exchange_xy" | "overlays">> = { // wire-only keys: never persisted
     font_size: 9, font_name: "Arial", title_size: 9, label_size: 9, tick_size: 9, legend_size: 9,
     legend, ticks, spines,
     x_lim: [0, 1], x_reversed: true, y_lim: [0, 1], y2_lim: [0, 1],

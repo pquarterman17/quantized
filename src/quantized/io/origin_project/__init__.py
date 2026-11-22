@@ -16,6 +16,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import OriginProjectError
+from quantized.io.origin_project.link_tables import mark_link_tables
 from quantized.io.origin_project.notes import notes_windows, parse_results_log, results_log
 from quantized.io.origin_project.opj import (
     build_opj_books,
@@ -125,7 +126,7 @@ def read_origin_books(path: Path) -> list[DataStruct]:
     raw = path.read_bytes()
     books[0] = _with_provenance(books[0], path, raw=raw)
     folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
-    return [_with_folder_path(b, folder_paths) for b in books]
+    return mark_link_tables([_with_folder_path(b, folder_paths) for b in books])
 
 
 @import_scoped
@@ -175,10 +176,11 @@ def read_origin_project_all(
         except OriginProjectError:
             books = []
 
+    (primary,) = mark_link_tables([primary])
     if books:
         books[0] = _with_provenance(books[0], path, raw=raw)
         folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
-        books = [_with_folder_path(b, folder_paths) for b in books]
+        books = mark_link_tables([_with_folder_path(b, folder_paths) for b in books])
     return primary, books
 
 

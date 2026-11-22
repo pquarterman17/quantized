@@ -25,6 +25,7 @@ import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
 import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
 import type { GraphLayer } from "./graphLayers";
 import { isString, keyedRecord } from "./sanitizeRecord";
+import { sanitizePlotOverlays, type PlotOverlays } from "./plotOverlays";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
@@ -191,6 +192,7 @@ export interface PlotView {
   seriesStyles: Record<number, SeriesStyle>;
   /** Colour gradient across the curves (origin gap audit 4 G1, lib/seriesRamp.ts); null = palette. */
   seriesRamp: SeriesRamp | null;
+  overlays: PlotOverlays | null; // line of fit / smoother / density ellipse (gap audit 8, lib/plotOverlays.ts); null = off
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
   seriesOrder: number[] | null;
@@ -255,7 +257,7 @@ export function defaultPlotView(): PlotView {
     annotations: [],
     regionShades: [],
     shapes: [],
-    seriesStyles: {}, seriesRamp: null,
+    seriesStyles: {}, seriesRamp: null, overlays: null,
     seriesLabels: {},
     errKeys: {},
     seriesOrder: null,
@@ -477,7 +479,7 @@ export function sanitizePlotView(v: unknown): PlotView {
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>) // symbol values: `graphLayersSanitize.withValidLayers` (.dwk)
         : {},
-    seriesRamp: sanitizeSeriesRamp(o.seriesRamp), // additive: an older .dwk has none -> null
+    seriesRamp: sanitizeSeriesRamp(o.seriesRamp), overlays: sanitizePlotOverlays(o.overlays), // additive: an older .dwk has none -> null
     // Values VALIDATED, not cast — see `lib/sanitizeRecord.ts` (BUG-014 r4).
     seriesLabels: keyedRecord<string, number>(o.seriesLabels, isString),
     errKeys:

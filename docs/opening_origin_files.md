@@ -136,6 +136,12 @@ Import is thorough but not lossless. In particular:
   kept OUT of the numeric worksheet/plot data, and the fit's own computed
   value behind each reference is not recovered. Everything else in the
   same workbook imports normally.
+- **Fit-link tables are grouped, not resolved.** The small tables Origin
+  keeps beside a fit (`Table1`, `Table2`... holding `cell://` links and
+  labels such as `Intercept` and `Slope`) are listed in the Library under a
+  collapsed "Origin link tables" group, marked "linked cells not
+  resolved". Every table is still imported and opens; the fit values the
+  links point to are not recovered.
 - **A truncated or incomplete `.opj` is flagged, not silently trusted.**
   An interrupted copy or download still parses up to the cut; quantized
   compares the file's length with the size its own header records and,

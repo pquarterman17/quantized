@@ -19,6 +19,7 @@ import type { StoreGet } from "./exportActive";
 import { annotationSizePt, compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import { layersWire } from "./graphLayersWire";
 import { insetWire } from "./inset";
+import { overlaysWire, overlayViewRefusal } from "./plotOverlays";
 import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import type { Dataset } from "./types";
@@ -66,7 +67,7 @@ export function viewOverrides(st: Pick<
   | "exchangeXY"
   | "insetMode"
   | "inset"
-> & Partial<Pick<PlotView, "layers">>,
+> & Partial<Pick<PlotView, "layers" | "overlays" | "waterfall" | "waterfallDx" | "seriesStyles">>,
 // The graph layers' curves read their LIVE sources (lib/graphLayers.ts).
 datasets: readonly Dataset[] = useApp.getState().datasets,
 ): FigureOverrides | undefined {
@@ -172,6 +173,8 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       inset: st.insetMode ? insetWire(st.inset) : undefined,
       // Inset graphs, images and tables, resolved as the screen draws them.
       layers: layersWire(st.layers, datasets),
+      // Fit overlays ride only where the canvas draws them (the same refusals, `overlayViewRefusal`).
+      overlays: overlayViewRefusal({ ...st, waterfall: st.waterfall ?? 0, waterfallDx: st.waterfallDx ?? 0, horizontalBars: Object.values(st.seriesStyles ?? {}).some((s) => s?.bars === "horizontal") }) ? undefined : overlaysWire(st.overlays),
     }) ?? undefined
   );
 }

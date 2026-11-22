@@ -1,6 +1,7 @@
 // Shared workbench shell (lane WB): the preview contract, forced
 // deterministically (fake timers + deferred promises; no timing waits).
 import { act, renderHook } from "@testing-library/react";
+import { useLayoutEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Refusal } from "./refusal";
@@ -242,5 +243,33 @@ describe("useWorkbenchPreview — typed refusal marker (lane WB6)", () => {
     h.rerender({ key: "b", auto: false });
     expect(h.result.current.error).toBe("");
     expect(h.result.current.refusal).toBe(false);
+  });
+});
+
+// The window between a commit and its passive effects: a click that lands there
+// (a MutationObserver-driven test, a fast user) calls refresh() while the
+// shell's key effect and ref have not yet caught up with the committed inputs.
+// A layout effect runs in exactly that window, so it forces it deterministically.
+describe("useWorkbenchPreview — refresh before passive effects", () => {
+  it("a refresh issued at commit runs for the committed key and is not aborted by the key effect", async () => {
+    const h = renderHook((props: { key: string }) => {
+      const preview = useWorkbenchPreview<string>({
+        key: props.key,
+        auto: false,
+        delayMs: 0,
+        run: (signal) => new Promise<string>((resolve, reject) => { runs.push({ key: props.key, signal, resolve, reject }); }),
+      });
+      useLayoutEffect(() => {
+        if (props.key === "b") void preview.refresh();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [props.key]);
+      return preview;
+    }, { initialProps: { key: "a" } });
+    h.rerender({ key: "b" });
+    await flush();
+    expect(runs.map((r) => r.key)).toEqual(["b"]);
+    expect(runs[0].signal.aborted).toBe(false);
+    await act(async () => { runs[0].resolve("fit-b"); await Promise.resolve(); });
+    expect(h.result.current.current).toBe("fit-b");
   });
 });

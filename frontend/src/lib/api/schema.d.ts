@@ -3206,6 +3206,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plot/overlays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plot Overlays
+         * @description Per series: each requested overlay's curve and legend text, or the reason
+         *     it was refused (too few points, constant X, infinite values, ...).
+         */
+        post: operations["plot_overlays_api_plot_overlays_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plot/series": {
         parameters: {
             query?: never;
@@ -4288,6 +4309,26 @@ export interface paths {
          * @description Single-record FFT spectrum (magnitude/psd/phase) of (x, y).
          */
         post: operations["fft_api_spectral_fft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spectral/spectrogram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spectrogram
+         * @description Short-time Fourier transform of one channel as a long-form map table.
+         */
+        post: operations["spectrogram_api_spectral_spectrogram_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7054,6 +7095,7 @@ export interface components {
             caveat?: string | null;
             /** Color Levels */
             color_levels?: (number | null)[] | null;
+            comparisons?: components["schemas"]["ComparisonMarks"] | null;
             /** Counts */
             counts?: number[][] | null;
             /**
@@ -7336,6 +7378,54 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** ComparisonBracket */
+        ComparisonBracket: {
+            /** A */
+            a: number;
+            /** B */
+            b: number;
+            /** Label */
+            label: string;
+            /** Y */
+            y: number;
+        };
+        /** ComparisonLetter */
+        ComparisonLetter: {
+            /** Slot */
+            slot: number;
+            /** Text */
+            text: string;
+            /** Y */
+            y: number;
+        };
+        /**
+         * ComparisonMarks
+         * @description Significance brackets / compact letters, ALREADY laid out by the client
+         *     (``lib/statComparisons.ComparisonMarks``): the figure draws them and names
+         *     the test in ``note`` (``calc.figure_stat_comparisons``). Slots are axis
+         *     category slots; ``y`` / ``tick`` / ``top`` are value-axis units.
+         */
+        ComparisonMarks: {
+            /**
+             * Brackets
+             * @default []
+             */
+            brackets?: components["schemas"]["ComparisonBracket"][];
+            /**
+             * Letters
+             * @default []
+             */
+            letters?: components["schemas"]["ComparisonLetter"][];
+            /** Note */
+            note: string;
+            /**
+             * Tick
+             * @default 0
+             */
+            tick?: number;
+            /** Top */
+            top?: number | null;
         };
         /** ConductivityRequest */
         ConductivityRequest: {
@@ -10236,6 +10326,32 @@ export interface components {
              */
             make_graph?: boolean;
         };
+        /** OverlaySeries */
+        OverlaySeries: {
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+            /** Y */
+            y: (number | null)[];
+        };
+        /**
+         * OverlaysRequest
+         * @description The live plot's line of fit / smoother / density ellipse for each plotted
+         *     series (``calc.figure_overlays``, the same computation the export draws).
+         *     ``x`` is shared; a null is a blank cell (an excluded or filtered row).
+         */
+        OverlaysRequest: {
+            /** Overlays */
+            overlays: {
+                [key: string]: unknown;
+            };
+            /** Series */
+            series: components["schemas"]["OverlaySeries"][];
+            /** X */
+            x: (number | null)[];
+        };
         /** PCARequest */
         PCARequest: {
             /**
@@ -12322,6 +12438,46 @@ export interface components {
              */
             zero_pad?: number;
         };
+        /** SpectrogramRequest */
+        SpectrogramRequest: {
+            /** Channel */
+            channel: number;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Detrend
+             * @default mean
+             */
+            detrend?: string;
+            /**
+             * Overlap
+             * @default 0.5
+             */
+            overlap?: number;
+            /**
+             * Resample
+             * @default false
+             */
+            resample?: boolean;
+            /**
+             * Scaling
+             * @default psd
+             */
+            scaling?: string;
+            /** Segment Len */
+            segment_len: number;
+            /**
+             * Window
+             * @default hann
+             */
+            window?: string;
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+        };
         /** SpinAsymmetryRequest */
         SpinAsymmetryRequest: {
             /** Dr Mm */
@@ -12515,6 +12671,7 @@ export interface components {
             caveat?: string | null;
             /** Color Levels */
             color_levels?: (number | null)[] | null;
+            comparisons?: components["schemas"]["ComparisonMarks"] | null;
             /** Connect Breaks */
             connect_breaks?: boolean[] | null;
             /** Data */
@@ -18452,6 +18609,41 @@ export interface operations {
             };
         };
     };
+    plot_overlays_api_plot_overlays_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverlaysRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     plot_series_api_plot_series_post: {
         parameters: {
             query?: never;
@@ -20175,6 +20367,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spectrogram_api_spectral_spectrogram_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpectrogramRequest"];
             };
         };
         responses: {
