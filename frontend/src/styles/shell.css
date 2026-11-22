@@ -481,6 +481,7 @@ body {
    narrow Library the chip goes and the name keeps the row; the book's Origin
    identity stays in the name's tooltip and its family folder. */
 @container (max-width: 280px) { .qzk-workbook-row > .qzk-origin-kind { display: none; } }
+.qzk-group-note { color: var(--text-dim); font-size: 0.85em; margin-left: 6px; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 /* PR L (L0.48/L0.49) — a Collection's member row. Deliberately NOT a
    DatasetRow: a Collection's members span every hierarchy node kind, and
