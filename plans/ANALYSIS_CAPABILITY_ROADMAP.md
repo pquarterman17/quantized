@@ -123,10 +123,13 @@ inconsistently exposed, and do not all share the same result lifecycle.
     unchanged (Auto recalculates, Manual marks stale, None tracks nothing).
     No new timing: the engine's existing 400 ms debounce coalesces a filter
     slider storm into one pass (tested), and a filter edit that changes
-    nothing still records nothing. Open points: (1) Undo/Redo restores the
-    exclusion/filter but, like undo of a cell edit, does not touch the engine;
-    marks added by the edit stay (conservative), but an Auto recalc that ran
-    on the excluded view is not re-run after Undo. (2) Fail closed: every
+    nothing still records nothing. Open points: (1) RESOLVED by lane UH
+    (2026-11-22): `undo`/`redo` now touch every dataset whose data,
+    `excludedRows` or `filter` reference changed (`store/historyTouch.ts`), so
+    Auto recalculates, Manual marks stale, None tracks nothing; unchanged
+    datasets are not touched, and the recalc's plain `set` writes record no
+    history, so the redo stack survives (`store/historyRecalc.test.ts`). Stale
+    marks are still never un-marked by undo (conservative). (2) Fail closed: every
     output type counts a filter/exclusion as an input change; none is
     exempted. Tests: `store/rowStateRecalc.test.ts`.
   - [ ] Remaining: migrate the other plain-worksheet tools in the table above

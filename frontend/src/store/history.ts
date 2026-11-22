@@ -33,8 +33,7 @@
 // mutate — `datasets`, `activeId`, `selectedIds`, `worksheetId`,
 // `originFigures`, `reports`, `figureDocs`, folder/spec collections,
 // `plotWindows`, and the live PlotView. A window bound to a dataset that an
-// undo just removed is
-// guarded below (`restorePatch` nulls it, the same treatment
+// undo just removed is guarded below (`restorePatch` nulls it, the same treatment
 // `removeDataset` gives a live binding going forward), so a restored state
 // never shows a dangling reference, only the existing "no dataset" empty
 // state.
@@ -53,6 +52,7 @@
 import { fixedLim, type HalfLim } from "../lib/axisLim";
 import type { ExtraYAxis } from "../lib/multiYModel";
 import type { AppState } from "./useApp";
+import { restoreTouching } from "./historyTouch";
 import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapshot";
 
 /** Bounded stack depth — oldest entries evicted first (both directions, for
@@ -407,7 +407,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         return { history: [...s.history.slice(0, k + 1), { label, snapshot, seq: seq() }].slice(-HISTORY_DEPTH), future: [] };
       }),
     undo: () =>
-      set((s) => {
+      restoreTouching(get, () => set((s) => {
         const top = s.history[s.history.length - 1];
         if (!top) return {};
         // Popping an entry re-exposes whatever was under it. If THAT entry
@@ -425,9 +425,9 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
-      }),
+      })),
     redo: () =>
-      set((s) => {
+      restoreTouching(get, () => set((s) => {
         const top = s.future[s.future.length - 1];
         if (!top) return {};
         return {
@@ -436,7 +436,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           status: `Redid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
-      }),
+      })),
     recordView: (before, after) =>
       set((s) => {
         if (
