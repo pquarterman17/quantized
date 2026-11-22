@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-15, after slice 30):** five more on-demand pieces
+**Current state (2026-11-21, after slice 31):** drawn shapes, text
+annotations, the reference-line plugin and the peak-marker / baseline-anchor
+edit plugins moved to startup chunks (`lib/shapesLoader.ts`,
+`lib/annotationsLoader.ts`, `lib/uplotRegionShades.ts`). Eager
+**816,029 -> 798,549 B (-17,480 B)**; the 816,042 B pin is NOT moved, leaving
+17,493 B of headroom for queued feature work.
+
+**Previous state (2026-11-15, after slice 30):** five more on-demand pieces
 left the startup chunk: three async store-action bodies (Create derived
 worksheet, the parse half of Paste data, the commit half of Append project),
 the `.dwk` parse entry point (loaded once a file is picked), and the plot
