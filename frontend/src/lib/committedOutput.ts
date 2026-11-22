@@ -64,18 +64,21 @@ export function committedOutputResult(args: {
   id: string;
   producer: AnalysisResultProducer;
   source: Dataset;
+  /** Further source worksheets of a multi-source output (a batch trend). */
+  extraSources?: readonly Dataset[];
   output: Dataset;
   key: string;
   settings: CommitSettings;
   createdAt?: string;
 }): AnalysisResult {
   const { id, producer, source, output, key, settings } = args;
+  const extras = args.extraSources ?? [];
   return {
     version: ANALYSIS_RESULT_VERSION,
     id,
-    name: `${producer.label} · ${source.name}`,
+    name: `${producer.label} · ${source.name}${extras.length ? ` +${extras.length}` : ""}`,
     producer,
-    sources: [{ datasetId: source.id, role: "input" }],
+    sources: [source, ...extras].map((s) => ({ datasetId: s.id, role: "input" as const })),
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
     parameters: { [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings) },
     tableRefs: [{ datasetId: output.id, label: output.name }],
@@ -83,6 +86,6 @@ export function committedOutputResult(args: {
     warnings: [],
     createdAt: args.createdAt ?? new Date().toISOString(),
     // The same format the save-side stamp and the load-side scan compare.
-    sourceFingerprint: dataFingerprint(source.data),
+    sourceFingerprint: [source, ...extras].map((s) => dataFingerprint(s.data)).join(":"),
   };
 }
