@@ -13,6 +13,7 @@ import { colormapCss } from "../../../lib/colormap";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { pickOptions } from "../analysisextras/columnPicks";
+import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import SurfaceFitBatchSection from "./SurfaceFitBatchSection";
 import SurfaceFitByLevel from "./SurfaceFitByLevel";
 import SurfaceResidualMap, { residualScale } from "./SurfaceResidualMap";
@@ -37,7 +38,8 @@ function SurfaceFitPanelBody() {
         </div>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          <ToolInputSummary xKey={f.xCol} columns={[f.yCol, f.zCol]} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 8 }}>
             <div>
               <label className="qzk-field-lbl">X</label>
               <Select aria-label="X column" options={opts} value={String(f.xCol)} onChange={(e) => f.setXCol(Number(e.target.value))} />

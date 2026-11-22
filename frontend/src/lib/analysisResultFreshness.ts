@@ -44,13 +44,40 @@ export function analysisDataFingerprint(dataset: Dataset): string {
   }
   return `${dataFingerprint(view)}:${(schema >>> 0).toString(16).padStart(8, "0")}`;
 }
+/** True when a linked output's recipe reads the source's ANALYSIS VIEW
+ *  (`inputRows: "analysis-view"`, Signal Processing's "Use excluded/filtered
+ *  rows" off). Its numbers then depend on the source's exclusions and Data
+ *  Filter, which the raw-data hash cannot see. A full-worksheet recipe is
+ *  unaffected by them and keeps the raw-data hash (so old files read as before). */
+export function outputReadsAnalysisView(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): boolean {
+  return result.outputs.some((ref) => byId.get(ref.datasetId)?.analysisRecipe?.inputRows === "analysis-view");
+}
+
+/** Marks a per-source hash taken over the analysis view. The prefix makes the
+ *  kind part of the stored value, so a fingerprint saved before analysis-view
+ *  outputs were hashed this way (no prefix: the raw-data hash) is still
+ *  compared against the raw data and is not flagged stale for no reason. */
+export const VIEW_FINGERPRINT_PREFIX = "v~";
+
 /** The result's sources' fingerprint, or null when it can't be judged (a
  *  source or output missing, or a lazily loaded book still pending, whose
- *  data is only a preview). */
-function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
+ *  data is only a preview). `kind` defaults to what the outputs' recipes say
+ *  (the analysis view for an analysis-view recipe, the raw data otherwise);
+ *  the load-side scan passes the kind the STORED value was taken with. Shared
+ *  with lib/analysisResultStaleLoad.ts so both sides hash the same thing. A
+ *  result with several outputs uses the analysis view when ANY of them reads
+ *  it (Signal Processing writes one output; this is the conservative choice). */
+export function sourcesFingerprint(
+  result: AnalysisResult,
+  byId: ReadonlyMap<string, Dataset>,
+  kind: "view" | "raw" = outputReadsAnalysisView(result, byId) ? "view" : "raw",
+): string | null {
   const refs = [...result.sources, ...result.outputs].map((ref) => byId.get(ref.datasetId));
   if (result.sources.length === 0 || refs.some((dataset) => !dataset || dataset.pending)) return null;
-  return result.sources.map((ref) => dataFingerprint(byId.get(ref.datasetId)!.data)).join(":");
+  return result.sources.map((ref) => {
+    const source = byId.get(ref.datasetId)!;
+    return kind === "view" ? `${VIEW_FINGERPRINT_PREFIX}${analysisDataFingerprint(source)}` : dataFingerprint(source.data);
+  }).join(":");
 }
 
 /** Producers whose envelope owns its result tables outright (no linked
