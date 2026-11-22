@@ -20,6 +20,7 @@ from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_stat_colors import bar_colors, check_aligned
+from quantized.calc.figure_stat_comparisons import draw_comparisons
 from quantized.calc.figure_stat_marks import overlay_bar_marks
 from quantized.calc.figure_styles import figure_style
 
@@ -41,6 +42,7 @@ def _draw_categorical_bars(
     bar_marks: dict[str, Any] | None = None,
     colors: list[str | None] | None = None,
     palette: list[str] | None = None,
+    comparisons: dict[str, Any] | None = None,
 ) -> Any | None:
     """Draw one grouped/stacked bar panel into `ax` — shared by the flat
     single-panel path below and `figure_facets.render_categorical_facets_figure`
@@ -101,6 +103,10 @@ def _draw_categorical_bars(
             )
         if counts is not None:
             _label_bar_counts(ax, x, width, vals, errs, counts, n_series)
+    if comparisons:
+        if stacked:
+            raise ValueError("significance marks need grouped bars, not stacked")
+        draw_comparisons(ax, comparisons, list(x))
     ax.set_xticks(x)
     ax.set_xticklabels(groups)
     ax.axhline(0, color="0.3", linewidth=0.8)  # baseline, visible for mixed-sign data
@@ -199,6 +205,7 @@ def render_categorical_figure(
     dpi: int = 200,
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
     y_domain: tuple[float, float] | None = None,
+    comparisons: dict[str, Any] | None = None,
 ) -> bytes:
     """Render a grouped or stacked bar chart to image bytes.
 
@@ -217,7 +224,8 @@ def render_categorical_figure(
     summary marker over grouped bars, and ``colors`` (P1.4 Color-by, one per
     category), see ``_draw_categorical_bars``. ``y_domain``: the screen's
     fixed value-axis range (``ax.set_ylim``, bars cut at the frame as on
-    screen); ``None`` autoscales.
+    screen); ``None`` autoscales. ``comparisons``: significance brackets /
+    letters over the categories (``calc.figure_stat_comparisons``; grouped bars).
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -257,7 +265,7 @@ def render_categorical_figure(
         ax = fig.subplots()
         outer = _draw_categorical_bars(
             ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
-            colors, palette,
+            colors, palette, comparisons,
         )
         layout_rect = add_caveat(fig, caveat)
         if title:

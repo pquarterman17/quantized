@@ -21,6 +21,7 @@ import { barCountAnchor } from "../../lib/groupAxis";
 import { categorySlots } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import { axisStyleOf, barDomain, barErrorHalf, drawMarks, type DrawMarks } from "./statDrawMarks";
+import { drawComparisons } from "./statDrawComparisons";
 import { drawValueAxis, type Rect, type StatDrawData } from "./statRender";
 import { drawCategoryAxis } from "./statRenderAxes";
 import { drawJitteredPoints, drawSummaryGlyph } from "./statRenderBox";
@@ -160,4 +161,5 @@ export function drawBar(
     }
   });
   if (clip) ctx.restore();
+  drawComparisons(ctx, rect, slots, vy, d.comparisons, ink);
 }

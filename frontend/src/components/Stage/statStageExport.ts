@@ -46,28 +46,14 @@ import { axisStyleWire, categoricalErrorWire, errorHalfWidth, nestedTiers, type 
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
-import { boxValueDomain, drawMarks, stripValueDomain } from "./statDrawMarks";
+import { comparisonWire } from "./statExportDomain";
 import { barMarksWire } from "./statBarMarks";
 import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
-/** Review finding 2: the canvas's box/strip value domain (`statDrawMarks.
- *  boxValueDomain`/`stripValueDomain`) always spans every raw datum
- *  (fliers, hidden points) so toggling a mark never rescales the plot --
- *  but matplotlib autoscales to whatever it actually drew, which is a
- *  NARROWER range whenever a mark is hidden (`points: "none"`, say). Rather
- *  than change either side's domain rule, send the canvas's own range as an
- *  explicit y-limit so the export matches it exactly (`ax.set_ylim`, see
- *  `figure_statplots.render_statplot_figure`'s `y_domain`). Violin has no
- *  such divergence (its domain is the KDE curve's own extent, never the
- *  points') so this is box/strip only. */
-export function canvasYDomain(draw: StatDrawData | null, m: ResolvedStatMarks | null): [number, number] | null {
-  if (!draw) return null;
-  if (draw.mode === "box") return boxValueDomain(draw.boxes, m ?? drawMarks(draw));
-  if (draw.mode === "strip") return stripValueDomain(draw);
-  return null;
-}
+export { canvasYDomain } from "./statExportDomain";
+import { canvasYDomain } from "./statExportDomain";
 
 /** Review finding 4: `draw.nestLabel` when `draw` carries one (box/violin/
  *  strip/bar all share `CategoryAxisMarks`), else null — never guessed from
@@ -442,6 +428,7 @@ export async function exportStatStage(
       ...(draw.valueRange ? { y_domain: draw.valueRange } : {}), // an Origin layer's fixed Y
       caveat,
       ...noteWire(o.errorNote),
+      ...comparisonWire(draw),
       fmt,
       x_label: o.groupLabel,
       y_label: o.barValueLabel,
@@ -489,6 +476,7 @@ export async function exportStatStage(
     spec.show_n = showN;
     spec.caveat = caveat;
     if (o.errorNote) spec.error_note = o.errorNote;
+    Object.assign(spec, comparisonWire(draw));
     spec.axis_style = axisWire(m, spec.labels ?? [], o.nestLabel !== undefined ? o.nestLabel : nestLabelOf(draw));
     // Review finding 2: send the canvas's own y-domain so matplotlib's
     // autoscale-to-drawn-artists can never disagree with it (points/fliers

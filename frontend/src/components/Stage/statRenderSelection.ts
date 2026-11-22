@@ -17,6 +17,7 @@ import {
   barDomain,
   barErrorHalf,
   boxValueDomain,
+  comparisonExtent,
   drawMarks,
   stripValueDomain,
   summaryExtents,
@@ -118,7 +119,7 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       if (gi < 0) return null; // an empty slot: no box drawn
       const b = data.boxes[gi];
       const m = drawMarks(data);
-      const domain = boxValueDomain(data.boxes, m);
+      const domain = boxValueDomain(data.boxes, m, comparisonExtent(data));
       const own = [b.whislo, b.whishi, ...b.fliers, ...summaryExtents(b, m)].filter((v) => Number.isFinite(v));
       if (!own.length) return null;
       return span(minOf(own), maxOf(own), domain);

@@ -23,6 +23,7 @@ import type { StatMarks, StatErrorBars, StatPointsMode, StatSummaryMark } from "
 import type { BoxStat, StatMode } from "./statstage";
 import { NESTED_LABEL_SEP } from "./statschooser";
 import { tCritical95 } from "./tdist";
+import type { ComparisonDisplay, ComparisonMethod } from "./statComparisons";
 
 export type { StatMarks, StatErrorBars, StatPointsMode, StatSummaryMark } from "./plotviewSanitize";
 
@@ -36,6 +37,11 @@ export interface ResolvedStatMarks {
   connectMeans: boolean;
   labelRotation: 0 | 45 | 90;
   labelWrap: boolean;
+  comparisons: ComparisonDisplay;
+  compareMethod: ComparisonMethod;
+  /** Dunnett's control group label; null = the first group. */
+  compareControl: string | null;
+  compareExact: boolean;
 }
 
 /** Characters per line when category labels wrap (screen and export). With
@@ -71,6 +77,10 @@ export function resolveStatMarks(mode: StatMode, m: StatMarks | null | undefined
     connectMeans: marks.connectMeans ?? false,
     labelRotation: marks.labelRotation ?? 0,
     labelWrap: marks.labelWrap ?? false,
+    comparisons: marks.comparisons ?? "off",
+    compareMethod: marks.compareMethod ?? "tukey",
+    compareControl: marks.compareControl ?? null,
+    compareExact: marks.compareExact ?? false,
   };
 }
 

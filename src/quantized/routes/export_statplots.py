@@ -73,8 +73,39 @@ class CategoryAxisStyle(BaseModel):
     fit: Literal["auto"] | None = None
 
 
+def _note(c: ComparisonMarks | None) -> str | None:
+    """The significance marks' footnote sentence (``None`` without marks)."""
+    return c.note if c else None
+
+
 def _axis_style(style: CategoryAxisStyle | None) -> dict[str, Any] | None:
     return style.model_dump() if style is not None else None
+
+
+class ComparisonBracket(BaseModel):
+    a: int = Field(ge=0)
+    b: int = Field(ge=0)
+    y: float = Field(allow_inf_nan=False)
+    label: str = Field(max_length=40)
+
+
+class ComparisonLetter(BaseModel):
+    slot: int = Field(ge=0)
+    y: float = Field(allow_inf_nan=False)
+    text: str = Field(max_length=40)
+
+
+class ComparisonMarks(BaseModel):
+    """Significance brackets / compact letters, ALREADY laid out by the client
+    (``lib/statComparisons.ComparisonMarks``): the figure draws them and names
+    the test in ``note`` (``calc.figure_stat_comparisons``). Slots are axis
+    category slots; ``y`` / ``tick`` / ``top`` are value-axis units."""
+
+    note: str = Field(max_length=300)
+    brackets: list[ComparisonBracket] = Field(default=[], max_length=400)
+    letters: list[ComparisonLetter] = Field(default=[], max_length=400)
+    tick: float = Field(default=0.0, allow_inf_nan=False)
+    top: float | None = Field(default=None, allow_inf_nan=False)
 
 
 class StatplotFacet(BaseModel):
@@ -160,6 +191,8 @@ class StatplotFigureRequest(BaseModel):
     # bars: SE of the mean") -- a footnote line above the caveat
     # (`calc.figure_group_notes.footnote_text`). None = no line, as before.
     error_note: str | None = Field(default=None, max_length=200)
+    # Gap audit 8 lane SIG: significance brackets / letters (flat panel only).
+    comparisons: ComparisonMarks | None = None
     # Per group: lift the connect-means line BEFORE it (a hidden empty level
     # sat there -- the screen's AxisSlot.gapBefore). None = no forced breaks.
     connect_breaks: list[bool] | None = None
@@ -206,6 +239,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
+    if req.comparisons and req.facets:
+        raise HTTPException(status_code=422, detail="significance marks are not drawn on facets")
     try:
         if req.facets:
             with heavy_imports(
@@ -254,7 +289,9 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
-                show_n=req.show_n, caveat=footnote_text(req.error_note, req.caveat),
+                show_n=req.show_n,
+                caveat=footnote_text(req.error_note, req.caveat, _note(req.comparisons)),
+                comparisons=req.comparisons.model_dump() if req.comparisons else None,
                 connect_breaks=req.connect_breaks,
                 marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
                 # qq / histogram: one glyph colour, the canvas' seriesColor(0).
@@ -330,6 +367,7 @@ class CategoricalFigureRequest(BaseModel):
     counts: list[list[int]] | None = None
     caveat: str | None = None
     error_note: str | None = Field(default=None, max_length=200)  # see StatplotFigureRequest
+    comparisons: ComparisonMarks | None = None  # significance marks, grouped bars, flat panel
     stacked: bool = False
     # The screen's fixed value-axis range (an Origin layer's decoded Y range,
     # `statPicks.valueRange`), applied with `ax.set_ylim`; None = autoscale.
@@ -380,6 +418,11 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    if req.comparisons and (req.facets or req.stacked):
+        raise HTTPException(
+            status_code=422,
+            detail="significance marks need one grouped (not stacked, not faceted) bar chart",
+        )
     try:
         if req.facets:
             with heavy_imports(
@@ -419,7 +462,8 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, dpi=dpi, counts=req.counts,
-                caveat=footnote_text(req.error_note, req.caveat),
+                caveat=footnote_text(req.error_note, req.caveat, _note(req.comparisons)),
+                comparisons=req.comparisons.model_dump() if req.comparisons else None,
                 axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
                 colors=level_colors(req.color_levels, req.palette), palette=req.palette,
                 svg_text_as_paths=req.svg_text_as_paths, y_domain=req.y_domain,

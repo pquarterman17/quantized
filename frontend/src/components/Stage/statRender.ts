@@ -16,6 +16,7 @@
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import { glyphColor } from "../../lib/statColor";
+import type { ComparisonMarks } from "../../lib/statComparisons";
 import type { ResolvedStatMarks } from "../../lib/statMarks";
 import { niceTicks } from "../../lib/niceTicks";
 import { axisLabelsOf, axisStyleOf, drawMarks, violinValueDomain } from "./statDrawMarks";
@@ -27,6 +28,7 @@ import {
   type IndexedGroupSpec,
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import { drawComparisons } from "./statDrawComparisons";
 import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } from "./statRenderBox";
 import { drawHistogram } from "./statRenderHist";
@@ -83,6 +85,9 @@ export interface CategoryAxisMarks {
   /** P1.4 Color-by: each plotted group's colour LEVEL (`lib/statColor`; bar:
    *  each drawn category's), null/absent = coloured by position. */
   colorLevels?: (number | null)[] | null;
+  /** Significance brackets / compact letters, already laid out
+   *  (`statCompareLayout`); null/absent = none drawn. */
+  comparisons?: ComparisonMarks | null;
 }
 
 export type StatDrawData =
@@ -156,6 +161,7 @@ export type StatDrawData =
       nestLabel?: string | null;
       /** P1.4 Color-by: each category's colour LEVEL (every series of it). */
       colorLevels?: (number | null)[] | null;
+      comparisons?: ComparisonMarks | null;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
@@ -400,6 +406,7 @@ function drawViolins(
     }
     if (b) drawSummaryMarker(ctx, cx, b, vy, ink, m);
   });
+  drawComparisons(ctx, rect, plan.slots, vy, d.comparisons, ink);
 }
 
 // ── Q-Q ──────────────────────────────────────────────────────────────────────

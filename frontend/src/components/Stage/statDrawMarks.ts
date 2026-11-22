@@ -59,6 +59,13 @@ export function axisLabelsOf(d: StatDrawData | null): string[] {
   return [];
 }
 
+/** The top of the significance brackets / letters (`statCompareLayout`), as a
+ *  value-domain candidate: the domain grows to hold them, never clips them. */
+export function comparisonExtent(d: Categorical): number[] {
+  const t = d.comparisons?.top;
+  return t !== undefined && Number.isFinite(t) ? [t] : [];
+}
+
 /** The summary marker's error bar for one group, or null. */
 export function summaryErrorBounds(b: BoxStat, m: ResolvedStatMarks): [number, number] | null {
   return m.summary === "mean" ? errorBounds(b, m.errorBars) : null;
@@ -76,15 +83,19 @@ export function summaryExtents(b: BoxStat, m: ResolvedStatMarks): number[] {
 /** Box mode's value domain: whiskers and fliers span every raw datum
  *  (Tukey's definition), so the points overlay adds nothing; the summary
  *  marker is folded in when shown. */
-export function boxValueDomain(boxes: readonly BoxStat[], m: ResolvedStatMarks): [number, number] {
-  return finiteDomain([...boxes.map((b) => [b.whislo, b.whishi, ...b.fliers]), boxes.flatMap((b) => summaryExtents(b, m))]);
+export function boxValueDomain(
+  boxes: readonly BoxStat[], m: ResolvedStatMarks, extra: readonly number[] = [],
+): [number, number] {
+  return finiteDomain([...boxes.map((b) => [b.whislo, b.whishi, ...b.fliers]), boxes.flatMap((b) => summaryExtents(b, m)), extra]);
 }
 
 /** Strip mode's value domain: every point (drawn or not, so hiding points
  *  never rescales the plot) plus the summary marker. */
 export function stripValueDomain(d: Extract<StatDrawData, { mode: "strip" }>): [number, number] {
   const m = drawMarks(d);
-  return finiteDomain([...d.points.map((g) => g.points.map((p) => p.value)), d.boxes.flatMap((b) => summaryExtents(b, m))]);
+  return finiteDomain([
+    ...d.points.map((g) => g.points.map((p) => p.value)), d.boxes.flatMap((b) => summaryExtents(b, m)), comparisonExtent(d),
+  ]);
 }
 
 /** Violin mode's value domain: every KDE curve's own extent (points never
@@ -96,6 +107,7 @@ export function violinValueDomain(
   return finiteDomain([
     ...d.violins.map((v) => [v.x[0] ?? 0, v.x[v.x.length - 1] ?? 0]),
     (d.boxes ?? []).flatMap((b) => summaryExtents(b, m)),
+    comparisonExtent(d),
   ]);
 }
 
@@ -120,7 +132,7 @@ export function barErrorHalf(
 export function barDomainCandidates(
   d: Extract<StatDrawData, { mode: "bar" }>, m: DrawMarks = drawMarks(d),
 ): number[] {
-  const out: number[] = [0];
+  const out: number[] = [0, ...comparisonExtent(d)];
   for (const g of d.data.groups) {
     if (d.stacked) {
       const total = stackedTotal(g.series);

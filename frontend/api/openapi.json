@@ -2242,6 +2242,16 @@
             ],
             "title": "Color Levels"
           },
+          "comparisons": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonMarks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "counts": {
             "anyOf": [
               {
@@ -3001,6 +3011,111 @@
           "y"
         ],
         "title": "CompareRequest",
+        "type": "object"
+      },
+      "ComparisonBracket": {
+        "properties": {
+          "a": {
+            "minimum": 0.0,
+            "title": "A",
+            "type": "integer"
+          },
+          "b": {
+            "minimum": 0.0,
+            "title": "B",
+            "type": "integer"
+          },
+          "label": {
+            "maxLength": 40,
+            "title": "Label",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "y",
+          "label"
+        ],
+        "title": "ComparisonBracket",
+        "type": "object"
+      },
+      "ComparisonLetter": {
+        "properties": {
+          "slot": {
+            "minimum": 0.0,
+            "title": "Slot",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 40,
+            "title": "Text",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "slot",
+          "y",
+          "text"
+        ],
+        "title": "ComparisonLetter",
+        "type": "object"
+      },
+      "ComparisonMarks": {
+        "description": "Significance brackets / compact letters, ALREADY laid out by the client\n(``lib/statComparisons.ComparisonMarks``): the figure draws them and names\nthe test in ``note`` (``calc.figure_stat_comparisons``). Slots are axis\ncategory slots; ``y`` / ``tick`` / ``top`` are value-axis units.",
+        "properties": {
+          "brackets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComparisonBracket"
+            },
+            "maxItems": 400,
+            "title": "Brackets",
+            "type": "array"
+          },
+          "letters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComparisonLetter"
+            },
+            "maxItems": 400,
+            "title": "Letters",
+            "type": "array"
+          },
+          "note": {
+            "maxLength": 300,
+            "title": "Note",
+            "type": "string"
+          },
+          "tick": {
+            "default": 0.0,
+            "title": "Tick",
+            "type": "number"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "ComparisonMarks",
         "type": "object"
       },
       "ConductivityRequest": {
@@ -17105,6 +17220,16 @@
               }
             ],
             "title": "Color Levels"
+          },
+          "comparisons": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonMarks"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "connect_breaks": {
             "anyOf": [
