@@ -81,6 +81,9 @@ jobs:
 
       - name: Build SPA (→ src/quantized/web)
         working-directory: frontend
+        # tsc -b hit V8's default ~2 GB heap on the macOS runner (v0.40.0).
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
           npm ci
           npm run build
