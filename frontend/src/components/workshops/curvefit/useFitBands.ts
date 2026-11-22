@@ -22,7 +22,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { BandsResult } from "../../../lib/api/fitStats";
 import { fitBandsFor } from "../../../lib/fitCurve";
 import type { CalcResult, Dataset } from "../../../lib/types";
-import { nextDatasetId, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { useApp } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { ownCurveFitOverlay, setCurveFitOverlayBand } from "../../../store/curveFitOverlay";
 import { bandPrefs, type FittedData } from "../../../store/curveFitSession";
 import {
@@ -36,6 +38,8 @@ import {
   overlayBand,
   overlayRows,
 } from "./fitBandData";
+
+const FIT_BAND_PRODUCER = { id: "fit-band", label: "Fit band", version: 1 } as const;
 
 /** A completed registry-model fit: the dataset, the model name, the fit
  *  result (params/covar/nPoints/nFree) and the pairs it ran on. */
@@ -60,6 +64,8 @@ export interface FitBandsState {
   /** The fit carried no usable covariance, so there is no band to draw. */
   empty: boolean;
   plot: () => void;
+  /** Why "Plot with band" is unavailable (already plotted); null when enabled. */
+  plotDisabledReason: string | null;
 }
 
 function median(values: number[]): number | null {
@@ -70,10 +76,8 @@ function median(values: number[]): number | null {
 }
 
 export function useFitBands(target: FitBandsTarget): FitBandsState {
-  const addDataset = useApp((s) => s.addDataset);
   const createWindow = useApp((s) => s.createWindow);
   const focusWindow = useApp((s) => s.focusWindow);
-  const setStatus = useApp((s) => s.setStatus);
   const [on, setOnState] = useState(bandPrefs.on);
   const [level, setLevelState] = useState(bandPrefs.level);
   const [prediction, setPredictionState] = useState(bandPrefs.prediction);
@@ -141,23 +145,34 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
     return median(hw);
   }, [band, empty]);
 
-  function plot(): void {
-    if (!band || empty) return;
-    const id = nextDatasetId();
-    const src = bandSourceFor(target.dataset, model, fitData.xKey, fitData.yKey);
-    const name = `${target.dataset.name} — ${model} fit, ${levelLabel(band.level)} band`;
+  const bandName = band ? `${target.dataset.name} — ${model} fit, ${levelLabel(band.level)} band` : "";
+  // One undo step (the band plot's window included), no duplicate on a repeat
+  // click, stale when the fitted dataset changes (store/analysisOutputCommit.ts).
+  const commit = useAnalysisCommit(band && !empty && !target.dataset.pending ? {
+    producer: FIT_BAND_PRODUCER,
+    sourceId: target.dataset.id,
+    computedOn: analysisDataFingerprint(target.dataset),
+    settings: { model, params: result.params ?? null, level: band.level, prediction, n: rows.x.length, halfWidth },
+    status: `added ${bandName}`,
     // Its OWN plot: an empty window first, focused, so the import-style
     // rebind addDataset does lands THERE and the source plot is left alone
     // (it used to rebind the focused source window too, drawing the band as
-    // six unstyled lines beside the styled copy). The styles go on after the
-    // rebind, which resets them to the dataset defaults.
-    focusWindow(createWindow(null, undefined, `${model} fit band`));
-    // `intoFocused`: this window was made for the band, so its own title does
-    // not make it a styled window to protect (store/windowUserEdits.ts).
-    addDataset({ id, name, data: bandDataStruct(rows, band, prediction, src) }, undefined, true);
-    useApp.setState({ seriesStyles: bandStyles(prediction) });
-    setStatus(`added ${name}`);
+    // six unstyled lines beside the styled copy). `intoFocused`: this window
+    // was made for the band, so its own title does not make it a styled window
+    // to protect (store/windowUserEdits.ts).
+    beforeWrite: () => focusWindow(createWindow(null, undefined, `${model} fit band`)),
+    intoFocused: true,
+    output: () => ({
+      name: bandName,
+      data: bandDataStruct(rows, band, prediction, bandSourceFor(target.dataset, model, fitData.xKey, fitData.yKey)),
+    }),
+  } : null);
+
+  function plot(): void {
+    if (!band || empty || commit.disabledReason) return;
+    // The styles go on after the rebind, which resets them to the dataset defaults.
+    if (commit.commit()?.kind === "created") useApp.setState({ seriesStyles: bandStyles(prediction) });
   }
 
-  return { on, setOn, level, setLevel, prediction, setPrediction, busy, error, halfWidth, empty, plot };
+  return { on, setOn, level, setLevel, prediction, setPrediction, busy, error, halfWidth, empty, plot, plotDisabledReason: commit.disabledReason };
 }

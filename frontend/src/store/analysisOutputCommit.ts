@@ -37,6 +37,12 @@ export interface AnalysisOutputCommit {
   settings: CommitSettings;
   /** Built only when a new output is actually written. */
   output: (source: Dataset) => { name: string; data: DataStruct; errorRoles?: Dataset["errorRoles"] };
+  /** Runs inside the one undo step, just before the worksheet is added (only
+   *  when a NEW output is written): a tool that opens its output in a window of
+   *  its own creates that window here, so Undo removes it with the output. */
+  beforeWrite?: () => void;
+  /** Land the output in the FOCUSED window (see `addDataset`'s `intoFocused`). */
+  intoFocused?: boolean;
   /** Status line on success. */
   status?: string;
 }
@@ -93,7 +99,8 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
-    get().addDataset(output);
+    request.beforeWrite?.();
+    get().addDataset(output, undefined, request.intoFocused);
     useApp.setState((current) => ({ analysisResults: [...current.analysisResults, result] }));
   });
   get().setStatus(request.status ?? `added ${output.name}`);
