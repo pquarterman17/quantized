@@ -33,6 +33,7 @@ export default function PeakByLevelSection({ params }: { params: PeakFindParams 
       run={run}
       runKey={`${xKey}|${yKey}|${JSON.stringify(params)}`}
       blockedReason={active?.pending ? "wait for the full dataset to load" : null}
+      save={{ toolId: "peaks", parameters: { ...params }, xKey, yKeys: yKey == null ? [] : [yKey] }}
     />
   );
 }

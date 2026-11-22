@@ -30,6 +30,14 @@ describe("byLevelBatchResult", () => {
     expect(result.stale).toBeUndefined();
   });
 
+  it("drops non-finite and undefined settings instead of making the parameters unreadable", () => {
+    const result = byLevelBatchResult(input({ parameters: { a: Number.NaN, b: undefined as never, c: { d: Infinity, e: 2 } } })) as AnalysisResult;
+    expect(result.parameters).toMatchObject({ c: { e: 2 }, toolId: "outlier-screening" });
+    expect(result.parameters).not.toHaveProperty("a");
+    expect(result.parameters).not.toHaveProperty("b");
+    expect((result.parameters as { c: object }).c).not.toHaveProperty("d");
+  });
+
   it("says when the level cap left levels unrun", () => {
     const result = byLevelBatchResult(input({ omittedLevels: 2 })) as AnalysisResult;
     expect(result.warnings[0]).toBe("2 further levels were not run (level cap).");
