@@ -6,6 +6,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.40.1] - 2026-11-22
+
+### Fixed
+
+- **macOS installer and auto-update for 0.40**: the v0.40.0 macOS build ran out of memory while type-checking, so 0.40.0 shipped without the macOS `.dmg`, the macOS server bundle and the auto-update manifest. The release build now has enough memory (#870). No app changes since 0.40.0.
+
 ## [0.40.0] - 2026-11-22
 
 ### Added
