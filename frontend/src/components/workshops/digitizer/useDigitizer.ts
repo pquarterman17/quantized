@@ -3,7 +3,7 @@
 // then trace the curve. "Create" maps the traced pixels to data via the
 // calibration (lib/digitizer, tested) and adds a DataStruct to the library.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { calibrate, tracedToData } from "../../../lib/digitizer";
 import type { DataStruct } from "../../../lib/types";
@@ -47,6 +47,10 @@ export function useDigitizer(): DigitizerState {
   const [refs, setRefs] = useState<Partial<Record<CalMode, Ref>>>({});
   const [traced, setTraced] = useState<Pt[]>([]);
   const [pending, setPending] = useState<Pt | null>(null);
+  // The last worksheet "Create" wrote, by the exact calibration + trace + name:
+  // a repeat click on the same digitization adds nothing (there is no source
+  // worksheet, so no stale marking applies; the image is the only input).
+  const made = useRef<{ key: string; id: string } | null>(null);
 
   const ready = !!(refs.x1 && refs.x2 && refs.y1 && refs.y2);
 
@@ -98,8 +102,19 @@ export function useDigitizer(): DigitizerState {
       units: [""],
       metadata: { x_column_name: "x", x_column_unit: "", source: "digitized" },
     };
-    addDataset({ id: nextDatasetId(), name: name.trim() || "digitized", data });
-    setStatus(`digitized ${x.length} points → ${name.trim() || "digitized"}`);
+    const title = name.trim() || "digitized";
+    const key = JSON.stringify([title, refs, traced]);
+    const prior = made.current;
+    const live = prior?.key === key ? useApp.getState().datasets.find((d) => d.id === prior.id) : undefined;
+    if (live) {
+      useApp.getState().setActive(live.id);
+      setStatus(`this digitization is already added as “${live.name}”; nothing was duplicated`);
+      return;
+    }
+    const id = nextDatasetId();
+    addDataset({ id, name: title, data });
+    made.current = { key, id };
+    setStatus(`digitized ${x.length} points → ${title}`);
   }
 
   return {
