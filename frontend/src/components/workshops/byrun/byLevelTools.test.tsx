@@ -4,10 +4,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { applyCorrections } from "../../../lib/api";
 import { baselineALS } from "../../../lib/api/baseline";
 import { findPeaks } from "../../../lib/api/peaks";
-import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
 import { DEFAULT_RECIPE } from "../../../lib/peakwizard";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -15,12 +13,9 @@ import BaselineByLevel from "../baseline/BaselineByLevel";
 import { DEFAULT_PEAK_FIND } from "../peaks/peakFindParams";
 import PeakByLevelSection from "../peaks/PeakByLevelSection";
 import PeakWizardByLevel from "../peakwizard/PeakWizardByLevel";
-import SignalScopeAndBy, { signalLevelSummary } from "../signalprocessing/SignalScopeAndBy";
-import { DEFAULT_SIGNAL_SETTINGS, settingsToParams } from "../signalprocessing/signalProcessingModel";
 
-vi.mock("../../../lib/api", () => ({ applyCorrections: vi.fn(), fetchBookData: vi.fn() }));
+vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn() }));
 vi.mock("../../../lib/api/peaks", () => ({ findPeaks: vi.fn() }));
-vi.mock("../../../lib/api/spectralWorkbench", () => ({ runSpectralWorkbench: vi.fn() }));
 vi.mock("../../../lib/api/baseline", () => ({
   baselineALS: vi.fn(), baselineAnchor: vi.fn(), baselineEstimate: vi.fn(), baselineModPoly: vi.fn(),
   baselineRegion: vi.fn(), baselineRollingBall: vi.fn(), baselineShirley: vi.fn(), baselineXrdLowAngle: vi.fn(),
@@ -136,43 +131,5 @@ describe("Baseline By", () => {
     render(<BaselineByLevel b={{ method: "anchor", params }} />);
     pickGroup();
     await waitFor(() => expect(bodyRows()[0]).toHaveTextContent("placed by hand"));
-  });
-});
-
-describe("Signal Processing By", () => {
-  const settings = DEFAULT_SIGNAL_SETTINGS;
-  const out = (mean: number): DataStruct => ({ time: [0, 1], values: [[mean], [mean]], labels: ["Signal"], units: [""], metadata: {} });
-
-  it("runs the configured correction on each level's rows", async () => {
-    vi.mocked(applyCorrections).mockImplementation(async ({ dataset }) => out(dataset.values[0]![1]!) as never);
-    const params = settingsToParams(settings, [1]);
-    const source = useApp.getState().datasets[0]!;
-    render(<SignalScopeAndBy source={source} secondary={null} params={params} spectralRecipe={null} blockedReason={null} settingsKey="k" />);
-    pickGroup();
-    await waitFor(() => expect(bodyRows()).toHaveLength(2));
-    const sent = vi.mocked(applyCorrections).mock.calls.map(([req]) => req.dataset.values.map((r) => r[1]));
-    expect(sent).toEqual([[1, 2, 3, 4, 5, 6], [11, 12, 13, 14, 15, 16]]);
-    expect(within(bodyRows()[1]!).getAllByRole("cell")[4]).toHaveTextContent("11");
-  });
-
-  it("runs the spectral workbench per level for a spectral recipe", async () => {
-    vi.mocked(runSpectralWorkbench).mockResolvedValue(out(5) as never);
-    const source = useApp.getState().datasets[0]!;
-    render(<SignalScopeAndBy source={source} secondary={null} params={null} spectralRecipe={{ op: "fft" } as never} blockedReason={null} settingsKey="s" />);
-    pickGroup();
-    await waitFor(() => expect(bodyRows()).toHaveLength(2));
-    expect(runSpectralWorkbench).toHaveBeenCalledTimes(2);
-  });
-
-  it("shows the blocking reason instead of running", async () => {
-    const source = useApp.getState().datasets[0]!;
-    render(<SignalScopeAndBy source={source} secondary={null} params={null} spectralRecipe={null} blockedReason="Select at least one signal column." settingsKey="k" />);
-    pickGroup();
-    await waitFor(() => expect(bodyRows()[0]).toHaveTextContent("Select at least one signal column."));
-    expect(applyCorrections).not.toHaveBeenCalled();
-  });
-
-  it("summarises an all-gap output as an error, not zeros", () => {
-    expect(() => signalLevelSummary({ time: [0], values: [[NaN]], labels: ["a"], units: [""], metadata: {} })).toThrow(/no finite output/);
   });
 });

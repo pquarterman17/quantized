@@ -90,7 +90,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Williamson-Hall | any (typed peaks ok) | yes | no |
     | Pawley, XRD reference | 2θ X axis | no | no |
     | Film thickness FFT, Reflectivity FFT | numeric Y | no | no |
-    | Signal Processing | numeric Y | recipe only | yes |
+    | Signal Processing | numeric Y | yes (summary) + recipes | yes |
     | Average curves | 2+ worksheets | n/a (is the batch) | no |
     | SIMS | numeric Y (SIMS) | yes | no |
     | Distribution | numeric Y | no | yes |
@@ -121,6 +121,15 @@ inconsistently exposed, and do not all share the same result lifecycle.
     per-input status) is recorded. Estimate-only; "Apply to N selected" still
     writes the subtracted worksheets. Anchor method refused with a reason.
     Tests: `baseline/BaselineBatchSection.test.tsx`.
+  - **Batch slice: Signal Processing (#18/#19, lane C):** Review inputs plus
+    the shared batch (`signalprocessing/SignalBatchSection.tsx`): the
+    configured correction or spectral operation runs on every selected
+    worksheet's own measured channels / rows / X range and one result table
+    (rows out, finite outputs, mean of the first output) is recorded.
+    Summary-only (Create new worksheet and the Library recipe apply still
+    write outputs); sigop filters and two-worksheet correlation refuse with a
+    reason. Tests: `signalprocessing/SignalScopeAndBy.test.tsx`. Still open
+    from #18/#19: Surface fit, Optical gap, Ellipse fit.
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.
