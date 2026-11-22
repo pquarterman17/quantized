@@ -35,7 +35,7 @@ import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
 import { IN_PLACE_OPS, metaStepText, runMetaStep, type MetaStepParams } from "./metadataRun";
-import { analysisData } from "./rowstate";
+import { analysisData, rowStateIdentity } from "./rowstate";
 import {
   computeSignalTransform,
   signalRecipeInputData,
@@ -419,16 +419,11 @@ export async function runTransform(
   const refs = refsOf(p);
   const others = await resolveRefs(s, refs);
   signal?.throwIfAborted();
-  // A recipe that reads the analysis view also reads the row state (lane IR):
-  // an exclusion or filter edited mid-run would otherwise yield an output of
-  // the old view that no stale mark ever catches.
+  // An analysis-view recipe also reads row state: a mid-run exclusion/filter edit refuses (lane IR).
   const readsView = p.op === "signal" && p.recipe.inputRows === "analysis-view";
   const signalSnapshots = p.op === "signal"
     ? [primary, ...others].map((dataset) => ({
-        id: dataset.id,
-        data: dataset.data,
-        rows: [dataset.excludedRows, dataset.filter],
-        errorRoles: JSON.stringify(dataset.errorRoles ?? []),
+        id: dataset.id, data: dataset.data, rows: rowStateIdentity(dataset), errorRoles: JSON.stringify(dataset.errorRoles ?? []),
       }))
     : [];
   const assertSignalSourceUnchanged = (): void => {
@@ -436,7 +431,7 @@ export async function runTransform(
     const changed = signalSnapshots.some((snapshot) => {
       const current = s().datasets.find((dataset) => dataset.id === snapshot.id);
       return !current || current.pending || current.data !== snapshot.data ||
-        (readsView && (current.excludedRows !== snapshot.rows[0] || current.filter !== snapshot.rows[1])) ||
+        (readsView && rowStateIdentity(current).some((part, i) => part !== snapshot.rows[i])) ||
         JSON.stringify(current.errorRoles ?? []) !== snapshot.errorRoles;
     });
     if (changed) {

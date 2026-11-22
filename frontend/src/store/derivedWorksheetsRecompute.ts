@@ -1,6 +1,7 @@
 import { applyCorrections } from "../lib/api";
 import { remapChannelList, type ColumnShift } from "../lib/channelRemap";
 import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
+import { rowStateIdentity } from "../lib/rowstate";
 import { bindSignalRecipe, signalRecipeInputData } from "../lib/signalRecipe";
 import type { Dataset } from "../lib/types";
 import { shiftForColumnChange } from "./derivedSheetShift";
@@ -24,7 +25,7 @@ export async function runDerivedWorksheetRecompute(
   // filter edited mid-pass must refuse, not commit the old view as current.
   const readsView = sheet.analysisRecipe?.inputRows === "analysis-view";
   const rowStateMoved = (current: Dataset | undefined, before: Dataset | undefined): boolean =>
-    readsView && (current?.excludedRows !== before?.excludedRows || current?.filter !== before?.filter);
+    readsView && rowStateIdentity(current).some((part, i) => part !== rowStateIdentity(before)[i]);
   const assertInputsUnchanged = () => {
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
     const currentSheet = get().datasets.find((dataset) => dataset.id === sheet.id);
