@@ -13,8 +13,12 @@ import { useEffect, useState } from "react";
 import { fftThickness } from "../../../lib/api/reductions";
 import type { FftThicknessResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+
+const FFT_THICKNESS_PRODUCER = { id: "fft-thickness", label: "FFT thickness", version: 1 } as const;
 
 export interface ReductionColumn {
   index: number;
@@ -42,13 +46,13 @@ export interface FftThicknessState {
   error: string | null;
   compute: () => Promise<void>;
   toLibrary: () => void;
+  /** Why "→ Library" is disabled (already added, or nothing to add). */
+  addDisabledReason: string | null;
   clear: () => void;
 }
 
 export function useFftThickness(): FftThicknessState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
 
   const columns: ReductionColumn[] = active
     ? active.data.labels.map((lab, i) => ({ index: i, label: lab || `Column ${i + 1}` }))
@@ -60,13 +64,19 @@ export function useFftThickness(): FftThicknessState {
   const [twoThetaMax, setTwoThetaMax] = useState<number | null>(null);
   const [windowFn, setWindowFn] = useState("hann");
   const [maxThicknessNm, setMaxThicknessNm] = useState(200);
-  const [result, setResult] = useState<FftThicknessResult | null>(null);
+  // The run as computed: the source and its analysis-view fingerprint, and the
+  // inputs, so the commit is keyed by value (one undo step, no duplicate,
+  // stale when the source changes: store/analysisOutputCommit.ts).
+  const [computed, setComputed] = useState<{
+    res: FftThicknessResult; sourceId: string; sourceName: string; computedOn: string; inputs: Record<string, unknown>;
+  } | null>(null);
+  const result = computed?.res ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // A new active dataset invalidates the current result and resets the picker.
   useEffect(() => {
-    setResult(null);
+    setComputed(null);
     setError(null);
     setCol(0);
   }, [active?.id]);
@@ -91,7 +101,10 @@ export function useFftThickness(): FftThicknessState {
         window: windowFn,
         max_thickness_nm: maxThicknessNm,
       });
-      setResult(res);
+      setComputed({
+        res, sourceId: ds.id, sourceName: ds.name, computedOn: analysisDataFingerprint(ds),
+        inputs: { col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "FFT thickness failed");
     } finally {
@@ -99,25 +112,31 @@ export function useFftThickness(): FftThicknessState {
     }
   }
 
+  const commit = useAnalysisCommit(computed ? {
+    producer: FFT_THICKNESS_PRODUCER,
+    sourceId: computed.sourceId,
+    computedOn: computed.computedOn,
+    settings: { ...computed.inputs, thicknessNm: computed.res.thickness_nm, n: computed.res.thickness_axis.length },
+    status: `added FFT-thickness spectrum (${computed.res.thickness_nm.toFixed(2)} nm)`,
+    output: () => {
+      const data: DataStruct = {
+        time: computed.res.thickness_axis,
+        values: computed.res.fft_magnitude.map((v) => [v]),
+        labels: ["FFT magnitude"],
+        units: [""],
+        metadata: { reduction: "fft-thickness", thickness_nm: computed.res.thickness_nm },
+      };
+      return { name: `${computed.sourceName} (FFT thickness)`, data };
+    },
+  } : null);
+
   function toLibrary(): void {
-    if (!result) return;
-    const data: DataStruct = {
-      time: result.thickness_axis,
-      values: result.fft_magnitude.map((v) => [v]),
-      labels: ["FFT magnitude"],
-      units: [""],
-      metadata: { reduction: "fft-thickness", thickness_nm: result.thickness_nm },
-    };
-    addDataset({
-      id: nextDatasetId(),
-      name: `${active?.name ?? "scan"} (FFT thickness)`,
-      data,
-    });
-    setStatus(`added FFT-thickness spectrum (${result.thickness_nm.toFixed(2)} nm)`);
+    if (commit.disabledReason) return;
+    commit.commit();
   }
 
   function clear(): void {
-    setResult(null);
+    setComputed(null);
     setError(null);
   }
 
@@ -141,6 +160,7 @@ export function useFftThickness(): FftThicknessState {
     error,
     compute,
     toLibrary,
+    addDisabledReason: commit.disabledReason,
     clear,
   };
 }

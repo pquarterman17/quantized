@@ -193,3 +193,40 @@ describe("useCurieWeiss", () => {
     expect(useApp.getState().datasets[1].data.metadata.label_rows).toBeUndefined();
   });
 });
+
+describe("useCurieWeiss: commit contract (lane RL4)", () => {
+  const fresh = () => useApp.setState({ analysisResults: [], history: [], future: [], staleDatasets: [], recalcMode: "manual" });
+  async function fitOnce(hook: { current: ReturnType<typeof useCurieWeiss> }) {
+    await act(async () => { await hook.current.fit(); });
+  }
+
+  it("a repeat fit creates no duplicate and keeps the derived link (fail-before: a second worksheet)", async () => {
+    fresh();
+    const { result: hook } = renderHook(() => useCurieWeiss());
+    act(() => { hook.current.setSampleMass(100); hook.current.setMolarMass(200); });
+    await fitOnce(hook);
+    expect(useApp.getState().datasets[1].derivedFrom).toEqual({ datasetId: "mt", pipeline: "curie-weiss" });
+    act(() => useApp.getState().setActive("mt"));
+    await fitOnce(hook);
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().status).toContain("already added");
+  });
+
+  it("is one undo step, adds again after Undo, and is marked stale when the source changes", async () => {
+    fresh();
+    const { result: hook } = renderHook(() => useCurieWeiss());
+    act(() => { hook.current.setSampleMass(100); hook.current.setMolarMass(200); });
+    await fitOnce(hook);
+    const out = useApp.getState().datasets[1].id;
+    act(() => useApp.getState().touchDataset("mt"));
+    expect(useApp.getState().staleDatasets).toContain(out);
+    useApp.setState({ staleDatasets: [] });
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+    act(() => useApp.getState().setActive("mt"));
+    await fitOnce(hook);
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+});

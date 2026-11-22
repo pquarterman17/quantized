@@ -62,7 +62,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Surface fit, Optical gap, Ellipse fit "Add … as dataset" | plain worksheet | **no** (repeat click duplicated) | yes | **none** | **never** → migrated (lane RL) |
     | Baseline subtract, Tabulate export, Peak batch table, Batch integrate trend, Fit band plot | plain worksheet (batch tables: one worksheet from several sources) | **yes** (shared contract; two clicks during a pending baseline fetch make one commit) | yes (the band's window folds in) | yes | yes, ANY source marks it stale → migrated (lane RL2) |
     | Digitizer Create | plain worksheet, no source worksheet (image input) | **yes** (by calibration + trace + name; no envelope) | yes | none | n/a (no source worksheet) → duplicate fix only (lane RL2) |
-    | Magnetometry outputs (normalization, demag, Curie–Weiss), FFT thickness, Reflectivity model/SLD, spin asymmetry | plain worksheet | no | yes | none | never (not migrated yet) |
+    | FFT thickness "→ Library", Magnetometry outputs (normalization, demag, Curie–Weiss) | plain worksheet (Curie–Weiss keeps its `derivedFrom` link) | **yes** (shared contract) | yes | yes | yes → migrated (lane RL4) |
+    | Spin asymmetry | plain worksheet from TWO sources (R++ and R--, `alsoFrom`) | **yes** | yes | yes | yes, either channel marks it stale → migrated (lane RL4) |
+    | Reflectivity model / SLD profile | plain worksheet, no source worksheet (a simulation of the layer stack) | **yes** (by the output's own digest in its metadata; no envelope) | yes | none | n/a (no source worksheet) → duplicate fix only (lane RL4) |
 
     Already shared: the `AnalysisResult` envelope with `sources`/`outputs`,
     `staleDatasets` + the recalc engine (`touchDataset`, mode gating), the
@@ -206,9 +208,30 @@ inconsistently exposed, and do not all share the same result lifecycle.
       replace vs add-as-new through the panel, StrictMode double mount, a mode
       switch during a pending commit, missing/changed source notice,
       disabled-with-reason in the workspace and the Library menu).
-  - [ ] Remaining: migrate FFT thickness, Reflectivity model/SLD, spin
-    asymmetry and the Magnetometry outputs (normalization, demag,
-    Curie–Weiss); reopen for multi-source batch tables and fit bands.
+  - [x] **Third slice (lane RL4, 2026-11-22).** Migrated FFT thickness,
+    spin asymmetry (two sources) and the Magnetometry outputs (normalization,
+    demag, Curie–Weiss) onto the contract (`store/commitComputedOutput.ts`
+    wraps `commitAnalysisOutput` for tools that compute and write in one
+    step: the key carries a digest of the output, so the same run finds the
+    existing worksheet; the output builder gained `derivedFrom`, so
+    Curie–Weiss stays a linked worksheet). Reflectivity model and SLD profile
+    have no source worksheet (a simulation), so they get the duplicate guard
+    only (`store/commitModelOutput.ts`), like Digitizer. Fail-before tests sit
+    beside each tool (`useFftThickness.test.ts`, `useSpinAsymmetry.test.ts`,
+    `useReflectivity.test.ts`, `useMagNormalization.test.ts`,
+    `useDemagCorrection.test.ts`, `useCurieWeiss.test.ts`); each fails on the
+    old hook. **Reopen stays disabled with a reason** for all of them (spin
+    asymmetry is multi-source; FFT thickness, the Units/Internal-field/
+    Curie–Weiss tabs do not record their picks as reopenable settings yet).
+    The BUG-020 list in `architecture.test.ts` moved these hooks (and
+    `useReflectivity`) from "mint ids themselves" to "delegating", since the
+    id is now minted in the store; the private-sequence check still covers
+    them.
+  - [ ] Remaining: reopen for multi-source batch tables, spin asymmetry and
+    fit bands, and for the tools above once their settings are recorded; the
+    other "add as dataset" writers outside the audit (Pawley, reflectivity
+    FFT, ROI cuts, resample, hysteresis, the Magnetometry background
+    subtraction) are not migrated.
 - [ ] Selection semantics differ by tool: active dataset, plotted channels,
   selected worksheet columns, range ROI, excluded rows, and filtered rows are
   not presented through one understandable contract.
@@ -331,16 +354,18 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   units, parameters, and algorithm version are recorded.
 - [ ] Preview is visibly provisional and Cancel leaves no scientific state.
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
-  Progress (lane RL): shared by `commitAnalysisOutput` for Surface fit,
-  Optical gap and Ellipse fit; the other plain-worksheet tools in the audit
-  above are not yet migrated, so this stays open.
+  Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
+  above now commits through the shared contract (Reflectivity model/SLD with a
+  duplicate guard only); writers outside the audit are not migrated, so this
+  stays open.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
 - [ ] A changed input marks the result stale; automatic recalculation occurs
   only when the project's recalculation mode permits it.
   Progress (lane RL): committed outputs now join the recalc graph (stale in
-  Auto/Manual, nothing in None, never auto-recomputed); the unmigrated tools
-  in the audit keep this open.
+  Auto/Manual, nothing in None, never auto-recomputed); every tool in the
+  audit with a source worksheet now joins it (lane RL4); writers outside the
+  audit keep this open.
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
   lazy Origin previews, and cancelled work fail closed with a useful message.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy

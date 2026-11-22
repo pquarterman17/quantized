@@ -7,7 +7,9 @@ import { detectMagXKind, stampXIdentity } from "../../../lib/magDataKind";
 import { ownXKey } from "../../../lib/perSeriesX";
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import type { DataStruct, Dataset } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
   magXY,
   requestView,
@@ -15,6 +17,8 @@ import {
   resolvedSourceStillCurrent,
   sourceUnits,
 } from "./useMagTools";
+
+const DEMAG_PRODUCER = { id: "mag-demag", label: "Internal-field correction", version: 1 } as const;
 
 export const DEMAG_SHAPES = [
   "Sphere",
@@ -114,8 +118,6 @@ export function useDemagCorrection() {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
   const [shape, setShape] = useState<DemagShape | "">("");
   const [busy, setBusy] = useState(false);
   const [readout, setReadout] = useState<DemagReadout>(EMPTY);
@@ -243,16 +245,26 @@ export function useDemagCorrection() {
           error_roles: errorRoles,
         },
       };
-      const outId = nextDatasetId();
-      addDataset({ id: outId, name: `${ds.name.replace(/\.[^.]+$/, "")} (internal field)`, data, errorRoles });
+      // One undo step, no duplicate on a repeat Apply, stale when the source
+      // changes (store/analysisOutputCommit.ts).
+      const outcome = commitComputedOutput({
+        producer: DEMAG_PRODUCER,
+        sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
+        settings: { shape, xKey: request.xKey, yKey },
+        name: `${ds.name.replace(/\.[^.]+$/, "")} (internal field)`, data, errorRoles,
+        status: `created internal-field dataset (N = ${response.n_factor.toPrecision(4)})`,
+      });
+      if (outcome.kind === "refused") {
+        setReadout({ ...EMPTY, owners, error: outcome.reason });
+        return;
+      }
       const warnings = [];
       if (!pairs.complete) warnings.push(`${pairs.n - pairs.keep.length} gap rows remain gaps in the corrected field.`);
       if (yRoles.length === 0 && xRoles.length === 0) warnings.push("No committed magnetization or applied-field uncertainty was available to propagate.");
       setReadout({
-        owners: [...owners, outId], nFactor: response.n_factor, nCgs: response.n_cgs,
+        owners: [...owners, outcome.outputId], nFactor: response.n_factor, nCgs: response.n_cgs,
         warning: warnings.length ? warnings.join(" ") : null, error: null,
       });
-      setStatus(`created internal-field dataset (N = ${response.n_factor.toPrecision(4)})`);
     } catch (error) {
       setReadout({ ...EMPTY, owners, error: error instanceof Error ? error.message : "internal-field correction failed" });
     } finally {

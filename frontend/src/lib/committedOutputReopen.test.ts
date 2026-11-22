@@ -40,6 +40,10 @@ describe("planReopen", () => {
     ["peak-batch-integrate", "several worksheets"],
     ["fit-band", "live Curve Fit"],
     ["fft-thickness", "cannot reopen in their tool yet"],
+    ["spin-asymmetry", "two worksheets"],
+    ["mag-normalization", "not recorded as reopenable settings"],
+    ["mag-demag", "not recorded as reopenable settings"],
+    ["curie-weiss", "not recorded as reopenable settings"],
   ])("disables %s with the reason", (producer, reason) => {
     const plan = planReopen(result(producer), [SOURCE, OUTPUT]);
     expect(plan.ok).toBe(false);
