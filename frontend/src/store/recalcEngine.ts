@@ -35,6 +35,7 @@ import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import type { FitSpec } from "../lib/types";
 import { FIT_ROW_IDENTITIES } from "../lib/rowSidecars";
 import { refreshFitRefsLater } from "./computedColumns";
+import { drainUserTouches, queueUserTouch } from "./recalcPassState";
 import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
 
@@ -98,6 +99,9 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
         // exclusion, say) must not leave it reading Current (lane IR).
         const marked = markStale(s.staleDatasets, committed);
         if (marked !== s.staleDatasets) set({ staleDatasets: marked });
+        // Lane RP: anything the pass is not itself writing is a USER edit; it
+        // is replayed once the pass settles (./recalcPassState).
+        queueUserTouch(id);
         return;
       }
       const staleDatasets = markStale(s.staleDatasets, [...down.datasets, ...committed]);
@@ -150,6 +154,10 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
         await recomputeStaleFits(set, get);
       } finally {
         _recalcInProgress = false;
+        // Lane RP: user edits made mid-pass, applied now under the current mode.
+        for (const id of drainUserTouches()) {
+          try { get().touchDataset(id); } catch { /* a dataset deleted mid-pass: nothing to mark */ }
+        }
         if (_recalcPending) void ((_recalcPending = false), get().recalcNow());
       }
     },
