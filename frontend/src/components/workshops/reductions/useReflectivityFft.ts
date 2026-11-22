@@ -14,6 +14,7 @@ import type { ReflectivityFftResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -79,6 +80,8 @@ export function useReflectivityFft(): ReflectivityFftState {
     datasetInputsToken(active), col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
   ]));
   const stale = result !== null && stamp.stale;
+  const settingsKey = JSON.stringify([col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence]);
+  const settingsRef = useLatestRef(settingsKey);
   const seq = useRef(0);
 
   useEffect(() => {
@@ -99,6 +102,7 @@ export function useReflectivityFft(): ReflectivityFftState {
       return;
     }
     const id = ++seq.current;
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
@@ -108,6 +112,9 @@ export function useReflectivityFft(): ReflectivityFftState {
       if (!ds) return;
       if (active.pending) await afterCommit();
       if (id !== seq.current) return;
+      // The user changed a setting while the book loaded: this request carries the
+      // old ones, so abandon it rather than stamp it with the new key.
+      if (settingsRef.current !== clickSettings) return;
       const launchKey = stamp.launchKey();
       const d = analysisData(ds) ?? ds.data;
       const res = await reflectivityFft(reflectivityFftBody(d, col, {
@@ -118,8 +125,6 @@ export function useReflectivityFft(): ReflectivityFftState {
       setResult(res);
     } catch (e) {
       if (id !== seq.current) return;
-      stamp.record(null);
-      setResult(null);
       setError(e instanceof Error ? e.message : "reflectivity FFT failed");
     } finally {
       if (id === seq.current) setBusy(false);

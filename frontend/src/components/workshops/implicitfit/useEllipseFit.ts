@@ -61,6 +61,8 @@ export function useEllipseFit(): EllipseFitState {
   const key = [active?.id, fingerprint, xCol, yCol, geometric].join(":");
   const live = stored && stored.key === key ? stored : null;
   const liveKey = useLatestRef(key);
+  const settingsKey = JSON.stringify([xCol, yCol, geometric]);
+  const settingsRef = useLatestRef(settingsKey);
   const hasData = !!active && columns.length >= 2;
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export function useEllipseFit(): EllipseFitState {
 
   async function fit(): Promise<void> {
     if (!active) return;
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
@@ -82,6 +85,7 @@ export function useEllipseFit(): EllipseFitState {
         await resolveDataset(active.id);
         await afterCommit();
       }
+      if (settingsRef.current !== clickSettings) return; // changed while the book loaded: this request carries the old ones
       const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;

@@ -113,6 +113,32 @@ describe("FFT thickness out-of-date state", () => {
     expect(result.current.stale).toBe(false);
   });
 
+  it("a setting changed while a lazy book loads is not stamped onto a request that carries the old one (fail-before: current)", async () => {
+    makePending({ id: "d1", name: "xrd.dat", data: scan });
+    const install = useApp.getState().resolveDataset;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    useApp.setState({ resolveDataset: async (id: string) => { await gate; return install(id); } });
+    const { result } = renderHook(() => useFftThickness());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.compute(); });
+    act(() => result.current.setWavelength(1.79));
+    await act(async () => { release(); await pending; });
+    expect(fftThickness).not.toHaveBeenCalled(); // the run for the old wavelength is abandoned
+    expect(result.current.result).toBeNull();
+    expect(result.current.busy).toBe(false);
+  });
+
+  it("a failed run keeps the previous result (marked if its inputs moved), as before", async () => {
+    const { result } = await computed();
+    act(() => result.current.setWavelength(1.79));
+    vi.mocked(fftThickness).mockRejectedValueOnce(new Error("window too short"));
+    await act(async () => { await result.current.compute(); });
+    expect(result.current.error).toBe("window too short");
+    expect(result.current.result).not.toBeNull();
+    expect(result.current.stale).toBe(true);
+  });
+
   it("Clear forgets the result and its stamp", async () => {
     const { result } = await computed();
     act(() => result.current.clear());

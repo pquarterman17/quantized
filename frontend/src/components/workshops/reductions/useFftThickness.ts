@@ -17,6 +17,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -83,6 +84,8 @@ export function useFftThickness(): FftThicknessState {
   // setting or source-row change afterwards marks it out of date.
   const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm]));
   const stale = computed !== null && stamp.stale;
+  const settingsKey = JSON.stringify([col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm]);
+  const settingsRef = useLatestRef(settingsKey);
   // Bumped on a dataset switch, Clear and every run: an answer for a run the
   // user has left is dropped.
   const seq = useRef(0);
@@ -101,6 +104,7 @@ export function useFftThickness(): FftThicknessState {
   async function compute(): Promise<void> {
     if (!active) return;
     const id = ++seq.current;
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
@@ -111,6 +115,9 @@ export function useFftThickness(): FftThicknessState {
       if (!ds) return;
       if (active.pending) await afterCommit();
       if (id !== seq.current) return;
+      // The user changed a setting while the book loaded: this request carries the
+      // old ones, so abandon it rather than stamp it with the new key.
+      if (settingsRef.current !== clickSettings) return;
       const launchKey = stamp.launchKey();
       const d = analysisData(ds) ?? ds.data;
       const res = await fftThickness(fftThicknessBody(d, col, { wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm }));
@@ -122,8 +129,6 @@ export function useFftThickness(): FftThicknessState {
       });
     } catch (e) {
       if (id !== seq.current) return;
-      stamp.record(null);
-      setComputed(null);
       setError(e instanceof Error ? e.message : "FFT thickness failed");
     } finally {
       if (id === seq.current) setBusy(false);

@@ -27,6 +27,7 @@ import type { Dataset, DataStruct } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { nextPlotObjectId } from "../../../store/idSeq";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -161,6 +162,8 @@ export function usePawley(): PawleyState {
   // setting that reaches the request plus the source rows' identity).
   const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), col, fields, tie, symmetry, refineCell]));
   const stale = result !== null && stamp.stale;
+  const settingsKey = JSON.stringify([col, fields, tie, symmetry, refineCell]);
+  const settingsRef = useLatestRef(settingsKey);
 
   // Bumped on every dataset switch and every compute(); a completion whose
   // token is no longer current belongs to a dataset or click the user has
@@ -238,6 +241,7 @@ export function usePawley(): PawleyState {
   async function compute(): Promise<void> {
     if (!active || !canCompute || !xIdentity) return;
     const token = ++runToken.current;
+    const clickSettings = settingsKey;
     const n = numbers;
     setBusy(true);
     setError(null);
@@ -247,6 +251,9 @@ export function usePawley(): PawleyState {
       // A lazy book's arrival moves the run key: let it commit, then take the key.
       if (active.pending) await afterCommit();
       if (token !== runToken.current) return;
+      // The user changed a setting while the book loaded: this request carries the
+      // old ones, so abandon it rather than stamp it with the new key.
+      if (settingsRef.current !== clickSettings) return;
       const launchKey = stamp.launchKey();
       const d = analysisData(ds) ?? ds.data;
       const pairs = dropGapRows(d.time, d.values.map((row) => row[col]));

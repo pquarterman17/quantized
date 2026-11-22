@@ -130,6 +130,8 @@ export function useOpticalGap(): OpticalGapState {
   const key = [active?.id, fingerprint, xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax].join(":");
   const result = stored && stored.key === key ? stored.res : null;
   const liveKey = useLatestRef(key);
+  const settingsKey = JSON.stringify([xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax]);
+  const settingsRef = useLatestRef(settingsKey);
   const hasData = !!active && columns.length >= 2;
 
   // A new dataset resets the picks and the fit window.
@@ -178,6 +180,7 @@ export function useOpticalGap(): OpticalGapState {
       setError("Enter the film thickness (nm) to convert transmittance to absorption.");
       return;
     }
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
@@ -187,6 +190,7 @@ export function useOpticalGap(): OpticalGapState {
         await resolveDataset(active.id);
         await afterCommit();
       }
+      if (settingsRef.current !== clickSettings) return; // changed while the book loaded: this request carries the old ones
       const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;
