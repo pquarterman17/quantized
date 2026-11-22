@@ -218,11 +218,64 @@ describe("fft mode (#34)", () => {
     expect(useApp.getState().gadgetFftPreview?.magnitude).toEqual([0, 5, 1]);
 
     useApp.getState().commitGadgetFft();
+    await vi.dynamicImportSettled();
     const state = useApp.getState();
     expect(state.datasets).toHaveLength(2);
     expect(state.datasets[1].data.time).toEqual([0, 1, 2]);
     expect(state.datasets[1].data.values).toEqual([[0], [5], [1]]);
     vi.useRealTimers();
+  });
+
+  // Lane RL2: the shared commit contract.
+  async function previewed() {
+    vi.useFakeTimers();
+    vi.mocked(fftSpectral).mockResolvedValue({ freq: [0, 1, 2], magnitude: [0, 5, 1], df: 1, nfft: 4, fs: 4, windowName: "hanning" });
+    useApp.setState({ gadgetMode: "fft", history: [], analysisResults: [], staleDatasets: [], recalcMode: "manual" });
+    useApp.getState().setQfitRoi([0, 5]);
+    await vi.advanceTimersByTimeAsync(500);
+    vi.useRealTimers();
+  }
+
+  it("a repeat Add creates no duplicate; it is one undo step with its Library result", async () => {
+    await previewed();
+    useApp.getState().commitGadgetFft();
+    await vi.dynamicImportSettled();
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().commitGadgetFft();
+    await vi.dynamicImportSettled();
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+  });
+
+  it("the output goes out of date when its source changes", async () => {
+    await previewed();
+    useApp.getState().commitGadgetFft();
+    await vi.dynamicImportSettled();
+    const outputId = useApp.getState().datasets[1].id;
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => d.id === "a" ? { ...d, data: { ...d.data, time: [0, 1, 2, 3, 4, 9] } } : d) }));
+    useApp.getState().touchDataset("a");
+    expect(useApp.getState().staleDatasets).toContain(outputId);
+  });
+
+  it("refuses a spectrum without a source stamp, or one whose worksheet changed since", async () => {
+    await previewed();
+    const preview = useApp.getState().gadgetFftPreview!;
+    // Changed after the preview: the commit refuses and writes nothing.
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => d.id === "a" ? { ...d, data: { ...d.data, time: [0, 1, 2, 3, 4, 9] } } : d) }));
+    useApp.getState().commitGadgetFft();
+    await vi.dynamicImportSettled();
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/changed after this result was computed/);
+    // Unstamped: refused up front.
+    useApp.setState({ gadgetFftPreview: { ...preview, source: undefined } });
+    useApp.getState().commitGadgetFft();
+    expect(useApp.getState().status).toMatch(/not computed on the active worksheet/);
+    expect(useApp.getState().datasets).toHaveLength(1);
   });
 
   it("needs at least 4 points and surfaces a clear error otherwise", async () => {

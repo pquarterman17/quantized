@@ -54,7 +54,8 @@ import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useRoisStore } from "../../../store/hooks/useRoisStore";
 import type { MapSectorState } from "../../../store/rois";
-import { useCutLanding } from "../../Stage/useCutLanding";
+import { useCutLanding, type CutCommit } from "../../Stage/useCutLanding";
+import { ROI_CUT_PRODUCER } from "./roiCutProducer";
 import { useBoxStats } from "./useBoxStats";
 
 // ── Pure helpers (column extents, polar-branch detection) ──────────────────
@@ -298,7 +299,7 @@ export function useRoiCuts(): RoiCutsState {
   const saveRoi = useRoisStore((s) => s.saveRoi);
   const applySavedRoi = useRoisStore((s) => s.applySavedRoi);
   const removeSavedRoi = useRoisStore((s) => s.removeSavedRoi);
-  const { busy, land } = useCutLanding();
+  const { busy, landCommitted } = useCutLanding();
 
   const isMap = active ? is2DMap(active.data) : false;
   const qAvailable = active ? hasQSpace(active.data.labels) : false;
@@ -358,6 +359,13 @@ export function useRoiCuts(): RoiCutsState {
     if (active) setMapRoi(defaultRectFor(active.data, space));
   }
 
+  /** One shared commit for every cut this workshop lands (lane RL2): keyed by
+   *  the active worksheet and the request's own settings. */
+  const cutCommit = (kind: string, request: object): CutCommit => {
+    const { dataset: _rows, ...rest } = request as { dataset?: unknown } & Record<string, unknown>;
+    return { producer: ROI_CUT_PRODUCER, sources: active ? [active] : [], settings: { kind, ...rest } };
+  };
+
   function runBox(collapse: "x" | "y" = boxCollapse): void {
     if (!active || !mapRoi) return;
     const body = roiBoxBody(active.data, normalizeRect(mapRoi), {
@@ -365,7 +373,7 @@ export function useRoiCuts(): RoiCutsState {
       reduce: boxReduce,
       nBins: boxBins,
     }) as unknown as BoxCutRequest;
-    void land(rsmBoxCut(body));
+    void landCommitted(rsmBoxCut(body), cutCommit("box", body));
   }
 
   // ── Sector card actions (polar routing) ──────────────────────────────
@@ -385,7 +393,7 @@ export function useRoiCuts(): RoiCutsState {
         phi_min: lo,
         phi_max: hi,
       };
-      void land(kind === "radial" ? rsmSector(req) : rsmChiProfile(req));
+      void landCommitted(kind === "radial" ? rsmSector(req) : rsmChiProfile(req), cutCommit(kind, req));
     } else if (branch.kind === "pole") {
       const rect = poleBoxRect(branch.axis, lo, hi, secMin, secMax);
       const body = roiBoxBody(active.data, rect, {
@@ -394,7 +402,7 @@ export function useRoiCuts(): RoiCutsState {
         nBins: sectorBins,
         wrap: branch.axis,
       }) as unknown as BoxCutRequest;
-      void land(rsmBoxCut(body));
+      void landCommitted(rsmBoxCut(body), cutCommit("pole-" + kind, body));
     }
     // branch "none": the panel disables both buttons — no-op guard here too.
   }
