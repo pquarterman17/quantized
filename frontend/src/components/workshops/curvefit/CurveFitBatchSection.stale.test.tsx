@@ -1,9 +1,9 @@
 // Curve Fit batch, lane WB5: the table is marked out of date (summary and
 // parameter plots withheld) when the settings the fits used, the worksheets
-// asked for or their data change; a new model pick does not (the summary is
-// named and laid out by the model the run used).
+// asked for or their data change. A settings change (model, weighting, start
+// table) drops the finished table instead (owner decision 2026-11-22, lane OD).
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitModel } from "../../../lib/api";
@@ -57,17 +57,43 @@ describe("CurveFitBatchSection out of date", () => {
     expect(screen.getByRole("button", { name: "Create summary worksheet" })).toBeInTheDocument();
   });
 
-  it("a weighting change after the run marks it and withholds the summary", async () => {
-    const { rerender } = await ran();
-    rerender(<CurveFitBatchSection {...base} weightMode="poisson" />);
-    expect(screen.getByText(/Out of date/)).toBeInTheDocument();
+  const START_ROWS = [{ name: "m", start: "3", min: "", max: "", fixed: false }, { name: "b", start: "0", min: "", max: "", fixed: false }];
+  const dropped = () => {
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.queryByText(/Out of date/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Create summary worksheet" })).toBeNull();
+  };
+
+  it.each([
+    ["weighting", { weightMode: "poisson" as const }],
+    ["start table", { paramRows: START_ROWS }],
+    ["model", { modelName: "Quadratic", model: QUAD }],
+  ])("a %s change drops the finished table", async (_name, change) => {
+    const { rerender } = await ran();
+    rerender(<CurveFitBatchSection {...base} {...change} />);
+    dropped();
   });
 
-  it("an edited start table marks it", async () => {
+  it("an unchanged rerender keeps the finished table", async () => {
     const { rerender } = await ran();
-    rerender(<CurveFitBatchSection {...base} paramRows={[{ name: "m", start: "3", min: "", max: "", fixed: false }, { name: "b", start: "0", min: "", max: "", fixed: false }]} />);
-    expect(screen.getByText(/Out of date/)).toBeInTheDocument();
+    rerender(<CurveFitBatchSection {...base} />);
+    rerender(<CurveFitBatchSection {...base} paramRows={[]} />);
+    expect(screen.getAllByText("Completed").length).toBe(2);
+    expect(screen.queryByText(/Out of date/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Create summary worksheet" })).toBeInTheDocument();
+  });
+
+  it("a batch still running when settings change lands dropped, as in the other batches", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    vi.mocked(fitModel).mockImplementation(async () => { await gate; return { params: [5, 10], errors: [0.1, 0.2], R2: 0.99, RMSE: 0.1, chiSqRed: 0.01, nPoints: 3 }; });
+    const { rerender } = render(<CurveFitBatchSection {...base} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Linear) batch" }));
+    await screen.findByText("Running…");
+    rerender(<CurveFitBatchSection {...base} weightMode="poisson" />);
+    release();
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+    dropped();
   });
 
   it("an edit to an input worksheet marks it", async () => {
@@ -75,12 +101,5 @@ describe("CurveFitBatchSection out of date", () => {
     act(() => useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "a" ? { ...d, excludedRows: [0] } : d)) })));
     expect(screen.getByText(/Out of date/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create summary worksheet" })).toBeNull();
-  });
-
-  it("a new model pick does not: the summary is the run's own (existing contract)", async () => {
-    const { rerender } = await ran();
-    rerender(<CurveFitBatchSection {...base} modelName="Quadratic" model={QUAD} />);
-    expect(screen.queryByText(/Out of date/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Create summary worksheet" })).toBeInTheDocument();
   });
 });
