@@ -17,6 +17,9 @@ loop) takes the canvas' full-scan path instead: x padded 2% each side
 (``fullYExtents``); so does an x whose first or last row draws no point.
 Both halves read ``tests/fixtures/wire/linear_autoscale.json``.
 
+An autoscaled linear axis is also widened so the largest size-by bubble fits
+(:mod:`quantized.calc.figure_bubble_pad`, the canvas' ``lib/bubblePad.ts``).
+
 A FLAT (zero-span) axis takes uPlot's own rule too, on x, y and y2 alike
 (``flat_auto_range``; ``log_auto_range`` already is ``rangeLog``'s): a flat
 1000 Oe field reads 0..2000, not matplotlib's ~950..1050, which frames a
@@ -56,6 +59,7 @@ from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.container import BarContainer, ErrorbarContainer
 from numpy.typing import NDArray
 
+from quantized.calc.figure_bubble_pad import pad_for_bubbles
 from quantized.calc.figure_orient import TransposedAxes
 from quantized.calc.figure_overlay_scale import is_overlay
 from quantized.calc.figure_ticks import _pow10
@@ -343,4 +347,5 @@ def shared_autoscale(ax: Any, axis: str, scale: str) -> None:
         else:
             new_lo, new_hi = range_num(d_lo, d_hi)
         if new_hi > new_lo:
+            new_lo, new_hi = pad_for_bubbles(axes, ax, axis, new_lo, new_hi)  # size-by bubbles fit
             set_lim(*((new_hi, new_lo) if flip else (new_lo, new_hi)))

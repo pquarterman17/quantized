@@ -7,8 +7,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type uPlot from "uplot";
 
 import { regionDecorSettled } from "./regionDecorLoader";
+import { annotationPlugin } from "./uplotAnnotations";
+import { refLinePlugin } from "./uplotRegionShades";
 import {
-  annotationPlugin, colorScatterPlugin, errorBarsPlugin, errorSpansPlugin, refLinePlugin, regionShadePlugin,
+  colorScatterPlugin, errorBarsPlugin, errorSpansPlugin, regionShadePlugin,
 } from "./uplotOverlays";
 import { orientArgs, orientPlugins, orientTurnSettled, TURNED_TOOLS } from "./uplotOrient";
 import { uprightView } from "./uplotTurn";

@@ -469,6 +469,15 @@ MATLAB."**
 > stats, fitting engine/models/diagnostics, reflectivity) is largely landed and
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
 
+- 2026-11-21 (lane DF) deferred follow-ups of #812/#813/#814/#816: explicit
+  "Clock (HH:MM:SS)" X tick mode (Inspector + Figure Builder) and an
+  `HH:MM:SS` worksheet X cell for `metadata.time_is_clock` (display only);
+  `/figure` out-of-range or unknown channel keys, an all-NaN heatmap, an empty
+  `.ogs` `graph.y_keys`, a string in a worksheet number column and the xlsx
+  row-limit count (off by two without a header) all fail with a clear 422.
+  Left: the worksheet *export* of a clock X still writes seconds; h5py hang on
+  a zeroed block skipped (a C-level hang, no cheap safe guard); JCAMP
+  non-numeric token stays fail-closed.
 - ~~**#1 Repo scaffold**~~ (2026-06-21, M1 PR1 `8a017e62`) — plan-hygiene
   reconciliation catch (2026-08-10), not new work: all three sub-boxes had
   been checked since day one but the item itself was never struck or moved

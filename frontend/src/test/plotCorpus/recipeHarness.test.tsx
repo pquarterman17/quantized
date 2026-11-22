@@ -66,7 +66,10 @@ describe("plot corpus recipe harness", () => {
   });
 
   it("a refused gallery tile is the recipe's error, not a stale export", async () => {
-    const out = await runSpecimen(specimen([{ gallery: "ternary" }]), 3);
+    // X plus ONE channel: still too few composition columns (X plus two is
+    // a valid A,B,C sheet since the ternary-order fix).
+    const one: DataStruct = { ...DATA, values: DATA.values.map((r) => [r[0]]), labels: ["y1"], units: [""] };
+    const out = await runSpecimen({ ...specimen([{ gallery: "ternary" }]), dataset: one }, 3);
     expect(out.spec).toBeUndefined();
     expect(out.error).toMatch(/gallery refused ternary: Needs three composition columns/);
   });
@@ -74,7 +77,8 @@ describe("plot corpus recipe harness", () => {
   it("the Plot > Ternary diagram command builds with the workshop's default picks", async () => {
     const out = await runSpecimen(specimen([{ command: "ternary" }]), 4);
     expect(out.route).toBe("ternary");
-    expect((out.spec as { labels: string[] }).labels).toEqual(["y1", "y2", "x"]);
+    // An A,B,C sheet reads A, B, C: the X column leads (ternary-order fix).
+    expect((out.spec as { labels: string[] }).labels).toEqual(["x", "y1", "y2"]);
   });
 
   it("a gallery Box recipe exports through the mounted Stat Stage", async () => {

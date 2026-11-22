@@ -1,16 +1,16 @@
 # CLAUDE.md — quantized
 
 Python/FastAPI backend + React/TypeScript frontend port of
-`quantized_matlab` (magnetometry / XRD / lab-data analysis toolbox). Backend
-targets **feature parity** with the MATLAB toolbox; the GUI is a **ground-up
-revamp**. EM tooling (Fermi viewer / EELS / EDS / imaging) is **out of
+`quantized_matlab` (magnetometry / XRD / lab-data analysis toolbox). The
+port has **surpassed** the MATLAB toolbox (owner decision, 2026-11-21): MATLAB
+is a historical reference, not a gate. The GUI is a **ground-up revamp**. EM tooling (Fermi viewer / EELS / EDS / imaging) is **out of
 scope**: it lives in `fermi-viewer` (MATLAB) and `fermiviewer` (Python).
 
 ## Reference repos (siblings in the same checkout root)
 
 | Repo | Role |
 |------|------|
-| `quantized_matlab` | **Behavioural reference**: authoritative for every formula, parser and feature; goldens are frozen from it. |
+| `quantized_matlab` | **Historical reference** (optional, often not checked out): consult it when useful; it does not gate new behaviour. The goldens frozen from it stay as regression tests. |
 | `fermiviewer` | **Structural reference**: the clean Python+React+Tauri port to mirror (layering, CLI, theme, enforcement tests). |
 | `thin_film_toolkit` | **Salvage only**: lift *pure domain logic*, re-verify against MATLAB, re-home into the clean layers. Never copy its architecture. |
 
@@ -100,6 +100,17 @@ Delegate each task to the cheapest model that fits it — never overkill:
   simple lookups.
 - The orchestrator keeps long test/build runs off its own model (delegate
   them) and does all pushes; worker agents commit locally and never push.
+
+## Owner standing decisions (2026-11-21)
+
+- **MATLAB is not a gate**; goldens stay as regression tests, changed only
+  deliberately (new test + reason in the commit), never by loosening.
+- **Permissive deps pre-approved** (BSD/MIT/Apache/PSF); no GPL (enforced).
+- **Fail closed** when intent is unclear; new behaviour is a UI option, not a
+  silently changed default.
+- **General before specialized:** any-plot/any-dataset features first, then
+  domain families (spectroscopy, XRD), technique-specific (hysteresis) last.
+- **Parallel lanes:** own `claude/<lane>` branch + PR, auto-merge on green.
 
 ## Planning docs
 

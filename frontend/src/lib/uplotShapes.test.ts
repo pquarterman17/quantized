@@ -3,7 +3,7 @@ import type uPlot from "uplot";
 
 import { CLICK_PX } from "./pointGesture";
 import type { Annotation, Shape } from "./types";
-import { annotationPlugin } from "./uplotOverlays";
+import { annotationPlugin } from "./uplotAnnotations";
 import {
   defaultShapeOpacity,
   DEFAULT_SHAPE_WIDTH,

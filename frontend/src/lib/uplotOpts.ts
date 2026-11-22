@@ -33,21 +33,22 @@ import { marks } from "./marksLoader";
 import { fixedXRange, fixedYScale, fullXExtents, scannedXRange } from "./uplotXRange";
 import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
-  annotationPlugin,
   axisBoxPlugin,
   colorScatterPlugin,
   errorBarsPlugin,
   errorSpansPlugin,
-  refLinePlugin,
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
 import { regionLiveBoxHook, regionSelectPick, selectBoxPick } from "./uplotRegionBox";
 import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
-import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
-import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
-import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
+import { loadedAnnotations } from "./annotationsLoader";
+import { regionDecor } from "./regionDecorLoader";
+import { loadedShapes } from "./shapesLoader";
+import type { ShapeEditOpts } from "./uplotShapes";
+import type { PeakMarkerCandidate } from "./peakMarkerHit";
+import type { AnchorPoint } from "./uplotAnchors";
 import { xLabelRightPad, xTickSpace, yTickSpace } from "./uplotRightPad";
 import { orientArgs, orientAxes, orientPlugins } from "./uplotOrient";
 import { withUnit } from "./unitDisplay";
@@ -867,11 +868,12 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       );
     }
   }
-  if (refLines && refLines.length > 0) {
+  const decorMod = regionDecor(), shapesMod = loadedShapes(), annMod = loadedAnnotations(); // startup chunks: null before they land, the viewport rebuilds then (useLazyPlotParts)
+  if (decorMod && refLines && refLines.length > 0) {
     // Dragging in the non-gesture tools (pointer/zoom/cursor); pan/measure/
     // region own the pointer-drag, so reference lines stay static there.
     plugins.push(
-      refLinePlugin(refLines, inkDimColor, {
+      decorMod.refLinePlugin(refLines, inkDimColor, {
         onMove: args.onRefLineMove,
         interactive: tool === "pointer" || tool === "zoom" || tool === "cursor",
         font: canvasFont,
@@ -884,9 +886,9 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // whenever there's something to SHOW (existing shapes) or something to DO
   // (an active draw-new-shape mode, even with zero shapes so far).
   const shapeKind = args.shapeDraw?.drawKind ?? null;
-  if ((args.shapes && args.shapes.length > 0) || shapeKind) {
+  if (shapesMod && ((args.shapes && args.shapes.length > 0) || shapeKind)) {
     plugins.push(
-      shapesPlugin(args.shapes ?? [], inkColor, {
+      shapesMod.shapesPlugin(args.shapes ?? [], inkColor, {
         interactive: tool === "pointer" && !!args.shapeEdit,
         selectColor: accentColor,
         selectedId: args.shapeEdit?.selectedId ?? null,
@@ -899,9 +901,9 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       }),
     );
   }
-  if (annotations && annotations.length > 0) {
+  if (annMod && annotations && annotations.length > 0) {
     plugins.push(
-      annotationPlugin(annotations, inkColor, font, {
+      annMod.annotationPlugin(annotations, inkColor, font, {
         interactive: tool === "pointer" && !!args.annotationEdit,
         selectColor: accentColor, paperColor: axesBg,
         selectedId: args.annotationEdit?.selectedId ?? null,
@@ -929,7 +931,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));
   }
   if (args.colorByColumns && args.colorByColumns.size > 0) plugins.push(colorScatterPlugin(args.colorByColumns));
-  plugins.push(...(marks()?.marksPlugins(args.seriesStyles, args.colorByColumns) ?? [])); // N5/N6 (lazy; buildSeriesDefs asks for the load)
+  plugins.push(...(marks()?.marksPlugins(args.seriesStyles, args.colorByColumns, !!xLim) ?? [])); // N5/N6 (lazy; buildSeriesDefs asks for the load)
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }
@@ -946,15 +948,13 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   }
   // Peak-workshop click-on-plot marker editing: also tool-independent —
   // workshop-scoped, not toolbar-tool-scoped (see BuildOptsArgs.peakWizardEdit).
-  if (args.peakWizardEdit) {
-    const { markers, onAdd, onRemove } = args.peakWizardEdit;
-    plugins.push(peakMarkerEditPlugin(markers, { onAdd, onRemove }));
+  if (decorMod && args.peakWizardEdit) {
+    const { markers, onAdd, onRemove } = args.peakWizardEdit; plugins.push(decorMod.peakMarkerEditPlugin(markers, { onAdd, onRemove }));
   }
   // Anchor-point baseline editing (GOTO #2): also tool-independent —
   // workshop-scoped, not toolbar-tool-scoped (see BuildOptsArgs.anchorEdit).
-  if (args.anchorEdit) {
-    const { getAnchors, onAdd, onMove, onRemove } = args.anchorEdit;
-    plugins.push(anchorEditPlugin(getAnchors, { onAdd, onMove, onRemove, color: accentColor }));
+  if (decorMod && args.anchorEdit) {
+    const { getAnchors, onAdd, onMove, onRemove } = args.anchorEdit; plugins.push(decorMod.anchorEditPlugin(getAnchors, { onAdd, onMove, onRemove, color: accentColor }));
   }
   // Axis titles / title (GOTO #5). Push the plugin when it must DRAW a title
   // (rich or moved) or the DOM title is rich, OR — in the pointer tool — for
