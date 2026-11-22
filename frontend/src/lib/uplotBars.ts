@@ -9,9 +9,14 @@
 // the X position runs down the canvas and the bar along it.
 import type uPlot from "uplot";
 
+import { stackBase } from "./uplotStack";
+
 export const BAR_FRACTION = 0.6;
 
-export const BAR_PATHS: uPlot.Series.PathBuilder = (u, seriesIdx, idx0, idx1) => {
+/** Bars from zero, or, for a stacked series, from the running total of the
+ *  stacked data columns `below` it (`lib/uplotStack.ts`) to that total plus
+ *  the series' own value. */
+export const barPaths = (below: readonly number[]): uPlot.Series.PathBuilder => (u, seriesIdx, idx0, idx1) => {
   const xs = u.data[0];
   const ys = u.data[seriesIdx];
   const scale = u.series[seriesIdx].scale ?? "y";
@@ -24,7 +29,6 @@ export const BAR_PATHS: uPlot.Series.PathBuilder = (u, seriesIdx, idx0, idx1) =>
   let gap = Infinity;
   for (let k = 1; k < px.length; k++) if (px[k] > px[k - 1]) gap = Math.min(gap, px[k] - px[k - 1]);
   const width = Number.isFinite(gap) ? gap * BAR_FRACTION : 12;
-  const base = u.valToPos(0, scale, true);
   const turned = u.scales?.x?.ori === 1;
   const path = new Path2D();
   for (let i = idx0; i <= idx1; i++) {
@@ -32,10 +36,14 @@ export const BAR_PATHS: uPlot.Series.PathBuilder = (u, seriesIdx, idx0, idx1) =>
     const y = ys[i];
     if (x == null || y == null) continue;
     const at = u.valToPos(x, "x", true);
-    const end = u.valToPos(y, scale, true);
+    const under = below.length ? stackBase(u.data as never, below, i) : 0;
+    const base = u.valToPos(under, scale, true);
+    const end = u.valToPos(under + y, scale, true);
     const [lo, len] = [Math.min(end, base), Math.abs(base - end)];
     if (turned) path.rect(lo, at - width / 2, len, width);
     else path.rect(at - width / 2, lo, width, len);
   }
   return { stroke: path, fill: path };
 };
+
+export const BAR_PATHS = barPaths([]);

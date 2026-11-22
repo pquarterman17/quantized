@@ -21,6 +21,8 @@ import type uPlot from "uplot";
 import type { ErrorSpan } from "./errorbars";
 import { offAutoscale } from "./overlayAutoscale";
 import type { PlotPayload } from "./plotdata";
+import type { SeriesStyle } from "./seriesStyleTypes";
+import { stackReach } from "./uplotStack";
 
 /** One series' drawn bars on one scale ("x", or Y axis 0/1): the bar ends at
  *  each payload row (empty where no bar is drawn). */
@@ -40,6 +42,7 @@ export function errorReach(
   payload: PlotPayload,
   errorBars: Map<number, (number | null)[]> | undefined,
   errorSpans: Map<number, ErrorSpan[]> | undefined,
+  styles?: readonly (SeriesStyle | undefined)[],
 ): BarEnds[] | null {
   const xs = payload.data[0] as Col;
   const out: BarEnds[] = [];
@@ -55,6 +58,7 @@ export function errorReach(
       if (rows.some((e) => e.length)) out.push({ series: i, on: axis === "x" ? "x" : s.axis ?? 0, rows });
     }
   });
+  if (styles) out.push(...stackReach(payload.series, payload.data as Col[], styles)); // stacked totals
   return out.length ? out : null;
 }
 

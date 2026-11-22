@@ -40,6 +40,7 @@ from quantized.calc.figure_styles import FigureStyle, figure_style
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.heavy_import import heavy_imports
 
+from .figure_bars import stacked_series
 from .figure_errorbars import apply_error_bars
 from .figure_marks import (
     DropLine,
@@ -61,9 +62,8 @@ _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
 _DRAWSTYLE = {"pre": "steps-pre", "post": "steps-post", "mid": "steps-mid"}
 # `_MARKER` (MarkerShape -> matplotlib code) lives in `calc.figure_colorscatter`,
 # whose gradient branch draws the same glyphs.
-# Fixed fill translucency for MAIN #13 (fill under/between curves) — matches
-# the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
-# reads the same as its on-screen counterpart.
+# Fill translucency for MAIN #13 (fill under/between): the screen's
+# `uplotFill.ts` FILL_ALPHA_PCT (25%), so an export reads like the canvas.
 _FILL_ALPHA = 0.25
 _MIN_MARKER_PT = 2.0  # mirrors the canvas' MIN_MARKER_PX (lib/markers.ts)
 
@@ -124,7 +124,7 @@ def _apply_fill(
         return
     fill = spec.get("fill")
     if fill == "under":
-        ax.fill_between(xv, yv, 0.0, color=color, alpha=_FILL_ALPHA)
+        ax.fill_between(xv, yv, spec.get("stack_base", 0.0), color=color, alpha=_FILL_ALPHA)
     elif isinstance(fill, Mapping):
         vs = fill.get("vs")
         if isinstance(vs, int) and 0 <= vs < len(series) and vs != idx:
@@ -195,6 +195,7 @@ def draw_series_axes(
     artists: list[Any] = []
     drops: list[DropLine] = []
     ax = oriented(ax, series_styles, bool(ov.get("exchange_xy")))  # bars / exchange_xy
+    series, series_styles = stacked_series(xv, series, series_styles)
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
         yv = np.asarray(y, dtype=float)

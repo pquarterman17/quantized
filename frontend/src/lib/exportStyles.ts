@@ -136,6 +136,7 @@ export function buildExportStyles(
     if (st?.dropLines) spec.drop_lines = st.dropLines;
     if (st?.connect) spec.connect = st.connect;
     if (st?.bars) spec.bars = st.bars;
+    if (st?.stack) spec.stack = true;
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;
       spec.colormap = st.colormap ?? "viridis";

@@ -29,6 +29,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.axis_style import apply_axis_style
 from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
 from quantized.calc.figure_axis_titles import apply_axis_titles
+from quantized.calc.figure_bars import stacked_series
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_inset import apply_inset
@@ -162,6 +163,7 @@ def draw_secondary_axes(
     Returns the per-series drawn artist, in ``series`` order.
     """
     artists: list[Any] = []
+    series, series_styles = stacked_series(xv, series, series_styles)
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
         yv = np.asarray(y, dtype=float)

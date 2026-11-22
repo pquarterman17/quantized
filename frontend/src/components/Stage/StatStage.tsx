@@ -21,6 +21,7 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Button, Select } from "../primitives";
+import HistColumnsPicker from "./HistColumnsPicker";
 import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
 import StatSummaryTable from "./StatSummaryTable";
@@ -311,7 +312,6 @@ export default function StatStage() {
             />
           </Picker>
         )}
-
         {st.mode === "qq" && (
           <Picker label="dist">
             <Select
@@ -331,6 +331,7 @@ export default function StatStage() {
                 onChange={(e) => st.setBins(e.target.value)}
               />
             </Picker>
+            <HistColumnsPicker columns={st.columns} valueCol={st.valueCol} picked={st.histCols} onChange={st.setHistCols} />
             <Picker label="fit">
               <Select
                 options={[{ value: "none", label: "none" }, ...DISTRIBUTIONS.map((d) => ({ value: d, label: d }))]}
