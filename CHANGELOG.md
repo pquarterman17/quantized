@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Curve Fit result on the graph**: the Curve Fit Results tab has a "Result on graph" section that adds the fit as a text annotation: the equation (for closed-form models; others show `y = Model(x)`), each parameter with its uncertainty, R², and optionally N and parameter units. Choose Plain text or a LaTeX equation (mathtext, drawn the same on screen and in the PDF/SVG export; if a parameter name or unit cannot be written as LaTeX the plain text is used and the panel says so) and either automatic error-rounded digits or 2-6 significant figures. Nothing is drawn until you press "Add to graph". It is one line, anchored to the top left of the page, and an ordinary annotation: drag, resize, restyle or delete it. While the Curve Fit panel is open, a re-fit or an options change rewrites the same annotation in place (no extra Undo step); when the fit is out of date, or the fit is removed or back to a guess, the text gets "(out of date)" appended and "Add to graph" is disabled until you press Fit. Each model gets its own annotation (switching the model does not rewrite another model's). Text you edit by hand is never overwritten ("Replace my edit" regenerates it). The link to the fit lasts for the session: a reopened project keeps the annotation as plain text that no longer updates.
+
 ## [0.40.1] - 2026-11-22
 
 ### Fixed
