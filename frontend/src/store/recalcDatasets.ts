@@ -46,6 +46,7 @@ import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
 import { downstreamOf, markStale } from "../lib/recalc";
 import { sortForRecalc } from "../lib/recalcOrder";
+import { beginPassWrite, endPassWrite } from "./recalcPassState";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 
@@ -169,6 +170,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
       // `applyCorrections` explains its own refusal through `setStatus`; that
       // text is the reason the summary carries (never a status it did NOT set).
       const before = get().status;
+      beginPassWrite(id); // its own touchDataset(id) is the pass's, not the user's
       try {
         if (await get().applyCorrections(id, d.corrections, d.bgRef)) {
           if (!held.has(id)) set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
@@ -177,6 +179,8 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
         failed.set(id, get().status === before ? "correction refused" : get().status); /* stays stale */
       } catch (e) {
         failed.set(id, `recalculation failed: ${message(e)}`);
+      } finally {
+        endPassWrite(id);
       }
     } else {
       // Worksheet audit #17: a worksheet whose formulas read ANOTHER
