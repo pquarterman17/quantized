@@ -152,6 +152,9 @@ export interface StatPicks {
    *  absent = autoscale. */
   valueRange?: [number, number];
   cols?: StatPickCols;
+  /** Extra columns a histogram bins with the value column (one graph, shared
+   *  bin edges); absent = the value column alone. */
+  histCols?: number[];
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
@@ -171,6 +174,9 @@ export function sanitizeStatPicks(v: unknown): StatPicks {
   for (const k in STAT_PICK_VALUES) if (STAT_PICK_VALUES[k].includes(o[k])) out[k] = o[k];
   const r = o.valueRange;
   if (Array.isArray(r) && r.length === 2 && r[0] < r[1] && r.every(Number.isFinite)) out.valueRange = r;
+  if (Array.isArray(o.histCols) && o.histCols.length <= 64 && o.histCols.every((i) => Number.isInteger(i) && i >= 0)) {
+    out.histCols = [...new Set(o.histCols as number[])];
+  }
   const c = o.cols as Record<string, unknown> | null;
   const keys = ["group", "group2", "value", "facet", "color"];
   if (typeof c === "object" && c && isColRef(c.value) && keys.every((k) => c[k] === null || isColRef(c[k]))) {

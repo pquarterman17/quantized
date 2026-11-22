@@ -8181,6 +8181,41 @@
         "title": "Hdf5Request",
         "type": "object"
       },
+      "HistogramMultiRequest": {
+        "properties": {
+          "bins": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              }
+            ],
+            "default": "fd",
+            "title": "Bins"
+          },
+          "columns": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "HistogramMultiRequest",
+        "type": "object"
+      },
       "HistogramRequest": {
         "properties": {
           "bins": {
@@ -27001,6 +27036,50 @@
           }
         },
         "summary": "Histogram Route",
+        "tags": [
+          "statplots"
+        ]
+      }
+    },
+    "/api/statplots/histogram-multi": {
+      "post": {
+        "description": "Several columns binned on shared edges (one graph, one bin rule).",
+        "operationId": "histogram_multi_route_api_statplots_histogram_multi_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistogramMultiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Histogram Multi Route Api Statplots Histogram Multi Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Histogram Multi Route",
         "tags": [
           "statplots"
         ]

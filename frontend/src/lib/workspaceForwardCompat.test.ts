@@ -108,6 +108,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "ExportSeriesStyle.size_range": (ws) => editExport(ws, { size_range: [2, 8] }),
   "ExportSeriesStyle.drop_lines": (ws) => editExport(ws, { drop_lines: "x" }),
   "ExportSeriesStyle.connect": (ws) => editExport(ws, { connect: "spline" }),
+  "ExportSeriesStyle.stack": (ws) => editExport(ws, { stack: true }),
   "DisplayBlock.ramp": (ws) => {
     const s = spec(ws);
     s.spec = { ...s.spec, display: { ...s.spec.display, ramp: { map: "plasma" } } };
@@ -129,6 +130,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "StatPicks.barPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", barStack: true, barPercent: true }; }),
   "StatPicks.valueRange": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", valueRange: [65, 75] }; }),
+  "StatPicks.histCols": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histCols: [2] }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -213,7 +215,7 @@ describe("forward compatibility with v0.34.0", () => {
     expect(kept.length).toBeGreaterThan(0);
     const style = {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
-      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline",
+      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true,
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());
     const ws = load();

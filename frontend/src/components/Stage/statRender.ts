@@ -23,13 +23,13 @@ import { categoryAxisLayout, drawCategoryAxis } from "./statRenderAxes";
 import {
   finiteDomain,
   violinOutline,
-  zeroBasedDomain,
   type BoxStat,
   type IndexedGroupSpec,
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } from "./statRenderBox";
+import { drawHistogram } from "./statRenderHist";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
 
@@ -122,6 +122,9 @@ export type StatDrawData =
       mode: "histogram";
       edges: number[];
       counts: number[];
+      /** Several columns on shared edges (`statHistMulti.ts`): one translucent
+       *  bar set each, `counts` being the first column's. Absent = one column. */
+      series?: { label: string; counts: number[] }[];
       density: boolean;
       fit?: { x: number[]; pdf: number[]; dist: string };
       valueLabel: string;
@@ -296,7 +299,7 @@ export function drawValueAxis(
   ctx.restore();
 }
 
-function drawNumericXAxis(
+export function drawNumericXAxis(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
   domain: [number, number],
@@ -436,55 +439,6 @@ function drawQQ(
     ctx.beginPath();
     ctx.arc(sx(d.theo[i]), sy(d.obs[i]), 2.5, 0, 2 * Math.PI);
     ctx.fill();
-  }
-}
-
-// ── Histogram ────────────────────────────────────────────────────────────────
-
-function drawHistogram(
-  ctx: CanvasRenderingContext2D,
-  rect: Rect,
-  d: Extract<StatDrawData, { mode: "histogram" }>,
-  ink: string,
-  muted: string,
-) {
-  if (!d.counts.length) return;
-  const xDomain = finiteDomain([d.edges]);
-  const yDomain = zeroBasedDomain([d.counts, d.fit?.pdf ?? []]);
-  drawNumericXAxis(ctx, rect, xDomain, d.valueLabel, ink, muted);
-  drawValueAxis(ctx, rect, yDomain, d.density ? "density" : "count", ink, muted);
-
-  const sx = (v: number) => rect.x + ((v - xDomain[0]) / (xDomain[1] - xDomain[0])) * rect.w;
-  const sy = (v: number) => rect.y + rect.h - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * rect.h;
-
-  const color = seriesColor(0);
-  for (let i = 0; i < d.counts.length; i++) {
-    const x0 = sx(d.edges[i]);
-    const x1 = sx(d.edges[i + 1]);
-    const yTop = sy(d.counts[i]);
-    const barX = Math.min(x0, x1);
-    const barW = Math.abs(x1 - x0);
-    const barH = rect.y + rect.h - yTop;
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle = color;
-    ctx.fillRect(barX, yTop, barW, barH);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(barX, yTop, barW, barH);
-  }
-
-  if (d.fit && d.fit.x.length) {
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    d.fit.x.forEach((v, i) => {
-      const px = sx(v);
-      const py = sy(d.fit!.pdf[i]);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
   }
 }
 

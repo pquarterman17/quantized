@@ -4354,6 +4354,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/statplots/histogram-multi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Histogram Multi Route
+         * @description Several columns binned on shared edges (one graph, one bin rule).
+         */
+        post: operations["histogram_multi_route_api_statplots_histogram_multi_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statplots/qq": {
         parameters: {
             query?: never;
@@ -9185,6 +9205,16 @@ export interface components {
              * @default export.h5
              */
             filename?: string;
+        };
+        /** HistogramMultiRequest */
+        HistogramMultiRequest: {
+            /**
+             * Bins
+             * @default fd
+             */
+            bins?: string | number;
+            /** Columns */
+            columns: number[][];
         };
         /** HistogramRequest */
         HistogramRequest: {
@@ -20041,6 +20071,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HistogramRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    histogram_multi_route_api_statplots_histogram_multi_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistogramMultiRequest"];
             };
         };
         responses: {
