@@ -145,7 +145,7 @@ export function useOutlierScreening(): OutlierScreeningState {
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view; selected rows ("Select flagged rows" writes them) and the
   // plot range are not read. A lazy Origin preview is refused, never screened.
-  const inputs = useAnalysisInputs({ yKeys: [col], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: [col], policy: ROW_POLICY.analysisView });
   const data = inputs.ok ? inputs.data : null;
   const values = useMemo(() => (data ? colValues(data, col) : []), [data, col]);
   const recipe = useMemo<OutlierScreeningRecipe>(() => ({ col, method, alpha, k, threshold }),

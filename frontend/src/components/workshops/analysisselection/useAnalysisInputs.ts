@@ -11,6 +11,8 @@ interface Options {
   followActive?: boolean;
   xKey?: number | null;
   yKeys?: readonly number[];
+  /** The tool has no X axis: the summary omits it. */
+  noX?: boolean;
   policy: AnalysisRowPolicy;
   /** False for a tool state that reads no data (do not request the full load). */
   load?: boolean;
@@ -21,17 +23,17 @@ interface Options {
  *  refusal clears itself once the real rows land. If that load FAILS the
  *  refusal becomes "load-failed" with the recorded reason (lib/bookData's
  *  `lastBookError`), which a retry (Re-import / Relink) replaces. */
-export function useAnalysisInputs({ selection, followActive = false, xKey, yKeys, policy, load = true }: Options): AnalysisInputs {
+export function useAnalysisInputs({ selection, followActive = false, xKey, yKeys, noX, policy, load = true }: Options): AnalysisInputs {
   // Memo on the TARGET dataset only: an edit to an unrelated worksheet must
   // not hand the tool a new `data` object (and a refetch).
   const target = useApp((state) => analysisTargetDataset(state.datasets, state.activeId, selection, followActive));
   const yKeyText = yKeys === undefined ? undefined : yKeys.join(",");
   const inputs = useMemo(
     () => resolveAnalysisInputs({
-      datasets: target ? [target] : [], activeId: target?.id ?? null, selection, followActive, xKey, policy,
+      datasets: target ? [target] : [], activeId: target?.id ?? null, selection, followActive, xKey, noX, policy,
       yKeys: yKeyText === undefined ? undefined : yKeyText === "" ? [] : yKeyText.split(",").map(Number),
     }),
-    [target, selection, followActive, xKey, yKeyText, policy],
+    [target, selection, followActive, xKey, noX, yKeyText, policy],
   );
   const ensureBookData = useApp((state) => state.ensureBookData);
   const pendingDataset = !inputs.ok && inputs.code === "pending" ? inputs.dataset : null;

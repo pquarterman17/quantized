@@ -54,6 +54,14 @@ describe("AnalysisInputSummary", () => {
     expect(line).not.toHaveClass("blocked");
   });
 
+  it("omits X when the tool declares it has none, and keeps it otherwise", () => {
+    const base = { datasets: [SHEET], activeId: "d1", yKeys: [0], policy: ROW_POLICY.analysisView };
+    const { rerender } = render(<AnalysisInputSummary inputs={resolveAnalysisInputs({ ...base, noX: true })} />);
+    expect(screen.getByLabelText("Analysis input")).toHaveTextContent(/^Input: run\.dat · Y: v \(V\) · 3 of 4 rows/);
+    rerender(<AnalysisInputSummary inputs={resolveAnalysisInputs(base)} />);
+    expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Input: run.dat · X: T · Y: v (V)");
+  });
+
   it("renders a refusal as its reason, marked blocked", () => {
     render(<AnalysisInputSummary inputs={resolveAnalysisInputs({ datasets: [], activeId: null, yKeys: [0], policy: ROW_POLICY.analysisView })} />);
     const line = screen.getByLabelText("Analysis input");
@@ -66,7 +74,10 @@ describe("AnalysisInputSummary", () => {
 describe("migrated tools show the shared summary", () => {
   it("Distribution states its input and policy", () => {
     render(<DistributionPanel />);
-    expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Input: run.dat · X: T · Y: v (V) · 3 of 4 rows");
+    // Distribution has no X axis, so the line omits "X:" (deliberate change).
+    const line = screen.getByLabelText("Analysis input");
+    expect(line).toHaveTextContent("Input: run.dat · Y: v (V) · 3 of 4 rows");
+    expect(line).not.toHaveTextContent("X: T");
   });
 
   it("Outlier screening states its input and policy", () => {
