@@ -26,7 +26,12 @@ import {
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { tabulateOutput } from "./tabulateExport";
+
+const TABULATE_PRODUCER = { id: "tabulate", label: "Tabulate", version: 1 } as const;
 
 /** A selectable column: -1 is the x column, 0.. are channels. */
 export interface TabulateColumn {
@@ -78,6 +83,8 @@ export interface TabulateState {
    *  numeric value — the panel warns. */
   groupIsCategorical: boolean;
   exportDataset: () => void;
+  /** Why "Export → dataset" is unavailable (already exported); null when enabled. */
+  exportDisabledReason: string | null;
   toTSV: () => string;
   /** Resolve a pending Origin preview before returning clipboard text. */
   copyTSV: () => Promise<{ text: string; rows: number } | null>;
@@ -125,7 +132,6 @@ function moveInArray<T>(arr: readonly T[], item: T, direction: -1 | 1): T[] {
 
 export function useTabulate(): TabulateState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -234,34 +240,28 @@ export function useTabulate(): TabulateState {
     return true;
   }
 
+  // One undo step, no duplicate on a repeat click, stale when the source
+  // changes (store/analysisOutputCommit.ts). The summary is a pure function of
+  // the analysis view and these controls, so they key the commit.
+  const dataRows = rows.filter((r) => !r.isTotal);
+  const commit = useAnalysisCommit(active && !active.pending && dataRows.length ? {
+    producer: TABULATE_PRODUCER,
+    sourceId: active.id,
+    computedOn: analysisDataFingerprint(active),
+    settings: { groupCols, valueCols, statKeys, grandTotal, rows: dataRows.length },
+    status: `tabulated ${valueLabels.join(", ")} by ${groupLabels.join(" × ")} (${dataRows.length} rows)`,
+    output: () => tabulateOutput(dataRows, groupCols, valueCols, statKeys, groupLabels, labelOf),
+  } : null);
+
   function exportDataset(): void {
     if (queuePending("export")) return;
     if (!rows.length) return;
-    const dataRows = rows.filter((r) => !r.isTotal);
     if (!dataRows.length) {
       setStatus("nothing to export (only the grand-total row is present)");
       return;
     }
-    const groupChannels = groupCols.map((_, d) => dataRows.map((r) => r.levels[d]));
-    const statChannels: number[][] = [];
-    const statLabels: string[] = [];
-    valueCols.forEach((vc, vi) => {
-      statKeys.forEach((k) => {
-        statChannels.push(dataRows.map((r) => r.values[vi][k]));
-        statLabels.push(`${labelOf(vc)} ${k}`);
-      });
-    });
-    const allChannels = [...groupChannels, ...statChannels];
-    const out: DataStruct = {
-      time: dataRows.map((_, i) => i),
-      values: dataRows.map((_, i) => allChannels.map((ch) => ch[i])),
-      labels: [...groupLabels, ...statLabels],
-      units: allChannels.map(() => ""),
-      metadata: { x_column_name: "row", source: "tabulate" },
-    };
-    const name = `${valueLabels.join(", ")} by ${groupLabels.join(" × ")}`;
-    addDataset({ id: nextDatasetId(), name, data: out });
-    setStatus(`tabulated ${name} (${dataRows.length} rows)`);
+    if (commit.disabledReason) return;
+    commit.commit();
   }
 
   function toTSV(): string {
@@ -458,6 +458,7 @@ export function useTabulate(): TabulateState {
     levelLabel,
     groupIsCategorical,
     exportDataset,
+    exportDisabledReason: rows.length && !active?.pending ? commit.disabledReason : null,
     toTSV,
     copyTSV,
     reportBusy,
