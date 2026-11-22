@@ -74,7 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(statsRegression).mockResolvedValue({ coeffs: [0, 0], R2: 1, yFit: [], residuals: [] } as never);
   vi.mocked(statsCorrelation).mockResolvedValue({ r: [[1, 1], [1, 1]], p: [[1, 0], [0, 1]], N: 4, method: "pearson" } as never);
-  vi.mocked(statsPCA).mockResolvedValue({ coeff: [[1, 0], [0, 1]], score: [[0, 0]], latent: [1, 0.5], explained: [66, 34], cumulative: [66, 100], mu: [0, 0], sigma: [1, 1] } as never);
+  vi.mocked(statsPCA).mockResolvedValue({ coeff: [[1, 0], [0, 1]], score: [[0, 0], [0, 0], [0, 0], [0, 0]], singular: [1, 1], latent: [1, 0.5], explained: [66, 34], cumulative: [66, 100], mu: [0, 0], sigma: [1, 1] } as never);
   vi.mocked(statsRecommend).mockResolvedValue({ recommendation: "t", endpoint: "/api/stats/ttest", parametric: true, n_groups: 2, paired: false, checks: {}, reasons: [] } as never);
   vi.mocked(statsNestedAnova).mockResolvedValue({ table: [], b_within_a_estimable: false, error_estimable: false } as never);
   vi.mocked(statsVariabilitySummary).mockResolvedValue({ grand_mean: 1, grand_n: 1 } as never);
