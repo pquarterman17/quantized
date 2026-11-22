@@ -70,7 +70,7 @@ const ERROR_ROLES: readonly SignatureErrorRole[] = [
   "value", "error-x", "error-x+", "error-x-", "error-y", "error-y+", "error-y-",
 ];
 const COMPOSITION_KINDS: readonly CompositionKind[] = ["spatial", "facet", "break"];
-const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
+const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime", "clock"];
 
 function isRole(v: unknown): v is RecipeChannelRole {
   return typeof v === "string" && (ROLES as readonly string[]).includes(v);

@@ -376,9 +376,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         .finally(() => !cancelled && setBusy(false));
     } else {
       const finite = finiteOf(data, valueCol);
-      if (finite.length < 2) {
+      if (finite.length < (fit ? 2 : 1)) {
         setDrawData(null);
-        setError("need ≥ 2 finite values");
+        setError(fit ? "need ≥ 2 finite values" : "need ≥ 1 finite value");
         return;
       }
       setBusy(true);

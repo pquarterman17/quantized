@@ -284,6 +284,23 @@ Sol/Opus or proves to require an unusually hard long autonomous run.
 
 ## Tier 1 — High Impact
 
+### Open-item triage (lane PA, 2026-11-21)
+
+Of 58 open boxes: 1 fixed (R-hat, below), 0 already merged, the rest owner
+verification, evidence-gated or large. None of the owner items can be closed
+from CI.
+
+| Class | Count | Lines (approx) | Notes |
+|---|---|---|---|
+| Fixed now | 1 | 10827 | mcmc split R-hat |
+| Unblocked, needs measurement | 1 | 395 | P1.1 offline-vs-deleted exists (`desktop_source_probe`); re-measure transitions |
+| Owner: real GPU/hardware | 2 | 403, 423 | zoom 1M x 7 p95 112 ms headless; real-GPU re-measure |
+| Owner: packaged build / OS | ~10 | 630, 8735, 9625, 10811-10815, 10885, 10895 | signing, notarization, Office paste, high-DPI |
+| Owner: real projects/data | ~20 | 300-317, 3628, 3687, 3709, 10883-10894 | friction log, instrument validation |
+| Owner: visual review | ~7 | 326-331, 10671, 10893 | 62 screenshot pairs, screen-canvas equivalence |
+| Owner decision | 2 | 8459-8460 | CVD default palette, `tol-bright` 8th slot |
+| Evidence-gated (specimens/demand) | ~12 | 5196, 5448, 6018, 9602-9603, 9873-9874, 10822-10826 | no action until evidence |
+
 Prove the switch and measure friction (Gate A), then remove the
 primary-application blockers: the trustworthy daily project (Gate B) and
 the arbitrary-data-to-figure contract (Gate C).
@@ -10824,7 +10841,11 @@ for Origin RE with specimens.
 - [ ] `.opju` matrix/2-D edges prioritize supplied real files.
 - [ ] Rigaku variable-step, unsupported SPC, and Oxford import wait for
   samples/specification.
-- [ ] Multi-chain MCMC R-hat is booked when posterior work becomes routine.
+- [x] Multi-chain MCMC R-hat is booked when posterior work becomes routine.
+  DREAM paths (`fit_bumps`, `refl_dream`) already report Gelman-Rubin; the
+  last gap, `calc/mcmc.py`'s NaN `r_hat` placeholder, is now a per-dimension
+  split-chain R-hat (NaN under 4 kept draws, fail closed).
+  `tests/test_calc_mcmc.py::test_r_hat_*`.
 
 ---
 
