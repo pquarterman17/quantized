@@ -139,8 +139,9 @@ describe("ModelScanSection", () => {
           onApply={vi.fn()}
         />,
       );
-      expect(screen.getByText("Scanning 4/29: Voigt")).toBeInTheDocument();
-      expect(screen.getByLabelText("Scan progress")).toBeInTheDocument();
+      // Shared WorkbenchProgress: the message now follows the percentage.
+      expect(screen.getByText("40% Scanning 4/29: Voigt")).toBeInTheDocument();
+      expect(screen.getByLabelText("Scan progress")).toHaveAttribute("value", "0.4");
     });
 
     it("falls back to a generic message before the first progress tick", () => {

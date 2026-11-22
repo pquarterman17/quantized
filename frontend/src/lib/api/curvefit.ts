@@ -70,8 +70,8 @@ export type EquationValidateResult = components["schemas"]["EquationValidateResp
 
 /** Validate a custom fit equation. Always 200 with ok/params/error — the
  *  live-validation shape (the fit endpoint is the one that 422s). */
-export function validateEquation(equation: string): Promise<EquationValidateResult> {
-  return postJSON("/api/fitting/equation/validate", { equation });
+export function validateEquation(equation: string, signal?: AbortSignal): Promise<EquationValidateResult> {
+  return postJSON("/api/fitting/equation/validate", { equation }, signal);
 }
 
 export interface EquationFitRequest {

@@ -38,6 +38,7 @@ import { toast } from "../../../store/toasts";
 import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
 import { analysisTargetDataset } from "../../../lib/analysisInputs";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 export type { EquationParamRow };
 
@@ -183,6 +184,17 @@ export function useEquationFit(
     return { min: minOf(finite), max: maxOf(finite) };
   }, [active, selected, seriesOrder, xKey, yKeys]);
 
+  // The equation check rides the shared workbench shell (../workbench): the
+  // 350 ms debounce, abort on an edit or unmount, and an older answer can
+  // never be applied to newer text. Its answer is then reconciled into the
+  // parameter table below.
+  const check = useWorkbenchPreview<EquationValidateResult>({
+    key: equation.trim() ? equation : "",
+    delayMs: debounceMs,
+    fallbackError: "validation unavailable",
+    run: (signal) => validateEquation(equation, signal),
+  });
+
   useEffect(() => {
     if (!equation.trim()) {
       setStatus("idle");
@@ -193,38 +205,37 @@ export function useEquationFit(
       return;
     }
     setStatus("checking");
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      validateEquation(equation)
-        .then((v) => {
-          if (cancelled) return;
-          if (v.ok) {
-            setStatus("ok");
-            setValidationError(null);
-            setParamNames(v.params);
-            setRows(freshRows(v.params, rowsRef.current));
-            setSummary(summaryOf(v));
-          } else {
-            setStatus("error");
-            setSummary(null);
-            setValidationError(v.error ?? "invalid equation");
-            const span = codePointSpanToUtf16(equation, v.errorStart, v.errorEnd);
-            setErrorAt(span ? { text: equation, span } : null);
-          }
-        })
-        .catch((e: unknown) => {
-          if (cancelled) return;
-          setStatus("error");
-          setSummary(null);
-          setErrorAt(null);
-          setValidationError(e instanceof Error ? e.message : "validation unavailable");
-        });
-    }, debounceMs);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [equation, debounceMs]);
+  }, [equation]);
+
+  // `check.current` is the answer for the CURRENT text only.
+  const answer = check.current;
+  useEffect(() => {
+    if (!answer) return;
+    if (answer.ok) {
+      setStatus("ok");
+      setValidationError(null);
+      setParamNames(answer.params);
+      setRows(freshRows(answer.params, rowsRef.current));
+      setSummary(summaryOf(answer));
+    } else {
+      setStatus("error");
+      setSummary(null);
+      setValidationError(answer.error ?? "invalid equation");
+      const span = codePointSpanToUtf16(equation, answer.errorStart, answer.errorEnd);
+      setErrorAt(span ? { text: equation, span } : null);
+    }
+    // `equation` is the key the answer is for; only a new answer applies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answer]);
+
+  const checkError = check.error;
+  useEffect(() => {
+    if (!checkError) return;
+    setStatus("error");
+    setSummary(null);
+    setErrorAt(null);
+    setValidationError(checkError);
+  }, [checkError]);
 
   function setRow(index: number, field: "guess" | "min" | "max" | "unit", value: string): void {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));

@@ -122,4 +122,51 @@ describe("useFigurePreview", () => {
     expect(result.current.error).toBe("422: data must have 3 columns");
     expect(result.current.busy).toBe(false);
   });
+
+  // Lane WB2 characterization (written before the move onto the shared shell).
+  it("keeps the previous image on screen (busy) while the next render runs", async () => {
+    const { resolve } = pendingRenders();
+    const { result, rerender } = renderHook((body: object) => useFigurePreview("/api/export/ternary-figure", body), {
+      initialProps: { v: 1 },
+    });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { resolve(0); await vi.runAllTimersAsync(); });
+    const first = result.current.preview;
+    expect(first).toMatch(/^data:image\/png/);
+    rerender({ v: 2 });
+    expect(result.current.busy).toBe(true);
+    expect(result.current.preview).toBe(first);
+  });
+
+  it("a different path re-renders even for the same body", async () => {
+    const { signals } = pendingRenders();
+    const body = { v: 1 };
+    const { rerender } = renderHook(({ path }: { path: string }) => useFigurePreview(path, body), {
+      initialProps: { path: "/api/export/pie-figure" },
+    });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    rerender({ path: "/api/export/ternary-figure" });
+    expect(signals[0].aborted).toBe(true);
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(signals).toHaveLength(2);
+  });
+
+  it("a superseded render's late answer never replaces the newer image", async () => {
+    // Transport that ignores abort, so the stale answer really does land.
+    const answers: ((text: string) => void)[] = [];
+    postBlobMock.mockImplementation(() => new Promise<Blob>((resolve) => {
+      answers.push((text) => resolve(new Blob([text], { type: "image/png" })));
+    }));
+    const { result, rerender } = renderHook((body: object) => useFigurePreview("/api/export/ternary-figure", body), {
+      initialProps: { v: 1 },
+    });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    rerender({ v: 2 });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { answers[1]("newer"); await vi.runAllTimersAsync(); });
+    const shown = result.current.preview;
+    expect(shown).not.toBeNull();
+    await act(async () => { answers[0]("older"); await vi.runAllTimersAsync(); });
+    expect(result.current.preview).toBe(shown);
+  });
 });

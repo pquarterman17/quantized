@@ -86,14 +86,16 @@ export function WorkbenchProgress({ progress, label, onStop, stopLabel = "Stop a
 }) {
   if (!progress) return null;
   const counted = "done" in progress;
+  // A job that reports NaN / out of range is shown as indeterminate / clamped.
+  const fraction = "done" in progress ? null : Number.isFinite(progress.fraction) ? Math.min(1, Math.max(0, progress.fraction as number)) : null;
   const text = counted
     ? `${progress.done}/${progress.total}${progress.current ? ` — ${progress.current}` : ""}`
-    : `${progress.fraction == null ? "" : `${Math.round(progress.fraction * 100)}%`}${progress.message ? ` ${progress.message}` : ""}`.trim();
+    : `${fraction == null ? "" : `${Math.round(fraction * 100)}%`}${progress.message ? ` ${progress.message}` : ""}`.trim();
   const bar = counted
     ? <progress aria-label={label} value={progress.done} max={progress.total} style={{ width: "100%" }} />
-    : progress.fraction == null
+    : fraction == null
       ? <progress aria-label={label} style={{ width: "100%" }} />
-      : <progress aria-label={label} value={progress.fraction} max={1} style={{ width: "100%" }} />;
+      : <progress aria-label={label} value={fraction} max={1} style={{ width: "100%" }} />;
   return (
     <div className="qzk-ds-meta qz-wb-progress" aria-live="polite" style={{ marginTop: 8 }}>
       {text}

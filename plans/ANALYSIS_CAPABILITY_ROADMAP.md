@@ -442,7 +442,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
   | Signal Processing (correction / spectral) | auto, 180 ms debounce; sequence + identity guard; AbortSignal | no ("Preview: name" key only) | nothing (Create aborted) | one red alert line, validation first | none needed (one request) |
   | Signal Processing filters (sigop) | auto, 180 ms; AbortSignal guard | no | **a worksheet** (Create carried no signal) | alert line | none |
   | Reduce rows (Resample window) | same hook as sigop | no | **a worksheet** (same bug) | alert div | none |
-  | Resample / align | auto, 250 ms; key-tagged result; AbortSignal | no ("Previewing…" only) | nothing; batch Stop between datasets | per-dataset lines + alert div | determinate batch progress + Stop |
+  | Resample / align | auto, 250 ms; key-tagged result; AbortSignal | no ("Previewing…" only) | nothing; batch Stop between datasets (WB2: aborts the request in flight) | per-dataset lines + alert div | determinate batch progress + Stop |
   | Reshape & combine | auto, 150 ms; key-tagged result; local compute (no abort needed) | no ("Previewing…" only) | nothing | alert div | none |
   | Baseline | Estimate button; anchors auto, 150 ms; **no stale guard** | no ("Baseline overlaid" note) | **a late estimate's overlay**; Subtract used a stale estimate under new settings | grey/red meta line | none |
   | Curve fit (equation check) | auto, debounced; cancelled flag, no abort | n/a (validation, not a result) | nothing | inline status | jobs: fraction progress + cancel (global / scan / bumps) |
@@ -475,10 +475,17 @@ inconsistently exposed, and do not all share the same result lifecycle.
     (a transport that cannot abort may still answer after Cancel).
 
   Migrated: Signal Processing, its sigop filters, Reduce rows, Resample /
-  align, Reshape & combine, Baseline. Not migrated: SIMS compare / region,
-  the ternary and figure previews, Curve fit's equation check, and every
-  tool that computes only on a button (Peaks, fits); Baseline's overlay on
-  the main plot is not itself styled as provisional (the panel is).
+  align, Reshape & combine, Baseline (lane WB); SIMS Process / Compare /
+  Region (`useDebouncedPreview` retired), the ternary / pie / vector-field
+  figure previews and Curve fit's equation check (lane WB2). Not migrated:
+  every tool that computes only on a button (Peaks, the fits, which would
+  need the shell's manual mode and its "Out of date" state); the SIMS tabs,
+  figure previews and equation check do not mark themselves "Preview (not
+  saved)" (they are not committed results: a figure image, a validation);
+  Baseline's overlay on the main plot is not itself styled as provisional
+  (the panel is). Lane WB2 also fixed: a Reshape & combine Create is aborted
+  by Close; Resample's batch Stop aborts the request in flight (the API takes
+  an AbortSignal; an item that honours the stop is "stopped", not "failed").
 
 ## Product contract for every new analysis
 
@@ -492,9 +499,10 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
   Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).
-  Still open: a Create already running in Reshape & combine is not aborted by
-  Close, Resample's batch stops after the dataset in flight, and the
-  unmigrated previews.
+  Lane WB2 closed the Reshape & combine Close gap and made Resample's Stop
+  abort the request in flight. Still open: the button-only tools (Peaks, the
+  fits) have no preview shell, so they show no "Out of date" / "Preview (not
+  saved)" states.
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
@@ -515,8 +523,11 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
 - [ ] Long work supports cancellation; determinate progress remains for jobs
   whose backend can expose meaningful progress rather than only busy/complete.
   Progress (lane WB): `WorkbenchProgress` is the shared determinate display
-  (Resample's batch uses it); job-queue tools (Curve fit global / scan /
-  bumps) are not yet on it, so this stays open.
+  (Resample's batch uses it); lane WB2 moved Curve fit global / compare /
+  scan / bumps and the reflectivity DREAM run onto it. Not moved: Peak
+  analyzer batch (a done/total counter, no fraction), SIMS and Batch Figure
+  Builder (done/total with a check/create phase label the shared display does
+  not carry), Pack project (bytes), so this stays open.
 - [x] The same saved recipe can run over selected compatible datasets without
   overwriting customized plots or raw data.
 - [x] Tests use representative files from the sibling `test-data` repository
@@ -1365,6 +1376,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane WB2: Close now aborts a running Reshape & combine Create and Resample's Stop aborts the request in flight (fail-before tests `useReshapePreview.close.test.ts`, `useResample.stop.test.ts`, `sequentialBatch.test.ts`); Curve fit scan / bumps / global and the reflectivity DREAM run render `WorkbenchProgress`; SIMS Process / Compare / Region, the ternary / pie / field figure previews and Curve fit's equation check run on `useWorkbenchPreview` (`useDebouncedPreview` removed). Not done: manual-mode adoption by Peaks and the fits. | Characterization tests written first (`simsPreview.contract.test.ts`, `useEquationFit.check.test.ts`, extra cases in `auxFigurePreview.test.ts`) and kept as guards; two existing assertions changed deliberately (scan progress text now carries the percentage; validate call now carries an AbortSignal). |
 | 2026-11-22 | Project team | Lane WB: audited the previewing tools and extracted a shared workbench shell from Signal Processing (`components/workshops/workbench`: `useWorkbenchPreview`, `useWorkbenchCommit`, `WorkbenchPreviewFrame` / `Message` / `Actions` / `Progress`). Signal Processing, its sigop filters, Reduce rows, Resample, Reshape & combine and Baseline migrated; previews read "Preview (not saved)". Fixed: Baseline subtracting an estimate under changed settings and drawing late estimates; sigop / Reduce rows Cancel still creating a worksheet. Defaults and debounce delays unchanged. | Characterization tests first (`SignalProcessingPanel.workbench.test.tsx`, `useResample.workbench.test.ts`); fail-before tests (`useBaseline.workbench.test.ts`, `SigopBody.workbench.test.tsx`); shell tests with forced races (`workbench/*.test.ts*`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `inputs="statistics"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane BY2: Save By result for the other `byrun` tools (Find peaks, Peak analyzer, Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit) and for Curve fit (its own By kept: it shows a parameter table per level; display pinned first); role-based batches drop a finished table on a settings change via an opt-in `settingsKey` (Curve fit and Hysteresis deliberately not). | Characterization tests first (`CurveFitPanel.byResults.test.tsx`); per-tool save / duplicate / Undo / out-of-date tests (`byLevelSave.test.tsx`, `signalBySave.test.tsx`); per-runner settings-change tests; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |

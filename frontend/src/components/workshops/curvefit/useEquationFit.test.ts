@@ -54,7 +54,7 @@ describe("useEquationFit validation", () => {
       result.current.setEquation("a*exp(-x/t)+c");
     });
     await waitFor(() => expect(result.current.status).toBe("ok"));
-    expect(validateEquation).toHaveBeenCalledWith("a*exp(-x/t)+c");
+    expect(validateEquation).toHaveBeenCalledWith("a*exp(-x/t)+c", expect.any(AbortSignal));
     expect(result.current.rows).toEqual([
       { name: "a", guess: "", min: "", max: "", fixed: false, unit: "" },
       { name: "t", guess: "", min: "", max: "", fixed: false, unit: "" },

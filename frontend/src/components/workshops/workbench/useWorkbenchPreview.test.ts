@@ -118,6 +118,24 @@ describe("useWorkbenchPreview — abort", () => {
     expect(h.result.current.error).toBe("");
   });
 
+  it("returning to a key that failed clears the old failure at once, and shows the retry's own", async () => {
+    const h = setup({ key: "a" });
+    tick(100);
+    runs[0].reject(new Error("offline"));
+    await flush();
+    expect(h.result.current.error).toBe("offline");
+    h.rerender({ key: "b" });
+    h.rerender({ key: "a" });
+    // The old failure for "a" is not the answer for the rerun now scheduled.
+    expect(h.result.current.error).toBe("");
+    tick(100);
+    expect(runs).toHaveLength(2);
+    expect(h.result.current.error).toBe("");
+    runs[1].reject(new Error("still offline"));
+    await flush();
+    expect(h.result.current.error).toBe("still offline");
+  });
+
   it("a non-Error rejection uses the fallback message", async () => {
     const h = setup({ key: "a", fallbackError: "baseline failed" });
     tick(100);

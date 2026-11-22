@@ -8,6 +8,7 @@
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { fmtNum as fmt } from "../../../lib/format";
 import DreamConvergence from "./DreamConvergence";
 import { useBumpsFit, type EngineChoice } from "./useBumpsFit";
@@ -110,31 +111,7 @@ export default function BumpsSection({ modelName }: { modelName: string }) {
           )}
 
           {busy && engine === "dream" && (
-            <div style={{ marginTop: 8 }}>
-              <div
-                aria-label="DREAM progress"
-                style={{
-                  height: 4,
-                  borderRadius: 2,
-                  background: "var(--surface-2)",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${Math.round((progress ?? 0) * 100)}%`,
-                    height: "100%",
-                    background: "var(--accent)",
-                  }}
-                />
-              </div>
-              <div
-                className="qzk-ds-meta"
-                style={{ marginTop: 4, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}
-              >
-                {Math.round((progress ?? 0) * 100)}% — sampling posterior
-              </div>
-            </div>
+            <WorkbenchProgress label="DREAM progress" progress={{ fraction: progress, message: "sampling posterior" }} />
           )}
 
           {error && (

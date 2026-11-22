@@ -31,7 +31,8 @@ import type { Dataset } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useTransformPreviewDialog } from "../../../store/transformPreviewDialog";
 import { useApp } from "../../../store/useApp";
-import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
+import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
+import { isAbortError, useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { formToRun, seedForm, type TransformForm } from "./transformForm";
 
 /** Debounce between an edit and the preview. */
@@ -75,7 +76,8 @@ export function useReshapePreview(): ReshapeState {
   const close = useTransformPreviewDialog((s) => s.close);
   const datasets = useApp((s) => s.datasets);
   const [form, setFormState] = useState<TransformForm>(() => seedForm(op ?? "merge", seed, datasets));
-  const [busy, setBusy] = useState(false);
+  const committing = useWorkbenchCommit();
+  const busy = committing.busy;
   const [commitError, setCommitError] = useState<string | null>(null);
 
   const run = useMemo(() => formToRun(form, datasets), [form, datasets]);
@@ -129,22 +131,30 @@ export function useReshapePreview(): ReshapeState {
   async function create(): Promise<void> {
     if (typeof run === "string" || !computed || blockedByUnits) return;
     const previewed = computed.preview;
-    setBusy(true);
     setCommitError(null);
-    try {
-      const out = await runTransform(useApp.getState, run.params, run.primaryId, (pv) =>
-        samePreview(pv, previewed) ? Promise.resolve(true) : reviewTransform(pv),
-      );
-      if (out) {
-        toast(`created ${out.name}`, "ok");
-        close();
+    // The shared commit guard: one Create at a time, and Close (or unmount)
+    // aborts it, so nothing is created after the window is closed.
+    await committing.run(async (signal) => {
+      try {
+        const out = await runTransform(useApp.getState, run.params, run.primaryId, (pv) =>
+          samePreview(pv, previewed) ? Promise.resolve(true) : reviewTransform(pv),
+          signal,
+        );
+        if (out) {
+          toast(`created ${out.name}`, "ok");
+          close();
+        }
+      } catch (e) {
+        if (signal.aborted || isAbortError(e)) return;
+        setCommitError(`not created — ${message(e, "the transform failed")}`);
       }
-    } catch (e) {
-      setCommitError(`not created — ${message(e, "the transform failed")}`);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
+
+  const closeWindow = (): void => {
+    committing.abort();
+    close();
+  };
 
   return {
     datasets,
@@ -162,6 +172,6 @@ export function useReshapePreview(): ReshapeState {
     busy,
     commitError,
     create,
-    close,
+    close: closeWindow,
   };
 }

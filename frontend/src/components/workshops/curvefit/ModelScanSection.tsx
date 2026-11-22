@@ -14,6 +14,7 @@
 // pattern this generalizes).
 
 import { Button } from "../../primitives";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { ScanEntry } from "../../../lib/api/curvefit";
 import type { ModelScanState } from "./useModelScan";
@@ -57,26 +58,10 @@ export default function ModelScanSection({ state, onApply }: Props) {
       </div>
 
       {busy && (
-        <div style={{ marginTop: 8 }}>
-          <div
-            aria-label="Scan progress"
-            style={{ height: 4, borderRadius: 2, background: "var(--surface-2)", overflow: "hidden" }}
-          >
-            <div
-              style={{
-                width: `${Math.round((progress ?? 0) * 100)}%`,
-                height: "100%",
-                background: "var(--accent)",
-              }}
-            />
-          </div>
-          <div
-            className="qzk-ds-meta"
-            style={{ marginTop: 4, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}
-          >
-            {progressMessage ?? "scanning models…"}
-          </div>
-        </div>
+        <WorkbenchProgress
+          label="Scan progress"
+          progress={{ fraction: progress, message: progressMessage ?? "scanning models…" }}
+        />
       )}
 
       {error && (
