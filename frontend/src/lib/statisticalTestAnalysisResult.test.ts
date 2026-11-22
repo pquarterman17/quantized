@@ -49,6 +49,10 @@ describe("statisticalTestAnalysisResult", () => {
       .toMatchObject({ adjustMethod: "holm", gofExpected: "uniform" });
     expect(statisticalTestRecipe(withParams({ ...legacy, adjustMethod: "sidak" }))).toBeNull();
     expect(statisticalTestRecipe(withParams({ ...legacy, gofExpected: "other" }))).toBeNull();
+    // ... and one saved before the survival grouping flag existed.
+    const { survivalGroups: _s, ...beforeSurvival } = { ...legacy, adjustMethod: "holm", gofExpected: "uniform", survivalGroups: true };
+    expect(statisticalTestRecipe(withParams(beforeSurvival))?.params.survivalGroups).toBe(false);
+    expect(statisticalTestRecipe(withParams({ ...beforeSurvival, survivalGroups: "yes" }))).toBeNull();
   });
 
   it("records only the columns a chi-square test reads (no expected column when uniform)", () => {

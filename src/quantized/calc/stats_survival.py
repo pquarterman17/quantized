@@ -7,6 +7,7 @@ dropped (listwise deletion).
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import numpy as np
@@ -14,7 +15,7 @@ from numpy.typing import NDArray
 
 from quantized.heavy_import import heavy_imports
 
-__all__ = ["kaplan_meier", "logrank_test", "cox_proportional_hazards"]
+__all__ = ["kaplan_meier", "logrank_test", "logrank_groups", "cox_proportional_hazards"]
 
 
 def _check_lifelines() -> None:
@@ -65,6 +66,8 @@ def kaplan_meier(
         raise ValueError("time must be non-negative")
     if not np.all((ev == 0.0) | (ev == 1.0)):
         raise ValueError("event must be binary (0/1)")
+    if not np.any(ev == 1.0):
+        raise ValueError("every row is censored (no events), so no survival curve can be estimated")
 
     # Fit KM
     kmf = KaplanMeierFitter()
@@ -88,7 +91,15 @@ def kaplan_meier(
     if np.isnan(median_time):
         median_time = float("nan")
 
+    # Median CI: the times the pointwise CI band crosses 0.5 (lifelines'
+    # median_survival_times on the CI frame); inf when the band never does.
+    with heavy_imports("lifelines.utils"):
+        from lifelines.utils import median_survival_times
+    med_ci = np.asarray(median_survival_times(kmf.confidence_interval_), dtype=float).ravel()
+
     return {
+        "medianCiLow": float(med_ci[0]),
+        "medianCiHigh": float(med_ci[1]),
         "times": times,
         "survival": surv,
         "ciLow": ci_lower,
@@ -164,6 +175,57 @@ def logrank_test(
     }
 
 
+def logrank_groups(
+    times: list[NDArray[np.float64]],
+    events: list[NDArray[np.float64]],
+) -> dict[str, Any]:
+    """Log-rank test across k >= 2 groups (chi-squared, k - 1 dof).
+
+    ``times[i]`` / ``events[i]`` are group i's follow-up and 0/1 event
+    columns. Rows with non-finite values are dropped per group; each group
+    needs >= 2 complete rows, and at least one event must exist overall.
+
+    Reference: lifelines ``multivariate_logrank_test``.
+    """
+    _check_lifelines()
+    with heavy_imports("lifelines.statistics"):
+        from lifelines.statistics import multivariate_logrank_test
+
+    if len(times) != len(events):
+        raise ValueError("times and events must list the same number of groups")
+    if len(times) < 2:
+        raise ValueError("the log-rank test needs at least 2 groups")
+    ts: list[NDArray[np.float64]] = []
+    es: list[NDArray[np.float64]] = []
+    for i, (t, e) in enumerate(zip(times, events, strict=True), start=1):
+        tv = np.asarray(t, dtype=float).ravel()
+        ev = np.asarray(e, dtype=float).ravel()
+        if tv.size != ev.size:
+            raise ValueError(f"group {i}: time length {tv.size} != event length {ev.size}")
+        keep = np.isfinite(tv) & np.isfinite(ev)
+        tv, ev = tv[keep], ev[keep]
+        if tv.size < 2:
+            raise ValueError(f"group {i} needs at least 2 complete rows")
+        if np.any(tv < 0.0):
+            raise ValueError("time must be non-negative")
+        if not np.all((ev == 0.0) | (ev == 1.0)):
+            raise ValueError("event must be binary (0/1)")
+        ts.append(tv)
+        es.append(ev)
+    if not any(np.any(e == 1.0) for e in es):
+        raise ValueError("every row is censored (no events), so groups cannot be compared")
+
+    labels = np.concatenate([np.full(t.size, i) for i, t in enumerate(ts)])
+    result = multivariate_logrank_test(np.concatenate(ts), labels, np.concatenate(es))
+    return {
+        "statistic": float(result.test_statistic),
+        "pValue": float(result.p_value),
+        "dof": float(len(ts) - 1),
+        "observed": [float(np.sum(e)) for e in es],
+        "N": [int(t.size) for t in ts],
+    }
+
+
 def cox_proportional_hazards(
     time: NDArray[np.float64],
     event: NDArray[np.float64],
@@ -221,6 +283,8 @@ def cox_proportional_hazards(
         raise ValueError("time must be non-negative")
     if not np.all((ev == 0.0) | (ev == 1.0)):
         raise ValueError("event must be binary (0/1)")
+    if not np.any(ev == 1.0):
+        raise ValueError("every row is censored (no events), so a Cox model cannot be fitted")
 
     # Build DataFrame (lifelines wants column names)
     cols_dict = {f"x{i}": xmat[:, i] for i in range(k)}
@@ -229,8 +293,21 @@ def cox_proportional_hazards(
     df = pd.DataFrame(cols_dict)
 
     # Fit Cox model
+    # Fail closed: lifelines reports a poorly converged fit (complete
+    # separation, collinear or near-constant predictors) as a ConvergenceWarning
+    # and still returns coefficients; those numbers are not trustworthy.
+    with heavy_imports("lifelines.exceptions"):
+        from lifelines.exceptions import ConvergenceWarning
     cph = CoxPHFitter()
-    cph.fit(df, duration_col="T", event_col="E")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", ConvergenceWarning)
+            cph.fit(df, duration_col="T", event_col="E")
+    except ConvergenceWarning as exc:
+        raise ValueError(
+            "the Cox fit did not converge (often complete separation, collinear or "
+            f"near-constant predictors); no coefficients are reported. Detail: {exc}"
+        ) from exc
 
     # Extract results. cph.params_/standard_errors_ are pandas Series (not
     # ndarrays), so .values is safe here — unlike statsmodels' discrete-choice

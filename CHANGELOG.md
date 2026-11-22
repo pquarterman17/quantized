@@ -6,6 +6,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Survival analysis in Statistical tests** (Analyze ▸ Statistics): three new tests that read the same analysis rows as the others (excluded and filtered rows left out), show the input line, and save their tables as a result. Old results still reopen.
+  - *Kaplan-Meier survival*: pick a time column and a 0/1 event column (1 = event, 0 = censored). Gives the median survival with its 95% confidence interval ("not reached" when the curve stays above 50%), and the curve as a table with 95% intervals and the number at risk and events at each time. Tick "One curve per group" and pick a group column to get one curve and median per group. The curve is shown as a table; it is not drawn or added to a plot.
+  - *Log-rank test (groups)*: compares the survival of two or more groups (one group column, up to 12 groups) with one chi-square test and a per-group events table.
+  - *Cox proportional hazards*: time, event and one or more predictor columns, with coefficients, hazard ratios (exp of the coefficient), 95% intervals and p-values, plus the concordance and log-likelihood.
+  - Refused with the reason, never coerced: negative times, an event column that is not 0/1, data with no events (all censored), a group with no events (Kaplan-Meier), a group with fewer than 2 usable rows, fewer than 2 groups for the log-rank test, a group column with more than 12 values, a Cox model with no predictor, and a Cox fit that does not converge (for example complete separation or constant predictors), which reports no coefficients instead of unreliable ones.
+
 ## [0.41.0] - 2026-11-22
 
 ### Added

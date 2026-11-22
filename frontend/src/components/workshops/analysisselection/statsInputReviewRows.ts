@@ -92,6 +92,12 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
   switch (testDef(s.testId).input) {
     case "one": rows.push({ label: s.testId === "adjust-p" ? "P-values" : "Column", value: name(ds, sel.x) }); break;
     case "classifier": rows.push({ label: "Outcome (0/1)", value: name(ds, sel.x) }, { label: "Score", value: name(ds, sel.y) }); break;
+    case "survival": {
+      rows.push({ label: "Time", value: name(ds, sel.x) }, { label: "Event (0/1)", value: name(ds, sel.y) });
+      if (s.testId === "logrank" || (s.testId === "kaplan-meier" && params.survivalGroups)) rows.push({ label: "Groups by", value: name(ds, sel.byCol) });
+      if (s.testId === "cox-ph") rows.push({ label: "Predictors", value: names(ds, sel.cols.filter((c) => c !== sel.x && c !== sel.y)) });
+      break;
+    }
     case "counts":
       rows.push({ label: "Observed counts", value: name(ds, sel.x) });
       rows.push(params.gofExpected === "column" ? { label: "Expected counts", value: name(ds, sel.y) } : { label: "Expected", value: "uniform" });

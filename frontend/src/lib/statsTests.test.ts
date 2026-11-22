@@ -43,6 +43,9 @@ describe("STATS_TESTS catalog", () => {
       "glm-poisson",
       "chi-square-gof",
       "adjust-p",
+      "kaplan-meier",
+      "logrank",
+      "cox-ph",
       "power",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);

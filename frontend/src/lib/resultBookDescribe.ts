@@ -57,6 +57,7 @@ const COLUMN_ROLE: Readonly<Record<string, string>> = {
   one: "Column", two: "Columns", paired: "Paired columns", blocks: "Conditions", columns: "Columns",
   factorial: "Response, factor A, factor B", regression: "Response, predictors",
   classifier: "Outcome (0/1), score", counts: "Observed counts (and expected)",
+  survival: "Time, event (and group / predictors)",
 };
 
 function savedLabels(result: AnalysisResult): string[] | null {
@@ -97,6 +98,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
       ["Criterion", def.id === "stepwise" ? params.criterion.toUpperCase() : null],
       ["Direction", def.id === "stepwise" ? params.direction : null],
       ["Adjustment", def.id === "adjust-p" ? params.adjustMethod : null],
+      ["Curves split by group", def.id === "kaplan-meier" ? (params.survivalGroups ? "yes" : "no") : null],
       ["Expected counts", def.id === "chi-square-gof" ? (params.gofExpected === "column" ? "from a column" : "uniform") : null],
     ]),
   };

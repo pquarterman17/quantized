@@ -85,6 +85,25 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
         {pick("Score", t.sel.y, (y) => t.setSel({ y }))}
       </div>
     );
+  } else if (kind === "survival") {
+    const grouped = t.testId === "logrank" || (t.testId === "kaplan-meier" && t.params.survivalGroups);
+    pickers = (
+      <>
+        <div style={row}>
+          {pick("Time", t.sel.x, (x) => t.setSel({ x }))}
+          {pick("Event (0/1)", t.sel.y, (y) => t.setSel({ y }))}
+          {grouped && pick("Group by", t.sel.byCol, (byCol) => t.setSel({ byCol }))}
+        </div>
+        {t.testId === "kaplan-meier" && (
+          <div style={{ marginTop: 8 }}>
+            <Checkbox checked={t.params.survivalGroups} onChange={() => setP({ survivalGroups: !t.params.survivalGroups })}>
+              One curve per group
+            </Checkbox>
+          </div>
+        )}
+        {t.testId === "cox-ph" && multi("Predictors", "Time and event columns are left out.")}
+      </>
+    );
   } else if (kind === "counts") {
     pickers = (
       <div style={row}>

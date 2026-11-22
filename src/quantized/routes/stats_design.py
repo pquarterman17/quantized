@@ -21,7 +21,12 @@ from quantized.calc.stats_contingency import (
 )
 from quantized.calc.stats_glm import logistic_regression, poisson_regression
 from quantized.calc.stats_roc import auc, roc_curve, youden_optimal_threshold
-from quantized.calc.stats_survival import cox_proportional_hazards, kaplan_meier, logrank_test
+from quantized.calc.stats_survival import (
+    cox_proportional_hazards,
+    kaplan_meier,
+    logrank_groups,
+    logrank_test,
+)
 from quantized.calc.stats_tests import recommend_test
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
@@ -264,6 +269,12 @@ class LogRankRequest(BaseModel):
     event2: list[float]
 
 
+class LogRankGroupsRequest(BaseModel):
+    """Request for the log-rank test across k >= 2 groups (parallel lists)."""
+    times: list[list[float]]
+    events: list[list[float]]
+
+
 class CoxRequest(BaseModel):
     """Request for Cox proportional-hazards model.
 
@@ -297,6 +308,22 @@ def logrank_route(req: LogRankRequest) -> dict[str, Any]:
             logrank_test(
                 np.asarray(req.time1, dtype=float), np.asarray(req.event1, dtype=float),
                 np.asarray(req.time2, dtype=float), np.asarray(req.event2, dtype=float),
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/logrank-groups")
+def logrank_groups_route(req: LogRankGroupsRequest) -> dict[str, Any]:
+    """Log-rank test across two or more groups."""
+    try:
+        return _wrap(
+            logrank_groups(
+                [np.asarray(t, dtype=float) for t in req.times],
+                [np.asarray(e, dtype=float) for e in req.events],
             )
         )
     except RuntimeError as exc:
