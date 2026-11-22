@@ -5,6 +5,7 @@
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { magXAxis } from "../../../lib/magDataKind";
 import { ownXKey } from "../../../lib/perSeriesX";
+import { tokenOf } from "../../../lib/previewKey";
 import type { Dataset } from "../../../lib/types";
 
 export interface BaselineBinding {
@@ -55,4 +56,20 @@ export function batchInput(ds: Dataset, ref: BaselineBinding | null): BaselineIn
   const xKey = ref.xKey == null ? null : ds.data.labels.indexOf(ref.xLabel);
   if (yKey < 0 || xKey === -1) return `${ds.name}: no "${yKey < 0 ? ref.yLabel : ref.xLabel}" column`;
   return baselineInput(ds, xKey, [yKey], null) ?? `${ds.name}: no usable Y channel`;
+}
+
+// Estimate on a still-loading book: compute() resolves it first, which swaps
+// the store's Dataset object. The loaded object keeps the pending one's input
+// token, so that swap (caused by the estimate itself) neither makes the
+// estimate stale nor resets the anchors; any later edit still does.
+const loadedFrom = new WeakMap<Dataset, number>();
+/** Books being loaded by an Estimate: dataset id -> the pending input token. */
+export const loadingBooks = new Map<string, number>();
+export function inputToken(ds: Dataset): number {
+  const inherited = loadingBooks.get(ds.id);
+  if (inherited !== undefined && !ds.pending && !loadedFrom.has(ds)) {
+    loadedFrom.set(ds, inherited); // the first loaded object after the swap
+    loadingBooks.delete(ds.id);
+  }
+  return loadedFrom.get(ds) ?? tokenOf(ds);
 }

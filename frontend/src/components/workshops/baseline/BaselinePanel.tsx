@@ -83,7 +83,7 @@ function BaselinePanelBody() {
   const {
     active, method, params, baseline, busy, error, anchors, binding,
     setMethod, setParams, compute, subtract, subtractDisabledReason, clear, pickRegion, clearAnchors, applyAnchors,
-    applyToSelected, selectedCount, batchOutputIds, replacing, estimateStale,
+    applyToSelected, selectedCount, batchOutputIds, replacing, estimateStale, estimating,
   } = useBaseline();
 
   const close = () => {
@@ -216,7 +216,7 @@ function BaselinePanelBody() {
       <WorkbenchMessage error={error} />
       {baseline && !error && (
         <div style={{ marginTop: 10 }}>
-          <WorkbenchPreviewFrame stale={estimateStale}>
+          <WorkbenchPreviewFrame stale={estimateStale} loading={estimating}>
             <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", whiteSpace: "normal" }}>
               {method === "anchor"
                 ? "Baseline overlaid — Apply −BG subtracts it as a correction step."

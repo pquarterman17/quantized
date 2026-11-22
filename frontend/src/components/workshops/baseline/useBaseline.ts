@@ -14,14 +14,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
 import type { BaselineOverlay, CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { tokenOf } from "../../../lib/previewKey";
 import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { baselineSeed } from "./baselineReopen";
-import { baselineInput, batchInput, type BaselineBinding } from "./baselineInput";
+import { baselineInput, batchInput, inputToken, loadingBooks, type BaselineBinding } from "./baselineInput";
 import { baselineBy, callBaseline, callBaselinePreview, type BaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
@@ -85,6 +84,8 @@ export interface BaselineState {
   /** "Apply to N selected": the same method + params on every selected dataset,
    *  outputs grouped in one folder, ONE undo entry. */
   applyToSelected: () => Promise<void>;
+  /** An estimate is being computed. */
+  estimating: boolean;
   /** The shown estimate was computed for a different method, knobs, anchors or input. */
   estimateStale: boolean;
   /** Why "Subtract → new worksheet" is unavailable (stale, already added, adding now); null when enabled. */
@@ -140,8 +141,9 @@ export function useBaseline(): BaselineState {
   // current (Subtract then says why) and one that lands after a change, a
   // Clear or Close is dropped. Estimate is a button (manual); the anchor
   // method re-estimates itself, debounced, as anchors are placed or dragged.
+  const inputKey = active ? JSON.stringify([inputToken(active), xKey, yKeys, seriesOrder]) : "";
   const preview = useWorkbenchPreview<Estimate | null>({
-    key: active ? JSON.stringify([tokenOf(active), xKey, yKeys, seriesOrder, method, params, method === "anchor" ? anchors : null]) : "",
+    key: active ? JSON.stringify([inputKey, method, params, method === "anchor" ? anchors : null]) : "",
     auto: method === "anchor" && anchors.length >= 2,
     delayMs: 150,
     fallbackError: "baseline failed",
@@ -180,7 +182,7 @@ export function useBaseline(): BaselineState {
     setAnchors([]);
     setBaselineOverlay(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay, discard]);
+  }, [inputKey, setBaselineOverlay, discard]);
 
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
@@ -213,8 +215,21 @@ export function useBaseline(): BaselineState {
       return;
     }
     setError(null);
+    if (active.pending) {
+      loadingBooks.set(active.id, inputToken(active));
+      const loaded = await resolveActive(active.id);
+      if (loaded) inputToken(loaded); // claim the token even if no render ran yet
+      loadingBooks.delete(active.id);
+      if (!loaded) return;
+    }
     await preview.refresh();
   }
+
+  // A message about an earlier estimate or apply (e.g. "place at least 2
+  // anchors") goes once a new estimate lands, including an automatic one.
+  useEffect(() => {
+    if (fresh) setError(null);
+  }, [fresh]);
 
   // Draw each new estimate on the plot (a dropped answer never gets here).
   useEffect(() => {
@@ -429,6 +444,7 @@ export function useBaseline(): BaselineState {
     params,
     baseline,
     busy,
+    estimating: preview.running,
     error: error ?? (preview.error || null),
     anchors,
     binding,

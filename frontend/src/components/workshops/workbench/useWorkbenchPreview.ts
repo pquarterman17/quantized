@@ -65,15 +65,18 @@ interface State<T> {
   latest: { key: string; value: T } | null;
   error: { key: string; message: string } | null;
   pendingKey: string | null;
+  /** Discarded while auto: nothing is scheduled for this key any more. */
+  discardedKey: string | null;
 }
 
 export function useWorkbenchPreview<T>({
   key, run, delayMs, auto = true, fallbackError = "Preview failed",
 }: WorkbenchPreviewOptions<T>): WorkbenchPreview<T> {
-  const [state, setState] = useState<State<T>>({ latest: null, error: null, pendingKey: null });
+  const [state, setState] = useState<State<T>>({ latest: null, error: null, pendingKey: null, discardedKey: null });
   const seq = useRef(0);
   const live = useRef<AbortController | null>(null);
   const mounted = useRef(true);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latestInputs = useLatestRef({ key, run, fallbackError });
 
   // Start a run for `forKey`, superseding (aborting) any run in flight.
@@ -85,7 +88,7 @@ export function useWorkbenchPreview<T>({
     const owns = () => mounted.current && seq.current === id && !c.signal.aborted;
     setState((s) => ({ ...s, pendingKey: forKey }));
     const settled = latestInputs.current.run(c.signal).then(
-      (value) => { if (owns()) setState({ latest: { key: forKey, value }, error: null, pendingKey: null }); },
+      (value) => { if (owns()) setState({ latest: { key: forKey, value }, error: null, pendingKey: null, discardedKey: null }); },
       (e: unknown) => {
         if (!owns() || isAbortError(e)) return;
         const message = e instanceof Error ? e.message : latestInputs.current.fallbackError;
@@ -107,10 +110,13 @@ export function useWorkbenchPreview<T>({
     [latestInputs, start],
   );
   const discard = useCallback(() => {
+    clearTimeout(timer.current);
     seq.current += 1;
     live.current?.abort();
     live.current = null;
-    setState({ latest: null, error: null, pendingKey: null });
+    setState({ latest: null, error: null, pendingKey: null, discardedKey: latestInputs.current.key });
+    // Refs and setState only: stable for the hook's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -124,9 +130,9 @@ export function useWorkbenchPreview<T>({
   // Every key change aborts the run in flight (its inputs are gone); in auto
   // mode it also schedules a debounced run for the new key.
   useEffect(() => {
-    const timer = key !== "" && auto ? setTimeout(() => void start(key), delayMs) : undefined;
+    timer.current = key !== "" && auto ? setTimeout(() => void start(key), delayMs) : undefined;
     return () => {
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimeout(timer.current);
       seq.current += 1;
       live.current?.abort();
       live.current = null;
@@ -137,7 +143,7 @@ export function useWorkbenchPreview<T>({
   const latest = state.latest;
   const current = latest && key !== "" && latest.key === key ? latest.value : null;
   const error = state.error && state.error.key === key ? state.error.message : "";
-  const scheduled = auto && key !== "" && current === null && error === "";
+  const scheduled = auto && key !== "" && current === null && error === "" && state.discardedKey !== key;
   return {
     current,
     latest,

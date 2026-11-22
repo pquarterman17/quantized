@@ -142,6 +142,20 @@ describe("useWorkbenchPreview — abort", () => {
   });
 });
 
+describe("useWorkbenchPreview — discard in auto mode", () => {
+  it("cancels a scheduled run and is not left loading", () => {
+    const h = setup({ key: "a" });
+    tick(50);
+    act(() => h.result.current.discard());
+    expect(h.result.current.loading).toBe(false);
+    tick(1000);
+    expect(runs).toHaveLength(0);
+    h.rerender({ key: "b" }); // the next edit previews again
+    tick(100);
+    expect(runs.map((r) => r.key)).toEqual(["b"]);
+  });
+});
+
 describe("useWorkbenchPreview — manual mode (an Estimate button)", () => {
   it("runs nothing until refresh, then runs at once and resolves when it settles", async () => {
     const h = setup({ key: "a", auto: false });

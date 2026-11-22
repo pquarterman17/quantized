@@ -5,7 +5,7 @@
 // (method, dataset) was still shown and overlaid; (3) one that answered after
 // the window closed put its overlay back on the plot. Races are forced with a
 // held promise, never waited out.
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct } from "../../../lib/types";
@@ -95,6 +95,41 @@ describe("Baseline estimate on the workbench shell (lane WB)", () => {
     await act(async () => { await result.current.compute(); });
     expect(result.current.error).toBe("ALS did not converge");
     act(() => result.current.setParams({ lam: 1e3 }));
+    expect(result.current.error).toBeNull();
+  });
+
+  it("Estimate on a still-loading book loads it and shows the estimate in one click", async () => {
+    vi.mocked(callBaselinePreview).mockResolvedValue({ baseline: [1, 1, 1, 1, 1] });
+    const full: DataStruct = { ...raw, time: [1, 2, 3, 4, 5], values: [[10], [12], [11], [13], [14]] };
+    useApp.setState({
+      datasets: [{
+        id: "d1", name: "book.opj", data: { ...raw, time: [1, 2], values: [[10], [12]] },
+        pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5, cols: 1 },
+      }],
+      resolveDataset: async (id: string) => {
+        // Like the store: a pending book is replaced once; a loaded one is returned as is.
+        useApp.setState((st) => ({ datasets: st.datasets.map((d) => (d.id === id && d.pending ? { id: d.id, name: d.name, data: full } : d)) }));
+        return useApp.getState().datasets.find((d) => d.id === id);
+      },
+    });
+    const { result } = renderHook(() => useBaseline());
+    await act(async () => { await result.current.compute(); });
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
+    expect(result.current.baseline).toEqual([1, 1, 1, 1, 1]);
+    expect(result.current.estimateStale).toBe(false);
+    expect(result.current.subtractDisabledReason).toBeNull();
+  });
+
+  it("an anchor-mode message clears when the automatic estimate lands", async () => {
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("anchor"));
+    await act(async () => { await result.current.compute(); });
+    expect(result.current.error).toBe("place at least 2 anchors on the plot");
+    const bridge = () => useApp.getState().baselineAnchorEdit!;
+    act(() => { bridge().addAnchor(1, 10); });
+    act(() => { bridge().addAnchor(4, 13); });
+    // Wait on STATE (the debounced estimate landing), not on a mock call.
+    await waitFor(() => expect(result.current.baseline).toEqual([1, 2, 1, 3]));
     expect(result.current.error).toBeNull();
   });
 });
