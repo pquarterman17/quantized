@@ -27,6 +27,10 @@ import type { Dataset, DataStruct } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { nextPlotObjectId } from "../../../store/idSeq";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
 import {
   PAWLEY_DEFAULT_FIELDS,
   PAWLEY_MAX_POINTS,
@@ -61,6 +65,8 @@ export interface PawleyState {
   refineCell: boolean;
   setRefineCell: (v: boolean) => void;
   result: PawleyResult | null;
+  /** The shown result was refined under settings or rows that have since changed. */
+  stale: boolean;
   /** The 2θ window the shown result was fit over. */
   fitRange: { min: number; max: number } | null;
   /** Whether the shown result refined the cell (the verdict depends on it). */
@@ -152,6 +158,12 @@ export function usePawley(): PawleyState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [latticeSource, setLatticeSource] = useState<LatticeSource | null>(null);
+  // Lane WB6: the result is stamped with the key its run LAUNCHED with (every
+  // setting that reaches the request plus the source rows' identity).
+  const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), col, fields, tie, symmetry, refineCell]));
+  const stale = result !== null && stamp.stale;
+  const settingsKey = JSON.stringify([col, fields, tie, symmetry, refineCell]);
+  const settingsRef = useLatestRef(settingsKey);
 
   // Bumped on every dataset switch and every compute(); a completion whose
   // token is no longer current belongs to a dataset or click the user has
@@ -165,6 +177,7 @@ export function usePawley(): PawleyState {
     setCol(0);
     setResult(null);
     setFitInput(null);
+    stamp.record(null);
     setError(null);
     setBusy(false);
     // Seed λ from the file, as Williamson-Hall and the peak table do; a typed
@@ -228,12 +241,20 @@ export function usePawley(): PawleyState {
   async function compute(): Promise<void> {
     if (!active || !canCompute || !xIdentity) return;
     const token = ++runToken.current;
+    const clickSettings = settingsKey;
     const n = numbers;
     setBusy(true);
     setError(null);
     try {
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) throw new Error("Could not load the full dataset.");
+      // A lazy book's arrival moves the run key: let it commit, then take the key.
+      if (active.pending) await afterCommit();
+      if (token !== runToken.current) return;
+      // The user changed a setting while the book loaded: this request carries the
+      // old ones, so abandon it rather than stamp it with the new key.
+      if (settingsRef.current !== clickSettings) return;
+      const launchKey = stamp.launchKey();
       const d = analysisData(ds) ?? ds.data;
       const pairs = dropGapRows(d.time, d.values.map((row) => row[col]));
       if (pairs.keep.length < 3) throw new Error("Pawley refinement needs at least 3 finite points.");
@@ -249,6 +270,7 @@ export function usePawley(): PawleyState {
       for (const k of MEASURED_WAVELENGTH_KEYS) {
         if (ds.data.metadata?.[k] != null) measured[k] = ds.data.metadata[k];
       }
+      stamp.record(launchKey);
       setResult(res);
       setFitInput({
         x: pairs.x,
@@ -273,6 +295,7 @@ export function usePawley(): PawleyState {
       if (token !== runToken.current) return;
       setResult(null);
       setFitInput(null);
+      stamp.record(null);
       setError(e instanceof Error ? e.message : "Pawley refinement failed");
     } finally {
       if (token === runToken.current) setBusy(false);
@@ -280,7 +303,7 @@ export function usePawley(): PawleyState {
   }
 
   function toLibrary(): void {
-    if (!result || !fitInput) return;
+    if (!result || !fitInput || stale) return;
     const f = fitInput;
     // Keep the source's own name only when it alone reads as 2θ; a label that
     // passed only on its "deg" unit (e.g. "x") is replaced.
@@ -365,7 +388,9 @@ export function usePawley(): PawleyState {
         ? "The source data or included rows changed after this fit. Refine again before adding reflection lines."
       : plotXKey !== null
         ? "Use the fitted dataset's 2θ time axis before adding its reflection lines."
-        : null
+        : stale
+          ? "Out of date: the settings changed after this fit. Refine again before adding reflection lines."
+          : null
     : null;
 
   const wavelengthFromFile = fileWavelength != null && parseField(fields.wavelength) === fileWavelength;
@@ -376,7 +401,7 @@ export function usePawley(): PawleyState {
     symmetry, setSymmetry,
     wavelengthFromFile,
     refineCell, setRefineCell,
-    result, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
+    result, stale, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
     busy, error, blockedReason, canCompute, compute, toLibrary, addReferenceLines,
     referenceLinesBlockedReason, applyLattice,
   };

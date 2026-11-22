@@ -8,6 +8,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { ReflectivityFftBatch } from "./ReductionBatchSections";
 import { type ReflFftPreprocess, useReflectivityFft } from "./useReflectivityFft";
 
@@ -46,6 +47,7 @@ export default function ReflectivityFftSection() {
     peakProminence,
     setPeakProminence,
     result,
+    stale,
     busy,
     error,
     compute,
@@ -156,6 +158,7 @@ export default function ReflectivityFftSection() {
 
       {result && (
         <div style={{ marginTop: 12 }}>
+          {stale && <OutOfDateNote block>the settings or rows changed after this result. Compute again.</OutOfDateNote>}
           <DataTable
             columns={["thickness (nm)", "amplitude", "label"]}
             rows={result.thicknesses_nm.map((t, i) => [
@@ -171,7 +174,7 @@ export default function ReflectivityFftSection() {
               {sl.suppressed_orders.length > 0 && ` · suppressed orders ${sl.suppressed_orders.join(", ")}`}
             </div>
           )}
-          <Button size="sm" style={{ marginTop: 8 }} onClick={toLibrary}>
+          <Button size="sm" style={{ marginTop: 8 }} onClick={toLibrary} disabled={stale} title={stale ? "Out of date: compute again" : undefined}>
             → Library
           </Button>
         </div>

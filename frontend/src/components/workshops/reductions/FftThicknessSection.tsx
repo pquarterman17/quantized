@@ -6,6 +6,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { FftThicknessBatch } from "./ReductionBatchSections";
 import { useFftThickness } from "./useFftThickness";
 
@@ -32,6 +33,7 @@ export default function FftThicknessSection() {
     maxThicknessNm,
     setMaxThicknessNm,
     result,
+    stale,
     busy,
     error,
     compute,
@@ -109,6 +111,7 @@ export default function FftThicknessSection() {
 
       {result && (
         <div style={{ marginTop: 12 }}>
+          {stale && <OutOfDateNote block>the settings or rows changed after this result. Compute again.</OutOfDateNote>}
           <DataTable
             columns={["result", "value"]}
             rows={[

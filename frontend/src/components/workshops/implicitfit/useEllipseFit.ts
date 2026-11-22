@@ -8,7 +8,9 @@ import { useEffect, useMemo, useState } from "react";
 import { ellipseFit, type EllipseResult } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
-import { useActiveDataset } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { afterCommit } from "../workbench/afterCommit";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -41,6 +43,7 @@ const ELLIPSE_FIT_PRODUCER = { id: "ellipse-fit", label: "Ellipse fit", version:
 
 export function useEllipseFit(): EllipseFitState {
   const active = useActiveDataset();
+  const resolveDataset = useApp((s) => s.resolveDataset);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
   // "Open in Ellipse fit" (lane RO): start from the recorded columns and method.
@@ -57,6 +60,9 @@ export function useEllipseFit(): EllipseFitState {
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
   const key = [active?.id, fingerprint, xCol, yCol, geometric].join(":");
   const live = stored && stored.key === key ? stored : null;
+  const liveKey = useLatestRef(key);
+  const settingsKey = JSON.stringify([xCol, yCol, geometric]);
+  const settingsRef = useLatestRef(settingsKey);
   const hasData = !!active && columns.length >= 2;
 
   useEffect(() => {
@@ -69,14 +75,23 @@ export function useEllipseFit(): EllipseFitState {
 
   async function fit(): Promise<void> {
     if (!active) return;
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
+      // A lazy book's arrival moves the key the result is stored under: install it
+      // first, let that commit land, and only then take the key this fit is asked with.
+      if (active.pending) {
+        await resolveDataset(active.id);
+        await afterCommit();
+      }
+      if (settingsRef.current !== clickSettings) return; // changed while the book loaded: this request carries the old ones
+      const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;
       const [x, y] = got.columns;
       const res = await ellipseFit({ x, y, geometric });
-      setStored({ key, res, x, y });
+      setStored({ key: launchKey, res, x, y });
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "ellipse fit failed");

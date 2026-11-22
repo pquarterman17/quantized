@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLatestRef } from "../../../lib/previewKey";
+import { Refusal } from "./refusal";
 
 export interface WorkbenchPreviewOptions<T> {
   /** Every input the preview depends on; "" when there is nothing to preview. */
@@ -48,6 +49,9 @@ export interface WorkbenchPreview<T> {
   stale: boolean;
   /** The failure for the current key ("" when none). */
   error: string;
+  /** `error` was thrown as a `Refusal` (the tool will not run on these inputs),
+   *  not a failed run. Typed: the same text from a backend failure is not one. */
+  refusal: boolean;
   /** A run for the current key is scheduled or in flight. */
   loading: boolean;
   /** Some run is in flight right now (not merely scheduled). */
@@ -63,7 +67,7 @@ export const isAbortError = (e: unknown): boolean =>
 
 interface State<T> {
   latest: { key: string; value: T } | null;
-  error: { key: string; message: string } | null;
+  error: { key: string; message: string; refusal: boolean } | null;
   pendingKey: string | null;
   /** Discarded while auto: nothing is scheduled for this key any more. */
   discardedKey: string | null;
@@ -102,7 +106,7 @@ export function useWorkbenchPreview<T>({
       (e: unknown) => {
         if (!owns() || isAbortError(e)) return;
         const message = e instanceof Error ? e.message : latestInputs.current.fallbackError;
-        setState((s) => ({ ...s, error: { key: forKey, message }, pendingKey: null }));
+        setState((s) => ({ ...s, error: { key: forKey, message, refusal: e instanceof Refusal }, pendingKey: null }));
       },
     );
     // A superseded run must not leave "loading" behind for its key.
@@ -161,6 +165,7 @@ export function useWorkbenchPreview<T>({
     latest,
     stale: latest !== null && current === null,
     error,
+    refusal: error !== "" && state.error?.refusal === true,
     loading: key !== "" && (state.pendingKey === key || scheduled),
     running: state.pendingKey !== null,
     // Runs for the key of the last COMMITTED render: the inputs the user sees.

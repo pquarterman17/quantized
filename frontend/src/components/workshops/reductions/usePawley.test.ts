@@ -336,16 +336,13 @@ describe("usePawley → Library", () => {
     await act(async () => {
       await hook.current.compute();
     });
-    // Later edits to the panel and the source must not relabel the result.
+    // A rename is not an input and must not relabel the result. (Lane WB6, a
+    // deliberate change: this test used to also change the channel, centering,
+    // wavelength and the source's rows and still expect → Library to add the old
+    // fit; a result whose inputs moved is now out of date and withheld, see
+    // usePawley.workbench.test.)
     act(() => {
-      hook.current.setCol(1);
-      hook.current.setSymmetry("F");
-      hook.current.setField("wavelength", "0.7107");
-      useApp.setState({
-        datasets: [{ id: "d1", name: "renamed.xrdml", data: {
-          ...scan, time: [1, 2, 3, 4], labels: ["Changed", "Other"], units: ["arb", "cps"],
-        } }],
-      });
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, name: "renamed.xrdml" })) }));
     });
     act(() => hook.current.toLibrary());
     const added = useApp.getState().datasets[1];

@@ -42,7 +42,6 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const [picked, setPicked] = useState<string[]>(() => initial.filter((v) => v && v !== CUSTOM_PREFIX));
-  const [refusalText, setRefusalText] = useState<string | null>(null);
 
   // Rides the workbench shell in MANUAL mode: nothing runs on an edit, only the
   // Compare button. The key is the picks, the saved equations behind them, the
@@ -57,21 +56,15 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
     fallbackError: "compare failed",
     run: async (signal) => {
       if (!active) return null;
-      setRefusalText(null);
-      try {
-        const ds = await resolveDataset(active.id);
-        const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
-        if (!d) throw new Refusal(fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) ?? "select a dataset to compare models on");
-        const pairs = dropGapRows(d.x, d.y);
-        const models = picked.filter((v) => !v.startsWith(CUSTOM_PREFIX));
-        const equations = customPicked
-          .filter((m): m is CustomFitModel => m != null)
-          .map((m) => ({ name: m.name, equation: m.equation, ...candidateGuesses(m) }));
-        return await compareModels({ x: pairs.x, y: pairs.y, models, equations }, signal);
-      } catch (e) {
-        if (e instanceof Refusal) setRefusalText(e.message);
-        throw e;
-      }
+      const ds = await resolveDataset(active.id);
+      const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
+      if (!d) throw new Refusal(fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) ?? "select a dataset to compare models on");
+      const pairs = dropGapRows(d.x, d.y);
+      const models = picked.filter((v) => !v.startsWith(CUSTOM_PREFIX));
+      const equations = customPicked
+        .filter((m): m is CustomFitModel => m != null)
+        .map((m) => ({ name: m.name, equation: m.equation, ...candidateGuesses(m) }));
+      return await compareModels({ x: pairs.x, y: pairs.y, models, equations }, signal);
     },
   });
 
@@ -98,7 +91,7 @@ export function useCompareModels(initial: string[], customModels: readonly Custo
     canCompare: active != null && picked.length >= 2 && !preview.running,
     busy: preview.running,
     error,
-    refusal: error !== null && error === refusalText,
+    refusal: error !== null && preview.refusal,
     stale: shown !== null && preview.stale,
     result: shown,
     compare,

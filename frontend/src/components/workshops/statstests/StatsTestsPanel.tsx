@@ -14,6 +14,7 @@ import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button, Select } from "../../primitives";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import StatsTestsInputs from "./StatsTestsInputs";
 import { useStatsTests } from "./useStatsTests";
@@ -82,15 +83,16 @@ export default function StatsTestsPanel() {
 
       {t.output && (
         <>
+          {t.stale && <OutOfDateNote block>the data or rows changed after this test ran. Run it again.</OutOfDateNote>}
           <Results output={t.output} />
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <Button size="sm" onClick={() => void t.copy()} title="Copy the sentence and tables as tab-separated text.">
+            <Button size="sm" disabled={t.stale} onClick={() => void t.copy()} title={t.stale ? "Out of date: run the test again" : "Copy the sentence and tables as tab-separated text."}>
               Copy table
             </Button>
-            <Button size="sm" onClick={t.exportCsv} title="Save the sentence and tables as a CSV file.">
+            <Button size="sm" disabled={t.stale} onClick={t.exportCsv} title={t.stale ? "Out of date: run the test again" : "Save the sentence and tables as a CSV file."}>
               Export CSV
             </Button>
-            <Button size="sm" disabled={t.busy} onClick={() => void t.toReport()}>
+            <Button size="sm" disabled={t.busy || t.stale} title={t.stale ? "Out of date: run the test again" : undefined} onClick={() => void t.toReport()}>
               → Report
             </Button>
           </div>

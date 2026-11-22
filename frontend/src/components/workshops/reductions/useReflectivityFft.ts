@@ -7,13 +7,17 @@
 // (`isNeutron`). "→ Library" writes the FFT magnitude spectrum as a new
 // dataset, mirroring useFftThickness / baseline's subtract().
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { reflectivityFft } from "../../../lib/api/reductions";
 import type { ReflectivityFftResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
 import { type ReflFftPreprocess, reflectivityFftBody, xIsQ } from "./reductionRequests";
 import type { ReductionColumn } from "./useFftThickness";
 
@@ -41,6 +45,8 @@ export interface ReflectivityFftState {
   peakProminence: number;
   setPeakProminence: (v: number) => void;
   result: ReflectivityFftResult | null;
+  /** The shown result was computed under settings or rows that have since changed. */
+  stale: boolean;
   busy: boolean;
   error: string | null;
   compute: () => Promise<void>;
@@ -69,8 +75,19 @@ export function useReflectivityFft(): ReflectivityFftState {
   const [result, setResult] = useState<ReflectivityFftResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Lane WB6: stamped with the key the run LAUNCHED with (see useFftThickness).
+  const stamp = useRunStamp(JSON.stringify([
+    datasetInputsToken(active), col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
+  ]));
+  const stale = result !== null && stamp.stale;
+  const settingsKey = JSON.stringify([col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence]);
+  const settingsRef = useLatestRef(settingsKey);
+  const seq = useRef(0);
 
   useEffect(() => {
+    seq.current += 1;
+    stamp.record(null);
+    setBusy(false);
     setResult(null);
     setError(null);
     setCol(0);
@@ -84,26 +101,38 @@ export function useReflectivityFft(): ReflectivityFftState {
       setError("wavelength is required for XRR (2θ) mode");
       return;
     }
+    const id = ++seq.current;
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
-      // #38 deferred edge: resolve the active dataset's full data first.
+      // #38 deferred edge: resolve the active dataset's full data first; a lazy
+      // book's arrival moves the run key, so it commits before the key is taken.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
+      if (active.pending) await afterCommit();
+      if (id !== seq.current) return;
+      // The user changed a setting while the book loaded: this request carries the
+      // old ones, so abandon it rather than stamp it with the new key.
+      if (settingsRef.current !== clickSettings) return;
+      const launchKey = stamp.launchKey();
       const d = analysisData(ds) ?? ds.data;
       const res = await reflectivityFft(reflectivityFftBody(d, col, {
         isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
       }));
+      if (id !== seq.current) return;
+      stamp.record(launchKey);
       setResult(res);
     } catch (e) {
+      if (id !== seq.current) return;
       setError(e instanceof Error ? e.message : "reflectivity FFT failed");
     } finally {
-      setBusy(false);
+      if (id === seq.current) setBusy(false);
     }
   }
 
   function toLibrary(): void {
-    if (!result) return;
+    if (!result || stale) return;
     const data: DataStruct = {
       time: result.thickness_axis,
       values: result.fft_magnitude.map((v) => [v]),
@@ -121,6 +150,9 @@ export function useReflectivityFft(): ReflectivityFftState {
   }
 
   function clear(): void {
+    seq.current += 1;
+    stamp.record(null);
+    setBusy(false);
     setResult(null);
     setError(null);
   }
@@ -147,6 +179,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     peakProminence,
     setPeakProminence,
     result,
+    stale,
     busy,
     error,
     compute,

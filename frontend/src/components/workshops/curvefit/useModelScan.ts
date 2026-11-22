@@ -28,7 +28,7 @@ import { toast } from "../../../store/toasts";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { afterCommit } from "../workbench/afterCommit";
-import { Refusal } from "../workbench/refusal";
+import { Refusal, type Failure, failureOf } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 
 /** The completed job's result payload — same shape as the synchronous
@@ -63,8 +63,9 @@ export function useModelScan(): ModelScanState {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [refusalText, setRefusalText] = useState<string | null>(null);
+  // The failure carries its kind (a typed `Refusal`), not a text to compare.
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const error = failure?.message ?? null;
   const jobRef = useRef<string | null>(null);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
@@ -78,8 +79,7 @@ export function useModelScan(): ModelScanState {
   async function scan(): Promise<void> {
     if (!active || busy) return;
     setBusy(true);
-    setError(null);
-    setRefusalText(null);
+    setFailure(null);
     setProgress(0);
     setProgressMessage(null);
     // P3.4: the scan is one op in the shared StatusBar location (percent +
@@ -129,10 +129,7 @@ export function useModelScan(): ModelScanState {
       stamp.record(launchKey);
       setResults(r.results);
     } catch (e) {
-      if (e instanceof Refusal) setRefusalText(e.message);
-      if (!(e instanceof JobCancelledError)) {
-        setError(e instanceof Error ? e.message : "scan failed");
-      }
+      if (!(e instanceof JobCancelledError)) setFailure(failureOf(e, "scan failed"));
       // a deliberate cancel is not an error — the prior results (if any) stay
     } finally {
       op.end();
@@ -156,7 +153,7 @@ export function useModelScan(): ModelScanState {
   function clear(): void {
     setResults(null);
     stamp.record(null);
-    setError(null);
+    setFailure(null);
   }
 
   return {
@@ -166,7 +163,7 @@ export function useModelScan(): ModelScanState {
     progress,
     progressMessage,
     error,
-    refusal: error !== null && error === refusalText,
+    refusal: failure?.refusal === true,
     stale: results !== null && stamp.stale,
     scan,
     cancel,

@@ -18,7 +18,9 @@ import {
 import { copyText } from "../../../lib/clipboard";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
+import { useLatestRef } from "../../../lib/previewKey";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { afterCommit } from "../workbench/afterCommit";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumber, seedStrings, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { surfaceResultText } from "./surfaceFitText";
@@ -72,6 +74,7 @@ function defaults(cols: PickColumn[], ds: Dataset | null): [number, number, numb
 
 export function useSurfaceFit(): SurfaceFitState {
   const active = useActiveDataset();
+  const resolveDataset = useApp((s) => s.resolveDataset);
   const setStatus = useApp((s) => s.setStatus);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
@@ -102,7 +105,11 @@ export function useSurfaceFit(): SurfaceFitState {
   const model = models.find((m) => m.name === modelName) ?? models[0] ?? null;
   const [xCol, yCol, zCol] = picks.map((p, i) => validPick(columns, p, defaults(columns, active)[i])) as [number, number, number];
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
-  const key = `${active?.id}:${fingerprint}:${xCol}:${yCol}:${zCol}:${model?.name}`;
+  // The start values and bounds are inputs too (lane WB6): the fit ran from them.
+  const key = `${active?.id}:${fingerprint}:${xCol}:${yCol}:${zCol}:${model?.name}:${JSON.stringify([p0, lower, upper])}`;
+  const liveKey = useLatestRef(key);
+  const settingsKey = JSON.stringify([xCol, yCol, zCol, model?.name, p0, lower, upper]);
+  const settingsRef = useLatestRef(settingsKey);
   // A result describes the inputs it ran on; any change to them retires it.
   const live = stored && stored.key === key ? stored : null;
   const result = live?.res ?? null;
@@ -190,14 +197,23 @@ export function useSurfaceFit(): SurfaceFitState {
       setError("A bound is not a number (leave it empty for no bound).");
       return;
     }
+    const clickSettings = settingsKey;
     setBusy(true);
     setError(null);
     try {
+      // A lazy book's arrival moves the key the result is stored under: install
+      // it, let that commit land, then take the key this fit is asked with.
+      if (active.pending) {
+        await resolveDataset(active.id);
+        await afterCommit();
+      }
+      if (settingsRef.current !== clickSettings) return; // changed while the book loaded: this request carries the old ones
+      const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol, zCol]);
       if (!got) return;
       const [x, y, z] = got.columns;
       const res = await surfaceFit({ x, y, z, model: model.name, p0: start as number[], lower: lo, upper: hi });
-      setStored({ key, res, x, y, z, start: { p0, lower, upper } }); // what it ran from, for a reopen
+      setStored({ key: launchKey, res, x, y, z, start: { p0, lower, upper } }); // what it ran from, for a reopen
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "surface fit failed");

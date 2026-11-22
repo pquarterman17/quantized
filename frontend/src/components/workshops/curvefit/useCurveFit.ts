@@ -7,7 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { listFitModels } from "../../../lib/api/curvefit";
 import { useLatestRef } from "../../../lib/previewKey";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
-import { FitRefusal, fitOnce, guessFit } from "./curveFitRun";
+import { type Failure, failureOf } from "../workbench/refusal";
+import { fitOnce, guessFit } from "./curveFitRun";
 import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
@@ -147,7 +148,8 @@ export function useCurveFit(): CurveFitState {
     });
   }, []);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // A guess / corner-plot failure; it carries its kind (a typed `Refusal`).
+  const [error, setError] = useState<Failure | null>(null);
   const [cornerBusy, setCornerBusy] = useState(false);
   const [weightMode, setWeightMode] = useState<WeightMode>(savedSpec?.weight?.mode ?? "none");
   const [manualKey, setManualKey] = useState<number | null>(
@@ -288,7 +290,6 @@ export function useCurveFit(): CurveFitState {
   // fit depends on (data changes are `fitInputsChanged` above): a result whose
   // run key differs from the current one is out of date, and an error belongs
   // to the key it ran with.
-  const [refusalText, setRefusalText] = useState<string | null>(null);
   const preview = useWorkbenchPreview<Fitted | null>({
     key: settingsKey,
     auto: false,
@@ -299,35 +300,29 @@ export function useCurveFit(): CurveFitState {
       const launchKey = settingsKeyRef.current; // what this run was asked with, not what it ends up under
       setBusy(true);
       setError(null);
-      setRefusalText(null);
       try {
         return await fitOnce({
           activeId: active.id, modelName, model, paramRows, weightingFor, setWeightNote,
           onFitted: (done) => { runKeys.current.set(done, launchKey); setFitted(done); },
         });
-      } catch (e) {
-        if (e instanceof FitRefusal) setRefusalText(e.message);
-        throw e;
       } finally {
         setBusy(false);
       }
     },
   });
-  const runError = error ?? (preview.error || null);
-  const refusal = runError !== null && runError === refusalText;
+  const runError = error?.message ?? (preview.error || null);
+  const refusal = error ? error.refusal : runError !== null && preview.refusal;
 
   async function run(kind: "guess" | "fit"): Promise<void> {
     if (!active) return;
     if (kind === "fit") return preview.refresh();
     setBusy(true);
     setError(null);
-    setRefusalText(null);
     try {
       const g = await guessFit(active.id, modelName);
       if (g) setFitted(g);
     } catch (e) {
-      if (e instanceof FitRefusal) setRefusalText(e.message);
-      setError(e instanceof Error ? e.message : "fit failed");
+      setError(failureOf(e, "fit failed"));
     } finally {
       setBusy(false);
     }
@@ -351,7 +346,7 @@ export function useCurveFit(): CurveFitState {
       const done = await exportCornerPlot({ dataset: active, model: modelName, paramNames: model?.paramNames ?? [], x: xy.x, y: xy.y, p0 });
       if (!done) setStatus("corner plot cancelled");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "corner plot failed");
+      setError({ message: e instanceof Error ? e.message : "corner plot failed", refusal: false });
     } finally {
       setCornerBusy(false);
     }

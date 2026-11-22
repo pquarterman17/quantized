@@ -439,13 +439,12 @@ inconsistently exposed, and do not all share the same result lifecycle.
   Progress (lane WB4): every tool on that list now says "Out of date" (see the
   Lane WB4 block below).
   Progress (lane WB5): the tools WB4 left out are audited and covered (Lane WB5
-  block below). The gap STAYS OPEN, narrowly: the WB5 list is done, but the
-  single-run tools that were never on any WB list (Hysteresis, Optical gap,
-  Surface fit, Ellipse fit, FFT thickness / Reflectivity FFT / Pawley /
-  Williamson-Hall, the statistics tools, Fit Y by X) have not been audited for
-  "Out of date", and the tool-by-tool tick needs that audit, not an assumption.
-  Next lane: audit that list (the batch ones already inherit the shell's
-  worksheet / data marker, see WB5).
+  block below).
+  Progress (lane WB6): the single-run tools never on a WB list are audited (Lane
+  WB6 block below). The gap STAYS OPEN, narrowly: the lane's list is done, but
+  RSM peaks / strain, ROI cuts, and the commit-only transforms (Demag,
+  Normalization, MagTools Background) and Tabulate were not audited (see the WB6
+  block), and the tick needs that read, not an assumption.
 
   **Workbench audit (lane WB, 2026-11-22).** Tools that preview before they
   commit, as found before the migration. "Key" = every input the preview
@@ -587,9 +586,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     the key change; stamp tools: otherwise the launch key is already out of
     date). Out-of-date ODR / equation / global fits also take their own curve
     off the plot (`fitOverlayOwnership.takeBackOverlay`, compare-and-clear).
-    Known nit: a refusal is told from an error by comparing message text, not a
-    flag carried with the error (identical text from two causes would show as a
-    refusal).
+    (Known nit, fixed in lane WB6: a refusal is now typed, not told by comparing text.)
   - Bugs fixed (fail-before tests): an out-of-date Peaks fit was shown,
     reported and labeled as current; ODR and Equation fit let an answer for
     inputs changed in flight set the result, overlay (and macro step); an
@@ -648,9 +645,55 @@ inconsistently exposed, and do not all share the same result lifecycle.
     worksheet, any moved. On the output worksheet the commit activates it
     describes itself and is not marked. **Curie-Weiss batch** resets by remount
     on a settings change (unchanged) and inherits the worksheet / data marker.
-  - **Not done:** the typed refusal marker (a refusal is still told from an error
-    by comparing text in seven hooks, `useCurveFit` at its line limit): not cheap
-    enough here, left as the known nit. The shell gap is not ticked (see above).
+  - **Not done in WB5:** the typed refusal marker (done in lane WB6) and the shell
+    gap tick (see above).
+
+  **Lane WB6 (the single-run tools, 2026-11-22).** Audit per tool. "Live" = the
+  tool recomputes (or clears its result) on every input change and stamps a
+  landed answer with the inputs it ran for, so a stale result can never be
+  reported / exported / saved; those were left unchanged and pinned. The rest
+  stay button-driven with their defaults; characterization tests first, forced
+  races with held requests.
+
+  | Tool | Behaviour found | Result |
+  |---|---|---|
+  | Distribution | live; histogram / stats / Shapiro / fits / By results stamped with the finite values (and levels + column) they ran for | no change (existing `useDistribution.test` pins it) |
+  | Fit Y by X | live; leg and By results stamped with the inputs object they ran for | no change (`useFitYByX.test`) |
+  | Multivariate | live; correlation / PCA stamped with the listwise rows + method | no change (`useMultivar.test`) |
+  | Variability | live; stamped with the nested levels | no change (`useVariability.test`) |
+  | Outlier screening | live; result keyed by source fingerprint + column + method + threshold / alpha / k | no change (`useOutlierScreening.test`) |
+  | Stats tests | button; a picks / parameters / test change dropped the output, but a change to the SOURCE rows did not: Copy / Export CSV / Report handed on the old numbers | **fixed**: stamped with the source identity, "Out of date" + withheld (`useStatsTests.workbench`) |
+  | Optical gap | button; result keyed by rows, picks, units, window, thickness, transition (dropped on change) | no change, pinned (`useOpticalGap.workbench`) |
+  | Surface fit | button; keyed by rows, picks, model, but NOT the start values / bounds | **fixed**: the start table is in the key (`useSurfaceFit.workbench`) |
+  | Ellipse fit | button; keyed by rows, picks, method; a lazy book installed by Fit moved the key the result was stored under, so the fit was discarded | **fixed**: resolve first, take the key after (`useEllipseFit.workbench`); the same ordering was applied to Optical gap and Surface fit |
+  | FFT thickness | button; result survived any setting / row change, "→ Library" added the old spectrum | **fixed**: `useRunStamp`, "Out of date", Library withheld, late answers for a left dataset dropped (`useFftThickness.workbench`) |
+  | Reflectivity FFT | same, and its "→ Library" had no guard at all | **fixed** (`useReflectivityFft.workbench`) |
+  | Pawley | button; result, Library and reflection lines survived a settings change (only a source change blocked the lines) | **fixed**: stamped with settings + source identity; Library and lines withheld (`usePawley.workbench`) |
+  | Williamson-Hall | every input setter and a dataset switch drop the result and bump a request sequence (inputs are hook state) | no change (`useWilliamsonHall.test` "invalidates a completed fit on every input edit and ignores a late response") |
+  | Hysteresis | live; clears the result, recomputes, an answer for moved inputs never lands; background subtraction re-checks its inputs | no change, pinned (`useHysteresis.stale.test`) |
+
+  - Display: the new marker is the shared `OutOfDateNote`; a statistical test's
+    settings change still DROPS its output (unchanged), a source change marks it.
+  - **Typed refusal marker (done).** `useWorkbenchPreview` reports `refusal`
+    (the run threw a `Refusal`); tools with their own state hold a
+    `Failure { message, refusal }` (`workbench/refusal.ts`, `failureOf`). The
+    seven hooks that compared message text (Curve fit, ODR, equation fit,
+    Compare models, Global fit, Model scan, Batch integrate) use it; their
+    displays are unchanged and an Error with a refusal's text is no longer shown
+    as one (`useWorkbenchPreview.test`). The Peak analyzer's `errorRefusal` /
+    `findRefused` flags were already typed.
+  - Deliberate test change: `usePawley.test` "adds observed, model, background and
+    residual on the exact fitted rows" also changed the channel, centering,
+    wavelength and source rows and expected the old fit to be added; that is now
+    what is withheld, so it keeps the rename case and the moved-input cases are in
+    `usePawley.workbench.test`.
+  - **Not audited (why the gap stays open):** RSM analysis / strain (button-driven
+    readouts) and ROI cuts' numeric readouts; Demag, Normalization and MagTools
+    Background are commit-only transforms (no held result) and Tabulate is a live
+    table, assessed from their headers only. Known limit: a lazy book resolved
+    by FFT thickness / Reflectivity FFT / Pawley / Stats tests is installed before
+    the run key is taken (as WB4), so an edit made exactly during that install is
+    not distinguished.
 
 ## Product contract for every new analysis
 
@@ -671,9 +714,12 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   fit and Batch integrate (an out-of-date result is never reported, exported,
   saved or applied). Lane WB5: so do Bumps / DREAM, the reflectivity fit, the Curie-Weiss fit, the
   Peak analyzer batch, Curve fit By tables and every batch over worksheets (fit
-  bands and the reflectivity DREAM were audited and needed no marker). Still
-  open: single-run tools never on a WB list (Hysteresis, Optical gap, Surface /
-  Ellipse fit, the XRD reductions, the statistics tools, Fit Y by X).
+  bands and the reflectivity DREAM were audited and needed no marker). Lane WB6:
+  FFT thickness, Reflectivity FFT, Pawley and the statistical tests mark a
+  result "Out of date" (Surface fit retires it on a start-value edit); the other
+  statistics tools, Hysteresis, Optical gap, Ellipse fit and Williamson-Hall were
+  audited and already recompute / clear. Still open: RSM, ROI cuts and the
+  commit-only magnetometry transforms (see the WB6 block).
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
@@ -1547,6 +1593,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane WB6: FFT thickness, Reflectivity FFT, Pawley and the statistical tests say "Out of date" and withhold Library / reflection lines / copy / export / report; Surface fit retires its result on a start-value or bound edit; Ellipse fit no longer discards a fit on a lazy book; typed refusal marker replaces the text comparison in seven hooks. Audited with no change: Distribution, Fit Y by X, Multivariate, Variability, Outlier screening, Hysteresis, Optical gap, Williamson-Hall. The shell gap stays open (RSM, ROI cuts, commit-only magnetometry transforms not audited). | Characterization + fail-before + forced-race tests (`useFftThickness.workbench`, `useReflectivityFft.workbench`, `usePawley.workbench`, `useStatsTests.workbench`, `useSurfaceFit.workbench`, `useEllipseFit.workbench`, `useOpticalGap.workbench`, `useHysteresis.stale`, `useWorkbenchPreview` refusal cases); one existing assertion changed deliberately (`usePawley.test`, see the WB6 block). |
 | 2026-11-22 | Project team | Lane WB5: Bumps / DREAM, the reflectivity fit, the Curie-Weiss fit, the Peak analyzer batch, Curve fit By tables and the shared batch shell mark results "Out of date" and withhold their summaries, exports, plots and applies; fit bands and reflectivity DREAM audited. Fixed: a late fit-band answer replacing a newer one; a Peak batch table added after its datasets changed. Not done: typed refusal marker; the shell gap stays open (single-run tools never on a WB list unaudited). | Characterization tests first, fail-before and forced-race tests (`useBumpsFit.workbench`, `useReflFit.workbench`, `useCurieWeiss.workbench`, `PeakBatchView.stale`, `AnalysisBatchControls.stale`, `CurveFitBatchSection.stale`, `useCurveFitByLevel.stale`, `useFitBands.workbench`, `useReflDream.workbench`); one existing assertion changed deliberately (`reflFitLiveRecord.test`, see WB5 block). |
 | 2026-11-22 | Project team | Lane WB4: the remaining button-only fits say "Out of date" and fail closed: Peaks panel Fit all together / Fit each (find settings), ODR, Equation fit and Compare models (manual mode), Global fit, Model scan and Batch integrate (`useRunStamp`), Peak analyzer model fit (shared note, WorkbenchMessage). Fixed: out-of-date results reportable / exportable / drawn as current, and late answers for changed inputs landing as current. The shell gap stays open (tools outside the list unaudited). | Characterization + fail-before tests (`PeaksPanel.workbench`, `useOdrFit.workbench`, `useEquationFit.workbench`, `useCompareModels.workbench`, `useGlobalFit.workbench`, `useModelScan.workbench`, `BatchIntegrateWindow.workbench`, `useModelFit.workbench`, `useRunStamp`); forced races with held requests; no existing assertion changed (ModelScanSection test helper gained two defaults). |
 | 2026-11-22 | Project team | Lane WB3: Curve fit's single Fit and the Peak analyzer's Find peaks adopt the shell's out-of-date state (Curve fit on `useWorkbenchPreview` manual mode, `useCurveFit` split into `curveFitRun.ts`); fixed: an out-of-date Curve fit could still be reported, bootstrapped and written to a worksheet; Reshape & combine Close now dismisses an open unit-mismatch review. Not done: the other button-only fits; the shell gap stays open. | Characterization tests first (`useCurveFit.workbench.test.ts`, `PeakWizardFind.workbench.test.tsx`); fail-before `CurveFitPanel.workbench.test.tsx`, `useReshapePreview.review.test.ts`; one existing assertion changed deliberately (out-of-date wording in `CurveFitPanel.lifecycle.test.tsx`). |
