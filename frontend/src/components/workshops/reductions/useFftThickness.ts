@@ -82,7 +82,8 @@ export function useFftThickness(): FftThicknessState {
   const [error, setError] = useState<string | null>(null);
   // Lane WB6: the result is stamped with the key its run LAUNCHED with; any
   // setting or source-row change afterwards marks it out of date.
-  const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm]));
+  const runKey = JSON.stringify([datasetInputsToken(active), col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm]);
+  const stamp = useRunStamp(runKey);
   const stale = computed !== null && stamp.stale;
   const settingsKey = JSON.stringify([col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm]);
   const settingsRef = useLatestRef(settingsKey);
@@ -105,12 +106,17 @@ export function useFftThickness(): FftThicknessState {
     if (!active) return;
     const id = ++seq.current;
     const clickSettings = settingsKey;
+    const clickKey = runKey;
     setBusy(true);
     setError(null);
     try {
       // #38 deferred edge: never FFT against the small preview — resolve the
       // active dataset's full data first. A lazy book's arrival moves the run
       // key, so let that commit land before taking the key this run is asked with.
+      // The key this run LAUNCHES with is the click's own render key: the refs below catch
+      // up in a passive effect, and a row or fingerprint change during the awaits must
+      // leave the result stamped with the rows the click was made on (so it lands stale),
+      // never current. Only a lazy book's arrival legitimately moves the key.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       if (active.pending) await afterCommit();
@@ -118,7 +124,7 @@ export function useFftThickness(): FftThicknessState {
       // The user changed a setting while the book loaded: this request carries the
       // old ones, so abandon it rather than stamp it with the new key.
       if (settingsRef.current !== clickSettings) return;
-      const launchKey = stamp.launchKey();
+      const launchKey = active.pending ? stamp.launchKey() : clickKey;
       const d = analysisData(ds) ?? ds.data;
       const res = await fftThickness(fftThicknessBody(d, col, { wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm }));
       if (id !== seq.current) return;
