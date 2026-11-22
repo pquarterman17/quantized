@@ -35,12 +35,16 @@ import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowsta
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
-import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
+import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { analysisTargetDataset } from "../../../lib/analysisInputs";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { Refusal } from "../workbench/refusal";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 export type { EquationParamRow };
+
+interface FitRun { result: CalcResult; held: boolean[]; units: string[] }
 
 /** What the last successful validate said the equation is made of (P2.7). */
 export interface EquationSummary {
@@ -72,6 +76,10 @@ export interface EquationFitState {
   runProblem: string | null;
   busy: boolean;
   error: string | null;
+  /** `error` is a refusal (the table or data cannot be fitted), not a failed request. */
+  refusal: boolean;
+  /** The shown result was fitted under an equation, table or data that has since changed. */
+  stale: boolean;
   result: CalcResult | null;
   /** Hold flags the CURRENT result was fitted with (aligned with its
    *  params), so the results table labels held values even after the table
@@ -160,11 +168,9 @@ export function useEquationFit(
   // (which re-validates after a debounce) can never mark the wrong characters.
   const [errorAt, setErrorAt] = useState<{ text: string; span: TextSpan } | null>(null);
   const [rows, setRows] = useState<EquationParamRow[]>(initial ? rowsFromModel(initial) : []);
-  const [busy, setBusy] = useState(false);
+  // Save errors and a fit refusal; a failed fit request is the preview's error.
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<CalcResult | null>(null);
-  const [fitHeld, setFitHeld] = useState<boolean[]>([]);
-  const [fitUnits, setFitUnits] = useState<string[]>([]);
+  const [refusalText, setRefusalText] = useState<string | null>(null);
   const [paramNames, setParamNames] = useState<string[]>(initial ? [...initial.params] : []);
   const [modelName, setModelName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -245,86 +251,113 @@ export function useEquationFit(
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, fixed: held } : r)));
   }
 
+  // The fit rides the shared workbench shell in MANUAL mode: nothing runs on
+  // an edit, only the Fit button. The key is everything the fit depends on
+  // (dataset rows / data, equation, start / bound / hold table, channels; a unit
+  // label only names the result, so it is no input). A result whose key differs
+  // is out of date; an answer for inputs that changed in flight is dropped.
+  const key = active
+    ? JSON.stringify([datasetInputsToken(active), equation, rows.map((r) => [r.name, r.guess, r.min, r.max, r.fixed]), xKey, yKeys, seriesOrder])
+    : "";
+  const fitRun = useWorkbenchPreview<FitRun | null>({
+    key,
+    auto: false,
+    delayMs: 0,
+    fallbackError: "fit failed",
+    run: async (signal) => {
+      if (!active) return null;
+      setError(null);
+      setRefusalText(null);
+      try {
+        return await runFit(signal);
+      } catch (e) {
+        if (e instanceof Refusal) setRefusalText(e.message);
+        throw e;
+      }
+    },
+  });
+
+  async function runFit(signal: AbortSignal): Promise<FitRun | null> {
+    if (!active) return null;
+    const parsed = parseEquationRows(rows);
+    if ("error" in parsed) throw new Refusal(parsed.error);
+    const { guesses, lower, upper, fixed } = parsed;
+    const units = rows.map((r) => r.unit.trim());
+
+    // Resolve a still-pending dataset first (#38), then fit the plotted
+    // X/primary-Y over the analysis view (#50/#53) — the same channels + rows
+    // the plot shows. Read the selection after the await in case the plotted
+    // channels changed while a lazy Origin book resolved.
+    const ds = await useApp.getState().resolveDataset(active.id);
+    if (!ds) return null;
+    const state = useApp.getState();
+    const currentSeed = useAnalysisSelection.getState();
+    const runSelection = currentSeed.toolId === "curvefit"
+      ? currentSeed.selection?.items.find((entry) => entry.datasetId === ds.id)
+      : undefined;
+    const runXKey = runSelection?.xKey ?? state.xKey;
+    const runYKeys = runSelection?.yKeys ?? state.yKeys;
+    const d = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
+    if (!d) {
+      const why = fitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder);
+      if (why) throw new Refusal(why);
+      return null;
+    }
+    const pairs = dropGapRows(d.x, d.y);
+    if (pairs.x.length === 0) throw new Refusal("no finite X/Y pairs are available to fit");
+    if (!pairs.complete) {
+      toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
+    }
+    const n = ds.data.time.length;
+    const kept = d.sourceRows ?? activeRowIndices(n, droppedRows(ds)); // the overlay is laid back onto these
+    // x/y by dataset handle when the server holds the dataset (lib/fitSource).
+    const r = await leanEquationFit({
+      equation,
+      x: pairs.x,
+      y: pairs.y,
+      guesses,
+      ...(lower.some((v) => v !== null) ? { lower } : {}),
+      ...(upper.some((v) => v !== null) ? { upper } : {}),
+      ...(fixed.some(Boolean) ? { fixed } : {}),
+    }, { data: ds.data, xKey: d.xKey, yKey: d.yKey }, fitRowsOf(pairs.keep, kept, n));
+    // The inputs changed (or the panel closed) while the request ran: its answer
+    // is not theirs, so none of the commit paths below may fire for it.
+    if (signal.aborted) return null;
+    // P3.5 "recently used" — the one genuinely ambiguous kind, so it is
+    // wired precisely. Selecting a saved model from the dropdown is a
+    // BROWSE; the use is the fit actually running with it. And the name is
+    // checked against what is really stored, because `modelName` is free
+    // text a user may have typed without ever saving: recording it
+    // unchecked would mint sidecar entries for models that do not exist,
+    // which `pruneEntries` would then have to clean up after.
+    if (modelName && loadCustomModels().some((m) => m.name === modelName)) {
+      recordUse({ kind: "fitModel", scope: "global", id: modelName });
+    }
+    // Script-only macro step ("ui" kind): the pipeline runner's "fit" step
+    // re-executes registry models by name, which a raw equation is not. It
+    // carries the full setup that ran (lib/equationRows equationFitStep).
+    const step = equationFitStep(equation, parsed);
+    useApp
+      .getState()
+      .recordMacro(`Fit equation ${modelName || equation}`, step.code, { kind: "ui", params: step.params });
+    const yFit = r.yFit as (number | null)[] | undefined;
+    if (Array.isArray(yFit)) {
+      const aligned = restoreGapRows(yFit, pairs);
+      const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
+      setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true });
+    }
+    return { result: r, held: fixed, units };
+  }
+
   async function fit(): Promise<void> {
     if (!active || status !== "ok" || rows.length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const parsed = parseEquationRows(rows);
-      if ("error" in parsed) throw new Error(parsed.error);
-      const { guesses, lower, upper, fixed } = parsed;
-      const units = rows.map((r) => r.unit.trim());
-
-      // Resolve a still-pending dataset first (#38), then fit the plotted
-      // X/primary-Y over the analysis view (#50/#53) — the same channels + rows
-      // the plot shows. Read the selection after the await in case the plotted
-      // channels changed while a lazy Origin book resolved.
-      const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
-      const state = useApp.getState();
-      const currentSeed = useAnalysisSelection.getState();
-      const runSelection = currentSeed.toolId === "curvefit"
-        ? currentSeed.selection?.items.find((entry) => entry.datasetId === ds.id)
-        : undefined;
-      const runXKey = runSelection?.xKey ?? state.xKey;
-      const runYKeys = runSelection?.yKeys ?? state.yKeys;
-      const d = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
-      if (!d) return throwFitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder);
-      const pairs = dropGapRows(d.x, d.y);
-      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
-      if (!pairs.complete) {
-        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
-      }
-      const n = ds.data.time.length;
-      const kept = d.sourceRows ?? activeRowIndices(n, droppedRows(ds)); // the overlay is laid back onto these
-      // x/y by dataset handle when the server holds the dataset (lib/fitSource).
-      const r = await leanEquationFit({
-        equation,
-        x: pairs.x,
-        y: pairs.y,
-        guesses,
-        ...(lower.some((v) => v !== null) ? { lower } : {}),
-        ...(upper.some((v) => v !== null) ? { upper } : {}),
-        ...(fixed.some(Boolean) ? { fixed } : {}),
-      }, { data: ds.data, xKey: d.xKey, yKey: d.yKey }, fitRowsOf(pairs.keep, kept, n));
-      setResult(r);
-      setFitHeld(fixed);
-      setFitUnits(units);
-      // P3.5 "recently used" — the one genuinely ambiguous kind, so it is
-      // wired precisely. Selecting a saved model from the dropdown is a
-      // BROWSE; the use is the fit actually running with it. And the name is
-      // checked against what is really stored, because `modelName` is free
-      // text a user may have typed without ever saving: recording it
-      // unchecked would mint sidecar entries for models that do not exist,
-      // which `pruneEntries` would then have to clean up after.
-      if (modelName && loadCustomModels().some((m) => m.name === modelName)) {
-        recordUse({ kind: "fitModel", scope: "global", id: modelName });
-      }
-      // Script-only macro step ("ui" kind): the pipeline runner's "fit" step
-      // re-executes registry models by name, which a raw equation is not. It
-      // carries the full setup that ran (lib/equationRows equationFitStep).
-      const step = equationFitStep(equation, parsed);
-      useApp
-        .getState()
-        .recordMacro(`Fit equation ${modelName || equation}`, step.code, { kind: "ui", params: step.params });
-      const yFit = r.yFit as (number | null)[] | undefined;
-      if (Array.isArray(yFit)) {
-        const aligned = restoreGapRows(yFit, pairs);
-        const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
-        setFitOverlay({ datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y, curveFit: true });
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "fit failed");
-    } finally {
-      setBusy(false);
-    }
+    return fitRun.refresh();
   }
 
   function clear(): void {
-    setResult(null);
-    setFitHeld([]);
-    setFitUnits([]);
+    fitRun.discard();
     setError(null);
+    setRefusalText(null);
     setFitOverlay(null);
   }
 
@@ -378,6 +411,8 @@ export function useEquationFit(
     return deleteCustomModel(name);
   }
 
+  const shown = fitRun.latest?.value ?? null;
+  const runError = error ?? (fitRun.error || null);
   return {
     active,
     equation,
@@ -390,11 +425,13 @@ export function useEquationFit(
     setHeld,
     summary,
     runProblem,
-    busy,
-    error,
-    result,
-    fitHeld,
-    fitUnits,
+    busy: fitRun.running,
+    error: runError,
+    refusal: runError !== null && runError === refusalText,
+    stale: shown !== null && fitRun.stale,
+    result: shown?.result ?? null,
+    fitHeld: shown?.held ?? [],
+    fitUnits: shown?.units ?? [],
     paramNames,
     fit,
     clear,
