@@ -419,10 +419,15 @@ export async function runTransform(
   const refs = refsOf(p);
   const others = await resolveRefs(s, refs);
   signal?.throwIfAborted();
+  // A recipe that reads the analysis view also reads the row state (lane IR):
+  // an exclusion or filter edited mid-run would otherwise yield an output of
+  // the old view that no stale mark ever catches.
+  const readsView = p.op === "signal" && p.recipe.inputRows === "analysis-view";
   const signalSnapshots = p.op === "signal"
     ? [primary, ...others].map((dataset) => ({
         id: dataset.id,
         data: dataset.data,
+        rows: [dataset.excludedRows, dataset.filter],
         errorRoles: JSON.stringify(dataset.errorRoles ?? []),
       }))
     : [];
@@ -431,6 +436,7 @@ export async function runTransform(
     const changed = signalSnapshots.some((snapshot) => {
       const current = s().datasets.find((dataset) => dataset.id === snapshot.id);
       return !current || current.pending || current.data !== snapshot.data ||
+        (readsView && (current.excludedRows !== snapshot.rows[0] || current.filter !== snapshot.rows[1])) ||
         JSON.stringify(current.errorRoles ?? []) !== snapshot.errorRoles;
     });
     if (changed) {

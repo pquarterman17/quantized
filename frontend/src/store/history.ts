@@ -425,7 +425,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
-      })),
+      }), set),
     redo: () =>
       restoreTouching(get, () => set((s) => {
         const top = s.future[s.future.length - 1];
@@ -436,7 +436,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           status: `Redid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
-      })),
+      }), set),
     recordView: (before, after) =>
       set((s) => {
         if (

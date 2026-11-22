@@ -20,10 +20,15 @@ export async function runDerivedWorksheetRecompute(
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
   if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
   const sourceErrorRoles = JSON.stringify(source.errorRoles ?? []);
+  // An analysis-view recipe also reads the row state (lane IR): an exclusion or
+  // filter edited mid-pass must refuse, not commit the old view as current.
+  const readsView = sheet.analysisRecipe?.inputRows === "analysis-view";
+  const rowStateMoved = (current: Dataset | undefined, before: Dataset | undefined): boolean =>
+    readsView && (current?.excludedRows !== before?.excludedRows || current?.filter !== before?.filter);
   const assertInputsUnchanged = () => {
     const currentSource = get().datasets.find((dataset) => dataset.id === sourceId);
     const currentSheet = get().datasets.find((dataset) => dataset.id === sheet.id);
-    if (currentSource?.data !== source.data || currentSheet !== sheet ||
+    if (currentSource?.data !== source.data || currentSheet !== sheet || rowStateMoved(currentSource, source) ||
         JSON.stringify(currentSource?.errorRoles ?? []) !== sourceErrorRoles) {
       throw new Error("source or derived worksheet changed while recalculation was running");
     }
@@ -37,6 +42,7 @@ export async function runDerivedWorksheetRecompute(
       if (secondaryId && !secondary) throw new Error(`second source dataset "${secondaryId}" no longer exists`);
       if (secondary?.pending) throw new Error(`second source dataset "${secondary.name}" hasn't fully loaded yet`);
       const secondaryData = secondary?.data;
+      const secondaryBefore = secondary;
       const secondaryErrorRoles = JSON.stringify(secondary?.errorRoles ?? []);
       const { recomputeSpectralWorksheet } = await import("./spectralWorksheetsRun");
       const result = await recomputeSpectralWorksheet(source, sheet, sheet.analysisRecipe, secondary);
@@ -44,7 +50,7 @@ export async function runDerivedWorksheetRecompute(
         ? get().datasets.find((dataset) => dataset.id === secondaryId)
         : undefined;
       if (secondaryId && (
-        currentSecondary?.data !== secondaryData ||
+        currentSecondary?.data !== secondaryData || rowStateMoved(currentSecondary, secondaryBefore) ||
         JSON.stringify(currentSecondary?.errorRoles ?? []) !== secondaryErrorRoles
       )) {
         throw new Error("second source worksheet changed while recalculation was running");
