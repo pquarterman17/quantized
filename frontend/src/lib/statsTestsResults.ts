@@ -9,6 +9,7 @@
 
 import type { AnovaTableRow, MultiRegressionResult, StatsTestResult } from "./api/statsTests";
 import { csvTextCell, neutralizeFormula } from "./csvCell";
+import { describeExtra } from "./statsTestsResultsExtra";
 
 export type Cell = string | number | null;
 
@@ -282,6 +283,12 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
         tables: [{ title: "Partial r", columns: ["", ...labels], rows: r.r.map((row, i) => [labels[i] ?? "", ...row]) }],
       };
     }
+    case "roc":
+    case "glm-logistic":
+    case "glm-poisson":
+    case "chi-square-gof":
+    case "adjust-p":
+      return describeExtra(result, labels, alpha);
     case "power": {
       const r = result.data;
       const test = `${r.tails === 1 ? "one" : "two"}-sided ${r.kind} t-test`;

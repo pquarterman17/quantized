@@ -115,6 +115,48 @@ describe("StatsTestsPanel", () => {
     expect(useApp.getState().analysisResults).toEqual([]);
   });
 
+  it("runs ROC on an outcome and a score and saves the result", async () => {
+    runMock.mockResolvedValue({
+      id: "roc",
+      data: {
+        roc: { fpr: [0, 1], tpr: [0, 1], thresholds: [null, 4], auc: 0.9, N: 5, nPositive: 2, nNegative: 3 },
+        youden: { optimalThreshold: 4, youdenJ: 0.8, fpr: 0.1, tpr: 0.9 },
+      },
+    });
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, values: [[0, 1, 5], [0, 2, 6], [1, 3, 4], [1, 4, 7], [0, 5, 5]] } }] });
+    render(<StatsTestsPanel />);
+    pickTest(/ROC/);
+    fireEvent.change(screen.getByLabelText("Outcome (0/1)"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Score"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    expect(await screen.findByText(/^AUC = 0\.9: Ms separates Hc = 1/)).toBeInTheDocument();
+    expect(runMock).toHaveBeenCalledWith({ id: "roc", body: { y_true: [0, 0, 1, 1, 0], y_score: [1, 2, 3, 4, 5] } });
+    expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
+      parameters: expect.objectContaining({ testId: "roc" }),
+    })]);
+  });
+
+  it("refuses ROC for a column that is not coded 0/1 without calling the backend", async () => {
+    render(<StatsTestsPanel />);
+    pickTest(/ROC/);
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    expect(await screen.findByText(/must be coded 0\/1/)).toBeInTheDocument();
+    expect(runMock).not.toHaveBeenCalled();
+    expect(useApp.getState().analysisResults).toEqual([]);
+  });
+
+  it("adjusts a p-value column with the chosen method", async () => {
+    runMock.mockResolvedValue({ id: "adjust-p", data: { adjusted: [0.5, 0.5], method: "bonferroni", m: 2, p_values: [0.25, 0.25] } });
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, time: [1, 2], values: [[0.25, 0, 0], [0.25, 0, 0]] } }] });
+    render(<StatsTestsPanel />);
+    pickTest(/P-value adjustment/);
+    fireEvent.change(screen.getByLabelText("Method"), { target: { value: "bonferroni" } });
+    fireEvent.change(screen.getByLabelText("P-values"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    expect(await screen.findByText(/^Bonferroni adjustment of 2 p-values/)).toBeInTheDocument();
+    expect(runMock).toHaveBeenCalledWith({ id: "adjust-p", body: { p_values: [0.25, 0.25], method: "bonferroni" } });
+  });
+
   it("copies the results as TSV and exports them as CSV", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
