@@ -98,6 +98,7 @@ function dataTypeOf(node: LibraryNode): string {
 }
 
 function sourceOf(node: LibraryNode): string {
+  if (node.kind === "origin-group" && node.entity.variant === "link-tables") return "Links not resolved";
   if (node.kind === "origin-group" || (node.kind === "origin-figure" && node.entity.datasetId == null)) return "Unresolved";
   if (node.source.missingDatasetIds.length > 0) return "Missing data";
   if (node.kind === "worksheet") {
@@ -134,7 +135,7 @@ export function libraryDetailsRows(hierarchy: LibraryHierarchy): LibraryDetailsR
   return nodes.map((node, manualIndex) => ({
     node,
     manualIndex,
-    type: TYPE_LABELS[node.kind],
+    type: node.kind === "origin-group" && node.entity.variant === "link-tables" ? "Origin link tables" : TYPE_LABELS[node.kind],
     location: locationOf(node, hierarchy),
     dimensions: dimensionsOf(node),
     dataType: dataTypeOf(node),

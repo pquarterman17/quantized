@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Origin fit-link tables no longer clutter the Library**: opening an `.opju` project that holds many `TableN` books of `cell://` links (the small tables Origin keeps beside a fit, with rows such as Intercept and Slope) now lists them together in one collapsed "Origin link tables" group marked "linked cells not resolved", instead of dozens of text books among your own. Nothing is removed: every table is still imported and opens from the group. The values those links point to are still not recovered. Books with real numbers, or real text that merely mentions a link, stay where they were.
+
 ## [0.40.1] - 2026-11-22
 
 ### Fixed

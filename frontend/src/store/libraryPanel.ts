@@ -148,7 +148,7 @@ export interface LibraryPanelSlice {
    *  session, matching the component's old default. */
   originFidelitySectionExpanded: boolean;
   toggleOriginFidelitySectionExpanded: () => void;
-  /** Disclosure of the virtual "Unresolved Origin figures" groups
+  /** Disclosure of the virtual "Unresolved Origin figures" and "Origin link tables" groups
    *  (lib/libraryHierarchy.ts `origin-group`), by group id. SESSION-ONLY like
    *  `originFidelitySectionExpanded`: a group is derived, never stored, so a
    *  saved project has nothing to restore it onto and it starts collapsed. */
