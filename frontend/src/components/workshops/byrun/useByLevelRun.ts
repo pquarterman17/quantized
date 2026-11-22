@@ -53,6 +53,12 @@ export function useByLevelRun(
   const [busy, setBusy] = useState(false);
   const runRef = useRef(run);
   runRef.current = run;
+  // A By column the caller no longer offers (it became the analysed column,
+  // say) resets to none instead of partitioning by the analysed column.
+  const { byCol, byOptions, setByCol } = part;
+  useEffect(() => {
+    if (byCol !== null && !byOptions.some((option) => option.index === byCol)) setByCol(null);
+  }, [byCol, byOptions, setByCol]);
 
   useEffect(() => {
     if (part.levels.length === 0) {

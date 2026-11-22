@@ -906,9 +906,13 @@ panel; **own** = a tool-specific result or worksheet. ✱ = changed here.
   are Cancelled), a failing worksheet is a Failed row and the batch goes on,
   one AB result. Short per-item calls do not need the backend job queue;
   Peak analyzer keeps its job (one long fit request). New:
-  `rowPolicy="analysisView"` for the statistics tools (each worksheet's
-  analysis view; the selection's rows / range / ROI are dropped from the run
-  and from the saved provenance, so the batch reads what the single run reads).
+  `inputs="statistics"` for the statistics tools: each worksheet's analysis
+  view (the selection's rows / range / ROI are dropped from the run and from
+  the saved provenance, so the batch reads what the single run reads) and no
+  plot-role check (columns are read by name; preflight refuses only a
+  worksheet that is gone or has no channel or rows). A settings change starts
+  a fresh table; a second tool claiming the selection is said, with a button
+  to take it back.
 - *Statistics wrapper:* `StatsBatchSection` is an opt-in, closed-by-default
   "Batch over selected worksheets" toggle; only opening it claims the tool's
   analysis selection, so opening a statistics tool never takes another open
@@ -919,7 +923,8 @@ panel; **own** = a tool-specific result or worksheet. ✱ = changed here.
   name → that worksheet fails with the reason; never a positional guess.
 - *Levels:* `byrun/ByLevelRunSection` stays the one By runner (one row per
   level, a failing level is an error row, a column change aborts the run in
-  flight). New opt-in `save`: "Save By result" records the CURRENT rows
+  flight; fixed here: a By pick the tool stops offering, because it became
+  the analysed column, resets to none instead of partitioning by it). New opt-in `save`: "Save By result" records the CURRENT rows
   (never while levels run, never on a lazy preview) as one AB result with a
   "Level" first column and `parameters.byColumn` (`lib/byLevelBatchResult`);
   the Result book describes it as "<tool> by <column>" with its level count,
@@ -966,10 +971,9 @@ describer).
   Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit) into
   `save` (one prop each, left out here to stay off files another lane is
   editing); Curve fit's own By into `byrun` or `save`; By for Hysteresis and
-  Williamson–Hall; a statistics batch whose selection has no plotted Y in some
-  worksheet is blocked by the shared resolver ("No selected response column")
-  although the statistics tools read by name; batch for Magnetometry tools,
-  Pawley, XRD reference, both FFT tools and Reflectivity.
+  Williamson–Hall; batch for Magnetometry tools, Pawley, XRD reference, both
+  FFT tools and Reflectivity; the role-based batches still keep a finished
+  table under changed settings (only the statistics wrapper resets it).
 
 ## Workstream E — Statistical result workspace
 
@@ -1169,7 +1173,7 @@ describer).
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
-| 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `rowPolicy="analysisView"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
+| 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `inputs="statistics"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane RB: audited how the statistics tools present results and added the Result book tab to the result workspace (`lib/resultBook.ts`, `analysisresults/resultbook/`) for Distribution, Fit Y by X, Multivariate, Variability and Outlier screening: one header (shared input line while current, method, settings, freshness), collapsible table and figure sections in one order, per-section Copy, Send to report and Open as worksheet, and Reopen in tool. | Characterization tests of the existing tabs (written first) still pass; book tests cover section order, collapse state, each action, a stale result and each migrated tool; `sendAnalysisInlineTableToReport(id, tableIndex)` store test; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane RB2: extended the Result book to saved statistical tests, Williamson–Hall results, Williamson–Hall comparisons and analysis-batch results (`lib/resultBookDescribe.ts`); the book fails closed (no tab) when a result's settings cannot be read; per-figure Send to report deliberately not added (see the Statistical engines item). | Tests per tool for header, section order, actions, stale state and the no-book cases (`resultbook/ResultBookMore.test.tsx`); the RB tests still pass; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated (slice 2 adds Fit Y by X, Multivariate, Variability, Stats tests and the chooser); lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |

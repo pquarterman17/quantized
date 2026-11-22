@@ -48,7 +48,8 @@ export function useSaveByResult(
   const disabledReason = !options ? "Saving is not offered for this tool."
     : !active || !byColumn ? "Pick a By column first."
       : active.pending ? "Wait for the full worksheet to load."
-        : !by.current ? "Wait for every level to finish."
+        : by.levels.length === 0 ? "This By column has no levels in the analysis view."
+          : !by.current ? "Wait for every level to finish."
           : by.rows.length === 0 ? "No levels have run yet."
             : stillSaved && saved?.rows === by.rows ? "This By result is already saved."
               : null;

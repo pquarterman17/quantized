@@ -7,15 +7,18 @@
 //
 // Opt-in so that merely opening a statistics tool never claims the shared
 // analysis selection from another open tool, and the single run's defaults are
-// untouched. Rows follow the statistics tools' single-run policy (the analysis
-// view: excluded and filtered-out rows dropped; selected rows and the plot X
-// range not read), so a batch row for the active worksheet matches the panel.
+// untouched. Inputs follow the statistics contract (AnalysisBatchControls
+// `inputs="statistics"`): the single run's rows (the analysis view: excluded
+// and filtered-out rows dropped; selected rows and the plot X range not read)
+// and columns by name, so a batch row for the active worksheet matches the panel.
 
 import { useState } from "react";
 
 import type { AnalysisResultValue } from "../../../lib/analysisResult";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { Dataset } from "../../../lib/types";
+import { seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
+import { Button } from "../../primitives";
 import AnalysisBatchControls, { type AnalysisBatchOutcome } from "./AnalysisBatchControls";
 import { useToolAnalysisSelection } from "./useToolAnalysisSelection";
 import "./analysisInputReview.css";
@@ -33,19 +36,29 @@ interface Props {
 
 function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resultParameters, blockedReason }: Props) {
   useToolAnalysisSelection(toolId); // seeds / keeps this tool's selection
+  const owner = useAnalysisSelection((state) => state.toolId);
+  if (owner !== null && owner !== toolId) {
+    return <p className="qzk-ds-meta">
+      Another tool is using the Library selection for its batch.{" "}
+      <Button size="sm" onClick={() => seedAnalysisSelection(toolId, "tool-default")}>Use it for {label}</Button>
+    </p>;
+  }
   return <>
     <p className="qzk-ds-meta">
       {meaning} Excluded and filtered-out rows are left out; selected rows and the plot X range are not used.
     </p>
     {blockedReason && <p className="qzk-analysis-input-issue error">{blockedReason}</p>}
     <AnalysisBatchControls
+      // A settings change starts a fresh table: rows run with other settings
+      // must not sit under the new column / method.
+      key={JSON.stringify(resultParameters ?? {})}
       toolId={toolId}
       label={label}
       summaryColumns={[...summaryColumns]}
       runItem={runItem}
       {...(resultParameters ? { resultParameters } : {})}
       blockedReason={blockedReason ?? null}
-      rowPolicy="analysisView"
+      inputs="statistics"
       defaultExpanded
     />
   </>;

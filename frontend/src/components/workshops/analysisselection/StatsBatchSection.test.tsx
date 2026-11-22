@@ -1,8 +1,8 @@
 // The statistics tools' shared batch (lane BY): Distribution, Fit Y by X and
 // Outlier screening over the worksheets selected in the Library, through
-// StatsBatchSection + AnalysisBatchControls (rowPolicy "analysisView").
+// StatsBatchSection + AnalysisBatchControls (inputs "statistics").
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsAnova, statsGrubbs, statsLevene, statsRecommend, statsShapiro } from "../../../lib/api";
@@ -70,8 +70,9 @@ describe("Distribution batch", () => {
   });
 
   it("profiles each worksheet's column of the same name; a worksheet without it is an error row", async () => {
+    // The plot's Y (column 1) does not exist in c: the statistics batch reads
+    // by name, so that plot role must not block the batch.
     setup([sheet("a", A), sheet("b", B), sheet("c", C, { channelTypes: {} })]);
-    useApp.setState({ yKeys: [0] }); // every sheet has a column 0 to plot
     render(<DistributionBatchSection column="Signal" />);
     openBatch();
     run("Distribution");
@@ -107,6 +108,29 @@ describe("Distribution batch", () => {
     await finished();
     expect(savedRows()[0]!.slice(0, 2)).toEqual(["a.csv", "Completed"]);
     expect(savedRows()[0]!.at(-1)).toBe("Normality: normality test unavailable.");
+  });
+
+  it("says when another tool's batch holds the selection, and takes it back on request", () => {
+    setup([sheet("a", A), sheet("b", B)]);
+    render(<DistributionBatchSection column="Signal" />);
+    openBatch();
+    act(() => { useAnalysisSelection.setState({ toolId: "curvefit" }); });
+    expect(screen.getByText(/Another tool is using the Library selection/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use it for Distribution" }));
+    expect(useAnalysisSelection.getState().toolId).toBe("distribution");
+    expect(screen.getByRole("button", { name: "Run Distribution batch" })).toBeEnabled();
+  });
+
+  it("starts a fresh table when the panel's column changes after a run", async () => {
+    setup([sheet("a", A)]);
+    const { rerender } = render(<DistributionBatchSection column="Signal" />);
+    openBatch();
+    run("Distribution");
+    await finished();
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    rerender(<DistributionBatchSection column="Group" />);
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getByText("Ready")).toBeInTheDocument();
   });
 
   it("refuses to run without a column", () => {

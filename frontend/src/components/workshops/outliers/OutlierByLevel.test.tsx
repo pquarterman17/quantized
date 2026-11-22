@@ -64,6 +64,27 @@ describe("Outlier screening By", () => {
     expect(useApp.getState().selection).toBeNull();
   });
 
+  it("drops the By column when it becomes the screened channel", async () => {
+    render(<OutlierScreeningPanel />);
+    await screen.findByText(/G = 2/);
+    pickGroup();
+    await waitFor(() => expect(within(byTable()).getAllByRole("row")).toHaveLength(3));
+    fireEvent.change(screen.getByLabelText("Channel"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Outlier screening by level" })).toBeNull());
+    // Back on y, the By pick was reset rather than kept as the channel's column.
+    fireEvent.change(screen.getByLabelText("Channel"), { target: { value: "1" } });
+    expect(await screen.findByLabelText("Outlier screening By (optional)")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Save By result" })).toBeNull();
+  });
+
+  it("says why Save is unavailable when the By column has no levels left", async () => {
+    useApp.setState({ datasets: [{ ...useApp.getState().datasets[0]!, data: { ...DATA, values: DATA.values.map(([, y]) => [Number.NaN, y!]) } }] });
+    render(<OutlierScreeningPanel />);
+    await screen.findByText(/G = 2/);
+    pickGroup();
+    expect(await screen.findByText("This By column has no levels in the analysis view.")).toBeInTheDocument();
+  });
+
   it("saves one By result per run, refuses a duplicate, and allows saving again after Undo", async () => {
     render(<OutlierScreeningPanel />);
     await screen.findByText(/G = 2/);
