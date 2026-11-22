@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Conditional formatting for worksheet columns**: right-click a column header and choose Conditional format... to colour its cells with up to two value rules (greater than, less than, between, or NaN/empty) and one 2- or 3-colour scale over the column's own min to max. Colours come from the theme (green, amber, red, accent, two series colours), so they follow the light/dark theme and accent. The first matching value rule wins and the scale colours the rest; NaN cells, infinities and a column with a single value get no scale colour, and a reversed "between" range is refused with a message instead of applied. It is display only: stored numbers, copies, exports and plots are unchanged, a selected column or cell keeps its selection colour, and only the visible rows are coloured, so a large sheet scrolls as before. Each change is one Undo step, "Clear conditional format" removes it, and the rules follow their column when columns are inserted, deleted or moved. They are saved with the project and restored on reopen; a project that uses them is saved as a workspace v7 file, which older versions refuse to open rather than silently dropping the formatting.
+
 ## [0.40.1] - 2026-11-22
 
 ### Fixed

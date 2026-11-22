@@ -305,6 +305,7 @@ export function serializeWorkspace(
       ...(d.columnProps && Object.keys(d.columnProps).length ? { columnProps: d.columnProps } : {}),
       ...(d.hiddenCols?.length ? { hiddenCols: d.hiddenCols } : {}),
       ...(d.frozenCols ? { frozenCols: d.frozenCols } : {}),
+      ...(d.cellRules && Object.keys(d.cellRules).length ? { cellRules: d.cellRules } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       fitSpec: d.fitSpec,
