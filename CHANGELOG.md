@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Pawley "→ Library", the reflectivity FFT "→ Library", the Magnetometry background subtraction (M(T) and M(H) paths) and the Hysteresis background subtraction now follow the shared result contract**: each output is ONE Undo step together with its Library result, repeating the same action on the same data adds nothing (the status line says "already added as ...", and the Pawley and reflectivity FFT "→ Library" buttons are disabled with that reason), and the output is marked "Out of date" when its source worksheet changes, recalculated or only marked per Auto / Manual / None. A different setting (channel, cell tie, window, fit fraction) is a new computation. The graph digitizer already skips a repeat Create; it has no source worksheet, so it has no Out of date marking. Reopening these tools from their results ("Open in ...") is not yet available.
+
 ## [0.41.0] - 2026-11-22
 
 ### Added

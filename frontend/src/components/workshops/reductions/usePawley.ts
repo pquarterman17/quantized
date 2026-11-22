@@ -22,15 +22,17 @@ import type { Cell, LatticePreset } from "../../../lib/crystalStructure";
 import { pawleyRefine } from "../../../lib/api/reductions";
 import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
 import type { PawleyResult } from "../../../lib/reductionTypes";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { nextPlotObjectId } from "../../../store/idSeq";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import {
   PAWLEY_DEFAULT_FIELDS,
   PAWLEY_MAX_POINTS,
@@ -48,6 +50,8 @@ import {
 } from "./pawleyInputs";
 
 export type { PawleyCentering };
+
+const PAWLEY_PRODUCER = { id: "pawley", label: "Pawley refinement", version: 1 } as const;
 
 export interface PawleyState {
   active: Dataset | null;
@@ -78,6 +82,8 @@ export interface PawleyState {
   canCompute: boolean;
   compute: () => Promise<void>;
   toLibrary: () => void;
+  /** Why "→ Library" is unavailable (out of date, or already added); null when it is enabled. */
+  addDisabledReason: string | null;
   addReferenceLines: () => void;
   /** Why the saved reflections cannot be applied to the current plot. */
   referenceLinesBlockedReason: string | null;
@@ -99,6 +105,11 @@ interface PawleyFitInput {
   range: { min: number; max: number };
   sourceId: string;
   sourceName: string;
+  /** The source worksheet's analysis-view fingerprint when this fit ran (the commit's out-of-date stamp). */
+  computedOn: string;
+  /** The settings the fit was made with (the commit key). */
+  col: number;
+  tie: PawleyTie;
   label: string;
   unit: string;
   xLabel: string;
@@ -140,7 +151,6 @@ const MEASURED_WAVELENGTH_KEYS = ["wavelength_a", "alpha_average"] as const;
 
 export function usePawley(): PawleyState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const plotXKey = useApp((s) => s.xKey);
   const columns = active
@@ -284,6 +294,9 @@ export function usePawley(): PawleyState {
         range,
         sourceId: ds.id,
         sourceName: ds.name,
+        computedOn: analysisDataFingerprint(ds),
+        col,
+        tie,
         label: ds.data.labels[col] || "Observed",
         unit: ds.data.units[col] || "",
         xLabel: xIdentity.xLabel,
@@ -308,50 +321,65 @@ export function usePawley(): PawleyState {
     }
   }
 
-  function toLibrary(): void {
-    if (!result || !fitInput || stale) return;
-    const f = fitInput;
-    // Keep the source's own name only when it alone reads as 2θ; a label that
-    // passed only on its "deg" unit (e.g. "x") is replaced.
-    const xName = xAxisIsTwoThetaDegrees({ xLabel: f.xLabel, xUnit: "" }) ? f.xLabel : "2Theta";
-    const data: DataStruct = {
-      time: f.x,
-      values: f.x.map((_, i) => [f.y[i], result.model[i], result.background[i], result.residual[i]]),
-      labels: [f.label, "Pawley model", "Background", "Residual"],
-      units: [f.unit, f.unit, f.unit, f.unit],
-      metadata: {
-        // The measured wavelength (if the source had one) stays under the
-        // parser keys; the value the fit USED is recorded under `pawley`, so
-        // a typed default is never mistaken for an instrument reading.
-        ...f.measured,
-        reduction: "pawley",
-        source_dataset_id: f.sourceId,
-        technique: "xrd.powder",
-        x_column_name: xName,
-        x_column_long: xName,
-        x_column_unit: "deg",
-        pawley: {
-          cell_initial: result.cell_initial,
-          cell_refined: result.cell,
-          tie: result.tie,
-          symmetry: f.symmetry,
-          wavelength_a: f.wavelength,
-          profile_fwhm_deg: f.profileFwhm,
-          refine_cell: f.refineCell,
-          start_cell_from: f.startCellFrom,
-          hkl_max: result.hkl_max,
-          two_theta_range_deg: [f.range.min, f.range.max],
-          rwp: result.rwp,
-          rwp_initial: result.rwp_initial,
-          converged: result.converged,
-          rwp_background: result.rwp_background,
-          warning: pawleyVerdict(result, f.refineCell),
-          peaks: result.peaks,
+  const commit = useAnalysisCommit(result && fitInput && !stale ? {
+    producer: PAWLEY_PRODUCER,
+    sourceId: fitInput.sourceId,
+    computedOn: fitInput.computedOn,
+    settings: {
+      col: fitInput.col, tie: fitInput.tie, symmetry: fitInput.symmetry, refineCell: fitInput.refineCell,
+      wavelength: fitInput.wavelength, fwhm: fitInput.profileFwhm,
+      // The refinement it produced, so a different outcome is a different output.
+      cell: result.cell, rwp: result.rwp, n: fitInput.x.length,
+    },
+    status: "added Pawley observed/model/background/residual dataset",
+    output: () => {
+      const f = fitInput;
+      // Keep the source's own name only when it alone reads as 2θ; a label that
+      // passed only on its "deg" unit (e.g. "x") is replaced.
+      const xName = xAxisIsTwoThetaDegrees({ xLabel: f.xLabel, xUnit: "" }) ? f.xLabel : "2Theta";
+      const data: DataStruct = {
+        time: f.x,
+        values: f.x.map((_, i) => [f.y[i], result.model[i], result.background[i], result.residual[i]]),
+        labels: [f.label, "Pawley model", "Background", "Residual"],
+        units: [f.unit, f.unit, f.unit, f.unit],
+        metadata: {
+          // The measured wavelength (if the source had one) stays under the
+          // parser keys; the value the fit USED is recorded under `pawley`, so
+          // a typed default is never mistaken for an instrument reading.
+          ...f.measured,
+          reduction: "pawley",
+          source_dataset_id: f.sourceId,
+          technique: "xrd.powder",
+          x_column_name: xName,
+          x_column_long: xName,
+          x_column_unit: "deg",
+          pawley: {
+            cell_initial: result.cell_initial,
+            cell_refined: result.cell,
+            tie: result.tie,
+            symmetry: f.symmetry,
+            wavelength_a: f.wavelength,
+            profile_fwhm_deg: f.profileFwhm,
+            refine_cell: f.refineCell,
+            start_cell_from: f.startCellFrom,
+            hkl_max: result.hkl_max,
+            two_theta_range_deg: [f.range.min, f.range.max],
+            rwp: result.rwp,
+            rwp_initial: result.rwp_initial,
+            converged: result.converged,
+            rwp_background: result.rwp_background,
+            warning: pawleyVerdict(result, f.refineCell),
+            peaks: result.peaks,
+          },
         },
-      },
-    };
-    addDataset({ id: nextDatasetId(), name: `${f.sourceName} (Pawley)`, data });
-    setStatus("added Pawley observed/model/background/residual dataset");
+      };
+      return { name: `${f.sourceName} (Pawley)`, data };
+    },
+  } : null);
+
+  function toLibrary(): void {
+    if (!result || !fitInput || stale || commit.disabledReason) return;
+    commit.commit();
   }
 
   function addReferenceLines(): void {
@@ -408,7 +436,8 @@ export function usePawley(): PawleyState {
     wavelengthFromFile,
     refineCell, setRefineCell,
     result, stale, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
-    busy, error, blockedReason, canCompute, compute, toLibrary, addReferenceLines,
+    busy, error, blockedReason, canCompute, compute, toLibrary,
+    addDisabledReason: stale ? "Out of date: the settings or rows changed since this fit. Refine again." : commit.disabledReason, addReferenceLines,
     referenceLinesBlockedReason, applyLattice,
   };
 }

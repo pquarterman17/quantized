@@ -32,7 +32,9 @@ import {
   type MagXDetection,
 } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
@@ -93,6 +95,8 @@ export const FIELD_UNITS = ["Oe", "T", "mT", "A/m"];
  *  tail; 70% of max|H| is where a loop is saturated. */
 export const DEFAULT_AUTO_FRACTION = 0.1;
 export const DEFAULT_HI_FRACTION = 0.7;
+
+const MAG_BACKGROUND_PRODUCER = { id: "mag-background", label: "Magnetometry background", version: 1 } as const;
 
 export interface MagRequestView {
   sourceId: string;
@@ -195,8 +199,6 @@ export function useMagTools(): MagToolsState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
   const [tab, setTab] = useState<MagTab>("background");
   const [bgMode, setBgModeState] = useState<MagBgMode>("auto");
   const [autoFraction, setAutoFraction] = useState(DEFAULT_AUTO_FRACTION);
@@ -297,6 +299,8 @@ export function useMagTools(): MagToolsState {
       }
       let corrected: number[];
       let fit: MagBgFit;
+      // Set on the commit, so a repeat that adds nothing keeps its own "already added" status.
+      let status = "";
       if (bgPath === "mh") {
         const res = await subtractHysteresisBackground({
           h: pairs.x,
@@ -317,19 +321,15 @@ export function useMagTools(): MagToolsState {
           warnings.push(
             "No high-field background found (too few saturated-tail points, or the field span is degenerate) — the moment is unchanged. Lower the high-field fraction to widen the tails.",
           );
-          setStatus("no high-field background found (too few tail points)");
+          status = "no high-field background found (too few tail points)";
         } else if (res.offset === 0) {
           // The MINOR-LOOP branch (`calc/magnetometry.py`): high field on only
           // one side, so a symmetric centre is undefined and the routine
           // deliberately removes the slope WITHOUT centring. Saying "re-centred
           // the loop" here would claim something that did not happen.
-          setStatus(
-            `removed χ·H background, not centred — high field on one side only (χ ${res.slope.toExponential(2)})`,
-          );
+          status = `removed χ·H background, not centred — high field on one side only (χ ${res.slope.toExponential(2)})`;
         } else {
-          setStatus(
-            `removed χ·H background and re-centred the loop (χ ${res.slope.toExponential(2)})`,
-          );
+          status = `removed χ·H background and re-centred the loop (χ ${res.slope.toExponential(2)})`;
         }
       } else {
         const res = await subtractMagBackground({
@@ -340,7 +340,7 @@ export function useMagTools(): MagToolsState {
         if (!resolvedSourceStillCurrent(request, ds.data)) return;
         corrected = restoreGapRows(res.corrected, pairs);
         fit = { kind: "mt", slope: res.slope, intercept: res.intercept };
-        setStatus(`subtracted high-T background (slope ${res.slope.toExponential(2)})`);
+        status = `subtracted high-T background (slope ${res.slope.toExponential(2)})`;
       }
       const data: DataStruct = {
         time: x, // the ORIGINAL x, gaps included — `corrected` is row-aligned to it
@@ -359,10 +359,22 @@ export function useMagTools(): MagToolsState {
         ),
       };
       const suffix = bgPath === "mh" ? "loop bg-sub" : "bg-sub";
-      const outId = nextDatasetId();
-      addDataset({ id: outId, name: `${stem()} (${suffix})`, data });
+      // One undo step with its Library result; the same correction of the same data
+      // adds nothing; the output goes out of date when the source changes.
+      const outcome = commitComputedOutput({
+        producer: MAG_BACKGROUND_PRODUCER,
+        sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
+        settings: { path: bgPath, fraction, xKey: request.xKey, yKey },
+        name: `${stem()} (${suffix})`,
+        data,
+        status,
+      });
+      if (outcome.kind === "refused") {
+        setReadout({ owners, key: null, fit: null, warning: null, error: outcome.reason });
+        return;
+      }
       setReadout({
-        owners: [...owners, outId],
+        owners: [...owners, outcome.outputId],
         key: bgRunKey(ds, request.xKey, request.yKeys, request.seriesOrder, bgPath, fraction),
         fit,
         warning: warnings.length ? warnings.join(" ") : null,

@@ -11,9 +11,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { reflectivityFft } from "../../../lib/api/reductions";
 import type { ReflectivityFftResult } from "../../../lib/reductionTypes";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
@@ -22,6 +24,8 @@ import { type ReflFftPreprocess, reflectivityFftBody, xIsQ } from "./reductionRe
 import type { ReductionColumn } from "./useFftThickness";
 
 export type { ReflFftPreprocess };
+
+const REFL_FFT_PRODUCER = { id: "reflectivity-fft", label: "Reflectivity FFT", version: 1 } as const;
 
 export interface ReflectivityFftState {
   active: Dataset | null;
@@ -51,13 +55,13 @@ export interface ReflectivityFftState {
   error: string | null;
   compute: () => Promise<void>;
   toLibrary: () => void;
+  /** Why "→ Library" is unavailable (out of date, or already added); null when it is enabled. */
+  addDisabledReason: string | null;
   clear: () => void;
 }
 
 export function useReflectivityFft(): ReflectivityFftState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
 
   const columns: ReductionColumn[] = active
     ? active.data.labels.map((lab, i) => ({ index: i, label: lab || `Column ${i + 1}` }))
@@ -73,6 +77,9 @@ export function useReflectivityFft(): ReflectivityFftState {
   const [maxThicknessNm, setMaxThicknessNm] = useState(500);
   const [peakProminence, setPeakProminence] = useState(0.05);
   const [result, setResult] = useState<ReflectivityFftResult | null>(null);
+  // What the shown result was computed from: the source worksheet and the settings
+  // the run was made with (the commit key and the out-of-date stamp).
+  const [ran, setRan] = useState<{ sourceId: string; sourceName: string; computedOn: string; inputs: unknown } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Lane WB6: stamped with the key the run LAUNCHED with (see useFftThickness).
@@ -90,6 +97,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     stamp.record(null);
     setBusy(false);
     setResult(null);
+    setRan(null);
     setError(null);
     setCol(0);
     setIsNeutron(xIsQ(active?.data));
@@ -128,6 +136,10 @@ export function useReflectivityFft(): ReflectivityFftState {
       }));
       if (id !== seq.current) return;
       stamp.record(launchKey);
+      setRan({
+        sourceId: ds.id, sourceName: ds.name, computedOn: analysisDataFingerprint(ds),
+        inputs: { col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence },
+      });
       setResult(res);
     } catch (e) {
       if (id !== seq.current) return;
@@ -137,22 +149,27 @@ export function useReflectivityFft(): ReflectivityFftState {
     }
   }
 
+  const commit = useAnalysisCommit(result && ran && !stale ? {
+    producer: REFL_FFT_PRODUCER,
+    sourceId: ran.sourceId,
+    computedOn: ran.computedOn,
+    settings: { ...(ran.inputs as Record<string, unknown>), thicknessesNm: result.thicknesses_nm, n: result.thickness_axis.length },
+    status: `added reflectivity-FFT spectrum (${result.thicknesses_nm.length} peak${result.thicknesses_nm.length === 1 ? "" : "s"})`,
+    output: () => {
+      const data: DataStruct = {
+        time: result.thickness_axis,
+        values: result.fft_magnitude.map((v) => [v]),
+        labels: ["FFT magnitude"],
+        units: [""],
+        metadata: { reduction: "reflectivity-fft", thicknesses_nm: result.thicknesses_nm },
+      };
+      return { name: `${ran.sourceName} (refl FFT)`, data };
+    },
+  } : null);
+
   function toLibrary(): void {
-    if (!result || stale) return;
-    const data: DataStruct = {
-      time: result.thickness_axis,
-      values: result.fft_magnitude.map((v) => [v]),
-      labels: ["FFT magnitude"],
-      units: [""],
-      metadata: { reduction: "reflectivity-fft", thicknesses_nm: result.thicknesses_nm },
-    };
-    addDataset({
-      id: nextDatasetId(),
-      name: `${active?.name ?? "scan"} (refl FFT)`,
-      data,
-    });
-    const n = result.thicknesses_nm.length;
-    setStatus(`added reflectivity-FFT spectrum (${n} peak${n === 1 ? "" : "s"})`);
+    if (stale || commit.disabledReason) return;
+    commit.commit();
   }
 
   function clear(): void {
@@ -160,6 +177,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     stamp.record(null);
     setBusy(false);
     setResult(null);
+    setRan(null);
     setError(null);
   }
 
@@ -190,6 +208,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     error,
     compute,
     toLibrary,
+    addDisabledReason: stale ? "Out of date: the settings or rows changed since this result. Compute again." : commit.disabledReason,
     clear,
   };
 }

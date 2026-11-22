@@ -52,6 +52,7 @@ export default function ReflectivityFftSection() {
     error,
     compute,
     toLibrary,
+    addDisabledReason,
   } = useReflectivityFft();
 
   if (!active) {
@@ -174,7 +175,7 @@ export default function ReflectivityFftSection() {
               {sl.suppressed_orders.length > 0 && ` · suppressed orders ${sl.suppressed_orders.join(", ")}`}
             </div>
           )}
-          <Button size="sm" style={{ marginTop: 8 }} onClick={toLibrary} disabled={stale} title={stale ? "Out of date: compute again" : undefined}>
+          <Button size="sm" style={{ marginTop: 8 }} onClick={toLibrary} disabled={!!addDisabledReason} title={addDisabledReason ?? undefined}>
             → Library
           </Button>
         </div>

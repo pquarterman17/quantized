@@ -143,7 +143,7 @@ export default function PawleySection() {
             ]}
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-            <Button size="sm" onClick={s.toLibrary} disabled={s.stale} title={s.stale ? "Out of date: refine again" : undefined}>→ Library</Button>
+            <Button size="sm" onClick={s.toLibrary} disabled={!!s.addDisabledReason} title={s.addDisabledReason ?? undefined}>→ Library</Button>
             <Button size="sm" disabled={!!s.referenceLinesBlockedReason}
               title={s.referenceLinesBlockedReason ?? "Add calculated reflection positions as vertical lines on the current plot."}
               onClick={s.addReferenceLines}>Add phase reference lines</Button>
