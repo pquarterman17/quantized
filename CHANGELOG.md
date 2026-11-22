@@ -6,6 +6,8 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-22
+
 ### Added
 
 - **"Open in <tool>" now works for the multi-source outputs**: the Peak batch table (in the Peak analyzer's Batch mode), the Batch integrate trend (in the Peaks panel's Batch integrate window) and Spin asymmetry (R++ and R--) reopen with every recorded source, the recorded settings (recipe and trend X, windows, baseline, alignment, or both channels' columns) and, for the two batches, the plotted channels they ran on. A missing source opens the tool without the settings and names how many are gone; a source changed since is named in a notice (the commit still refuses a stale computation); a Peak batch recipe that is no longer saved is not swapped for another one and blocks Run until you pick one, and an edited recipe is flagged. Replace writes into the same worksheet and result in one Undo step and goes through the column-layout check, and the replaced result now lists the worksheets it was computed from this time. A fit band still cannot reopen: its covariance, free-parameter count, weights and fit range are not recorded, and the button says so.
@@ -46,6 +48,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **A run whose rows changed while it was running no longer lands as current** in FFT thickness, Pawley, Reflectivity FFT, Surface fit, Ellipse fit and Optical gap (#863, #866).
 - **An edit made while a recalculation pass runs now marks derived worksheets out of date**: a source edited mid-pass left a worksheet the pass had already re-derived reading Current over the pre-edit numbers. The edit is now applied when the pass finishes under the usual mode (Auto recalculates once, Manual marks stale, None tracks nothing); Undo/Redo history and bursts of edits are unaffected. (A cell edit to the very worksheet whose correction the pass is writing at that instant is still overwritten by that correction.)
 - **Analysis results stay honest across features**: a Curie–Weiss output is no longer overwritten with its source's columns by a recalculation; undoing a Replace of an out-of-date result keeps it marked out of date; a Signal Processing run that leaves excluded/filtered rows out refuses (Create) or stays out of date (recalculation) when rows are excluded or filtered while it runs; an exclusion made during a recalculation still marks committed results out of date; changing a statistics batch setting mid-run no longer allows a second batch at once; and a saved Signal Processing By result no longer records "Use excluded/filtered rows", which By never applies.
 - **Late or stale answers in the RSM, ROI and Test chooser tools**: peaks found for a dataset you left no longer appear (or draw on the map) under the next one, a strain answer after Clear is dropped, a Find peaks on a lazy Origin book no longer discards its own result, the ROI box statistics no longer show another dataset's numbers when you return to a dataset, and a Test chooser answer for columns you changed in flight is dropped.
