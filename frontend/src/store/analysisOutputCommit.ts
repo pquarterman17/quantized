@@ -28,6 +28,11 @@ export interface AnalysisOutputCommit {
   sourceId: string;
   /** `analysisDataFingerprint(source)` as of the computation being committed. */
   computedOn: string;
+  /** Further source worksheets of a multi-source output (a batch trend), each
+   *  with its analysis-view fingerprint as computed. Part of the commit key;
+   *  every one must still match (fail closed) and is listed in the envelope, so
+   *  a change to ANY source marks the output stale. */
+  alsoFrom?: readonly { id: string; computedOn: string }[];
   /** Inputs plus the result digest the output encodes (small: no arrays of data). */
   settings: CommitSettings;
   /** Built only when a new output is actually written. */
@@ -40,8 +45,10 @@ export type AnalysisCommitOutcome =
   | { kind: "created" | "existing"; resultId: string; outputId: string }
   | { kind: "refused"; reason: string };
 
-export function commitKeyFor(request: Pick<AnalysisOutputCommit, "producer" | "sourceId" | "computedOn" | "settings">): string {
-  return committedOutputKey(request.producer.id, request.sourceId, request.computedOn, request.settings);
+export function commitKeyFor(request: Pick<AnalysisOutputCommit, "producer" | "sourceId" | "computedOn" | "settings" | "alsoFrom">): string {
+  // Single-source keys stay byte-identical to the original contract.
+  const settings = request.alsoFrom?.length ? { ...request.settings, alsoFrom: request.alsoFrom } : request.settings;
+  return committedOutputKey(request.producer.id, request.sourceId, request.computedOn, settings);
 }
 
 export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCommitOutcome {
@@ -56,6 +63,16 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   if (source.pending) return refuse(`${request.producer.label}: load the full source worksheet before adding its output`);
   if (analysisDataFingerprint(source) !== request.computedOn) {
     return refuse(`${request.producer.label}: the source changed after this result was computed; run it again before adding it`);
+  }
+  const extraSources: Dataset[] = [];
+  for (const extra of request.alsoFrom ?? []) {
+    const dataset = state.datasets.find((d) => d.id === extra.id);
+    if (!dataset) return refuse(`${request.producer.label}: a source worksheet no longer exists; nothing was added`);
+    if (dataset.pending) return refuse(`${request.producer.label}: load the full source worksheets before adding the output`);
+    if (analysisDataFingerprint(dataset) !== extra.computedOn) {
+      return refuse(`${request.producer.label}: “${dataset.name}” changed after this result was computed; run it again before adding it`);
+    }
+    extraSources.push(dataset);
   }
   const key = commitKeyFor(request);
   const existingId = findCommittedResultId(state.analysisResults, state.datasets, state.staleDatasets, key);
@@ -73,7 +90,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
   };
   const result = committedOutputResult({
-    id: nextAnalysisResultId(), producer: request.producer, source, output, key, settings: request.settings,
+    id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     get().addDataset(output);

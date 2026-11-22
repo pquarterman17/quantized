@@ -140,4 +140,35 @@ describe("stale-input marking for a committed output", () => {
     const savedStale = stampAnalysisResults(useApp.getState().analysisResults, useApp.getState().datasets, useApp.getState().staleDatasets);
     expect(savedStale[0].stale).toBe(true);
   });
+
+  describe("multi-source outputs (alsoFrom)", () => {
+    const SECOND: Dataset = { id: "src2", name: "Film 2", data: data([4, 5, 6]) };
+    const multi = (): AnalysisOutputCommit => request({
+      alsoFrom: [{ id: "src2", computedOn: analysisDataFingerprint(useApp.getState().datasets.find((d) => d.id === "src2")!) }],
+    });
+    beforeEach(() => useApp.setState({ datasets: [SOURCE, SECOND] }));
+
+    it("lists every source, is idempotent, and any source going stale marks the output", () => {
+      expect(commitAnalysisOutput(multi()).kind).toBe("created");
+      expect(commitAnalysisOutput(multi()).kind).toBe("existing");
+      const [result] = useApp.getState().analysisResults;
+      expect(result.sources.map((s) => s.datasetId)).toEqual(["src", "src2"]);
+      const outputId = result.outputs[0].datasetId;
+      useApp.getState().touchDataset("src2");
+      expect(useApp.getState().staleDatasets).toEqual([outputId]);
+    });
+
+    it("fails closed, writing nothing, when a further source changed since the computation", () => {
+      const req = multi();
+      useApp.setState({ datasets: [SOURCE, { ...SECOND, data: data([9, 9, 9]) }] });
+      expect(commitAnalysisOutput(req).kind).toBe("refused");
+      expect(useApp.getState().datasets).toHaveLength(2);
+      expect(useApp.getState().analysisResults).toHaveLength(0);
+    });
+
+    it("a different further-source set is a different computation", () => {
+      commitAnalysisOutput(multi());
+      expect(commitAnalysisOutput(request()).kind).toBe("created");
+    });
+  });
 });

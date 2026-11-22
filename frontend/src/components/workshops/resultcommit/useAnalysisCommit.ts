@@ -28,6 +28,7 @@ export interface AnalysisCommitState {
 export function useAnalysisCommit(request: AnalysisOutputCommit | null): AnalysisCommitState {
   const keyInput = request && {
     producer: request.producer, sourceId: request.sourceId, computedOn: request.computedOn, settings: request.settings,
+    alsoFrom: request.alsoFrom,
   };
   const keyText = keyInput ? JSON.stringify(keyInput) : null;
   // Keyed by value so a re-render with an equal request reuses the key.

@@ -18,7 +18,9 @@ import { saveBlob } from "../../../lib/download";
 import { parseQuantity } from "../../../lib/metadataCleanup";
 import { keysAcross, metaValue, pathFromId, type MetaKeyInfo } from "../../../lib/metadataKeys";
 import { integratePeaksBatch, type IntegrateBatchResponse } from "../../../lib/api/peaks";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { commitBatchTable } from "../resultcommit/commitBatchTable";
 import {
   batchBody,
   batchIntegrateCsv,
@@ -35,6 +37,8 @@ import {
   type SourceOutcome,
 } from "./batchIntegrate";
 
+const BATCH_INTEGRATE_PRODUCER = { id: "peak-batch-integrate", label: "Batch integrate", version: 1 } as const;
+
 export type BatchIntegratePhase = "idle" | "running" | "done" | "failed";
 
 interface BatchRun {
@@ -45,6 +49,8 @@ interface BatchRun {
   baseline: "linear" | "none";
   aligned: boolean;
   metaOf: Map<string, Record<string, unknown>>;
+  /** Each read dataset's analysis-view fingerprint at run time (the commit's staleness basis). */
+  fps: Map<string, string>;
   ranAt: string;
 }
 
@@ -57,7 +63,6 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   const seriesOrder = useApp((s) => s.seriesOrder);
   const roi = useApp((s) => s.qfitRoi);
   const resolveDataset = useApp((s) => s.resolveDataset);
-  const addDataset = useApp((s) => s.addDataset);
 
   const [pickedRaw, setPicked] = useState<string[]>(() =>
     selectedIds.length > 1 ? [...selectedIds] : active ? [active.id] : []);
@@ -101,6 +106,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     const outcomes: SourceOutcome[] = [];
     const series: { name: string; x: number[]; y: number[] }[] = [];
     const metaOf = new Map<string, Record<string, unknown>>();
+    const fps = new Map<string, string>();
     for (const dsId of picked) {
       const name = datasets.find((d) => d.id === dsId)?.name ?? dsId;
       try {
@@ -108,6 +114,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
         if (!ds) throw new Error("the dataset is no longer available");
         const s = seriesFor(ds, channels);
         metaOf.set(dsId, ds.data.metadata ?? {});
+        fps.set(dsId, analysisDataFingerprint(ds));
         series.push({ name, x: s.x, y: s.y });
         outcomes.push({ datasetId: dsId, name, ok: true });
       } catch (e) {
@@ -130,7 +137,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     if (!live()) return;
     setRun({
       rows: batchIntegrateRows(outcomes, res, ws), outcomes, windows: ws, channels, baseline,
-      aligned: res?.aligned ?? false, metaOf, ranAt: new Date().toISOString(),
+      aligned: res?.aligned ?? false, metaOf, fps, ranAt: new Date().toISOString(),
     });
     setPhase("done");
   };
@@ -148,10 +155,18 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
       channels: { x: run.channels.xLabel, y: run.channels.yLabel },
     });
     if (data.time.length === 0) return { id: "", skipped };
-    const id = nextDatasetId();
     const vs = field ? ` vs ${String(data.metadata.x_column_name)}` : "";
-    addDataset({ id, name: `Integrated ${run.channels.yLabel}${vs} (${data.time.length} datasets)`, data });
-    return { id, skipped };
+    // One undo step, no duplicate on a repeat click, stale when ANY integrated
+    // dataset changes (store/analysisOutputCommit.ts).
+    const outcome = commitBatchTable({
+      producer: BATCH_INTEGRATE_PRODUCER,
+      sources: run.outcomes.filter((o) => o.ok && run.fps.has(o.datasetId)).map((o) => ({ id: o.datasetId, computedOn: run.fps.get(o.datasetId)! })),
+      settings: { windows: run.windows, baseline: run.baseline, aligned: run.aligned, xField, y: run.channels.yLabel },
+      name: `Integrated ${run.channels.yLabel}${vs} (${data.time.length} datasets)`,
+      data,
+    });
+    // A repeat Add (or a refusal) already said so in the status line.
+    return outcome.kind === "created" ? { id: outcome.outputId, skipped } : null;
   };
 
   return {

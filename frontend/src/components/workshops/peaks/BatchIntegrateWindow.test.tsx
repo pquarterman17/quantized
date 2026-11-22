@@ -3,12 +3,13 @@
 // dataset x window table, export it as CSV, and land the trend (integrated
 // intensity vs temperature) in the library with its provenance.
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveBlob } from "../../../lib/download";
 import { integratePeaksBatch, type IntegrateBatchPeak } from "../../../lib/api/peaks";
 import type { DataStruct } from "../../../lib/types";
+import { analysisResultsReset } from "./batchIntegrateTestSetup";
 import { useApp } from "../../../store/useApp";
 import BatchIntegrateWindow from "./BatchIntegrateWindow";
 
@@ -40,6 +41,7 @@ beforeEach(() => {
     xKey: null,
     yKeys: null,
     seriesOrder: null,
+    ...analysisResultsReset,
   });
   vi.mocked(integratePeaksBatch).mockResolvedValue({
     regions: [[0.5, 1.5]], n_spectra: 2, n_regions: 1, aligned: false, reference: 0,
@@ -80,6 +82,33 @@ describe("BatchIntegrateWindow", () => {
     expect(trend?.data.values.map((r) => r[0])).toEqual([7, 3]);
     expect(trend?.data.metadata.x_column_unit).toBe("K");
     expect(trend?.data.metadata.peakIntegrateBatch).toMatchObject({ windows: [[0.5, 1.5]] });
+  });
+
+  // Lane RL2. Fail-before: a second "Add trend dataset" wrote a second
+  // identical worksheet, with no Library result and no stale mark.
+  it("a repeat Add trend creates no duplicate, is one undo step, and goes stale with ANY source", async () => {
+    render(<BatchIntegrateWindow seedPeaks={[{ center: 1, fwhm: 0.5 }]} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
+    await screen.findByRole("region", { name: "batch integration results" });
+    const add = screen.getByRole("button", { name: "Add trend dataset" });
+    const trends = () => useApp.getState().datasets.filter((d) => d.data.metadata.source === "peak-batch-integrate");
+    fireEvent.click(add);
+    fireEvent.click(add);
+    expect(trends()).toHaveLength(1);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().status).toContain("already added");
+    // The second source (d2) changing marks the trend stale.
+    const trendId = trends()[0].id;
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => d.id === "d2" ? { ...d, data: { ...d.data, time: [0, 1, 2, 3, 4, 9] } } : d) }));
+      useApp.getState().touchDataset("d2");
+    });
+    expect(useApp.getState().staleDatasets).toEqual([trendId]);
+    // Undo removes the trend and its result together; Add then works again.
+    act(() => useApp.getState().undo());
+    expect(trends()).toHaveLength(0);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
   });
 
   it("blocks the run, saying why, when there is no window", () => {
