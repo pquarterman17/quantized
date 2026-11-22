@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { configDefaults } from "vitest/config";
 
 import { preloadPrune } from "./scripts/preloadPrune.mjs";
 
@@ -23,7 +24,12 @@ import { preloadPrune } from "./scripts/preloadPrune.mjs";
 // review caught. `fileURLToPath` is platform-aware and yields `C:\Users\…`.
 const configDir = fileURLToPath(new URL(".", import.meta.url));
 
-const pkgVersion = (): string => {
+// Test files that run in the `node` environment (see `test.projects` below).
+const nodeEnvTests = JSON.parse(
+  readFileSync(join(configDir, "src/test/nodeEnvTests.json"), "utf8"),
+) as string[];
+
+const pkgVersion =(): string => {
   try {
     return (JSON.parse(readFileSync(join(configDir, "package.json"), "utf8")) as {
       version?: string;
@@ -112,9 +118,42 @@ export default defineConfig({
     },
   },
   test: {
-    environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    // Two projects, split by environment. Creating a jsdom environment per
+    // test file was ~46% of the suite's tracked time (1,714 of them, ~0.8 s
+    // each), and a file that never touches the DOM pays that for nothing.
+    // `src/test/nodeEnvTests.json` lists the files that PASS in vitest's bare
+    // `node` environment; everything else (every .tsx, every test that reads
+    // document/window/localStorage, directly or through the code it imports)
+    // stays on jsdom, so a NEW test file defaults to the safe environment.
+    // A listed file that starts needing the DOM fails loudly with
+    // "document is not defined": move it out of the list. Regenerate by
+    // running the .test.ts files with `environment: "node"` and keeping the
+    // ones that pass. (`pool: "vmThreads"` was tried and is not an option
+    // here: jsdom's html-encoding-sniffer require()s an ES-module-only
+    // @exodus/bytes, which the vm pools cannot load.)
+    //
+    // `scripts/freeze-regression-matrix.mjs` re-enters vitest's Node API with
+    // `include` pointed at itself and needs jsdom; project-level `include`
+    // would ignore that override and run the whole suite, so the script sets
+    // QZ_VITEST_FLAT=1 and gets the single-environment shape instead.
+    ...(process.env.QZ_VITEST_FLAT === "1"
+      ? { environment: "jsdom" as const, include: ["src/**/*.test.{ts,tsx}"] }
+      : { projects: [
+      {
+        extends: true,
+        test: {
+          name: "jsdom",
+          environment: "jsdom",
+          include: ["src/**/*.test.{ts,tsx}"],
+          exclude: [...configDefaults.exclude, ...nodeEnvTests],
+        },
+      },
+      {
+        extends: true,
+        test: { name: "node", environment: "node", include: nodeEnvTests },
+      },
+    ] }),
     // Vitest's 5 s default is too tight for this suite's canvas/uPlot-heavy
     // tests once the full 300+ file run is executing in parallel: a DIFFERENT
     // file (StatStage, WindowCanvas, …) would time out on each run while every

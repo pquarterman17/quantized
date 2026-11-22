@@ -129,6 +129,9 @@ if (process.env.VITEST) {
   if (CHECK) {
     process.env.FREEZE_CHECK = "1";
   }
+  // vite.config.ts splits the suite into jsdom/node projects, whose own
+  // `include` would ignore the override below; this asks for the flat shape.
+  process.env.QZ_VITEST_FLAT = "1";
   const vitest = await startVitest("test", [], {
     watch: false,
     root: FRONTEND,
