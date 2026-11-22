@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { analysisDataFingerprint, snapshotResultState } from "../lib/analysisResultFreshness";
+import type { DistributionSnapshot } from "../lib/distributionAnalysisResult";
 import type { Dataset, DataStruct } from "../lib/types";
 import { commitAnalysisOutput } from "./analysisOutputCommit";
 import { publishDistributionResult } from "./distributionResults";
@@ -131,7 +132,7 @@ describe("committed outputs", () => {
 });
 
 describe("snapshot results", () => {
-  const snapshot = {
+  const snapshot: DistributionSnapshot = {
     label: "y", byLabel: null, hist: { counts: [2, 1], centers: [15, 25], edges: [10, 20, 30] },
     desc: { N: 3, mean: 20, median: 20, std: 10, min: 10, q1: 15, q3: 25, max: 30 },
     norm: { W: 0.99, p: 0.7, N: 3 }, normNote: null, levels: [], totalLevels: 0, rankedFits: [],
