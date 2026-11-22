@@ -11,13 +11,13 @@ agent can implement a fix without repeating the investigation.
 
 ## How to use this document
 
-- [ ] Keep findings evidence-backed. A possible feature gap is not a bug until
+- [ ] [standing checklist, not a work item] Keep findings evidence-backed. A possible feature gap is not a bug until
   the current behavior and intended behavior are both stated.
-- [ ] For every fix, add the PR/commit, focused regression test, full gate, and
+- [ ] [standing checklist, not a work item] For every fix, add the PR/commit, focused regression test, full gate, and
   agent verification before checking the finding complete.
-- [ ] Keep owner-only visual judgements open even when automated coverage is
+- [ ] [standing checklist, not a work item] Keep owner-only visual judgements open even when automated coverage is
   green.
-- [ ] Reconcile completed findings into `BUGS_AND_ISSUES.md` and the relevant
+- [ ] [standing checklist, not a work item] Reconcile completed findings into `BUGS_AND_ISSUES.md` and the relevant
   feature plan; do not leave two contradictory sources of truth.
 
 ## Audit map
@@ -30,9 +30,9 @@ agent can implement a fix without repeating the investigation.
   and checksums exist on the stable GitHub release.
 - [x] Confirm release workflows now reject a tag/package mismatch.
 - [x] Probe the installed CLI's conventional version-reporting path.
-- [ ] Install the Windows artifact and verify upgrade-in-place, icon identity,
+- [ ] [owner] Install the Windows artifact and verify upgrade-in-place, icon identity,
   launch, backend startup, and uninstall entry. **Owner/real desktop required.**
-- [ ] Install the macOS artifact and verify Gatekeeper/right-click-open,
+- [ ] [owner] Install the macOS artifact and verify Gatekeeper/right-click-open,
   launch, and Dock identity. **Owner/real Mac required.**
 
 ### Primary Origin-replacement journeys
@@ -44,11 +44,11 @@ agent can implement a fix without repeating the investigation.
   role-binding code is covered, while current-release visual/manual-role and
   second-file checks remain open.
 - [x] Audit Quick Plot refusal and configuration guidance in the current code.
-- [ ] Run import -> Library -> worksheet -> editable figure against the owner's
+- [ ] [owner] Run import -> Library -> worksheet -> editable figure against the owner's
   dense Origin project and record screenshots plus exact confusing nodes.
-- [ ] Run `.refl` -> Error Columns -> editable figure on Windows and record
+- [ ] [owner] Run `.refl` -> Error Columns -> editable figure on Windows and record
   whether uncertainty/resolution become whiskers rather than plotted curves.
-- [ ] Time unfamiliar-file-to-acceptable-figure and figure-to-PowerPoint copy.
+- [ ] [owner] Time unfamiliar-file-to-acceptable-figure and figure-to-PowerPoint copy.
   Targets remain 20 minutes and seconds respectively.
 
 ### Persistence and scientific integrity
@@ -70,10 +70,10 @@ agent can implement a fix without repeating the investigation.
 
 - [x] Reconcile existing matrix findings: axis breaks, waterfall offsets,
   legend renames, hidden-series colors, and grouped styles have landed.
-- [ ] Exercise the acceptance matrix in `FIGURE_AUTHORING_WORKFLOW_PLAN.md`
+- [ ] [owner] Exercise the acceptance matrix in `FIGURE_AUTHORING_WORKFLOW_PLAN.md`
   against the packaged build: errors, y2, hidden/reordered series, grouping,
   facets, 2x2 pages, PNG clipboard, SVG, and PDF.
-- [ ] Compare at least one saved/reopened frozen figure containing gaps with
+- [ ] [owner] Compare at least one saved/reopened frozen figure containing gaps with
   its live source and export. **Automated structural half added 2026-09-21:**
   `regressionMatrixFrozen.test.ts` compares the frozen figure's screen/export/
   reopened projections, proves its snapshot keeps NaN and signed zero while
@@ -285,9 +285,9 @@ inexpensive model.
 
 ## Existing open problems confirmed as still relevant
 
-- [ ] **BUG-001 / P0:** owner visual verification and a second Reductus variant
+- [ ] [owner] **BUG-001 / P0:** owner visual verification and a second Reductus variant
   remain required before uncertainty-role handling can honestly close.
-- [ ] **UX-001 + UX-004 / P1:** compact rows and unique marks landed, but the
+- [ ] [owner] **UX-001 + UX-004 / P1:** compact rows and unique marks landed, but the
   dense reported Origin project still needs a real readability verdict.
 - [x] **BUG-002 / P2:** hard-linked source aliases are blocked by filesystem
   identity checks (PR #382).

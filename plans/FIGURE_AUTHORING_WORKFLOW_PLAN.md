@@ -103,7 +103,7 @@ the transitions lossless and discoverable.
       Builder, Figure Page, saved figures, and export adapters.
 - [x] Targeted frontend tests passed: **101 tests** covering the relevant
       hooks, conversions, saved figures, and export specs.
-- [ ] Perform a visible, timed desktop usability session. The in-app browser
+- [ ] [owner] Perform a visible, timed desktop usability session. The in-app browser
       control runtime was unavailable during this audit, so static evidence
       and tests could not establish appearance, discoverability, or timing.
 
@@ -200,7 +200,7 @@ instead of a reduced shadow model.
 **Recommended models:** GPT-5.6 Terra high / Claude Sonnet 5 after F1's schema
 decisions are merged.
 
-- [ ] **F2.1 Bind the preview to FigureDocument — BLOCKED on owner gates
+- [ ] [gated: owner gates D-1/D-3/D-4] **F2.1 Bind the preview to FigureDocument — BLOCKED on owner gates
       D-1/D-3/D-4 (2026-09-30 status: a–e, h and i are done; only f and g
       remain and both wait on the owner, not on code).** Display document
       name and dirty state; stop creating a detached source of truth.
@@ -224,7 +224,7 @@ decisions are merged.
         legacy fallback said "Apply is unavailable". The
         no-window-no-dataset degrade is byte-identical. See the 2026-08-12
         round-2 log entry.
-  - [ ] **F2.1f Open saved legacy figures canonically (BLOCKED on the
+  - [ ] [gated: owner gates D-1/D-3/D-4] **F2.1f Open saved legacy figures canonically (BLOCKED on the
         graph-templates and migration owner gates).** `openFigureDraft`
         (`useApp.ts`) still seeds legacy mode for Library ▸ Publication
         figures — the other remaining legacy opener; the canonical route is
@@ -232,7 +232,7 @@ decisions are merged.
         Graph Builder does. Blocked because the legacy-only Save-as-figure /
         graph-template UI disappears for these docs (see the 2026-08-12
         convergence-map log entry, decisions D-1/D-3).
-  - [ ] **F2.1g Retire legacy mode (BLOCKED on F2.1f + the archival owner
+  - [ ] [gated: owner gates D-1/D-3/D-4] **F2.1g Retire legacy mode (BLOCKED on F2.1f + the archival owner
         gate D-4; F2.1e shipped 2026-08-12).** Once both legacy openers are gone: delete
         `legacyFigure.ts`, `figureDocSeed`, the hook's legacy state twins,
         and the `canonical` fork everywhere (~150 lines out of
@@ -1630,7 +1630,7 @@ choose it for later XRD data, and leave SIMS or customized plots untouched.
 
 Check these only with automated coverage plus an owner-visible desktop run.
 
-- [ ] **A1 Arbitrary data:** Drop/import data, confirm inferred roles, and
+- [ ] [owner] **A1 Arbitrary data:** Drop/import data, confirm inferred roles, and
       reach a production-quality editable plot without code.
       **Automated half DONE 2026-08-14** —
       `e2e/specs/arbitrary-data-journey.spec.ts`, a real-Chromium journey
@@ -1647,7 +1647,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       Verified load-bearing: planting `ignore` into `import_preview.py`'s
       `_CHANNEL_ROLES` reddens the spec's channel-count assertion; reverted.
       Owner desktop run still gates the checkbox.
-- [ ] **A2 Mouse editing:** Change line/scatter mode, colors, widths, errors,
+- [ ] [owner] **A2 Mouse editing:** Change line/scatter mode, colors, widths, errors,
       scales, limits, legend, and labels through direct manipulation/properties.
       **Automated half DONE 2026-08-14** —
       `e2e/specs/mouse-editing-journey.spec.ts`, a real-Chromium journey
@@ -1666,7 +1666,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       a dropped `seriesStyles` into `figureDocument.ts`'s
       `figureDocumentToPlotView` reddens the "survived reopen" assertion;
       reverted. Owner desktop run still gates the checkbox.
-- [ ] **A3 Lossless figure:** Save, close, reopen, and compare the complete
+- [ ] [owner] **A3 Lossless figure:** Save, close, reopen, and compare the complete
       document/spec for equality. **Automated half DONE 2026-08-12** —
       `e2e/specs/figure-document-roundtrip.spec.ts`, a real-Chromium journey
       against the real backend: Save Editable Figure via the File menu, close
@@ -1676,7 +1676,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       **Store/serializer half added 2026-11-22 (Lane FA, no bug found):** `frontend/src/store/figureJourneys.a3a5.test.ts`
       (save, close, project reopen, figure reopen; complete document, window and live-facade
       `toEqual`; a second cycle is stable). Still human: the desktop click-through.
-- [ ] **A4 Complex 1-D:** Repeat A3 with y2, asymmetric errors, hidden/reordered
+- [ ] [owner] **A4 Complex 1-D:** Repeat A3 with y2, asymmetric errors, hidden/reordered
       series, custom formats, annotations, shapes, and waterfall offset.
       **Automated half DONE 2026-08-12** — the same spec carries y2 keys,
       hidden + reordered series, a renamed series, per-series styles, all three
@@ -1699,7 +1699,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       and the live facade after reopen. Also pins every `PlotView` field through the live facade
       and the document-only fields (frozen snapshot with NaN, axis breaks, encoding, publication
       overrides/series styles, output). Still human: how the reopened figure LOOKS and feels.
-- [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
+- [ ] [owner] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
       and export with the same series and labels. **Automated half DONE
       2026-08-14** — `e2e/specs/group-facet-journey.spec.ts`, a real-Chromium
       journey against the real backend: Graph Builder's Group well →
@@ -1725,7 +1725,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       in the saved document, back into the live facade after a file round trip, kept out of the
       visual state, and cleared when unset. Facet RENDERING is still the F2.3i gap above.
       Still human: Group/Facet build on the Stage and eyeballing the export.
-- [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
+- [ ] [owner] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
       save/reopen, edit one panel, and preserve layout. **Automated half DONE
       2026-09-13** — `e2e/specs/multi-panel-journey.spec.ts`, a real-Chromium
       journey against the real backend: two fixture imports, four SEPARATELY
@@ -1783,7 +1783,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       resize mode, save, file round trip, reopen (`buildSpec()` equals the pre-save spec),
       edit one panel, save, round trip again (only that override changed; a linked page reopens
       linked). Still human: Shift+Arrow/drag feel and the look of the linked page.
-- [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
+- [ ] [owner] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
       seconds and visually compare it with the internal figure. **Code half
       DONE 2026-09-29 (ChatGPT-Sol; revised in PR #492 review):** single
       figures and Figure Pages place the 300-DPI PNG plus an HTML `<img>` of
@@ -1791,7 +1791,7 @@ Check these only with automated coverage plus an owner-visible desktop run.
       text-as-paths SVG only where the browser advertises `image/svg+xml`;
       the plot toolbar invokes this publication path directly. The checkbox
       remains open for the real Word/PowerPoint visual comparison.
-- [ ] **A8 Vector export:** Export SVG/PDF and compare limits, ticks, text,
+- [ ] [owner] **A8 Vector export:** Export SVG/PDF and compare limits, ticks, text,
       legend, errors, annotations, and panel placement. **Automated half DONE
       2026-09-13** — `tests/test_export_vector_structure.py`, against the real
       FastAPI routes (`/api/export/figure`, `/api/export/figure-hitmap`,
@@ -1843,10 +1843,10 @@ Check these only with automated coverage plus an owner-visible desktop run.
       in data units), secondary axis limits/scale/tick format on the saved Figure, log scale +
       limits, reordered series reordering the legend, and SVG vs PDF page size (`/MediaBox`).
       Still human: glyph/visual comparison against the screen and a PDF viewer.
-- [ ] **A9 Time targets:** First unfamiliar dataset to acceptable figure in at
+- [ ] [owner] **A9 Time targets:** First unfamiliar dataset to acceptable figure in at
       most 20 minutes; routine figure in at most 2 minutes; copy/paste in
       seconds.
-- [ ] **A10 Platforms:** Complete the core journey on Windows and macOS;
+- [ ] [owner] **A10 Platforms:** Complete the core journey on Windows and macOS;
       Ubuntu is bonus coverage if inexpensive.
 
 ## Recommended PR sequence
@@ -1870,27 +1870,27 @@ PR that changes its status.
 
 Before starting a slice:
 
-- [ ] Rebase on current `main`; Claude and ChatGPT may be working concurrently.
-- [ ] Read this plan, the linked parent tasks, and current code before trusting
+- [ ] [standing checklist, not a work item] Rebase on current `main`; Claude and ChatGPT may be working concurrently.
+- [ ] [standing checklist, not a work item] Read this plan, the linked parent tasks, and current code before trusting
       checkbox or backlog summaries.
-- [ ] Confirm the change does not reinterpret Origin parser/binding semantics.
-- [ ] Identify the canonical owner of every state field touched.
-- [ ] Add characterization tests before changing a lossy adapter.
-- [ ] Exercise keyboard and mouse paths for new controls.
-- [ ] Run targeted tests, full frontend tests when shared contracts change,
+- [ ] [standing checklist, not a work item] Confirm the change does not reinterpret Origin parser/binding semantics.
+- [ ] [standing checklist, not a work item] Identify the canonical owner of every state field touched.
+- [ ] [standing checklist, not a work item] Add characterization tests before changing a lossy adapter.
+- [ ] [standing checklist, not a work item] Exercise keyboard and mouse paths for new controls.
+- [ ] [standing checklist, not a work item] Run targeted tests, full frontend tests when shared contracts change,
       TypeScript build, and applicable backend tests.
-- [ ] Update the dated log and checked items with commit/PR evidence.
+- [ ] [standing checklist, not a work item] Update the dated log and checked items with commit/PR evidence.
 
 ## Revisit after owner use
 
-- [ ] Reassess names (“Publication Preview” versus “Figure Builder”) after F2;
+- [ ] [gated: revisit after owner use] Reassess names (“Publication Preview” versus “Figure Builder”) after F2;
       the original name may become accurate once the surface edits the canonical
       document.
-- [ ] Reassess whether Stage and publication preview should remain separate
+- [ ] [gated: revisit after owner use] Reassess whether Stage and publication preview should remain separate
       windows or become modes/dockable views of one editor.
-- [ ] Reassess organization and search after real projects accumulate; keep
+- [ ] [gated: revisit after owner use] Reassess organization and search after real projects accumulate; keep
       figure search low priority until the Library hierarchy is exercised.
-- [ ] Reassess automatic template suggestions only after manual templates are
+- [ ] [gated: revisit after owner use] Reassess automatic template suggestions only after manual templates are
       trusted and non-destructive.
 
 ## Completed / decision log

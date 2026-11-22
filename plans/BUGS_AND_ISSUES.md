@@ -186,7 +186,7 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Observe all three value columns drawn as lines on the default log-Y plot.
 - [x] Observe uncertainty and resolution included as ordinary legend series.
 - [x] Confirm whether manually assigning the two roles in **Error Columns** immediately produces correct X/Y whiskers in the current release. Verified 2026-09-28: `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts`'s "NCNR .refl error roles are overridable through the store action ErrorRolesCard calls" describe block (8/8 tests pass) drives the exact `setErrorRoles` call `ErrorRolesCard.tsx`'s `patch` helper makes and confirms the next render draws the override's whiskers.
-- [ ] Check at least one Reductus file variant beyond the repository fixture before broadening name matching.
+- [ ] [owner] Check at least one Reductus file variant beyond the repository fixture before broadening name matching.
 
 ### Implementation checklist
 
@@ -220,7 +220,7 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Neither uncertainty column appears as a normal legend series unless the user explicitly chooses to plot it. **2026-09-14 (Claude):** default-hidden half — `errorbars.test.ts`'s "draws neither uncertainty nor resolution as a plotted series alongside the spans" (only channel 0 is ever passed as `plotted`) and `usePlotPayload.errorRoles.test.ts`'s "plots only the measured channel; uncertainty/resolution never appear as series". Explicit-choice half — `reimport.test.ts`'s "a customization that WIDENS the default (plotting uncertainty as an ordinary series) survives a same-shape reimport" drives the real store (`yKeys: [0, 1]`, the Channels-card checkbox path) and confirms uncertainty stays plotted once the user asks for it.
 - [x] The worksheet still exposes every original column and value. **2026-09-14 (Claude):** `tests/test_io_ncnr.py::test_refl_declares_uncertainty_and_resolution_roles` asserts `ds.labels == ("Intensity", "uncertainty", "resolution")` and `ds.values.shape == (325, 3)` on the real fixture — every imported column present and untouched, exactly this criterion's wording.
 - [x] Ambiguous/unrecognized layouts are not silently given confident but unsupported bindings. **2026-09-14 (Claude):** `tests/test_io_ncnr.py::test_refl_roles_fail_safe_on_unrecognised_layouts` (parametrized: swapped uncertainty/resolution order, and no recognisable token at all) asserts `_refl_role_metadata(...) == {}` — no roles emitted, rather than a confident but wrong binding.
-- [ ] Owner verifies the reported file visually on Windows.
+- [ ] [owner] Owner verifies the reported file visually on Windows.
 
 ### Completion record
 
@@ -470,7 +470,7 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 - [x] Determine why the reported worksheets render as large cards while Graph2/Graph8/Graph9 render as compact rows. — a component choice, not CSS: `DatasetRow.tsx` rendered a 4-part stacked card with an always-mounted `Sparkline`; `FigureRow.tsx` was already a single-line `.qzk-fig-item`.
 - [x] Check whether the current Tree/Tiles/Details preference already provides a compact alternative for these exact nodes. — `LibraryDetails.tsx` already renders every kind as a uniform compact `<tr>`; this was a Tree-view component gap, not a missing capability.
 - [x] Reconcile this item against unfinished work in `LIBRARY_WORKBOOK_UX_PLAN.md`; do not create a second competing hierarchy model. — the fix changes only how a `worksheet` node renders inside Tree; `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy`/`flattenLibraryHierarchy` is untouched and still the single structural truth.
-- [ ] Test hierarchy comprehension with a project containing several books, sheets, and saved graphs with similar names. — needs a real user/owner session; not exercised here.
+- [ ] [owner] Test hierarchy comprehension with a project containing several books, sheets, and saved graphs with similar names. — needs a real user/owner session; not exercised here.
 
 ### Interaction checklist
 
@@ -499,13 +499,13 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 
 ### Acceptance criteria
 
-- [ ] A new user can identify folders, workbooks, worksheets, and saved graphs without trial-and-error clicking. — glyphs now exist for all four kinds; a real judgment call needs an actual new-user/owner session.
-- [ ] At least six worksheet rows are comfortably visible in a typical-height Library without scrolling past large previews. — very likely true (a compact row is one ~20-24px line vs. the prior ~90-110px card) but not visually confirmed against a rendered viewport — no screenshot taken this pass. **2026-09-14 (Claude), partial evidence added, still left unticked:** `frontend/src/components/Library/LibraryTree.compactRows.test.tsx` renders the real `LibraryTree` with 8 worksheets and confirms, at the DOM+CSS-text layer, the two structural facts that ARE honestly establishable without a real browser: every worksheet row is a single line with no `.qzk-ds-spark`/`.qzk-ds-foot` child mounted by default (no preview, no full-card footer), and `shell.css` declares the compact modifier's padding as measurably smaller than the full card's (`3px 4px` vs `8px 9px`). That is NOT the same as proving six such rows fit in a 480px panel: `shell.css` declares no `height`/`line-height` for `.qzk-ds-compact`/`.qzk-ds-compact-row`/`.qzk-ds-name`, so the row's actual rendered height depends on the browser's font-metric default line-height, which neither CSS-text parsing nor jsdom's layout-free DOM can supply. Sabotage-verified (forcing the preview open by default via `DatasetRowPreview`'s `isPreviewExpanded` call, and inflating the compact padding to the full card's in a scratch edit of `shell.css`) made the corresponding assertions fail; both reverted byte-identical. Left unticked per this box's own honesty requirement.
+- [ ] [owner] A new user can identify folders, workbooks, worksheets, and saved graphs without trial-and-error clicking. — glyphs now exist for all four kinds; a real judgment call needs an actual new-user/owner session.
+- [ ] [owner] At least six worksheet rows are comfortably visible in a typical-height Library without scrolling past large previews. — very likely true (a compact row is one ~20-24px line vs. the prior ~90-110px card) but not visually confirmed against a rendered viewport — no screenshot taken this pass. **2026-09-14 (Claude), partial evidence added, still left unticked:** `frontend/src/components/Library/LibraryTree.compactRows.test.tsx` renders the real `LibraryTree` with 8 worksheets and confirms, at the DOM+CSS-text layer, the two structural facts that ARE honestly establishable without a real browser: every worksheet row is a single line with no `.qzk-ds-spark`/`.qzk-ds-foot` child mounted by default (no preview, no full-card footer), and `shell.css` declares the compact modifier's padding as measurably smaller than the full card's (`3px 4px` vs `8px 9px`). That is NOT the same as proving six such rows fit in a 480px panel: `shell.css` declares no `height`/`line-height` for `.qzk-ds-compact`/`.qzk-ds-compact-row`/`.qzk-ds-name`, so the row's actual rendered height depends on the browser's font-metric default line-height, which neither CSS-text parsing nor jsdom's layout-free DOM can supply. Sabotage-verified (forcing the preview open by default via `DatasetRowPreview`'s `isPreviewExpanded` call, and inflating the compact padding to the full card's in a scratch edit of `shell.css`) made the corresponding assertions fail; both reverted byte-identical. Left unticked per this box's own honesty requirement.
 - [x] A user can reveal a plot thumbnail when desired without opening or replacing the active plot. — test-verified: `selectedIds`/`activeId` unchanged after toggling the preview.
 - [x] Names and action meanings are recoverable even when the Library is narrow. — the tooltip/ellipsis mechanism is preserved, not re-tested at a narrow panel width. **2026-09-14 (Claude):** `LibraryTree.compactRows.test.tsx`'s "narrow-panel name/action recoverability" describe block renders the real `LibraryTree` with a deliberately long worksheet name and asserts (1) the name element's `title` attribute contains the full, untruncated name — recoverable regardless of rendered width — and (2) `shell.css`'s `.qzk-ds-name` rule declares `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap` (parsed from the stylesheet text via `styles/cssRules.testkit.ts`, not assumed). Sabotage-verified: stripping the `title` attribute from `DatasetRowParts.tsx`'s name span, and separately dropping the three overflow declarations from `shell.css`'s `.qzk-ds-name` rule, each made its corresponding assertion fail; both reverted byte-identical.
 - [x] Tree, Tiles, and Details views retain consistent selection and activation behavior. — Tiles/Details untouched; Tree's selection/activation logic is unchanged (only the worksheet row's markup changed), and `LibraryTree.test.tsx` passes unmodified.
-- [ ] The reported Origin project remains navigable with no missing or duplicated nodes. — not tested against the owner's actual reported project (not available here).
-- [ ] Owner verifies the revised workflow on the reported project. — pending; required before this item can be marked complete.
+- [ ] [owner] The reported Origin project remains navigable with no missing or duplicated nodes. — not tested against the owner's actual reported project (not available here).
+- [ ] [owner] Owner verifies the revised workflow on the reported project. — pending; required before this item can be marked complete.
 
 ### Completion record
 
@@ -722,11 +722,11 @@ Worksheets sweeps only downstream dependents).
   standing on the status bar. All nine refusal sites in the slice now go through
   one `fail()` helper; pinned by "a refused paste replaces the status line
   instead of leaving the last success standing".
-- [ ] Decide whether a dropped link is worth preserving as inert historical
+- [ ] [owner] Decide whether a dropped link is worth preserving as inert historical
   text (e.g. the source dataset's NAME) rather than a resolvable id. This is a
   semantics call about what lineage means across a transfer boundary — do not
   invent it silently.
-- [ ] If a "copy with dependents" scope is ever added, revisit: the link would
+- [ ] [gated: only if a 'copy with dependents' scope is added] If a "copy with dependents" scope is ever added, revisit: the link would
   then be internal and would not need dropping at all.
 
 ### Completion record
@@ -890,7 +890,7 @@ undefined` masking makes it fail as expected).
   this entry.
 - [x] Agent verifies the resolved half through the shared row-state path,
   hook count, and rendered panel notice.
-- [ ] Owner verifies when required.
+- [ ] [owner] Owner verifies when required.
 
 #### Completion record
 
@@ -1084,7 +1084,7 @@ everywhere, not just mask its display) — that call is not made here.
   categorizing the picked groupCol masks the picker AND stops the grouping
   math from using it" and "a non-categorical facetCol SURVIVES" cases.
   A manual click-through was not performed this slice.
-- [ ] Owner verifies when required.
+- [ ] [owner] Owner verifies when required.
 
 #### Completion record
 
@@ -1193,7 +1193,7 @@ spread-first and removes only the four project-level Origin envelopes.
   fractional; `cat_levels` is `None` on the result.
 - [x] Reproduced by an agent — the two strip tests below assert exactly this,
   including that the codes really are no longer valid.
-- [ ] Reproduced through the UI on real owner data (not required for the
+- [ ] [owner] Reproduced through the UI on real owner data (not required for the
   code-verifiable fix; retained as optional owner acceptance).
 
 #### Investigation
@@ -1239,7 +1239,7 @@ spread-first and removes only the four project-level Origin envelopes.
   unchanged; coincident duplicate-x/NaN data is a true identity.
 - [x] Browser apply/reimport and `.dwk` serialize/parse round trips preserve
   corrected data, raw data, `cat_levels` and `level_order`.
-- [ ] Owner verifies on real mixed data.
+- [ ] [owner] Owner verifies on real mixed data.
 
 #### Completion record
 
@@ -1357,7 +1357,7 @@ The two hesitations, and what they were actually worth:
   `metadata` wholesale (`{ ...data.metadata }`, dropping the
   `sliceRowSidecars` call) made it fail (`expected [...] to have a length of
   4 but got 6`); reverted byte-identical.
-- [ ] Confirmed visually on real owner data.
+- [ ] [owner] Confirmed visually on real owner data.
 
 #### Investigation
 
@@ -2632,7 +2632,7 @@ carries a migration warning (structural, not a live path)".
   this is not corrected in place; the review round below measured its own
   number fresh instead.
 - [x] Agent verifies acceptance criteria — this entry.
-- [ ] Owner verifies when required.
+- [ ] [owner] Owner verifies when required.
 
 #### Completion record
 
@@ -6809,7 +6809,7 @@ failure that blocks reopening the file.
   byte-identity pin, both compatibility directions, the autosave path, the
   workbook-transfer path and the peak-table fingerprint, each sabotage-
   verified (7 sabotages, table in the commit body).
-- [ ] Owner verifies when required — a real Save/reopen of a project
+- [ ] [owner] Owner verifies when required — a real Save/reopen of a project
   containing an inserted blank row, in the running app on Windows.
 
 #### Completion record
@@ -6935,7 +6935,7 @@ this entry.
   `useMultiPanelStage.ts`).
 - [x] The per-panel channel divergence measured directly with a throwaway probe
   over the real `facetPayloads`, not inferred.
-- [ ] Confirmed visually on owner data.
+- [ ] [owner] Confirmed visually on owner data.
 
 #### Implementation
 
@@ -7280,7 +7280,7 @@ one-line patch to slip into a bundle-diet follow-up.
 - [x] Relevant focused tests pass
 - [x] Type-check/build/repository gates pass
 - [x] Agent verifies acceptance criteria
-- [ ] Owner verifies when required
+- [ ] [owner] Owner verifies when required
 
 #### Completion record
 
@@ -7673,7 +7673,7 @@ dialogs in open order, too. See R16 in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
       `region-tool-escape.spec.ts` 6/6 consecutive clean runs, all under
       `CI=1` so no foreign dev server could be reused
 - [x] Agent verifies acceptance criteria — 2026-09-19, see the tables above
-- [ ] Owner verifies when required
+- [ ] [owner] Owner verifies when required
 
 #### Completion record
 
@@ -7885,7 +7885,7 @@ failure status now names the real reason instead of always blaming storage.
 - [x] Relevant focused tests pass
 - [x] Type-check/build/repository gates pass
 - [x] Agent verifies acceptance criteria
-- [ ] Owner verifies on the real `m3learning_rsm.xrdml` workflow
+- [ ] [owner] Owner verifies on the real `m3learning_rsm.xrdml` workflow
 
 `lib/techniqueViewMemory.test.ts`
 - "stores only the nine declared view fields, never the wider object handed
@@ -8026,7 +8026,7 @@ only changes what NEW cuts are named, which is what removes the collision.
 - [x] Relevant focused tests pass
 - [x] Type-check/build/repository gates pass
 - [x] Agent verifies acceptance criteria
-- [ ] Owner verifies
+- [ ] [owner] Owner verifies
 
 `components/Stage/useCutLanding.test.ts` (new file), three cases against a
 `vi.resetModules()` reload with a restored `cut-1` in the library — the reload
@@ -8273,7 +8273,7 @@ the output column is empty, rather than silently minting it.
 - [x] Regression test per defect and per review finding, each sabotage-verified
 - [x] Relevant focused tests pass
 - [x] Type-check/build/repository gates pass
-- [ ] Owner verifies on the reported VSM file
+- [ ] [owner] Owner verifies on the reported VSM file
 
 #### Completion record
 
@@ -8362,7 +8362,7 @@ not a silent drop.
 - [x] Fitted overlays restore gaps at their original row indices
 - [x] User notice names the number of excluded rows
 - [x] Type-check and focused tests pass
-- [ ] Owner verifies the original gapped hysteresis file in Curve Fit
+- [ ] [owner] Owner verifies the original gapped hysteresis file in Curve Fit
 
 ### Implementation record — 2026-09-20 (ChatGPT-Sol)
 
@@ -8523,7 +8523,7 @@ were fragile in compact and scaled Windows layouts.
 - [x] Preserve recent-project open/remove/clear behavior in a compact flyout.
 - [x] Verify unit, accessibility/architecture, production bundle, and real
   Chromium layouts at the repository's 100%, 125%, and 200% scale profiles.
-- [ ] Owner: visually confirm menu grouping, hover timing, and legibility in
+- [ ] [owner] Owner: visually confirm menu grouping, hover timing, and legibility in
   the packaged Windows desktop build at 100%, 125%, and 150% display scaling.
 
 ## New issue template
@@ -8545,33 +8545,33 @@ Describe what the user did, what happened, and why it matters. Include filenames
 
 #### Reproduction
 
-- [ ] Starting state and sample data identified
-- [ ] Exact actions recorded
-- [ ] Actual result recorded
-- [ ] Expected result recorded
-- [ ] Reproduced by an agent or explicitly marked owner-only
+- [ ] [standing checklist, not a work item] Starting state and sample data identified
+- [ ] [standing checklist, not a work item] Exact actions recorded
+- [ ] [standing checklist, not a work item] Actual result recorded
+- [ ] [standing checklist, not a work item] Expected result recorded
+- [ ] [standing checklist, not a work item] Reproduced by an agent or explicitly marked owner-only
 
 #### Investigation
 
-- [ ] Likely owning components/modules identified
-- [ ] Root cause confirmed rather than inferred
-- [ ] Related workflows and persistence paths checked
-- [ ] Existing plan overlap reconciled
+- [ ] [standing checklist, not a work item] Likely owning components/modules identified
+- [ ] [standing checklist, not a work item] Root cause confirmed rather than inferred
+- [ ] [standing checklist, not a work item] Related workflows and persistence paths checked
+- [ ] [standing checklist, not a work item] Existing plan overlap reconciled
 
 #### Implementation
 
-- [ ] Minimal safe behavior defined
-- [ ] Failure and ambiguous-data behavior defined
-- [ ] Data integrity and backward compatibility considered
-- [ ] UI wording/tooltips/accessibility included where relevant
+- [ ] [standing checklist, not a work item] Minimal safe behavior defined
+- [ ] [standing checklist, not a work item] Failure and ambiguous-data behavior defined
+- [ ] [standing checklist, not a work item] Data integrity and backward compatibility considered
+- [ ] [standing checklist, not a work item] UI wording/tooltips/accessibility included where relevant
 
 #### Tests and acceptance
 
-- [ ] Regression test fails before the fix and passes afterward
-- [ ] Relevant focused tests pass
-- [ ] Type-check/build/repository gates pass
-- [ ] Agent verifies acceptance criteria
-- [ ] Owner verifies when required
+- [ ] [standing checklist, not a work item] Regression test fails before the fix and passes afterward
+- [ ] [standing checklist, not a work item] Relevant focused tests pass
+- [ ] [standing checklist, not a work item] Type-check/build/repository gates pass
+- [ ] [standing checklist, not a work item] Agent verifies acceptance criteria
+- [ ] [standing checklist, not a work item] Owner verifies when required
 
 #### Completion record
 
@@ -8785,7 +8785,7 @@ acceptance evidence is untouched and still passes.
 - [x] Marks work in every theme/accent/density and in greyscale — they carry
   no colour information; enforced by construction (`currentColor`), stated
   here rather than test-claimed.
-- [ ] Owner confirms, on the reported Origin project, that the eight marks
+- [ ] [owner] Owner confirms, on the reported Origin project, that the eight marks
   read apart at a glance and that the tree is quieter.
 
 ### Completion record
@@ -8892,7 +8892,7 @@ respond to a later pointer move with no button held.
 - [x] Do not create an Undo entry when geometry did not change.
 - [x] Add deferred-rAF tests for move and resize; current synchronous-rAF tests cannot expose the race.
 - [x] Add cancellation tests proving later pointer movement has no effect.
-- [ ] Owner verifies fast drag and resize behavior in the desktop app.
+- [ ] [owner] Owner verifies fast drag and resize behavior in the desktop app.
 
 ---
 
@@ -8966,7 +8966,7 @@ so `/simulate` silently showed absorbing layers as gain media.
 - [x] Negate isld at the boundary: `routes/reflectivity._engine_layers` (simulate) and `calc/refl_model.layer_stack` (fit).
 - [x] Regression tests: `test_simulate_treats_positive_sld_imag_as_absorption`, and the positive-isld absorption case in `tests/test_calc_refl_fit.py`.
 - [x] Leave the golden engine and its MATLAB freeze untouched (parity holds for MATLAB's own convention).
-- [ ] Decide deliberately whether MATLAB `parrattRefl` should change sign (sibling repo; not touched here).
+- [x] (stale: MATLAB is not a gate (owner decision 2026-11-21); sibling repo) Decide deliberately whether MATLAB `parrattRefl` should change sign (sibling repo; not touched here).
 
 ---
 
@@ -9008,7 +9008,7 @@ granted read access to `localhost:5173` in every run mode, not just `--dev`.
   a real uvicorn on an OS-picked port the way `--desktop` runs it);
   `test_csrf_guard.py` cases now name the Host they are same-origin with;
   `test_server_launch.py` pins the Vite args and the pre-uvicorn env export.
-- [ ] Residual: `tauri://localhost` is the origin of EVERY Tauri app on the
+- [ ] [owner] Residual: `tauri://localhost` is the origin of EVERY Tauri app on the
   machine, not just ours. The packaged shell navigates to the served
   `http://127.0.0.1:<port>` (same-origin), so the allowance may be removable;
   not changed here without a packaged-app check.
@@ -9065,7 +9065,7 @@ Cancel right after `findByRole("dialog")`.
 - [x] Relevant focused suites pass (dialogFocus.a11y, lazyRegion, lazyDialog*, usePendingDialogGuard, ConfirmDialog, ParamDialog).
 - [x] Type-check/build/repository gates pass (see Completion record).
 - [x] Agent verifies acceptance criteria.
-- [ ] Owner verifies when required -- not required.
+- [x] (stale: recorded as not required) Owner verifies when required -- not required.
 
 #### Completion record
 
@@ -9323,7 +9323,7 @@ see it half-built.
 - [x] `tests/test_startup_imports.py` passes unchanged: `create_app()`
       still imports none of openpyxl, periodictable or matplotlib.
 - [x] Agent verifies acceptance criteria.
-- [ ] Owner verifies when required — not required.
+- [x] (stale: recorded as not required) Owner verifies when required — not required.
 
 #### Completion record
 
@@ -9380,7 +9380,7 @@ see it half-built.
 - [x] Focused and full frontend tests, real-corpus API tests, lint/typecheck, production build, repository-integrity checks, and the real-browser box/sector workflow pass.
 - [x] Critical self-review found and closed inactive-tool hit interception, offscreen full-sector handles, and wrong-dataset default priming; no remaining blocking or meaningful small issue found.
 - [x] CI passes and PR receives final review. Verified 2026-11-21: the box/sector code and its tests (`MapSectorWedge.test.tsx`, `useMapSectorWedge.test.ts`) have been on main since PR #563's merge (8e7da83f); the PR was long since reviewed and merged.
-- [ ] Owner confirms box and sector resizing feel reliable in the desktop build.
+- [ ] [owner] Owner confirms box and sector resizing feel reliable in the desktop build.
 
 ### Regression coverage
 

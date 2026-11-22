@@ -380,13 +380,13 @@ session.
 
 ## Definition of done (extends PRIMARY's "Definition of primary software")
 
-- [ ] Three representative real projects finish with **neither** Origin
+- [ ] [owner] Three representative real projects finish with **neither** Origin
   **nor JMP** opened (the PRIMARY definition's first box, JMP half now
   first-class).
-- [ ] A grouped categorical analysis (text factors) goes from file to
+- [ ] [owner] A grouped categorical analysis (text factors) goes from file to
   publication figure + summary table without code or level-recoding
   detours.
-- [ ] Every census-listed JMP platform has a validated quantized
+- [ ] [gated: JMP census] Every census-listed JMP platform has a validated quantized
   equivalent or an explicit, owner-accepted deferral.
 
 ## PR discipline

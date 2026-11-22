@@ -62,7 +62,7 @@ This is the product contract for Claude's native implementation. It avoids repea
 - [x] Backend tests cover containment, sibling-prefix rejection, traversal, symlink/junction escape, read-only behavior, and revocation.
 - [x] Frontend tests cover Browse cancellation, session cancellation, every row state/action, and zero mutation before Relink.
 - [x] Integration tests cover identical-at-Preview/changed-before-commit refusal and typed-only paths receiving no grant.
-- [ ] Smoke-test Windows and macOS native pickers. Ubuntu is bonus coverage, not a blocker. **UNMET** — this lane has no Windows/macOS hardware; owner-gated, carried to R2/C5.
+- [ ] [owner] Smoke-test Windows and macOS native pickers. Ubuntu is bonus coverage, not a blocker. **UNMET** — this lane has no Windows/macOS hardware; owner-gated, carried to R2/C5.
 
 **Recommended model:** Claude Sonnet. Escalate only platform-specific path-containment/threat-model ambiguity to Claude Opus.
 
@@ -110,7 +110,7 @@ This is the product contract for Claude's native implementation. It avoids repea
 - [x] Cut `v0.23.0-rc2` from the exact reviewed `main` SHA after C1/C2 and record it.
 - [x] Run the required frontend, backend, packaging, installer, and platform matrix.
 - [x] Publish artifacts/checksums and verify the installed desktop/taskbar icon uses the Quantized logo.
-- [ ] ~~Perform owner testing on RC2~~ — **SUPERSEDED by C6/RC3.** RC2 was cut and published but never owner-tested; 19 further merges (#221-#239) landed after it, several fixing silent data-integrity defects. RC2 is no longer a valid acceptance candidate for the same reason RC1 was not.
+- [x] ~~Perform owner testing on RC2~~ — **SUPERSEDED by C6/RC3.** RC2 was cut and published but never owner-tested; 19 further merges (#221-#239) landed after it, several fixing silent data-integrity defects. RC2 is no longer a valid acceptance candidate for the same reason RC1 was not.
 
 **Closed 2026-08-23** — tag `v0.23.0-rc2` at `4f51f6e`, `release.yml` run `32622022893`. Verified 2026-08-26: the prerelease carries 8 assets (`Quantized_0.23.0_x64-setup.exe` + `.sig`, `Quantized_0.23.0_aarch64.dmg`, `Quantized_0.23.0_amd64.deb`, three `qz-server-*` archives, `latest.json`), each with a GitHub-recorded sha256 digest. `releases/latest` still points at `v0.22.0`, so the rollback build is intact.
 
@@ -120,10 +120,10 @@ This is the product contract for Claude's native implementation. It avoids repea
 
 **Goal:** validate what static review cannot: window dragging/resizing, intermittent blank subwindows, Origin-project legibility, non-maximized plot/worksheet layout, quick plotting, figure editing, Office copy/paste, relink consent, and recovery.
 
-- [ ] Record pass/fail with screenshots or concise reproduction steps.
-- [ ] Copy/paste should take seconds; first production figure remains a 20-minute maximum and unfamiliar-data import a 30-minute maximum.
-- [ ] Route defects through PR review. Change wording/tooltips only for reproducible confusion.
-- [ ] Promote `v0.23.0` only after blockers close on the exact candidate SHA and rollback/recovery instructions match shipped behavior.
+- [ ] [owner] Record pass/fail with screenshots or concise reproduction steps.
+- [ ] [owner] Copy/paste should take seconds; first production figure remains a 20-minute maximum and unfamiliar-data import a 30-minute maximum.
+- [ ] [standing checklist, not a work item] Route defects through PR review. Change wording/tooltips only for reproducible confusion.
+- [x] (stale: superseded: v0.23.0 was tagged; releases continue to v0.40.1) Promote `v0.23.0` only after blockers close on the exact candidate SHA and rollback/recovery instructions match shipped behavior.
 
 **Owner/model:** owner + Claude Sonnet. Use Sol for follow-up interaction/wording review once owner observations exist.
 
@@ -138,7 +138,7 @@ This is the product contract for Claude's native implementation. It avoids repea
 - [x] Cut `v0.23.0-rc3` from the exact reviewed `main` SHA — `412609850e74d83a0e7e4090ed7e8b61e58affc4`, via `cut-tag.yml`. **Subsequently DISQUALIFIED — see below.**
 - [x] Dispatch `release.yml` **with the tag as the ref** — both traps held in practice; the build did not start on its own and required the manual dispatch.
 - [x] Verify the published prerelease — all 5 jobs green, 9 assets (3 installers, 3 server archives, `.sig`, `latest.json`, `SHA256SUMS`), `prerelease: true`, `releases/latest` still `v0.22.0`.
-- [ ] Owner acceptance on the installed build — **now against RC4**, not RC3 (carries C5 and R2).
+- [ ] [owner] Owner acceptance on the installed build — **now against RC4**, not RC3 (carries C5 and R2).
 
 ### RC3 is disqualified; RC4 is the candidate
 

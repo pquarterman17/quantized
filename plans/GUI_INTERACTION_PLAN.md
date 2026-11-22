@@ -63,7 +63,7 @@ Windows display scaling and does not require remembering the command palette.
 - [x] Add focused model/DOM tests for grouping, states, shortcuts, semantic
       roles, keyboard switching, submenu execution, Escape ownership, and
       focus return; retain the context-menu regression suite.
-- [ ] Owner visual feel-check in the packaged Windows build at 100%, 125%, and
+- [ ] [owner] Owner visual feel-check in the packaged Windows build at 100%, 125%, and
       150% scaling. This is release acceptance, not missing implementation.
 
 Implementation ownership: ChatGPT-Sol/Codex (frontend UX); Claude review is the
@@ -189,7 +189,7 @@ feature checklist.
           conversion, and worksheet text-column preservation. Remote PostgreSQL/
           ODBC connectors remain demand-driven because they add credentials,
           drivers, and network policy rather than more analysis capability.
-    - [ ] `.opju` migration edges (matrix books, some 2-D instrument data, richer
+    - [ ] [gated: Origin recovery evidence gate; Origin import] `.opju` migration edges (matrix books, some 2-D instrument data, richer
           graphic-object/callout fidelity). Protected by the Origin recovery
           evidence gate; never infer new binary semantics from this UX plan.
 

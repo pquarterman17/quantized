@@ -468,12 +468,12 @@ of being booked here.)*
           The 5 cm × 5 cm × 30 nm workflow (20 emu/cm³ = 20 000 A/m for
           1.5e-3 emu, worked by hand in the test comments) runs on both sides
           and through the panel DOM.
-    - [ ] **Deferred follow-up, not part of the first implementation:** add
+    - [ ] [gated: deferred follow-up] **Deferred follow-up, not part of the first implementation:** add
           optional uncertainty fields for dimensions/mass and propagate their
           contribution separately from measurement uncertainty. The first
           release must preserve enough profile/provenance information to add
           this without changing previously saved meanings.
-    - [ ] Revisit after owner testing whether density-derived volume,
+    - [ ] [gated: after owner testing] Revisit after owner testing whether density-derived volume,
           irregular-shape volume, multiple pieces/sample count, and batch
           profile assignment are frequent enough to justify expansion. Do not
           grow those speculative fields into the first implementation.
