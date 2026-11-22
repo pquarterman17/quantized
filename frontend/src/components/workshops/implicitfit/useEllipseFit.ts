@@ -76,17 +76,22 @@ export function useEllipseFit(): EllipseFitState {
   async function fit(): Promise<void> {
     if (!active) return;
     const clickSettings = settingsKey;
+    const clickKey = key;
     setBusy(true);
     setError(null);
     try {
-      // A lazy book's arrival moves the key the result is stored under: install it
-      // first, let that commit land, and only then take the key this fit is asked with.
+      // A lazy book's arrival moves the key the result is stored under: install it,
+      // let that commit land, then take the key this fit is asked with. With no wait
+      // nothing can have changed, and the refs (which catch up in a passive effect)
+      // may still trail the render this click came from, so the click's own key is
+      // the truth: reading the refs there dropped a click made just after a commit.
+      let launchKey = clickKey;
       if (active.pending) {
         await resolveDataset(active.id);
         await afterCommit();
+        if (settingsRef.current !== clickSettings) return; // changed while the book loaded: this request carries the old ones
+        launchKey = liveKey.current;
       }
-      if (settingsRef.current !== clickSettings) return; // changed while the book loaded: this request carries the old ones
-      const launchKey = liveKey.current;
       const got = await load(active.id, [xCol, yCol]);
       if (!got) return;
       const [x, y] = got.columns;

@@ -11,6 +11,10 @@
 // - `record(key)` stamps the result that just landed; `record(null)` forgets it
 //   (Clear, a failed run, a dropped result).
 //
+// - A key taken BEFORE a lazy Origin book installs stays the live key after the
+//   install when nothing but the book arrived (inputsKey's lazy lineage, lane LZ),
+//   so such a run lands current; a user edit still moves the key and marks it stale.
+//
 // Pure React: no store or API imports.
 
 import { useState } from "react";
