@@ -55,5 +55,6 @@ describe("Signal Processing filters: Cancel during Create (lane WB)", () => {
     await act(async () => { release?.(); await Promise.resolve(); await Promise.resolve(); });
     expect(useApp.getState().datasets).toEqual([dataset]);
     expect(useApp.getState().history).toEqual([]);
+    expect(useApp.getState().status).toBe("cancelled — nothing was created");
   });
 });

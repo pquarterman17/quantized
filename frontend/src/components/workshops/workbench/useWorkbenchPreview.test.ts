@@ -142,6 +142,17 @@ describe("useWorkbenchPreview — abort", () => {
   });
 });
 
+describe("useWorkbenchPreview — a run that throws synchronously", () => {
+  it("is an error for its key, not an endless 'Previewing…'", async () => {
+    const h = renderHook(() => useWorkbenchPreview<string>({ key: "a", delayMs: 100, run: () => { throw new Error("bad recipe"); } }));
+    tick(100);
+    await flush();
+    expect(h.result.current.error).toBe("bad recipe");
+    expect(h.result.current.loading).toBe(false);
+    expect(h.result.current.running).toBe(false);
+  });
+});
+
 describe("useWorkbenchPreview — discard in auto mode", () => {
   it("cancels a scheduled run and is not left loading", () => {
     const h = setup({ key: "a" });

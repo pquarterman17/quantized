@@ -132,4 +132,39 @@ describe("Baseline estimate on the workbench shell (lane WB)", () => {
     await waitFor(() => expect(result.current.baseline).toEqual([1, 2, 1, 3]));
     expect(result.current.error).toBeNull();
   });
+
+  it("anchor mode on a still-loading book keeps the anchors through the load and shows the estimate", async () => {
+    vi.mocked(callBaselinePreview).mockResolvedValue({ baseline: [1, 1, 1, 1, 1] });
+    const full: DataStruct = { ...raw, time: [1, 2, 3, 4, 5], values: [[10], [12], [11], [13], [14]] };
+    useApp.setState({
+      datasets: [{
+        id: "d1", name: "book.opj", data: { ...raw, time: [1, 2], values: [[10], [12]] },
+        pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5, cols: 1 },
+      }],
+      resolveDataset: async (id: string) => {
+        useApp.setState((st) => ({ datasets: st.datasets.map((d) => (d.id === id && d.pending ? { id: d.id, name: d.name, data: full } : d)) }));
+        return useApp.getState().datasets.find((d) => d.id === id);
+      },
+    });
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("anchor"));
+    const bridge = () => useApp.getState().baselineAnchorEdit!;
+    act(() => { bridge().addAnchor(1, 10); });
+    act(() => { bridge().addAnchor(2, 12); });
+    await waitFor(() => expect(result.current.baseline).toEqual([1, 1, 1, 1, 1]));
+    expect(result.current.anchors).toHaveLength(2);
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
+  });
+
+  it("a batch error is not wiped when an earlier estimate becomes current again", async () => {
+    const { result } = renderHook(() => useBaseline());
+    await act(async () => { await result.current.compute(); });
+    useApp.setState({ selectedIds: ["d1", "missing"] });
+    await act(async () => { await result.current.applyToSelected(); });
+    const message = result.current.error;
+    expect(message).toBeTruthy();
+    act(() => result.current.setParams({ lam: 1e3 }));
+    act(() => result.current.setParams({ lam: 1e6 }));
+    expect(result.current.error).toBe(message);
+  });
 });

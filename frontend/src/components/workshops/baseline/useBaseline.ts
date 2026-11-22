@@ -135,6 +135,7 @@ export function useBaseline(): BaselineState {
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const liveIds = useApp((s) => s.datasets.filter((d) => batchIds.includes(d.id)).map((d) => d.id).join("|"));
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null); // the estimate is not ready yet
   const binding = active ? baselineInput(active, xKey, yKeys, seriesOrder)?.binding ?? null : null;
   // The estimate rides the shared workbench shell (../workbench): keyed on
   // every input it is computed from, so an answer for older inputs is never
@@ -142,16 +143,26 @@ export function useBaseline(): BaselineState {
   // Clear or Close is dropped. Estimate is a button (manual); the anchor
   // method re-estimates itself, debounced, as anchors are placed or dragged.
   const inputKey = active ? JSON.stringify([inputToken(active), xKey, yKeys, seriesOrder]) : "";
-  const preview = useWorkbenchPreview<Estimate | null>({
+  const preview = useWorkbenchPreview<Estimate>({
     key: active ? JSON.stringify([inputKey, method, params, method === "anchor" ? anchors : null]) : "",
     auto: method === "anchor" && anchors.length >= 2,
     delayMs: 150,
     fallbackError: "baseline failed",
     run: async () => {
       // #38 deferred edge: never estimate a baseline against the small
-      // preview — resolve the active dataset's full data first.
-      const ds = active && await useApp.getState().resolveDataset(active.id);
-      if (!ds) return null;
+      // preview — resolve the active dataset's full data first. A book's
+      // load swaps its Dataset object; the loaded one keeps this input token
+      // (baselineInput.ts), so the swap does not abort or reset this run.
+      if (!active) throw new Error("select a dataset first");
+      if (active.pending) loadingBooks.set(active.id, inputToken(active));
+      let ds: Dataset | undefined;
+      try {
+        ds = await useApp.getState().resolveDataset(active.id);
+        if (ds) inputToken(ds); // claim the token even if no render ran yet
+      } finally {
+        loadingBooks.delete(active.id);
+      }
+      if (!ds) throw new Error("the dataset is no longer available");
       const state = useApp.getState();
       const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
@@ -179,6 +190,7 @@ export function useBaseline(): BaselineState {
     if (holdSeed()) return; // keep a reopen's recorded anchors
     discard();
     setError(null);
+    setHint(null);
     setAnchors([]);
     setBaselineOverlay(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,24 +223,18 @@ export function useBaseline(): BaselineState {
   async function compute(): Promise<void> {
     if (!active) return;
     if (method === "anchor" && anchors.length < 2) {
-      setError("place at least 2 anchors on the plot");
+      setHint("place at least 2 anchors on the plot");
       return;
     }
     setError(null);
-    if (active.pending) {
-      loadingBooks.set(active.id, inputToken(active));
-      const loaded = await resolveActive(active.id);
-      if (loaded) inputToken(loaded); // claim the token even if no render ran yet
-      loadingBooks.delete(active.id);
-      if (!loaded) return;
-    }
+    setHint(null);
     await preview.refresh();
   }
 
-  // A message about an earlier estimate or apply (e.g. "place at least 2
-  // anchors") goes once a new estimate lands, including an automatic one.
+  // A "the estimate is not ready" hint (e.g. "place at least 2 anchors") goes
+  // once a new estimate lands, including an automatic one; other errors stay.
   useEffect(() => {
-    if (fresh) setError(null);
+    if (fresh) setHint(null);
   }, [fresh]);
 
   // Draw each new estimate on the plot (a dropped answer never gets here).
@@ -375,7 +381,7 @@ export function useBaseline(): BaselineState {
     const plotted = fresh?.binding ?? binding;
     if (plotted && (plotted.xKey != null || plotted.yKey !== 0)) {
       if (!fresh) {
-        setError("wait for the selected-channel preview, then Apply again");
+        setHint("wait for the selected-channel preview, then Apply again");
         return;
       }
       if (!(await subtractInto())) return;
@@ -408,7 +414,7 @@ export function useBaseline(): BaselineState {
         setAnchors([]);
         if (!commit.replacing) setStatus("subtracted anchor baseline (new dataset - prior corrections active)");
       } else {
-        setError("prior corrections active: wait for the preview, then Apply again");
+        setHint("prior corrections active: wait for the preview, then Apply again");
       }
       return;
     }
@@ -433,6 +439,7 @@ export function useBaseline(): BaselineState {
   function clear(): void {
     discard();
     setError(null);
+    setHint(null);
     setBaselineOverlay(null);
   }
 
@@ -445,7 +452,7 @@ export function useBaseline(): BaselineState {
     baseline,
     busy,
     estimating: preview.running,
-    error: error ?? (preview.error || null),
+    error: error ?? hint ?? (preview.error || null),
     anchors,
     binding,
     setMethod,

@@ -87,7 +87,15 @@ export function useWorkbenchPreview<T>({
     live.current = c;
     const owns = () => mounted.current && seq.current === id && !c.signal.aborted;
     setState((s) => ({ ...s, pendingKey: forKey }));
-    const settled = latestInputs.current.run(c.signal).then(
+    // Started synchronously (the request goes out now); a run that throws
+    // before returning its promise is an error like any other.
+    let launched: Promise<T>;
+    try {
+      launched = latestInputs.current.run(c.signal);
+    } catch (e) {
+      launched = Promise.reject(e instanceof Error ? e : new Error(latestInputs.current.fallbackError));
+    }
+    const settled = launched.then(
       (value) => { if (owns()) setState({ latest: { key: forKey, value }, error: null, pendingKey: null, discardedKey: null }); },
       (e: unknown) => {
         if (!owns() || isAbortError(e)) return;

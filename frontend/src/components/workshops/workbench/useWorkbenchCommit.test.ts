@@ -39,6 +39,19 @@ describe("useWorkbenchCommit", () => {
     expect(h.signal()?.aborted).toBe(true);
   });
 
+  it("abort releases the guard at once, even if the transport answers later", async () => {
+    const { result } = renderHook(() => useWorkbenchCommit());
+    const h = held();
+    await act(async () => { void result.current.run(h.commit); });
+    act(() => result.current.abort());
+    expect(result.current.busy).toBe(false);
+    let ran = false;
+    await act(async () => { await result.current.run(async () => { ran = true; }); });
+    expect(ran).toBe(true);
+    await act(async () => { h.release("late"); await Promise.resolve(); });
+    expect(result.current.busy).toBe(false);
+  });
+
   it("unmount aborts the pending commit (closing the window mid-commit)", async () => {
     const { result, unmount } = renderHook(() => useWorkbenchCommit());
     const h = held();

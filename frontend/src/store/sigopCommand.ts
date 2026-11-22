@@ -8,5 +8,11 @@ import { useApp } from "./useApp";
  *  refused input; the caller shows it. Resolves false when nothing was made.
  *  `signal` (Cancel): an abort before the output is added writes nothing. */
 export async function createSigopFromApp(params: SigopParams, sourceId: string, signal?: AbortSignal): Promise<boolean> {
-  return (await runTransform(useApp.getState, params, sourceId, undefined, signal)) !== null;
+  try {
+    return (await runTransform(useApp.getState, params, sourceId, undefined, signal)) !== null;
+  } catch (e) {
+    if (!signal?.aborted) throw e;
+    useApp.getState().setStatus("cancelled — nothing was created");
+    return false;
+  }
 }
