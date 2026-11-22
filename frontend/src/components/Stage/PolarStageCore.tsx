@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { observeResizePaint } from "../../lib/frameCoalesce";
-import { POLAR_LINE_PX, polarChannels, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
+import { polarChannels, polarLineWidth, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
 import { analysisData } from "../../lib/rowstate";
 import { niceTicks } from "../../lib/niceTicks";
 import type { Dataset, DataStruct } from "../../lib/types";
@@ -23,7 +23,7 @@ import type { Accent, Theme } from "../../store/useApp";
 export interface PolarStageCoreProps {
   dataset: Dataset | null;
   yKeys: number[] | null;
-  seriesStyles: Record<number, { color?: string }>;
+  seriesStyles: Record<number, { color?: string; width?: number }>;
   showGrid: boolean;
   /** Rebuild triggers only: `draw` reads design tokens (`--text`,
    *  `--series-*`) at paint time, so a theme/accent switch needs a repaint
@@ -78,7 +78,7 @@ function draw(
   host: HTMLElement,
   data: DataStruct | null,
   yKeys: number[] | null,
-  seriesStyles: Record<number, { color?: string }>,
+  seriesStyles: Record<number, { color?: string; width?: number }>,
   showGrid: boolean,
 ) {
   const ctx = canvas.getContext("2d");
@@ -144,7 +144,7 @@ function draw(
   // Series curves.
   plotted.forEach((ch, i) => {
     ctx.strokeStyle = seriesColor(i, seriesStyles[ch]);
-    ctx.lineWidth = POLAR_LINE_PX;
+    ctx.lineWidth = polarLineWidth(seriesStyles[ch]);
     ctx.beginPath();
     let started = false;
     for (let k = 0; k < angle.length; k++) {

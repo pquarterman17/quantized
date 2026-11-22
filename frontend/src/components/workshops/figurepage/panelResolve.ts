@@ -49,6 +49,7 @@ import type { FigureDocument } from "../../../lib/figureDocument";
 import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import { savedOverlaysDroppedNotice } from "../../../lib/figureDocumentOverlaySpec";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
+import { withFullSavedFit } from "../../../lib/figureSavedFit";
 import { buildFigureSpecFromDocument, type ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import type { PanelSource } from "../../../lib/figurepageActions";
 import type { PageDocument } from "../../../lib/pageDocument";
@@ -164,7 +165,7 @@ export async function panelFigure(
     // grouped+secondary-axis combination) — any such failure is exactly a
     // "this source can no longer render" case, same as a dead window/figdoc.
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
+      const spec = buildFigureSpecFromDocument(await withFullSavedFit(document, dataset, useApp.getState().staleFits), dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
       return pagePanelSpec(spec);
     } catch {
       return null;
@@ -188,7 +189,7 @@ export async function panelFigure(
       : undefined;
     if (!dataset) return null;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
+      const spec = buildFigureSpecFromDocument(await withFullSavedFit(document, dataset, useApp.getState().staleFits), dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
       return pagePanelSpec(spec);
     } catch {
       return null;
@@ -216,7 +217,7 @@ export async function panelFigure(
       : undefined;
   if (document.data.mode === "live" && !dataset) return null;
   try {
-    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
+    const spec = buildFigureSpecFromDocument(await withFullSavedFit(document, dataset, useApp.getState().staleFits), dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
     return pagePanelSpec(spec);
   } catch {
     return null;
@@ -392,7 +393,7 @@ export async function buildPageSpecFromDocument(
     }
     let figure: FigureSpec;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
+      const spec = buildFigureSpecFromDocument(await withFullSavedFit(document, dataset, useApp.getState().staleFits), dataset, document.name, { greyExcluded, defaultTrace, onDroppedOverlays: droppedNote(document.name), staleFits: useApp.getState().staleFits });
       figure = pagePanelSpec(spec);
     } catch (e) {
       throw new Error(

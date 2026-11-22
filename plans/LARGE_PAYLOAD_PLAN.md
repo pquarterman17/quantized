@@ -146,13 +146,23 @@ Deferred from phase 2:
   `positive_even_params` flips a sign-ambiguous parameter after the fit,
   and `f(x, -p)` is equal only to 1e-9, not bit-identical, so the evaluate
   fallback could differ from the stored curve.
-- **Document-only exports** (a Figure Page panel, batch / Library PDFs) of a
-  saved DISPLAY curve leave the fit out with the existing "saved fit left
-  out" notice instead of shipping the thinned picture; materializing those
-  sections needs an async seam in `lib/figureSpec`.
+- ~~**Document-only exports**~~ (shipped, lane E): `lib/figureSavedFit.ts`
+  `withFullSavedFit` is the async step in front of
+  `buildFigureSpecFromDocument` for a Figure Page panel
+  (`panelResolve.panelFigure`) and a batch / Library PDF
+  (`downloadBatchFigures`): it fetches the saved display curve by resultId
+  (evicted: the model evaluated at the fitted x, `fullFitCurve`'s fallback)
+  and hands the builder a copy of the document with the full curve. Fails
+  closed: a failed fetch, a stale fit or a changed row key leaves the document
+  alone, so the fit is left out with the "saved fit left out" notice as
+  before. Still sync-only (display curve left out): Send to report and the
+  Figure Builder preview, which have no async seam yet.
 - **Zoom detail** of the display curve (it is 4096 buckets over the whole
-  fit; a zoomed view shows the coarser polyline) and a decimated residual
-  display (residual plots fetch the full curve when opened).
+  fit; a zoomed view shows the coarser polyline) is DEFERRED: a denser curve
+  for the visible x-range needs a new API (`/api/fitting/curve` takes only a
+  `result_id` and returns the whole curve; it needs an x-window and a display
+  budget). Also deferred: a decimated residual display (residual plots fetch
+  the full curve when opened).
 - The Curve Fit header's poor-fit verdict reads `residuals` synchronously,
   so for a display result in 0.5 <= R² < 0.9 it judges by R² only (the
   status line fetches and runs the test).
@@ -473,6 +483,16 @@ Deferred from lane D:
 - 2026-11-22: lane D: remaining inputs by handle (fit-multi, baselines, sigop,
   regression, descriptive), weights by channel, lean ALS / rolling ball /
   anchor / Shirley / region; measurements and tests in the lane D section.
+- 2026-11-22: document-only exports of a saved display fit (lane E): Figure
+  Page panels and batch / Library PDFs fetch the full curve before building
+  (`lib/figureSavedFit.ts`, test `figureSavedFit.test.ts`; the panel and batch
+  cases failed with the wiring reverted). Zoom detail deferred (needs a new
+  API, see the deferred list). Also lane E: the matplotlib export pads an
+  autoscaled linear axis for the largest size-by bubble
+  (`calc/figure_bubble_pad.py`, mirror of `lib/bubblePad.ts`; test
+  `tests/test_calc_figure_bubble_pad.py`, the widening case failed with the
+  hook disabled).
+
 - 2026-11-21: batch Curve Fit by handle (lane DF): `CurveFitBatchSection` posts
   `/fitting/fit` as dataset handle + channels + the fitted rows (the single
   fit's `fitRowsOf` mapping) through `postBySource`, with arrays when the
