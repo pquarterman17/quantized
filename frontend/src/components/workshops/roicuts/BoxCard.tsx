@@ -12,6 +12,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import type { CutSpace } from "../../../lib/mapcuts";
 import type { RoiCutsState } from "./useRoiCuts";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import Field from "./Field";
 
 function fmt(v: number | null | undefined): string {
@@ -82,7 +83,10 @@ export default function BoxCard({ roi }: { roi: RoiCutsState }) {
         </Button>
       </div>
 
-      {roi.boxStats && (
+      {roi.boxStats && roi.statsStale && (
+        <OutOfDateNote block>the box or the data changed after these statistics. Press Stats again.</OutOfDateNote>
+      )}
+      {roi.boxStats && !roi.statsStale && (
         <div
           className="qzk-ds-meta"
           style={{ marginTop: 10, display: "grid", gridTemplateColumns: "auto auto", gap: "3px 16px", userSelect: "text" }}

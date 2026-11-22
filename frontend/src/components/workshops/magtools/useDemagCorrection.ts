@@ -10,6 +10,7 @@ import type { DataStruct, Dataset } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { datasetInputsToken } from "../workbench/inputsKey";
 import {
   magXY,
   requestView,
@@ -34,13 +35,15 @@ const CORRECTABLE_FIELD_UNITS = new Set(["Oe", "T", "mT", "A/m"]);
 
 interface DemagReadout {
   owners: readonly string[];
+  /** What the readout was produced for (source rows, plotted channels, geometry); null for an error. */
+  key: string | null;
   nFactor: number | null;
   nCgs: number | null;
   warning: string | null;
   error: string | null;
 }
 
-const EMPTY: DemagReadout = { owners: [], nFactor: null, nCgs: null, warning: null, error: null };
+const EMPTY: DemagReadout = { owners: [], key: null, nFactor: null, nCgs: null, warning: null, error: null };
 
 function correctionProblem(
   ds: Dataset | null,
@@ -122,7 +125,13 @@ export function useDemagCorrection() {
   const [busy, setBusy] = useState(false);
   const [readout, setReadout] = useState<DemagReadout>(EMPTY);
   const activeId = active?.id ?? null;
-  const visible = activeId && readout.owners.includes(activeId) ? readout : EMPTY;
+  const owned = activeId && readout.owners.includes(activeId) ? readout : EMPTY;
+  // Lane WB7: on the source the applied-N readout describes the RUN, so a moved
+  // geometry / channel / row set withholds it (an "Applied N" beside another
+  // geometry would read as that geometry's); on the corrected dataset it describes itself.
+  const liveKey = JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, shape]);
+  const stale = owned.key !== null && activeId === owned.owners[0] && owned.key !== liveKey;
+  const visible = stale ? { ...EMPTY, owners: owned.owners, error: owned.error } : owned;
   const problem = useMemo(
     () => correctionProblem(active, shape, xKey, yKeys, seriesOrder),
     [active, shape, xKey, yKeys, seriesOrder],
@@ -262,6 +271,7 @@ export function useDemagCorrection() {
       if (!pairs.complete) warnings.push(`${pairs.n - pairs.keep.length} gap rows remain gaps in the corrected field.`);
       if (yRoles.length === 0 && xRoles.length === 0) warnings.push("No committed magnetization or applied-field uncertainty was available to propagate.");
       setReadout({
+        key: JSON.stringify([datasetInputsToken(ds), request.xKey, request.yKeys, request.seriesOrder, shape]),
         owners: [...owners, outcome.outputId], nFactor: response.n_factor, nCgs: response.n_cgs,
         warning: warnings.length ? warnings.join(" ") : null, error: null,
       });
@@ -273,7 +283,7 @@ export function useDemagCorrection() {
   }
 
   return {
-    shape, setShape, busy, problem, apply,
+    shape, setShape, busy, problem, apply, stale,
     nFactor: visible.nFactor, nCgs: visible.nCgs,
     warning: visible.warning, error: visible.error,
   };

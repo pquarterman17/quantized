@@ -25,6 +25,8 @@ import { Button } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
 import { pawleyAxisProblem, scanRange } from "./pawleyInputs";
 import { addReferenceSticks } from "./referenceSticks";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
+import { useRunStamp } from "../workbench/useRunStamp";
 
 const hint = { marginTop: 8, color: "var(--text-faint)" } as const;
 const grid = { display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 10px", alignItems: "center", marginTop: 8 } as const;
@@ -67,6 +69,7 @@ export default function BuiltInPhaseIndexer() {
     setWavelength(String(wavelengthFromMetadata(active?.data.metadata) ?? CU_KA1_A));
     setPeakText(fittedPeakText(active));
     setResult(null);
+    stamp.record(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the dataset id only
   }, [activeId]);
 
@@ -87,18 +90,28 @@ export default function BuiltInPhaseIndexer() {
       : "problem" in parsed ? parsed.problem : null;
   const twoThetaMin = range && !axisProblem ? Math.max(0, range.min) : 10;
   const twoThetaMax = range && !axisProblem ? Math.min(180, range.max) : 90;
+  // Lane WB7: λ, tolerance, the peak list, the phase and the scan range are the
+  // run's inputs; a result whose inputs moved is marked and Label on plot withheld
+  // (a dataset switch and a phase change still DROP it, as before).
+  const stamp = useRunStamp(JSON.stringify([phase, wavelength, tolerance, peakText, twoThetaMin, twoThetaMax]));
+  const stale = result !== null && stamp.stale;
 
   async function runIndex(): Promise<void> {
     if (inputProblem || "problem" in parsed) return;
     const mine = ++token.current;
+    const launchKey = stamp.launchKey();
     setBusy(true);
     setError(null);
+    stamp.record(null);
     try {
       const r = await xrdIndex({
         phase, peaks: parsed.peaks, wavelength: lambda, tolerance: tol,
         two_theta_min: twoThetaMin, two_theta_max: Math.max(twoThetaMax, twoThetaMin + 1e-6),
       });
-      if (mine === token.current) setResult(r);
+      if (mine === token.current) {
+        stamp.record(launchKey);
+        setResult(r);
+      }
     } catch (e) {
       if (mine === token.current) {
         setResult(null);
@@ -110,7 +123,7 @@ export default function BuiltInPhaseIndexer() {
   }
 
   function labelOnPlot(): void {
-    if (!result || axisProblem || result.reflections.length === 0) return;
+    if (!result || stale || axisProblem || result.reflections.length === 0) return;
     addReferenceSticks(
       `${result.phase.name} (built-in) · λ ${result.wavelength.toFixed(5)} Å`,
       // No intensity model: equal-height sticks mark positions only.
@@ -137,7 +150,7 @@ export default function BuiltInPhaseIndexer() {
       <div style={grid}>
         <label className="qzk-field-lbl" htmlFor="qz-xrd-phase">Phase</label>
         <select id="qz-xrd-phase" className="qz-select" value={phase} disabled={!phases}
-          onChange={(e) => { setPhase(e.target.value); setResult(null); }}>
+          onChange={(e) => { setPhase(e.target.value); setResult(null); stamp.record(null); }}>
           {!phases && <option value={phase}>{phase}</option>}
           {byCategory.map(([category, list]) => (
             <optgroup key={category} label={category}>
@@ -163,11 +176,12 @@ export default function BuiltInPhaseIndexer() {
         <Button size="sm" disabled={busy || !!inputProblem} onClick={() => void runIndex()}>
           {busy ? "Indexing…" : "Index peaks"}
         </Button>
-        <Button size="sm" disabled={!result || !!axisProblem || result.reflections.length === 0} title={axisProblem ?? undefined} onClick={labelOnPlot}>
+        <Button size="sm" disabled={!result || stale || !!axisProblem || result.reflections.length === 0} title={stale ? "Out of date: index the peaks again" : axisProblem ?? undefined} onClick={labelOnPlot}>
           Label on plot
         </Button>
       </div>
-      {result && (
+      {stale && <OutOfDateNote block>the wavelength, tolerance or peak list changed after this indexing. Index peaks again.</OutOfDateNote>}
+      {result && !stale && (
         <>
           <div className="qzk-ds-meta" style={hint} data-testid="xrd-index-summary">
             {result.phase.name}: {result.reflections.length} reflection{result.reflections.length === 1 ? "" : "s"} in {fmtNum(twoThetaMin)}–{fmtNum(twoThetaMax)}° · {result.n_matched} of {result.matches.length} peak{result.matches.length === 1 ? "" : "s"} indexed (±{fmtNum(result.tolerance)}°)

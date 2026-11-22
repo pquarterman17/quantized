@@ -36,7 +36,7 @@
 
 import { useEffect, useState } from "react";
 
-import { rsmBoxCut, rsmBoxStats, rsmChiProfile, rsmSector, type BoxCutRequest, type BoxStats, type BoxStatsRequest } from "../../../lib/api/rsm";
+import { rsmBoxCut, rsmChiProfile, rsmSector, type BoxCutRequest, type BoxStats } from "../../../lib/api/rsm";
 import type { CutSpace } from "../../../lib/mapcuts";
 import { is2DMap } from "../../../lib/mapdata";
 import { hasQSpace } from "../../../lib/mapdataFetch";
@@ -45,7 +45,6 @@ import {
   normalizeRect,
   polefigAxes,
   roiBoxBody,
-  roiStatsBody,
   sectorFromCenter,
   type RoiDef,
   type RoiRect,
@@ -56,6 +55,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useRoisStore } from "../../../store/hooks/useRoisStore";
 import type { MapSectorState } from "../../../store/rois";
 import { useCutLanding } from "../../Stage/useCutLanding";
+import { useBoxStats } from "./useBoxStats";
 
 // ── Pure helpers (column extents, polar-branch detection) ──────────────────
 
@@ -245,6 +245,8 @@ export interface RoiCutsState {
   runBox: (collapse?: "x" | "y") => void;
   runStats: () => Promise<void>;
   boxStats: BoxStats | null;
+  /** The readout was measured for a box / rows that have since changed (values withheld). */
+  statsStale: boolean;
   statsBusy: boolean;
   statsError: string | null;
 
@@ -309,9 +311,7 @@ export function useRoiCuts(): RoiCutsState {
   const [boxCollapse, setBoxCollapse] = useState<"x" | "y">("x");
   const [boxReduce, setBoxReduce] = useState<"sum" | "mean" | "max">("sum");
   const [boxBins, setBoxBins] = useState(200);
-  const [boxStats, setBoxStats] = useState<BoxStats | null>(null);
-  const [statsBusy, setStatsBusy] = useState(false);
-  const [statsError, setStatsError] = useState<string | null>(null);
+  const { boxStats, statsStale, statsBusy, statsError, runStats } = useBoxStats(active, mapRoi);
   const boxSpace: CutSpace = mapRoi?.space ?? boxSpaceDefault;
 
   // A new active dataset re-primes the sector card's defaults (full circle,
@@ -324,8 +324,6 @@ export function useRoiCuts(): RoiCutsState {
   useEffect(() => {
     if (!active || mapSector !== DEFAULT_MAP_SECTOR) return;
     setMapSector(sectorDefaultsFor(active));
-    setBoxStats(null);
-    setStatsError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
@@ -368,20 +366,6 @@ export function useRoiCuts(): RoiCutsState {
       nBins: boxBins,
     }) as unknown as BoxCutRequest;
     void land(rsmBoxCut(body));
-  }
-
-  async function runStats(): Promise<void> {
-    if (!active || !mapRoi) return;
-    setStatsBusy(true);
-    setStatsError(null);
-    try {
-      const body = roiStatsBody(active.data, normalizeRect(mapRoi)) as unknown as BoxStatsRequest;
-      setBoxStats(await rsmBoxStats(body));
-    } catch (e) {
-      setStatsError(e instanceof Error ? e.message : "box stats failed");
-    } finally {
-      setStatsBusy(false);
-    }
   }
 
   // ── Sector card actions (polar routing) ──────────────────────────────
@@ -455,6 +439,7 @@ export function useRoiCuts(): RoiCutsState {
     runBox,
     runStats,
     boxStats,
+    statsStale,
     statsBusy,
     statsError,
 

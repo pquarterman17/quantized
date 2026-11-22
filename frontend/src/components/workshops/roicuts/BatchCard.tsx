@@ -25,6 +25,7 @@ import Card from "../../primitives/Card";
 import { fmtNum } from "../../../lib/format";
 import type { StatKey, TabRow } from "../../../lib/tabulate";
 import TabulateTable from "../tabulate/TabulateTable";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import type { RoiCutsState } from "./useRoiCuts";
 import { useRoiBatch, type BatchNamedReason, type BatchSummaryRow } from "./useRoiBatch";
 
@@ -125,7 +126,10 @@ export default function BatchCard({ roi }: { roi: RoiCutsState }) {
         </div>
       )}
 
-      {batch.summaryRows.length > 0 && (
+      {batch.summaryRows.length > 0 && batch.summaryStale && (
+        <OutOfDateNote block>the box or the data changed after this summary. Apply to selected again.</OutOfDateNote>
+      )}
+      {batch.summaryRows.length > 0 && !batch.summaryStale && (
         <>
           <TabulateTable
             groupLabels={GROUP_LABELS}
