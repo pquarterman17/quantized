@@ -26,6 +26,7 @@ import { Fragment, useState } from "react";
 import { labelForCode } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/originTextColumns";
 import type { ColumnAria } from "../../../lib/worksheetColumnView";
+import type { CellTint } from "../../../lib/worksheetRules";
 import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { fmtCell, type CellFormatter } from "./cellFormat";
 import type { TextColumnLayout } from "./textColumns";
@@ -104,6 +105,8 @@ export interface GridRowProps {
   /** True column numbers (`aria-colindex`), set while some column is hidden so
    *  a screen reader still says which column a cell is. */
   colPos?: ColumnAria;
+  /** Conditional-format tint per cell; a selected or cursor cell keeps its selection colour. */
+  tintOf?: CellTint;
 }
 
 export interface GridRowCursor {
@@ -145,6 +148,7 @@ export default function GridRow({
   frozenCols = NO_FROZEN,
   frozenLeft = () => 0,
   colPos,
+  tintOf,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -241,6 +245,7 @@ export default function GridRow({
     const colSelected = selectedCols.has(col);
     const levels = computed ? null : (catLevels?.(col) ?? null);
     const mark = cursor?.mark(cursor.pos, col) ?? null;
+    const tint = !colSelected && !mark && !entry && !levels && col >= 0 ? tintOf?.(col, value) : undefined;
     return (
       <div
         key={col}
@@ -259,6 +264,7 @@ export default function GridRow({
           ...(pinnedLeft != null
             ? { position: "sticky" as const, left: pinnedLeft, zIndex: 2, background: colSelected || mark ? "var(--accent-soft)" : "var(--surface-0)", ...(col >= 0 && col === frozenCols[frozenCols.length - 1] ? { boxShadow: "2px 0 0 var(--accent)" } : {}) }
             : {}),
+          ...(tint ? { background: tint } : {}),
         }}
         onDoubleClick={
           locked

@@ -23,6 +23,7 @@ import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeColumnDesignations } from "./columnDesignationsSanitize";
 import { sanitizeColumnProps } from "./columnProps";
+import { sanitizeCellRules } from "./worksheetRulesModel";
 import { sanitizeFrozenCols, sanitizeHiddenCols } from "./worksheetColumnViewSanitize";
 import { sanitizeBindings } from "./errorRoles";
 import { parseFitSpec } from "./fitSpecParse";
@@ -260,6 +261,8 @@ export function parseWorkspaceDataset(
   if (hiddenCols) ds.hiddenCols = hiddenCols;
   const frozenCols = sanitizeFrozenCols(dd.frozenCols, ds.data.labels.length);
   if (frozenCols) ds.frozenCols = frozenCols;
+  const cellRules = sanitizeCellRules(dd.cellRules, ds.data.labels.length);
+  if (cellRules) ds.cellRules = cellRules;
   // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
   // stale .dwk could carry out-of-range indices.
   const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);

@@ -73,6 +73,7 @@ import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
 import type { ColumnProps } from "./columnProps";
+import type { CellRules } from "./worksheetRulesModel";
 import type { ChannelRole, ColumnFilter, Dataset, FitSpec, LinkedCurve, ModelingType, SeriesStyle } from "./types";
 
 /** One column-count change: a plain number is the REMOVED column (every
@@ -243,6 +244,8 @@ export interface DatasetChannelState {
   /** Worksheet view: hidden columns and the frozen prefix length (lib/worksheetColumnView.ts). */
   hiddenCols?: number[];
   frozenCols?: number;
+  /** Conditional-format rules by column (lib/worksheetRulesModel.ts). */
+  cellRules?: CellRules;
 }
 
 export function remapDatasetChannels(
@@ -268,6 +271,7 @@ export function remapDatasetChannels(
     columnProps: remapKeyedRecord(d.columnProps, removedCol),
     hiddenCols: remapHiddenCols(d.hiddenCols, removedCol),
     frozenCols: remapFrozenCols(d.frozenCols, removedCol),
+    cellRules: remapKeyedRecord(d.cellRules, removedCol),
   };
 }
 

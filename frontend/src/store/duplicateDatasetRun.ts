@@ -38,6 +38,7 @@ export function duplicateDatasetRun(id: string, set: SliceSet, get: SliceGet): v
       ...(src.columnProps ? { columnProps: { ...src.columnProps } } : {}),
       ...(src.hiddenCols ? { hiddenCols: [...src.hiddenCols] } : {}),
       ...(src.frozenCols ? { frozenCols: src.frozenCols } : {}),
+      ...(src.cellRules ? { cellRules: structuredClone(src.cellRules) } : {}),
       ...(src.errorRoles ? { errorRoles: [...src.errorRoles] } : {}), // F5: [] is truthy, carries the O1 marker too
     };
     const datasets = [...s.datasets];

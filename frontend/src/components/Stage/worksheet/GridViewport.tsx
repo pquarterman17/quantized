@@ -34,6 +34,7 @@ import {
 } from "../../../lib/gridwindow";
 import type { OriginDesignation } from "../../../lib/columnmeta";
 import type { ColumnProps } from "../../../lib/columnProps";
+import type { CellTint } from "../../../lib/worksheetRules";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import { gridFormatters } from "./cellFormat";
@@ -46,7 +47,7 @@ import { useColumnMarks, useGridColumnAxis } from "./useGridColumnAxis";
 import { useTextColumnLayout } from "./useTextColumnLayout";
 
 const NO_COLS: ReadonlySet<number> = new Set();
-const DATE_X_COL_WIDTH = 168; // px: a full "YYYY-MM-DD HH:MM:SS" in the mono cell font
+const DATE_X_COL_WIDTH = 168; // px: a full "YYYY-MM-DD HH:MM:SS" in mono
 
 export interface GridViewportProps {
   data: DataStruct;
@@ -118,6 +119,7 @@ export interface GridViewportProps {
   hiddenCols?: ReadonlySet<number>;
   frozenCols?: number;
   onShowCols?: (cols: number[]) => void;
+  tintOf?: CellTint; // conditional format (lib/worksheetRules.ts)
 }
 
 /** What the cursor hook hands the grid: the per-cell marks and handlers
@@ -191,6 +193,7 @@ export default function GridViewport({
   hiddenCols = NO_COLS,
   frozenCols = 0,
   onShowCols,
+  tintOf,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
@@ -222,11 +225,9 @@ export default function GridViewport({
     setScroll({ top: el.scrollTop, left: el.scrollLeft });
   };
 
-  const colWidth = DEFAULT_COL_WIDTH;
+  const [colWidth, colCount] = [DEFAULT_COL_WIDTH, data.labels.length];
   const gutterWidth = gutterWidthFor(order.length + 1);
-  const colCount = data.labels.length;
-  // Per-column width resolution (MAIN_PLAN #3): resized columns override the
-  // uniform default; -1 (the pinned x column) is resizable too.
+  // Per-column widths (MAIN_PLAN #3): resized columns override the default; -1 (x) too.
   // A date X needs room for "2026-03-01 12:00:00" (audit #7) until the user sizes it.
   const widthOf = (c: number) => colWidths[c] ?? (c < 0 && xIsDate ? DATE_X_COL_WIDTH : colWidth);
   const colResize = useColResize(widthOf, onResizeCol);
@@ -321,6 +322,7 @@ export default function GridViewport({
       frozenCols={pinnedCols}
       frozenLeft={axis.frozenLeft}
       colPos={colPos}
+      tintOf={tintOf}
     />
   );
 
