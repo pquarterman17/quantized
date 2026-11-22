@@ -86,7 +86,7 @@ function FigureCard({ result, index, savedBinding, onOpen, onBuild, onReport, on
   </article>;
 }
 
-function StatisticalFigureCard({ draft, disabled, disabledReason, onCreate }: {
+export function StatisticalFigureCard({ draft, disabled, disabledReason, onCreate }: {
   draft: StatisticalResultFigureDraft;
   disabled: boolean;
   disabledReason?: string;

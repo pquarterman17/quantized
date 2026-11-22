@@ -342,6 +342,49 @@ inconsistently exposed, and do not all share the same result lifecycle.
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.
+  - **Audit (2026-11-22, lane RB): how each statistics tool presents results.**
+    "Workspace" = the result workspace (`components/workshops/analysisresults`)
+    a saved Library result opens in; "Book" = the result-book view added by RB.
+
+    | Tool | In-tool panel | Saved snapshot: tables / figures | Workspace before RB | Report | Reopen | Book |
+    |------|---------------|----------------------------------|---------------------|--------|--------|------|
+    | Distribution | histogram + box strips, per-level sections, compare table; Save result, → Report | Summary, Histogram(s), Distribution fits, Fitted quantiles / histogram drafts | six tabs (Overview, Table, Figures, Diagnostics, Provenance, Notes); tables and figures on separate tabs | in-tool → Report; workspace "Send summary" = first table only | Edit / rerun… | **yes** |
+    | Fit Y by X | bivariate / oneway / contingency views; Save result, → Report | mode summary + detail tables, Tukey, Test chooser, Fitted curve, Regression band / group, curve, contingency, interval drafts | same six tabs | same as Distribution | Edit / rerun… | **yes** |
+    | Multivariate | correlation matrix, PCA, SPLOM tabs; Save result (no in-tool report) | r / p matrices, PCA summary, loadings, scaling, scores / scores + explained-variance drafts | same six tabs | workspace "Send summary" only | Edit / rerun… | **yes** |
+    | Variability | variability chart + variance components; Save result, → Report | Nested ANOVA, Variance components, Cell and Factor A summaries / components + cell-mean drafts | same six tabs | same as Distribution | Edit / rerun… | **yes** |
+    | Outlier screening | method controls + flagged rows; Save result | Flagged rows, Rosner sequence / flagged + Rosner drafts | same six tabs | workspace "Send summary" only | Edit / rerun… | **yes** |
+    | Statistical tests | sentence + tables; Copy, Export CSV, → Report; every Run saves a result | test tables / none | same six tabs | in-tool and "Send summary" | Edit / rerun… | not yet |
+    | Test chooser | recommendation list; → Report | no result of its own (Fit Y by X saves its recommendations as a table) | — | in-tool only | — | n/a |
+
+    Shared already: snapshot save (`store/snapshotResultSave.ts`), the
+    freshness authority (`snapshotResultState`), per-table Copy/Export and
+    multi-output Freeze, frozen figure drafts (`lib/statisticalResultFigures`),
+    the shared input line (`AnalysisInputSummary`). What was missing: one view
+    reading a result top to bottom, a per-table report handoff (only the first
+    table could be sent), and a per-table "open as worksheet".
+  - **Design (lane RB).** A "Result book" tab in the existing result workspace
+    (no new window; Overview stays the default tab). Pure model
+    `lib/resultBook.ts` (one per-producer entry: method, settings, the columns
+    the tool resolves); view `analysisresults/resultbook/`. Header: method,
+    freshness badge and saved date, the inputs, the settings, the warnings,
+    and Reopen in tool / Expand all / Collapse all. The input line is the
+    shared `AnalysisInputSummary`, re-resolved from the source only while the
+    result is current (same analysis-view fingerprint, so the same rows);
+    otherwise the book prints the saved input and says why the saved values
+    can no longer be verified (fail closed). Sections in one fixed order for
+    every producer: the saved tables in saved order, then the figures in
+    draft order; the first section opens expanded. Table sections: Copy
+    table, Send to report (that table, titled "result · table"; current
+    results only), Open as worksheet (freezes that table into an
+    independent worksheet and shows it). Figure sections: Create editable
+    figure (the existing frozen-draft path; send the figure to a report from
+    its window).
+  - **First slice done (lane RB):** Distribution, Fit Y by X, Multivariate,
+    Variability and Outlier screening. Remaining: Statistical tests (no
+    figure drafts; one entry in `lib/resultBook.ts` once its method/settings
+    line is designed), Williamson–Hall and analysis batches; a direct
+    "send figure section to report" (today via the created figure); an
+    option to make the book the default tab (owner decision).
 - [ ] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
@@ -957,6 +1000,7 @@ dataset precedence, roles, selected rows and X range (fail-before tests in
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane RB: audited how the statistics tools present results and added the Result book tab to the result workspace (`lib/resultBook.ts`, `analysisresults/resultbook/`) for Distribution, Fit Y by X, Multivariate, Variability and Outlier screening: one header (shared input line while current, method, settings, freshness), collapsible table and figure sections in one order, per-section Copy, Send to report and Open as worksheet, and Reopen in tool. | Characterization tests of the existing tabs (written first) still pass; book tests cover section order, collapse state, each action, a stale result and each migrated tool; `sendAnalysisInlineTableToReport(id, tableIndex)` store test; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated (slice 2 adds Fit Y by X, Multivariate, Variability, Stats tests and the chooser); lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane SEL2: moved Fit Y by X, Multivariate, Variability, Stats tests and the Stats chooser onto the resolver and summary; added the distinct `load-failed` refusal for a failed lazy Origin load; Curve fit's custom-equation mode now reads the handoff like the other modes. | Characterization tests before migration; Fit Y by X queued-report and By-partition tests; summary/refusal tests for all five panels; fail-before tests for the equation-mode fix; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-10-15 | Project team | Added a loaded-data Curie–Weiss workflow to the Magnetometry workshop. It accepts declared molar susceptibility or converts a real M(T) sweep from total moment / emu per gram using the dataset's explicit field column plus entered sample and molar mass. It writes a normal inverse-susceptibility worksheet with an in-range fit line, exact source-row and sample-context provenance, visible θ/C/μeff/R²/n, and propagated confirmed response errors. The adversarial pass added absolute-K enforcement, filtered/excluded-row alignment, parameter/row-state/source race refusal, asymmetric inverse-error direction and label reversal, explicit unweighted/exact-input disclosures, bounded large-array range selection, and a minimum-three-row high-temperature default. | Pure calculation and route checks cover total and mass-normalized moment, T/Oe conversion, uncertainty, zero field, non-positive χ, explicit fit-range refusal, JSON-safe gaps, and missing context. Focused frontend checks cover unit/axis qualification, field selection, derived output/provenance, exclusions, missing errors, stale source and stale-control changes. Forced TypeScript, full ESLint/Ruff/mypy, clean production build, architecture and full-suite CI remain the PR gate. The private Quantum Design `mpms_mvst.dat` imported as 300 M(T) rows with its real Temperature, DC Moment, DC Moment Error, and 999.9075 Oe field; a 180.63–299.90 K fit used 120 positive rows (R² 0.99996) without modifying the source file. |

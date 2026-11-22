@@ -4,7 +4,9 @@ import type { AnalysisResult } from "../../../lib/analysisResult";
 import { distributionAnalysisResult } from "../../../lib/distributionAnalysisResult";
 import { fitYByXAnalysisResult } from "../../../lib/fitYByXAnalysisResult";
 import { multivariateAnalysisResult } from "../../../lib/multivariateAnalysisResult";
+import { outlierScreeningAnalysisResult } from "../../../lib/outlierScreeningAnalysisResult";
 import type { Dataset } from "../../../lib/types";
+import { variabilityAnalysisResult } from "../../../lib/variabilityAnalysisResult";
 
 export const source: Dataset = {
   id: "source", name: "Raw trace",
@@ -38,3 +40,28 @@ export const multivariate = (): AnalysisResult => multivariateAnalysisResult(
   },
 );
 
+
+/** A two-column source for the nested Variability chart (response + batch). */
+export const variabilitySource: Dataset = {
+  ...source,
+  data: { ...source.data, values: [[1, 10], [2, 20], [4, 20]], labels: ["Signal", "Batch"], units: ["V", ""] },
+};
+export const variability = (): AnalysisResult => variabilityAnalysisResult(
+  "variability", variabilitySource, { responseCol: 0, factorACol: -1, factorBCol: 1 }, {
+    responseLabel: "Signal", factorALabel: "Time", factorBLabel: "Batch", levelLabels: [],
+    anova: { table: [], a_levels: 2, b_per_a: [], n_per_cell: [], n_total: 3, grand_mean: 2.33,
+      alpha: 0.05, a_tested_against: "Error", b_within_a_estimable: false,
+      error_estimable: false, balanced: false },
+    summary: { cells: [], a_groups: [], grand_mean: 2.33, grand_n: 3, a_levels: 2, balanced: false },
+    varComp: null, varCompNote: "not estimable",
+  },
+);
+export const outlier = (): AnalysisResult => outlierScreeningAnalysisResult(
+  "outlier", source, { col: 0, method: "mad", alpha: 0.01, k: 4, threshold: 3.5 }, {
+    channelLabel: "Signal", flaggedRows: [{ rowIndex: 2, value: 4, score: 4 }], omittedRows: [], rosnerSteps: [],
+    result: { method: "mad", data: {
+      modified_z_scores: [0, 0, 4], median: 2, mad: 0.5, scale_method: "MAD", threshold: 3.5,
+      flagged_indices: [2], N: 3, excluded_indices: [], method: "modified z-score",
+    } },
+  },
+);

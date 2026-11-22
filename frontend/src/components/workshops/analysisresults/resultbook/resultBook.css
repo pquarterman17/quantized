@@ -1,0 +1,27 @@
+/* Result book (lane RB): header + collapsible sections, tokens only. */
+.qz-result-book { display: grid; gap: var(--space-2); }
+.qz-result-book-head {
+  display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+}
+.qz-result-book-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.qz-result-book-title h3 { margin: 0; margin-right: auto; font-size: 13px; }
+.qz-result-book-title .qz-analysis-status { margin-right: 0; }
+.qz-result-book-meta { color: var(--text-dim); font-size: 11px; }
+.qz-result-book-saved-input { margin: 0; }
+.qz-result-book-settings { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin: 0; }
+.qz-result-book-settings div { display: flex; gap: 4px; }
+.qz-result-book-settings dt { color: var(--text-dim); }
+.qz-result-book-settings dt::after { content: ":"; }
+.qz-result-book-settings dd { margin: 0; font-family: var(--font-mono); }
+.qz-result-book-warnings { margin: 0; padding-left: 18px; color: var(--warn); }
+.qz-result-book-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.qz-result-book-section { border: 1px solid var(--border); border-radius: var(--radius); }
+.qz-result-book-section > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); }
+.qz-result-book-section > header h4 { margin: 0; margin-right: auto; }
+.qz-result-book-toggle {
+  border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600;
+  padding: 2px 0; cursor: default;
+}
+.qz-result-book-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.qz-result-book-body { padding: 0 var(--space-2) var(--space-2); overflow-x: auto; }
