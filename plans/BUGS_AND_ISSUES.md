@@ -63,6 +63,18 @@ after slice 4 added nine seams across three new modules, landing at 28;
 
 This is a working document, not a claim that every observation is already reproduced or assigned. Add new reports using the template below. Do not check off an item merely because code was written: its acceptance criteria and relevant automated tests must pass. Items requiring owner testing should remain open until that testing occurs.
 
+
+## Open-item triage (2026-11-21, lane B1)
+
+All ~50 unchecked items were triaged; none is a small, contained code fix, so
+none was changed. 1 was stale and is now ticked (BUG-033 CI/PR item). The rest:
+
+| Class | Count | Items (line anchors approximate) | Needed from owner |
+|---|---|---|---|
+| Owner verification (real data / Windows / desktop build / visual) | ~38 | "Owner verifies when required", "Confirmed visually on owner data", reported-file checks, menu scaling at 100/125/150%, fast drag/resize, Library glyph/row-count/new-user judgements | Run on the real file or build, then tick |
+| Design / semantics decision | 5 | dropped-link lineage text (~l.713); "copy with dependents" revisit (~l.717); MATLAB `parrattRefl` sign (BUG-029, sibling repo, ~l.8957); `tauri://localhost` origin allowance removal (BUG-030, needs packaged-app check, ~l.8999); Reductus name matching needs a second real variant (~l.177) | Decide, or supply a sample file / packaged app |
+| Unfilled new-issue template checklist | 17 | the `## New issue template` block (~l.8536-8562); not real items | None |
+
 ## Status key
 
 - `[ ]` Open or not yet verified
@@ -9367,7 +9379,7 @@ see it half-built.
 - [x] Add stable box/sector handle identifiers for real-browser interaction coverage.
 - [x] Focused and full frontend tests, real-corpus API tests, lint/typecheck, production build, repository-integrity checks, and the real-browser box/sector workflow pass.
 - [x] Critical self-review found and closed inactive-tool hit interception, offscreen full-sector handles, and wrong-dataset default priming; no remaining blocking or meaningful small issue found.
-- [ ] CI passes and PR receives final review.
+- [x] CI passes and PR receives final review. Verified 2026-11-21: the box/sector code and its tests (`MapSectorWedge.test.tsx`, `useMapSectorWedge.test.ts`) have been on main since PR #563's merge (8e7da83f); the PR was long since reviewed and merged.
 - [ ] Owner confirms box and sector resizing feel reliable in the desktop build.
 
 ### Regression coverage

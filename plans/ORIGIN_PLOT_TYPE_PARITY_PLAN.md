@@ -222,16 +222,19 @@ None open.
          record (its error plots were drawn as lines). Public: 1,803 ->
          882 figures with `error_bar_plots`, 1,845 plots on 1,207 curves
          attached; owner: 149 plots, 167 `.opj` phantom lines gone.
-   - [ ] **Asymmetric error bars on a figure**: 874 public halves (437
+   - [x] **Asymmetric error bars on a figure**: 874 public halves (437
          curves, mostly PerceivedRisk) have proven plus/minus columns that
          differ; the figure path carries one symmetric `errKeys` column per
          curve. Needs the halves as the figure's error bindings (the
          renderer already draws asymmetric spans).
-   - [ ] **Two both-ways error plots on one curve** (420 public): which
+         DONE (#788, ledger F-067; `test_realdata_halves_attach_plus_and_minus_by_their_authors_names`); verified 2026-11-21 (Lane OD triage).
+   - [x] **Two both-ways error plots on one curve** (420 public): which
          one Origin draws (or a band + bars) needs the COM check in
          `error_bars.md`.
-   - [ ] **X-error bars from a figure's own plots** (13 public, 12 owner):
+         DONE (#788, ledger F-069: equal columns attach (420 of 420 equal, PREV Graph29AA), anything else stays left out); verified 2026-11-21 (Lane OD triage).
+   - [x] **X-error bars from a figure's own plots** (13 public, 12 owner):
          bind them as the curve's X error (book roles draw some today).
+         DONE (#788, ledger F-068; `test_realdata_lollipop_x_halves_draw_stems_to_zero`); verified 2026-11-21 (Lane OD triage).
    - [x] ~~**Step drawn as a line**~~ FIXED 2026-11-15: curve record byte 17
          = 11 is `line.connect` 7 (13 specimens, 39 curves; 0 of 7,103
          corpus records), so the line style is withheld
@@ -436,10 +439,11 @@ None open.
          Owner COM checks open: `SOP_meas` Graph67 orientation, `Graph_Template`
          Graph1's upright 215 plot (`plot_kinds.md`). The `.opj` reader's own
          `column` / `bar` mapping still overlaps multi-series bars.
-   - [ ] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
+   - [x] **Text X** (`text_categories`, 5 specimens, 10 curves): Origin
          plots against the text categories; quantized draws against the row
          index. The same 5 specimens hold the only category-family omitted
          labels (`label_is_short_name`).
+         DONE (#784 category axes with text labels, F-087 / F-088; a text X on a later sheet is admitted for pies only, F-117); verified 2026-11-21 (Lane OD triage).
 7. **Specialised family import parity** — polar, contour, heatmap, ternary,
    waterfall, bubble/colour-mapped scatter, vector, inset, axis break,
    multi-panel. Measured by the item 2 scorer (2026-11-15).
@@ -557,6 +561,10 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     canvas (`lib/uplotOrient.ts`) and in export (`calc/figure_orient.py`),
     but only an Origin import sets it: no gallery tile, Series card control
     or Stat Stage orientation.
+    **PARTIAL 2026-11-21:** gallery tile "Horizontal Bar" and a Series card
+    "Bars" control (None / Vertical / Horizontal) now create it on the XY
+    stage (screen and export share `SeriesStyle.bars`); Stat Stage
+    orientation is still open.
 11. **Horizontal stacked bar** — 11/11 `stacked_bar` unbuildable: the Stat
     Stage bar is vertical only and `bars: "horizontal"` has no stacking.
 12. **Floating column** — 9/9 `floating_column` unbuildable: no bar that
@@ -574,10 +582,19 @@ Evidence for every item below: `tools/plot_corpus/scratch_run.py` over the
     (`SeriesStyle.bars`) would draw Origin's figure but has no creation UI
     (shared with #10). The bars also take no Series card colour (11/11
     styles wrong on both types).
+    **PARTIAL 2026-11-21:** the gallery's "Column per X row" tile draws one
+    bar per row, one series per Y column, filled with the Series card colour
+    (XY-stage bars). Stacked column per X row is still open (needs a
+    cumulative bar base on screen and in `calc/figure_bars.py`, plus the
+    autoscale).
 15. **Histogram of several columns** — 8/11 `histogram`: the gallery's
     Histogram bins only the first plotted column; Origin bins every
     selected Y column in one graph. `single_point` (1 row) exports nothing
     (the stage needs >= 2 values); Origin draws a one-bin histogram.
+    **PARTIAL 2026-11-21:** a single finite value now draws a one-bin
+    histogram (screen and export, `calc/statplots.histogram`; a distribution
+    fit still needs >= 2 values). Binning several Y columns in one graph is
+    still open.
 16. **Double-Y axis assignment** — 6/8 `double_y` put the wrong curve on the
     right axis: `plotTypePatch("doubleY")` moves the LAST plotted column to
     Y2, Origin's `DOUBLEY` template puts the SECOND Y column on the right

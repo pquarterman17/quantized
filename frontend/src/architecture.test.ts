@@ -866,12 +866,16 @@ const TS_MODULE_PINS: Record<string, number> = {
   // are read through `toolPlugins()` (lib/axisExtrasHook.ts), one import line.
   // 1262 -> 1177 (2026-11-16, UX audit 8 #8): the auto tick labels moved to
   // lib/autoTickValues.ts when they gained the ×10ⁿ factor.
+  // 1177 unchanged (2026-11-21, bundle diet slice 31): shapes, annotations, ref
+  // lines and the workshop edit plugins are read through startup chunks.
   "/lib/uplotOpts.ts": 1177,
   // 1175 -> 1164 (2026-11-13, figures integration): the region-shade chunk
   // loader moved to lib/regionDecorLoader.ts.
   // 1164 -> 1076 (2026-11-15, origin gap audit 4 lane A): the error-bar drawing
   // moved to the startup chunk (lib/uplotErrorDraw.ts) for the eager budget.
-  "/lib/uplotOverlays.ts": 1076,
+  // 1076 -> 507 (2026-11-21, bundle diet slice 31): annotationPlugin moved to
+  // lib/uplotAnnotations.ts and refLinePlugin to lib/uplotRegionShades.ts (startup chunks).
+  "/lib/uplotOverlays.ts": 507,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
   // ReflectivityFftResult) — a self-contained leaf block nothing else in this

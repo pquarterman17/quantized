@@ -31,7 +31,7 @@ import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/fig
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
-import { xAxisIsDate } from "../../../lib/tickFormat";
+import { xAxisIsClock, xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisScale, DataStruct, RefLine, Shape } from "../../../lib/types";
 import { figurePublicationDirty } from "../../../store/figureUnsavedEdits";
 import { nextFigureDocId } from "../../../store/idSeq";
@@ -447,6 +447,7 @@ export function useFigureBuilder() {
     canonicalYFmt: canonicalView?.yFmt ?? yFmt,
     canonicalY2Fmt: canonicalView?.y2Fmt ?? null,
     xIsDate: xAxisIsDate(data?.metadata, (canonicalView?.xFmt ?? xFmt).mode),
+    xIsClock: xAxisIsClock(data?.metadata, (canonicalView?.xFmt ?? xFmt).mode),
     ...tickFmtOps,
     ...page,
     // F2.3f: canonical-only (empty/no-op in legacy mode — see the field doc above).

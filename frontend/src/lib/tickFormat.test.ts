@@ -5,7 +5,10 @@ import {
   normalizeTickDigits,
   TICK_DATE_OPTIONS,
   TICK_MODE_OPTIONS,
+  tickModeHasDigits,
+  xAxisIsClock,
   xAxisIsDate,
+  xTickModeOptions,
 } from "./tickFormat";
 
 describe("tick-format vocabulary", () => {
@@ -68,5 +71,17 @@ describe("normalizeTickDigits", () => {
     expect(normalizeTickDigits("99")).toBe(20);
     expect(normalizeTickDigits("2.6")).toBe(3);
     expect(normalizeTickDigits("3")).toBe(3);
+  });
+});
+
+describe("clock tick mode", () => {
+  it("is offered on a time-of-day column or when already selected", () => {
+    expect(xAxisIsClock({ time_is_clock: true }, "auto")).toBe(true);
+    expect(xAxisIsClock({}, "clock")).toBe(true);
+    expect(xAxisIsClock({}, "auto")).toBe(false);
+    expect(xTickModeOptions(true).map((o) => o.value)).toEqual(["auto", "fixed", "sci", "eng", "clock"]);
+    expect(xTickModeOptions(false)).toBe(TICK_MODE_OPTIONS);
+    expect(tickModeHasDigits("clock")).toBe(false);
+    expect(tickModeHasDigits("fixed")).toBe(true);
   });
 });

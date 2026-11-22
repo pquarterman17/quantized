@@ -186,6 +186,7 @@ export default function FigureBuilderView() {
                 yFmt: f.canonicalYFmt,
                 y2Fmt: f.canonicalY2Fmt,
                 xIsDate: f.xIsDate,
+                xIsClock: f.xIsClock,
                 onXFmt: f.setXFmtCanonical,
                 onYFmt: f.setYFmtCanonical,
                 onY2Fmt: f.setY2FmtCanonical,

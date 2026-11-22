@@ -34,6 +34,8 @@ import { isTurned, orientTurnReady, orientTurnSettled } from "../../lib/uplotOri
 import { regionDecorReady, regionDecorSettled } from "../../lib/regionDecorLoader";
 import { loadMarks, marksPending, usesMarks } from "../../lib/marksLoader";
 import { richLabelsReady, richLabelsSettled } from "../../lib/richLabelsLoader";
+import { annotationsReady, annotationsSettled } from "../../lib/annotationsLoader";
+import { shapesReady, shapesSettled } from "../../lib/shapesLoader";
 
 /** What the startup chunks would change on this plot: every label it draws
  *  (title, axis titles, series and annotation text) and whether it has any
@@ -47,6 +49,10 @@ export interface LazyDecorNeeds {
   turned?: boolean;
   /** A series asks for spline / drop lines / size-by (lib/marksLoader.ts): rebuild once that chunk settles. */
   marks?: boolean;
+  /** The plot has drawn shapes, or a draw-shape mode is active (lib/shapesLoader.ts). */
+  shapes?: boolean;
+  /** The plot has text annotations (lib/annotationsLoader.ts). */
+  annotations?: boolean;
   /** A time-of-day X (`PlotPayload.xIsDate` "clock"): its `auto` format draws the
    *  clock axis, which rides the axis-extras chunk (lib/clockTicks.ts). */
   clock?: boolean;
@@ -94,8 +100,9 @@ export function useLazyPlotParts(
   // The canvas title drawing (lib/richLabelsLoader.ts): any plot with a label
   // rebuilds once it lands, so rich / moved / draggable titles appear.
   const needTitles = !richLabelsReady() && decor.texts.some((t) => !!t?.trim());
+  const needShapes = (!!decor.shapes && !shapesReady()) || (!!decor.annotations && !annotationsReady());
   useEffect(() => {
-    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn) return;
+    if (!needExtras && !needGadgets && !needTools && !needEscapes && !needDecor && !needTitles && !needTurn && !needShapes) return;
     let live = true;
     // A failed chunk load leaves that part undrawn (the plot itself is
     // complete without it); the next need retries. The startup chunks never
@@ -108,6 +115,8 @@ export function useLazyPlotParts(
       needDecor ? regionDecorSettled : null,
       needTitles ? richLabelsSettled : null,
       needTurn ? orientTurnSettled : null,
+      decor.shapes && !shapesReady() ? shapesSettled : null,
+      decor.annotations && !annotationsReady() ? annotationsSettled : null,
     ]).then(
       () => {
         if (live) onReady();
@@ -118,7 +127,7 @@ export function useLazyPlotParts(
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onReady` is a fresh closure each render; only the needs decide.
-  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn]);
+  }, [needExtras, needGadgets, needTools, needEscapes, needDecor, needTitles, needTurn, needShapes]);
   // The marks chunk (lib/marksLoader.ts) is its OWN effect, keyed on whether a series asks for a mark
   // (stable) rather than on "still pending": the arrival flips pending in the same commit and must not
   // cancel the rebuild it is about to ask for.
