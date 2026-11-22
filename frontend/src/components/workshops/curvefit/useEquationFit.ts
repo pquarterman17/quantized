@@ -36,6 +36,8 @@ import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { selectedFitData, throwFitSelectionRefusal } from "../../../lib/fitselection";
+import { analysisTargetDataset } from "../../../lib/analysisInputs";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
 
 export type { EquationParamRow };
 
@@ -130,11 +132,25 @@ export function useEquationFit(
   opts?: { debounceMs?: number },
 ): EquationFitState {
   const debounceMs = opts?.debounceMs ?? 350;
-  const active = useActiveDataset();
+  // The SAME dataset and roles the registry modes fit (useCurveFit): the
+  // Curve fit selection item (an Analysis Center / worksheet / rerun handoff,
+  // or the live plot capture) wins over the active worksheet and the live
+  // plot channels; a handoff naming a deleted worksheet gets no dataset. The
+  // selection is seeded by useCurveFit in the parent panel; with none (this
+  // panel on its own) the active worksheet and plotted channels apply.
+  const fallbackActive = useActiveDataset();
+  const datasets = useApp((s) => s.datasets);
+  const owner = useAnalysisSelection((s) => s.toolId);
+  const seed = useAnalysisSelection((s) => s.selection);
+  const item = owner === "curvefit" ? seed?.items[0] ?? null : null;
+  const active = analysisTargetDataset(datasets, fallbackActive?.id ?? null, item, seed?.source === "tool-default");
+  const selected = item && item.datasetId === active?.id ? item : null; // never another sheet's roles
   const setFitOverlay = useApp((s) => s.setFitOverlay);
-  const xKey = useApp((s) => s.xKey);
-  const yKeys = useApp((s) => s.yKeys);
+  const liveXKey = useApp((s) => s.xKey);
+  const liveYKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
+  const xKey = selected?.xKey ?? liveXKey;
+  const yKeys = selected?.yKeys ?? liveYKeys;
 
   const [equation, setEquation] = useState(initial?.equation ?? "");
   const [status, setStatus] = useState<ValidationStatus>(initial ? "ok" : "idle");
@@ -160,12 +176,12 @@ export function useEquationFit(
   rowsRef.current = rows;
 
   const xRange = useMemo(() => {
-    const d = selectedFitData(active, xKey, yKeys, seriesOrder);
+    const d = selectedFitData(active, xKey, yKeys, seriesOrder, selected ?? undefined);
     if (!d) return null;
     const finite = d.x.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return null;
     return { min: minOf(finite), max: maxOf(finite) };
-  }, [active, seriesOrder, xKey, yKeys]);
+  }, [active, selected, seriesOrder, xKey, yKeys]);
 
   useEffect(() => {
     if (!equation.trim()) {
@@ -235,15 +251,21 @@ export function useEquationFit(
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       const state = useApp.getState();
-      const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!d) return throwFitSelectionRefusal(ds, state.xKey, state.yKeys, state.seriesOrder);
+      const currentSeed = useAnalysisSelection.getState();
+      const runSelection = currentSeed.toolId === "curvefit"
+        ? currentSeed.selection?.items.find((entry) => entry.datasetId === ds.id)
+        : undefined;
+      const runXKey = runSelection?.xKey ?? state.xKey;
+      const runYKeys = runSelection?.yKeys ?? state.yKeys;
+      const d = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
+      if (!d) return throwFitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder);
       const pairs = dropGapRows(d.x, d.y);
       if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
       }
       const n = ds.data.time.length;
-      const kept = activeRowIndices(n, droppedRows(ds));
+      const kept = d.sourceRows ?? activeRowIndices(n, droppedRows(ds)); // the overlay is laid back onto these
       // x/y by dataset handle when the server holds the dataset (lib/fitSource).
       const r = await leanEquationFit({
         equation,
