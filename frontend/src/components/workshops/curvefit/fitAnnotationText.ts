@@ -77,6 +77,15 @@ function r2Tex(s: string): string {
   return `R^2=${texNum(s)}`;
 }
 
+/** Make `$` literal in rich text. The label grammar (lib/richtext.ts, and
+ *  matplotlib's) has no backslash escape: a backslash only marks the `$` right
+ *  after it as literal, and is otherwise printed as-is. So escaping `$` alone is
+ *  complete; doubling backslashes would print them twice. Pinned by "user text
+ *  cannot open a math region" in fitAnnotationText.test.ts. */
+function escapeDollars(text: string): string {
+  return text.split("$").join("\\$");
+}
+
 function build(i: FitResultInput, o: FitAnnotationOptions, tex: boolean, notes: string[]): string | null {
   const params = Array.isArray(i.result.params) ? (i.result.params as unknown[]) : [];
   const errors = Array.isArray(i.result.errors) ? (i.result.errors as unknown[]) : [];
@@ -89,7 +98,7 @@ function build(i: FitResultInput, o: FitAnnotationOptions, tex: boolean, notes: 
       if (eq !== null && parseRichText(`$y=${eq}$`).ok) parts.push(math(`y=${eq}`));
       else {
         // Only the equation falls back (to the model's name); parameters stay LaTeX.
-        parts.push(`y = ${i.model}(x)`.replace(/\$/g, "\\$"));
+        parts.push(escapeDollars(`y = ${i.model}(x)`));
         if (Object.hasOwn(FIT_MODEL_EXPRS, i.model)) notes.push("The equation cannot be written as LaTeX here; the model name is shown instead.");
       }
     }
@@ -120,7 +129,7 @@ function build(i: FitResultInput, o: FitAnnotationOptions, tex: boolean, notes: 
 /** The annotation text for a fit result. Never throws; a latex request that the
  *  screen parser rejects returns the plain text and says why in `note`. */
 export function buildFitAnnotationText(input: FitResultInput, opts: FitAnnotationOptions): FitAnnotationText {
-  const escape = (t: string) => t.replace(/\$/g, "\\$");
+  const escape = escapeDollars;
   if (opts.format === "latex") {
     const notes: string[] = [];
     const t = build(input, opts, true, notes);
