@@ -6,6 +6,8 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-22
+
 ### Added
 
 - **Point labels from a column on any XY plot**: the Inspector has a new Point labels card. Pick a label column (text or numeric) and which points to label: all points, only the rows selected in the worksheet, or the top N by |y| (1 to 100). It is off by default, saved with the graph (and in undo), and a project that uses it is saved in a newer file version that older releases refuse to open rather than silently dropping it. The labels are laid out once and drawn in the live plot and in the vector export (PDF, SVG, EPS, PNG) from that one list, each in its curve's colour. Rows excluded from the analysis or dropped by the data filter are never labelled, nor are points with a blank label or a missing value. To keep the plot readable, crowded labels are thinned (the plot is cut into a 14 by 10 grid and each cell keeps one label, the one furthest from zero in |y|, so a 2,000-point plot shows at most 140), and the plot and the card say how many were left out. "All points" is refused above 2,000 points (nothing is drawn, with the reason shown) because a label per point is unreadable; use Top N or Selected rows there. With a label column set, the cursor readout also shows the row number and the label value of the point under the cursor. Nothing is drawn, and the plot says why, on a reciprocal axis, with exchanged X and Y, horizontal bars, a waterfall, a group, encoding, facet or secondary Y axis, curves on different X columns, or decade offsets on a log axis; a deleted label column turns the labels off. Text is cut at 32 characters.
