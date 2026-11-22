@@ -6154,6 +6154,14 @@ export interface components {
     schemas: {
         /** ALSRequest */
         ALSRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Lam
              * @default 1000000
@@ -6170,12 +6178,24 @@ export interface components {
              */
             p?: number;
             /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
+            /**
              * Tol
              * @default 0.000001
              */
             tol?: number;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** AdjustPRequest */
         AdjustPRequest: {
@@ -6261,15 +6281,37 @@ export interface components {
         AnchorRequest: {
             /** Anchors */
             anchors: number[][];
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Method
              * @default pchip
              */
             method?: string;
+            /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** AngleRequest */
         AngleRequest: {
@@ -7818,8 +7860,21 @@ export interface components {
         };
         /** DescriptiveRequest */
         DescriptiveRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: (number | null)[];
+            x?: (number | null)[] | null;
+            /** X Channel */
+            x_channel?: number | null;
         };
         /** DiagnosticsRequest */
         DiagnosticsRequest: {
@@ -7954,6 +8009,8 @@ export interface components {
             display_points?: number | null;
             /** Dy */
             dy?: number[] | null;
+            /** Dy Channel */
+            dy_channel?: number | null;
             /** Equation */
             equation: string;
             /** Fixed */
@@ -7987,6 +8044,8 @@ export interface components {
             upper?: (number | null)[] | null;
             /** Weights */
             weights?: number[] | null;
+            /** Weights Channel */
+            weights_channel?: number | null;
             /** X */
             x?: number[] | null;
             /** X Channel */
@@ -8031,6 +8090,12 @@ export interface components {
         };
         /** EstimateRequest */
         EstimateRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Display Points */
             display_points?: number | null;
             /**
@@ -8068,15 +8133,24 @@ export interface components {
              * @default true
              */
             return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Smooth Passes
              * @default 3
              */
             smooth_passes?: number;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /**
          * ExtraYAxisSpec
@@ -8730,6 +8804,12 @@ export interface components {
              * @default false
              */
             constrain?: boolean;
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /**
              * Deadline S
              * @default 10
@@ -8752,10 +8832,19 @@ export interface components {
              * @default true
              */
             polish?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** FitPeakRequest */
         FitPeakRequest: {
@@ -8843,6 +8932,8 @@ export interface components {
             display_points?: number | null;
             /** Dy */
             dy?: number[] | null;
+            /** Dy Channel */
+            dy_channel?: number | null;
             /** Fixed */
             fixed?: boolean[] | null;
             /** Lower */
@@ -8876,6 +8967,8 @@ export interface components {
             upper?: (number | null)[] | null;
             /** Weights */
             weights?: number[] | null;
+            /** Weights Channel */
+            weights_channel?: number | null;
             /** X */
             x?: number[] | null;
             /** X Channel */
@@ -9665,6 +9758,12 @@ export interface components {
         };
         /** ModPolyRequest */
         ModPolyRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Display Points */
             display_points?: number | null;
             /**
@@ -9682,13 +9781,20 @@ export interface components {
              * @default true
              */
             return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /**
              * Tol
              * @default 0.000001
              */
             tol?: number;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** MomentConvertRequest */
         MomentConvertRequest: {
@@ -11088,19 +11194,41 @@ export interface components {
         };
         /** RegionBackgroundRequest */
         RegionBackgroundRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Order
              * @default 1
              */
             order?: number;
+            /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** X Max */
             x_max: number;
             /** X Min */
             x_min: number;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
             /** Y Max */
             y_max?: number | null;
             /** Y Min */
@@ -11120,15 +11248,30 @@ export interface components {
             band_interval?: string;
             /** Band X */
             band_x?: number[] | null;
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /**
              * Order
              * @default 1
              */
             order?: number;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** RepeatedMeasuresRequest */
         RepeatedMeasuresRequest: {
@@ -11296,18 +11439,38 @@ export interface components {
         };
         /** RollingBallRequest */
         RollingBallRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Radius
              * @default 100
              */
             radius?: number;
             /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
+            /**
              * Smooth
              * @default -1
              */
             smooth?: number;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** RosnerRequest */
         RosnerRequest: {
@@ -11444,6 +11607,14 @@ export interface components {
         };
         /** ShirleyRequest */
         ShirleyRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Edge Average
              * @default 1
@@ -11455,14 +11626,28 @@ export interface components {
              */
             max_iter?: number;
             /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
+            /**
              * Tol
              * @default 0.000001
              */
             tol?: number;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /** SigopRequest */
         SigopRequest: {
@@ -11473,9 +11658,11 @@ export interface components {
             /** Channels */
             channels?: number[];
             /** Dataset */
-            dataset: {
+            dataset?: {
                 [key: string]: unknown;
-            };
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Display Points */
             display_points?: number | null;
             /** Method */
@@ -12825,6 +13012,14 @@ export interface components {
         };
         /** XrdLowAngleRequest */
         XrdLowAngleRequest: {
+            /** Dataset */
+            dataset?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
+            /** Display Points */
+            display_points?: number | null;
             /**
              * Include X2
              * @default true
@@ -12836,14 +13031,28 @@ export interface components {
              */
             max_iter?: number;
             /**
+             * Return Baseline
+             * @default true
+             */
+            return_baseline?: boolean;
+            /** Rows */
+            rows?: [
+                number,
+                number
+            ][] | null;
+            /**
              * Tol
              * @default 0.000001
              */
             tol?: number;
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** X Channel */
+            x_channel?: number | null;
             /** Y */
-            y: number[];
+            y?: number[] | null;
+            /** Y Channel */
+            y_channel?: number | null;
         };
         /**
          * YoudenRequest

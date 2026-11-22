@@ -18,7 +18,7 @@ import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } fr
 import type { BaselineOverlay, CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
-import { callBaseline, callBaselinePreview } from "./baselineCall";
+import { baselineBy, callBaseline, callBaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
 export type BaselineMethod =
@@ -233,7 +233,7 @@ export function useBaseline(): BaselineState {
       const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
       const { x, y } = input;
-      const res = await callBaselinePreview(method, x, y, params, anchors);
+      const res = await callBaselinePreview(method, x, y, params, anchors, baselineBy(ds.data, input.binding.xKey, input.binding.yKey));
       fullRef.current = res.full ?? null;
       setBaseline(res.baseline);
       setEstimateBinding(input.binding);
@@ -339,7 +339,7 @@ export function useBaseline(): BaselineState {
         if (!ds) throw new Error("a selected dataset could not be loaded");
         const input = batchInput(ds, binding);
         if (typeof input === "string") throw new Error(input);
-        const res = await callBaseline(method, input.x, input.y, params, anchors).catch((e: unknown) => {
+        const res = await callBaseline(method, input.x, input.y, params, anchors, baselineBy(ds.data, input.binding.xKey, input.binding.yKey)).catch((e: unknown) => {
           throw new Error(`${ds.name}: ${e instanceof Error ? e.message : "baseline failed"}`);
         });
         outputs.push({ name: bgSubName(ds.name), data: subtractBaselineData(ds.data, res.baseline, input.binding, method) });

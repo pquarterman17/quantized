@@ -9,6 +9,7 @@
 import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey, type RegressionBand } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
+import { postBySource } from "../../../lib/fitSource";
 import type { Recommendation } from "../../../lib/statschooser";
 import type { CalcResult, DataStruct } from "../../../lib/types";
 
@@ -148,18 +149,23 @@ export async function runLeg(
     const n = Math.min(xv.length, yv.length);
     const xs: number[] = [];
     const ys: number[] = [];
+    const rows: number[] = []; // the dataset rows behind each pair (the by-handle request)
     for (let i = 0; i < n; i++) {
       if (Number.isFinite(xv[i]) && Number.isFinite(yv[i])) {
         xs.push(xv[i]);
         ys.push(yv[i]);
+        rows.push(i);
       }
     }
     if (xs.length < order + 2) {
       throw new InsufficientDataError(`need at least ${order + 2} paired points for order-${order} regression`);
     }
-    const regression = await statsRegression({
-      x: xs, y: ys, order, band_x: bandGrid(xs), band_interval: bandInterval,
-    });
+    const body = { x: xs, y: ys, order, band_x: bandGrid(xs), band_interval: bandInterval };
+    // x/y by dataset handle when the server holds `data` (lib/fitSource; a By
+    // level's slice or a pruned analysis view is a new object and posts arrays).
+    const regression = await postBySource<CalcResult>(
+      "/api/stats/regression", body, { data, xKey: xCol < 0 ? null : xCol, yKey: Math.max(yCol, -1) }, rows,
+      () => statsRegression(body));
     const band = (regression.band as RegressionBand | undefined) ?? null;
     return { bivariate: { x: xs, y: ys, order, regression, band } };
   }

@@ -118,3 +118,11 @@ export function baselineEstimateLean(
 export function baselineModPolyLean(body: { y: number[]; order?: number } & LeanOpts): Promise<LeanBaselineResult> {
   return postJSON("/api/baseline/modpoly", body);
 }
+
+/** Lean response for any other baseline route (ALS, rolling ball, anchor,
+ *  Shirley, XRD low-angle, region): the same request plus `return_baseline:
+ *  false` / `display_points`. Region's polynomial arrives as
+ *  `baselineDisplay` too. */
+export function baselineLean(path: string, body: object & LeanOpts): Promise<LeanBaselineResult> {
+  return postJSON(path, body);
+}
