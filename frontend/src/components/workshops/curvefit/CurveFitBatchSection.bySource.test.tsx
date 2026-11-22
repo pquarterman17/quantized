@@ -93,3 +93,42 @@ describe("CurveFitBatchSection - inputs by dataset handle", () => {
     for (const r of reqs) expect(r).toMatchObject({ x: [0, 1, 3, 4], y: [1, 2, 4, 5] });
   });
 });
+
+describe("CurveFitBatchSection - weights by channel", () => {
+  const weighted = (id: string): Dataset => ({
+    id, name: `${id}.csv`,
+    data: {
+      time: [0, 1, 2, 3, 4], values: [[1, 0.5], [2, -0.25], [Number.NaN, 0.1], [4, 0.2], [5, 0.4]],
+      labels: ["Y", "E"], units: ["", ""], metadata: {},
+    },
+  });
+
+  it("names the sigma column instead of posting dy", async () => {
+    const datasets = [weighted("a"), weighted("b")];
+    useApp.setState({
+      datasets, activeId: "a", selectedIds: ["a", "b"], analysisResults: [], history: [], future: [],
+      resolveDataset: async (id: string) => datasets.find((d) => d.id === id),
+    });
+    useAnalysisSelection.setState({
+      toolId: "curvefit",
+      selection: captureAnalysisSelection({
+        datasets, activeId: "a", selectedIds: ["a", "b"], xKey: null, yKeys: [0],
+        seriesOrder: null, errKeys: { 0: 1 }, selection: null, range: null,
+      }, "library"),
+    });
+    usePendingOps.setState({ ops: [] });
+    for (const d of datasets) rememberHandle(d.data, `h-${d.id}`);
+    render(<CurveFitBatchSection modelName="Linear" model={LINEAR} paramRows={[]} weightMode="yerr" manualKey={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Linear) batch" }));
+    await screen.findByRole("button", { name: "Create summary worksheet" });
+    expect(vi.mocked(fitModel)).not.toHaveBeenCalled();
+    const bodies = fitBodies();
+    expect(bodies).toHaveLength(2);
+    // The sigma column is the first worksheet's own (the selection carries
+    // errKeys per worksheet); the second runs unweighted, with no weights at all.
+    expect(bodies[0]).toMatchObject({ dy_channel: 1, rows: [[0, 2], [3, 2]] });
+    expect(bodies[0]).not.toHaveProperty("dy");
+    expect(bodies[1]).not.toHaveProperty("dy_channel");
+    expect(bodies[1]).not.toHaveProperty("dy");
+  });
+});

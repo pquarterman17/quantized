@@ -6,7 +6,7 @@ not: a large-data audit at 200k rows saw responses up to 82 MB inlined into
 the client. This plan measures them, sets one rule for all of them, and
 records which part has shipped.
 
-**Status:** Active (phases 1-2, the backend of 4, the phase 3 slice and the P8 input consumers shipped)
+**Status:** Active (phases 1-2, the backend of 4, the phase 3 slice, the P8 input consumers and lane D's remaining inputs, weights by channel and lean baselines shipped)
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-11-21
 **Updated:** 2026-11-21
@@ -251,13 +251,13 @@ event loop (`OffloopJSONRoute`, required for a dataset-bearing route).
 
 Deferred from phase 3:
 
-- **Other inputs**: `/autoguess`, `/equation/fit` and `/peaks/find` went by
-  handle in P8 (below). `/peaks/fit-multi`, the baselines, sigop and the stats
-  routes still post x/y. Each is the same `XYSource` mixin plus one call-site
-  change.
-- **Weights by channel**: `dy`/`weights` (8 MB at 1M) still ride as arrays;
-  a `dy_channel` needs `dyForFit`'s rules (error column, manual sigma,
-  validation) mirrored or resolved into a channel.
+- ~~**Other inputs**~~ Done: `/autoguess`, `/equation/fit` and `/peaks/find`
+  went by handle in P8; `/peaks/fit-multi`, every baseline route, sigop and
+  `/stats/descriptive` + `/stats/regression` in lane D (below). Still arrays:
+  the other stats routes (their `x`/`y` are independent samples, not rows of
+  one dataset) and the peak-integrate / batch routes.
+- ~~**Weights by channel**~~ Done in lane D (below), for the error-column and
+  direct-weight modes; the derived Poisson vector still rides as an array.
 - **Recompute callers** (`recalcFits`, pipeline/gadget fits) keep posting
   arrays (eager modules; the eager budget has ~0.5 kB). The batch Curve Fit
   went by handle in lane DF (below).
@@ -331,8 +331,9 @@ Deferred from phase 4:
 - **Sigop preview client**: `computeSigop` serves both the live preview and
   the commit/replay path and the preview consumes the whole dataset; opting
   the preview in needs the workshop to render `datasetDisplay`.
-- **Other baselines** (ALS, rolling ball, anchor, Shirley, region): same
-  shape, one wrapper each; the lean fields exist only on SNIP and ModPoly.
+- ~~**Other baselines** (ALS, rolling ball, anchor, Shirley, region)~~ Done in
+  lane D: every baseline route has the lean fields, and the workshop's
+  preview uses them for all methods.
 - **Recipe / wizard callers** (`peakwizard/recipeSteps`) and batch apply keep
   the full response.
 
@@ -395,12 +396,93 @@ Deferred from P8:
 - **Equation fit display curve** (see phase 2) and the peak-find lean
   background / `find_result_id` consumer (above): both need a design change,
   not a transport one.
-- **Sigop preview** by `datasetDisplay` (above), and sigop / baseline / stats
-  inputs by handle.
+- **Sigop preview** by `datasetDisplay` (above). (Sigop / baseline / stats
+  inputs by handle: done in lane D.)
 - ~~**Batch Curve Fit** guesses and fits still post arrays.~~ Done in lane DF:
   the per-worksheet batch fit and its data-derived starts go by handle. Still
   arrays: the factor-level path (each level is a new in-memory object with no
   handle) and `recalcFits` / `fitRecompute` (eager).
+
+## Lane D: remaining inputs, weights by channel, lean baselines (shipped)
+
+All opt-in; a request in the old shape is byte-identical (tested, no handle
+header). Backend `routes/_datasetrows.py` now has `YSource` (y-only: ALS,
+rolling ball, ModPoly) and `XSource` (descriptive; gaps stay NaN, as a posted
+`null` does) next to `XYSource`; `/baseline`, `/stats` get the offloop route
+class like `/fitting`.
+
+- **Inputs by handle**: `/peaks/fit-multi`, `/baseline/{estimate, als,
+  rollingball, modpoly, anchor, shirley, xrdlowangle, region}`,
+  `/stats/regression` and `/stats/descriptive` take `dataset_handle` +
+  channels + `rows` (409 on a miss, then one resend of the dataset, then the
+  arrays). `/transform/sigop` takes `dataset_handle` instead of `dataset`
+  (a posted `dataset` wins, is not cached and sets no header, so the old
+  request is untouched); the cached dataset is read as JSON would have carried
+  it (`json_equivalent`: -0 -> +0, Inf -> NaN), tested with -0, Inf and NaN.
+- **Weights by channel**: `dy_channel` (= `|column|`, `dyForFit`'s yerr and
+  manual modes) and `weights_channel` (the column as is, direct mode) on
+  `FitOptions`, so `/fitting/fit` and `/equation/fit`; read at the same rows
+  as x/y, a non-finite weight is 422, with posted x/y or together with
+  `dy`/`weights` is 422. The client (`lib/fitSource.weightColsOf`) uses it
+  whenever `dyForFit` resolved a vector from a column; the Poisson vector
+  (sqrt of y) is derived and still posts. `scale_errors` stays in the body.
+- **Lean baselines**: `return_baseline: false` / `display_points` on ALS,
+  rolling ball, anchor, Shirley, XRD low-angle and region (region's polynomial
+  comes back as `baselineDisplay`, its other fields unchanged); the full
+  result is `/api/results/array` by id as for SNIP/ModPoly.
+- **Client** (all lazy; eager size unchanged, see the commit): the baseline
+  workshop (`baselineCall.ts`: every method by handle, lean for every method
+  over 20,000 rows), Peaks "Fit simultaneously", Fit Y by X's bivariate leg,
+  Curve Fit and its batch (weights), sigop (`lib/api/sigopByHandle.ts`, used by
+  `computeSigop` when the dataset object has a remembered handle).
+
+Measured (synthetic Gaussian on a slope + noise, 1M rows, JSON bytes as sent;
+responses identical to the array request, `resultId` aside):
+
+| Request | arrays | by handle |
+|---|---|---|
+| `/peaks/fit-multi` | 38.67 MB | 191 B |
+| `/baseline/estimate` (SNIP) | 38.67 MB | 129 B |
+| `/baseline/als` | 19.49 MB | 94 B |
+| `/baseline/rollingball` | 19.49 MB | 108 B |
+| `/baseline/modpoly` | 19.49 MB | 94 B |
+| `/baseline/anchor` | 38.67 MB | 167 B |
+| `/baseline/region` | 38.67 MB | 152 B |
+| `/stats/regression` | 38.67 MB | 123 B |
+| `/stats/descriptive` | 19.49 MB | 94 B |
+| `/transform/sigop` (2 channels) | 60.18 MB | 117 B |
+| `/fitting/fit`, weighted, display curve (x/y/dy) | 58.18 MB | 200 B (`dy_channel`) |
+
+The weights alone were the remaining ~19.5 MB of a by-handle weighted fit
+(`dy` as an array); `dy_channel` removes it. Lean responses at 1M rows:
+
+| Response | full -> lean |
+|---|---|
+| `/baseline/als` | 18.55 -> 0.21 MB |
+| `/baseline/rollingball` | 18.55 -> 0.21 MB |
+| `/baseline/anchor` | 18.45 -> 0.21 MB |
+| `/baseline/region` | 18.46 -> 0.21 MB |
+| `/baseline/shirley` | not measured at 1M (the synthetic peak has no step, so Shirley refuses it); identical-by-id covered at 30k rows |
+
+Tests: `tests/test_api_handle_inputs_more.py` (per client rule x route,
+byte-identical to the array request, and in the malformed-dataset sweep; weights by channel for dy/|negative|/
+weights x 4 rules x /fit and /equation/fit; sigop incl. -0/Inf; lean x5; 409,
+422 and size guards) -- 108 of its 109 failed with the route changes reverted
+(the 1 that passed is the size arithmetic). Frontend: `baselineCall.bySource.test.ts`,
+`useCurveFit.weightCols.test.ts`, `CurveFitBatchSection.bySource.test.tsx`,
+`runLeg.bySource.test.ts`, `usePeaks.bySource.test.ts`, `sigopByHandle.test.ts`
+-- 35 of the 41 call-site tests failed with the call sites reverted.
+
+Deferred from lane D:
+
+- The other `/stats` routes (t-tests, two-sample, correlation, ...): their
+  `x`/`y` are independent samples or derived arrays, not one dataset's rows;
+  the distribution workshop and the eager `statsDescriptive` callers post
+  filtered arrays (no row identity), so descriptive has no client yet.
+- Sigop preview stays arrays unless the dataset object has a handle (the
+  analysis rows of an excluded/filtered sheet are a new object); a 409 resend
+  posts the whole held object, as the fits do.
+- The recompute callers and `peakwizard/recipeSteps` still post arrays.
 
 ## Completed
 
@@ -408,6 +490,9 @@ Deferred from P8:
   (lane F): `sendFigureToReport`, the Builder's Export and its preview go
   through `withFullSavedFit` (test `figureSavedFit.seams.test.tsx`; the send
   and Export cases failed with the wiring reverted).
+- 2026-11-22: lane D: remaining inputs by handle (fit-multi, baselines, sigop,
+  regression, descriptive), weights by channel, lean ALS / rolling ball /
+  anchor / Shirley / region; measurements and tests in the lane D section.
 - 2026-11-22: document-only exports of a saved display fit (lane E): Figure
   Page panels and batch / Library PDFs fetch the full curve before building
   (`lib/figureSavedFit.ts`, test `figureSavedFit.test.ts`; the panel and batch

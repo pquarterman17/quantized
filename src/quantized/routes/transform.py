@@ -23,6 +23,8 @@ from quantized.calc.resample_align import align_resample
 from quantized.calc.signal_ops import run_signal_op
 from quantized.datastruct import DataStruct
 from quantized.routes._arrayresults import lean_dataset_fields
+from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
+from quantized.routes._datasetrows import json_equivalent
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload
@@ -154,7 +156,13 @@ def average(req: AverageRequest) -> Response:
 
 
 class SigopRequest(BaseModel):
-    dataset: dict[str, Any]
+    #: The dataset, or (opt-in, plans/LARGE_PAYLOAD_PLAN.md) the
+    #: ``dataset_handle`` of one the server already holds (409 when unknown;
+    #: the client resends ``dataset``). ``dataset`` wins when both are sent. A
+    #: posted ``dataset`` is not cached and no handle header is sent, so the
+    #: old request is exactly as before.
+    dataset: dict[str, Any] | None = None
+    dataset_handle: str | None = None
     #: median | despike | lowess | convolve | deconvolve | hilbert | ifft |
     #: reduce-bin | reduce-duplicates | reduce-nth (calc/signal_ops.py)
     method: str
@@ -184,8 +192,14 @@ class SigopResponse(BaseModel):
 @router.post("/sigop", response_model=SigopResponse, response_class=DataStructResponse)
 def sigop(req: SigopRequest) -> Response:
     """Median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT / Reduce XY."""
+    if req.dataset is None and req.dataset_handle is None:
+        raise HTTPException(status_code=422, detail="dataset or dataset_handle is required")
     try:
-        data = DataStruct.from_dict(req.dataset)
+        if req.dataset is not None:
+            data = DataStruct.from_dict(req.dataset)
+        else:
+            cached, _ = resolve_or_409(CachedDatasetRequest(dataset_handle=req.dataset_handle))
+            data = json_equivalent(cached)
         res = run_signal_op(data, req.method, req.channels, req.args)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -166,13 +166,17 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!ds || stale()) return;
         const st = useApp.getState();
         const item = selectionItemForTool("peaks", ds.id);
-        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows } = peakInputs(
+        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows, rows } = peakInputs(
           ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item,
         );
-        const res = await fitMultiPeak({
+        const multiBody = {
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
-        });
+        };
+        // x/y by dataset handle when the server holds the dataset (lib/fitSource).
+        const multiSource = yKeyUsed === null || !rows ? undefined : { data: ds.data, xKey: xKeyUsed, yKey: yKeyUsed };
+        const res = await postBySource<Awaited<ReturnType<typeof fitMultiPeak>>>(
+          "/api/peaks/fit-multi", multiBody, multiSource, multiSource && rows ? rows() : [], () => fitMultiPeak(multiBody));
         if (stale()) return;
         setFitResult(res);
         // P2.1: the fit becomes this dataset's durable peak table (survives a

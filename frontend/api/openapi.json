@@ -3,6 +3,42 @@
     "schemas": {
       "ALSRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "lam": {
             "default": 1000000.0,
             "title": "Lam",
@@ -18,22 +54,67 @@
             "title": "P",
             "type": "number"
           },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "tol": {
             "default": 1e-06,
             "title": "Tol",
             "type": "number"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "y"
-        ],
         "title": "ALSRequest",
         "type": "object"
       },
@@ -176,29 +257,130 @@
             "title": "Anchors",
             "type": "array"
           },
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "method": {
             "default": "pchip",
             "title": "Method",
             "type": "string"
           },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
         "required": [
-          "x",
-          "y",
           "anchors"
         ],
         "title": "AnchorRequest",
@@ -4572,24 +4754,87 @@
       },
       "DescriptiveRequest": {
         "properties": {
-          "x": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "number"
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
                 },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "title": "X",
-            "type": "array"
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           }
         },
-        "required": [
-          "x"
-        ],
         "title": "DescriptiveRequest",
         "type": "object"
       },
@@ -4987,6 +5232,18 @@
             ],
             "title": "Dy"
           },
+          "dy_channel": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy Channel"
+          },
           "equation": {
             "title": "Equation",
             "type": "string"
@@ -5124,6 +5381,18 @@
               }
             ],
             "title": "Weights"
+          },
+          "weights_channel": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights Channel"
           },
           "x": {
             "anyOf": [
@@ -5304,6 +5573,29 @@
       },
       "EstimateRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "display_points": {
             "anyOf": [
               {
@@ -5354,6 +5646,30 @@
             "title": "Return Baseline",
             "type": "boolean"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "smooth_passes": {
             "default": 3,
             "maximum": 10000.0,
@@ -5362,24 +5678,58 @@
             "type": "integer"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "x",
-          "y"
-        ],
         "title": "EstimateRequest",
         "type": "object"
       },
@@ -7062,6 +7412,29 @@
             "title": "Constrain",
             "type": "boolean"
           },
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "deadline_s": {
             "default": 10.0,
             "exclusiveMinimum": 0.0,
@@ -7091,24 +7464,84 @@
             "title": "Polish",
             "type": "boolean"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
         "required": [
-          "x",
-          "y",
           "peaks"
         ],
         "title": "FitMultiPeakRequest",
@@ -7448,6 +7881,18 @@
             ],
             "title": "Dy"
           },
+          "dy_channel": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy Channel"
+          },
           "fixed": {
             "anyOf": [
               {
@@ -7578,6 +8023,18 @@
               }
             ],
             "title": "Weights"
+          },
+          "weights_channel": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights Channel"
           },
           "x": {
             "anyOf": [
@@ -9561,6 +10018,29 @@
       },
       "ModPolyRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "display_points": {
             "anyOf": [
               {
@@ -9589,22 +10069,62 @@
             "title": "Return Baseline",
             "type": "boolean"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "tol": {
             "default": 1e-06,
             "title": "Tol",
             "type": "number"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "y"
-        ],
         "title": "ModPolyRequest",
         "type": "object"
       },
@@ -13172,17 +13692,101 @@
       },
       "RegionBackgroundRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "order": {
             "default": 1,
             "title": "Order",
             "type": "integer"
           },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "x_max": {
             "title": "X Max",
@@ -13193,11 +13797,30 @@
             "type": "number"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           },
           "y_max": {
             "anyOf": [
@@ -13223,8 +13846,6 @@
           }
         },
         "required": [
-          "x",
-          "y",
           "x_min",
           "x_max"
         ],
@@ -13257,30 +13878,111 @@
             ],
             "title": "Band X"
           },
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
           "order": {
             "default": 1,
             "title": "Order",
             "type": "integer"
           },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "x",
-          "y"
-        ],
         "title": "RegressionRequest",
         "type": "object"
       },
@@ -13751,10 +14453,75 @@
       },
       "RollingBallRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "radius": {
             "default": 100,
             "title": "Radius",
             "type": "integer"
+          },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
           },
           "smooth": {
             "default": -1,
@@ -13762,16 +14529,32 @@
             "type": "integer"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "y"
-        ],
         "title": "RollingBallRequest",
         "type": "object"
       },
@@ -14282,6 +15065,42 @@
       },
       "ShirleyRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "edge_average": {
             "default": 1,
             "title": "Edge Average",
@@ -14292,30 +15111,93 @@
             "title": "Max Iter",
             "type": "integer"
           },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "tol": {
             "default": 1e-06,
             "title": "Tol",
             "type": "number"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "x",
-          "y"
-        ],
         "title": "ShirleyRequest",
         "type": "object"
       },
@@ -14334,9 +15216,27 @@
             "type": "array"
           },
           "dataset": {
-            "additionalProperties": true,
-            "title": "Dataset",
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
           },
           "display_points": {
             "anyOf": [
@@ -14362,7 +15262,6 @@
           }
         },
         "required": [
-          "dataset",
           "method"
         ],
         "title": "SigopRequest",
@@ -17991,6 +18890,42 @@
       },
       "XrdLowAngleRequest": {
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          },
+          "display_points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 16.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Points"
+          },
           "include_x2": {
             "default": true,
             "title": "Include X2",
@@ -18001,30 +18936,93 @@
             "title": "Max Iter",
             "type": "integer"
           },
+          "return_baseline": {
+            "default": true,
+            "title": "Return Baseline",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
           "tol": {
             "default": 1e-06,
             "title": "Tol",
             "type": "number"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "x_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Channel"
           },
           "y": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Y",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "y_channel": {
+            "anyOf": [
+              {
+                "minimum": -1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Channel"
           }
         },
-        "required": [
-          "x",
-          "y"
-        ],
         "title": "XrdLowAngleRequest",
         "type": "object"
       },

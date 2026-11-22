@@ -4,7 +4,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { findPeaks, fitPeak } from "../../../lib/api/peaks";
+import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { rememberHandle } from "../../../lib/api/datasetCache";
 import type { DataStruct, Peak } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
@@ -38,7 +38,8 @@ beforeEach(() => {
   vi.mocked(findPeaks).mockResolvedValue({ peaks: [pk(1), pk(3)], background: [] });
   // The find now goes by handle as well (P8), so the fetch answers both routes.
   fetchMock = vi.fn(async (path: string) => new Response(
-    JSON.stringify(path === "/api/peaks/find" ? { peaks: [pk(1), pk(3)], background: [0, 0, 0, 0, 0] } : FIT),
+    JSON.stringify(path === "/api/peaks/find" ? { peaks: [pk(1), pk(3)], background: [0, 0, 0, 0, 0] }
+      : path === "/api/peaks/fit-multi" ? { peaks: [], bgCoeffs: [0, 0], R2: 1, rmse: 0 } : FIT),
     { status: 200, headers: { "Content-Type": "application/json" } }));
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -75,5 +76,18 @@ describe("usePeaks fitEach by dataset handle", () => {
     expect(body).toMatchObject({ dataset_handle: "h-find", x_channel: -1, y_channel: 0, rows: [[0, 4], [5, 1]] });
     expect(body).not.toHaveProperty("x");
     expect(body).not.toHaveProperty("return_background"); // curation reads the background synchronously
+  });
+
+  it("fits simultaneously by handle too, and by arrays without one", async () => {
+    rememberHandle(DATA, "h-multi");
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => result.current.fitTogether({ model: "Lorentzian", bgDegree: 1, linkMode: "None", constrain: false }));
+    expect(fitMultiPeak).not.toHaveBeenCalled();
+    const call = fetchMock.mock.calls.find(([path]) => path === "/api/peaks/fit-multi");
+    const body = JSON.parse(String(call![1].body));
+    expect(body).toMatchObject({ dataset_handle: "h-multi", x_channel: -1, y_channel: 0, rows: [[0, 4], [5, 1]], model: "Lorentzian" });
+    expect(body).not.toHaveProperty("x");
+    expect(body).not.toHaveProperty("y");
   });
 });

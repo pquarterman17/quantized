@@ -89,6 +89,7 @@ class JobStore:
 
     def __init__(self, max_workers: int = 2) -> None:
         self._jobs: dict[str, Job] = {}
+        self._max_workers = max_workers
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="qz-job")
         self._lock = threading.Lock()
 
@@ -156,8 +157,26 @@ class JobStore:
                     job.status = "error"
                     job.finished_at = time.monotonic()
 
-        self._pool.submit(run)
+        self._submit_to_pool(run)
         return job.id
+
+    def _submit_to_pool(self, run: Callable[[], None]) -> None:
+        """Queue ``run``, replacing the executor if an app lifespan shut it down.
+
+        ``jobs`` is a process-wide singleton but the app lifespan shuts its pool
+        down on exit; without this, any later use of the same process (a second
+        lifespan, or a client that never ran one) fails with ``cannot schedule
+        new futures after shutdown`` for the rest of the process."""
+        with self._lock:
+            try:
+                self._pool.submit(run)
+                return
+            except RuntimeError:
+                if not getattr(self._pool, "_shutdown", False):
+                    raise
+            self._pool = ThreadPoolExecutor(
+                max_workers=self._max_workers, thread_name_prefix="qz-job")
+            self._pool.submit(run)
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)

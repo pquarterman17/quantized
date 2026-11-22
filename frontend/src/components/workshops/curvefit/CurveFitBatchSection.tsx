@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 
 import { fitModel } from "../../../lib/api";
 import { fitRowsOf } from "../../../lib/fitCurve";
-import { postBySource, type FitSource } from "../../../lib/fitSource";
+import { postBySource, weightColsOf, type FitSource, type WeightCols } from "../../../lib/fitSource";
 import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { analysisSelectionData, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
@@ -122,6 +122,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     const request: Parameters<typeof fitModel>[0] = {
       model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y, source, rows)), ...BATCH_FIT_TRANSPORT,
     };
+    let weightCols: WeightCols | undefined; // the sigma column, when the weights come straight from one
     if (weightMode === "yerr" || weightMode === "poisson") {
       const keep = pairs.keep.map((index) => selected.analysisRows?.[index] ?? index);
       const weighted = dyForFit(dataset, selected.yKey, weightMode === "poisson"
@@ -129,6 +130,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         : { mode: "yerr", errKey: selection.errorKeys[selected.yKey] }, keep);
       if (weighted.dy) {
         request.dy = keep.map((index) => weighted.dy![index]!);
+        if (weightMode === "yerr") weightCols = weightColsOf({ mode: "yerr", errKey: selection.errorKeys[selected.yKey] });
         if (!scaleErrors) request.scale_errors = false;
       }
       if (weighted.issue) warnings.push(weighted.issue);
@@ -138,7 +140,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         ? `${what} was not configured; this input ran unweighted.`
         : `${what} columns are worksheet-specific; this batch input ran unweighted.`);
     }
-    const result = await postBySource<CalcResult>("/api/fitting/fit", request, source, rows, () => fitModel(request));
+    const result = await postBySource<CalcResult>("/api/fitting/fit", request, source, rows, () => fitModel(request), { weights: weightCols });
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
   }, [manualKey, model, modelName, paramRows, weightMode, scaleErrors, names.length]);
 

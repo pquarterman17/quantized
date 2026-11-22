@@ -53,6 +53,18 @@ GOOD_DATASET = {
     "metadata": {},
 }
 
+# A core-level shape (a peak on a step, strictly positive monotone x) that
+# /api/baseline/shirley converges on and /xrdlowangle accepts.
+_SX = np.linspace(20.0, 40.0, 41)
+_SP = np.exp(-(((_SX - 30.0) / 2.0) ** 2))
+SPECTRUM_GOOD = {
+    "time": _SX.tolist(),
+    "values": [[float(v)] for v in 10 + 200 * _SP + 50 * (1 - np.cumsum(_SP) / _SP.sum())],
+    "labels": ["a"],
+    "units": [""],
+    "metadata": {},
+}
+
 # /api/fitting/compare-datasets F-tests shared-vs-separate fits, so its good
 # half needs more points per series than the separate model's parameters.
 COMPARE_GOOD = {
@@ -157,6 +169,28 @@ CASES = [
         lambda ds: {"dataset": ds, "x_channel": -1, "y_channel": 0, "rows": [[0, 5]]},
         COMPARE_GOOD,
     ),
+    *[
+        (path, lambda ds, extra=extra: {"dataset": ds, "x_channel": -1, "y_channel": 0,
+                                         "rows": [[0, 5]], **extra}, COMPARE_GOOD)
+        for path, extra in (
+            ("/api/baseline/estimate", {}),
+            ("/api/baseline/anchor", {"anchors": [[0.0, 1.0], [4.0, 2.0]]}),
+            ("/api/baseline/region", {"x_min": 0.0, "x_max": 4.0}),
+            ("/api/peaks/fit-multi", {"peaks": [{"center": 2.0, "fwhm": 1.0, "height": 1.0}]}),
+            ("/api/stats/regression", {}),
+        )
+    ],
+    *[
+        (path, lambda ds: {"dataset": ds, "x_channel": -1, "y_channel": 0, "rows": [[0, 41]]},
+         SPECTRUM_GOOD)
+        for path in ("/api/baseline/shirley", "/api/baseline/xrdlowangle")
+    ],
+    *[
+        (path, lambda ds: {"dataset": ds, "y_channel": 0, "rows": [[0, 5]]}, COMPARE_GOOD)
+        for path in ("/api/baseline/als", "/api/baseline/rollingball", "/api/baseline/modpoly")
+    ],
+    ("/api/stats/descriptive", lambda ds: {"dataset": ds, "x_channel": 0, "rows": [[0, 5]]},
+     COMPARE_GOOD),
     ("/api/plot/series", lambda ds: {"dataset": ds, "x_key": 0, "y_keys": [1]}, GOOD_DATASET),
     (
         "/api/plot/map",

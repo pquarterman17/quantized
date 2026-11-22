@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.fitting import weights_from_dy
 
@@ -29,6 +29,13 @@ class FitOptions(BaseModel):
     dy: list[float] | None = None
     # Direct weighting: the weight column used as w as given.
     weights: list[float] | None = None
+    # Weights by channel (plans/LARGE_PAYLOAD_PLAN.md): with a dataset row
+    # selection (routes/_datasetrows.XYSource) the weights may name the
+    # dataset's own column instead of riding as an array: ``dy_channel`` is
+    # ``|column|`` as ``dy`` (the client's error-column modes take the abs),
+    # ``weights_channel`` the column as ``weights``. Read at the fit's rows.
+    dy_channel: int | None = Field(default=None, ge=0)
+    weights_channel: int | None = Field(default=None, ge=0)
     # Parameter errors: "jtj" = (J'WJ)^-1 * s^2 (Origin / scipy curve_fit,
     # the default) or "hessian" (MATLAB curveFit's SSR-Hessian method).
     covariance: Literal["jtj", "hessian"] = "jtj"
@@ -56,6 +63,14 @@ class FitOptions(BaseModel):
     # Ignored without ``return_residuals: false``; None = full ``yFit``.
     display_points: int | None = Field(default=None, ge=16, le=20_000)
 
+    @model_validator(mode="after")
+    def _one_weighting(self) -> FitOptions:
+        if self.dy is not None and self.dy_channel is not None:
+            raise ValueError("send dy or dy_channel, not both")
+        if self.weights is not None and self.weights_channel is not None:
+            raise ValueError("send weights or weights_channel, not both")
+        return self
+
 
 def open_bounds(values: list[float | None] | None, fill: float) -> list[float] | None:
     """A request's bound list with ``null`` -> ``fill`` (``-inf`` / ``+inf``).
@@ -78,9 +93,13 @@ def stats_kwargs(opts: FitOptions) -> dict[str, Any]:
     }
 
 
-def resolve_weights(opts: FitOptions, n: int) -> NDArray[np.float64] | list[float] | None:
+def resolve_weights(
+    opts: FitOptions, n: int, dy: list[float] | None = None, weights: list[float] | None = None,
+) -> NDArray[np.float64] | list[float] | None:
     """The fit weights for ``opts``: ``dy`` first (instrumental), then the
-    direct ``weights`` column, else ``None`` (unweighted)."""
-    if opts.dy is not None:
-        return weights_from_dy(opts.dy, n)
-    return opts.weights
+    direct ``weights`` column, else ``None`` (unweighted). ``dy`` / ``weights``
+    are the columns gathered for ``dy_channel`` / ``weights_channel``."""
+    dy = opts.dy if dy is None else dy
+    if dy is not None:
+        return weights_from_dy(dy, n)
+    return opts.weights if weights is None else weights
