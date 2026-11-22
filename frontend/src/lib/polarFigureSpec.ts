@@ -11,9 +11,10 @@
 //     range `polarRadialRange` (min at the centre, values clamped) and the
 //     `niceTicks` rings, all sent explicitly (`routes/export_figures_polar`);
 //   - per-series COLOUR, at the canvas' palette positions, and the canvas'
-//     fixed `POLAR_LINE_PX` width — the canvas draws every series as one solid
-//     line at that width, so a series' own width/dash/marker are not sent and
-//     the style preset's `line_width` never applies (`exportLineWidth`'s rule);
+//     width (`polarLineWidth`: the Series card's width, else `POLAR_LINE_PX`)
+//     — the canvas draws every series as one solid line, so a series' dash and
+//     marker are not sent and the style preset's `line_width` never applies
+//     (`exportLineWidth`'s rule);
 //   - the grid toggle; legend renames.
 // Imported only by lazily-loaded export modules (via figureSpecStage).
 
@@ -22,7 +23,7 @@ import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import type { FigureRenderOpts } from "./figureSpec";
 import { pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
-import { POLAR_CANVAS, POLAR_LINE_PX, polarChannels, polarRadialRange } from "./polar";
+import { POLAR_CANVAS, polarChannels, polarLineWidth, polarRadialRange } from "./polar";
 import { analysisData } from "./rowstate";
 import { niceTicks } from "./niceTicks";
 import type { Dataset } from "./types";
@@ -40,7 +41,7 @@ export function buildPolarFigureSpec(
   const rLim = polarRadialRange(data.values, channels);
   const styles = toWireSeriesStyles(buildExportStyles(channels, st.seriesStyles), false).map((s, i) => {
     const legend = st.seriesLabels[channels[i]];
-    return { ...(s?.color ? { color: s.color } : {}), ...(legend ? { legend } : {}), width: POLAR_LINE_PX };
+    return { ...(s?.color ? { color: s.color } : {}), ...(legend ? { legend } : {}), width: polarLineWidth(st.seriesStyles[channels[i]]) };
   });
   return {
     dataset: data,

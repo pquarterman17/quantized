@@ -41,3 +41,15 @@ export function defaultPicks(data: DataStruct, n: number): number[] {
   for (let i = 0; i < n; i++) picks.push(i < data.labels.length ? i : -1);
   return picks;
 }
+
+/** Default composition picks for a sheet whose columns are A, B, C...: when the
+ *  channels alone cannot fill `n` picks, the X column (index -1, the sheet's
+ *  FIRST column on import) leads, then the channels in order, so an A,B,C
+ *  sheet reads A, B, C rather than B, C, A. With enough channels it is
+ *  `defaultPicks`. */
+export function compositionPicks(data: DataStruct, n: number): number[] {
+  if (data.labels.length >= n) return defaultPicks(data, n);
+  const picks = [-1];
+  for (let i = 0; picks.length < n; i++) picks.push(i < data.labels.length ? i : -1);
+  return picks;
+}

@@ -8,6 +8,8 @@ import { DataTable } from "../../primitives/DataTable";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { pickOptions } from "../analysisextras/columnPicks";
+import EllipseFitBatchSection from "./EllipseFitBatchSection";
+import EllipseFitByLevel from "./EllipseFitByLevel";
 import EllipsePlot from "./EllipsePlot";
 import { useEllipseFit } from "./useEllipseFit";
 
@@ -111,6 +113,8 @@ export default function EllipseFitPanel() {
               </div>
             </>
           )}
+          <EllipseFitByLevel e={e} />
+          <EllipseFitBatchSection geometric={e.geometric} />
         </>
       )}
     </ToolWindow>

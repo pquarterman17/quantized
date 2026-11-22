@@ -59,7 +59,7 @@ describe("BaselinePanel batch apply (UX9-E)", () => {
       background: [1, 1, 1, 1], coeffs: [0, 1], n_points: 4, mean: 1, std: 0, min: 1, max: 1, order: 1,
     });
     render(<BaselinePanel />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Baseline method" }), { target: { value: "linear" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply to 3 selected" }));
     });
@@ -83,7 +83,7 @@ describe("BaselinePanel batch apply (UX9-E)", () => {
     const swapped: DataStruct = { ...raw, values: raw.values.map((r) => [99, r[0]]), labels: ["Temp", "Intensity"], units: ["K", "cps"] };
     useApp.setState({ datasets: [spectrum("A.txt", "a"), { id: "b", name: "B.txt", data: swapped }], selectedIds: ["a", "b"] });
     render(<BaselinePanel />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Baseline method" }), { target: { value: "linear" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply to 2 selected" }));
     });

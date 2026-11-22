@@ -64,29 +64,33 @@ inconsistently exposed, and do not all share the same result lifecycle.
     (`withAnalysisRequirements`), so they cannot disagree. Analyze opens with
     "Recent analyses" (last 5, the Analysis Center's persisted `recent` list,
     now fed by every launch path) and "Open results (N)" for the active
-    worksheet. Not yet done: the Analysis Center still evaluates its own
-    `compatibility()` (same metadata, longer messages, no worksheet-count or 2θ
-    check); converge it onto the predicate table.
+    worksheet. The Analysis Center's own
+    `compatibility()` is converged (lane C, 2026-11-21): the worksheet-count
+    and 2θ checks now live in `lib/analysisExtraRequirements.ts`
+    (`EXTRA_REQUIREMENTS`), read by both the menu/palette predicate and
+    `analysisTools(actions, dataset, datasets)`, so Average curves, Pawley and
+    XRD reference are unavailable in the Center for the same reason as in the
+    menu (`lib/analysisCenterExtra.test.ts`).
   - **Audit (2026-11-19): input needs vs. batch / By support.** "Batch" = run
     over selected worksheets; "By" = per-level of a grouping column.
 
     | Tool | Needs | Batch | By |
     |------|-------|-------|----|
     | Curve fit | numeric Y, 3+ rows | yes | yes |
-    | Surface fit | X,Y,Z or map | no | no |
-    | Optical gap (Tauc) | numeric Y | no | no |
-    | Ellipse fit | 2 numeric columns | no | no |
+    | Surface fit | X,Y,Z or map | yes (summary) | yes |
+    | Optical gap (Tauc) | numeric Y | yes (summary) | yes |
+    | Ellipse fit | 2 numeric columns | yes (summary) | yes |
     | Hysteresis | numeric Y (magnetometry) | yes | no |
     | Magnetometry tools | numeric Y (magnetometry) | no | no |
-    | Find peaks | numeric Y | yes (integrate windows) | no |
-    | Peak analyzer (wizard) | numeric Y | yes | no |
-    | Baseline | numeric Y | recipe only | no |
+    | Find peaks | numeric Y | yes (integrate windows) | yes |
+    | Peak analyzer (wizard) | numeric Y | yes | yes |
+    | Baseline | numeric Y | yes (estimate summary) | yes |
     | Reflectivity / Reflectometry view | numeric Y (refl/XRD) | no | no |
     | RSM, ROI cuts | 2-D map | ROI cuts only | no |
     | Williamson-Hall | any (typed peaks ok) | yes | no |
     | Pawley, XRD reference | 2θ X axis | no | no |
     | Film thickness FFT, Reflectivity FFT | numeric Y | no | no |
-    | Signal Processing | numeric Y | recipe only | no |
+    | Signal Processing | numeric Y | yes (summary) + recipes | yes |
     | Average curves | 2+ worksheets | n/a (is the batch) | no |
     | SIMS | numeric Y (SIMS) | yes | no |
     | Distribution | numeric Y | no | yes |
@@ -94,11 +98,56 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Multivariate, Variability, Outlier screening, Stats tests/chooser | 2+ numeric / factors / numeric Y | no | no |
     | Calculators, Digitizer | none | n/a | n/a |
 
-    Gaps (recorded, not built): Batch is missing for Surface fit, Optical gap,
-    Ellipse fit, Magnetometry tools, Pawley, XRD reference, both FFT tools,
+    Gaps (recorded, not built): Batch is missing for Magnetometry tools, Pawley, XRD reference, both FFT tools,
     Reflectivity, and every statistics tool; By is missing everywhere except
-    Curve fit, Distribution and Fit Y by X. Baseline and Signal Processing
-    reach batch only through Pipeline Studio recipes.
+    Curve fit, Distribution, Fit Y by X and (lane C, 2026-11-22) Find peaks,
+    Peak analyzer, Baseline, Signal Processing and (lane C2) Surface fit,
+    Optical gap and Ellipse fit. Signal Processing reaches
+    batch only through Pipeline Studio recipes.
+  - **By slice landed (#22, lane C):** one shared runner
+    (`components/workshops/byrun/`: `useByLevelRun`, `ByLevelRunSection`,
+    `levelPairs`) runs a tool's own computation once per level of a
+    categorical column and shows one summary row per level (display-only; a
+    failing level is an error row). Wired into Find peaks (peaks, strongest
+    centre / SNR), Peak analyzer (recipe baseline + find; step 2), Baseline
+    (baseline range, residual RMS; the hand-placed anchor method is refused
+    with a reason) and Signal Processing (correction and spectral operations;
+    the sigop filters and two-worksheet correlation say they are not
+    available). Tests: `byrun/byLevelTools.test.tsx`.
+  - **Batch slice: Baseline (#18/#19, lane C):** Baseline now carries Review
+    inputs and the shared batch (`baseline/BaselineBatchSection.tsx`): the
+    chosen method and settings are estimated on every selected worksheet's
+    plotted channel and one result table (baseline min / max, residual RMS,
+    per-input status) is recorded. Estimate-only; "Apply to N selected" still
+    writes the subtracted worksheets. Anchor method refused with a reason.
+    Tests: `baseline/BaselineBatchSection.test.tsx`.
+  - **Batch slice: Signal Processing (#18/#19, lane C):** Review inputs plus
+    the shared batch (`signalprocessing/SignalBatchSection.tsx`): the
+    configured correction or spectral operation runs on every selected
+    worksheet's own measured channels / rows / X range and one result table
+    (rows out, finite outputs, mean of the first output) is recorded.
+    Summary-only (Create new worksheet and the Library recipe apply still
+    write outputs); sigop filters and two-worksheet correlation refuse with a
+    reason. Tests: `signalprocessing/SignalScopeAndBy.test.tsx`.
+  - **Batch + By slice: Surface fit, Optical gap, Ellipse fit (#18/#19/#22,
+    lane C2):** each tool carries Review inputs plus the shared batch
+    (`SurfaceFitBatchSection`, `OpticalGapBatchSection`,
+    `EllipseFitBatchSection`) and a `*ByLevel` section over `byrun/`. A batch
+    reads each worksheet's REVIEWED roles (X, then Y; Surface fit needs X plus
+    exactly two channels, or a flagged 2-D map's own axes), honouring its row /
+    range selection, via `analysisextras/batchColumns.ts`, not the panel's
+    column pickers. Surface fit auto-guesses start values per worksheet / level
+    (typed starts describe the active sheet) and takes the panel's model and
+    bounds; Optical gap applies the panel's X unit, signal, transition and
+    window (a worksheet whose X unit reads differently is flagged; transmittance
+    without a thickness is refused); Ellipse fit applies the fit kind (under 5
+    points fails with a reason). Summary-only: the Add-dataset buttons still
+    write the active worksheet. Tests: `SurfaceFitBatchSection.test.tsx`,
+    `OpticalGapBatchSection.test.tsx`, `EllipseFitBatchSection.test.tsx`,
+    `byrun/byLevelExtras.test.tsx`. Deferred (item 3): By and batch for
+    Multivariate, Variability, Outlier screening and Stats tests (factor /
+    multi-column inputs need a per-tool decision on what a level or a
+    worksheet means).
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.

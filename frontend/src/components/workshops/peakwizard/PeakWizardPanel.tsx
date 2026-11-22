@@ -26,6 +26,7 @@ import {
 import { PEAK_WIZARD_WINDOW_ID } from "./usePeakCandidates";
 import { usePeakWizard, WIZARD_STEPS } from "./usePeakWizard";
 import PeakBatchView from "./PeakBatchView";
+import PeakWizardByLevel from "./PeakWizardByLevel";
 import { fitRunningBlock } from "./peakNavGate";
 
 export default function PeakWizardPanel() {
@@ -131,6 +132,7 @@ export default function PeakWizardPanel() {
           {/* qzk-peakwizard: the steps' hint lines wrap instead of being cut
               off with an ellipsis in the 420 px window (re-audit #16). */}
           <div className="qzk-peakwizard" style={{ marginTop: 10 }}>{stepBody}</div>
+          {w.step === 1 && <PeakWizardByLevel recipe={w.recipe} />}
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <Button size="sm" disabled={w.step === 0 || fitRunningBlock(w) !== null} title={fitRunningBlock(w) ?? undefined} onClick={w.back}>

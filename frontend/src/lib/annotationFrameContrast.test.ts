@@ -5,7 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { annotationPlugin, resolveFrameFill } from "./uplotOverlays";
+import { annotationPlugin } from "./uplotAnnotations";
+import { resolveFrameFill } from "./uplotOverlays";
 import type { Annotation } from "./types";
 
 function drawBox(paperColor?: string, frame: Annotation["frame"] = { opacity: 0.9 }) {

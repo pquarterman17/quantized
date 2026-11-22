@@ -226,33 +226,51 @@ def missing_x_reason(
     return "sheet_x_not_found"
 
 
-def _book_columns(books: Iterable[DataStruct]) -> dict[str, tuple[str, frozenset[str]]]:
-    """``origin_book`` -> (its X column name, its value column names)."""
-    out: dict[str, tuple[str, frozenset[str]]] = {}
+def _book_columns(
+    books: Iterable[DataStruct],
+) -> dict[str, tuple[str, frozenset[str], frozenset[str]]]:
+    """``origin_book`` -> (its X column name, its value column names, its
+    text-X columns). A text-X column is an imported Text column designated X
+    on a book whose numeric X is empty (``x_column_name`` ``""``)."""
+    out: dict[str, tuple[str, frozenset[str], frozenset[str]]] = {}
     for ds in books:
         key = str(ds.metadata.get("origin_book", ""))
         names = ds.metadata.get("origin_column_names")
         if key and isinstance(names, list):
             x_name = str(ds.metadata.get("x_column_name") or "")
-            out[key] = (x_name, frozenset(str(n) for n in names))
+            text = ds.metadata.get("origin_text_columns")
+            roles = ds.metadata.get("column_designations")
+            text_x: frozenset[str] = frozenset()
+            if not x_name and isinstance(text, Mapping) and isinstance(roles, Mapping):
+                text_x = frozenset(str(c) for c in text if roles.get(c) == "X")
+            out[key] = (x_name, frozenset(str(n) for n in names), text_x)
     return out
 
 
 def _unbound_reason(
-    curve: Mapping[str, Any], columns: Mapping[str, tuple[str, frozenset[str]]]
+    curve: Mapping[str, Any],
+    columns: Mapping[str, tuple[str, frozenset[str], frozenset[str]]],
 ) -> str:
     """Why the frontend could not draw this re-bound curve from its
-    ``Book@N`` (``originFigureSelection.figureBindingFor``), or ``""``."""
+    ``Book@N`` (``originFigureSelection.figureBindingFor``), or ``""``.
+
+    A text X is accepted only for a pie curve (``plotType`` ``pie``): its
+    text column IS the wedge label list (``opju_pie``; ``soil deep`` Graph12 /
+    15 / 16 / 19 / Graph9 print the shares of the imported values in Origin's
+    previews). Any other kind against a text X (grouped columns, bars) would
+    draw as lines where Origin draws bars, so it stays left out
+    (``x_not_imported``): ``docs/origin_re/plot_kinds.md`` "Text X"."""
     entry = columns.get(str(curve.get("book")))
     if entry is None:
         return "book_not_imported"
-    x_name, values = entry
+    x_name, values, text_x = entry
     y, x = str(curve.get("y", "")), str(curve.get("x", ""))
     if y == x_name and y not in values:
         return "y_is_sheet_x"  # the importer made the plotted Y the sheet's X
     if y not in values:
         return "column_not_imported"
-    if x and x != x_name and x not in values:
+    pie_labels = x in text_x and curve.get("plotType") == "pie"
+    if x and x != x_name and x not in values and not pie_labels:
         return "x_not_imported"  # the sheet's X (often a text column) is not imported
     return ""
 

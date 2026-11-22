@@ -4,8 +4,8 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { refLinePlugin, regionShadePlugin } from "./uplotOverlays";
-import { drawOffScaleRefLine } from "./uplotRegionShades";
+import { regionShadePlugin } from "./uplotOverlays";
+import { drawOffScaleRefLine, refLinePlugin } from "./uplotRegionShades";
 
 /** The module under test starts a lazy import at load; once that chunk has
  *  evaluated and one macrotask has passed, its `.then` has installed it. */
