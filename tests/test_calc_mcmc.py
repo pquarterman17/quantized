@@ -126,3 +126,38 @@ def test_constant_chain_ess_equals_n() -> None:
 def test_invalid_options_raise(kwargs: dict, match: str) -> None:
     with pytest.raises(ValueError, match=match):
         mcmc_sample(lambda p: 0.0, [0.0], **kwargs)
+
+
+def test_r_hat_is_split_gelman_rubin_per_dimension() -> None:
+    """A well-mixed chain gives R-hat near 1 for every dimension (audit P2)."""
+    r = mcmc_sample(
+        lambda p: float(-0.5 * np.sum(p**2)),
+        [0.0, 0.0],
+        num_steps=6000,
+        burn_in=500,
+        step_size=1.5,
+        seed=11,
+    )
+    r_hat = np.asarray(r["diagnostic"]["r_hat"])
+    assert r_hat.shape == (2,)
+    assert np.all(np.isfinite(r_hat))
+    assert np.all(r_hat < 1.1)
+
+
+def test_r_hat_flags_a_chain_that_has_not_mixed() -> None:
+    """A tiny step size over a wide posterior drifts: R-hat must be well above 1."""
+    r = mcmc_sample(
+        lambda p: float(-0.5 * (p[0] / 50.0) ** 2),
+        [-80.0],
+        num_steps=2000,
+        burn_in=0,
+        step_size=0.5,
+        seed=2,
+    )
+    assert float(np.asarray(r["diagnostic"]["r_hat"])[0]) > 1.1
+
+
+def test_r_hat_fails_closed_when_too_few_draws() -> None:
+    """Fewer than 4 kept draws cannot be split into two chains: NaN, not a guess."""
+    r = mcmc_sample(lambda p: float(-0.5 * p[0] ** 2), 0.0, num_steps=10, burn_in=8, seed=1)
+    assert np.all(np.isnan(np.asarray(r["diagnostic"]["r_hat"])))
