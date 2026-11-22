@@ -39,6 +39,8 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **Analysis results stay honest across features**: a Curie–Weiss output is no longer overwritten with its source's columns by a recalculation; undoing a Replace of an out-of-date result keeps it marked out of date; a Signal Processing run that leaves excluded/filtered rows out refuses (Create) or stays out of date (recalculation) when rows are excluded or filtered while it runs; an exclusion made during a recalculation still marks committed results out of date; changing a statistics batch setting mid-run no longer allows a second batch at once; and a saved Signal Processing By result no longer records "Use excluded/filtered rows", which By never applies.
+
 - **An out-of-date Curve fit could still be reported or written out**: after the data, weighting or any fit setting changed, "→ Report", "Corner plot…" and the Bands / Fit report / Output to worksheet sections still acted on the old numbers; they now wait until you press Fit again.
 - **Closing Reshape & combine while its unit-mismatch review was open** left the dialog up, and confirming it silently created nothing; Close now dismisses it.
 - **Baseline no longer subtracts an estimate under settings it was not computed with.** Changing the method, a parameter or the anchors after Estimate used to leave Subtract enabled, and the output recorded the new settings over the old baseline; Subtract now stays disabled, with the reason, until you Estimate again. An estimate that answers after the method or dataset changed, or after Close or Clear, is dropped instead of being drawn on the plot.
