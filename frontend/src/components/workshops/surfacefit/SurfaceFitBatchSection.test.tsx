@@ -84,3 +84,18 @@ describe("SurfaceFitBatchSection", () => {
     expect(screen.getByRole("button", { name: "Run Surface fit batch" })).toBeDisabled();
   });
 });
+
+describe("SurfaceFitBatchSection settings change", () => {
+  it("drops the finished table when the model bounds change", async () => {
+    seed([sheet("a", ["Y", "Z"]), sheet("b", ["Y", "Z"])], [0, 1]);
+    const { rerender } = render(<SurfaceFitBatchSection f={{ model: MODEL, lower: ["", ""], upper: ["", ""] }} />);
+    run();
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    rerender(<SurfaceFitBatchSection f={{ model: MODEL, lower: ["", ""], upper: ["", ""] }} />);
+    expect(screen.getAllByText("Completed")).toHaveLength(2);
+    rerender(<SurfaceFitBatchSection f={{ model: MODEL, lower: ["", ""], upper: ["", "5"] }} />);
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getAllByText("Ready")).toHaveLength(2);
+    expect(register).toHaveBeenCalledOnce();
+  });
+});

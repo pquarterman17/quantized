@@ -45,6 +45,7 @@ export default function OpticalGapBatchSection({ g }: { g: TaucSettings }) {
       resultParameters={{ xUnit, signal, percent, thickness, kind, eMin, eMax }}
       blockedReason={typeof options === "string" ? options : null}
       runItem={runItem}
+      settingsKey={JSON.stringify([xUnit, signal, percent, thickness, kind, eMin, eMax])}
     />
   </>;
 }

@@ -36,6 +36,7 @@ export default function PeakWizardByLevel({ recipe }: { recipe: PeakRecipe }) {
       run={run}
       runKey={`${xKey}|${yKey}|${JSON.stringify(recipe.baseline)}|${JSON.stringify(recipe.find)}`}
       blockedReason={active?.pending ? "wait for the full dataset to load" : null}
+      save={{ toolId: "peak-wizard", parameters: { baseline: { ...recipe.baseline }, find: { ...recipe.find } }, xKey, yKeys: yKey == null ? [] : [yKey] }}
     />
   );
 }

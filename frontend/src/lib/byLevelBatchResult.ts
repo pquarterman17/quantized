@@ -10,7 +10,7 @@
 // record (no levels, a row/column shape mismatch).
 
 import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultValue } from "./analysisResult";
-import { ANALYSIS_SELECTION_VERSION, analysisSelectionSnapshot } from "./analysisSelection";
+import { ANALYSIS_SELECTION_VERSION, type AnalysisRangeSelection, analysisSelectionSnapshot } from "./analysisSelection";
 
 export type ByResultCell = string | number | null;
 
@@ -41,10 +41,21 @@ export interface ByLevelBatchInput {
   /** The columns the tool analysed on that worksheet (provenance). */
   xKey?: number | null;
   yKeys?: readonly number[];
+  /** Row / range restriction of the selection the levels were cut from. */
+  rowIds?: readonly number[] | null;
+  range?: AnalysisRangeSelection | null;
 }
 
 /** The table title the Result book and figure code read for batch results. */
 export const BY_STATUS_TABLE = "Batch status";
+
+/** A tool's settings as a result accepts them: non-finite numbers (a blank
+ *  bound held as NaN) and undefined fields are omitted, since one of either
+ *  makes the whole parameters tree unreadable on reopen. */
+function jsonSafe(parameters: Record<string, AnalysisResultValue>): Record<string, AnalysisResultValue> {
+  return JSON.parse(JSON.stringify(parameters, (_key, value: unknown) =>
+    typeof value === "number" && !Number.isFinite(value) ? undefined : value)) as Record<string, AnalysisResultValue>;
+}
 
 export function byLevelBatchResult(input: ByLevelBatchInput): AnalysisResult | string {
   if (input.rows.length === 0) return "No levels have run yet.";
@@ -61,7 +72,8 @@ export function byLevelBatchResult(input: ByLevelBatchInput): AnalysisResult | s
     createdAt: input.createdAt,
     items: [{
       datasetId: input.datasetId, xKey: input.xKey ?? null, yKeys: [...(input.yKeys ?? [])],
-      errorBindings: [], errorKeys: {}, factorKeys: [input.byColumn.index], rowIds: null, range: null, roi: null,
+      errorBindings: [], errorKeys: {}, factorKeys: [input.byColumn.index],
+      rowIds: input.rowIds ? [...input.rowIds] : null, range: input.range ?? null, roi: null,
     }],
   });
   return {
@@ -72,7 +84,7 @@ export function byLevelBatchResult(input: ByLevelBatchInput): AnalysisResult | s
     sources: [{ datasetId: input.datasetId, role: "input" }],
     outputs: [],
     parameters: {
-      ...input.parameters,
+      ...(input.parameters ? jsonSafe(input.parameters) : {}),
       toolId: input.toolId,
       byColumn: input.byColumn.label,
       selection: selection as unknown as AnalysisResultValue,

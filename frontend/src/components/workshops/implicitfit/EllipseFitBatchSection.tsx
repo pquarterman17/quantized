@@ -28,6 +28,7 @@ export default function EllipseFitBatchSection({ geometric }: { geometric: boole
       summaryColumns={[...ELLIPSE_SUMMARY_HEADERS]}
       resultParameters={{ geometric }}
       runItem={runItem}
+      settingsKey={String(geometric)}
     />
   </>;
 }

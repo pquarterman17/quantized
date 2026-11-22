@@ -249,8 +249,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
     by X and Outlier screening now batch over selected worksheets; Outlier
     screening has By; a By table can be saved as one analysis-batch result.
     Multivariate, Variability and Stats tests/chooser are decided as
-    fail-closed (no batch/By) with the reason recorded. Still open: the rest
-    of the `byrun` tools opting into Save By result, and the tools in D2's
+    fail-closed (no batch/By) with the reason recorded. BY2: every
+    `byrun` tool and Curve fit offer Save By result, and the role-based batches
+    reset a finished table on a settings change. Still open: the tools in D2's
     "Remaining".
 - [x] The Analyze menu is a launcher, not an analysis navigator. (Resolved by #764.) It does not
   show input requirements, compatibility with the current worksheet, recent
@@ -915,10 +916,10 @@ panel; **own** = a tool-specific result or worksheet. ✱ = changed here.
 
 | Tool | Batch: controls → result | By: controls → result |
 |---|---|---|
-| Curve fit | `AnalysisBatchControls` → AB (+ summary worksheet) | own `useCurveFitByLevel` → disp |
-| Find peaks | `AnalysisBatchControls` → AB; Batch integrate → worksheet (`commitBatchTable`) | `byrun` → disp |
-| Peak analyzer | own `usePeakBatch` (job queue, cancel) → peak batch table worksheet | `byrun` → disp |
-| Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit | `AnalysisBatchControls` (role-based columns) → AB | `byrun` → disp |
+| Curve fit ✱ | `AnalysisBatchControls` → AB (+ summary worksheet) | own `useCurveFitByLevel` → disp, **Save By result → AB** |
+| Find peaks ✱ | `AnalysisBatchControls` → AB; Batch integrate → worksheet (`commitBatchTable`) | `byrun` → disp, **Save By result → AB** |
+| Peak analyzer ✱ | own `usePeakBatch` (job queue, cancel) → peak batch table worksheet | `byrun` → disp, **Save By result → AB** |
+| Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit ✱ | `AnalysisBatchControls` (role-based columns) → AB | `byrun` → disp, **Save By result → AB** |
 | Hysteresis | `AnalysisBatchControls` → AB (+ trend figures) | none |
 | Williamson–Hall | own section → `williamson-hall-batch` | none |
 | SIMS | own `simsBatch` (review dialog) → one worksheet per profile | none |
@@ -984,6 +985,39 @@ panel; **own** = a tool-specific result or worksheet. ✱ = changed here.
   raises multiple-comparison questions the tool does not answer). Each stays
   single-run with no batch/By control rather than an option that guesses.
 
+**Lane BY2 (2026-11-22).**
+- *Save By result, the rest of the tools.* Find peaks (`peaks`), Peak analyzer
+  (`peak-wizard`), Baseline, Signal processing, Surface fit, Optical gap and
+  Ellipse fit each pass one `save` prop: the saved table is exactly the rows
+  the panel shows (Level, Status, Rows, the tool's own summary columns,
+  Warnings), the tool's settings go in as provenance, and non-finite or
+  undefined settings (a blank NaN bound) are dropped so they cannot make the
+  parameters unreadable. Still opt-in: nothing saves until the button is
+  pressed, and every default is unchanged.
+- *Curve fit By: not moved onto `byrun`; it gets Save By result only.* Its By
+  shows a collapsible parameter table per level (parameters, errors, R², RMSE),
+  fits each level with the panel's weighting and start values, and its
+  summary is not one row per level of fixed columns, so putting it on
+  `ByLevelRunSection` would replace that display. The display is pinned by
+  `CurveFitPanel.byResults.test.tsx` (written before the change); the save
+  records one row per level (each parameter and its error, R², RMSE), the
+  weighting, the start values and the Library selection's own row / range
+  restriction (`byLevelBatchResult` now carries those, so a selection-cut
+  By run is not recorded as the whole worksheet). It saves only from a run that
+  matches the current levels and settings (`current`, new on the hook).
+- *Plot-column batches reset on a settings change.* `AnalysisBatchControls`
+  gains an opt-in `settingsKey`: when it changes, the finished table is
+  dropped; a run in flight finishes, registers its result with the settings it
+  ran with, and its table is then dropped. Find peaks, Baseline, Signal
+  Processing, Surface fit, Optical gap and Ellipse fit pass theirs. **Not
+  reset, on purpose:** Curve fit (its summary worksheet and plot chips are
+  tied to the run's own model and columns, pinned by
+  `CurveFitBatchSection.summary.test.tsx` "keeps the run's model..."; resetting
+  would remove a documented behaviour, so it is left as a decision) and
+  Hysteresis (its only settings are the trend axis, which does not change the
+  per-worksheet values). Peak analyzer's batch is its own job-queue runner and
+  was not touched.
+
 **Tests.** Characterization first (`batchBy.characterization.test.tsx`: the
 batch shell's default row narrowing and empty-selection render, the By
 section display-only); runner and component tests in
@@ -997,13 +1031,16 @@ describer).
 
 - [x] Audit + one contract; Distribution, Fit Y by X and Outlier screening
   batch; Outlier screening By; Save By result as an analysis-batch result.
-- [ ] Remaining: opt the other `byrun` tools (Find peaks, Peak analyzer,
-  Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit) into
-  `save` (one prop each, left out here to stay off files another lane is
-  editing); Curve fit's own By into `byrun` or `save`; By for Hysteresis and
-  Williamson–Hall; batch for Magnetometry tools, Pawley, XRD reference, both
-  FFT tools and Reflectivity; the role-based batches still keep a finished
-  table under changed settings (only the statistics wrapper resets it).
+- [x] BY2: the other `byrun` tools (Find peaks, Peak analyzer, Baseline,
+  Signal Processing, Surface fit, Optical gap, Ellipse fit) opt into `save`;
+  Curve fit's own By gets Save By result (kept on its own runner, see
+  "Lane BY2"); the role-based batches reset their finished table when their
+  settings change (`settingsKey`).
+- [ ] Remaining: Curve fit's batch still keeps a finished table under changed
+  settings (decision above); Peak analyzer's own batch runner has no reset;
+  By for Hysteresis and Williamson–Hall; batch for Magnetometry tools, Pawley,
+  XRD reference, both FFT tools and Reflectivity; Curve fit By still runs all
+  levels at once with no abort (the `byrun` runner aborts on a change).
 
 ## Workstream E — Statistical result workspace
 
@@ -1204,6 +1241,7 @@ describer).
 | Date | Author | Change | Evidence |
 |---|---|---|---|
 | 2026-11-22 | Project team | Lane BY: audited batch and By support (Workstream D, D2) and made one contract of the existing pieces: `AnalysisBatchControls` gains `inputs="statistics"`, `StatsBatchSection` (opt-in, name-matched columns), `ByLevelRunSection` gains an opt-in Save By result (`lib/byLevelBatchResult`, described by the Result book). Distribution, Fit Y by X and Outlier screening batch; Outlier screening By; Multivariate, Variability and Stats tests/chooser recorded as fail-closed. Single-run defaults unchanged. | Characterization tests first; runner, component and builder tests (`StatsBatchSection.test.tsx`, `OutlierByLevel.test.tsx`, `byLevelBatchResult.test.ts`); forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
+| 2026-11-22 | Project team | Lane BY2: Save By result for the other `byrun` tools (Find peaks, Peak analyzer, Baseline, Signal Processing, Surface fit, Optical gap, Ellipse fit) and for Curve fit (its own By kept: it shows a parameter table per level; display pinned first); role-based batches drop a finished table on a settings change via an opt-in `settingsKey` (Curve fit and Hysteresis deliberately not). | Characterization tests first (`CurveFitPanel.byResults.test.tsx`); per-tool save / duplicate / Undo / out-of-date tests (`byLevelSave.test.tsx`, `signalBySave.test.tsx`); per-runner settings-change tests; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-11-22 | Project team | Lane RB: audited how the statistics tools present results and added the Result book tab to the result workspace (`lib/resultBook.ts`, `analysisresults/resultbook/`) for Distribution, Fit Y by X, Multivariate, Variability and Outlier screening: one header (shared input line while current, method, settings, freshness), collapsible table and figure sections in one order, per-section Copy, Send to report and Open as worksheet, and Reopen in tool. | Characterization tests of the existing tabs (written first) still pass; book tests cover section order, collapse state, each action, a stale result and each migrated tool; `sendAnalysisInlineTableToReport(id, tableIndex)` store test; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane RB2: extended the Result book to saved statistical tests, Williamson–Hall results, Williamson–Hall comparisons and analysis-batch results (`lib/resultBookDescribe.ts`); the book fails closed (no tab) when a result's settings cannot be read; per-figure Send to report deliberately not added (see the Statistical engines item). | Tests per tool for header, section order, actions, stale state and the no-book cases (`resultbook/ResultBookMore.test.tsx`); the RB tests still pass; tsc, lint, build (bundle OK). |
 | 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated (slice 2 adds Fit Y by X, Multivariate, Variability, Stats tests and the chooser); lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |

@@ -30,7 +30,7 @@ interface Props {
 }
 
 export default function SignalScopeAndBy({ source, secondary, settings, spectral, channels, sigopFilter, crossWorksheet, validation }: Props) {
-  const { active, data, columns } = usePlottedPair();
+  const { active, data, columns, xKey, yKey } = usePlottedPair();
   const blockedReason = sigopFilter
     ? "By and batch are not available for this filter yet."
     : crossWorksheet ? "A cross-worksheet correlation is tied to its two worksheets." : validation || null;
@@ -50,6 +50,7 @@ export default function SignalScopeAndBy({ source, secondary, settings, spectral
         run={run}
         runKey={JSON.stringify([settings, spectral, channels])}
         blockedReason={blockedReason}
+        save={{ toolId: "signal-processing", parameters: { settings: { ...settings }, spectral: { ...spectral }, channels }, xKey, yKeys: yKey == null ? [] : [yKey] }}
       />
     </>
   );

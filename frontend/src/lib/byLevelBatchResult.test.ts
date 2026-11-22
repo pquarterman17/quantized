@@ -30,6 +30,23 @@ describe("byLevelBatchResult", () => {
     expect(result.stale).toBeUndefined();
   });
 
+  it("drops non-finite and undefined settings instead of making the parameters unreadable", () => {
+    const result = byLevelBatchResult(input({ parameters: { a: Number.NaN, b: undefined as never, c: { d: Infinity, e: 2 } } })) as AnalysisResult;
+    expect(result.parameters).toMatchObject({ c: { e: 2 }, toolId: "outlier-screening" });
+    expect(result.parameters).not.toHaveProperty("a");
+    expect(result.parameters).not.toHaveProperty("b");
+    expect((result.parameters as { c: object }).c).not.toHaveProperty("d");
+  });
+
+  it("keeps the selection's own row / range restriction in the saved provenance", () => {
+    const result = byLevelBatchResult(input({ rowIds: [1, 2, 3], range: { lo: 0, hi: 5, source: "manual" } })) as AnalysisResult;
+    const item = (result.parameters as { selection: { items: { rowRuns: unknown; range: unknown }[] } }).selection.items[0]!;
+    expect(item.rowRuns).not.toBeNull();
+    expect(item.range).toEqual({ lo: 0, hi: 5, source: "manual" });
+    const whole = byLevelBatchResult(input()) as AnalysisResult;
+    expect((whole.parameters as { selection: { items: { rowRuns: unknown }[] } }).selection.items[0]!.rowRuns).toBeNull();
+  });
+
   it("says when the level cap left levels unrun", () => {
     const result = byLevelBatchResult(input({ omittedLevels: 2 })) as AnalysisResult;
     expect(result.warnings[0]).toBe("2 further levels were not run (level cap).");

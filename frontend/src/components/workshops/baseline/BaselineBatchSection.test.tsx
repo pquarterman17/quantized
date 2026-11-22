@@ -68,3 +68,19 @@ describe("BaselineBatchSection", () => {
     expect(baselineALS).not.toHaveBeenCalled();
   });
 });
+
+describe("BaselineBatchSection settings change", () => {
+  it("drops the finished table when the method settings change, and keeps it when they do not", async () => {
+    vi.mocked(baselineALS).mockImplementation(async ({ y }) => ({ baseline: y.map((v) => v - 1) }) as never);
+    const { rerender } = render(<BaselineBatchSection b={{ method: "als", params }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Baseline batch" }));
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    rerender(<BaselineBatchSection b={{ method: "als", params: { ...params } }} />);
+    expect(screen.getAllByText("Completed")).toHaveLength(2); // same settings: kept
+    rerender(<BaselineBatchSection b={{ method: "als", params: { ...params, lam: 1e3 } }} />);
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getAllByText("Ready")).toHaveLength(2);
+    expect(register).toHaveBeenCalledOnce(); // the saved result itself is untouched
+  });
+});

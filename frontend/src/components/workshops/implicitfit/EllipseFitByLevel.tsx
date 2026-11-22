@@ -29,6 +29,7 @@ export default function EllipseFitByLevel({ e }: { e: Pick<EllipseFitState, "geo
       run={run}
       runKey={`${xCol}|${yCol}|${geometric}`}
       blockedReason={active?.pending ? "wait for the full dataset to load" : null}
+      save={{ toolId: "ellipse-fit", parameters: { geometric }, xKey: xCol >= 0 ? xCol : null, yKeys: [yCol] }}
     />
   );
 }

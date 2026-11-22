@@ -34,6 +34,7 @@ export default function BaselineByLevel({ b }: { b: Pick<BaselineState, "method"
       run={run}
       runKey={`${xKey}|${yKey}|${method}|${JSON.stringify(params)}`}
       blockedReason={active?.pending ? "wait for the full dataset to load" : method === "anchor" ? "anchor baselines are placed by hand on one curve" : null}
+      save={{ toolId: "baseline", parameters: { method, ...params }, xKey, yKeys: yKey == null ? [] : [yKey] }}
     />
   );
 }

@@ -34,6 +34,7 @@ export default function OpticalGapByLevel({ g }: { g: TaucSettings & Pick<Optica
       run={run}
       runKey={`${xCol}|${yCol}|${JSON.stringify(options)}`}
       blockedReason={active?.pending ? "wait for the full dataset to load" : typeof options === "string" ? options : null}
+      save={{ toolId: "optical-gap", parameters: { xUnit, signal, percent, thickness, kind, eMin, eMax }, xKey: xCol >= 0 ? xCol : null, yKeys: [yCol] }}
     />
   );
 }

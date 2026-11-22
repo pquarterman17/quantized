@@ -32,6 +32,7 @@ export default function SurfaceFitByLevel({ f }: { f: Pick<SurfaceFitState, "mod
       run={run}
       runKey={`${xCol}|${yCol}|${zCol}|${model?.name}|${JSON.stringify(bounds)}`}
       blockedReason={active?.pending ? "wait for the full dataset to load" : !model ? "choose a surface model" : typeof bounds === "string" ? bounds : null}
+      save={{ toolId: "surface-fit", parameters: { model: model?.name ?? null, lower, upper }, xKey: xCol >= 0 ? xCol : null, yKeys: [yCol, zCol] }}
     />
   );
 }

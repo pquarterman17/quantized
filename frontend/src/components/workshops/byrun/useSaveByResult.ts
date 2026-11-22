@@ -8,6 +8,7 @@ import { useRef, useState } from "react";
 
 import type { AnalysisResultValue } from "../../../lib/analysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import type { AnalysisRangeSelection } from "../../../lib/analysisSelection";
 import { byLevelBatchResult } from "../../../lib/byLevelBatchResult";
 import type { Dataset } from "../../../lib/types";
 import { registerAnalysisResult } from "../../../store/analysisResultActions";
@@ -24,6 +25,10 @@ export interface ByResultSaveOptions {
   /** The columns analysed on the worksheet (provenance). */
   xKey?: number | null;
   yKeys?: readonly number[];
+  /** The selection's own row / range restriction when the tool's By levels
+   *  were cut from it (Curve fit); omitted = the whole analysis view. */
+  rowIds?: readonly number[] | null;
+  range?: AnalysisRangeSelection | null;
 }
 
 export interface ByResultSave {
@@ -36,7 +41,7 @@ export function useSaveByResult(
   tool: string,
   active: Dataset | null,
   headers: readonly string[],
-  by: ByLevelRunState,
+  by: Pick<ByLevelRunState, "byOptions" | "byCol" | "levels" | "totalLevels" | "rows" | "current">,
   options: ByResultSaveOptions | undefined,
 ): ByResultSave {
   const [saved, setSaved] = useState<{ rows: ByLevelRow[]; id: string } | null>(null);
@@ -71,6 +76,8 @@ export function useSaveByResult(
       ...(options.parameters ? { parameters: options.parameters } : {}),
       ...(options.xKey !== undefined ? { xKey: options.xKey } : {}),
       ...(options.yKeys ? { yKeys: options.yKeys } : {}),
+      ...(options.rowIds !== undefined ? { rowIds: options.rowIds } : {}),
+      ...(options.range !== undefined ? { range: options.range } : {}),
     });
     if (typeof result === "string") {
       analysisBatchRuntime().setStatus(`${tool} By result not saved: ${result}`);

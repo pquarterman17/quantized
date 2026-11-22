@@ -30,5 +30,6 @@ export default function PeakBatchSection({ params }: { params: PeakFindParams })
     label="Peak detection"
     summaryColumns={["Peaks", "Strongest center", "Strongest SNR"]}
     runItem={runItem}
+    settingsKey={JSON.stringify(params)}
   />;
 }

@@ -214,3 +214,52 @@ describe("AnalysisBatchControls", () => {
     ]);
   });
 });
+
+describe("AnalysisBatchControls settingsKey", () => {
+  const open = () => fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+  const run = () => fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+  const ui = (key: string | undefined, runItem: (d: Dataset) => Promise<{ values: number[] }>) =>
+    <AnalysisBatchControls toolId="batch-test" label="Test batch" summaryColumns={["N"]} runItem={runItem} {...(key !== undefined ? { settingsKey: key } : {})} />;
+
+  it("drops a finished table when the key changes, and keeps it when it does not", async () => {
+    const runItem = vi.fn(async () => ({ values: [1] }));
+    const { rerender } = render(ui("a", runItem));
+    open();
+    run();
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    rerender(ui("a", runItem));
+    expect(screen.getAllByText("Completed")).toHaveLength(2);
+    rerender(ui("b", runItem));
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getAllByText("Ready")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Run Test batch batch" })).toBeEnabled();
+    expect(register).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the finished table without a key (the long-standing default)", async () => {
+    const runItem = vi.fn(async () => ({ values: [1] }));
+    const { rerender } = render(ui(undefined, runItem));
+    open();
+    run();
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    rerender(ui(undefined, async () => ({ values: [2] })));
+    expect(screen.getAllByText("Completed")).toHaveLength(2);
+  });
+
+  it("drops a run that finishes after the settings changed under it (its saved result keeps the old settings)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const runItem = vi.fn(async () => { await gate; return { values: [1] }; });
+    const { rerender } = render(ui("a", runItem));
+    open();
+    run();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Running…" })).toBeDisabled());
+    rerender(ui("b", runItem));
+    release();
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+    await waitFor(() => expect(screen.getAllByText("Ready")).toHaveLength(2));
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(register).toHaveBeenCalledOnce();
+  });
+});
+

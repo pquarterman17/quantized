@@ -34,7 +34,7 @@ import { askConfirm } from "../../../store/confirmDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import CurveFitAdvanced from "./CurveFitAdvanced";
-import CurveFitByLevelSection from "./CurveFitByLevelSection";
+import CurveFitByResults from "./CurveFitByResults";
 import CurveFitHeader, { CurveFitModelPicker, CurveFitTabPanel as TabPanel, type CurveFitTab } from "./CurveFitHeader";
 import EquationModelPanel from "./EquationModelPanel";
 import CurveFitResults from "./CurveFitResults";
@@ -116,9 +116,8 @@ export default function CurveFitPanel() {
     byCol,
     setByCol,
     byLevels,
-    byTotalLevels,
-    byResults,
     byBusy,
+    byRun,
   } = useCurveFit();
   const byActive = byLevels.length > 0;
   // Reopening on a fit shows it; otherwise start at Setup. Fit switches here.
@@ -341,22 +340,7 @@ export default function CurveFitPanel() {
         {!byActive && <FitConvergenceWarning result={guessOnly ? null : result} />}
 
         {byActive ? (
-          <>
-            {byTotalLevels > byLevels.length && (
-              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-                By column has {byTotalLevels} levels — showing the first {byLevels.length}
-              </div>
-            )}
-            {byBusy && byResults.length === 0 ? (
-              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-                fitting {byLevels.length} levels…
-              </div>
-            ) : (
-              byResults.map((r) => (
-                <CurveFitByLevelSection key={r.label} result={r} paramNames={paramNames} />
-              ))
-            )}
-          </>
+          <CurveFitByResults active={active} by={byRun} paramNames={paramNames} />
         ) : (
           <CurveFitResults
             active={active}

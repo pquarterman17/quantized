@@ -76,3 +76,18 @@ describe("EllipseFitBatchSection", () => {
     expect(ellipseFit).toHaveBeenCalledOnce();
   });
 });
+
+describe("EllipseFitBatchSection settings change", () => {
+  it("drops the finished table when the fit kind changes", async () => {
+    seed([sheet("a", 8), sheet("b", 9)]);
+    const { rerender } = render(<EllipseFitBatchSection geometric={false} />);
+    run();
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+    rerender(<EllipseFitBatchSection geometric={false} />);
+    expect(screen.getAllByText("Completed")).toHaveLength(2);
+    rerender(<EllipseFitBatchSection geometric />);
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.getAllByText("Ready")).toHaveLength(2);
+    expect(register).toHaveBeenCalledOnce();
+  });
+});
