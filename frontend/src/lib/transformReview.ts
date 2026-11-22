@@ -6,8 +6,9 @@ import { actionable, needsConfirm, warningsText } from "./transformWarnings";
 import type { TransformPreview } from "./transformRun";
 
 /** Interactive review: silent when there is nothing to say; a unit mismatch
- *  gets a danger-styled confirm whose button names what is being overridden. */
-export function reviewTransform(pv: TransformPreview): Promise<boolean> {
+ *  gets a danger-styled confirm whose button names what is being overridden.
+ *  `signal`: aborting it dismisses the dialog (answer no). */
+export function reviewTransform(pv: TransformPreview, signal?: AbortSignal): Promise<boolean> {
   if (!actionable(pv.warnings).length) return Promise.resolve(true);
   const units = needsConfirm(pv.warnings);
   return askConfirm(
@@ -15,5 +16,6 @@ export function reviewTransform(pv: TransformPreview): Promise<boolean> {
     warningsText(pv.summary, pv.warnings),
     units ? "Create despite unit mismatch" : "Create",
     units,
+    signal,
   );
 }

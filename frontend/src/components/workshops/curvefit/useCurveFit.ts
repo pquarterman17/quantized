@@ -108,6 +108,7 @@ export function useCurveFit(): CurveFitState {
   const datasets = useApp((s) => s.datasets);
   const active = analysisTargetDataset(datasets, fallbackActive?.id ?? null, selection?.items[0], selection?.source === "tool-default");
   const selected = selection?.items[0]?.datasetId === active?.id ? selection?.items[0] ?? null : null; // never another sheet's roles
+  const setStatus = useApp((s) => s.setStatus);
   const liveXKey = useApp((s) => s.xKey);
   const liveYKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
@@ -225,6 +226,13 @@ export function useCurveFit(): CurveFitState {
   const settingsKey = active ? JSON.stringify([active.id, modelName, xKey, yKeys, seriesOrder, errKeys, paramRows.length === 0 || rowsAreDefault(paramRows, model) ? null : paramRows, weightMode, manualKey, scaleErrors]) : "";
   const runKeys = useRef(new WeakMap<Fitted, string>());
   const settingsKeyRef = useLatestRef(settingsKey);
+  // A fit restored from the session (a reopen, a worksheet revisited) has no
+  // run key: it is taken to match the settings first shown beside it, so an
+  // edit made after that marks it out of date like a fresh fit.
+  const shownResult = shown;
+  useEffect(() => {
+    if (shownResult && !runKeys.current.has(shownResult)) runKeys.current.set(shownResult, settingsKey);
+  }, [shownResult, settingsKey]);
   const settingsStale = !!fitData && !!shown && (runKeys.current.get(shown) ?? settingsKey) !== settingsKey;
   const dataStale = useMemo(
     () => !!fitData && !!xy && !!active &&
@@ -313,10 +321,12 @@ export function useCurveFit(): CurveFitState {
     if (kind === "fit") return preview.refresh();
     setBusy(true);
     setError(null);
+    setRefusalText(null);
     try {
       const g = await guessFit(active.id, modelName);
       if (g) setFitted(g);
     } catch (e) {
+      if (e instanceof FitRefusal) setRefusalText(e.message);
       setError(e instanceof Error ? e.message : "fit failed");
     } finally {
       setBusy(false);
@@ -339,7 +349,7 @@ export function useCurveFit(): CurveFitState {
     setError(null);
     try {
       const done = await exportCornerPlot({ dataset: active, model: modelName, paramNames: model?.paramNames ?? [], x: xy.x, y: xy.y, p0 });
-      if (!done) useApp.getState().setStatus("corner plot cancelled");
+      if (!done) setStatus("corner plot cancelled");
     } catch (e) {
       setError(e instanceof Error ? e.message : "corner plot failed");
     } finally {

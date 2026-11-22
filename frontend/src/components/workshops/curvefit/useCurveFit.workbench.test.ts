@@ -164,6 +164,25 @@ describe("shell: out of date, refusals, and races", () => {
     expect(h.result.current.error).toBeNull();
   });
 
+  it("a fit restored on reopen goes out of date when a setting changes after it is shown", async () => {
+    const first = await ready();
+    await fit(first);
+    first.unmount();
+    const h = await ready();
+    expect(h.result.current.result).not.toBeNull(); // restored from the session
+    expect(h.result.current.resultStale).toBe(false);
+    act(() => h.result.current.setParamRow(0, { start: "3" }));
+    expect(h.result.current.resultStale).toBe(true);
+  });
+
+  it("Guess on data with nothing finite is a refusal too", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: NO_PAIRS }] });
+    const h = await ready();
+    await act(async () => { await h.result.current.run("guess"); });
+    expect(h.result.current.error).toMatch(/no finite X\/Y pairs/);
+    expect(h.result.current.refusal).toBe(true);
+  });
+
   it("Remove fit (clear) leaves nothing out of date and nothing shown", async () => {
     const h = await ready();
     await fit(h);
