@@ -77,7 +77,7 @@ export function useCanvasPointLabels(plotRef: RefObject<uPlot | null>, layout: L
       mod.current = m;
       plotRef.current?.redraw(false);
       setLoaded(true);
-    });
+    }).catch(() => undefined); // offline: labels are not drawn, the plot is unaffected
   }, [shown, plotRef]);
   // A new layout asks the instance for a redraw (the draw hook reads `latest`).
   useEffect(() => {
