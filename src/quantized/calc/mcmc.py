@@ -78,8 +78,8 @@ def mcmc_sample(
     dict
         ``samples`` ``[N × P]`` post-burn-in thinned draws, ``log_posterior``
         ``[N]`` at each, ``accept_rate`` (target 0.2–0.5), and ``diagnostic``
-        (``n_steps``, ``n_accepted``, ``ess`` per dimension, ``r_hat`` = NaN
-        placeholder, ``sampler``).
+        (``n_steps``, ``n_accepted``, ``ess`` per dimension, ``r_hat`` = split
+        Gelman-Rubin per dimension, NaN when under 4 draws, ``sampler``).
     """
     if num_steps < 1:
         raise ValueError("num_steps must be a positive integer")
@@ -135,7 +135,7 @@ def mcmc_sample(
             "n_steps": n,
             "n_accepted": n_accepted,
             "ess": ess,
-            "r_hat": float("nan"),  # Gelman-Rubin needs multiple chains (TODO)
+            "r_hat": _split_r_hat(samples),
             "sampler": "random-walk-metropolis",
         },
     }
@@ -168,6 +168,28 @@ def _effective_sample_size(samples: NDArray[np.float64]) -> NDArray[np.float64]:
     tau = 1.0 + 2.0 * np.sum(ac_pos * (ac_pos > 0.05), axis=0)
     ess[active] = n_kept / np.maximum(tau, 1.0)
     return ess
+
+
+def _split_r_hat(samples: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Split-chain Gelman-Rubin R-hat per dimension (Gelman et al., BDA3 s11.4).
+
+    The single chain is cut into two equal halves treated as two chains; a
+    drifting (unmixed) chain makes the halves disagree and R-hat exceed 1.
+    Fails closed to NaN when fewer than 4 draws are kept (halves of <2).
+    """
+    n_kept, n_params = samples.shape
+    half = n_kept // 2
+    if half < 2:
+        return np.full(n_params, np.nan)
+    halves = np.stack([samples[:half], samples[half : 2 * half]])  # [2, half, P]
+    within = halves.var(axis=1, ddof=1).mean(axis=0)
+    between = half * halves.mean(axis=1).var(axis=0, ddof=1)
+    var_plus = (half - 1) / half * within + between / half
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r_hat = np.sqrt(var_plus / within)
+    # Constant halves that agree (0/0) are trivially converged.
+    r_hat[(within == 0.0) & (between == 0.0)] = 1.0
+    return np.asarray(r_hat, dtype=float)
 
 
 def _nextpow2(value: int) -> int:
