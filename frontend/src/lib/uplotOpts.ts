@@ -931,7 +931,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
     plugins.push(errorBarsPlugin(legacyBars, inkDimColor, ERROR_CAP_HALF_PX));
   }
   if (args.colorByColumns && args.colorByColumns.size > 0) plugins.push(colorScatterPlugin(args.colorByColumns));
-  plugins.push(...(marks()?.marksPlugins(args.seriesStyles, args.colorByColumns) ?? [])); // N5/N6 (lazy; buildSeriesDefs asks for the load)
+  plugins.push(...(marks()?.marksPlugins(args.seriesStyles, args.colorByColumns, !!xLim) ?? [])); // N5/N6 (lazy; buildSeriesDefs asks for the load)
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }

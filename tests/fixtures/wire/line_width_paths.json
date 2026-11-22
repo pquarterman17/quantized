@@ -1,5 +1,5 @@
 {
-  "rule": "A line with no explicit width exports at the width its canvas draws it (px sent as pt), never the style preset's line_width: a spatial page cell at the plot template's width (the Preferences default under Screen), the Graph Builder's encoded export at its preview's fixed 1.5 px, the polar figure at the polar canvas' fixed 1.5 px.",
+  "rule": "A line with no explicit width exports at the width its canvas draws it (px sent as pt), never the style preset's line_width: a spatial page cell at the plot template's width (the Preferences default under Screen), the Graph Builder's encoded export at its preview's fixed 1.5 px, the polar figure at the Series card's width (1.5 px when it sets none).",
   "cases": [
     {
       "name": "Spatial page: a non-Screen template's width in every panel; an explicit width wins",
@@ -733,7 +733,7 @@
       ]
     },
     {
-      "name": "Polar: every series at the canvas' fixed width, its own width ignored",
+      "name": "Polar: a Series-card width is drawn and exported; an unstyled series keeps the 1.5 px default",
       "route": "figure",
       "body": {
         "dataset": {
@@ -818,7 +818,7 @@
           },
           {
             "color": "#d62728",
-            "width": 1.5
+            "width": 4
           }
         ],
         "filename": "widths"
@@ -830,7 +830,7 @@
         },
         {
           "line": true,
-          "width": 1.5
+          "width": 4
         }
       ]
     }

@@ -27,7 +27,7 @@ export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
   | "column" | "stackedColumn" | "columnX" | "barH" | "box" | "histogram"
   | "contour"
-  | "violin" | "doubleY" | "polar" | "waterfall" | "stacked" | "ternary";
+  | "violin" | "doubleY" | "polar" | "waterfall" | "stacked" | "ternary" | "pie";
 
 export interface PlotTypeDef {
   id: PlotTypeId;
@@ -50,15 +50,16 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Colour map with contour lines from X/Y/Z columns." },
   { id: "violin", label: "Violin", glyph: GLYPHS.plotViolin, description: "Distribution shape per category, mirrored." },
-  { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The last plotted column on a second Y axis at the right." },
+  { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The second column on a right-hand Y axis." },
   { id: "polar", label: "Polar", glyph: GLYPHS.plotPolar, description: "Angle (X, degrees) against radius (Y)." },
   { id: "waterfall", label: "Waterfall", glyph: GLYPHS.plotWaterfall, description: "Curves offset vertically so overlapping traces separate." },
   { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
   { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
+  { id: "pie", label: "Pie / Doughnut", glyph: GLYPHS.plotPie, description: "Wedges by value; a hole makes a doughnut." },
 ];
 
 /** Types that open an existing tool rather than restyle the graph. */
-export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall", "stacked", "ternary"]);
+export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall", "stacked", "ternary", "pie"]);
 
 /** Why a type cannot draw this dataset, or null when it can. */
 export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): string | null {
@@ -71,7 +72,8 @@ export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): st
   }
   const columns = dataset.data.labels.length;
   if ((id === "doubleY" || id === "waterfall" || id === "stacked") && columns < 2) return "Needs at least two Y columns.";
-  if (id === "ternary" && columns < 3) return "Needs three composition columns.";
+  // The X column counts: an A,B,C sheet imports A as X and B, C as channels.
+  if (id === "ternary" && columns + 1 < 3) return "Needs three composition columns.";
   return null;
 }
 
@@ -93,8 +95,9 @@ export function plotTypePatch(
   plotted: readonly number[],
 ): Partial<PlotView> {
   if (id === "polar") return { statMode: false, polarMode: true };
-  // The last plotted column moves to the right axis (Origin's Double-Y).
-  if (id === "doubleY") return { statMode: false, polarMode: false, y2Keys: plotted.length > 1 ? [plotted[plotted.length - 1]] : null };
+  // The SECOND plotted column moves to the right axis, the rest stay left
+  // (Origin's DOUBLEY template; the same as "the last" only with two columns).
+  if (id === "doubleY") return { statMode: false, polarMode: false, y2Keys: plotted.length > 1 ? [plotted[1]] : null };
   const mode = XY_MODE[id];
   if (mode) {
     const seriesStyles: Record<number, SeriesStyle> = { ...view.seriesStyles };
