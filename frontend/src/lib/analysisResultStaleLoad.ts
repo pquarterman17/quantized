@@ -3,14 +3,8 @@
 // the startup bundle for code that only runs while opening a workspace.
 
 import type { AnalysisResult } from "./analysisResult";
-import { dataFingerprint } from "./analysisResultFreshness";
+import { sourcesFingerprint } from "./analysisResultFreshness";
 import type { Dataset } from "./types";
-
-function sourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
-  const refs = [...result.sources, ...result.outputs].map((ref) => byId.get(ref.datasetId));
-  if (result.sources.length === 0 || refs.some((dataset) => !dataset || dataset.pending)) return null;
-  return result.sources.map((ref) => dataFingerprint(byId.get(ref.datasetId)!.data)).join(":");
-}
 
 /** The output ids that are out of date in the file just parsed. */
 export function staleAnalysisOutputs(results: readonly AnalysisResult[], datasets: readonly Dataset[]): string[] {
