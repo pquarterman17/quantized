@@ -91,6 +91,9 @@ export function useCurveFitByLevel(
       return;
     }
     let cancelled = false;
+    // Aborts the fits still in flight when the inputs change or the panel closes
+    // (the `byrun` runner does the same), instead of leaving them to finish unseen.
+    const controller = new AbortController();
     const ranInputs = [byPartition.levels, modelName, xKey, yKey, start, active, weight];
     setBusy(true);
     void Promise.all(
@@ -134,7 +137,7 @@ export function useCurveFitByLevel(
                   ...(start.fixed.some(Boolean) ? { fixed: start.fixed } : {}),
                 }
               : {}),
-          });
+          }, controller.signal);
           return { label: lvl.label, n: x.length, result, error: null };
         } catch (e) {
           return {
@@ -157,6 +160,7 @@ export function useCurveFitByLevel(
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [byPartition.levels, modelName, xKey, yKey, start, active, weight]);
 
