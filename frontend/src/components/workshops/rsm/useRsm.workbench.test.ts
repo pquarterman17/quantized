@@ -134,4 +134,25 @@ describe("RSM analysis out-of-date state", () => {
     expect(result.current.peaks).toHaveLength(2); // fail-before: dropped by the install
     expect(result.current.stale).toBe(false);
   });
+
+  it("takes the peaks off the map overlay while out of date and puts them back when the count is restored", async () => {
+    const { result } = await found();
+    expect(useApp.getState().rsmPeaks?.datasetId).toBe("d1");
+    act(() => result.current.setNPeaks(3));
+    expect(useApp.getState().rsmPeaks).toBeNull(); // fail-before: still drawn as current
+    act(() => result.current.setNPeaks(2));
+    expect(useApp.getState().rsmPeaks?.peaks).toHaveLength(2);
+  });
+
+  it("forced race: a failure of a run the user left does not show an error or clear busy", async () => {
+    let fail!: (e: Error) => void;
+    vi.mocked(analyzeRsm).mockImplementationOnce(() => new Promise((_, rej) => { fail = rej; }));
+    const { result } = renderHook(() => useRsm());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.analyze(); });
+    await act(async () => {});
+    act(() => useApp.setState({ datasets: [DS, { id: "d2", name: "b.xrdml", data: { ...RSM } }], activeId: "d2" }));
+    await act(async () => { fail(new Error("boom")); await pending; });
+    expect(result.current.error).toBeNull(); // fail-before: "boom" under d2
+  });
 });

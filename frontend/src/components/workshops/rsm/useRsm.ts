@@ -113,6 +113,20 @@ export function useRsm(): RsmState {
   const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), nPeaks]));
   const nPeaksNow = useLatestRef(nPeaks);
   const stale = peaks !== null && stamp.stale;
+  const staleNow = useLatestRef(stale);
+  // The map overlay draws the published peaks: take them off while out of date,
+  // put them back if the count is restored.
+  const overlayCleared = useRef(false);
+  useEffect(() => {
+    if (stale) {
+      setRsmPeaks(null);
+      overlayCleared.current = true;
+    } else if (overlayCleared.current) {
+      overlayCleared.current = false;
+      if (peaks?.length && active) setRsmPeaks({ datasetId: active.id, peaks });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the mark only
+  }, [stale]);
 
   // A new active dataset invalidates the current analysis.
   useEffect(() => {
@@ -127,7 +141,7 @@ export function useRsm(): RsmState {
 
   async function analyze(): Promise<void> {
     if (!active || !isRsm) return;
-    const first = ++seq.current;
+    let mine = ++seq.current; // every exit path compares against the run it belongs to
     setBusy(true);
     setError(null);
     setStrain(null);
@@ -139,9 +153,9 @@ export function useRsm(): RsmState {
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       if (active.pending) await afterCommit();
-      else if (first !== seq.current) return;
+      else if (mine !== seq.current) return;
       if (useApp.getState().activeId !== ds.id) return;
-      const request = ++seq.current;
+      const request = (mine = ++seq.current);
       const launchKey = stamp.launchKey();
       const res = await analyzeRsm({ dataset: ds.data, n_peaks: nPeaksNow.current });
       if (request !== seq.current) return;
@@ -150,9 +164,10 @@ export function useRsm(): RsmState {
       setRsmPeaks(res.peaks.length ? { datasetId: ds.id, peaks: res.peaks } : null);
       if (res.n_peaks_found === 0) setError("No peaks found above threshold.");
     } catch (e) {
+      if (mine !== seq.current) return;
       setError(e instanceof Error ? e.message : "RSM analysis failed");
     } finally {
-      setBusy(false);
+      if (mine === seq.current) setBusy(false);
     }
   }
 
@@ -201,7 +216,7 @@ export function useRsm(): RsmState {
       setError(`couldn't load the full dataset — ${e instanceof Error ? e.message : "error"}`);
       return;
     }
-    if (!ds) return;
+    if (!ds || staleNow.current) return; // the peak count changed while the dataset loaded
     const ruler = buildPeakRuler(ds.data, peak, kind);
     if (!ruler) {
       setError("Peak has no reciprocal-space centre.");

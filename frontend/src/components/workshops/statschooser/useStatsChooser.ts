@@ -23,6 +23,7 @@ import type { CalcResult, Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useLatestRef } from "../../../lib/previewKey";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -107,6 +108,7 @@ export function useStatsChooser(): StatsChooserState {
   const seq = useRef(0);
   const stamp = useRunStamp(datasetInputsToken(active));
   const stale = (rec !== null || testResult !== null) && stamp.stale;
+  const staleNow = useLatestRef(stale);
 
   // The shared input contract (lib/analysisInputs): the active worksheet's
   // analysis view over the columns the current mode reads. A lazy Origin
@@ -254,6 +256,7 @@ export function useStatsChooser(): StatsChooserState {
 
   async function toReport(): Promise<void> {
     if (!rec || !testResult || !active || stale) return;
+    const request = seq.current;
     setBusy(true);
     try {
       const { report } = await reportEmit({
@@ -263,6 +266,7 @@ export function useStatsChooser(): StatsChooserState {
         caption: rec.reasons.join("; "),
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
+      if (request !== seq.current || staleNow.current) return; // the answer changed while the report was built
       addReportWithProvenance(`${rec.recommendation} — ${active.name}`, report, active.id);
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");

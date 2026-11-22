@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { subtractMagBackground } from "../../../lib/api/magnetometry";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
 import { useMagTools } from "./useMagTools";
 
 vi.mock("../../../lib/api/magnetometry", () => ({
@@ -26,6 +27,7 @@ const MULTI: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  restoreResolve();
   vi.mocked(subtractMagBackground).mockResolvedValue({ corrected: [4, 1, 0, 0], slope: -0.01, intercept: 3 });
   useApp.setState({
     datasets: [{ id: "d1", name: "mt.dat", data: MULTI }],
@@ -91,5 +93,12 @@ describe("MagTools background fit readout out of date", () => {
     act(() => useApp.setState({ activeId: "d1" }));
     expect(result.current.fitStale).toBe(false);
     expect(result.current.fit).not.toBeNull();
+  });
+
+  it("a lazy source installed by the run does not read as changed", async () => {
+    makePending({ id: "d1", name: "mt.dat", data: MULTI });
+    const { result } = await ran();
+    expect(result.current.fit).not.toBeNull();
+    expect(result.current.fitStale).toBe(false);
   });
 });
