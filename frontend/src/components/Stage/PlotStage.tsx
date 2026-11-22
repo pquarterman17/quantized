@@ -15,7 +15,7 @@ import type { Dataset } from "../../lib/types";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { useFocusedRampedStyles } from "./useSeriesRamp";
-import { useStageOverlays } from "./useStageOverlays";
+import { useFitPreviewPayload, useStageOverlays } from "./useStageOverlays";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useFocusedWindowChrome } from "./useFocusedWindowChrome";
 import { usePointLabelLayout } from "./usePointLabelLayout";
@@ -147,7 +147,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const {
     payload,
     payloadDatasetId,
-    displayPayload: basePayload, // + Y3+ axis tags just below (useMultiY)
+    displayPayload: shownPayload, // + the Curve Fit initial-guess preview, then Y3+ axis tags just below (useMultiY)
     plotted,
     styleList,
     labelList, legendLabels, // P1.4: an encoded render's finished legend text (usePlotPayload)
@@ -186,7 +186,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
     // is what makes that re-fetch reachable at all.
     xLim,
   });
-  const { payload: displayPayload, axes: yAxesShown } = useStageMultiY(basePayload, plotted, { yScale, yFmt, groupKey, y2Keys, hiddenChannels, active, multiPanel: multiPanelShowing(composition, stackMode, plotted.length), picks: focusedBindings?.encoding });
+  const { payload: displayPayload, axes: yAxesShown } = useStageMultiY(useFitPreviewPayload(shownPayload, active?.id ?? null), plotted, { yScale, yFmt, groupKey, y2Keys, hiddenChannels, active, multiPanel: multiPanelShowing(composition, stackMode, plotted.length), picks: focusedBindings?.encoding });
   useLogAxisNotice(displayPayload, plotted, { xScale, yScale, y2Scale, y2Keys });
 
   // Right-click state (menu position + the gesture-cancel-then-open handler)

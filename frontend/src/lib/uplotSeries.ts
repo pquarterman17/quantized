@@ -196,10 +196,11 @@ export function buildSeriesDefs(
       // A fit curve nobody styled is a thinner dashed LINE, and data nobody styled gets markers
       // while a fit is shown, so the fit cannot hide it (lib/fitOverlayStyle.ts; the export agrees).
       const fitCurve = isFitSeries(s) && !seriesStyles?.[i];
-      const trace = seriesTrace(style, fitCurve ? "Line" : s.overlay ? (args.defaultTrace ?? "Line") : dataTrace); // an explicit style opts out
+      const previewCurve = !!s.preview && !seriesStyles?.[i]; // dotted thin line, whatever the default trace
+      const trace = seriesTrace(style, fitCurve || previewCurve ? "Line" : s.overlay ? (args.defaultTrace ?? "Line") : dataTrace); // an explicit style opts out
       const lineW = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
-      const width = screenStrokeWidth(fitCurve ? fitLineWidth(lineW) : lineW);
-      const dash = fitCurve ? FIT_DASH : style?.line ? DASH[style.line] : undefined;
+      const width = screenStrokeWidth(fitCurve || previewCurve ? fitLineWidth(lineW) : lineW);
+      const dash = previewCurve ? DASH.dotted : fitCurve ? FIT_DASH : style?.line ? DASH[style.line] : undefined;
       // Markers: glyph + size for an explicit `marker` style, or the plain 5px
       // circle of the Scatter / Line + markers default trace —
       // `markers.seriesPoints` owns that decision now, and its doc records why

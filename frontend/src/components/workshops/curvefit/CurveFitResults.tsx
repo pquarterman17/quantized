@@ -19,6 +19,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { singleFitTable } from "../../../lib/fitTableLayer";
 import FindXYSection from "./FindXYSection";
+import { useFitAnnotationGuard } from "./useFitAnnotation";
 import FitParamTable from "./FitParamTable";
 import FitTableControls from "./FitTableControls";
 import type { FittedData } from "../../../store/curveFitSession";
@@ -28,6 +29,7 @@ const FitDiagnosticsSection = lazyRegion(() => import("./FitDiagnosticsSection")
 const FitReportSection = lazyRegion(() => import("./FitReportSection"), "Fit report");
 const ResidualPlotsSection = lazyRegion(() => import("./ResidualPlotsSection"), "Residual plots");
 const FitOutputSection = lazyRegion(() => import("./FitOutputSection"), "Output to worksheet");
+const FitAnnotationSection = lazyRegion(() => import("./FitAnnotationSection"), "Result on graph");
 
 interface Props {
   active: Dataset | null;
@@ -79,6 +81,7 @@ export default function CurveFitResults(p: Props) {
   const params = (result?.params as number[] | undefined) ?? [];
   const names = params.map((_, i) => p.paramNames[i] ?? `p${i}`);
   const done = result && !guessOnly;
+  useFitAnnotationGuard(active?.id ?? null, !!done);
 
   const setStatus = useApp((s) => s.setStatus);
   const view = done && active ? fitResultView(resultInput(active, modelName, names, result, fitData)) : null;
@@ -195,6 +198,8 @@ export default function CurveFitResults(p: Props) {
               <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
             </>
           )}
+          {/* Outside the stale guard: an out-of-date fit marks its graph text. */}
+          <FitAnnotationSection key={`${active.id}:${fitData.yKey}:${modelName}`} fitId={`${active.id}:${fitData.yKey}:${modelName}`} input={resultInput(active, modelName, names, result, fitData)} stale={p.stale} />
           <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want, fitData.fixed)} />
           <FitDiagnosticsSection result={result} fitData={fitData} />
         </>

@@ -66,6 +66,8 @@ export interface CurveFitState {
   /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
    *  searches over; null when there's no analysis data yet. */
   xRange: { min: number; max: number } | null;
+  /** The fit's (x, y) as selected, for the initial-guess preview. */
+  fitXy: { x: number[]; y: number[]; xKey: number | null } | null;
   /** MAIN #30: editable starting values / bounds / fixed flags for the
    *  registry model. Seeded from its registry defaults; edits survive a
    *  model change when the parameter name survives. */
@@ -374,6 +376,7 @@ export function useCurveFit(): CurveFitState {
     runCornerPlot,
     cornerBusy,
     xRange,
+    fitXy: xy,
     weightMode,
     setWeightMode,
     manualKey,

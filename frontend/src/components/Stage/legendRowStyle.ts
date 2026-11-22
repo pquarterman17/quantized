@@ -15,6 +15,8 @@ const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "cir
 const BAND_SAMPLE: SeriesStyle = { width: 1, line: "dashed" };
 /** A fit curve's legend sample: the thinner dashed line `uplotSeries` draws. */
 const FIT_SAMPLE: SeriesStyle = { width: 1.2, line: "dashed" };
+/** The initial-guess preview's legend sample: the dotted line `uplotSeries` draws. */
+const PREVIEW_SAMPLE: SeriesStyle = { width: 1.2, line: "dotted" };
 /** The canvas' selected-row companion: line-free 7px accent-filled circles. */
 const SELECTED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 7 };
 
@@ -50,9 +52,11 @@ export function legendRowStyle(
       ? EXCLUDED_SAMPLE
       : s.band
         ? BAND_SAMPLE
-        : isFitSeries(s) && !styleList?.[i]
-          ? FIT_SAMPLE
-          : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
+        : s.preview && !styleList?.[i]
+          ? PREVIEW_SAMPLE
+          : isFitSeries(s) && !styleList?.[i]
+            ? FIT_SAMPLE
+            : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
   // Gap audit 4 review L9: a literal symbol edge / fill colour gets the canvas'
   // contrast check too (`uplotSeries` resolves them for `symbolPoints`).
   const lit = (c?: string) => (c && !c.startsWith("--") ? resolveDrawColor(c, isDarkBg, inkColor) : c);
