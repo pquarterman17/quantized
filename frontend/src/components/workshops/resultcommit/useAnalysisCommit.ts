@@ -4,11 +4,9 @@
 // side, store/analysisOutputCommit.ts, owns idempotency and the one undo step;
 // this hook only exposes them to a button (disabled + why, not a silent no-op).
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useMemo, useRef, useState } from "react";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
-import { outputLayoutVerdict } from "../../../store/analysisOutputLayout";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
 import { replaceTargetFor, useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
