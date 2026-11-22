@@ -5,6 +5,8 @@
 //
 // - WorkbenchPreviewFrame: marks a preview as PROVISIONAL ("Preview (not
 //   saved)"), says when it is loading, and when it is out of date.
+// - OutOfDateNote: the one "Out of date" wording, also used on its own by a
+//   tool whose result is not a provisional preview (a recorded fit).
 // - WorkbenchMessage: one place for "why it cannot run" (a refusal, from the
 //   tool's validation) and "the run failed" (an error, from the backend).
 // - WorkbenchActions: Cancel + extra buttons + the commit button, which is
@@ -19,6 +21,16 @@ import { Button } from "../../primitives";
 
 export const PROVISIONAL_LABEL = "Preview (not saved)";
 
+/** The shared "Out of date" marker: a result whose inputs or settings changed
+ *  after it was computed. `children` says what changed (a lower-case clause).
+ *  A tool whose result is not a provisional preview (a fit already recorded)
+ *  uses this on its own; it must also withhold what would commit the result. */
+export function OutOfDateNote({ children, block = false }: { children: ReactNode; block?: boolean }) {
+  return block
+    ? <div className="qzk-helptext qz-wb-preview-stale" role="status" data-stale="true">Out of date: {children}</div>
+    : <span className="qz-wb-preview-stale" data-stale="true">Out of date: {children}</span>;
+}
+
 export function WorkbenchPreviewFrame({ loading = false, stale = false, children }: {
   loading?: boolean;
   /** The shown preview was computed for inputs that have since changed. */
@@ -30,7 +42,7 @@ export function WorkbenchPreviewFrame({ loading = false, stale = false, children
       <div className="qz-wb-preview-badge">
         <span className="qz-wb-preview-tag">{PROVISIONAL_LABEL}</span>
         {loading && <span aria-live="polite">Previewing…</span>}
-        {stale && !loading && <span className="qz-wb-preview-stale">Out of date: the inputs changed since this preview.</span>}
+        {stale && !loading && <OutOfDateNote>the inputs changed since this preview.</OutOfDateNote>}
       </div>
       {children}
     </section>

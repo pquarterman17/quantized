@@ -8,6 +8,7 @@
 
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { stemFromName } from "../../../lib/exportActive";
 import { copyText } from "../../../lib/clipboard";
 import { fitResultMarkdown, fitResultTsv, fitResultView, shownParamTable, type FitResultInput } from "../../../lib/fitResultView";
@@ -46,6 +47,8 @@ interface Props {
   /** The Results tab is showing: the residual plots open by themselves. */
   residualsOpen?: boolean;
 }
+
+const STALE_REASON = "Out of date: press Fit to refit the current data and settings first";
 
 /** The fitted X column's display name, for the residual-vs-X axis. */
 function xLabelOf(ds: Dataset, xKey: number | null): string {
@@ -117,8 +120,10 @@ export default function CurveFitResults(p: Props) {
         </div>
       )}
       {done && p.stale && (
-        <div className="qzk-helptext" role="status" style={{ marginTop: 10, color: "var(--warn)" }}>
-          The data or weighting selected for fitting changed after this fit, so the results below describe the earlier inputs. Press Fit to update them.
+        <div style={{ marginTop: 10, color: "var(--warn)" }}>
+          <OutOfDateNote block>
+            The data, weighting or fit settings changed after this fit, so the results below describe the earlier inputs. Press Fit to update them; Report, Corner plot and the output sections wait for that.
+          </OutOfDateNote>
         </div>
       )}
       {/* One line per value and per CI (UX-F); the CI folds under the value
@@ -145,13 +150,13 @@ export default function CurveFitResults(p: Props) {
           <Button size="sm" title="Copy the results table as Markdown" onClick={() => void copy(true)}>
             Copy MD
           </Button>
-          <Button size="sm" disabled={p.reporting} onClick={p.onReport}>
+          <Button size="sm" disabled={p.reporting || p.stale} title={p.stale ? STALE_REASON : undefined} onClick={p.onReport}>
             {p.reporting ? "Reporting…" : "→ Report"}
           </Button>
           <Button
             size="sm"
-            disabled={p.cornerBusy}
-            title="Bootstrap the fit and export a pairwise parameter-uncertainty corner plot"
+            disabled={p.cornerBusy || p.stale}
+            title={p.stale ? STALE_REASON : "Bootstrap the fit and export a pairwise parameter-uncertainty corner plot"}
             onClick={p.onCornerPlot}
           >
             {p.cornerBusy ? "Bootstrapping…" : "Corner plot…"}
@@ -182,9 +187,14 @@ export default function CurveFitResults(p: Props) {
 
       {done && active && fitData && (
         <>
-          <FitBandsSection target={{ dataset: active, model: modelName, result, fitData }} />
-          <FitReportSection result={result} fitData={fitData} paramNames={names} fileStem={`${stemFromName(active.name)}-${modelName}`} />
-          <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
+          {/* What writes or reports the fit waits for a fit of the current inputs. */}
+          {!p.stale && (
+            <>
+              <FitBandsSection target={{ dataset: active, model: modelName, result, fitData }} />
+              <FitReportSection result={result} fitData={fitData} paramNames={names} fileStem={`${stemFromName(active.name)}-${modelName}`} />
+              <FitOutputSection dataset={active} model={modelName} paramNames={names} result={result} fitData={fitData} />
+            </>
+          )}
           <FitTableControls sourceKey={`single:${active.id}`} stats={["r2", "chiSqRed", "chiSq", "n"]} build={(want) => singleFitTable(names, result, want, fitData.fixed)} />
           <FitDiagnosticsSection result={result} fitData={fitData} />
         </>
