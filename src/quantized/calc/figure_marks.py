@@ -29,9 +29,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.figure_bars import draw_series
+from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
 from quantized.calc.figure_overlay_scale import tag_overlay
-from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_warnings import note_figure_warning
