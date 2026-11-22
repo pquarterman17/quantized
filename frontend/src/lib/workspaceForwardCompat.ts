@@ -243,6 +243,8 @@ export const DATASET: Classify<Dataset> = {
   tags: V, group: V, folderId: V, order: V, formulas: V, formulaErrors: V, derivedFrom: V, analysisRecipe: V,
   channelRoles: V, columnDesignations: V, errorRoles: V, importedAt: V, channelTypes: V, excludedRows: V,
   filter: V, pending: V, source: V, versionOf: V, workbookId: V,
+  // Session-only (lazy-book install counter): never serialized, so 0.34 is unaffected.
+  installEpoch: K,
   linkedCurves: G, columnProps: G, hiddenCols: G, frozenCols: G,
 };
 
