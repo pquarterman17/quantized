@@ -13,6 +13,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select, StatusDot } from "../../primitives";
 import { resultRows } from "../../../lib/statschooser";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { useStatsChooser } from "./useStatsChooser";
 
 export default function StatsChooserPanel() {
@@ -116,6 +117,8 @@ export default function StatsChooserPanel() {
             </div>
           )}
 
+          {c.stale && <OutOfDateNote block>the rows or data changed after this answer. Ask again.</OutOfDateNote>}
+
           {c.rec && (
             <div style={{ marginTop: 10 }}>
               <StatusDot
@@ -132,7 +135,7 @@ export default function StatsChooserPanel() {
                   <li key={i}>{r}</li>
                 ))}
               </ul>
-              <Button size="sm" disabled={c.busy} onClick={() => void c.runRecommended()}>
+              <Button size="sm" disabled={c.busy || c.stale} title={c.stale ? "Out of date: ask which test again" : undefined} onClick={() => void c.runRecommended()}>
                 Run {c.rec.recommendation}
               </Button>
             </div>
@@ -148,7 +151,7 @@ export default function StatsChooserPanel() {
                 ])}
               />
               <div style={{ marginTop: 8 }}>
-                <Button size="sm" disabled={c.busy} onClick={() => void c.toReport()}>
+                <Button size="sm" disabled={c.busy || c.stale} title={c.stale ? "Out of date: ask which test again" : undefined} onClick={() => void c.toReport()}>
                   → Report
                 </Button>
               </div>

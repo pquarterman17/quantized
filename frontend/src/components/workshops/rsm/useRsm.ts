@@ -14,7 +14,7 @@
 // (its own header names this as its 4th intended caller) — one click lands
 // one library dataset, no dependency on the map's inline commit bar.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { analyzeRsm, rsmBoxCut, rsmStrain, type BoxCutRequest } from "../../../lib/api/rsm";
 import { rulerBoxBody } from "../../../lib/roi";
@@ -22,6 +22,10 @@ import { buildPeakRuler, defaultPeakForCut, peakHasQCentre, withPeakCutLabel, ty
 import type { Dataset, RsmPeak, RsmStrainResponse } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useCutLanding } from "../../Stage/useCutLanding";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
+import { useLatestRef } from "../../../lib/previewKey";
 
 export interface RsmState {
   active: Dataset | null;
@@ -29,6 +33,9 @@ export interface RsmState {
   nPeaks: number;
   peaks: RsmPeak[] | null;
   strain: RsmStrainResponse | null;
+  /** The peaks were found for a different "Peaks" count than the one now set
+   *  (lane WB7): marked, and the strain / cut actions that read them withheld. */
+  stale: boolean;
   busy: boolean;
   error: string | null;
   setNPeaks: (n: number) => void;
@@ -99,24 +106,46 @@ export function useRsm(): RsmState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { busy: cutBusy, land } = useCutLanding();
+  // Lane WB7: a new active dataset DROPS the analysis (below); a changed peak
+  // count marks it out of date. `seq` makes an answer for a dropped / cleared
+  // analysis land nowhere.
+  const seq = useRef(0);
+  const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), nPeaks]));
+  const nPeaksNow = useLatestRef(nPeaks);
+  const stale = peaks !== null && stamp.stale;
 
   // A new active dataset invalidates the current analysis.
   useEffect(() => {
+    seq.current++;
+    stamp.record(null);
+    setBusy(false);
     setPeaks(null);
     setStrain(null);
     setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `stamp` is a fresh object each render
   }, [active]);
 
   async function analyze(): Promise<void> {
     if (!active || !isRsm) return;
+    const first = ++seq.current;
     setBusy(true);
     setError(null);
     setStrain(null);
+    stamp.record(null);
     try {
-      // #38 deferred edge: resolve the active dataset's full data first.
+      // #38 deferred edge: resolve the active dataset's full data first. A lazy
+      // book's arrival swaps the dataset (the effect above would drop this run),
+      // so let that commit land, then take the run's key.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const res = await analyzeRsm({ dataset: ds.data, n_peaks: nPeaks });
+      if (active.pending) await afterCommit();
+      else if (first !== seq.current) return;
+      if (useApp.getState().activeId !== ds.id) return;
+      const request = ++seq.current;
+      const launchKey = stamp.launchKey();
+      const res = await analyzeRsm({ dataset: ds.data, n_peaks: nPeaksNow.current });
+      if (request !== seq.current) return;
+      stamp.record(launchKey);
       setPeaks(res.peaks);
       setRsmPeaks(res.peaks.length ? { datasetId: ds.id, peaks: res.peaks } : null);
       if (res.n_peaks_found === 0) setError("No peaks found above threshold.");
@@ -128,24 +157,31 @@ export function useRsm(): RsmState {
   }
 
   async function computeStrain(): Promise<void> {
-    if (!peaks) return;
+    if (!peaks || stale) return;
     const pair = strainPair(peaks);
     if (!pair) {
       setError("Need a substrate + film peak with finite Q-space centres.");
       return;
     }
+    const request = ++seq.current;
     setBusy(true);
     setError(null);
     try {
-      setStrain(await rsmStrain({ q_sub: pair.sub, q_film: pair.film }));
+      const res = await rsmStrain({ q_sub: pair.sub, q_film: pair.film });
+      if (request !== seq.current) return;
+      setStrain(res);
     } catch (e) {
+      if (request !== seq.current) return;
       setError(e instanceof Error ? e.message : "strain calculation failed");
     } finally {
-      setBusy(false);
+      if (request === seq.current) setBusy(false);
     }
   }
 
   function clear(): void {
+    seq.current++;
+    stamp.record(null);
+    setBusy(false);
     setPeaks(null);
     setStrain(null);
     setError(null);
@@ -153,7 +189,7 @@ export function useRsm(): RsmState {
   }
 
   async function peakCut(peak: RsmPeak, kind: PeakCutKind): Promise<void> {
-    if (!active || !isRsm) return;
+    if (!active || !isRsm || stale) return;
     // #38 deferred edge, same as analyze() above: resolve the full dataset
     // (peaks were fitted against it, but `active` may be a lazy stub). The
     // buttons fire this as `void …`, so a rejected resolve must reach the
@@ -179,7 +215,9 @@ export function useRsm(): RsmState {
     await land(rsmBoxCut(body).then((cut) => withPeakCutLabel(cut, peak, kind)));
   }
 
-  const { peak: defaultCutPeak, reason: cutDisabledReason } = cutTarget(isRsm, peaks);
+  const target = cutTarget(isRsm, peaks);
+  const defaultCutPeak = stale ? null : target.peak;
+  const cutDisabledReason = stale ? "Out of date: the peak count changed; find peaks again" : target.reason;
 
   return {
     active,
@@ -187,6 +225,7 @@ export function useRsm(): RsmState {
     nPeaks,
     peaks,
     strain,
+    stale,
     busy,
     error,
     setNPeaks,

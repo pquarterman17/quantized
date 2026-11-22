@@ -16,6 +16,7 @@ import { Button } from "../../primitives";
 import { peakHasQCentre } from "../../../lib/rsmPeakCut";
 import type { RsmPeak } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { strainPair, useRsm } from "./useRsm";
 
 function fmt(v: number | null | undefined, digits = 4): string {
@@ -45,6 +46,7 @@ export default function RsmPanel() {
     nPeaks,
     peaks,
     strain,
+    stale,
     busy,
     error,
     setNPeaks,
@@ -62,7 +64,7 @@ export default function RsmPanel() {
     clear();
     setOpen(false);
   };
-  const canStrain = !!peaks && strainPair(peaks) != null;
+  const canStrain = !!peaks && !stale && strainPair(peaks) != null;
 
   return (
     <ToolWindow id="rsm" title="RSM analysis" width={360} onClose={close}>
@@ -111,6 +113,10 @@ export default function RsmPanel() {
             </div>
           )}
 
+          {stale && (
+            <OutOfDateNote block>the peak count changed after these peaks were found. Find peaks again.</OutOfDateNote>
+          )}
+
           {peaks && peaks.length > 0 && (
             <table className="qzk-rsm-table" style={{ width: "100%", marginTop: 12, fontSize: 11 }}>
               <thead style={{ color: "var(--text-faint)", textAlign: "right" }}>
@@ -125,7 +131,7 @@ export default function RsmPanel() {
               </thead>
               <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
                 {peaks.map((p) => (
-                  <PeakRow key={p.rank} peak={p} busy={cutBusy} onRadial={radialCut} onTransverse={transverseCut} />
+                  <PeakRow key={p.rank} peak={p} busy={cutBusy || stale} onRadial={radialCut} onTransverse={transverseCut} />
                 ))}
               </tbody>
             </table>
@@ -139,7 +145,7 @@ export default function RsmPanel() {
             </div>
           )}
 
-          {strain && (
+          {strain && !stale && (
             <div
               className="qzk-ds-meta"
               style={{ marginTop: 12, display: "grid", gridTemplateColumns: "auto auto", gap: "4px 16px" }}
