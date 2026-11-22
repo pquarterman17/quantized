@@ -137,6 +137,9 @@ export interface FigureOverrides {
    *  draws what the screen drew — `lib/graphLayersWire.ts`,
    *  `calc.figure_layers.apply_layers`. */
   layers?: import("./graphLayersWire").LayerWire[];
+  /** Line of fit / smoother / density ellipse (`PlotView.overlays`, gap audit 8):
+   *  `lib/plotOverlays.ts` `overlaysWire`, drawn by `calc.figure_overlays_draw`. */
+  overlays?: Record<string, unknown>;
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only

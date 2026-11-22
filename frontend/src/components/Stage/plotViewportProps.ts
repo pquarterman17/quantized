@@ -6,12 +6,15 @@ import type uPlot from "uplot";
 
 import type { HalfLim } from "../../lib/axisLim";
 import type { PlotPayload } from "../../lib/plotdata";
+import type { PlotOverlays } from "../../lib/plotOverlays";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
 
 export interface PlotViewportProps
   extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit" | "xLim" | "yLim"> {
   displayPayload: PlotPayload | null;
+  /** Line of fit / smoother / density ellipse (`PlotView.overlays`); null/absent = off. */
+  overlays?: PlotOverlays | null;
   /** Gap audit 4 G19: the Y link group's registry key (`windowYSyncKey`). */
   ySyncKey?: string;
   /** Committed X/Y limits; a null side is auto for that side (`useResolvedLims`). */

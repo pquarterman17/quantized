@@ -253,6 +253,20 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(dataset).toEqual(datasetBefore);
   });
 
+  it("fit overlays ride the export, but never with x breaks (the broken panels do not draw them on screen either)", () => {
+    const view = {
+      ...richView(), xScale: "linear" as const, yScale: "linear" as const,
+      y2Keys: [], y2Scale: null, y2Fmt: null, y2Step: null, y2AxisLabel: "",
+      overlays: { line: { band: "confidence" as const, level: 0.95 }, smoother: null, ellipse: null },
+    };
+    const whole = createFigureDocument({ id: "ov", name: "Overlays", datasetId: dataset.id, view });
+    expect(buildFigureSpecFromDocument(whole, dataset, "f").overrides?.overlays).toEqual({ line: { band: "confidence", level: 0.95 } });
+    const broken = createFigureDocument({ id: "ov-b", name: "Overlays", datasetId: dataset.id, view, axisBreaks: { x: [[0.4, 0.6]] } });
+    const spec = buildFigureSpecFromDocument(broken, dataset, "f");
+    expect(spec.overrides?.x_breaks).toEqual([[0.4, 0.6]]);
+    expect(spec.overrides?.overlays).toBeUndefined();
+  });
+
   it("keeps canonical-only rich errors, mark/facet, breaks, and output across the PlotView facade round trip", () => {
     const document = createFigureDocument({
       id: "round-trip",

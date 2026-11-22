@@ -81,6 +81,8 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
             raise ValueError("exchange_xy must be true or false")
         if ov["exchange_xy"] and ov.get("x_breaks"):
             raise ValueError("exchange_xy is not supported together with x_breaks")
+    if ov.get("overlays") and ov.get("x_breaks"):  # the broken figure never draws them
+        raise ValueError("overlays are not supported together with x_breaks")
     validate_page_pad(ov.get("page_pad"))  # Page setup margins (calc.figure_layout)
     validate_typography(ov)  # per-element font sizes (calc.figure_fonts)
     breaks = ov.get("x_breaks")
