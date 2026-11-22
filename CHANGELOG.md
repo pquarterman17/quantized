@@ -6,6 +6,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Floating Column** plot type (gallery tile and a Series card "Floats from the series above" option): each bar spans two Y columns, low to high, on screen and in the exported figure.
+- The cursor readout of a **stacked series** shows its running total beside its own value.
+- A large Curve Fit's saved fit curve now reaches "Add to Report" from a saved figure and the Figure Builder preview and Export, as it already did on Figure Pages and batch PDFs.
+
 ### Changed
 
 - **Peak find is ~2x faster on large traces** (1M rows: 70 s to 36 s): the SNIP clip runs as a compiled `numba` kernel with the same results, and falls back to the previous numpy code where numba is unavailable.

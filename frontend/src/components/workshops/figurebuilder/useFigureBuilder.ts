@@ -22,6 +22,7 @@ import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
 import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
 import { dragPreviewElement } from "./previewDrag";
 import { exportPreviewFigure } from "./previewExport";
+import { useFullSavedFitDocument } from "./useFullSavedFitDocument";
 import { editPreviewElementText, previewElementText, selectPreviewElement } from "./previewSelect";
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
@@ -138,13 +139,14 @@ export function useFigureBuilder() {
   const canonicalDataset = canonicalDocument?.bindings.datasetId
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
     : null;
+  const fullFit = useFullSavedFitDocument(canonicalDocument, canonicalDataset, useApp((s) => s.staleFits)); // a saved display fit's full curve
   const cyclesStyles = useApp(selectSessionCyclesSeriesStyles); // P3.3 -- see that selector's doc
   const tickHints = sessionTickHints(useApp.getState()); // read at render: publishing re-renders nothing
   // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a pure
   // function of document + dataset + the app's excluded-rows mode) -- this hook just memoizes the call.
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(
-    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints),
-    [canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints?.x, tickHints?.y, tickHints?.y2], // eslint-disable-line react-hooks/exhaustive-deps -- the values, not the published object
+    () => computeCanonicalReadiness(fullFit.doc, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints),
+    [fullFit.doc, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace, defaultLineWidth, tickHints?.x, tickHints?.y, tickHints?.y2], // eslint-disable-line react-hooks/exhaustive-deps -- the values, not the published object
   );
   const canonicalData = canonicalReadiness?.state === "missing-source" ? null : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {
@@ -392,6 +394,7 @@ export function useFigureBuilder() {
 
   return {
     active,
+    savedFitNote: fullFit.note, // the preview draws without a saved display fit until its full curve loads
     fmt: canonicalDocument?.output.format ?? fmt,
     setFmt: canonical ? (next: string) => setCanonicalOutput({ format: next }) : setFmt,
     style: canonicalDocument?.output.stylePreset ?? style,

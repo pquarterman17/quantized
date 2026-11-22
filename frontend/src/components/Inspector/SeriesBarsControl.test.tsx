@@ -12,6 +12,6 @@ describe("SeriesBarsControl", () => {
     rerender(<SeriesBarsControl channel={2} style={{ bars: true }} setSeriesStyle={set} />);
     expect((screen.getByLabelText("Bars") as HTMLSelectElement).value).toBe("vertical");
     fireEvent.change(screen.getByLabelText("Bars"), { target: { value: "none" } });
-    expect(set).toHaveBeenLastCalledWith(2, { bars: undefined });
+    expect(set).toHaveBeenLastCalledWith(2, { bars: undefined, float: undefined });
   });
 });

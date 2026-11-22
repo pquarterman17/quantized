@@ -96,6 +96,12 @@ export interface SeriesStyle {
    *  that total, a `fill: "under"` area is drawn between it and the new total.
    *  `lib/uplotStack.ts` on the canvas, `calc/figure_bars.stacked_series` on export. */
   stack?: boolean;
+  /** Floating column (Origin's FloatCol): `"high"` on a bar series that directly
+   *  follows a `"low"` one on the same Y axis draws each bar from the low
+   *  series' value to its own (instead of from zero); the low series draws
+   *  nothing itself. An unpaired flag does nothing. `lib/uplotStack.floatLowColumn`
+   *  on the canvas, `calc/figure_bars.floating_series` on export. */
+  float?: "low" | "high";
   /** A COMPLETE style (a Graph Builder mark, `plotspec.markSeriesStyle`): the
    *  Preferences default trace fills nothing, so an unset `width` draws a line,
    *  an unset `marker` none and an unset `step` a straight line. Absent (every

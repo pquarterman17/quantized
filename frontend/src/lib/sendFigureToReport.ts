@@ -34,6 +34,7 @@ import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { PRESET_ORDER, presetLabels } from "./figurePresets";
+import { withFullSavedFit } from "./figureSavedFit";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
@@ -436,7 +437,10 @@ export async function runSendEditableFigureToReport(s: StoreGet, figureId: strin
       }
 
       const stem = stemFromName(current.name);
-      const doc = current;
+      // A saved display curve (a large Curve Fit) is swapped for its full curve first, as on a
+      // Figure Page panel; unreadable or failed, the document is unchanged and the builder leaves
+      // the fit out with its notice (lib/figureSavedFit.ts). The `after` check below covers the await.
+      const doc = await withFullSavedFit(current, dataset, s().staleFits);
       let picked;
       try {
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".

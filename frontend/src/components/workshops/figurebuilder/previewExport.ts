@@ -13,6 +13,7 @@ import { buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
+import { withFullSavedFit } from "../../../lib/figureSavedFit";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { LiveTickSteps } from "../../../lib/liveTickSteps";
 import { withLiveTickHints } from "../../../lib/liveTickStepsSpec";
@@ -77,13 +78,17 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         let dataset = canonicalDataset;
         if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
         signal.throwIfAborted();
+        // A saved display fit is swapped for its full curve first (lib/figureSavedFit); failed, the
+        // document is unchanged and the builder leaves the fit out with its notice (fail closed).
+        const document = await withFullSavedFit(canonicalDocument, dataset, useApp.getState().staleFits);
+        signal.throwIfAborted();
         const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
         // An overlay the figure cannot carry is reported, never dropped
         // silently (lib/overlayDropNotice — the quick dialog's own notice).
         const drops = overlayDropTracker();
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         const picked = await chooseExcludedRows(
-          (greyExcluded) => drops.build((onDroppedOverlays) => withLiveTickHints(buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
+          (greyExcluded) => drops.build((onDroppedOverlays) => withLiveTickHints(buildFigureSpecFromDocument(document, dataset, stem, {
             autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
             defaultLineWidth: useApp.getState().defaultLineWidth, staleFits: useApp.getState().staleFits, onDroppedOverlays,
           }), deps.tickHints)),
