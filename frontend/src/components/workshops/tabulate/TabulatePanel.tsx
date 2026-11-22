@@ -15,6 +15,7 @@ import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Switch } from "../../primitives/Switch";
 import { Button } from "../../primitives";
+import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import TabulateStatPicker from "./TabulateStatPicker";
 import TabulateTable from "./TabulateTable";
 import { MAX_GROUP_COLS, useTabulate } from "./useTabulate";
@@ -42,6 +43,7 @@ function TabulatePanelBody() {
         </div>
       ) : (
         <>
+          <ToolInputSummary noX load={false} columns={[...t.groupCols, ...t.valueCols]} />
           <div className="qzk-zone-wells">
             <ZoneWell
               title="Group by"

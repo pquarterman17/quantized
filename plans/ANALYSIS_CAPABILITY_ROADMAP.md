@@ -856,15 +856,45 @@ dataset precedence, roles, selected rows and X range (fail-before tests in
 - [x] Summary omits X for tools with no X; Signal Processing "Use
   excluded/filtered rows"; Baseline, Optical gap, magtools summary; Optical gap
   / Surface fit / Ellipse fit loads on the resolver.
+**Slice 4 (lane SEL4).**
+- Surface fit, Ellipse fit, Peak wizard, Tabulate, Pie and Ternary show the
+  shared summary (`analysisselection/ToolInputSummary`, one component over
+  `useAnalysisInputs` with `ROW_POLICY.analysisView`). Each already worked on
+  the analysis view; the line states it, no default or row policy changed.
+  Characterization first: `inputContract.remaining.characterization.test.tsx`;
+  summary text: `remainingInputSummary.test.tsx`. Tabulate, Pie, Ternary and
+  Peak wizard pass `load: false`, so the line does not start a lazy full load
+  the tool never asked for (a lazy preview shows the refusal reason, as
+  elsewhere). Tabulate / Pie / Ternary have no X and omit it; their "Y:" lists
+  the grouped/summarised, label/ring or composition columns.
+- Bug (linked Signal output not Out of date after only an exclusion/filter
+  change): the in-session recalc engine was already correct (`touchDataset` ->
+  recalc mode; pinned by `store/rowStateSignalRecalc.test.ts`: Manual marks
+  stale, Auto recalculates on the analysis view, None tracks nothing). The
+  hole was the DURABLE freshness stamp: `sourcesFingerprint` (save stamp and
+  load scan, `lib/analysisResultFreshness.ts`) hashed the source's raw `data`
+  only, so a source whose exclusions or filter changed since the stamp (merged
+  or hand-edited file, a change made in mode None) still read Current after
+  reopen. It now hashes the analysis view for an output whose recipe says
+  `inputRows: "analysis-view"`, in both the stamp and the load scan
+  (`lib/analysisResultFreshnessRows.test.ts`, fail-before verified). The view
+  hash carries a `v~` prefix so the stored value names its own kind: a project
+  saved before this is still judged on the raw data (no spurious Out of date)
+  until it is saved again. A full-worksheet recipe keeps the raw-data hash:
+  exclusions do not change its numbers, so the durable state does not go
+  stale. In-session it is still marked stale by the engine on an exclusion
+  change (the link is to the source's whole state; a recalculation is a no-op
+  on the numbers). That conservative marking is deliberate.
+
+- [x] Surface fit / Ellipse fit / Peak wizard / Tabulate / Pie / Ternary
+  summaries; linked analysis-view Signal output freshness across save/reopen.
 - [ ] Remaining: the Analysis Center "Review inputs" for the own-pick
   statistics tools; the magtools, Hysteresis, Baseline data paths still call
   `magXY` / `selectedFitData` / `baselineInput` rather than `resolved.data`
-  (their rows are the stated policy, verified by tests, but not one code path);
-  Surface fit / Ellipse fit / Peak wizard / Tabulate / Pie / Ternary summaries;
-  a linked Signal output is not marked Out of date when only the source's
-  exclusions change while its recipe uses the analysis view (it follows data
-  edits, as before); the Fit Y by X/Stats chooser queue paths still use
-  `resolveDataset` beside the hook's `ensureBookData`.
+  (their rows are the stated policy, verified by tests, but not one code path;
+  the same holds for the six tools above); the Fit Y by X/Stats chooser queue
+  paths still use `resolveDataset` beside the hook's `ensureBookData`; the
+  Peak wizard line does not mention its own fit range or gap-row drop.
 
 ## Workstream E — Statistical result workspace
 

@@ -7,6 +7,7 @@
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Select } from "../../primitives";
+import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import AuxFigureFrame from "./AuxFigureFrame";
 import { useAuxFigureStore } from "./auxFigureStore";
 import { useTernary } from "./useTernary";
@@ -31,7 +32,12 @@ export default function TernaryPanel() {
         </div>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 10 }}>
+          <ToolInputSummary
+            noX
+            load={false}
+            columns={[t.picks.a, t.picks.b, t.picks.c, ...(t.picks.colorBy === null ? [] : [t.picks.colorBy])]}
+          />
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             {CORNERS.map(([key, label]) => (
               <div key={key} style={{ flex: 1 }}>
                 <label className="qzk-field-lbl">{label}</label>
