@@ -106,6 +106,25 @@ describe("FFT thickness out-of-date state", () => {
     expect(result.current.result).toBeNull(); // fail-before: d1's result showed on d2
   });
 
+  it("forced race: rows changed while resolveDataset is pending leave the result stamped with the click's rows, so it lands out of date (fail-before: current)", async () => {
+    // The run key's live ref catches up in a passive effect and was read after the awaits,
+    // so a row change during them was stamped onto the old rows' answer. Forced here with
+    // a deferred resolveDataset that returns the rows the click was made on.
+    const clicked = useApp.getState().datasets[0];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    useApp.setState({ resolveDataset: async () => { await gate; return clicked; } });
+    const { result } = renderHook(() => useFftThickness());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.compute(); });
+    act(() => useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, excludedRows: [1] })) })));
+    await act(async () => { release(); await pending; });
+    expect(result.current.result).not.toBeNull();
+    expect(result.current.stale).toBe(true);
+    act(() => result.current.toLibrary());
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
   it("a lazy book is resolved before the run, so its arrival does not mark the fresh result", async () => {
     makePending({ id: "d1", name: "xrd.dat", data: scan });
     const { result } = await computed();
