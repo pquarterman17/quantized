@@ -9,9 +9,11 @@
 // round-trip, and a render superseded by a newer body (or an unmount) is
 // ABORTED, not just ignored, so a stale render never delays the fresh one.
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { postBlob } from "../../../lib/api/http";
+import { tokenOf } from "../../../lib/previewKey";
+import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 /** Screen-resolution preview; the export uses the preset's calibrated dpi. */
 export const PREVIEW_DPI = 110;
@@ -39,46 +41,29 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /** `body` must be referentially stable across renders (the workshops derive
- *  it with useMemo): the effect keys on its identity, so a fresh literal per
- *  render would abort and re-arm the render after every settle. */
+ *  it with useMemo): its identity (`tokenOf`) is the preview key, so a fresh
+ *  literal per render would abort and re-arm the render after every settle.
+ *  Rides the shared workbench shell: the previous image stays on screen
+ *  (`busy`) while the next one renders, and a superseded render is aborted. */
 export function useFigurePreview(path: string, body: object | null): FigurePreview {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
+  const shell = useWorkbenchPreview<string>({
+    key: body ? `${path}#${tokenOf(body)}` : "",
+    delayMs: DEBOUNCE_MS,
+    fallbackError: "preview failed",
+    run: async (signal) => {
+      if (!body) throw new Error("nothing to preview");
+      return blobToDataUrl(await postBlob(path, previewBody(body), signal));
+    },
+  });
+  const { discard } = shell;
+  // No body: forget the old image, so a later body never shows it.
   useEffect(() => {
-    if (!body) {
-      setPreview(null);
-      setError(null);
-      setBusy(false);
-      return;
-    }
-    let cancelled = false;
-    const controller = new AbortController();
-    setBusy(true);
-    const timer = setTimeout(() => {
-      postBlob(path, previewBody(body), controller.signal)
-        .then(blobToDataUrl)
-        .then(
-          (url) => {
-            if (cancelled) return;
-            setPreview(url);
-            setError(null);
-            setBusy(false);
-          },
-          (failure: unknown) => {
-            if (cancelled) return;
-            setError(failure instanceof Error ? failure.message : "preview failed");
-            setBusy(false);
-          },
-        );
-    }, DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [path, body]);
+    if (!body) discard();
+  }, [body, discard]);
 
-  return { preview, error, busy };
+  return {
+    preview: body ? (shell.latest?.value ?? null) : null,
+    error: shell.error || null,
+    busy: shell.loading,
+  };
 }
