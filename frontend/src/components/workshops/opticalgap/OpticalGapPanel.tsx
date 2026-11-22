@@ -16,6 +16,7 @@ import { fmtNum as fmt } from "../../../lib/format";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import SmallUPlot from "../SmallUPlot";
 import { pickOptions } from "../analysisextras/columnPicks";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import OpticalGapBatchSection from "./OpticalGapBatchSection";
 import OpticalGapByLevel from "./OpticalGapByLevel";
 import { taucPayload } from "./taucPlot";
@@ -54,7 +55,8 @@ function OpticalGapPanelBody() {
         <div className="qzk-helptext">Select a dataset with an energy or wavelength column and an absorption or transmittance column.</div>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <AnalysisInputSummary inputs={g.inputs} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
             <div>
               <label className="qzk-field-lbl">Spectrum X</label>
               <Select aria-label="X column" options={opts} value={String(g.xCol)} onChange={(e) => g.setXCol(Number(e.target.value))} />

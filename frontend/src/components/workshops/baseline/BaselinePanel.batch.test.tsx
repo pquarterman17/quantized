@@ -51,7 +51,8 @@ beforeEach(() => {
 describe("BaselinePanel batch apply (UX9-E)", () => {
   it("names the dataset in the header", () => {
     render(<BaselinePanel />);
-    expect(screen.getByText(/Raman_A\.txt: Intensity vs/)).toBeInTheDocument();
+    // The header is now the shared input line (lib/analysisInputs); same facts, new wording.
+    expect(screen.getByText(/^Input: Raman_A\.txt · X: .* · Y: Intensity \(cps\)/)).toBeInTheDocument();
   });
 
   it("Apply to 3 selected writes 3 grouped outputs as ONE undo entry, then offers Overlay", async () => {

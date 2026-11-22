@@ -13,6 +13,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import OverlayOutputsButton from "../OverlayOutputsButton";
 import { useApp } from "../../../store/useApp";
+import BaselineInputSummary from "./BaselineInputSummary";
 import BaselineBatchSection from "./BaselineBatchSection";
 import BaselineByLevel from "./BaselineByLevel";
 import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
@@ -100,9 +101,9 @@ function BaselinePanelBody() {
         onChange={(e) => setMethod(e.target.value as BaselineMethod)}
       />
 
-      <div className="qzk-hint" style={{ marginTop: 6 }}>
-        {binding ? `${active?.name}: ${binding.yLabel} vs ${binding.xLabel}` : "Select a plotted Y channel"}
-      </div>
+      {binding ? <BaselineInputSummary binding={binding} /> : (
+        <div className="qzk-hint" style={{ marginTop: 6 }}>Select a plotted Y channel</div>
+      )}
 
       <div
         style={{
