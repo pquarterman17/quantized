@@ -28,7 +28,6 @@ import {
   type FitParamRow,
 } from "../../../lib/fitParams";
 import { dyForFit, weightRequestFields } from "../../../lib/fitweights";
-import { weightColsOf } from "../../../lib/fitSource";
 import type { ByColumnOption } from "../useByPartition";
 import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -356,7 +355,7 @@ export function useCurveFit(): CurveFitState {
                 ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
               }
             : {}),
-        }, modelName, rows, source, finiteDy ? weightColsOf(weight) : undefined);
+        }, modelName, rows, source, finiteDy ? weight : undefined);
         // A fit request can outlive an edit/reimport. Never attach its result
         // or row tokens to the replacement worksheet object it did not fit.
         if (useApp.getState().datasets.find((dataset) => dataset.id === ds.id) !== ds) {

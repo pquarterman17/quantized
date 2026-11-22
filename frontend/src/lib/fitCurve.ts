@@ -26,9 +26,9 @@ import { restoreGapRows } from "./api/finitePairs";
 import { postJSON, type HttpError } from "./api/http";
 import type { FitCurveSource, FitOverlay } from "./fitTypes";
 import { withResiduals } from "./fitResiduals";
-import { postBySource, type FitSource, type WeightCols } from "./fitSource";
+import { postBySource, weightColsOf, type FitSource } from "./fitSource";
 import { expandToFull } from "./rowstate";
-import type { CalcResult } from "./types";
+import type { CalcResult, FitWeighting } from "./types";
 
 /** Fits with more points than this ask for a display curve. */
 export const FIT_DISPLAY_MIN_POINTS = 20_000;
@@ -101,17 +101,18 @@ export function fitRowsOf(keep: readonly number[], kept: readonly number[], n: n
 /** Run a fit with the transport for its size; restore the residuals (lean)
  *  and record a display curve's source. `rows`: `fitRowsOf`. With `source`
  *  (a /api/fitting/fit request), x/y go by dataset handle when the server
- *  holds the dataset (lib/fitSource; phase 3), and `weights` (the sigma /
- *  weight column the request's dy / weights came from) by channel. */
+ *  holds the dataset (lib/fitSource; phase 3), and the sigma / weight column
+ *  `weighting` resolved the request's dy / weights from by channel. */
 export async function displayFit<R extends { y: number[]; x: number[] }>(
   fit: (req: R & ReturnType<typeof fitTransport>) => Promise<CalcResult>,
   req: R,
   model: string,
   rows: number[],
   source?: FitSource,
-  weights?: WeightCols,
+  weighting?: FitWeighting,
 ): Promise<CalcResult> {
   const body = { ...req, ...fitTransport(req.x.length) };
+  const weights = weighting && weightColsOf(weighting);
   const raw = await postBySource("/api/fitting/fit", body, source, rows, () => fit(body), { weights });
   return withCurveSource(withResiduals(raw, req.y), model, req.x, rows);
 }

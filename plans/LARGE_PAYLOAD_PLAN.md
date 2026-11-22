@@ -449,7 +449,7 @@ The weights alone were the remaining ~19.5 MB of a by-handle weighted fit
 | `/baseline/shirley` | not measured at 1M (the synthetic peak has no step, so Shirley refuses it); identical-by-id covered at 30k rows |
 
 Tests: `tests/test_api_handle_inputs_more.py` (per client rule x route,
-byte-identical to the array request; weights by channel for dy/|negative|/
+byte-identical to the array request, and in the malformed-dataset sweep; weights by channel for dy/|negative|/
 weights x 4 rules x /fit and /equation/fit; sigop incl. -0/Inf; lean x5; 409,
 422 and size guards) -- 108 of its 109 failed with the route changes reverted
 (the 1 that passed is the size arithmetic). Frontend: `baselineCall.bySource.test.ts`,
