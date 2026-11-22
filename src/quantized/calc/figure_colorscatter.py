@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_styles import FigureStyle
 from quantized.heavy_import import heavy_imports
@@ -168,6 +169,7 @@ def draw_color_scatter(
     if spec.get("color_stops") and spec.get("color_lim"):
         out = _draw_gradient(fig, ax, xv[:n], yv[:n], z[:n], label, spec, size)
         if diam is not None:
+            tag_bubbles(out, diam)
             add_size_legend(ax, spec, "0.35", "o")
         return out
     sc = ax.scatter(
@@ -175,5 +177,6 @@ def draw_color_scatter(
     )
     fig.colorbar(sc, ax=ax)
     if diam is not None:
+        tag_bubbles(sc, diam)
         add_size_legend(ax, spec, "0.35", "o")
     return _hollow(sc, spec)

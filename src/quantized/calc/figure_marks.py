@@ -29,6 +29,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.figure_bars import draw_series
+from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
 from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
@@ -286,10 +287,11 @@ def _scatter_sized(
     keep = np.isfinite(xv) & np.isfinite(yv) & np.isfinite(sizes)
     marker = _marker(spec)
     hollow = spec.get("marker_fill") == "hollow" or marker in ("+", "x")
-    ax.scatter(
+    sc = ax.scatter(
         xv[keep], yv[keep], s=sizes[keep] ** 2, marker=marker, zorder=3,
         **({"facecolors": "none", "edgecolors": color} if hollow else {"color": color}),
     )
+    tag_bubbles(sc, sizes[keep])  # the autoscale leaves room for the biggest
 
 
 DropLine = tuple[NDArray[np.float64], NDArray[np.float64], str, Any]

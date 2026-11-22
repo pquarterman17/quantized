@@ -1,6 +1,7 @@
 import { exportFigureBatch } from "./api/figureBatch";
 import type { FigureSpec } from "./api/figures";
 import type { FigureDocument } from "./figureDocument";
+import { withFullSavedFit } from "./figureSavedFit";
 import { buildFigureSpecFromDocument, type ExcludedRowsGhoster } from "./figureSpec";
 import type { DefaultTrace } from "./seriesStyleTypes";
 import type { Dataset } from "./types";
@@ -84,6 +85,10 @@ export async function downloadBatchFigures(
     throw new Error(`A single archive can contain at most ${MAX_BATCH_FIGURE_EXPORT} figures.`);
   }
   const fullDatasets = await fullBatchDatasets(figures, datasets, resolveDataset, signal);
-  const specs = batchFigureSpecs(figures, fullDatasets, options);
+  // A saved display curve (a large fit) is fetched in full first; one that cannot be is left out with its notice.
+  const byId = new Map(fullDatasets.map((d) => [d.id, d]));
+  const upgraded = await Promise.all(figures.map((f) => withFullSavedFit(f, f.bindings.datasetId === null ? null : byId.get(f.bindings.datasetId), options.staleFits)));
+  signal?.throwIfAborted();
+  const specs = batchFigureSpecs(upgraded, fullDatasets, options);
   await exportFigureBatch(specs, options.archiveName.trim() || "figures", signal, options.multipage === true);
 }
