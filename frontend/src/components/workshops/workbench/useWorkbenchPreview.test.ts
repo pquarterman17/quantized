@@ -3,6 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Refusal } from "./refusal";
 import { useWorkbenchPreview, type WorkbenchPreviewOptions } from "./useWorkbenchPreview";
 
 interface Run { key: string; signal: AbortSignal; resolve: (v: string) => void; reject: (e: unknown) => void }
@@ -216,5 +217,30 @@ describe("useWorkbenchPreview — manual mode (an Estimate button)", () => {
     await act(async () => { await h.result.current.refresh(); done = true; });
     expect(done).toBe(true);
     expect(runs).toHaveLength(0);
+  });
+});
+
+describe("useWorkbenchPreview — typed refusal marker (lane WB6)", () => {
+  it("a Refusal is flagged; an Error with the SAME text is not (the old text comparison conflated them)", async () => {
+    const h = setup({ key: "a", auto: false });
+    await act(async () => { void h.result.current.refresh(); });
+    await act(async () => { runs[0].reject(new Refusal("nothing to fit")); await Promise.resolve(); });
+    expect(h.result.current.error).toBe("nothing to fit");
+    expect(h.result.current.refusal).toBe(true);
+
+    await act(async () => { void h.result.current.refresh(); });
+    await act(async () => { runs[1].reject(new Error("nothing to fit")); await Promise.resolve(); });
+    expect(h.result.current.error).toBe("nothing to fit");
+    expect(h.result.current.refusal).toBe(false);
+  });
+
+  it("no error means no refusal, and the flag belongs to its key", async () => {
+    const h = setup({ key: "a", auto: false });
+    expect(h.result.current.refusal).toBe(false);
+    await act(async () => { void h.result.current.refresh(); });
+    await act(async () => { runs[0].reject(new Refusal("no")); await Promise.resolve(); });
+    h.rerender({ key: "b", auto: false });
+    expect(h.result.current.error).toBe("");
+    expect(h.result.current.refusal).toBe(false);
   });
 });

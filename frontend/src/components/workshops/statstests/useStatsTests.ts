@@ -150,6 +150,7 @@ export function useStatsTests(): StatsTestsState {
     setOutput(null);
     setError(null);
     consumeRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `stamp` is a fresh object each render
   }, [consumeRequest, requested]);
 
   async function run(): Promise<void> {

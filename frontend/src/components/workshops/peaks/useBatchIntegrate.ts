@@ -31,7 +31,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { afterCommit } from "../workbench/afterCommit";
-import { Refusal } from "../workbench/refusal";
+import { Refusal, type Failure, failureOf } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { commitBatchTable } from "../../../store/commitBatchTable";
 import {
@@ -84,8 +84,9 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   const [baseline, setBaseline] = useState<"linear" | "none">("linear");
   const [align, setAlign] = useState(false);
   const [phase, setPhase] = useState<BatchIntegratePhase>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [refusalText, setRefusalText] = useState<string | null>(null);
+  // The failure carries its kind (a typed `Refusal`), not a text to compare.
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const error = failure?.message ?? null;
   const [run, setRun] = useState<BatchRun | null>(null);
   const [xField, setXField] = useState("");
   const seq = useRef(0);
@@ -122,8 +123,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     const live = () => seq.current === id;
     const ws = windows.map((w) => ({ ...w }));
     setPhase("running");
-    setError(null);
-    setRefusalText(null);
+    setFailure(null);
     const outcomes: SourceOutcome[] = [];
     const series: { name: string; x: number[]; y: number[] }[] = [];
     const metaOf = new Map<string, Record<string, unknown>>();
@@ -157,8 +157,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
       if (series.length > 0) res = await integratePeaksBatch(batchBody(series, ws, { baseline, align }));
     } catch (e) {
       if (!live()) return;
-      if (e instanceof Refusal) setRefusalText(e.message);
-      setError(e instanceof Error ? e.message : "the batch failed");
+      setFailure(failureOf(e, "the batch failed"));
       setPhase("failed");
       return;
     }
@@ -203,7 +202,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     togglePicked: (dsId: string) => setPicked((p) => (p.includes(dsId) ? p.filter((x) => x !== dsId) : [...p, dsId])),
     windows, setWindows, seedWindows: windowsFromPeaks(seedPeaks), roi,
     baseline, setBaseline, align, setAlign,
-    channels, block, busy, phase, error, refusal: error !== null && error === refusalText, stale,
+    channels, block, busy, phase, error, refusal: failure?.refusal === true, stale,
     rows: run?.rows ?? null, fields, xField, setXField,
     start, exportCsv, addTrend,
   };

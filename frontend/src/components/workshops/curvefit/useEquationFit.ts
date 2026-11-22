@@ -172,7 +172,6 @@ export function useEquationFit(
   const [rows, setRows] = useState<EquationParamRow[]>(initial ? rowsFromModel(initial) : []);
   // Save errors and a fit refusal; a failed fit request is the preview's error.
   const [error, setError] = useState<string | null>(null);
-  const [refusalText, setRefusalText] = useState<string | null>(null);
   const ownOverlay = useRef<FitOverlay | null>(null);
   const [paramNames, setParamNames] = useState<string[]>(initial ? [...initial.params] : []);
   const [modelName, setModelName] = useState(initial?.name ?? "");
@@ -270,13 +269,7 @@ export function useEquationFit(
     run: async (signal) => {
       if (!active) return null;
       setError(null);
-      setRefusalText(null);
-      try {
-        return await runFit(signal);
-      } catch (e) {
-        if (e instanceof Refusal) setRefusalText(e.message);
-        throw e;
-      }
+      return await runFit(signal);
     },
   });
 
@@ -367,7 +360,6 @@ export function useEquationFit(
   function clear(): void {
     fitRun.discard();
     setError(null);
-    setRefusalText(null);
     setFitOverlay(null);
   }
 
@@ -442,7 +434,8 @@ export function useEquationFit(
     runProblem,
     busy: fitRun.running,
     error: runError,
-    refusal: runError !== null && runError === refusalText,
+    // A save error is never a refusal; a fit failure is one only when thrown as a Refusal.
+    refusal: error === null && runError !== null && fitRun.refusal,
     stale: shown !== null && fitRun.stale,
     result: shown?.result ?? null,
     fitHeld: shown?.held ?? [],

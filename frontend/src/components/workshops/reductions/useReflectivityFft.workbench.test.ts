@@ -46,7 +46,7 @@ describe("Reflectivity FFT out-of-date state", () => {
 
   it("a changed setting marks it and withholds → Library; changing it back restores it", async () => {
     const { result } = await computed();
-    act(() => result.current.setPreprocess("none"));
+    act(() => result.current.setPreprocess("R"));
     expect(result.current.result).not.toBeNull();
     expect(result.current.stale).toBe(true);
     act(() => result.current.toLibrary());

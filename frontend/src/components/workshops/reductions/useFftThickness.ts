@@ -95,6 +95,7 @@ export function useFftThickness(): FftThicknessState {
     setComputed(null);
     setError(null);
     setCol(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset per dataset, not per render of the stamp
   }, [active?.id]);
 
   async function compute(): Promise<void> {

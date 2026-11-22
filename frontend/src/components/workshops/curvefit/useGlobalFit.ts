@@ -46,7 +46,7 @@ import { trackJob } from "../../../store/pendingOpActions";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { afterCommit } from "../workbench/afterCommit";
-import { Refusal } from "../workbench/refusal";
+import { Refusal, type Failure, failureOf } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
 import {
   channelMembers,
@@ -122,8 +122,9 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [progressFraction, setProgressFraction] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [refusalText, setRefusalText] = useState<string | null>(null);
+  // The failure carries its kind (a typed `Refusal`), not a text to compare.
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const error = failure?.message ?? null;
   const [result, setResult] = useState<GlobalFitRun | null>(null);
   const [comparison, setComparison] = useState<DatasetCompareResult | null>(null);
   const [shown, setShown] = useState<number | null>(null);
@@ -202,12 +203,8 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
 
   async function run(mode: "fit" | "compare" = "fit"): Promise<void> {
     if (!model || busy) return;
-    setError(null);
-    setRefusalText(null);
-    const refuse = (message: string) => {
-      setError(message);
-      setRefusalText(message);
-    };
+    setFailure(null);
+    const refuse = (message: string) => setFailure({ message, refusal: true });
     const members = candidates.filter((m) => pickedKeys.includes(memberKey(m)));
     // Freeze the pick: "Show" activates a dataset, which collapses the Library
     // selection a default pick would otherwise follow.
@@ -277,8 +274,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       setResult({ fit, members, overlays });
     } catch (e) {
       if (mode === "compare") setComparison(null);
-      if (e instanceof Refusal) setRefusalText(e.message);
-      if (!(e instanceof JobCancelledError)) setError(e instanceof Error ? e.message : "global fit failed");
+      if (!(e instanceof JobCancelledError)) setFailure(failureOf(e, "global fit failed"));
     } finally {
       op.end();
       jobRef.current = null;
@@ -326,7 +322,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
       });
       addReportWithProvenance(title, report, activeId);
     } catch (e) {
-      setError(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`);
+      setFailure({ message: `could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, refusal: false });
     } finally {
       setReporting(false);
     }
@@ -356,7 +352,7 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     progress,
     progressFraction,
     error,
-    refusal: error !== null && error === refusalText,
+    refusal: failure?.refusal === true,
     run,
     comparison,
     cancel,

@@ -13,7 +13,7 @@
 // differs is out of date (`stale`), and an answer for inputs that changed while
 // it was in flight is dropped. Validation failures are refusals.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { odrFit, type OdrResult } from "../../../lib/api/fitStats";
@@ -60,7 +60,6 @@ export function useOdrFit(): OdrFitState {
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
-  const [refusalText, setRefusalText] = useState<string | null>(null);
   const ownOverlay = useRef<FitOverlay | null>(null);
   const key = active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, errKeys]) : "";
 
@@ -71,33 +70,27 @@ export function useOdrFit(): OdrFitState {
     fallbackError: "ODR fit failed",
     run: async (signal) => {
       if (!active) return null;
-      setRefusalText(null);
-      try {
-        const ds = await resolveDataset(active.id);
-        const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
-        const xCh = xErrorChannel(ds);
-        const refused = ds && !d ? fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) : null;
-        if (refused) throw new Refusal(refused);
-        if (!ds || !d || xCh == null) throw new Refusal("no X-error column is designated for this dataset");
-        const pairs = dropGapRows(d.x, d.y);
-        const xErr = sigmas(ds, xCh, pairs.keep);
-        if (!xErr) throw new Refusal("the X-error column has non-positive or invalid values");
-        const yCh = errKeys[d.yKey];
-        const yErr = yCh != null ? sigmas(ds, yCh, pairs.keep) : null;
-        const r = await odrFit({ x: pairs.x, y: pairs.y, x_error: xErr, ...(yErr ? { y_error: yErr } : {}) }, signal);
-        // The inputs changed (or the panel closed) while the request ran: its answer is not theirs.
-        if (signal.aborted) return null;
-        const n = ds.data.time.length;
-        const kept = activeRowIndices(n, droppedRows(ds));
-        const aligned = restoreGapRows(pairs.x.map((x) => r.slope * x + r.intercept), pairs);
-        const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true };
-        ownOverlay.current = overlay;
-        setFitOverlay(overlay);
-        return { result: r, usedYErr: yErr != null };
-      } catch (e) {
-        if (e instanceof Refusal) setRefusalText(e.message);
-        throw e;
-      }
+      const ds = await resolveDataset(active.id);
+      const d = ds ? selectedFitData(ds, xKey, yKeys, seriesOrder) : null;
+      const xCh = xErrorChannel(ds);
+      const refused = ds && !d ? fitSelectionRefusal(ds, xKey, yKeys, seriesOrder) : null;
+      if (refused) throw new Refusal(refused);
+      if (!ds || !d || xCh == null) throw new Refusal("no X-error column is designated for this dataset");
+      const pairs = dropGapRows(d.x, d.y);
+      const xErr = sigmas(ds, xCh, pairs.keep);
+      if (!xErr) throw new Refusal("the X-error column has non-positive or invalid values");
+      const yCh = errKeys[d.yKey];
+      const yErr = yCh != null ? sigmas(ds, yCh, pairs.keep) : null;
+      const r = await odrFit({ x: pairs.x, y: pairs.y, x_error: xErr, ...(yErr ? { y_error: yErr } : {}) }, signal);
+      // The inputs changed (or the panel closed) while the request ran: its answer is not theirs.
+      if (signal.aborted) return null;
+      const n = ds.data.time.length;
+      const kept = activeRowIndices(n, droppedRows(ds));
+      const aligned = restoreGapRows(pairs.x.map((x) => r.slope * x + r.intercept), pairs);
+      const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true };
+      ownOverlay.current = overlay;
+      setFitOverlay(overlay);
+      return { result: r, usedYErr: yErr != null };
     },
   });
 
@@ -112,7 +105,7 @@ export function useOdrFit(): OdrFitState {
   return {
     busy: preview.running,
     error,
-    refusal: error !== null && error === refusalText,
+    refusal: error !== null && preview.refusal,
     result: latest?.result ?? null,
     stale: latest !== null && preview.stale,
     usedYErr: latest?.usedYErr ?? false,
