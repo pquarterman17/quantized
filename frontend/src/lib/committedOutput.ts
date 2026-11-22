@@ -12,7 +12,7 @@
 
 import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from "./analysisResult";
 import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
-import { COMMIT_KEY_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
+import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
 import type { Dataset } from "./types";
 
@@ -43,8 +43,10 @@ export function committedOutputKey(
 }
 
 /** The id of the CURRENT committed result for `key`: its output worksheet still
- *  exists and is not marked stale. A result whose output was deleted, or that
- *  went stale, no longer blocks a new commit. */
+ *  exists and is not marked stale (in the session's `staleDatasets`, or on the
+ *  envelope: an Undo of a replace restores a stale output's envelope marked).
+ *  A result whose output was deleted, or that went stale, no longer blocks a
+ *  new commit. */
 export function findCommittedResultId(
   results: readonly AnalysisResult[],
   datasets: readonly Pick<Dataset, "id">[],
@@ -53,7 +55,7 @@ export function findCommittedResultId(
 ): string | null {
   if (!key) return null;
   for (const result of results) {
-    if (!isCommittedOutputResult(result) || result.parameters?.[COMMIT_KEY_PARAM] !== key) continue;
+    if (!isCommittedOutputResult(result) || result.parameters?.[COMMIT_KEY_PARAM] !== key || result.stale) continue;
     const output = result.outputs[0]!.datasetId;
     if (datasets.some((dataset) => dataset.id === output) && !staleDatasets.includes(output)) return result.id;
   }
@@ -69,6 +71,8 @@ export function committedOutputResult(args: {
   output: Dataset;
   key: string;
   settings: CommitSettings;
+  /** What "Open in <tool>" needs beyond the keyed settings (not keyed). */
+  reopen?: CommitSettings;
   createdAt?: string;
 }): AnalysisResult {
   const { id, producer, source, output, key, settings } = args;
@@ -80,7 +84,10 @@ export function committedOutputResult(args: {
     producer,
     sources: [source, ...extras].map((s) => ({ datasetId: s.id, role: "input" as const })),
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
-    parameters: { [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings) },
+    parameters: {
+      [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings),
+      ...(args.reopen ? { [REOPEN_PARAM]: toResultValue(args.reopen) } : {}),
+    },
     tableRefs: [{ datasetId: output.id, label: output.name }],
     plotBindings: [{ datasetId: output.id, channels: output.data.labels.map((_, index) => index) }],
     warnings: [],

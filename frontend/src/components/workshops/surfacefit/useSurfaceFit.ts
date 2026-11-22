@@ -20,6 +20,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { seedNumber, seedStrings, useReopenSeed } from "../resultcommit/useReopenSession";
 import { surfaceResultText } from "./surfaceFitText";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, mapDefaults, parseField, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
@@ -48,6 +49,8 @@ export interface SurfaceFitState {
   addFittedSurface: () => void;
   /** Why "Add fitted surface" is disabled (already added, or nothing to add). */
   addDisabledReason: string | null;
+  /** The output a commit replaces (opened from its result, Replace chosen), else null. */
+  replacing: string | null;
   /** The finite rows the fit ran on (what the residual map and the output draw from). */
   points: { x: number[]; y: number[]; z: number[] } | null;
   guessing: boolean;
@@ -73,12 +76,23 @@ export function useSurfaceFit(): SurfaceFitState {
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
 
-  const [picks, setPicks] = useState<[number, number, number]>(() => defaults(columns, active));
+  // "Open in Surface fit" (lane RO): start from the recorded columns, model and
+  // start values; the reset/re-guess effects below leave them alone until the
+  // user changes one of them.
+  const seed = useReopenSeed(SURFACE_FIT_PRODUCER.id, active?.id);
+  const seeded = seed && {
+    picks: [seedNumber(seed.settings.xCol, -1), seedNumber(seed.settings.yCol, 0), seedNumber(seed.settings.zCol, 1)] as [number, number, number],
+    model: typeof seed.settings.model === "string" ? seed.settings.model : "Plane",
+  };
+  // Held only when start values were recorded (else they are re-guessed as usual).
+  const seedRef = useRef(seeded && Array.isArray(seed?.extra?.p0) ? seeded : null);
+  const [picks, setPicks] = useState<[number, number, number]>(() => seeded?.picks ?? defaults(columns, active));
   const [models, setModels] = useState<SurfaceModelInfo[]>([]);
-  const [modelName, setModelName] = useState("Plane");
-  const [p0, setP0] = useState<string[]>([]);
-  const [lower, setLower] = useState<string[]>([]);
-  const [upper, setUpper] = useState<string[]>([]);
+  const [modelName, setModelName] = useState(() => seeded?.model ?? "Plane");
+  const [p0, setP0] = useState<string[]>(() => seedStrings(seed?.extra?.p0));
+  const [lower, setLower] = useState<string[]>(() => seedStrings(seed?.extra?.lower));
+  const [upper, setUpper] = useState<string[]>(() => seedStrings(seed?.extra?.upper));
+  const resetMounted = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState<{ key: string; res: SurfaceFitResult; x: number[]; y: number[]; z: number[] } | null>(null);
@@ -108,6 +122,9 @@ export function useSurfaceFit(): SurfaceFitState {
   // A new dataset resets the picks; a changed column list keeps them on their
   // columns (or resets one whose column is gone, with a toast).
   useEffect(() => {
+    const first = !resetMounted.current;
+    resetMounted.current = true;
+    if (first && seed) return; // a reopen's recorded picks, not the defaults
     setPicks(defaults(columns, active));
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,6 +160,9 @@ export function useSurfaceFit(): SurfaceFitState {
   // Starting values are re-guessed when the model, the dataset or a picked column
   // changes (a different quantity), never when rows are merely excluded or edited.
   useEffect(() => {
+    const held = seedRef.current;
+    if (held && held.picks.join(":") === [xCol, yCol, zCol].join(":") && (!model || held.model === model.name)) return;
+    seedRef.current = null;
     if (model) {
       setP0(model.param_names.map(() => ""));
       setLower(model.param_names.map(() => ""));
@@ -197,6 +217,7 @@ export function useSurfaceFit(): SurfaceFitState {
     sourceId: active.id,
     computedOn: fingerprint,
     settings: { xCol, yCol, zCol, model: result.model_name, params: result.params, errors: result.errors, n: result.n_points },
+    reopenExtra: { p0, lower, upper },
     status: `added the ${result.model_name} fitted surface (${result.n_points} points)`,
     output: (source) => {
       const d = source.data;
@@ -264,6 +285,7 @@ export function useSurfaceFit(): SurfaceFitState {
     resetGuess,
     addFittedSurface,
     addDisabledReason: commit.disabledReason,
+    replacing: commit.replacing,
     points: live ? { x: live.x, y: live.y, z: live.z } : null,
     guessing,
     copyResults,

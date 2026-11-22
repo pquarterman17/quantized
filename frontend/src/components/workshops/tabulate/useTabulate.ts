@@ -29,6 +29,7 @@ import { toast } from "../../../store/toasts";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { seedNumbers, useReopenSeed } from "../resultcommit/useReopenSession";
 import { tabulateOutput } from "./tabulateExport";
 
 const TABULATE_PRODUCER = { id: "tabulate", label: "Tabulate", version: 1 } as const;
@@ -85,6 +86,8 @@ export interface TabulateState {
   exportDataset: () => void;
   /** Why "Export → dataset" is unavailable (already exported); null when enabled. */
   exportDisabledReason: string | null;
+  /** The output a commit replaces (opened from its result, Replace chosen), else null. */
+  replacing: string | null;
   toTSV: () => string;
   /** Resolve a pending Origin preview before returning clipboard text. */
   copyTSV: () => Promise<{ text: string; rows: number } | null>;
@@ -150,12 +153,17 @@ export function useTabulate(): TabulateState {
 
   // Defaults mirror v1: group by the first categorical channel (else the
   // first channel); value = the first continuous channel that isn't grouped.
-  const [groupCols, setGroupCols] = useState<number[]>(() => [firstCategorical(active) ?? 0]);
-  const [valueCols, setValueCols] = useState<number[]>(() => [
+  // "Open in Tabulate" (lane RO) starts from the recorded layout instead.
+  const seed = useReopenSeed(TABULATE_PRODUCER.id, active?.id)?.settings;
+  const [groupCols, setGroupCols] = useState<number[]>(() => seedNumbers(seed?.groupCols, [firstCategorical(active) ?? 0]));
+  const [valueCols, setValueCols] = useState<number[]>(() => seedNumbers(seed?.valueCols, [
     firstContinuous(active, [firstCategorical(active) ?? 0]),
-  ]);
-  const [statKeys, setStatKeys] = useState<StatKey[]>(() => [...DEFAULT_STAT_KEYS]);
-  const [grandTotal, setGrandTotal] = useState(false);
+  ]));
+  const [statKeys, setStatKeys] = useState<StatKey[]>(() => {
+    const recorded = Array.isArray(seed?.statKeys) ? seed.statKeys : null;
+    return recorded ? STAT_KEYS.filter((key) => recorded.includes(key)) : [...DEFAULT_STAT_KEYS];
+  });
+  const [grandTotal, setGrandTotal] = useState(() => seed?.grandTotal === true);
   const [queuedAction, setQueuedAction] = useState<{ kind: "export" | "report"; key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
   const copySeq = useRef(0);
@@ -459,6 +467,7 @@ export function useTabulate(): TabulateState {
     groupIsCategorical,
     exportDataset,
     exportDisabledReason: rows.length && !active?.pending ? commit.disabledReason : null,
+    replacing: commit.replacing,
     toTSV,
     copyTSV,
     reportBusy,

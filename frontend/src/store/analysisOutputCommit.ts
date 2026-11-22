@@ -20,6 +20,7 @@ import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputKey, committedOutputResult, findCommittedResultId, type CommitSettings } from "../lib/committedOutput";
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
+import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
 import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
@@ -45,10 +46,17 @@ export interface AnalysisOutputCommit {
   intoFocused?: boolean;
   /** Status line on success. */
   status?: string;
+  /** Unkeyed tool state "Open in <tool>" restores beside the settings (start
+   *  values a fit began from, say): recorded, never part of the key. */
+  reopenExtra?: CommitSettings;
+  /** Lane RO: the committed result (opened in its tool) whose output this
+   *  commit REPLACES in place, in one undo step (store/analysisOutputReplace.ts),
+   *  instead of adding a new output. */
+  replace?: string;
 }
 
 export type AnalysisCommitOutcome =
-  | { kind: "created" | "existing"; resultId: string; outputId: string }
+  | { kind: "created" | "existing" | "replaced"; resultId: string; outputId: string }
   | { kind: "refused"; reason: string };
 
 export function commitKeyFor(request: Pick<AnalysisOutputCommit, "producer" | "sourceId" | "computedOn" | "settings" | "alsoFrom">): string {
@@ -90,6 +98,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     get().setStatus(`this ${request.producer.label} output is already added as “${name}”; nothing was duplicated`);
     return { kind: "existing", resultId: existingId, outputId };
   }
+  if (request.replace) return replaceCommittedOutput(request, request.replace, source, extraSources, key, refuse);
   const built = request.output(source);
   const output: Dataset = {
     id: nextDatasetId(), name: built.name, data: built.data,
@@ -97,6 +106,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   };
   const result = committedOutputResult({
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
+    reopen: reopenRecord(request, output),
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     request.beforeWrite?.();

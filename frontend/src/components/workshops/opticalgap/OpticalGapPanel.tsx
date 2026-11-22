@@ -7,6 +7,8 @@
 import { useMemo } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
@@ -37,7 +39,7 @@ const SCALES = [
   { value: "percent", label: "percent (0 to 100)" },
 ];
 
-export default function OpticalGapPanel() {
+function OpticalGapPanelBody() {
   const hide = useAnalysisExtras((s) => s.hide);
   const g = useOpticalGap();
   const opts = pickOptions(g.columns);
@@ -47,6 +49,7 @@ export default function OpticalGapPanel() {
 
   return (
     <ToolWindow id="optical-gap" title="Optical gap (Tauc plot)" width={460} onClose={() => hide("optical-gap")}>
+      <ReopenBanner tool="optical-gap" />
       {!g.hasData ? (
         <div className="qzk-helptext">Select a dataset with an energy or wavelength column and an absorption or transmittance column.</div>
       ) : (
@@ -161,7 +164,7 @@ export default function OpticalGapPanel() {
               </div>
               <div style={{ marginTop: 10 }}>
                 <Button size="sm" disabled={!!g.addDisabledReason} title={g.addDisabledReason ?? "Add the photon energy, α and the Tauc quantity as a new dataset"} onClick={g.addTaucData}>
-                  Add Tauc data as dataset
+                  {g.replacing ? `Replace “${g.replacing}”` : "Add Tauc data as dataset"}
                 </Button>
               </div>
             </>
@@ -172,4 +175,9 @@ export default function OpticalGapPanel() {
       )}
     </ToolWindow>
   );
+}
+
+/** Remounts the body for each "Open in <tool>" session (it seeds once, at mount). */
+export default function OpticalGapPanel() {
+  return <OpticalGapPanelBody key={useReopenScope("optical-gap")} />;
 }

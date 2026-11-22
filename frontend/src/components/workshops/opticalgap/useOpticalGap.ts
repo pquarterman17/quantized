@@ -4,13 +4,14 @@
 // reports Eg with its uncertainty. The fit window is auto-detected until the
 // user types one. "Add Tauc data" writes the transformed edge as a dataset.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { taucFit, type TaucResult, type TaucSignal, type TaucXUnit, type TransitionKind } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { seedChoice, seedNumber, useReopenSeed } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, parseField, pickColumns, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
@@ -50,6 +51,8 @@ export interface OpticalGapState {
   addTaucData: () => void;
   /** Why "Add Tauc data" is disabled (already added, or nothing to add). */
   addDisabledReason: string | null;
+  /** The output a commit replaces (opened from its result, Replace chosen), else null. */
+  replacing: string | null;
 }
 
 /** X quantity from the column's unit, else from its values (a number above 30
@@ -86,20 +89,29 @@ export function guessSignal(label: string, unit: string, y: number[]): { signal:
 }
 
 const OPTICAL_GAP_PRODUCER = { id: "optical-gap", label: "Optical gap", version: 1 } as const;
+const X_UNITS: readonly TaucXUnit[] = ["eV", "meV", "cm-1", "nm", "A", "um"];
+const SIGNALS: readonly TaucSignal[] = ["alpha", "absorbance", "transmittance"];
 
 export function useOpticalGap(): OpticalGapState {
   const active = useActiveDataset();
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
 
-  const [picks, setPicks] = useState<[number, number]>([-1, 0]);
-  const [xUnit, setXUnit] = useState<TaucXUnit>("eV");
-  const [signal, setSignal] = useState<TaucSignal>("alpha");
-  const [percent, setPercent] = useState(false);
-  const [thickness, setThickness] = useState("");
-  const [kind, setKind] = useState<TransitionKind>("direct");
-  const [eMin, setEMin] = useState("");
-  const [eMax, setEMax] = useState("");
+  // "Open in Optical gap" (lane RO): start from the recorded choices; the reset
+  // and unit-guess effects leave them alone until a column pick changes.
+  const seed = useReopenSeed(OPTICAL_GAP_PRODUCER.id, active?.id)?.settings;
+  const text = (v: unknown): string => (typeof v === "string" ? v : "");
+  const seededPicks: [number, number] | null = seed ? [seedNumber(seed.xCol, -1), seedNumber(seed.yCol, 0)] : null;
+  const holdGuess = useRef(seededPicks?.join(":") ?? null);
+  const resetMounted = useRef(false);
+  const [picks, setPicks] = useState<[number, number]>(() => seededPicks ?? [-1, 0]);
+  const [xUnit, setXUnit] = useState<TaucXUnit>(() => seedChoice(seed?.xUnit, X_UNITS, "eV"));
+  const [signal, setSignal] = useState<TaucSignal>(() => seedChoice(seed?.signal, SIGNALS, "alpha"));
+  const [percent, setPercent] = useState(() => seed?.percent === true);
+  const [thickness, setThickness] = useState(() => text(seed?.thickness));
+  const [kind, setKind] = useState<TransitionKind>(() => seedChoice(seed?.kind, TRANSITIONS.map((t) => t.value), "direct"));
+  const [eMin, setEMin] = useState(() => text(seed?.eMin));
+  const [eMax, setEMax] = useState(() => text(seed?.eMax));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState<{ key: string; res: TaucResult } | null>(null);
@@ -113,14 +125,19 @@ export function useOpticalGap(): OpticalGapState {
 
   // A new dataset resets the picks and the fit window.
   useEffect(() => {
+    const first = !resetMounted.current;
+    resetMounted.current = true;
+    if (first && seed) return; // a reopen's recorded choices, not the defaults
     setPicks([-1, 0]);
     setError(null);
     setEMin("");
     setEMax("");
-  }, [active?.id]);
+  }, [active?.id, seed]);
   // The picked columns say what the X unit and the signal are (re-read when a pick changes).
   useEffect(() => {
     if (!active) return;
+    if (holdGuess.current === `${xCol}:${yCol}`) return; // the recorded unit and signal stand
+    holdGuess.current = null;
     let live = true;
     load(active.id, [xCol, yCol]).then(
       (got) => {
@@ -256,5 +273,6 @@ export function useOpticalGap(): OpticalGapState {
     fit,
     addTaucData,
     addDisabledReason: commit.disabledReason,
+    replacing: commit.replacing,
   };
 }

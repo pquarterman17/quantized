@@ -21,6 +21,10 @@ import type { AnalysisResult } from "./analysisResult";
 /** The envelope parameter that marks (and keys) a committed output. */
 export const COMMIT_KEY_PARAM = "commitKey";
 
+/** The envelope parameter with what "Open in <tool>" needs beyond the keyed
+ *  settings (lib/committedOutputReopen.ts). */
+export const REOPEN_PARAM = "reopen";
+
 export function isCommittedOutputResult(result: AnalysisResult): boolean {
   return typeof result.parameters?.[COMMIT_KEY_PARAM] === "string" && result.outputs.length > 0;
 }

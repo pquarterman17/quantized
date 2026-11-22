@@ -3,13 +3,14 @@
 // the direct algebraic fit, refined to orthogonal distance. "Add fitted
 // ellipse" writes the curve as a dataset to overlay on the points.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ellipseFit, type EllipseResult } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { seedNumber, useReopenSeed } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
@@ -32,6 +33,8 @@ export interface EllipseFitState {
   addEllipse: () => void;
   /** Why "Add fitted ellipse" is disabled (already added, or nothing to add). */
   addDisabledReason: string | null;
+  /** The output a commit replaces (opened from its result, Replace chosen), else null. */
+  replacing: string | null;
 }
 
 const ELLIPSE_FIT_PRODUCER = { id: "ellipse-fit", label: "Ellipse fit", version: 1 } as const;
@@ -40,8 +43,11 @@ export function useEllipseFit(): EllipseFitState {
   const active = useActiveDataset();
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
-  const [picks, setPicks] = useState<[number, number]>([-1, 0]);
-  const [geometric, setGeometric] = useState(true);
+  // "Open in Ellipse fit" (lane RO): start from the recorded columns and method.
+  const seed = useReopenSeed(ELLIPSE_FIT_PRODUCER.id, active?.id)?.settings;
+  const resetMounted = useRef(false);
+  const [picks, setPicks] = useState<[number, number]>(() => (seed ? [seedNumber(seed.xCol, -1), seedNumber(seed.yCol, 0)] : [-1, 0]));
+  const [geometric, setGeometric] = useState(() => seed?.geometric !== false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState<{ key: string; res: EllipseResult; x: number[]; y: number[] } | null>(null);
@@ -54,9 +60,12 @@ export function useEllipseFit(): EllipseFitState {
   const hasData = !!active && columns.length >= 2;
 
   useEffect(() => {
+    const first = !resetMounted.current;
+    resetMounted.current = true;
+    if (first && seed) return; // a reopen's recorded picks, not the defaults
     setPicks([-1, 0]);
     setError(null);
-  }, [active?.id]);
+  }, [active?.id, seed]);
   useFollowColumnPicks(active, (follow) => setPicks((p) => [follow(p[0]) ?? -1, follow(p[1]) ?? 0]));
 
   async function fit(): Promise<void> {
@@ -143,5 +152,6 @@ export function useEllipseFit(): EllipseFitState {
     fit,
     addEllipse,
     addDisabledReason: commit.disabledReason,
+    replacing: commit.replacing,
   };
 }

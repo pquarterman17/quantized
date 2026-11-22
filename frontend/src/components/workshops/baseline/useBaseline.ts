@@ -20,6 +20,8 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { baselineSeed } from "./baselineReopen";
 import { baselineBy, callBaseline, callBaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
@@ -83,6 +85,8 @@ export interface BaselineState {
   applyToSelected: () => Promise<void>;
   /** Why "Subtract → new worksheet" is unavailable (already added, adding now); null when enabled. */
   subtractDisabledReason: string | null;
+  /** The output a commit replaces (opened from its result, Replace chosen), else null. */
+  replacing: string | null;
   /** Datasets selected in the Library (the batch targets). */
   selectedCount: number;
   /** The batch's output dataset ids still in the Library (for "Overlay these"). */
@@ -157,8 +161,12 @@ export function useBaseline(): BaselineState {
   const regionPicked = useApp((s) => s.regionPicked);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
   const setBaselineAnchorEdit = useApp((s) => s.setBaselineAnchorEdit);
-  const [method, setMethod] = useState<BaselineMethod>("als");
-  const [params, setParamsState] = useState<BaselineParams>(DEFAULTS);
+  // "Open in Baseline" (lane RO): start from the recorded method, knobs, anchors.
+  const seed = useReopenSeed(BASELINE_PRODUCER.id, active?.id);
+  const [seeded] = useState(() => baselineSeed(seed?.settings, DEFAULTS));
+  const resetMounted = useRef(false);
+  const [method, setMethod] = useState<BaselineMethod>(seeded?.method ?? "als");
+  const [params, setParamsState] = useState<BaselineParams>(seeded?.params ?? DEFAULTS);
   const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
   // A lean (large SNIP / ModPoly) preview holds only display rows in `baseline`;
   // the full array, which Subtract needs, comes from here (by result id).
@@ -170,7 +178,7 @@ export function useBaseline(): BaselineState {
   // The source's analysis-view fingerprint when the estimate was computed: the
   // shared commit refuses a source that changed since (store/analysisOutputCommit).
   const [estimateFp, setEstimateFp] = useState<string | null>(null);
-  const [anchors, setAnchors] = useState<[number, number][]>([]);
+  const [anchors, setAnchors] = useState<[number, number][]>(seeded?.method === "anchor" ? seeded.anchors : []);
   const [busy, setBusy] = useState(false);
   const selectedCount = useApp((s) => s.selectedIds.length);
   const [batchIds, setBatchIds] = useState<string[]>([]);
@@ -193,13 +201,16 @@ export function useBaseline(): BaselineState {
   // A new active dataset invalidates the current estimate + its overlay (and
   // the anchors — they're coordinates on the OLD data).
   useEffect(() => {
+    const first = !resetMounted.current;
+    resetMounted.current = true;
+    if (first && seeded) return; // keep a reopen's recorded anchors
     setBaseline(null);
     setEstimateBinding(null);
     setEstimateFp(null);
     setError(null);
     setAnchors([]);
     setBaselineOverlay(null);
-  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay]);
+  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay, seeded]);
 
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
@@ -323,7 +334,7 @@ export function useBaseline(): BaselineState {
     output: (source) => ({ name: bgSubName(source.name), data: source.data }), // replaced by commitAsync
   } : null);
 
-  /** Subtract into a new dataset; true only when a NEW worksheet was written. */
+  /** Subtract into a new dataset (or the reopened result's output); true only when one was written. */
   async function subtractInto(): Promise<boolean> {
     if (!active || !baseline || !estimateBinding) return false;
     const binding = estimateBinding;
@@ -345,7 +356,7 @@ export function useBaseline(): BaselineState {
       }
       return (source) => ({ name: bgSubName(source.name), data: subtractBaselineData(source.data, full, binding, method) });
     });
-    return outcome?.kind === "created";
+    return outcome?.kind === "created" || outcome?.kind === "replaced";
   }
 
   async function subtract(): Promise<void> {
@@ -474,6 +485,7 @@ export function useBaseline(): BaselineState {
     subtract,
     applyToSelected,
     subtractDisabledReason: baseline ? commit.disabledReason : null,
+    replacing: commit.replacing,
     selectedCount,
     batchOutputIds: liveIds ? liveIds.split("|") : [],
     clear,

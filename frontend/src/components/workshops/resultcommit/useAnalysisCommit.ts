@@ -8,6 +8,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
+import { replaceTargetFor, useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
 
 export interface AnalysisCommitState {
@@ -23,9 +24,19 @@ export interface AnalysisCommitState {
   commitAsync: (prepare: () => Promise<AnalysisOutputCommit["output"] | null>) => Promise<AnalysisCommitOutcome | null>;
   /** True while a `commitAsync` is pending. */
   inFlight: boolean;
+  /** Lane RO: the output worksheet a commit REPLACES (the tool was opened from
+   *  its result and the user chose Replace), or null when a commit adds new. */
+  replacing: string | null;
 }
 
-export function useAnalysisCommit(request: AnalysisOutputCommit | null): AnalysisCommitState {
+export function useAnalysisCommit(base: AnalysisOutputCommit | null): AnalysisCommitState {
+  // Opened from a committed result with Replace chosen: commit into its output.
+  const replace = useToolReopen((s) => (base ? replaceTargetFor(s.sessions, base.producer.id, base.sourceId) : undefined));
+  const replacing = useApp((state) => {
+    const outputId = replace && state.analysisResults.find((result) => result.id === replace)?.outputs[0]?.datasetId;
+    return (outputId && state.datasets.find((dataset) => dataset.id === outputId)?.name) || null;
+  });
+  const request = base && replace ? { ...base, replace } : base;
   const keyInput = request && {
     producer: request.producer, sourceId: request.sourceId, computedOn: request.computedOn, settings: request.settings,
     alsoFrom: request.alsoFrom,
@@ -57,6 +68,7 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
   return {
     committedAs,
     inFlight,
+    replacing,
     commitAsync,
     disabledReason: !request ? "Run the analysis first."
       : inFlight ? "Adding the output…"
