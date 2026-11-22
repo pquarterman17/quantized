@@ -84,7 +84,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Magnetometry tools | numeric Y (magnetometry) | no | no |
     | Find peaks | numeric Y | yes (integrate windows) | yes |
     | Peak analyzer (wizard) | numeric Y | yes | yes |
-    | Baseline | numeric Y | recipe only | yes |
+    | Baseline | numeric Y | yes (estimate summary) | yes |
     | Reflectivity / Reflectometry view | numeric Y (refl/XRD) | no | no |
     | RSM, ROI cuts | 2-D map | ROI cuts only | no |
     | Williamson-Hall | any (typed peaks ok) | yes | no |
@@ -114,6 +114,13 @@ inconsistently exposed, and do not all share the same result lifecycle.
     with a reason) and Signal Processing (correction and spectral operations;
     the sigop filters and two-worksheet correlation say they are not
     available). Tests: `byrun/byLevelTools.test.tsx`.
+  - **Batch slice: Baseline (#18/#19, lane C):** Baseline now carries Review
+    inputs and the shared batch (`baseline/BaselineBatchSection.tsx`): the
+    chosen method and settings are estimated on every selected worksheet's
+    plotted channel and one result table (baseline min / max, residual RMS,
+    per-input status) is recorded. Estimate-only; "Apply to N selected" still
+    writes the subtracted worksheets. Anchor method refused with a reason.
+    Tests: `baseline/BaselineBatchSection.test.tsx`.
 - [ ] Statistical engines are extensive but feel like separate utilities.
   Output tables and plots do not yet behave like a single expandable Origin/JMP
   result book.
