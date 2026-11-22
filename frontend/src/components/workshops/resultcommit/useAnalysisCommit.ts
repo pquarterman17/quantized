@@ -8,6 +8,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
+import { replaceTargetFor, useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
 
 export interface AnalysisCommitState {
@@ -23,9 +24,24 @@ export interface AnalysisCommitState {
   commitAsync: (prepare: () => Promise<AnalysisOutputCommit["output"] | null>) => Promise<AnalysisCommitOutcome | null>;
   /** True while a `commitAsync` is pending. */
   inFlight: boolean;
+  /** Lane RO: the output worksheet a commit REPLACES (the tool was opened from
+   *  its result and the user chose Replace), or null when a commit adds new. */
+  replacing: string | null;
 }
 
 export function useAnalysisCommit(request: AnalysisOutputCommit | null): AnalysisCommitState {
+  // Opened from a committed result with Replace chosen: commit into its output.
+  const replace = useToolReopen((s) => (request ? replaceTargetFor(s.sessions, request.producer.id, request.sourceId) : undefined));
+  const replacing = useApp((state) => {
+    const outputId = replace && state.analysisResults.find((result) => result.id === replace)?.outputs[0]?.datasetId;
+    return (outputId && state.datasets.find((dataset) => dataset.id === outputId)?.name) || null;
+  });
+  // The replace target is read AT COMMIT TIME (after a slow prepare too), so a
+  // switch to "Add as a new output" while a commit is pending is honoured.
+  const withTarget = (req: AnalysisOutputCommit): AnalysisOutputCommit => {
+    const target = replaceTargetFor(useToolReopen.getState().sessions, req.producer.id, req.sourceId);
+    return target ? { ...req, replace: target } : req;
+  };
   const keyInput = request && {
     producer: request.producer, sourceId: request.sourceId, computedOn: request.computedOn, settings: request.settings,
     alsoFrom: request.alsoFrom,
@@ -48,7 +64,7 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
     setInFlight(true);
     try {
       const output = await prepare();
-      return output ? commitAnalysisOutput({ ...request, output }) : null;
+      return output ? commitAnalysisOutput(withTarget({ ...request, output })) : null;
     } finally {
       pending.current = false;
       setInFlight(false);
@@ -57,10 +73,11 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
   return {
     committedAs,
     inFlight,
+    replacing,
     commitAsync,
     disabledReason: !request ? "Run the analysis first."
       : inFlight ? "Adding the output…"
       : committedAs ? `Already added as “${committedAs}”. Undo or delete it to add it again.` : null,
-    commit: () => (request ? commitAnalysisOutput(request) : null),
+    commit: () => (request ? commitAnalysisOutput(withTarget(request)) : null),
   };
 }

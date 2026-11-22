@@ -7,6 +7,8 @@
 // recalc DAG). Thin — logic lives in the hook.
 
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import OverlayOutputsButton from "../OverlayOutputsButton";
@@ -74,12 +76,12 @@ const FIELDS: Record<BaselineMethod, ParamField[]> = {
   poly: [{ label: "Poly order", key: "order" }],
 };
 
-export default function BaselinePanel() {
+function BaselinePanelBody() {
   const setOpen = useApp((s) => s.setBaselineOpen);
   const {
     active, method, params, baseline, busy, error, anchors, binding,
     setMethod, setParams, compute, subtract, subtractDisabledReason, clear, pickRegion, clearAnchors, applyAnchors,
-    applyToSelected, selectedCount, batchOutputIds,
+    applyToSelected, selectedCount, batchOutputIds, replacing,
   } = useBaseline();
 
   const close = () => {
@@ -89,6 +91,7 @@ export default function BaselinePanel() {
 
   return (
     <ToolWindow id="baseline" title="Baseline" width={320} dockable onClose={close}>
+      <ReopenBanner tool="baseline-subtract" />
       <label className="qzk-field-lbl">Method</label>
       <Select
         aria-label="Baseline method"
@@ -182,7 +185,7 @@ export default function BaselinePanel() {
           </Button>
         ) : (
           <Button size="sm" disabled={!baseline || subtractDisabledReason != null} title={subtractDisabledReason ?? undefined} onClick={() => void subtract()}>
-            Subtract → new worksheet
+            {replacing ? `Subtract → replace “${replacing}”` : "Subtract → new worksheet"}
           </Button>
         )}
       </div>
@@ -222,4 +225,9 @@ export default function BaselinePanel() {
       )}
     </ToolWindow>
   );
+}
+
+/** Remounts the body for each "Open in <tool>" session (it seeds once, at mount). */
+export default function BaselinePanel() {
+  return <BaselinePanelBody key={useReopenScope("baseline-subtract")} />;
 }

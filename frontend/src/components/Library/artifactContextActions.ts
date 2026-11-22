@@ -12,6 +12,9 @@ import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 import { withAnalysisResultActions } from "../../store/analysisResultLazy";
+import { isCommittedOutputResult } from "../../lib/committedOutputGraph";
+import { planReopen, reopenLabel } from "../../lib/committedOutputReopen";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 
 export type ArtifactNode = Extract<
   LibraryNode,
@@ -49,6 +52,23 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
     enabled: (target) => target.node.kind !== "origin-figure" || target.node.entity.datasetId != null,
     disabledReason: () => "source workbook is unresolved",
     run: (target) => target.open(),
+  },
+  {
+    // Lane RO: a committed analysis output reopens in its producing tool.
+    id: "artifact.reopenInTool",
+    label: (target) => target.node.kind === "analysis-result" ? reopenLabel(target.node.entity) : "Open in tool",
+    hidden: (target) => target.node.kind !== "analysis-result" || !isCommittedOutputResult(target.node.entity),
+    enabled: (target) => target.node.kind === "analysis-result" && planReopen(target.node.entity, useApp.getState().datasets).ok,
+    disabledReason: (target) => {
+      if (target.node.kind !== "analysis-result") return "";
+      const plan = planReopen(target.node.entity, useApp.getState().datasets);
+      return plan.ok ? "" : plan.reason;
+    },
+    run: (target) => {
+      const id = target.node.entityId;
+      void runLazy("Opening the tool…", () => import("../../store/toolReopenOpen"))
+        .then((m) => m.openCommittedResultInTool(id), onLoadFailure);
+    },
   },
   {
     id: "artifact.rename",

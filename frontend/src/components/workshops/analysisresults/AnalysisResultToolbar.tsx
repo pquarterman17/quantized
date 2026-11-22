@@ -4,6 +4,8 @@ import type { Dataset } from "../../../lib/types";
 import { Button } from "../../primitives";
 import AnalysisResultFreeze from "./AnalysisResultFreeze";
 import AnalysisResultSnapshotToolbar from "./AnalysisResultSnapshotToolbar";
+import ReopenInToolButton from "./ReopenInToolButton";
+import { isCommittedOutputResult } from "../../../lib/committedOutputGraph";
 import { NOT_RECOMPUTABLE } from "./analysisResultPanelText";
 import type { Dispatch, SetStateAction } from "react";
 import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
@@ -60,6 +62,7 @@ export default function AnalysisResultToolbar({
         onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
     </> : <>
       <Button disabled={!hasOutput} onClick={onOpenOutput}>Open worksheet</Button>
+      {isCommittedOutputResult(result) && <ReopenInToolButton result={result} disabled={busy !== null} />}
       <Button disabled={!source || !hasOutput || !outputRecomputable || busy !== null} title={blocked ?? (hasOutput && !outputRecomputable ? NOT_RECOMPUTABLE : undefined)} onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
       <Button disabled={!source || !outputHasRecipe || busy !== null} title={blocked} onClick={onRerun}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
       <Button disabled={result.outputs.length !== 1 || !hasOutput || busy !== null} title="Create a separate linked output worksheet and result." onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
