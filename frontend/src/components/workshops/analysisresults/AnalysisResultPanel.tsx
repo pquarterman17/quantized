@@ -32,6 +32,8 @@ import AnalysisResultSnapshot from "./AnalysisResultSnapshot";
 import AnalysisResultTables from "./AnalysisResultTables";
 import AnalysisResultTabs, { type AnalysisResultTab } from "./AnalysisResultTabs";
 import AnalysisResultToolbar from "./AnalysisResultToolbar";
+import ResultBook from "./resultbook/ResultBook";
+import { hasResultBook } from "../../../lib/resultBook";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
@@ -77,6 +79,9 @@ export default function AnalysisResultPanel() {
   const isMultivariate = result?.producer.id === "multivariate-analysis";
   const isWilliamsonHall = result?.producer.id === "williamson-hall";
   const isSnapshot = !!result && isSnapshotResult(result);
+  const hasBook = !!result && isSnapshot && hasResultBook(result);
+  // The tab survives switching results; a result without a book shows Overview.
+  const view: AnalysisResultTab = tab === "book" && !hasBook ? "overview" : tab;
   const statsRecipe = result && isStats ? statisticalTestRecipe(result) : null;
   const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
   const savedFitYByXRecipe = result && isFitYByX ? fitYByXRecipe(result, source) : null;
@@ -299,9 +304,9 @@ export default function AnalysisResultPanel() {
         {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
           {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}
         </p>}
-        <AnalysisResultTabs active={tab} diagnostics={diagnostics.length} onChange={setTab} />
-        <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${tab}`}>
-          {tab === "overview" && <>
+        <AnalysisResultTabs active={view} diagnostics={diagnostics.length} onChange={setTab} book={hasBook} />
+        <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${view}`}>
+          {view === "overview" && <>
             {isSnapshot ? <AnalysisResultSnapshot result={result} source={source} view="overview" onExport={() => void exportInlineTables()} /> : isRefl ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="overview" /> : isPeak ? <dl className="qz-analysis-summary">
               <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
               <div><dt>Source</dt><dd>{source?.name ?? "Missing source"}</dd></div>
@@ -324,7 +329,10 @@ export default function AnalysisResultPanel() {
               ? <p className="qz-analysis-caption">Values are read live from the source worksheet’s fitted peak table. Editing or re-fitting updates this result; deleting this Library item keeps the scientific table.</p>
               : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">{output && !output.derivedFrom ? `This result records its source; a change to the source marks it Out of date. ${NOT_RECOMPUTABLE}` : "This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result."}</p>}
           </>}
-          {tab === "table" && (isSnapshot
+          {view === "book" && snapshotState && <ResultBook key={result.id} result={result} source={source} state={snapshotState}
+            busy={busy} setBusy={setBusy} recipeReady={!!(savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe)}
+            figureBlocked={figureDisabledReason} onReopen={editSnapshot} onClose={close} />}
+          {view === "table" && (isSnapshot
             ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null}
               selectionEnabled={snapshotState === "current"} onSelectRows={selectSourceRows}
               onCopy={(index) => void copyInlineTables(index)} onExport={(index) => void exportInlineTables(index)} />
@@ -334,13 +342,13 @@ export default function AnalysisResultPanel() {
             ? <AnalysisResultPeakTable table={peakTable} onExport={() => void exportPeaks()} />
             : isFit ? <AnalysisResultFitTable spec={fitSpec} onExport={() => void exportFit()} />
             : <AnalysisResultTables result={result} onOpen={openTable} onExport={(datasetId) => void exportTable(datasetId)} />)}
-          {tab === "figures" && <AnalysisResultFigures result={result}
+          {view === "figures" && <AnalysisResultFigures result={result}
             disabled={figureDisabledReason !== undefined} disabledReason={figureDisabledReason}
             onOpen={(index) => void openPlot(index)} onBuild={(index) => void buildFigure(index)} onReport={(index) => void sendReport(index)} onRefit={isFit ? editFit : undefined} onCreateStatistical={(key) => void createStatisticalFigure(key)} />}
-          {tab === "diagnostics" && (diagnostics.length
+          {view === "diagnostics" && (diagnostics.length
             ? <ul className="qz-analysis-diagnostics">{diagnostics.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}</ul>
             : <p className="qz-analysis-empty">No warnings or missing references.</p>)}
-          {tab === "provenance" && (isSnapshot
+          {view === "provenance" && (isSnapshot
             ? <AnalysisResultSnapshot result={result} source={source} view="provenance" onExport={() => void exportInlineTables()} />
             : isRefl
             ? <AnalysisResultRefl result={result} record={reflFit} datasets={datasets} view="provenance" />
@@ -360,7 +368,7 @@ export default function AnalysisResultPanel() {
               <div><dt>Fingerprint</dt><dd>{peakTable.provenance.fingerprint ?? "Not recorded"}</dd></div>
             </>}
           </dl>)}
-          {tab === "notes" && <div className="qz-analysis-notes">
+          {view === "notes" && <div className="qz-analysis-notes">
             <label htmlFor="analysis-result-notes">Notes</label>
             <textarea id="analysis-result-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record interpretation, assumptions, or follow-up work…" />
             <Button variant="primary" disabled={notes === (result.notes ?? "")} onClick={() => withActions((m) => m.updateAnalysisResultNotes(result.id, notes))}>Save notes</Button>

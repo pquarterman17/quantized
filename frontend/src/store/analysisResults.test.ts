@@ -266,6 +266,30 @@ describe("analysis result output actions", () => {
     expect(useApp.getState().reports).toHaveLength(1);
   });
 
+  it("reports one chosen inline table under its own title, and refuses a missing index", async () => {
+    const inline: AnalysisResult = {
+      ...RESULT, producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+      sources: [{ datasetId: source.id, role: "input" }],
+      sourceFingerprint: analysisDataFingerprint(source),
+      outputs: [], scalarValues: { Interpretation: "Summary." },
+      tables: [
+        { title: "Summary", columns: ["statistic", "value"], rows: [["N", 2]] },
+        { title: "Histogram", columns: ["center", "count"], rows: [[1, 2], [2, 1]] },
+      ],
+    };
+    useApp.setState({ analysisResults: [inline], datasets: [source], reports: [] });
+    reportEmit.mockResolvedValueOnce({ report: { title: "test", sections: [] } });
+    expect(await sendAnalysisInlineTableToReport(inline.id, 1)).toBe(true);
+    expect(reportEmit).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: "Smooth · Trace · Histogram", columns: ["center", "count"], caption: "",
+      records: [{ center: 1, count: 2 }, { center: 2, count: 1 }],
+    }));
+    expect(useApp.getState().reports.at(-1)?.name).toBe("Smooth · Trace · Histogram");
+    expect(await sendAnalysisInlineTableToReport(inline.id, 2)).toBe(false);
+    expect(useApp.getState().status).toMatch(/saved table is unavailable/);
+    expect(useApp.getState().reports).toHaveLength(1);
+  });
+
   it("copies one or every inline result table and rejects a stale table index", async () => {
     const inline: AnalysisResult = {
       ...RESULT, producer: { id: "statistical-test", label: "Statistical Test", version: 1 },
