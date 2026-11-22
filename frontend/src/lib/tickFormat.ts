@@ -39,6 +39,31 @@ export function xAxisIsDate(
   return metadata?.time_is_datetime === true || isDateTickMode(currentMode);
 }
 
+/** Whether to offer the explicit "Clock" X mode: the parser read the X
+ *  column as a time of day (`metadata.time_is_clock`, Import Wizard), or a
+ *  saved spec already selected it (so it stays switchable back). On such an X
+ *  `auto` already draws the clock; the explicit choice is the way back after
+ *  fixed/sci/eng, which print raw seconds. */
+export function xAxisIsClock(
+  metadata: Record<string, unknown> | undefined,
+  currentMode: TickMode,
+): boolean {
+  return metadata?.time_is_clock === true || currentMode === "clock";
+}
+
+export const TICK_CLOCK_OPTION: { value: TickMode; label: string } = { value: "clock", label: "Clock (HH:MM:SS)" };
+
+/** The mode list of an X axis: the four number modes, plus the clock choice
+ *  on a time-of-day column. */
+export function xTickModeOptions(allowClock: boolean): { value: TickMode; label: string }[] {
+  return allowClock ? [...TICK_MODE_OPTIONS, TICK_CLOCK_OPTION] : TICK_MODE_OPTIONS;
+}
+
+/** Modes that take a decimal/mantissa digit count: the number modes only. */
+export function tickModeHasDigits(mode: TickMode): boolean {
+  return mode !== "auto" && mode !== "clock" && !isDateTickMode(mode);
+}
+
 /** The date-select's value/label pairs, including the "not a date" option
  *  that maps back to `auto`. */
 export const TICK_DATE_OPTIONS: { value: string; label: string }[] = [

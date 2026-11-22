@@ -23,7 +23,8 @@ import {
   isDateTickMode,
   normalizeTickDigits,
   TICK_DATE_OPTIONS,
-  TICK_MODE_OPTIONS,
+  tickModeHasDigits,
+  xTickModeOptions,
 } from "../../../lib/tickFormat";
 import type { AxisFormat, TickMode } from "../../../lib/types";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -35,17 +36,19 @@ function AxisRow({
   fmt,
   onChange,
   allowDate = false,
+  allowClock = false,
 }: {
   axis: string;
   fmt: AxisFormat;
   onChange: (next: AxisFormat) => void;
   allowDate?: boolean;
+  allowClock?: boolean;
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, width: "100%" }}>
       <span className="qzk-field-lbl" style={{ margin: 0, width: 18 }}>{axis}</span>
       <SegmentedControl<TickMode>
-        options={TICK_MODE_OPTIONS}
+        options={xTickModeOptions(allowClock)}
         value={isDateTickMode(fmt.mode) ? "auto" : fmt.mode}
         onChange={(mode) => onChange({ ...fmt, mode })}
       />
@@ -66,7 +69,7 @@ function AxisRow({
           ))}
         </select>
       )}
-      {fmt.mode !== "auto" && !isDateTickMode(fmt.mode) && (
+      {tickModeHasDigits(fmt.mode) && (
         <NumberField
           aria-label={`${axis} digits`}
           value={String(fmt.digits)}
@@ -88,6 +91,7 @@ export default function TickFormatPanel({
   y2Fmt,
   hasY2,
   xIsDate,
+  xIsClock = false,
   onXFmt,
   onYFmt,
   onY2Fmt,
@@ -103,13 +107,15 @@ export default function TickFormatPanel({
   /** Whether the bound data's X column was recognized as timestamps (or a
    *  date mode is already selected, so it stays switchable back). */
   xIsDate: boolean;
+  /** Whether the X column is a time of day (or Clock is already selected). */
+  xIsClock?: boolean;
   onXFmt: (next: AxisFormat) => void;
   onYFmt: (next: AxisFormat) => void;
   onY2Fmt: (next: AxisFormat | null) => void;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
-      <AxisRow axis="X" fmt={xFmt} onChange={onXFmt} allowDate={xIsDate} />
+      <AxisRow axis="X" fmt={xFmt} onChange={onXFmt} allowDate={xIsDate} allowClock={xIsClock} />
       <AxisRow axis="Y" fmt={yFmt} onChange={onYFmt} />
       {hasY2 && (
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, width: "100%" }}>

@@ -25,7 +25,7 @@ import type { Dataset, SeriesStyle } from "./types";
 
 export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
-  | "column" | "stackedColumn" | "box" | "histogram"
+  | "column" | "stackedColumn" | "columnX" | "barH" | "box" | "histogram"
   | "contour"
   | "violin" | "doubleY" | "polar" | "waterfall" | "stacked" | "ternary" | "pie";
 
@@ -44,6 +44,8 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "area", label: "Area", glyph: GLYPHS.plotArea, description: "Lines filled down to zero." },
   { id: "column", label: "Column / Bar", glyph: GLYPHS.plotColumn, description: "One bar per category (the X column's levels), side by side per series." },
   { id: "stackedColumn", label: "Stacked Column", glyph: GLYPHS.plotStackedColumn, description: "Bars stacked per category, one segment per series." },
+  { id: "columnX", label: "Column per X row", glyph: GLYPHS.plotColumnX, description: "One bar per row at its X value, one series per Y column; the Series card colour fills the bars." },
+  { id: "barH", label: "Horizontal Bar", glyph: GLYPHS.plotBarH, description: "Bars from zero at each X, turned on their side (X up the left axis)." },
   { id: "box", label: "Box", glyph: GLYPHS.plotBox, description: "Box-and-whisker per category." },
   { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Colour map with contour lines from X/Y/Z columns." },
@@ -80,6 +82,8 @@ const XY_MODE: Partial<Record<PlotTypeId, SeriesMode>> = {
   scatter: "scatter",
   lineSymbol: "lineSymbol",
   area: "line",
+  columnX: "line",
+  barH: "line",
 };
 
 /** The view patch for an XY or Stat Stage type (contour switches tabs
@@ -102,6 +106,13 @@ export function plotTypePatch(
       const next: SeriesStyle = { ...current, ...seriesModePatch(mode, current) };
       if (id === "area") next.fill = "under";
       else if (next.fill === "under") delete next.fill;
+      // Bar types draw bars from zero (their fill is the bars' own); every
+      // other XY type leaves bar mode, so Column per X row -> Line switches.
+      if (id === "columnX" || id === "barH") {
+        next.bars = id === "barH" ? "horizontal" : true;
+        delete next.fill;
+        next.marker = false;
+      } else delete next.bars;
       seriesStyles[ch] = next;
     }
     return { statMode: false, polarMode: false, seriesStyles };

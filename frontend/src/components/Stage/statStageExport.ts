@@ -137,7 +137,7 @@ export function buildExportSpec(
       filename: `qq_${valueLabel}`,
     };
   }
-  if (values.length < 2) return null;
+  if (values.length < (fit ? 2 : 1)) return null;
   return {
     kind: "histogram",
     data: values,
