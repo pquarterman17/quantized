@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import BaselinePanel from "../baseline/BaselinePanel";
+import MagToolsPanel from "../magtools/MagToolsPanel";
 import OpticalGapPanel from "../opticalgap/OpticalGapPanel";
 
 const { taucMock } = vi.hoisted(() => ({ taucMock: vi.fn() }));
@@ -15,6 +16,9 @@ vi.mock("../../../lib/api/analysisExtras", () => ({ taucFit: taucMock }));
 vi.mock("../../../lib/api/baseline", () => ({
   baselineALS: vi.fn(), baselineAnchor: vi.fn(), baselineEstimate: vi.fn(), baselineModPoly: vi.fn(),
   baselineRegion: vi.fn(), baselineRollingBall: vi.fn(), baselineShirley: vi.fn(), baselineXrdLowAngle: vi.fn(),
+}));
+vi.mock("../../../lib/api/magnetometry", () => ({
+  subtractMagBackground: vi.fn(), subtractHysteresisBackground: vi.fn(), normalizeMagMoment: vi.fn(), demagCorrectField: vi.fn(),
 }));
 vi.mock("../SmallUPlot", () => ({ default: () => <div /> }));
 vi.mock("../../overlays/ToolWindow", () => ({
@@ -64,5 +68,13 @@ describe("general tools show the shared summary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fit gap" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No rows remain after exclusions");
     expect(taucMock).not.toHaveBeenCalled();
+  });
+
+  it("Magnetometry tools: Background states the full worksheet, Curie-Weiss the analysis view", () => {
+    useApp.setState({ magToolsOpen: true } as never);
+    render(<MagToolsPanel />);
+    expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Uses every row, including 1 excluded or filtered-out row.");
+    fireEvent.click(screen.getByRole("radio", { name: "Curie–Weiss" }));
+    expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Excluded and filtered-out rows are left out (1 excluded row");
   });
 });
