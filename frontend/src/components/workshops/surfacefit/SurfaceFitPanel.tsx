@@ -160,7 +160,7 @@ export default function SurfaceFitPanel() {
                 <Button size="sm" title="Copy the results as a Markdown table" onClick={() => void f.copyResults(true)}>
                   Copy MD
                 </Button>
-                <Button size="sm" title="Add X, Y, the fitted Z, the data Z and the residual as a new dataset" onClick={f.addFittedSurface}>
+                <Button size="sm" disabled={!!f.addDisabledReason} title={f.addDisabledReason ?? "Add X, Y, the fitted Z, the data Z and the residual as a new dataset"} onClick={f.addFittedSurface}>
                   Add fitted surface as dataset
                 </Button>
               </div>

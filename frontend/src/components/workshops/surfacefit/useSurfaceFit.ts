@@ -18,7 +18,8 @@ import {
 import { copyText } from "../../../lib/clipboard";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { surfaceResultText } from "./surfaceFitText";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, mapDefaults, parseField, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
@@ -45,12 +46,16 @@ export interface SurfaceFitState {
   fit: () => Promise<void>;
   resetGuess: () => void;
   addFittedSurface: () => void;
+  /** Why "Add fitted surface" is disabled (already added, or nothing to add). */
+  addDisabledReason: string | null;
   /** The finite rows the fit ran on (what the residual map and the output draw from). */
   points: { x: number[]; y: number[]; z: number[] } | null;
   guessing: boolean;
   copyResults: (markdown: boolean) => Promise<void>;
   labels: { x: string; y: string; z: string };
 }
+
+const SURFACE_FIT_PRODUCER = { id: "surface-fit", label: "Surface fit", version: 1 } as const;
 
 const fmtStart = (v: number): string => String(Number(v.toPrecision(6)));
 
@@ -64,7 +69,6 @@ function defaults(cols: PickColumn[], ds: Dataset | null): [number, number, numb
 
 export function useSurfaceFit(): SurfaceFitState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
@@ -186,35 +190,49 @@ export function useSurfaceFit(): SurfaceFitState {
 
   const labels = { x: pickLabel(columns, xCol), y: pickLabel(columns, yCol), z: pickLabel(columns, zCol) };
 
+  // One undo step, no duplicates, stale when the source changes
+  // (store/analysisOutputCommit.ts).
+  const commit = useAnalysisCommit(result && live && active ? {
+    producer: SURFACE_FIT_PRODUCER,
+    sourceId: active.id,
+    computedOn: fingerprint,
+    settings: { xCol, yCol, zCol, model: result.model_name, params: result.params, errors: result.errors, n: result.n_points },
+    status: `added the ${result.model_name} fitted surface (${result.n_points} points)`,
+    output: (source) => {
+      const d = source.data;
+      return {
+        name: `${source.name} (${result.model_name} fit)`,
+        data: {
+          time: live.x,
+          values: live.y.map((yy, i) => [yy, result.z_fit[i], live.z[i], result.residuals[i]]),
+          labels: [labels.y, `${labels.z} (fit)`, labels.z, `${labels.z} residual`],
+          units: [pickUnit(d, yCol), pickUnit(d, zCol), pickUnit(d, zCol), pickUnit(d, zCol)],
+          metadata: {
+            x_column_name: labels.x,
+            x_column_unit: pickUnit(d, xCol),
+            surface_fit: {
+              model: result.model_name,
+              param_names: result.param_names,
+              params: result.params,
+              errors: result.errors,
+              ci_level: result.level,
+              ci_low: result.inference.map((r) => r.lcl),
+              ci_high: result.inference.map((r) => r.ucl),
+              fixed: result.fixed,
+              r2: result.r2,
+              rmse: result.rmse,
+              dof: result.dof,
+            },
+            ...(d.metadata?.["scatteredXYZ"] === true ? { scatteredXYZ: true } : {}),
+          },
+        } satisfies DataStruct,
+      };
+    },
+  } : null);
+
   function addFittedSurface(): void {
-    if (!result || !live || !active) return;
-    const d = active.data;
-    const data: DataStruct = {
-      time: live.x,
-      values: live.y.map((yy, i) => [yy, result.z_fit[i], live.z[i], result.residuals[i]]),
-      labels: [labels.y, `${labels.z} (fit)`, labels.z, `${labels.z} residual`],
-      units: [pickUnit(d, yCol), pickUnit(d, zCol), pickUnit(d, zCol), pickUnit(d, zCol)],
-      metadata: {
-        x_column_name: labels.x,
-        x_column_unit: pickUnit(d, xCol),
-        surface_fit: {
-          model: result.model_name,
-          param_names: result.param_names,
-          params: result.params,
-          errors: result.errors,
-          ci_level: result.level,
-          ci_low: result.inference.map((r) => r.lcl),
-          ci_high: result.inference.map((r) => r.ucl),
-          fixed: result.fixed,
-          r2: result.r2,
-          rmse: result.rmse,
-          dof: result.dof,
-        },
-        ...(d.metadata?.["scatteredXYZ"] === true ? { scatteredXYZ: true } : {}),
-      },
-    };
-    addDataset({ id: nextDatasetId(), name: `${active.name} (${result.model_name} fit)`, data });
-    setStatus(`added the ${result.model_name} fitted surface (${result.n_points} points)`);
+    if (commit.disabledReason) return;
+    commit.commit();
   }
 
   async function copyResults(markdown: boolean): Promise<void> {
@@ -245,6 +263,7 @@ export function useSurfaceFit(): SurfaceFitState {
     fit,
     resetGuess,
     addFittedSurface,
+    addDisabledReason: commit.disabledReason,
     points: live ? { x: live.x, y: live.y, z: live.z } : null,
     guessing,
     copyResults,

@@ -167,6 +167,25 @@ describe("useWilliamsonHall", () => {
     expect(reopened.result.current.instrumentalBroadening).toBe(0.05);
   });
 
+  it("re-enables Save after Undo removes the saved result (lane RL; was stuck as saved)", async () => {
+    vi.mocked(williamsonHall).mockResolvedValue({ grain_size_nm: 42, microstrain: 0.001, r2: 0.98,
+      plot_x: [1, 2], plot_y: [0.01, 0.02], fit_line: [0.01, 0.001] });
+    const { result } = renderHook(() => useWilliamsonHall());
+    act(() => {
+      result.current.updateRow(0, { twoTheta: 30, fwhm: 0.2 });
+      result.current.updateRow(1, { twoTheta: 45, fwhm: 0.3 });
+    });
+    await act(async () => { await result.current.compute(); });
+    act(() => { result.current.saveResult(); });
+    expect(result.current.canSaveResult).toBe(false);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+    expect(result.current.canSaveResult).toBe(true);
+    act(() => { result.current.saveResult(); result.current.saveResult(); });
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(result.current.canSaveResult).toBe(false);
+  });
+
   it("keeps a saved peak-table binding when reopening onto another source", async () => {
     const peakTable: PeakTable = {
       version: 1,

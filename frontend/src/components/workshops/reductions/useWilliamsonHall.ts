@@ -25,7 +25,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { williamsonHall } from "../../../lib/api/reductions";
 import { includedPeaks, manualEditCount, peakTableMatchesData, peakTableXIsDegrees } from "../../../lib/peakTableFit";
 import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
-import { useActiveDataset } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useWilliamsonHallRequestStore } from "../../../store/williamsonHall";
 import { publishWilliamsonHallResult } from "../../../store/williamsonHallResults";
 import { williamsonHallPeakTableFingerprint, type WilliamsonHallRecipe } from "../../../lib/williamsonHallRecipe";
@@ -98,9 +98,13 @@ export function useWilliamsonHall(): WilliamsonHallState {
   const [fittedSource, setFittedSource] = useState<string | null>(null);
   const [peakTableFingerprint, setPeakTableFingerprint] = useState<string | null>(null);
   const [completed, setCompleted] = useState<{ source: NonNullable<ReturnType<typeof useActiveDataset>>; recipe: WilliamsonHallRecipe } | null>(null);
-  const savedRef = useRef(false);
+  // The id of the result this fit was saved as. "Saved" is read from the live
+  // project, so Undo (or deleting the result) re-enables Save for the same fit
+  // instead of leaving it stuck as already saved (lane RL).
+  const savedRef = useRef<string | null>(null);
   const requestSeq = useRef(0);
-  const [saved, setSaved] = useState(false);
+  const [savedId, setSaved] = useState<string | null>(null);
+  const saved = useApp((state) => !!savedId && state.analysisResults.some((item) => item.id === savedId));
   const activeIdRef = useRef<string | undefined>(undefined);
   const request = useWilliamsonHallRequestStore((state) => state.request);
   const consumeRequest = useWilliamsonHallRequestStore((state) => state.consumeRequest);
@@ -138,8 +142,8 @@ export function useWilliamsonHall(): WilliamsonHallState {
     setResult(null);
     setCompleted(null);
     setError(null);
-    savedRef.current = false;
-    setSaved(false);
+    savedRef.current = null;
+    setSaved(null);
   };
 
   // Any hand edit invalidates the provenance label: the rows are then no longer
@@ -194,8 +198,8 @@ export function useWilliamsonHall(): WilliamsonHallState {
     setResult(null);
     setCompleted(null);
     requestSeq.current++;
-    savedRef.current = false;
-    setSaved(false);
+    savedRef.current = null;
+    setSaved(null);
     const { datasetName, model, method, producer } = table.provenance;
     const excluded = table.peaks.length - included.length;
     const edited = manualEditCount(included);
@@ -224,7 +228,7 @@ export function useWilliamsonHall(): WilliamsonHallState {
     setPeakTableFingerprint(request.sourceKind === "peak-table" ? request.peakTableFingerprint ?? null : null);
     setFittedSource(request.sourceKind === "peak-table" ? "Inputs restored from the saved fitted-peak binding" : null);
     requestSeq.current++;
-    setResult(null); setCompleted(null); setError(null); savedRef.current = false; setSaved(false);
+    setResult(null); setCompleted(null); setError(null); savedRef.current = null; setSaved(null);
     consumeRequest();
   }, [active?.id, consumeRequest, request]);
 
@@ -232,7 +236,7 @@ export function useWilliamsonHall(): WilliamsonHallState {
     if (activeIdRef.current !== undefined && activeIdRef.current !== active?.id) {
       requestSeq.current++;
       setResult(null); setCompleted(null); setError(null); setFittedSource(null);
-      setPeakTableFingerprint(null); savedRef.current = false; setSaved(false);
+      setPeakTableFingerprint(null); savedRef.current = null; setSaved(null);
     }
     activeIdRef.current = active?.id;
   }, [active?.id]);
@@ -263,8 +267,8 @@ export function useWilliamsonHall(): WilliamsonHallState {
       if (seq === requestSeq.current) {
         setResult(res);
         setCompleted(source ? { source, recipe } : null);
-        savedRef.current = false;
-        setSaved(false);
+        savedRef.current = null;
+        setSaved(null);
       }
     } catch (e) {
       if (seq === requestSeq.current) setError(e instanceof Error ? e.message : "Williamson-Hall fit failed");
@@ -279,11 +283,15 @@ export function useWilliamsonHall(): WilliamsonHallState {
   }
 
   function saveResult(): string | null {
-    if (!result || !completed || savedRef.current) return null;
-    savedRef.current = true;
+    // Refuse while the saved result still exists, and a second call in the same
+    // gesture (the ref is ahead of the rendered `savedId`).
+    const prior = savedRef.current;
+    if (!result || !completed || (prior && (prior !== savedId || saved))) return null;
     const id = publishWilliamsonHallResult(completed.source, completed.recipe, result);
-    if (!id) savedRef.current = false;
-    else setSaved(true);
+    if (id) {
+      savedRef.current = id;
+      setSaved(id);
+    }
     return id;
   }
 

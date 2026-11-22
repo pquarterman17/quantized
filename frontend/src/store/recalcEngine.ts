@@ -30,6 +30,7 @@
 // written green against the pre-extraction useApp.ts and unchanged by the
 // move. store/recalc.test.ts covers what a pass recomputes.
 
+import { committedOutputsOf } from "../lib/committedOutputGraph";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import type { FitSpec } from "../lib/types";
 import { FIT_ROW_IDENTITIES } from "../lib/rowSidecars";
@@ -88,7 +89,10 @@ export function createRecalcEngineSlice(set: SliceSet, get: SliceGet): RecalcEng
       const s = get();
       if (s.recalcMode === "off") return;
       const down = downstreamOf(s.datasets, id);
-      const staleDatasets = markStale(s.staleDatasets, down.datasets);
+      // Lane RL: a committed analysis output (lib/committedOutputGraph.ts) of
+      // the touched dataset, or of anything it re-derives, is stale too.
+      const committed = committedOutputsOf(s.analysisResults, [id, ...down.datasets]);
+      const staleDatasets = markStale(s.staleDatasets, [...down.datasets, ...committed]);
       const staleFits = markStale(s.staleFits, down.fits);
       if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) {
         set({ staleDatasets, staleFits });

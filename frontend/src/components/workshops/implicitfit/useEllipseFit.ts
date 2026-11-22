@@ -8,7 +8,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ellipseFit, type EllipseResult } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
@@ -29,12 +30,14 @@ export interface EllipseFitState {
   labels: { x: string; y: string };
   fit: () => Promise<void>;
   addEllipse: () => void;
+  /** Why "Add fitted ellipse" is disabled (already added, or nothing to add). */
+  addDisabledReason: string | null;
 }
+
+const ELLIPSE_FIT_PRODUCER = { id: "ellipse-fit", label: "Ellipse fit", version: 1 } as const;
 
 export function useEllipseFit(): EllipseFitState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
   const [picks, setPicks] = useState<[number, number]>([-1, 0]);
@@ -76,36 +79,51 @@ export function useEllipseFit(): EllipseFitState {
 
   const labels = { x: pickLabel(columns, xCol), y: pickLabel(columns, yCol) };
 
-  function addEllipse(): void {
-    if (!live || !active) return;
-    const d = active.data;
-    const data: DataStruct = {
-      time: live.res.curve_x,
-      values: live.res.curve_y.map((v) => [v]),
-      labels: [labels.y],
-      units: [pickUnit(d, yCol)],
-      metadata: {
-        x_column_name: labels.x,
-        x_column_unit: pickUnit(d, xCol),
-        ellipse_fit: {
-          center: [live.res.center_x, live.res.center_y],
-          semi_major: live.res.semi_major,
-          semi_minor: live.res.semi_minor,
-          angle_deg: live.res.angle_deg,
-          se: {
-            center_x: live.res.center_x_se,
-            center_y: live.res.center_y_se,
-            semi_major: live.res.semi_major_se,
-            semi_minor: live.res.semi_minor_se,
-            angle_deg: live.res.angle_deg_se,
+  // One undo step, no duplicates, stale when the source changes
+  // (store/analysisOutputCommit.ts).
+  const commit = useAnalysisCommit(live && active ? {
+    producer: ELLIPSE_FIT_PRODUCER,
+    sourceId: active.id,
+    computedOn: fingerprint,
+    settings: {
+      xCol, yCol, geometric, center: [live.res.center_x, live.res.center_y], semiMajor: live.res.semi_major,
+      semiMinor: live.res.semi_minor, angle: live.res.angle_deg, rms: live.res.rms, n: live.x.length,
+    },
+    status: "added the fitted ellipse",
+    output: (source) => {
+      const d = source.data;
+      const data: DataStruct = {
+        time: live.res.curve_x,
+        values: live.res.curve_y.map((v) => [v]),
+        labels: [labels.y],
+        units: [pickUnit(d, yCol)],
+        metadata: {
+          x_column_name: labels.x,
+          x_column_unit: pickUnit(d, xCol),
+          ellipse_fit: {
+            center: [live.res.center_x, live.res.center_y],
+            semi_major: live.res.semi_major,
+            semi_minor: live.res.semi_minor,
+            angle_deg: live.res.angle_deg,
+            se: {
+              center_x: live.res.center_x_se,
+              center_y: live.res.center_y_se,
+              semi_major: live.res.semi_major_se,
+              semi_minor: live.res.semi_minor_se,
+              angle_deg: live.res.angle_deg_se,
+            },
+            rms: live.res.rms,
+            arc_coverage_deg: live.res.arc_coverage_deg,
           },
-          rms: live.res.rms,
-          arc_coverage_deg: live.res.arc_coverage_deg,
         },
-      },
-    };
-    addDataset({ id: nextDatasetId(), name: `${active.name} (fitted ellipse)`, data });
-    setStatus("added the fitted ellipse");
+      };
+      return { name: `${source.name} (fitted ellipse)`, data };
+    },
+  } : null);
+
+  function addEllipse(): void {
+    if (commit.disabledReason) return;
+    commit.commit();
   }
 
   return {
@@ -124,5 +142,6 @@ export function useEllipseFit(): EllipseFitState {
     labels,
     fit,
     addEllipse,
+    addDisabledReason: commit.disabledReason,
   };
 }

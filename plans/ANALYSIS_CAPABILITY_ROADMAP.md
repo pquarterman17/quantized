@@ -3,7 +3,7 @@
 **Source:** ChatGPT-Sol (Codex)
 **Status:** Active
 **Created:** 2026-10-06
-**Last updated:** 2026-10-15
+**Last updated:** 2026-11-22
 
 ## Goal
 
@@ -46,6 +46,51 @@ inconsistently exposed, and do not all share the same result lifecycle.
 - [ ] Result lifecycle is inconsistent. Some results become linked worksheets
   or durable tables, some can only be copied to a report, and some disappear
   when a tool window closes.
+  - **Audit (2026-11-22, lane RL): how each tool commits a result today.**
+    "Idempotent" = a repeat click on the same computation creates nothing;
+    "Stale" = a source change marks the committed result out of date.
+
+    | Tool | Commits to | Idempotent | One undo step | Library result | Stale on input change |
+    |------|------------|------------|---------------|----------------|-----------------------|
+    | Signal Processing | linked derived worksheet (`derivedFrom` + `analysisRecipe`) | in-flight guard; panel closes on commit | yes (`addDataset` + `registerSignalResult`) | yes | recalc graph (`staleDatasets`), recalculates per recalc mode |
+    | Curve fit | `fitSpec` on the source | yes (one result per source) | yes | yes | `staleFits` + fingerprint |
+    | Peaks / Peak analyzer | `peakTable` on the source | yes (one result per source) | yes | yes | peak-table fingerprint |
+    | Reflectivity fit | `reflFits` history record | per record | yes | yes | channel check |
+    | Distribution, Fit Y by X, Variability, Outlier screening, Multivariate | envelope tables (snapshot) | yes, five bespoke value-keyed matchers (Distribution's only in its hook) | yes | yes | fingerprint (`snapshotResultState`), mode-independent |
+    | Statistical tests | envelope tables | no guard (each Run is a run) | yes | yes | fingerprint |
+    | Williamson–Hall | envelope tables | boolean ref, stuck "saved" after Undo (**fixed**, lane RL) | yes | yes | fingerprint + peak binding |
+    | Surface fit, Optical gap, Ellipse fit "Add … as dataset" | plain worksheet | **no** (repeat click duplicated) | yes | **none** | **never** → migrated (lane RL) |
+    | Baseline subtract, Magnetometry outputs (normalization, demag, Curie–Weiss), FFT thickness, Reflectivity model/SLD, spin asymmetry, Tabulate, peak batch/integrate tables, fit bands, digitizer | plain worksheet | no | yes | none | never (not migrated yet) |
+
+    Already shared: the `AnalysisResult` envelope with `sources`/`outputs`,
+    `staleDatasets` + the recalc engine (`touchDataset`, mode gating), the
+    save-side stamp (`stampAnalysisResults`) and load-side scan
+    (`staleAnalysisOutputs`), and `asOneEditStep`.
+  - [x] **Shared commit contract, first slice (lane RL, 2026-11-22).**
+    `store/analysisOutputCommit.ts` (`commitAnalysisOutput`) + hook
+    `components/workshops/resultcommit/useAnalysisCommit.ts`, pure parts in
+    `lib/committedOutput.ts` / `lib/committedOutputGraph.ts`. A commit writes
+    the output worksheet AND an `AnalysisResult` (sources, outputs,
+    `parameters.commitKey` + settings, fingerprint) as ONE undo step; a repeat
+    commit of the same computation (by value: producer, source, analysis-view
+    fingerprint, settings and result digest) creates nothing and shows the
+    existing output, the button disabled with the reason; after Undo, deletion
+    of the output, or a source change it commits again. A missing, still
+    loading or changed source fails closed. Stale marking reuses the recalc
+    graph: `touchDataset` marks a committed output stale in Auto/Manual mode
+    (None tracks nothing), a recalc pass leaves it stale (no recipe to replay),
+    the result workspace disables Recalculate with the reason and says to rerun
+    the tool, and the existing stamp/scan carries the state across save/reopen.
+    Migrated: Surface fit, Optical gap, Ellipse fit. Tests:
+    `store/analysisOutputCommit.test.ts`,
+    `resultcommit/committedOutputTools.test.tsx` (fail-before: duplicate on
+    repeat Add, no stale mark), `reductions/useWilliamsonHall.test.ts`.
+  - [ ] Remaining: migrate the other plain-worksheet tools in the table above
+    (Baseline subtract is async: add an in-flight guard to the hook first);
+    fold the five snapshot matchers into one store helper; "Edit / reopen in
+    tool" for committed outputs (they reopen as worksheets, not tool state);
+    stale marking from analysis-view-only changes (row exclusions/filters do
+    not call `touchDataset`, so they do not mark any linked output stale).
 - [ ] Selection semantics differ by tool: active dataset, plotted channels,
   selected worksheet columns, range ROI, excluded rows, and filtered rows are
   not presented through one understandable contract.
@@ -154,6 +199,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
 - [ ] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
+  Progress (lane RL): the commit half exists (`useAnalysisCommit` +
+  `commitAnalysisOutput`, see the audit above); preview/cancel and rerun/edit
+  are not yet part of it.
 
 ## Product contract for every new analysis
 
@@ -165,10 +213,16 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   units, parameters, and algorithm version are recorded.
 - [ ] Preview is visibly provisional and Cancel leaves no scientific state.
 - [ ] Commit is one undo step and repeated clicks cannot create duplicates.
+  Progress (lane RL): shared by `commitAnalysisOutput` for Surface fit,
+  Optical gap and Ellipse fit; the other plain-worksheet tools in the audit
+  above are not yet migrated, so this stays open.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
 - [ ] A changed input marks the result stale; automatic recalculation occurs
   only when the project's recalculation mode permits it.
+  Progress (lane RL): committed outputs now join the recalc graph (stale in
+  Auto/Manual, nothing in None, never auto-recomputed); the unmigrated tools
+  in the audit keep this open.
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
   lazy Origin previews, and cancelled work fail closed with a useful message.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy

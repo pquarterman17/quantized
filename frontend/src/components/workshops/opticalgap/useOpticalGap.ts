@@ -9,7 +9,8 @@ import { useEffect, useMemo, useState } from "react";
 import { taucFit, type TaucResult, type TaucSignal, type TaucXUnit, type TransitionKind } from "../../../lib/api/analysisExtras";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { DataStruct } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset } from "../../../store/useApp";
+import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, parseField, pickColumns, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
@@ -47,6 +48,8 @@ export interface OpticalGapState {
   yLabel: string;
   fit: () => Promise<void>;
   addTaucData: () => void;
+  /** Why "Add Tauc data" is disabled (already added, or nothing to add). */
+  addDisabledReason: string | null;
 }
 
 /** X quantity from the column's unit, else from its values (a number above 30
@@ -82,10 +85,10 @@ export function guessSignal(label: string, unit: string, y: number[]): { signal:
   return { signal: "transmittance", percent: unit.includes("%") || maxFinite(y) > 1.5 };
 }
 
+const OPTICAL_GAP_PRODUCER = { id: "optical-gap", label: "Optical gap", version: 1 } as const;
+
 export function useOpticalGap(): OpticalGapState {
   const active = useActiveDataset();
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
   const columns = useMemo(() => pickColumns(active), [active]);
   const load = useLoadColumns();
 
@@ -178,36 +181,51 @@ export function useOpticalGap(): OpticalGapState {
 
   const yLabel = `(αhν)^${Number((result?.gamma ?? 2).toPrecision(3))}`;
 
-  function addTaucData(): void {
-    if (!result || !active) return;
-    const t = parseField(thickness);
-    const order = result.energy.map((_, i) => i).sort((a, b) => result.energy[a] - result.energy[b]);
-    const data: DataStruct = {
-      time: order.map((i) => result.energy[i]),
-      values: order.map((i) => [result.alpha[i], result.tauc[i]]),
-      // Absorbance without a thickness gives alpha only up to a constant: no unit claimed.
-      labels: [signal === "absorbance" && !t ? "α (∝ A)" : "α", yLabel],
-      units: [signal === "absorbance" && !t ? "" : "cm⁻¹", ""],
-      metadata: {
-        x_column_name: "Photon energy",
-        x_column_unit: "eV",
-        tauc: {
-          transition: result.kind,
-          eg: result.eg,
-          eg_se: result.eg_se,
-          eg_se_fit: result.eg_se_fit,
-          eg_window_sd: result.eg_window_sd,
-          ci_level: result.level,
-          eg_low: result.eg_lcl,
-          eg_high: result.eg_ucl,
-          window: [result.e_min, result.e_max],
-          auto_window: result.auto_window,
-          r2: result.r2,
+  // One undo step, no duplicates, stale when the source changes
+  // (store/analysisOutputCommit.ts).
+  const commit = useAnalysisCommit(result && active ? {
+    producer: OPTICAL_GAP_PRODUCER,
+    sourceId: active.id,
+    computedOn: fingerprint,
+    settings: {
+      xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax,
+      eg: result.eg, egSe: result.eg_se, window: [result.e_min, result.e_max], n: result.energy.length,
+    },
+    status: `added the Tauc data (Eg = ${result.eg.toFixed(3)} eV)`,
+    output: (source) => {
+      const t = parseField(thickness);
+      const order = result.energy.map((_, i) => i).sort((a, b) => result.energy[a] - result.energy[b]);
+      const data: DataStruct = {
+        time: order.map((i) => result.energy[i]),
+        values: order.map((i) => [result.alpha[i], result.tauc[i]]),
+        // Absorbance without a thickness gives alpha only up to a constant: no unit claimed.
+        labels: [signal === "absorbance" && !t ? "α (∝ A)" : "α", yLabel],
+        units: [signal === "absorbance" && !t ? "" : "cm⁻¹", ""],
+        metadata: {
+          x_column_name: "Photon energy",
+          x_column_unit: "eV",
+          tauc: {
+            transition: result.kind,
+            eg: result.eg,
+            eg_se: result.eg_se,
+            eg_se_fit: result.eg_se_fit,
+            eg_window_sd: result.eg_window_sd,
+            ci_level: result.level,
+            eg_low: result.eg_lcl,
+            eg_high: result.eg_ucl,
+            window: [result.e_min, result.e_max],
+            auto_window: result.auto_window,
+            r2: result.r2,
+          },
         },
-      },
-    };
-    addDataset({ id: nextDatasetId(), name: `${active.name} (Tauc, ${result.label.toLowerCase()})`, data });
-    setStatus(`added the Tauc data (Eg = ${result.eg.toFixed(3)} eV)`);
+      };
+      return { name: `${source.name} (Tauc, ${result.label.toLowerCase()})`, data };
+    },
+  } : null);
+
+  function addTaucData(): void {
+    if (commit.disabledReason) return;
+    commit.commit();
   }
 
   return {
@@ -237,5 +255,6 @@ export function useOpticalGap(): OpticalGapState {
     yLabel,
     fit,
     addTaucData,
+    addDisabledReason: commit.disabledReason,
   };
 }

@@ -402,6 +402,11 @@ export async function recalculateAnalysisResult(id: string): Promise<boolean> {
   if (!result) return false;
   const output = state.datasets.find((dataset) => dataset.id === result.outputs[0]?.datasetId);
   const sourceId = result.sources[0]?.datasetId;
+  if (output && !output.derivedFrom && sourceId && state.datasets.some((dataset) => dataset.id === sourceId)) {
+    // A committed analysis output (lib/committedOutputGraph.ts): nothing to replay.
+    state.setStatus(`can't recalculate ${result.name}: it was computed once by ${result.producer.label}; run ${result.producer.label} again to replace it`, "danger");
+    return false;
+  }
   if (!output?.derivedFrom || !sourceId || !state.datasets.some((dataset) => dataset.id === sourceId)) {
     state.setStatus(`can't recalculate ${result.name}: its source or output worksheet is missing`, "danger");
     return false;

@@ -8,9 +8,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Shared "add result as dataset" contract**: Surface fit, Optical gap and Ellipse fit outputs now land as one undo step together with a Library result; clicking Add again on the same computation creates no duplicate (the button says it is already added); a change to the source marks the output Out of date in Auto and Manual recalculation mode (None tracks nothing), and that state survives save and reopen.
 - **Floating Column** plot type (gallery tile and a Series card "Floats from the series above" option): each bar spans two Y columns, low to high, on screen and in the exported figure.
 - The cursor readout of a **stacked series** shows its running total beside its own value.
 - A large Curve Fit's saved fit curve now reaches "Add to Report" from a saved figure and the Figure Builder preview and Export, as it already did on Figure Pages and batch PDFs.
+
+### Fixed
+
+- **Williamson–Hall Save result** is available again after Undo removes the saved result (it stayed "already saved").
 
 ### Changed
 

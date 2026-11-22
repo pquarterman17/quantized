@@ -35,7 +35,7 @@ import AnalysisResultToolbar from "./AnalysisResultToolbar";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
-import { FIT_SOURCE_MISSING, formatDate, formatValue, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
+import { FIT_SOURCE_MISSING, formatDate, formatValue, NOT_RECOMPUTABLE, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 import { openAnalysisSourceRows } from "../../../store/analysisResultRowNavigation";
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
@@ -290,7 +290,7 @@ export default function AnalysisResultPanel() {
           snapshotState={snapshotState ?? "source-missing"}
           recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
           hasReflFit={!!reflFit} hasFitSpec={!!fitSpec} fitReplayable={fitReplayable}
-          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} blocked={blocked} setBusy={setBusy} onFrozen={setActive}
+          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputRecomputable={!!output?.derivedFrom} blocked={blocked} setBusy={setBusy} onFrozen={setActive}
           onOpenSource={() => { if (source) openTable(source.id); }} onOpenOutput={openOutput}
           onEdit={isSnapshot ? editSnapshot : isRefl ? editReflFit : isPeak ? editPeaks : editFit}
           onRecalculate={() => void recalculate()} onRerun={() => void rerun()}
@@ -322,7 +322,7 @@ export default function AnalysisResultPanel() {
             </dl>}
             {isPeak
               ? <p className="qz-analysis-caption">Values are read live from the source worksheet’s fitted peak table. Editing or re-fitting updates this result; deleting this Library item keeps the scientific table.</p>
-              : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result.</p>}
+              : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">{output && !output.derivedFrom ? `This result records its source; a change to the source marks it Out of date. ${NOT_RECOMPUTABLE}` : "This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result."}</p>}
           </>}
           {tab === "table" && (isSnapshot
             ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null}
