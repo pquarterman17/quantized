@@ -129,7 +129,7 @@ rule in task 4.
    - 98 speculative edits to currently-passing tests is a bad trade: each
      carries its own risk of breaking a working test to prevent a flake that
      may not exist.
-   - [ ] Standing rule: when you are editing a test file for any other reason
+   - [ ] [standing checklist, not a work item] Standing rule: when you are editing a test file for any other reason
      and it appears in the inventory, fix its weak waits then. Wait on STATE
      (`await waitFor(() => expect(result.current.x).not.toBeNull())`), never on
      the mock. Lower the task-6 allowlist in the same commit.

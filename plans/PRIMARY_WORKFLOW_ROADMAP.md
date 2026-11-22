@@ -18,8 +18,8 @@ Goal: turn an imported worksheet into an understandable path from inspection thr
 - [x] Make the loading placeholder and loaded workspace obey the shared Escape ordering.
 - [x] Keep the workflow lazy and within the eager bundle budget.
 - [x] Add a worksheet context action and preserve explicit plot-intent routing back to Plot/Map.
-- [ ] Manual sign-off with representative SIMS, XRD, reflectometry, magnetometry, and generic files.
-- [ ] Revisit the action order and stage descriptions after several real analysis sessions.
+- [ ] [owner] Manual sign-off with representative SIMS, XRD, reflectometry, magnetometry, and generic files.
+- [ ] [owner] Revisit the action order and stage descriptions after several real analysis sessions.
 
 Acceptance: a user can select a worksheet, understand why a workflow was chosen, reach the appropriate existing tools in one click, and never run an analysis on a lazy preview or a newly selected replacement dataset.
 
@@ -85,9 +85,9 @@ Acceptance: a user can understand and safely modify how a derived dataset was pr
 
 ## Review discipline for every section
 
-- [ ] Add characterization tests before changing an established workflow.
-- [ ] Test stale selection, deleted/reused ids, lazy Origin data, cancellation, and repeated clicks.
-- [ ] Verify opening/cancelling does not mutate raw or scientific state.
-- [ ] Run typecheck, lint, focused tests, architecture ratchets, production build, and bundle-size gate.
-- [ ] Exercise representative files from the sibling `test-data` corpus where the feature touches import or technique behavior.
-- [ ] Perform a second adversarial review before requesting external review.
+- [ ] [standing checklist, not a work item] Add characterization tests before changing an established workflow.
+- [ ] [standing checklist, not a work item] Test stale selection, deleted/reused ids, lazy Origin data, cancellation, and repeated clicks.
+- [ ] [standing checklist, not a work item] Verify opening/cancelling does not mutate raw or scientific state.
+- [ ] [standing checklist, not a work item] Run typecheck, lint, focused tests, architecture ratchets, production build, and bundle-size gate.
+- [ ] [standing checklist, not a work item] Exercise representative files from the sibling `test-data` corpus where the feature touches import or technique behavior.
+- [ ] [standing checklist, not a work item] Perform a second adversarial review before requesting external review.

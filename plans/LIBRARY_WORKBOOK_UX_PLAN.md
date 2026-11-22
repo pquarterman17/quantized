@@ -3439,7 +3439,7 @@ back to the owner. No Library implementation is authorized by this pause.
   L0.21, L0.43, L0.50, and L0.55.
 - [x] ~~Scale and organization behavior.~~ Confirmed in L0.46-L0.49,
   L0.54, and L0.56; engineering safeguards remain unchecked until built.
-- [ ] Revisit L0.44 after real cross-workbook work to confirm that folder-level
+- [ ] [gated: needs real cross-workbook use] Revisit L0.44 after real cross-workbook work to confirm that folder-level
   results remain understandable and do not create Origin-like clutter.
 
 ## Completed

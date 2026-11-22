@@ -823,9 +823,9 @@ being measured on current `main` before anything is called a blocker.
 ### Day 0 — baseline and dispatch (2026-08-17)
 
 - [x] Merge G5 only after Claude's save/close/reopen/project-reload proof passes. **(#160.)**
-- [ ] Tag or record the baseline preview build and run the owner’s 20-minute
+- [ ] [owner] Tag or record the baseline preview build and run the owner’s 20-minute
   Quick Figure smoke workflow. **— OWNER, still open.**
-- [ ] Owner starts the real switch-trigger project/friction log and confirms
+- [ ] [owner] Owner starts the real switch-trigger project/friction log and confirms
   Windows/macOS Office copy/paste; agents cannot manufacture this evidence. **— OWNER, still open.**
 - [x] Create worktrees and publish pickup briefs for lanes A–G. **(lanes A-G worktrees + briefs published.)**
 - [x] Opus freezes native project (P1.1/P1.2/P1.7), categorical/grouping
@@ -876,7 +876,7 @@ being measured on current `main` before anything is called a blocker.
 - [x] Finish M stale/frozen/dependent recovery and one-session Undo behavior. **(#179.)**
 - [x] ~~Finish N Relink Data, cleanup limits, and portable Pack Project.~~ **— DEFERRED WITH EVIDENCE**, same closure as the Day-3 N row (not open work).
 - [x] Finish P1.7 Relink/portability and P1.5 live grouping/facet behavior. **(#181 / #182.)**
-- [ ] ChatGPT-Sol reviews wording, menus, previews and recovery affordances. **— SOL, still open.**
+- [ ] [owner] ChatGPT-Sol reviews wording, menus, previews and recovery affordances. **— SOL, still open.**
 - **Gate:** Windows and macOS paths are required; Ubuntu is best-effort.
 
 ### Day 5 — feature freeze
@@ -892,12 +892,12 @@ being measured on current `main` before anything is called a blocker.
 
 ### Day 6 — stabilization
 
-- [ ] Fix release blockers only, using one PR per root cause where practical.
-- [ ] Run Windows and macOS packaged smoke tests: import, browse, quick plot,
+- [x] (stale: sprint over: v0.23.0 shipped, later releases to v0.40.1) Fix release blockers only, using one PR per root cause where practical.
+- [ ] [owner] Run Windows and macOS packaged smoke tests: import, browse, quick plot,
   configure, edit, template, combine, derive, copy/paste, save/reopen, reimport,
   delete/restore, offline/sidecar recovery.
-- [ ] Owner performs a 60–90 minute real-data session and records friction.
-- [ ] Verify installer/logo/desktop/taskbar behavior in the release artifact.
+- [ ] [owner] Owner performs a 60–90 minute real-data session and records friction.
+- [ ] [owner] Verify installer/logo/desktop/taskbar behavior in the release artifact.
 
 ## Independent Day-6 audit — required before Day 7
 
@@ -912,12 +912,12 @@ limitation, before Day 7 begins.
 
 ### P0 — release gates and claims
 
-- [ ] **Complete the four Day-6 gates above with recorded evidence.** Run the
+- [ ] [owner] **Complete the four Day-6 gates above with recorded evidence.** Run the
   packaged Windows and macOS workflows, the owner's 60–90 minute real-data
   session, installer/icon checks, and the outstanding ChatGPT-Sol wording,
   menu, preview and recovery review. Do not infer these from unit/E2E CI.
   **Owner:** owner + Claude Sonnet; **review:** ChatGPT-Sol. **— OWNER/SOL, still open (agents cannot run these).**
-- [ ] **Test an installed, packaged app rather than only its build and sidecar.**
+- [ ] [owner] **Test an installed, packaged app rather than only its build and sidecar.**
   On Windows and macOS, install and launch the candidate and exercise import →
   browse → Quick Plot → configure/edit → copy/paste → save/reopen → reimport →
   delete/restore → recovery. Include real native dialogs, cancel paths, Unicode
@@ -1061,7 +1061,7 @@ Sub-items, tracked against the three states above:
   blocked; none may remain ambiguously “in progress.” (This reconciliation
   pass: this document, `POST_SPRINT_INDEPENDENT_REVIEW.md`,
   `RELEASE_BLOCKERS.md`, `RC_RELEASE_NOTES_DRAFT.md`.)
-- [ ] Schedule post-sprint triage after the owner has used the build. **OPEN
+- [ ] [owner] Schedule post-sprint triage after the owner has used the build. **OPEN
   — depends on R2's owner-acceptance session actually running first.**
 
 ## Definition of done for every slice
