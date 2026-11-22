@@ -160,7 +160,7 @@ export default function OpticalGapPanel() {
                 <SmallUPlot payload={payload} label={`Tauc plot, band gap ${fmt(r.eg)} eV`} height={200} />
               </div>
               <div style={{ marginTop: 10 }}>
-                <Button size="sm" title="Add the photon energy, α and the Tauc quantity as a new dataset" onClick={g.addTaucData}>
+                <Button size="sm" disabled={!!g.addDisabledReason} title={g.addDisabledReason ?? "Add the photon energy, α and the Tauc quantity as a new dataset"} onClick={g.addTaucData}>
                   Add Tauc data as dataset
                 </Button>
               </div>

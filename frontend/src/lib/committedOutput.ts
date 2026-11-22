@@ -1,0 +1,88 @@
+// The shared "commit derived output" contract (lane RL). Pure: the commit key
+// and the AnalysisResult envelope a tool's "Add … as dataset" publishes with its
+// output worksheet. The store side (one undo step, idempotency against the live
+// project) is store/analysisOutputCommit.ts; the recalc side (stale marking per
+// the project's recalc mode) is lib/committedOutputGraph.ts.
+//
+// The key is BY VALUE: producer + source id + the source's analysis-view
+// fingerprint at compute time + the tool's settings (inputs AND the result
+// digest the output encodes). A repeat click on the same computation finds the
+// same key; any real change to the data, the controls or the fitted values is a
+// new computation and commits normally.
+
+import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from "./analysisResult";
+import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
+import { COMMIT_KEY_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
+import { dataFingerprint } from "./dataFingerprint";
+import type { Dataset } from "./types";
+
+export type CommitSettings = Record<string, unknown>;
+
+/** A settings value the envelope sanitizer keeps on reopen: non-finite numbers
+ *  become null (the sanitizer would otherwise drop ALL parameters, and with
+ *  them the commit key), undefined fields are omitted. */
+export function toResultValue(value: unknown): AnalysisResultValue {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) return value.map(toResultValue);
+  if (typeof value === "object") {
+    const out: Record<string, AnalysisResultValue> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (item !== undefined) out[key] = toResultValue(item);
+    }
+    return out;
+  }
+  return null;
+}
+
+export function committedOutputKey(
+  producerId: string, sourceId: string, sourceFingerprint: string, settings: CommitSettings,
+): string {
+  return JSON.stringify([producerId, sourceId, sourceFingerprint, toResultValue(settings)]);
+}
+
+/** The id of the CURRENT committed result for `key`: its output worksheet still
+ *  exists and is not marked stale. A result whose output was deleted, or that
+ *  went stale, no longer blocks a new commit. */
+export function findCommittedResultId(
+  results: readonly AnalysisResult[],
+  datasets: readonly Pick<Dataset, "id">[],
+  staleDatasets: readonly string[],
+  key: string | null,
+): string | null {
+  if (!key) return null;
+  for (const result of results) {
+    if (!isCommittedOutputResult(result) || result.parameters?.[COMMIT_KEY_PARAM] !== key) continue;
+    const output = result.outputs[0]!.datasetId;
+    if (datasets.some((dataset) => dataset.id === output) && !staleDatasets.includes(output)) return result.id;
+  }
+  return null;
+}
+
+export function committedOutputResult(args: {
+  id: string;
+  producer: AnalysisResultProducer;
+  source: Dataset;
+  output: Dataset;
+  key: string;
+  settings: CommitSettings;
+  createdAt?: string;
+}): AnalysisResult {
+  const { id, producer, source, output, key, settings } = args;
+  return {
+    version: ANALYSIS_RESULT_VERSION,
+    id,
+    name: `${producer.label} · ${source.name}`,
+    producer,
+    sources: [{ datasetId: source.id, role: "input" }],
+    outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
+    parameters: { [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings) },
+    tableRefs: [{ datasetId: output.id, label: output.name }],
+    plotBindings: [{ datasetId: output.id, channels: output.data.labels.map((_, index) => index) }],
+    warnings: [],
+    createdAt: args.createdAt ?? new Date().toISOString(),
+    // The same format the save-side stamp and the load-side scan compare.
+    sourceFingerprint: dataFingerprint(source.data),
+  };
+}

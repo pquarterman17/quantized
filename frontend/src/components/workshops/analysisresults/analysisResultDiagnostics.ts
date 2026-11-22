@@ -3,6 +3,7 @@ import { snapshotResultDiagnostics, type SnapshotResultState } from "../../../li
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import type { Dataset, FitSpec } from "../../../lib/types";
+import { COMMITTED_OUTPUT_STALE } from "./analysisResultPanelText";
 import type { ReflFitRecord } from "../reflectivity/reflFitRecord";
 import type { RecordIssues } from "../reflectivity/reflFitRestore";
 
@@ -40,7 +41,9 @@ export function analysisResultDiagnostics({
       .map((ref) => `Source worksheet ${ref.datasetId} is missing.`),
     ...result.outputs.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId))
       .map((ref) => `Output worksheet ${ref.datasetId} is missing.`),
-    ...(output && staleDatasets.includes(output.id) ? ["The linked output is out of date and should be recalculated."] : []),
+    ...(output && staleDatasets.includes(output.id)
+      ? [output.derivedFrom ? "The linked output is out of date and should be recalculated." : COMMITTED_OUTPUT_STALE]
+      : []),
     ...(peakTable?.provenance.warnings ?? []),
     ...(isPeak && source && peakTable && !peakTableMatchesData(peakTable, source)
       ? ["The source data changed after this peak fit. Re-fit before using these values."]

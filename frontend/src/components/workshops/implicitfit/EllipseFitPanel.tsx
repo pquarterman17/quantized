@@ -107,7 +107,7 @@ export default function EllipseFitPanel() {
                 <EllipsePlot x={e.points.x} y={e.points.y} curveX={r.curve_x} curveY={r.curve_y} cx={r.center_x} cy={r.center_y} />
               </div>
               <div style={{ marginTop: 10 }}>
-                <Button size="sm" title="Add the fitted ellipse as a dataset to overlay on the points" onClick={e.addEllipse}>
+                <Button size="sm" disabled={!!e.addDisabledReason} title={e.addDisabledReason ?? "Add the fitted ellipse as a dataset to overlay on the points"} onClick={e.addEllipse}>
                   Add fitted ellipse as dataset
                 </Button>
               </div>

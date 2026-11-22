@@ -6,6 +6,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Shared "add result as dataset" contract**: Surface fit, Optical gap and Ellipse fit outputs now land as one undo step together with a Library result; clicking Add again on the same computation creates no duplicate (the button says it is already added); a change to the source marks the output Out of date in Auto and Manual recalculation mode (None tracks nothing), and that state survives save and reopen.
+
+### Fixed
+
+- **Williamson–Hall Save result** is available again after Undo removes the saved result (it stayed "already saved").
+
 ### Changed
 
 - **Peak find is ~2x faster on large traces** (1M rows: 70 s to 36 s): the SNIP clip runs as a compiled `numba` kernel with the same results, and falls back to the previous numpy code where numba is unavailable.

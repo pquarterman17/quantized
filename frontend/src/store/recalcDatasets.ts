@@ -37,6 +37,7 @@
 //    so via `setStatus`. Cite only what a mechanism actually covers.
 
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
+import { committedOutputIds } from "../lib/committedOutputGraph";
 import { withRecomputedFormulas } from "./computedColumns";
 import { baseColumns } from "../lib/formula";
 import { sheetIdsRead } from "../lib/sheetBindings";
@@ -116,7 +117,15 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
   // of one is left stale too — see `failedUpstream` below.
   const failed = new Map<string, string>();
   const nameOf = (id: string): string => get().datasets.find((x) => x.id === id)?.name ?? id;
-  const order = sortForRecalc(get().datasets, get().staleDatasets);
+  // Lane RL: a committed analysis output has no recipe to replay; it STAYS
+  // stale until its tool runs again (lib/committedOutputGraph.ts). Never
+  // "clear" it here as if it had been recalculated.
+  const held = committedOutputIds(get().analysisResults);
+  const recomputable = get().staleDatasets.filter((id) => {
+    const d = held.has(id) ? get().datasets.find((x) => x.id === id) : undefined;
+    return !d || !!d.derivedFrom || !!d.corrections;
+  });
+  const order = sortForRecalc(get().datasets, recomputable);
   for (const id of order) {
     const d = get().datasets.find((x) => x.id === id);
     // REVIEW ROUND: clearing only the FAILING id was not enough — the same bug

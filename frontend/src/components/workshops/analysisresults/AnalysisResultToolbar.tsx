@@ -4,12 +4,13 @@ import type { Dataset } from "../../../lib/types";
 import { Button } from "../../primitives";
 import AnalysisResultFreeze from "./AnalysisResultFreeze";
 import AnalysisResultSnapshotToolbar from "./AnalysisResultSnapshotToolbar";
+import { NOT_RECOMPUTABLE } from "./analysisResultPanelText";
 import type { Dispatch, SetStateAction } from "react";
 import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 
 export default function AnalysisResultToolbar({
   result, source, status, busy, mode, snapshotState, recipeReady,
-  hasReflFit, hasFitSpec, fitReplayable, hasOutput, outputHasRecipe,
+  hasReflFit, hasFitSpec, fitReplayable, hasOutput, outputHasRecipe, outputRecomputable,
   blocked, setBusy, onFrozen,
   onOpenSource, onOpenOutput, onEdit, onRecalculate, onRerun,
   onDuplicate, onReport, onRename, onRemove,
@@ -26,6 +27,9 @@ export default function AnalysisResultToolbar({
   fitReplayable: boolean;
   hasOutput: boolean;
   outputHasRecipe: boolean;
+  /** The output can be re-derived in place (it has `derivedFrom`); a committed
+   *  analysis output cannot, only its tool can replace it. */
+  outputRecomputable: boolean;
   blocked?: string;
   setBusy: Dispatch<SetStateAction<AnalysisResultBusy>>;
   onFrozen: (datasetId: string) => void;
@@ -56,7 +60,7 @@ export default function AnalysisResultToolbar({
         onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
     </> : <>
       <Button disabled={!hasOutput} onClick={onOpenOutput}>Open worksheet</Button>
-      <Button disabled={!source || !hasOutput || busy !== null} title={blocked} onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
+      <Button disabled={!source || !hasOutput || !outputRecomputable || busy !== null} title={blocked ?? (hasOutput && !outputRecomputable ? NOT_RECOMPUTABLE : undefined)} onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
       <Button disabled={!source || !outputHasRecipe || busy !== null} title={blocked} onClick={onRerun}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
       <Button disabled={result.outputs.length !== 1 || !hasOutput || busy !== null} title="Create a separate linked output worksheet and result." onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
       <AnalysisResultFreeze result={result} busy={busy} setBusy={setBusy} onFrozen={onFrozen} />
