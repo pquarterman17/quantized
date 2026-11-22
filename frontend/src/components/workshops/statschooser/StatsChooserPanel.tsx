@@ -7,7 +7,8 @@ import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
-import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
+import StatsInputReview from "../analysisselection/StatsInputReview";
+import { chooserRows } from "../analysisselection/statsInputReviewRows";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -30,7 +31,7 @@ export default function StatsChooserPanel() {
         </div>
       ) : (
         <>
-          <AnalysisInputSummary inputs={c.inputs} />
+          <StatsInputReview inputs={c.inputs} rows={chooserRows(c.inputs, { ...c, paired: c.paired && c.pairable })} />
           <SegmentedControl
             options={[
               { value: "columns", label: "Columns as groups" },
