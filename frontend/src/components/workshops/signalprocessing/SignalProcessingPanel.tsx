@@ -23,7 +23,7 @@ import SigopBody from "./SigopBody";
 import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
-import SignalScopeNote from "./SignalScopeNote";
+import SignalScopeAndBy from "./SignalScopeAndBy";
 import SignalUncertaintyControls from "./SignalUncertaintyControls";
 import {
   DEFAULT_SIGNAL_SETTINGS,
@@ -378,7 +378,7 @@ export default function SignalProcessingPanel() {
             <SignalPreview source={active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
             {spectral && <SpectralReadout result={displayedPreview} />}
             {correctionOp && <SignalUncertaintyControls operation={correctionOp} boundLabels={boundTargets.map((c) => active.data.labels[c])} blocked={Boolean(errorBlock)} drop={settings.dropUncertainty} setDrop={(dropUncertainty) => setSettings((current) => ({ ...current, dropUncertainty }))} />}
-            <SignalScopeNote source={active} secondary={secondary} />
+            <SignalScopeAndBy source={active} secondary={secondary} settings={settings} spectral={spectralSettings} channels={channels} sigopFilter={sigop !== null} crossWorksheet={crossWorksheet} validation={validation} />
             {spectral && (boundTargets.length > 0 || secondaryBoundTargets.length > 0) && <div className="qz-signal-note">Bound uncertainties are not propagated into spectral outputs; the linked source and full recipe remain recorded.</div>}
             {(validation || previewError || outputError) && <p className="qz-error" role="alert">{validation || previewError || outputError}</p>}
             {/* Worksheet audit #15: the same setup on each selected Library sheet. */}
