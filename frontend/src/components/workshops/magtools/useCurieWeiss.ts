@@ -5,7 +5,9 @@ import type { ErrorBinding } from "../../../lib/errorRoles";
 import { massInGrams, type MassUnit } from "../../../lib/sampleGeometry";
 import { analysisView, rowStateIdentity } from "../../../lib/rowstate";
 import type { DataStruct, Dataset } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
   curieWeissProblem,
   fieldColumns,
@@ -20,6 +22,8 @@ import {
   resolveCurrentRequest,
   resolvedSourceStillCurrent,
 } from "./useMagTools";
+
+const CURIE_WEISS_PRODUCER = { id: "curie-weiss", label: "Curie–Weiss", version: 1 } as const;
 
 interface FitReadout {
   owners: readonly string[];
@@ -86,8 +90,6 @@ export function useCurieWeiss() {
   const xKey = useApp((state) => state.xKey);
   const yKeys = useApp((state) => state.yKeys);
   const seriesOrder = useApp((state) => state.seriesOrder);
-  const addDataset = useApp((state) => state.addDataset);
-  const setStatus = useApp((state) => state.setStatus);
   const yKey = active ? magXY(active, xKey, yKeys, seriesOrder).yKey : 0;
   const [basisChoice, setBasisChoice] = useState<CurieWeissBasisChoice>("auto");
   const [fieldKey, setFieldKey] = useState<number | null>(null);
@@ -292,12 +294,22 @@ export function useCurieWeiss() {
           },
         },
       };
-      const outId = nextDatasetId();
-      addDataset({
-        id: outId, name: `${dataset.name.replace(/\.[^.]+$/, "")} (Curie–Weiss)`, data,
+      // One undo step, no duplicate on a repeat fit, stale when the source or
+      // its row state changes (store/analysisOutputCommit.ts). The worksheet
+      // stays linked to its source as before (`derivedFrom`).
+      const outcome = commitComputedOutput({
+        producer: CURIE_WEISS_PRODUCER,
+        sources: [{ id: dataset.id, computedOn: analysisDataFingerprint(dataset) }],
+        settings: { ...runParams, xKey: request.xKey, yKey: current.yKey },
+        name: `${dataset.name.replace(/\.[^.]+$/, "")} (Curie–Weiss)`, data,
         ...(errorRoles.length ? { errorRoles } : {}),
         derivedFrom: { datasetId: dataset.id, pipeline: "curie-weiss" },
+        status: `Curie–Weiss fit: θ = ${result.theta_cw.toPrecision(4)} K, R² = ${result.r2.toFixed(4)}`,
       });
+      if (outcome.kind === "refused") {
+        setReadout({ ...EMPTY, owners, error: outcome.reason });
+        return;
+      }
       const warnings: string[] = [];
       if (sourceRows.length < full.x.length) warnings.push(`${full.x.length - sourceRows.length} excluded or filtered rows remain gaps.`);
       if (keep.length < current.x.length) warnings.push(`${current.x.length - keep.length} incomplete analysis rows remain gaps.`);
@@ -314,11 +326,10 @@ export function useCurieWeiss() {
       }
       if (result.C <= 0) warnings.push("The fitted Curie constant is non-positive; μeff is not physically meaningful.");
       setReadout({
-        owners: [...owners, outId], theta: result.theta_cw, curie: result.C,
+        owners: [...owners, outcome.outputId], theta: result.theta_cw, curie: result.C,
         moment: result.mu_eff, r2: result.r2, nFit: result.n_fit,
         warning: warnings.length ? warnings.join(" ") : null, error: null,
       });
-      setStatus(`Curie–Weiss fit: θ = ${result.theta_cw.toPrecision(4)} K, R² = ${result.r2.toFixed(4)}`);
     } catch (error) {
       setReadout({ ...EMPTY, owners, error: error instanceof Error ? error.message : "Curie–Weiss fit failed" });
     } finally {

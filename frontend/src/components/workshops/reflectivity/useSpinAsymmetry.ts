@@ -7,8 +7,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { spinAsymmetry } from "../../../lib/api/reductions";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { asymmetryStruct, defaultChannels, pairChannels, readChannel, spinRequest } from "./spinAsymmetry";
+
+const SPIN_ASYMMETRY_PRODUCER = { id: "spin-asymmetry", label: "Spin asymmetry", version: 1 } as const;
 
 export interface ChannelPick {
   id: string;
@@ -20,7 +24,6 @@ export function useSpinAsymmetry() {
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
   const resolveDataset = useApp((s) => s.resolveDataset);
-  const addDataset = useApp((s) => s.addDataset);
 
   const pickFor = (id: string): ChannelPick => {
     const ds = datasets.find((d) => d.id === id);
@@ -58,8 +61,21 @@ export function useSpinAsymmetry() {
         pp: { dataset: dpp, col: pp.col }, mm: { dataset: dmm, col: mm.col },
       });
       const name = `Spin asymmetry (${dpp.name} / ${dmm.name})`;
-      addDataset({ id: nextDatasetId(), name, data, errorRoles });
-      setDone(`Added "${name}": ${res.n_valid} of ${pair.q.length} Q points valid.`);
+      // One undo step, no duplicate on a repeat run, stale when EITHER channel's
+      // worksheet changes (store/analysisOutputCommit.ts).
+      const outcome = commitComputedOutput({
+        producer: SPIN_ASYMMETRY_PRODUCER,
+        sources: [
+          { id: dpp.id, computedOn: analysisDataFingerprint(dpp) },
+          { id: dmm.id, computedOn: analysisDataFingerprint(dmm) },
+        ],
+        settings: { pp: { col: pp.col, errCol: pp.errCol }, mm: { col: mm.col, errCol: mm.errCol }, mmId: dmm.id },
+        name, data, errorRoles,
+      });
+      if (outcome.kind === "refused") throw new Error(outcome.reason);
+      setDone(outcome.kind === "existing"
+        ? `"${name}" is already added; nothing was duplicated.`
+        : `Added "${name}": ${res.n_valid} of ${pair.q.length} Q points valid.`);
     } catch (e) {
       if (seq.current !== id) return;
       setError(e instanceof Error ? e.message : "spin asymmetry failed");

@@ -433,3 +433,47 @@ describe("useMagNormalization — metadata fill and saved profiles are explicit"
     expect(result.current.error).toMatch(/Name the profile/);
   });
 });
+
+describe("useMagNormalization: commit contract (lane RL4)", () => {
+  const fresh = () => useApp.setState({ analysisResults: [], history: [], future: [], staleDatasets: [], recalcMode: "manual" });
+
+  it("a repeat Apply creates no duplicate (fail-before: a second worksheet)", async () => {
+    fresh();
+    const { result } = renderHook(() => useMagNormalization());
+    enterFilm(result);
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    act(() => useApp.getState().setActive("d1"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().status).toContain("already added");
+  });
+
+  it("is one undo step, adds again after Undo, and a different basis is a new output", async () => {
+    fresh();
+    const { result } = renderHook(() => useMagNormalization());
+    enterFilm(result);
+    await act(async () => { await result.current.apply(); });
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+    act(() => useApp.getState().setActive("d1"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    act(() => useApp.getState().setActive("d1"));
+    act(() => result.current.setFieldText("filmThickness", "60"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets).toHaveLength(3);
+  });
+
+  it("marks the output stale when the source changes (manual mode)", async () => {
+    fresh();
+    const { result } = renderHook(() => useMagNormalization());
+    enterFilm(result);
+    await act(async () => { await result.current.apply(); });
+    const out = useApp.getState().datasets[1].id;
+    act(() => useApp.getState().touchDataset("d1"));
+    expect(useApp.getState().staleDatasets).toContain(out);
+  });
+});

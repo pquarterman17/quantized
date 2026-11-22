@@ -6,8 +6,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
+import { addModelOutput } from "../../../store/commitModelOutput";
 import type { DataStruct, SldPreset } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { probeRadiation } from "./reflFitData";
 import { resolveLayer } from "./reflFitModel";
 import { expandGraded, type GradedProfile } from "./reflGraded";
@@ -42,8 +43,6 @@ const DEFAULT_LAYERS: ModelLayer[] = [
   { preset: "Silicon", thickness: 0, roughness: 3, sld: 0 },
 ];
 
-let _simCounter = 0;
-
 export interface ReflectivityState {
   presets: SldPreset[];
   layers: ModelLayer[];
@@ -63,7 +62,6 @@ export interface ReflectivityState {
 }
 
 export function useReflectivity(): ReflectivityState {
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const reflectivitySeed = useApp((s) => s.reflectivitySeed);
   const clearReflectivitySeed = useApp((s) => s.clearReflectivitySeed);
@@ -144,7 +142,6 @@ export function useReflectivity(): ReflectivityState {
         n_points: grid.nPoints,
         resolution: grid.resolution > 0 ? grid.resolution : null,
       });
-      const n = ++_simCounter;
       const data: DataStruct = {
         time: res.q,
         values: res.r.map((v) => [v ?? Number.NaN]),
@@ -152,8 +149,7 @@ export function useReflectivity(): ReflectivityState {
         units: ["a.u."],
         metadata: { source: "reflectivity-sim", radiation, layers: layers.length, graded: gradedCount },
       };
-      addDataset({ id: nextDatasetId(), name: `Reflectivity model ${n}`, data });
-      setStatus(`simulated R(Q) — ${res.q.length} points`);
+      addModelOutput("reflectivity-sim", "reflectivity model", data, `simulated R(Q) — ${res.q.length} points`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "simulation failed");
     } finally {
@@ -168,7 +164,6 @@ export function useReflectivity(): ReflectivityState {
     setError(null);
     try {
       const res = await reflSldProfile({ layers: await expandGraded(toApiLayers(), layers) });
-      const n = ++_simCounter;
       const data: DataStruct = {
         time: res.z,
         values: res.sld.map((v) => [v ?? Number.NaN]),
@@ -176,8 +171,7 @@ export function useReflectivity(): ReflectivityState {
         units: ["Å⁻²"],
         metadata: { source: "reflectivity-sld", radiation, layers: layers.length, graded: gradedCount },
       };
-      addDataset({ id: nextDatasetId(), name: `SLD profile ${n}`, data });
-      setStatus(`SLD profile — ${res.z.length} points`);
+      addModelOutput("reflectivity-sld", "SLD profile", data, `SLD profile — ${res.z.length} points`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "SLD profile failed");
     } finally {

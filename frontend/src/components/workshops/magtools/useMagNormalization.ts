@@ -43,7 +43,9 @@ import {
 } from "../../../lib/sampleNormalization";
 import { profileFromMetadata } from "../../../lib/sampleProfileMetadata";
 import type { DataStruct, Dataset } from "../../../lib/types";
-import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
   FIELD_UNITS,
   magXY,
@@ -71,6 +73,8 @@ function fitGeometry(basis: NormalizationBasis, geometry: SampleGeometry): Sampl
   const allowed = geometriesFor(basis);
   return allowed.length && !allowed.includes(geometry) ? allowed[0] : geometry;
 }
+
+const NORMALIZATION_PRODUCER = { id: "mag-normalization", label: "Magnetometry normalization", version: 1 } as const;
 
 const NOTHING_TO_DO = "Nothing to change: choose a basis, another output unit, or another field unit.";
 
@@ -120,8 +124,6 @@ export function useMagNormalization(): MagNormalizationState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const addDataset = useApp((s) => s.addDataset);
-  const setStatus = useApp((s) => s.setStatus);
   const profiles = useSampleProfiles();
   const [basis, setBasisState] = useState<NormalizationBasis>("none");
   const [chosenMoment, setToMoment] = useState("");
@@ -274,11 +276,20 @@ export function useMagNormalization(): MagNormalizationState {
         units: [res.y_unit],
         metadata: stampXIdentity(metadata, ds.data, ownXKey(ds, request.xKey, yKey), res.x_unit),
       };
-      const outId = nextDatasetId();
-      addDataset({ id: outId, name: `${ds.name.replace(/\.[^.]+$/, "")} (${res.y_unit})`, data });
+      // One undo step, no duplicate on a repeat Apply, stale when the source
+      // changes (store/analysisOutputCommit.ts).
+      const outcome = commitComputedOutput({
+        producer: NORMALIZATION_PRODUCER,
+        sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
+        settings: {
+          basis, toMoment: outUnit, toField: res.x_unit, xKey: request.xKey, yKey, profile: profileWire(profile),
+        },
+        name: `${ds.name.replace(/\.[^.]+$/, "")} (${res.y_unit})`, data,
+        status: `converted to ${res.x_unit} / ${res.y_unit}`,
+      });
+      if (outcome.kind === "refused") return fail(outcome.reason);
       if (res.warning) warnings.push(res.warning);
-      setReadout({ owners: [...owners, outId], warning: warnings.length ? warnings.join(" ") : null, error: null, notice: null });
-      setStatus(`converted to ${res.x_unit} / ${res.y_unit}`);
+      setReadout({ owners: [...owners, outcome.outputId], warning: warnings.length ? warnings.join(" ") : null, error: null, notice: null });
     } catch (e) {
       fail(e instanceof Error ? e.message : "normalization failed");
     } finally {

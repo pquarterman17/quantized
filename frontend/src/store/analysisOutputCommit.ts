@@ -37,7 +37,7 @@ export interface AnalysisOutputCommit {
   /** Inputs plus the result digest the output encodes (small: no arrays of data). */
   settings: CommitSettings;
   /** Built only when a new output is actually written. */
-  output: (source: Dataset) => { name: string; data: DataStruct; errorRoles?: Dataset["errorRoles"] };
+  output: (source: Dataset) => { name: string; data: DataStruct; errorRoles?: Dataset["errorRoles"]; derivedFrom?: Dataset["derivedFrom"] };
   /** Runs inside the one undo step, just before the worksheet is added (only
    *  when a NEW output is written): a tool that opens its output in a window of
    *  its own creates that window here, so Undo removes it with the output. */
@@ -103,6 +103,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   const output: Dataset = {
     id: nextDatasetId(), name: built.name, data: built.data,
     ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
+    ...(built.derivedFrom ? { derivedFrom: built.derivedFrom } : {}),
   };
   const result = committedOutputResult({
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,

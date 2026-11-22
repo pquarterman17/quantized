@@ -125,4 +125,57 @@ describe("useFftThickness", () => {
     rerender();
     expect(result.current.result).toBeNull();
   });
+
+  describe("commit contract (lane RL4)", () => {
+    const res = {
+      thickness_nm: 55.5, uncertainty_nm: null, wavelength_a: 1.5406,
+      two_theta_range: [10, 40] as [number, number], fft_magnitude: [0, 1, 2], thickness_axis: [0, 10, 20], n_points: 4,
+    };
+    async function computed() {
+      vi.mocked(fftThickness).mockResolvedValue(res);
+      const hook = renderHook(() => useFftThickness());
+      await act(async () => { await hook.result.current.compute(); });
+      return hook;
+    }
+
+    // Adding activates the output, which resets the tool; going back to the
+    // source and running the same computation is the repeat Add.
+    const again = async (hook: Awaited<ReturnType<typeof computed>>) => {
+      act(() => useApp.getState().setActive("d1"));
+      await act(async () => { await hook.result.current.compute(); });
+    };
+    const fresh = () => useApp.setState({ analysisResults: [], history: [], future: [], staleDatasets: [], recalcMode: "manual" });
+
+    it("a repeat Add creates no duplicate and says why (fail-before: it added a second worksheet)", async () => {
+      fresh();
+      const hook = await computed();
+      act(() => hook.result.current.toLibrary());
+      await again(hook);
+      expect(hook.result.current.addDisabledReason).toContain("Already added");
+      act(() => hook.result.current.toLibrary());
+      expect(useApp.getState().datasets).toHaveLength(2);
+      expect(useApp.getState().analysisResults).toHaveLength(1);
+    });
+
+    it("Add is one undo step and can be added again after Undo", async () => {
+      fresh();
+      const hook = await computed();
+      act(() => hook.result.current.toLibrary());
+      act(() => useApp.getState().undo());
+      expect(useApp.getState().datasets).toHaveLength(1);
+      expect(useApp.getState().analysisResults).toHaveLength(0);
+      await again(hook);
+      act(() => hook.result.current.toLibrary());
+      expect(useApp.getState().datasets).toHaveLength(2);
+    });
+
+    it("marks the output stale when the source changes (manual mode)", async () => {
+      fresh();
+      const hook = await computed();
+      act(() => hook.result.current.toLibrary());
+      const outId = useApp.getState().datasets[1].id;
+      act(() => useApp.getState().touchDataset("d1"));
+      expect(useApp.getState().staleDatasets).toContain(outId);
+    });
+  });
 });
